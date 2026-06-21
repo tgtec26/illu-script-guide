@@ -10,6 +10,8 @@ const alignFiles = [
   "스크립트/05_정렬/Align_1mmVcenterS.jsx",
 ];
 
+const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
+
 function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
 }
@@ -36,6 +38,21 @@ for (const file of alignFiles) {
 
   if (!/finally\s*\{[\s\S]*tempObj\.remove\(\)/.test(source)) {
     console.error(`${file}: temporary outlined text duplicate must be removed in finally`);
+    failures++;
+  }
+}
+
+{
+  const source = read(artboardGenerator);
+  if (!/setIntegerPreference\(\s*["']rulerType["']\s*,\s*unitValue\s*\)/.test(source) ||
+      !/setGeneralUnits\(\s*1\s*\)/.test(source)) {
+    console.error(`${artboardGenerator}: general units must be set to millimeters with rulerType=1`);
+    failures++;
+  }
+  if (!/new\s+DocumentPreset\s*\(\s*\)/.test(source) ||
+      !/preset\.units\s*=\s*isPixel\s*\?\s*RulerUnits\.Pixels\s*:\s*RulerUnits\.Millimeters/.test(source) ||
+      !/documents\.addDocument\(/.test(source)) {
+    console.error(`${artboardGenerator}: new documents must be created with DocumentPreset.units`);
     failures++;
   }
 }

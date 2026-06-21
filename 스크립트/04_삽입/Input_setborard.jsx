@@ -62,6 +62,12 @@ function main() {
     }
 }
 
+function setGeneralUnits(unitValue) {
+    try {
+        app.preferences.setIntegerPreference("rulerType", unitValue);
+    } catch (e) {}
+}
+
 function generateArtboards(w, h, isPixel, count, gapMM) {
     var mmToPt = 2.834645;
     var widthPt = isPixel ? w : w * mmToPt;
@@ -69,12 +75,21 @@ function generateArtboards(w, h, isPixel, count, gapMM) {
     var gapPt = gapMM * mmToPt;
 
     var colorSpace = isPixel ? DocumentColorSpace.RGB : DocumentColorSpace.CMYK;
-    var doc = app.documents.add(colorSpace, widthPt, heightPt);
+    var preset = new DocumentPreset();
+    preset.colorMode = colorSpace;
+    preset.units = isPixel ? RulerUnits.Pixels : RulerUnits.Millimeters;
+    preset.width = widthPt;
+    preset.height = heightPt;
+    preset.numArtboards = 1;
+    preset.title = "대지 생성기";
+
+    var startupPreset = (app.startupPresetsList && app.startupPresetsList.length > 0) ? app.startupPresetsList[0] : "Print";
+    var doc = app.documents.addDocument(startupPreset, preset, false);
 
     if (isPixel) {
-        doc.rulerUnits = RulerUnits.Pixels;
+        setGeneralUnits(6); // pixels
     } else {
-        doc.rulerUnits = RulerUnits.Millimeters;
+        setGeneralUnits(1); // millimeters
     }
 
     var firstArtboard = doc.artboards[0];
