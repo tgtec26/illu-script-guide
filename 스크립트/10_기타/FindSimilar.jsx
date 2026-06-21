@@ -107,7 +107,7 @@
     };
 
     var candidates = rbSelection.value ? selectionCandidates(initialSelection, referenceItem) : documentCandidates(doc, referenceItem);
-    var matches = [];
+    var matches = [referenceItem];
 
     for (var i = 0; i < candidates.length; i++) {
         try {
@@ -123,8 +123,6 @@
             matches[m].selected = true;
         } catch (e2) {}
     }
-
-    alert("완료: " + matches.length + "개를 찾았습니다.");
 
     function selectionCandidates(selectionItems, refItem) {
         var result = [];
