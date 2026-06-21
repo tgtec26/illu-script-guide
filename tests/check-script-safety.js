@@ -11,6 +11,7 @@ const alignFiles = [
 ];
 
 const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
+const updaterFiles = ["update-mac.command", "update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
@@ -53,6 +54,30 @@ for (const file of alignFiles) {
       !/preset\.units\s*=\s*isPixel\s*\?\s*RulerUnits\.Pixels\s*:\s*RulerUnits\.Millimeters/.test(source) ||
       !/documents\.addDocument\(/.test(source)) {
     console.error(`${artboardGenerator}: new documents must be created with DocumentPreset.units`);
+    failures++;
+  }
+}
+
+for (const file of updaterFiles) {
+  const source = read(file);
+  if (!source.includes("https://github.com/tgtec26/illu-script.git")) {
+    console.error(`${file}: updater must point to GitHub repository`);
+    failures++;
+  }
+}
+
+{
+  const source = read("update-mac.command");
+  if (!source.includes("rsync -a --delete") || !source.includes("sudo")) {
+    console.error("update-mac.command: must sync managed folders and handle app-folder permissions");
+    failures++;
+  }
+}
+
+{
+  const source = read("update-windows.ps1");
+  if (!source.includes("Adobe Illustrator*") || !source.includes("Remove-Item") || !source.includes("Copy-Item")) {
+    console.error("update-windows.ps1: must find Illustrator and replace managed folders");
     failures++;
   }
 }
