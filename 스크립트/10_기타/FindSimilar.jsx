@@ -13,6 +13,7 @@
 
     var doc = app.activeDocument;
     var initialSelection = doc.selection;
+    var settings = loadSettings();
 
     if (!initialSelection || initialSelection.length < 1) {
         alert("기준 개체를 1개 선택한 뒤 실행하세요.");
@@ -32,7 +33,8 @@
     scopePanel.margins = 12;
     var rbDoc = scopePanel.add("radiobutton", undefined, "문서 전체");
     var rbSelection = scopePanel.add("radiobutton", undefined, "현재 선택 안");
-    rbDoc.value = true;
+    rbDoc.value = settings.scope !== "selection";
+    rbSelection.value = settings.scope === "selection";
 
     var conditionPanel = win.add("panel", undefined, "조건");
     conditionPanel.orientation = "column";
@@ -52,13 +54,13 @@
     var chkStrokeWidth = row2.add("checkbox", undefined, "Stroke Width");
     var chkOpacity = row2.add("checkbox", undefined, "Opacity");
 
-    chkGeometry.value = true;
-    chkObjectType.value = true;
-    chkFill.value = true;
-    chkStroke.value = true;
-    chkStrokeWidth.value = true;
-    chkSize.value = true;
-    chkOpacity.value = false;
+    chkGeometry.value = settings.geometry;
+    chkObjectType.value = settings.objectType;
+    chkFill.value = settings.fill;
+    chkStroke.value = settings.stroke;
+    chkStrokeWidth.value = settings.strokeWidth;
+    chkSize.value = settings.size;
+    chkOpacity.value = settings.opacity;
 
     var geoPanel = win.add("panel", undefined, "Geometry 옵션");
     geoPanel.orientation = "column";
@@ -71,14 +73,14 @@
     var chkRotationAllowed = geoRow1.add("checkbox", undefined, "Rotation allowed");
     var chkMirrorAllowed = geoRow1.add("checkbox", undefined, "Mirror allowed");
 
-    chkScaleAllowed.value = false;
-    chkRotationAllowed.value = false;
-    chkMirrorAllowed.value = false;
+    chkScaleAllowed.value = settings.scaleAllowed;
+    chkRotationAllowed.value = settings.rotationAllowed;
+    chkMirrorAllowed.value = settings.mirrorAllowed;
 
     var tolRow = geoPanel.add("group");
     tolRow.orientation = "row";
     tolRow.add("statictext", undefined, "Tolerance:");
-    var inputTolerance = tolRow.add("edittext", undefined, "0.5");
+    var inputTolerance = tolRow.add("edittext", undefined, String(settings.tolerance));
     inputTolerance.characters = 6;
     tolRow.add("statictext", undefined, "pt / color");
 
@@ -93,6 +95,7 @@
     if (isNaN(tolerance) || tolerance < 0) tolerance = 0.5;
 
     var options = {
+        scope: rbSelection.value ? "selection" : "document",
         geometry: chkGeometry.value,
         objectType: chkObjectType.value,
         fill: chkFill.value,
@@ -105,6 +108,7 @@
         mirrorAllowed: chkMirrorAllowed.value,
         tolerance: tolerance
     };
+    saveSettings(options);
 
     var candidates = rbSelection.value ? selectionCandidates(initialSelection, referenceItem) : documentCandidates(doc, referenceItem);
     var matches = [referenceItem];
@@ -458,5 +462,73 @@
         if (a.count !== b.count) return a.count - b.count;
         if (a.closed !== b.closed) return a.closed ? -1 : 1;
         return 0;
+    }
+
+    function defaultSettings() {
+        return {
+            scope: "document",
+            geometry: true,
+            objectType: true,
+            fill: true,
+            stroke: true,
+            strokeWidth: true,
+            size: true,
+            opacity: false,
+            scaleAllowed: false,
+            rotationAllowed: false,
+            mirrorAllowed: false,
+            tolerance: 0.5
+        };
+    }
+
+    function settingsFile() {
+        var folder = new Folder(Folder.myDocuments + "/Adobe Scripts");
+        if (!folder.exists) folder.create();
+        return new File(folder.fsName + "/FindSimilar_settings.json");
+    }
+
+    function loadSettings() {
+        var defaults = defaultSettings();
+        var file = settingsFile();
+        if (!file.exists) return defaults;
+
+        try {
+            file.open("r");
+            var text = file.read();
+            file.close();
+            var loaded = JSON.parse(text);
+            for (var key in defaults) {
+                if (defaults.hasOwnProperty(key) && loaded.hasOwnProperty(key)) {
+                    defaults[key] = loaded[key];
+                }
+            }
+        } catch (e) {
+            try { file.close(); } catch (closeError) {}
+        }
+        return defaults;
+    }
+
+    function saveSettings(options) {
+        try {
+            var file = settingsFile();
+            file.open("w");
+            file.write(JSON.stringify({
+                scope: options.scope,
+                geometry: options.geometry,
+                objectType: options.objectType,
+                fill: options.fill,
+                stroke: options.stroke,
+                strokeWidth: options.strokeWidth,
+                size: options.size,
+                opacity: options.opacity,
+                scaleAllowed: options.scaleAllowed,
+                rotationAllowed: options.rotationAllowed,
+                mirrorAllowed: options.mirrorAllowed,
+                tolerance: options.tolerance
+            }, null, 2));
+            file.close();
+        } catch (e) {
+            try { file.close(); } catch (closeError) {}
+        }
     }
 })();
