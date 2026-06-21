@@ -1,6 +1,11 @@
 // [최종] 가장 큰 도형(또는 글자) 고정 + 세로 정렬
 // 클리핑 마스크 대응 및 텍스트 글리프 기준 1mm 간격 정렬
 (function() {
+    if (app.documents.length === 0) {
+        alert("열린 문서가 없습니다.");
+        return;
+    }
+
     var doc = app.activeDocument;
     var sel = doc.selection;
     
@@ -16,14 +21,17 @@
         // 1. 텍스트 프레임 처리 (글자 모양 실측)
         if (obj.typename === "TextFrame") {
             var tempObj = obj.duplicate();
+            var outlined = null;
             try {
-                var outlined = tempObj.createOutline();
+                outlined = tempObj.createOutline();
                 bounds = outlined.geometricBounds; // [Left, Top, Right, Bottom]
-                outlined.remove(); 
             } catch(e) {
-                // 아웃라인 생성 실패 시 기본 바운딩 박스 사용
                 bounds = obj.geometricBounds;
-                if(tempObj) tempObj.remove();
+            } finally {
+                try {
+                    if (outlined) outlined.remove();
+                    if (tempObj) tempObj.remove();
+                } catch(removeError) {}
             }
         } 
         // 2. 클리핑 마스크 처리 (마스크 경로의 크기만 측정)

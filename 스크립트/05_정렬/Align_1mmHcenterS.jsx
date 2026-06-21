@@ -1,6 +1,11 @@
 // [최종] 가장 작은 도형(또는 글자) 고정
 // 클리핑 마스크 대응 및 텍스트 글리프 기준 1mm 간격 정렬
 (function() {
+    if (app.documents.length === 0) {
+        alert("열린 문서가 없습니다.");
+        return;
+    }
+
     var doc = app.activeDocument;
     var sel = doc.selection;
     
@@ -16,13 +21,17 @@
         // 1. 텍스트 프레임 처리 (글자 모양 기준)
         if (obj.typename === "TextFrame") {
             var tempObj = obj.duplicate();
+            var outlined = null;
             try {
-                var outlined = tempObj.createOutline();
+                outlined = tempObj.createOutline();
                 bounds = outlined.geometricBounds; 
-                outlined.remove(); 
             } catch(e) {
                 bounds = obj.geometricBounds;
-                if(tempObj) tempObj.remove();
+            } finally {
+                try {
+                    if (outlined) outlined.remove();
+                    if (tempObj) tempObj.remove();
+                } catch(removeError) {}
             }
         } 
         // 2. 클리핑 마스크 처리 (가장 중요)
