@@ -46,15 +46,17 @@ if [ -z "$APP_DIR" ]; then
   exit 1
 fi
 
-TARGET_DIR="$(
-  find "$APP_DIR/Presets.localized" "$APP_DIR/Presets" -type d \( -name '스크립트' -o -name 'Scripts' \) 2>/dev/null \
-    | head -n 1
-)"
+if [ -d "$APP_DIR/Presets.localized/ko_KR" ]; then
+  TARGET_DIR="$APP_DIR/Presets.localized/ko_KR/스크립트"
+elif [ -d "$APP_DIR/Presets/ko_KR" ]; then
+  TARGET_DIR="$APP_DIR/Presets/ko_KR/스크립트"
+else
+  TARGET_DIR="$(
+    find "$APP_DIR/Presets.localized" "$APP_DIR/Presets" -type d \( -name '스크립트' -o -name 'Scripts' \) 2>/dev/null \
+      | head -n 1
+  )"
 
-if [ -z "$TARGET_DIR" ]; then
-  if [ -d "$APP_DIR/Presets.localized/ko_KR" ]; then
-    TARGET_DIR="$APP_DIR/Presets.localized/ko_KR/스크립트"
-  else
+  if [ -z "$TARGET_DIR" ]; then
     LOCALE_DIR="$(find "$APP_DIR/Presets.localized" "$APP_DIR/Presets" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n 1)"
     if [ -z "$LOCALE_DIR" ]; then
       echo "Illustrator Presets 폴더를 찾지 못했습니다."

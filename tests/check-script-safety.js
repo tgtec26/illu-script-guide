@@ -72,6 +72,10 @@ for (const file of updaterFiles) {
     console.error("update-mac.command: must sync managed folders and handle app-folder permissions");
     failures++;
   }
+  if (!source.includes('TARGET_DIR="$APP_DIR/Presets.localized/ko_KR/스크립트"')) {
+    console.error("update-mac.command: must prefer Korean localized Illustrator script folder");
+    failures++;
+  }
 }
 
 {
