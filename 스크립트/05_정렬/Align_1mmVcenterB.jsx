@@ -1,0 +1,141 @@
+/* [가로 정렬 스크립트 - 클리핑 마스크 대응 버전]
+  1. 면적이 가장 큰 개체 고정 (Key Object)
+  2. 나머지 개체는 중심점(X좌표)을 비교하여 좌/우 그룹으로 분류
+  3. 모든 개체를 Key Object의 '세로 중앙(Center Y)'에 맞춤
+  4. 좌/우로 1mm 간격으로 차례대로 배치
+  5. 텍스트는 글자 모양(Glyph), 클리핑 마스크는 마스크 경로 기준 계산
+*/
+
+(function() {
+    var doc = app.activeDocument;
+    var sel = doc.selection;
+    
+    if (sel.length < 2) {
+        alert("최소 2개 이상의 개체를 선택해주세요.");
+        return;
+    }
+
+    // --- [핵심 함수] 실제 눈에 보이는 경계값 구하기 ---
+    function getRealBounds(obj) {
+        var bounds;
+        // 1. 텍스트 프레임 처리
+        if (obj.typename === "TextFrame") {
+            var tempObj = obj.duplicate();
+            try {
+                var outlined = tempObj.createOutline();
+                bounds = outlined.geometricBounds;
+                outlined.remove();
+            } catch(e) {
+                bounds = obj.geometricBounds;
+                if(tempObj) tempObj.remove();
+            }
+        } 
+        // 2. 클리핑 마스크 처리 (추가된 로직)
+        else if (obj.typename === "GroupItem" && obj.clipped) {
+            for (var i = 0; i < obj.pageItems.length; i++) {
+                var currItem = obj.pageItems[i];
+                if (currItem.clipping) {
+                    bounds = currItem.geometricBounds;
+                    break;
+                }
+            }
+            if (!bounds) bounds = obj.visibleBounds;
+        }
+        // 3. 일반 개체
+        else {
+            bounds = obj.geometricBounds;
+        }
+        return bounds;
+    }
+
+    // --- 헬퍼 함수들 ---
+    function getWidth(obj) {
+        var bounds = getRealBounds(obj);
+        return bounds[2] - bounds[0];
+    }
+    
+    function getHeight(obj) {
+        var bounds = getRealBounds(obj);
+        return Math.abs(bounds[1] - bounds[3]);
+    }
+    
+    function getCenterX(obj) {
+        var bounds = getRealBounds(obj);
+        return (bounds[0] + bounds[2]) / 2;
+    }
+    
+    function getCenterY(obj) {
+        var bounds = getRealBounds(obj);
+        return (bounds[1] + bounds[3]) / 2;
+    }
+
+    // --- 1. 기준 개체 선정 (면적이 가장 큰 것) ---
+    var keyObject = sel[0];
+    var maxArea = getWidth(sel[0]) * getHeight(sel[0]);
+    
+    for (var i = 1; i < sel.length; i++) {
+        var area = getWidth(sel[i]) * getHeight(sel[i]);
+        if (area > maxArea) {
+            maxArea = area;
+            keyObject = sel[i];
+        }
+    }
+    
+    var keyBounds = getRealBounds(keyObject);
+    var keyCenterY = (keyBounds[1] + keyBounds[3]) / 2; 
+    var keyLeft = keyBounds[0];
+    var keyRight = keyBounds[2];
+    var keyCenterX = (keyLeft + keyRight) / 2;
+
+    var rightObjects = [];
+    var leftObjects = [];
+    
+    // --- 2. 좌/우 그룹 분류 ---
+    for (var i = 0; i < sel.length; i++) {
+        if (sel[i] == keyObject) continue;
+        var objCenterX = getCenterX(sel[i]);
+        if (objCenterX > keyCenterX) {
+            rightObjects.push(sel[i]);
+        } else {
+            leftObjects.push(sel[i]);
+        }
+    }
+    
+    // --- 3. 정렬 순서 ---
+    rightObjects.sort(function(a, b) { return getCenterX(a) - getCenterX(b); });
+    leftObjects.sort(function(a, b) { return getCenterX(b) - getCenterX(a); });
+    
+    var gap = 2.834645669; // 1mm
+    
+    // --- 4. 오른쪽 개체 배치 ---
+    var currentRightEdge = keyRight;
+    for (var i = 0; i < rightObjects.length; i++) {
+        var obj = rightObjects[i];
+        var objWidth = getWidth(obj);
+        var myCenterY = getCenterY(obj);
+        var deltaY = keyCenterY - myCenterY; 
+        
+        var currentBounds = getRealBounds(obj);
+        var newLeft = currentRightEdge + gap;
+        var deltaX = newLeft - currentBounds[0];
+        
+        obj.translate(deltaX, deltaY);
+        currentRightEdge = newLeft + objWidth;
+    }
+    
+    // --- 5. 왼쪽 개체 배치 ---
+    var currentLeftEdge = keyLeft;
+    for (var i = 0; i < leftObjects.length; i++) {
+        var obj = leftObjects[i];
+        var objWidth = getWidth(obj);
+        var myCenterY = getCenterY(obj);
+        var deltaY = keyCenterY - myCenterY;
+        
+        var currentBounds = getRealBounds(obj);
+        var newLeft = currentLeftEdge - gap - objWidth;
+        var deltaX = newLeft - currentBounds[0];
+        
+        obj.translate(deltaX, deltaY);
+        currentLeftEdge = newLeft;
+    }
+})();
