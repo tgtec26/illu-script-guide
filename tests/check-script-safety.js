@@ -11,6 +11,7 @@ const alignFiles = [
 ];
 
 const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
+const findSimilar = "스크립트/10_기타/FindSimilar.jsx";
 const updaterFiles = ["update-mac.command", "update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -83,6 +84,39 @@ for (const file of updaterFiles) {
   if (!source.includes("Adobe Illustrator*") || !source.includes("Remove-Item") || !source.includes("Copy-Item")) {
     console.error("update-windows.ps1: must find Illustrator and replace managed folders");
     failures++;
+  }
+}
+
+{
+  const source = read(findSimilar);
+  const required = [
+    'var chkGeometry',
+    'chkGeometry.value = true',
+    'var chkObjectType',
+    'chkObjectType.value = true',
+    'var chkFill',
+    'chkFill.value = true',
+    'var chkStroke',
+    'chkStroke.value = true',
+    'var chkStrokeWidth',
+    'chkStrokeWidth.value = true',
+    'var chkSize',
+    'chkSize.value = true',
+    'var chkScaleAllowed',
+    'chkScaleAllowed.value = false',
+    'var chkRotationAllowed',
+    'chkRotationAllowed.value = false',
+    'var chkMirrorAllowed',
+    'chkMirrorAllowed.value = false',
+    'function geometryMatches',
+    'function collectPathItems',
+    'function colorsMatch',
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${findSimilar}: missing ${token}`);
+      failures++;
+    }
   }
 }
 
