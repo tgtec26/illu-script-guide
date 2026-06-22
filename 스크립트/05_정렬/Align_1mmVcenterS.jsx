@@ -6,6 +6,15 @@
   5. 텍스트는 글자 모양(Glyph), 클리핑 마스크는 마스크 경로 기준
 */
 
+// 마지막 실행 스크립트 기록 → Align_RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 (function() {
     if (app.documents.length === 0) {
         alert("열린 문서가 없습니다.");

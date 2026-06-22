@@ -1,5 +1,14 @@
 // [최종] 가장 작은 도형(또는 글자) 고정
 // 클리핑 마스크 대응 및 텍스트 글리프 기준 1mm 간격 정렬
+// 마지막 실행 스크립트 기록 → Align_RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 (function() {
     if (app.documents.length === 0) {
         alert("열린 문서가 없습니다.");
