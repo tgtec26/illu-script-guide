@@ -20,15 +20,59 @@
     var items = [];
     var bounds = null;
 
-    function isLockedOrHidden(item) {
+    function rememberState(states, item, prop) {
+        try {
+            if (typeof item[prop] === "undefined") return;
+            states.push({
+                item: item,
+                prop: prop,
+                value: item[prop]
+            });
+        } catch (e) {}
+    }
+
+    function makeEditableAndVisible(item) {
+        var states = [];
         var current = item;
+
         while (current && current.typename !== "Document") {
-            if (current.locked || current.hidden || current.visible === false) {
-                return true;
-            }
+            rememberState(states, current, "locked");
+            rememberState(states, current, "hidden");
+            rememberState(states, current, "visible");
+
+            try {
+                if (typeof current.locked !== "undefined") current.locked = false;
+            } catch (e1) {}
+
+            try {
+                if (typeof current.hidden !== "undefined") current.hidden = false;
+            } catch (e2) {}
+
+            try {
+                if (typeof current.visible !== "undefined") current.visible = true;
+            } catch (e3) {}
+
             current = current.parent;
         }
-        return false;
+
+        return states;
+    }
+
+    function restoreStates(states) {
+        for (var i = states.length - 1; i >= 0; i--) {
+            try {
+                states[i].item[states[i].prop] = states[i].value;
+            } catch (e) {}
+        }
+    }
+
+    function readVisibleBounds(item) {
+        var states = makeEditableAndVisible(item);
+        try {
+            return item.visibleBounds;
+        } finally {
+            restoreStates(states);
+        }
     }
 
     function rectsOverlap(a, b) {
@@ -49,7 +93,7 @@
         for (var i = 0; i < groupItem.pageItems.length; i++) {
             var child = groupItem.pageItems[i];
             if (child.clipping) {
-                return child.visibleBounds;
+                return readVisibleBounds(child);
             }
             if (child.typename === "GroupItem") {
                 var nested = getClippingBounds(child);
@@ -59,16 +103,32 @@
         return null;
     }
 
-    function getItemBounds(item) {
-        if (!item || item.guides || isLockedOrHidden(item)) return null;
+    function getGroupContentBounds(groupItem) {
+        var groupBounds = null;
 
+        for (var i = 0; i < groupItem.pageItems.length; i++) {
+            groupBounds = unionBounds(groupBounds, getItemBounds(groupItem.pageItems[i]));
+        }
+
+        return groupBounds;
+    }
+
+    function getItemBounds(item) {
+        if (!item || item.guides) return null;
+
+        var states = makeEditableAndVisible(item);
         try {
             if (item.typename === "GroupItem" && item.clipped) {
                 return getClippingBounds(item) || item.visibleBounds;
             }
+            if (item.typename === "GroupItem") {
+                return getGroupContentBounds(item) || item.visibleBounds;
+            }
             return item.visibleBounds;
         } catch (e) {
             return null;
+        } finally {
+            restoreStates(states);
         }
     }
 

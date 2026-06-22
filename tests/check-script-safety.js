@@ -12,6 +12,7 @@ const alignFiles = [
 
 const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
 const textInput = "스크립트/02_문자/Text_input.jsx";
+const fitToMargin = "스크립트/10_기타/fit2mm.jsx";
 const findSimilar = "스크립트/10_기타/find-replace.jsx";
 const updaterFiles = ["update-mac.command", "update-windows.ps1", "UPDATE.md"];
 
@@ -70,6 +71,18 @@ for (const file of alignFiles) {
       !source.includes('selectedOption = 7') ||
       !source.includes('contentsArray = ["①", "②", "③", "④", "⑤"]')) {
     console.error(`${textInput}: must offer circled number text inserts`);
+    failures++;
+  }
+}
+
+{
+  const source = read(fitToMargin);
+  if (!source.includes("function makeEditableAndVisible") ||
+      !source.includes("function getGroupContentBounds") ||
+      !source.includes("restoreStates") ||
+      !source.includes("finally") ||
+      /isLockedOrHidden/.test(source)) {
+    console.error(`${fitToMargin}: must include locked and hidden items while restoring original states`);
     failures++;
   }
 }
