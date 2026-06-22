@@ -32,6 +32,7 @@
     var btn4 = buttonGroup.add("button", undefined, "㉠, ㉡, ㉢, ㉣, ㉤");
     var btn5 = buttonGroup.add("button", undefined, "ⓐ, ⓑ, ⓒ, ⓓ, ⓔ");
     var btn6 = buttonGroup.add("button", undefined, "1, 2, 3, 4, 5");
+    var btn7 = buttonGroup.add("button", undefined, "①, ②, ③, ④, ⑤");
     
     var selectedOption = null;
     
@@ -63,6 +64,11 @@
     
     btn6.onClick = function() {
         selectedOption = 6;
+        dialog.close();
+    };
+
+    btn7.onClick = function() {
+        selectedOption = 7;
         dialog.close();
     };
     
@@ -98,6 +104,10 @@
         fontName = "Batang";
     } else if (selectedOption === 6) {
         contentsArray = ["1", "2", "3", "4", "5"];
+        fontSize = 8;
+        fontName = "BEDFGG+GSMediumB1";
+    } else if (selectedOption === 7) {
+        contentsArray = ["①", "②", "③", "④", "⑤"];
         fontSize = 8;
         fontName = "BEDFGG+GSMediumB1";
     }
