@@ -5,7 +5,7 @@ if (app.selection.length > 0 && app.selection[0].typename === "TextFrame") {
     // 적용할 서체 이름 설정
     var korFontName = "SpoqaHanSansNeo-Regular";
     var engFontName = "BEDFGG+GSMediumB1";
-    var fontSize = 9; // 설정하고자 하는 글자 크기
+    var fontSize = 8; // 설정하고자 하는 글자 크기
 
     try {
         var korFont = textFonts.getByName(korFontName);
