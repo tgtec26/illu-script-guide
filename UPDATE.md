@@ -13,11 +13,10 @@
 
 ## Windows
 
-1. `update-windows.ps1` 우클릭
-2. `PowerShell에서 실행` 선택
+1. `update-windows.cmd` 더블클릭
+2. 권한 확인 창이 나오면 `예` 선택
 3. GitHub 로그인/권한 요청이 나오면 승인
-4. 권한 오류가 나면 PowerShell을 관리자 권한으로 열고 실행
-5. Illustrator 재시작
+4. Illustrator 재시작
 
 ## 동작
 

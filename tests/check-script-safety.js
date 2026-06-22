@@ -11,11 +11,15 @@ const alignFiles = [
 ];
 
 const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
-const findSimilar = "스크립트/10_기타/FindSimilar.jsx";
+const findSimilar = "스크립트/10_기타/find-replace.jsx";
 const updaterFiles = ["update-mac.command", "update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
+}
+
+function readBuffer(file) {
+  return fs.readFileSync(path.join(root, file));
 }
 
 function lineOf(source, pattern) {
@@ -81,8 +85,40 @@ for (const file of updaterFiles) {
 
 {
   const source = read("update-windows.ps1");
+  const bytes = readBuffer("update-windows.ps1");
   if (!source.includes("Adobe Illustrator*") || !source.includes("Remove-Item") || !source.includes("Copy-Item")) {
     console.error("update-windows.ps1: must find Illustrator and replace managed folders");
+    failures++;
+  }
+  if (!source.includes("InstallLocation") || !source.includes("Microsoft\\Windows\\CurrentVersion\\Uninstall")) {
+    console.error("update-windows.ps1: must find Illustrator from Windows installed-app registry entries");
+    failures++;
+  }
+  if (!source.includes("Join-Path $Root \"Adobe\"")) {
+    console.error("update-windows.ps1: must search the common Program Files Adobe subfolder");
+    failures++;
+  }
+  if (!source.includes("#Requires -Version 5.1")) {
+    console.error("update-windows.ps1: must explicitly support Windows PowerShell 5.1 or newer");
+    failures++;
+  }
+  if (bytes[0] !== 0xef || bytes[1] !== 0xbb || bytes[2] !== 0xbf) {
+    console.error("update-windows.ps1: must be saved as UTF-8 with BOM for Windows PowerShell 5.1 Korean paths");
+    failures++;
+  }
+}
+
+{
+  const source = read("update-windows.cmd");
+  const bytes = readBuffer("update-windows.cmd");
+  if (!source.includes("powershell.exe") ||
+      !source.includes("-ExecutionPolicy Bypass") ||
+      !source.includes("-File \"%SCRIPT_DIR%update-windows.ps1\"")) {
+    console.error("update-windows.cmd: must launch the PowerShell updater by double-click");
+    failures++;
+  }
+  if (!bytes.includes(Buffer.from("\r\n")) || bytes.includes(Buffer.from("@echo off\n"))) {
+    console.error("update-windows.cmd: must use CRLF line endings for cmd.exe");
     failures++;
   }
 }
@@ -111,7 +147,7 @@ for (const file of updaterFiles) {
     'function geometryMatches',
     'function collectPathItems',
     'function colorsMatch',
-    'if (opts.size && !opts.scaleAllowed && !sizeMatches',
+    'if (o.size && !o.scaleAllowed && !sizeMatchesBounds',
     'FindSimilar_settings.json',
     'function loadSettings',
     'function saveSettings',
