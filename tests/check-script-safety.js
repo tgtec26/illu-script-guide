@@ -12,6 +12,7 @@ const alignFiles = [
 
 const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
 const textInput = "스크립트/02_문자/Text_input.jsx";
+const graySelection = "스크립트/03_색상/Color_graysel.jsx";
 const fitToMargin = "스크립트/10_기타/fit2mm.jsx";
 const findSimilar = "스크립트/10_기타/find-replace.jsx";
 const updaterFiles = ["update-mac.command", "update-windows.ps1", "UPDATE.md"];
@@ -97,6 +98,21 @@ for (const file of alignFiles) {
       !source.includes("finally") ||
       /isLockedOrHidden/.test(source)) {
     console.error(`${fitToMargin}: must include locked and hidden items while restoring original states`);
+    failures++;
+  }
+}
+
+{
+  const source = read(graySelection);
+  if (!source.includes("var defaultTarget = getDefaultTarget(sel)") ||
+      !source.includes("chkFill.value = defaultTarget === \"fill\"") ||
+      !source.includes("chkStroke.value = defaultTarget === \"stroke\"") ||
+      !source.includes("function getDefaultTarget(items)") ||
+      !source.includes("function collectPaintState(item, state)") ||
+      !/state\.hasFill\s*=\s*true/.test(source) ||
+      !/state\.hasStroke\s*=\s*true/.test(source) ||
+      !/return\s+state\.hasStroke\s*&&\s*!state\.hasFill\s*\?\s*"stroke"\s*:\s*"fill"/.test(source)) {
+    console.error(`${graySelection}: stroke-only selections must default to Stroke`);
     failures++;
   }
 }

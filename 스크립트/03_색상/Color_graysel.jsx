@@ -64,8 +64,9 @@
     var chkFill = panelTarget.add("checkbox", undefined, "면 (Fill)");
     var chkStroke = panelTarget.add("checkbox", undefined, "선 (Stroke)");
     
-    chkFill.value = true; 
-    chkStroke.value = false;
+    var defaultTarget = getDefaultTarget(sel);
+    chkFill.value = defaultTarget === "fill";
+    chkStroke.value = defaultTarget === "stroke";
 
     chkFill.onClick = function() { chkStroke.value = !this.value; }
     chkStroke.onClick = function() { chkFill.value = !this.value; }
@@ -143,6 +144,42 @@
         if (doStroke) {
             pathItem.stroked = true;
             pathItem.strokeColor = color;
+        }
+    }
+
+    function getDefaultTarget(items) {
+        var state = {
+            hasFill: false,
+            hasStroke: false
+        };
+
+        for (var i = 0; i < items.length; i++) {
+            collectPaintState(items[i], state);
+        }
+
+        return state.hasStroke && !state.hasFill ? "stroke" : "fill";
+    }
+
+    function collectPaintState(item, state) {
+        if (item.typename === "GroupItem") {
+            for (var i = 0; i < item.pageItems.length; i++) {
+                collectPaintState(item.pageItems[i], state);
+            }
+            return;
+        }
+        if (item.typename === "CompoundPathItem") {
+            for (var j = 0; j < item.pathItems.length; j++) {
+                collectPaintState(item.pathItems[j], state);
+            }
+            return;
+        }
+        if (item.typename === "PathItem") {
+            if (item.filled) state.hasFill = true;
+            if (item.stroked) state.hasStroke = true;
+            return;
+        }
+        if (item.typename === "TextFrame") {
+            state.hasFill = true;
         }
     }
 
