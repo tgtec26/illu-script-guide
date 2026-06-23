@@ -74,8 +74,20 @@ for (const file of alignFiles) {
     console.error(`${textInput}: must offer circled number text inserts`);
     failures++;
   }
-  if (!/selectedOption\s*={2,3}\s*3[\s\S]*?fontName\s*=\s*"KoPubWorld바탕체_Pro"/.test(source)) {
-    console.error(`${textInput}: roman numerals must use KoPubWorld바탕체_Pro`);
+  if (!/selectedOption\s*={2,3}\s*3[\s\S]*?fontNames\s*=\s*romanFontCandidates/.test(source) ||
+      !/var\s+romanFontCandidates\s*=\s*\[[\s\S]*?"KoPubWorld바탕체_Pro"/.test(source) ||
+      !source.includes('"KoPubWorldBatangPM"') ||
+      !source.includes('"KoPubWorldBatangPL"') ||
+      !source.includes('"KoPubWorldBatangPB"') ||
+      !source.includes("var targetFont = findTextFont(fontNames, \"Batang\", selectedOption === 3)") ||
+      !source.includes("function findTextFont(fontNames, fallbackName, useKoPubMetadata)") ||
+      !source.includes("if (useKoPubMetadata)") ||
+      !/for\s*\(\s*var\s+\w+\s*=\s*0;\s*\w+\s*<\s*app\.textFonts\.length;\s*\w+\+\+\s*\)/.test(source) ||
+      !source.includes('getFontText(font, "family")') ||
+      !source.includes('getFontText(font, "style")') ||
+      !source.includes("nameMatchesKoPubWorldBatang") ||
+      !source.includes("kopubworldbatangp[mlb]")) {
+    console.error(`${textInput}: roman numerals must resolve KoPubWorld바탕체_Pro by candidate names and font metadata`);
     failures++;
   }
   if (!source.includes("var viewLeft = viewBounds[0]") ||

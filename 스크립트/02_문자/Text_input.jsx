@@ -76,52 +76,54 @@
     }
     
     // 선택에 따른 설정
-    var contentsArray, fontSize, fontName;
+    var romanFontCandidates = [
+        "KoPubWorld바탕체_Pro",
+        "KoPubWorld Batang Pro",
+        "KoPubWorldBatangPro",
+        "KoPubWorldBatang_Pro",
+        "KoPubWorldBatangPM",
+        "KoPubWorldBatangPL",
+        "KoPubWorldBatangPB",
+        "KoPubWorldBatangPro-Regular",
+        "KoPubWorldBatangPro-Medium",
+        "KoPubWorldBatangMedium"
+    ];
+    var contentsArray, fontSize, fontNames;
     
     if (selectedOption === 1) {
         contentsArray = ["(가)", "(나)", "(다)", "(라)"];
         fontSize = 10;
-        fontName = "Batang";
+        fontNames = ["Batang"];
     } else if (selectedOption === 2) {
         contentsArray = ["A", "B", "C", "D"];
         fontSize = 8;
-        fontName = "BEDFGG+GSMediumB1";
+        fontNames = ["BEDFGG+GSMediumB1"];
     } else if (selectedOption === 3) {
         contentsArray = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ"];
         fontSize = 8;
-        fontName = "KoPubWorld바탕체_Pro";
+        fontNames = romanFontCandidates;
     } else if (selectedOption === 4) {
         contentsArray = ["㉠", "㉡", "㉢", "㉣", "㉤"];
         fontSize = 9;
-        fontName = "Batang";
+        fontNames = ["Batang"];
     } else if (selectedOption === 5) {
         contentsArray = ["ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ"];
         fontSize = 9;
-        fontName = "Batang";
+        fontNames = ["Batang"];
     } else if (selectedOption === 6) {
         contentsArray = ["1", "2", "3", "4", "5"];
         fontSize = 8;
-        fontName = "BEDFGG+GSMediumB1";
+        fontNames = ["BEDFGG+GSMediumB1"];
     } else if (selectedOption === 7) {
         contentsArray = ["①", "②", "③", "④", "⑤"];
         fontSize = 8;
-        fontName = "BEDFGG+GSMediumB1";
+        fontNames = ["BEDFGG+GSMediumB1"];
     }
     
     var horizontalGap = 5; // 가로 간격
     var bottomMargin = 20; // 화면 하단에서 띄울 간격
     
-    var targetFont;
-    try {
-        targetFont = app.textFonts.getByName(fontName);
-    } catch (e) {
-        try {
-            targetFont = app.textFonts.getByName("Batang");
-        } catch (e2) {
-            targetFont = app.textFonts[0];
-            alert("지정된 폰트를 찾을 수 없어 기본 폰트로 실행합니다.");
-        }
-    }
+    var targetFont = findTextFont(fontNames, "Batang", selectedOption === 3);
     
     // 먼저 모든 텍스트 프레임을 생성하여 전체 너비와 최대 높이 계산
     var textFrames = [];
@@ -161,4 +163,49 @@
     doc.activate();
     
     view.zoom = view.zoom;
+
+    function findTextFont(fontNames, fallbackName, useKoPubMetadata) {
+        for (var i = 0; i < fontNames.length; i++) {
+            try {
+                return app.textFonts.getByName(fontNames[i]);
+            } catch (e) {}
+        }
+
+        if (useKoPubMetadata) {
+            for (var j = 0; j < app.textFonts.length; j++) {
+                var font = app.textFonts[j];
+                if (nameMatchesKoPubWorldBatang(font)) {
+                    return font;
+                }
+            }
+        }
+
+        try {
+            return app.textFonts.getByName(fallbackName);
+        } catch (e2) {
+            alert("지정된 폰트를 찾을 수 없어 기본 폰트로 실행합니다.");
+            return app.textFonts[0];
+        }
+    }
+
+    function nameMatchesKoPubWorldBatang(font) {
+        var name = getFontText(font, "name");
+        var family = getFontText(font, "family");
+        var style = getFontText(font, "style");
+        var all = (name + " " + family + " " + style).toLowerCase();
+
+        var hasKoPub = all.indexOf("kopubworld") >= 0 || all.indexOf("kopub") >= 0 || all.indexOf("코펍") >= 0;
+        var hasBatang = all.indexOf("batang") >= 0 || all.indexOf("바탕") >= 0;
+        var hasPro = all.indexOf("pro") >= 0 || /kopubworldbatangp[mlb]/.test(all);
+
+        return hasKoPub && hasBatang && hasPro;
+    }
+
+    function getFontText(font, key) {
+        try {
+            return String(font[key] || "");
+        } catch (e) {
+            return "";
+        }
+    }
 })();
