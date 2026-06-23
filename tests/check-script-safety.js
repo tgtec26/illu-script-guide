@@ -73,6 +73,20 @@ for (const file of alignFiles) {
     console.error(`${textInput}: must offer circled number text inserts`);
     failures++;
   }
+  if (!/selectedOption\s*={2,3}\s*3[\s\S]*?fontName\s*=\s*"KoPubWorld바탕체_Pro"/.test(source)) {
+    console.error(`${textInput}: roman numerals must use KoPubWorld바탕체_Pro`);
+    failures++;
+  }
+  if (!source.includes("var viewLeft = viewBounds[0]") ||
+      !source.includes("var viewRight = viewBounds[2]") ||
+      !source.includes("var viewCenterX = (viewLeft + viewRight) / 2") ||
+      !source.includes("var baselineY = viewBottom + bottomMargin + maxHeight") ||
+      !source.includes("textFrames[i].position = [currentX, baselineY]") ||
+      !source.includes("currentX += textFrames[i].width + horizontalGap") ||
+      /artboardLeft/.test(source)) {
+    console.error(`${textInput}: text inserts must be laid out horizontally at the bottom center of the current view`);
+    failures++;
+  }
 }
 
 {

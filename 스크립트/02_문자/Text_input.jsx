@@ -5,17 +5,13 @@
     }
     var doc = app.activeDocument;
     
-    // 현재 활성화된 대지 가져오기
-    var artboard = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-    var artboardRect = artboard.artboardRect;
-    var artboardLeft = artboardRect[0]; // 활성 대지의 왼쪽 경계
-    
     // 현재 보고 있는 화면의 영역 가져오기
     var view = doc.views[0];
     var viewBounds = view.bounds;
-    var viewTop = viewBounds[1];
+    var viewLeft = viewBounds[0];
+    var viewRight = viewBounds[2];
     var viewBottom = viewBounds[3];
-    var viewCenterY = (viewTop + viewBottom) / 2; // 화면의 세로 중앙
+    var viewCenterX = (viewLeft + viewRight) / 2; // 화면의 가로 중앙
     
     // 다이얼로그 생성
     var dialog = new Window("dialog", "텍스트 삽입 선택");
@@ -93,7 +89,7 @@
     } else if (selectedOption === 3) {
         contentsArray = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ"];
         fontSize = 8;
-        fontName = "KoPubWorldBatangMedium";
+        fontName = "KoPubWorld바탕체_Pro";
     } else if (selectedOption === 4) {
         contentsArray = ["㉠", "㉡", "㉢", "㉣", "㉤"];
         fontSize = 9;
@@ -112,7 +108,8 @@
         fontName = "BEDFGG+GSMediumB1";
     }
     
-    var verticalGap = 5; // 세로 간격
+    var horizontalGap = 5; // 가로 간격
+    var bottomMargin = 20; // 화면 하단에서 띄울 간격
     
     var targetFont;
     try {
@@ -126,9 +123,10 @@
         }
     }
     
-    // 먼저 모든 텍스트 프레임을 생성하여 전체 높이 계산
+    // 먼저 모든 텍스트 프레임을 생성하여 전체 너비와 최대 높이 계산
     var textFrames = [];
-    var totalHeight = 0;
+    var totalWidth = 0;
+    var maxHeight = 0;
     
     for (var i = 0; i < contentsArray.length; i++) {
         var tf = doc.textFrames.add();
@@ -139,20 +137,22 @@
         } catch(err) {}
         textFrames.push(tf);
         
-        totalHeight += tf.height;
+        totalWidth += tf.width;
         if (i < contentsArray.length - 1) {
-            totalHeight += verticalGap;
+            totalWidth += horizontalGap;
+        }
+        if (tf.height > maxHeight) {
+            maxHeight = tf.height;
         }
     }
     
-    // 전체 텍스트 그룹의 시작 Y 위치 계산 (화면 중앙에 배치되도록)
-    var startY = viewCenterY + (totalHeight / 2);
-    var currentY = startY;
+    // 현재 보이는 화면의 6시 방향에 가로로 배치
+    var currentX = viewCenterX - (totalWidth / 2);
+    var baselineY = viewBottom + bottomMargin + maxHeight;
     
-    // 활성 대지의 왼쪽 가장자리, 화면 세로 중앙에 배치
     for (var i = 0; i < textFrames.length; i++) {
-        textFrames[i].position = [artboardLeft, currentY];
-        currentY -= (textFrames[i].height + verticalGap);
+        textFrames[i].position = [currentX, baselineY];
+        currentX += textFrames[i].width + horizontalGap;
     }
     
     doc.selection = null;
