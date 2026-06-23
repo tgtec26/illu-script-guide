@@ -12,9 +12,9 @@
     pnlOptions.margins = 15;
     
     var grpFont = pnlOptions.add("group");
-    var radRoman = grpFont.add("radiobutton", undefined, "로만체");
     var radItalic = grpFont.add("radiobutton", undefined, "이탤릭체");
-    radRoman.value = true; // 기본값: 로만체
+    var radRoman = grpFont.add("radiobutton", undefined, "로만체");
+    radItalic.value = true; // 기본값: 이탤릭체
 
     var grpCase = pnlOptions.add("group");
     var radLower = grpCase.add("radiobutton", undefined, "소문자");
@@ -120,7 +120,7 @@
                 var textItem = layer.textFrames.add();
                 
                 textItem.contents = charBase + numStr;
-                textItem.textRange.characterAttributes.size = 14;
+                textItem.textRange.characterAttributes.size = 8;
                 if (targetFont) {
                     textItem.textRange.characterAttributes.textFont = targetFont;
                 }
@@ -166,7 +166,7 @@
             return;
         }
 
-        var fontStyle = radRoman.value ? "Roman" : "Italic";
+        var fontStyle = radItalic.value ? "Italic" : "Roman";
         var textCase = radLower.value ? "Lower" : "Upper";
 
         // 배열 데이터를 직접 넘겨서 그리기 함수 실행

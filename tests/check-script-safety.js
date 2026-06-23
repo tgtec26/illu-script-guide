@@ -12,6 +12,7 @@ const alignFiles = [
 
 const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
 const textInput = "스크립트/02_문자/Text_input.jsx";
+const subscriptedVariable = "스크립트/02_문자/Text_SubscriptedVariable.jsx";
 const graySelection = "스크립트/03_색상/Color_graysel.jsx";
 const fitToMargin = "스크립트/10_기타/fit2mm.jsx";
 const findSimilar = "스크립트/10_기타/find-replace.jsx";
@@ -98,6 +99,17 @@ for (const file of alignFiles) {
       !source.includes("currentX += textFrames[i].width + horizontalGap") ||
       /artboardLeft/.test(source)) {
     console.error(`${textInput}: text inserts must be laid out horizontally at the bottom center of the current view`);
+    failures++;
+  }
+}
+
+{
+  const source = read(subscriptedVariable);
+  if (!/var\s+radItalic\s*=\s*grpFont\.add\("radiobutton",\s*undefined,\s*"이탤릭체"\);[\s\S]*?var\s+radRoman\s*=\s*grpFont\.add\("radiobutton",\s*undefined,\s*"로만체"\);/.test(source) ||
+      !source.includes("radItalic.value = true") ||
+      !source.includes('var fontStyle = radItalic.value ? "Italic" : "Roman"') ||
+      !source.includes("textItem.textRange.characterAttributes.size = 8")) {
+    console.error(`${subscriptedVariable}: italic must be the left/default style and generated text must be 8pt`);
     failures++;
   }
 }
