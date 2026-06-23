@@ -138,4 +138,3 @@ Get-ChildItem -Path $SourceDir -Force | Where-Object { $_.Name -ne ".DS_Store" }
 }
 
 Write-Host "완료. Illustrator가 열려 있다면 재시작하세요."
-Read-Host "Enter 키를 누르면 닫습니다"

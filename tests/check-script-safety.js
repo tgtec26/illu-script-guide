@@ -180,6 +180,10 @@ for (const file of updaterFiles) {
     console.error("update-windows.ps1: must explicitly support Windows PowerShell 5.1 or newer");
     failures++;
   }
+  if (/Write-Host\s+"완료\.[\s\S]*?Read-Host\s+"Enter 키를 누르면 닫습니다"/.test(source)) {
+    console.error("update-windows.ps1: successful updates must close without waiting for Enter");
+    failures++;
+  }
   if (bytes[0] !== 0xef || bytes[1] !== 0xbb || bytes[2] !== 0xbf) {
     console.error("update-windows.ps1: must be saved as UTF-8 with BOM for Windows PowerShell 5.1 Korean paths");
     failures++;
