@@ -16,6 +16,7 @@ const subscriptedVariable = "스크립트/02_문자/Text_SubscriptedVariable.jsx
 const graySelection = "스크립트/03_색상/Color_graysel.jsx";
 const fitToMargin = "스크립트/10_기타/fit2mm.jsx";
 const findSimilar = "스크립트/10_기타/find-replace.jsx";
+const embedLinkedImages = "스크립트/10_기타/embed.jsx";
 const updaterFiles = ["update-mac.command", "update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -137,6 +138,19 @@ for (const file of alignFiles) {
       !/state\.hasStroke\s*=\s*true/.test(source) ||
       !/return\s+state\.hasStroke\s*&&\s*!state\.hasFill\s*\?\s*"stroke"\s*:\s*"fill"/.test(source)) {
     console.error(`${graySelection}: stroke-only selections must default to Stroke`);
+    failures++;
+  }
+}
+
+{
+  const source = read(embedLinkedImages);
+  if (/alert\s*\(\s*resultMessage\s*\)/.test(source) ||
+      source.includes('var resultMessage = "처리가 완료되었습니다.\\n"')) {
+    console.error(`${embedLinkedImages}: successful embed completion must not show a popup`);
+    failures++;
+  }
+  if (!source.includes('alert("먼저 문서를 열어주세요.")')) {
+    console.error(`${embedLinkedImages}: missing-document warning must remain visible`);
     failures++;
   }
 }

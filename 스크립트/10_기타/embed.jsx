@@ -41,15 +41,6 @@ if (app.documents.length > 0) {
         }
     }
 
-    var resultMessage = "처리가 완료되었습니다.\n";
-    resultMessage += "- 성공: " + successCount + "개\n";
-    
-    if (failCount > 0) {
-        resultMessage += "- 실패: " + failCount + "개 (링크 유실 또는 권한 문제)";
-    }
-
-    alert(resultMessage);
-
 } else {
     alert("먼저 문서를 열어주세요.");
 }
