@@ -70,9 +70,18 @@ for (const file of alignFiles) {
 
 {
   const source = read(textInput);
-  if (!source.includes('buttonGroup.add("button", undefined, "①, ②, ③, ④, ⑤")') ||
+  const textInputArrays = source.match(/contentsArray\s*=\s*\[[^\]]+\]/g) || [];
+  if (textInputArrays.length !== 7 ||
+      textInputArrays.some((arraySource) => {
+        const items = arraySource.match(/"[^"]*"/g) || [];
+        return items.length !== 6;
+      })) {
+    console.error(`${textInput}: every text insert option must provide exactly 6 items`);
+    failures++;
+  }
+  if (!source.includes('buttonGroup.add("button", undefined, "①, ②, ③, ④, ⑤, ⑥")') ||
       !source.includes('selectedOption = 7') ||
-      !source.includes('contentsArray = ["①", "②", "③", "④", "⑤"]')) {
+      !source.includes('contentsArray = ["①", "②", "③", "④", "⑤", "⑥"]')) {
     console.error(`${textInput}: must offer circled number text inserts`);
     failures++;
   }

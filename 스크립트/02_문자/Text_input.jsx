@@ -22,13 +22,13 @@
     buttonGroup.orientation = "column";
     buttonGroup.alignChildren = "fill";
     
-    var btn1 = buttonGroup.add("button", undefined, "(가), (나), (다), (라)");
-    var btn2 = buttonGroup.add("button", undefined, "A, B, C, D");
-    var btn3 = buttonGroup.add("button", undefined, "Ⅰ, Ⅱ, Ⅲ, Ⅳ, Ⅴ");
-    var btn4 = buttonGroup.add("button", undefined, "㉠, ㉡, ㉢, ㉣, ㉤");
-    var btn5 = buttonGroup.add("button", undefined, "ⓐ, ⓑ, ⓒ, ⓓ, ⓔ");
-    var btn6 = buttonGroup.add("button", undefined, "1, 2, 3, 4, 5");
-    var btn7 = buttonGroup.add("button", undefined, "①, ②, ③, ④, ⑤");
+    var btn1 = buttonGroup.add("button", undefined, "(가), (나), (다), (라), (마), (바)");
+    var btn2 = buttonGroup.add("button", undefined, "A, B, C, D, E, F");
+    var btn3 = buttonGroup.add("button", undefined, "Ⅰ, Ⅱ, Ⅲ, Ⅳ, Ⅴ, Ⅵ");
+    var btn4 = buttonGroup.add("button", undefined, "㉠, ㉡, ㉢, ㉣, ㉤, ㉥");
+    var btn5 = buttonGroup.add("button", undefined, "ⓐ, ⓑ, ⓒ, ⓓ, ⓔ, ⓕ");
+    var btn6 = buttonGroup.add("button", undefined, "1, 2, 3, 4, 5, 6");
+    var btn7 = buttonGroup.add("button", undefined, "①, ②, ③, ④, ⑤, ⑥");
     
     var selectedOption = null;
     
@@ -91,31 +91,31 @@
     var contentsArray, fontSize, fontNames;
     
     if (selectedOption === 1) {
-        contentsArray = ["(가)", "(나)", "(다)", "(라)"];
+        contentsArray = ["(가)", "(나)", "(다)", "(라)", "(마)", "(바)"];
         fontSize = 10;
         fontNames = ["Batang"];
     } else if (selectedOption === 2) {
-        contentsArray = ["A", "B", "C", "D"];
+        contentsArray = ["A", "B", "C", "D", "E", "F"];
         fontSize = 8;
         fontNames = ["BEDFGG+GSMediumB1"];
     } else if (selectedOption === 3) {
-        contentsArray = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ"];
+        contentsArray = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ"];
         fontSize = 8;
         fontNames = romanFontCandidates;
     } else if (selectedOption === 4) {
-        contentsArray = ["㉠", "㉡", "㉢", "㉣", "㉤"];
+        contentsArray = ["㉠", "㉡", "㉢", "㉣", "㉤", "㉥"];
         fontSize = 9;
         fontNames = ["Batang"];
     } else if (selectedOption === 5) {
-        contentsArray = ["ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ"];
+        contentsArray = ["ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ"];
         fontSize = 9;
         fontNames = ["Batang"];
     } else if (selectedOption === 6) {
-        contentsArray = ["1", "2", "3", "4", "5"];
+        contentsArray = ["1", "2", "3", "4", "5", "6"];
         fontSize = 8;
         fontNames = ["BEDFGG+GSMediumB1"];
     } else if (selectedOption === 7) {
-        contentsArray = ["①", "②", "③", "④", "⑤"];
+        contentsArray = ["①", "②", "③", "④", "⑤", "⑥"];
         fontSize = 8;
         fontNames = ["BEDFGG+GSMediumB1"];
     }
