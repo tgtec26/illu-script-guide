@@ -9,6 +9,8 @@ const alignFiles = [
   "스크립트/05_정렬/Align_1mmVcenterB.jsx",
   "스크립트/05_정렬/Align_1mmVcenterS.jsx",
 ];
+const centerAlignBig = "스크립트/05_정렬/Align_CenterB.jsx";
+const centerAlignSmall = "스크립트/05_정렬/Align_CenterS.jsx";
 
 const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
 const textInput = "스크립트/02_문자/Text_input.jsx";
@@ -109,6 +111,54 @@ for (const file of alignFiles) {
       !source.includes("currentX += textFrames[i].width + horizontalGap") ||
       /artboardLeft/.test(source)) {
     console.error(`${textInput}: text inserts must be laid out horizontally at the bottom center of the current view`);
+    failures++;
+  }
+}
+
+for (const file of [centerAlignBig, centerAlignSmall]) {
+  const source = read(file);
+  const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+  const activeDocLine = lineOf(source, /app\.activeDocument/);
+
+  if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+    console.error(`${file}: app.documents.length guard must run before app.activeDocument`);
+    failures++;
+  }
+
+  if (!source.includes('Folder.temp + "/illu_last_script.txt"') ||
+      !source.includes("__memo.write($.fileName)")) {
+    console.error(`${file}: must record itself for Align_RepeatLast.jsx`);
+    failures++;
+  }
+
+  if (!/finally\s*\{[\s\S]*tempObj\.remove\(\)/.test(source)) {
+    console.error(`${file}: temporary outlined text duplicate must be removed in finally`);
+    failures++;
+  }
+
+  if (!source.includes("sel[j] === keyObject") ||
+      !source.includes("alignToKeyCenter") ||
+      !source.includes("getCenterX") ||
+      !source.includes("getCenterY")) {
+    console.error(`${file}: non-key objects must align both centers to the key object`);
+    failures++;
+  }
+}
+
+{
+  const source = read(centerAlignBig);
+  if (!source.includes("var maxArea") ||
+      !/if\s*\(\s*area\s*>\s*maxArea\s*\)/.test(source)) {
+    console.error(`${centerAlignBig}: largest area object must be the key object`);
+    failures++;
+  }
+}
+
+{
+  const source = read(centerAlignSmall);
+  if (!source.includes("var minArea") ||
+      !/if\s*\(\s*area\s*<\s*minArea\s*\)/.test(source)) {
+    console.error(`${centerAlignSmall}: smallest area object must be the key object`);
     failures++;
   }
 }
