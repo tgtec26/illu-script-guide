@@ -1,6 +1,6 @@
 (function() {
     // 1. ScriptUI 창 구성
-    var win = new Window("dialog", "하첨자 기호 생성기 by cjh");
+    var win = new Window("dialog", "첨자 문자 만들기 by cjh");
     win.orientation = "column";
     win.alignChildren = ["fill", "top"];
     win.spacing = 15;
@@ -80,12 +80,44 @@
         for (var j = 0; j < chkNums.length; j++) chkNums[j].value = false;
     };
 
+    // --- 윗첨자 이온 선택 패널 ---
+    var pnlIon = win.add("panel", undefined, "윗첨자 이온 선택");
+    pnlIon.alignChildren = "fill";
+    pnlIon.margins = 15;
+
+    var grpIonTop = pnlIon.add("group");
+    grpIonTop.alignment = "right";
+    var btnDeselectIon = grpIonTop.add("button", undefined, "전체 해제");
+
+    var rowIonNum = pnlIon.add("group");
+    rowIonNum.orientation = "row";
+    rowIonNum.alignChildren = "left";
+    var chkIonNums = [];
+    for (var n = 1; n <= 7; n++) {
+        chkIonNums[n-1] = rowIonNum.add("checkbox", undefined, n.toString());
+        chkIonNums[n-1].preferredSize.width = 40;
+    }
+
+    var rowIonSign = pnlIon.add("group");
+    rowIonSign.orientation = "row";
+    rowIonSign.alignChildren = "left";
+    var chkIonPlus = rowIonSign.add("checkbox", undefined, "+");
+    var chkIonMinus = rowIonSign.add("checkbox", undefined, "-");
+    chkIonPlus.preferredSize.width = 40;
+    chkIonMinus.preferredSize.width = 40;
+
+    btnDeselectIon.onClick = function() {
+        for (var n = 0; n < chkIonNums.length; n++) chkIonNums[n].value = false;
+        chkIonPlus.value = false;
+        chkIonMinus.value = false;
+    };
+
     // --- 실행 버튼 ---
-    var btnGenerate = win.add("button", undefined, "하첨자 기호 생성하기", {name: "ok"});
+    var btnGenerate = win.add("button", undefined, "첨자 문자 만들기", {name: "ok"});
     btnGenerate.preferredSize.height = 40;
 
     // 2. 핵심 그리기 로직 (일러스트레이터 제어)
-    function drawSubscriptSymbols(fontStyle, textCase, alphabetsArr, numbersArr) {
+    function drawScriptSymbols(fontStyle, textCase, alphabetsArr, subscriptNumbersArr, ionNumbersArr, ionSignsArr) {
         if (app.documents.length === 0) return "에러: 열려있는 문서가 없습니다.";
 
         var doc = app.activeDocument;
@@ -115,8 +147,8 @@
                 charBase = charBase.toLowerCase();
             }
 
-            for (var j = 0; j < numbersArr.length; j++) {
-                var numStr = numbersArr[j];
+            for (var j = 0; j < subscriptNumbersArr.length; j++) {
+                var numStr = subscriptNumbersArr[j];
                 var textItem = layer.textFrames.add();
                 
                 textItem.contents = charBase + numStr;
@@ -143,6 +175,38 @@
                 currentX += width + gap; // 5mm 간격으로 우측 이동
                 textItem.selected = true;
             }
+
+            var normalizedIonNumbers = ionNumbersArr.length > 0 ? ionNumbersArr : [""];
+            for (var m = 0; m < normalizedIonNumbers.length; m++) {
+                for (var s = 0; s < ionSignsArr.length; s++) {
+                    var ionNumStr = normalizedIonNumbers[m];
+                    var ionNumberText = ionNumStr === "1" ? "" : ionNumStr;
+                    var ionSignStr = ionSignsArr[s];
+                    var ionTextItem = layer.textFrames.add();
+
+                    ionTextItem.contents = charBase + ionNumberText + ionSignStr;
+                    ionTextItem.textRange.characterAttributes.size = 8;
+                    if (targetFont) {
+                        ionTextItem.textRange.characterAttributes.textFont = targetFont;
+                    }
+
+                    var ionCharLength = charBase.length;
+                    for (var p = ionCharLength; p < ionTextItem.contents.length; p++) {
+                        ionTextItem.textRange.characters[p].characterAttributes.baselinePosition = FontBaselineOption.SUPERSCRIPT;
+                    }
+
+                    ionTextItem.top = currentY;
+                    ionTextItem.left = currentX;
+
+                    var ionBounds = ionTextItem.geometricBounds;
+                    var ionWidth = ionBounds[2] - ionBounds[0];
+                    var ionHeight = ionBounds[1] - ionBounds[3];
+
+                    if (ionHeight > maxHeight) maxHeight = ionHeight;
+                    currentX += ionWidth + gap;
+                    ionTextItem.selected = true;
+                }
+            }
             // 한 줄(알파벳 하나) 완성 후 5mm 간격으로 아래로 이동
             currentY -= (maxHeight > 0 ? maxHeight : 14) + gap;
         }
@@ -161,8 +225,22 @@
             if (chkNums[j].value) selectedNums.push((j + 1).toString());
         }
 
-        if (selectedAlphas.length === 0 || selectedNums.length === 0) {
-            alert("알파벳과 숫자를 각각 하나 이상 선택해 주세요.");
+        var selectedIonNums = [];
+        for (var n = 0; n < chkIonNums.length; n++) {
+            if (chkIonNums[n].value) selectedIonNums.push((n + 1).toString());
+        }
+
+        var selectedIonSigns = [];
+        if (chkIonPlus.value) selectedIonSigns.push("+");
+        if (chkIonMinus.value) selectedIonSigns.push("-");
+
+        if (selectedAlphas.length === 0 || (selectedNums.length === 0 && selectedIonSigns.length === 0)) {
+            alert("알파벳과 하첨자 숫자 또는 윗첨자 이온 조합을 선택해 주세요.");
+            return;
+        }
+
+        if (selectedIonNums.length > 0 && selectedIonSigns.length === 0) {
+            alert("윗첨자 이온은 숫자와 + 또는 -를 함께 선택해 주세요.");
             return;
         }
 
@@ -170,7 +248,7 @@
         var textCase = radLower.value ? "Lower" : "Upper";
 
         // 배열 데이터를 직접 넘겨서 그리기 함수 실행
-        drawSubscriptSymbols(fontStyle, textCase, selectedAlphas, selectedNums);
+        drawScriptSymbols(fontStyle, textCase, selectedAlphas, selectedNums, selectedIonNums, selectedIonSigns);
         win.close(); // 생성 후 창 닫기
     };
 

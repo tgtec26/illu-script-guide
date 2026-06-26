@@ -173,6 +173,33 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     console.error(`${subscriptedVariable}: italic must be the left/default style and generated text must be 8pt`);
     failures++;
   }
+  const requiredIonTokens = [
+    'new Window("dialog", "첨자 문자 만들기 by cjh")',
+    'var pnlIon = win.add("panel", undefined, "윗첨자 이온 선택")',
+    'var chkIonNums = []',
+    'var chkIonPlus = rowIonSign.add("checkbox", undefined, "+")',
+    'var chkIonMinus = rowIonSign.add("checkbox", undefined, "-")',
+    'var btnGenerate = win.add("button", undefined, "첨자 문자 만들기", {name: "ok"})',
+    'function drawScriptSymbols(fontStyle, textCase, alphabetsArr, subscriptNumbersArr, ionNumbersArr, ionSignsArr)',
+    'FontBaselineOption.SUPERSCRIPT',
+    'drawScriptSymbols(fontStyle, textCase, selectedAlphas, selectedNums, selectedIonNums, selectedIonSigns)',
+  ];
+  for (const token of requiredIonTokens) {
+    if (!source.includes(token)) {
+      console.error(`${subscriptedVariable}: missing ion superscript support token: ${token}`);
+      failures++;
+    }
+  }
+  if (!source.includes('var normalizedIonNumbers = ionNumbersArr.length > 0 ? ionNumbersArr : [""]') ||
+      !source.includes('var ionNumberText = ionNumStr === "1" ? "" : ionNumStr') ||
+      !/\.contents\s*=\s*charBase\s*\+\s*ionNumberText\s*\+\s*ionSignStr/.test(source)) {
+    console.error(`${subscriptedVariable}: ion charge 1 must be omitted, including sign-only ions like H+`);
+    failures++;
+  }
+  if (!/if\s*\(\s*selectedAlphas\.length\s*={2,3}\s*0\s*\|\|\s*\(\s*selectedNums\.length\s*={2,3}\s*0\s*&&\s*selectedIonSigns\.length\s*={2,3}\s*0\s*\)\s*\)/.test(source)) {
+    console.error(`${subscriptedVariable}: must allow sign-only ion superscript selections such as H+`);
+    failures++;
+  }
 }
 
 {
