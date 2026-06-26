@@ -875,7 +875,7 @@
 	]
 	/keyIndex 39
 	/colorIndex 0
-	/isOpen 0
+	/isOpen 1
 	/eventCount 2
 	/event-1 {
 		/useRulersIn1stQuadrant 0
@@ -1681,7 +1681,7 @@
 	]
 	/keyIndex 25
 	/colorIndex 0
-	/isOpen 0
+	/isOpen 1
 	/eventCount 2
 	/event-1 {
 		/useRulersIn1stQuadrant 0
@@ -3111,7 +3111,7 @@
 			/showInPalette -1
 			/type (ustring)
 			/value [ 17
-				5f30303030303233313044373944434130
+				5f30303030303231433438413244454530
 			]
 		}
 		/parameter-2 {
@@ -3147,7 +3147,7 @@
 			/showInPalette -1
 			/type (ustring)
 			/value [ 17
-				5f30303030303230433142423134333330
+				5f30303030303231433932443941443430
 			]
 		}
 		/parameter-2 {
