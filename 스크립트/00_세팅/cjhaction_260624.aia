@@ -3,7 +3,7 @@
 	ecb59ceca285ed9b88
 ]
 /isOpen 1
-/actionCount 38
+/actionCount 37
 /action-1 {
 	/name [ 20
 		ec84b8eba19c20eab3b5eab08420ebb684ed8fac
@@ -257,178 +257,6 @@
 }
 /action-8 {
 	/name [ 10
-		47736d656469756d6231
-	]
-	/keyIndex 21
-	/colorIndex 0
-	/isOpen 1
-	/eventCount 1
-	/event-1 {
-		/useRulersIn1stQuadrant 0
-		/internalName (adobe_SLOCharacterPalette)
-		/localizedName [ 13
-			ebacb8ec9e9020ec84a4eca095
-		]
-		/isOpen 0
-		/isOn 1
-		/hasDialog 0
-		/parameterCount 23
-		/parameter-1 {
-			/key 1718578804
-			/showInPalette -1
-			/type (ustring)
-			/value [ 17
-				4245444647472b47534d656469756d4231
-			]
-		}
-		/parameter-2 {
-			/key 1635019876
-			/showInPalette -1
-			/type (boolean)
-			/value 1
-		}
-		/parameter-3 {
-			/key 1635019621
-			/showInPalette -1
-			/type (boolean)
-			/value 1
-		}
-		/parameter-4 {
-			/key 1953653611
-			/showInPalette -1
-			/type (integer)
-			/value 0
-		}
-		/parameter-5 {
-			/key 1936292453
-			/showInPalette -1
-			/type (unit real)
-			/value 8.0
-			/unit 592476268
-		}
-		/parameter-6 {
-			/key 1986359924
-			/showInPalette -1
-			/type (unit real)
-			/value 100.0
-			/unit 592474723
-		}
-		/parameter-7 {
-			/key 1752134249
-			/showInPalette -1
-			/type (unit real)
-			/value 100.0
-			/unit 592474723
-		}
-		/parameter-8 {
-			/key 1650553701
-			/showInPalette -1
-			/type (unit real)
-			/value 0.5
-			/unit 592476268
-		}
-		/parameter-9 {
-			/key 1651664235
-			/showInPalette -1
-			/type (boolean)
-			/value 0
-		}
-		/parameter-10 {
-			/key 1886547824
-			/showInPalette -1
-			/type (boolean)
-			/value 1
-		}
-		/parameter-11 {
-			/key 1936488820
-			/showInPalette -1
-			/type (boolean)
-			/value 0
-		}
-		/parameter-12 {
-			/key 1970170990
-			/showInPalette -1
-			/type (boolean)
-			/value 0
-		}
-		/parameter-13 {
-			/key 1937011307
-			/showInPalette -1
-			/type (boolean)
-			/value 0
-		}
-		/parameter-14 {
-			/key 1920100726
-			/showInPalette -1
-			/type (boolean)
-			/value 1
-		}
-		/parameter-15 {
-			/key 1919247987
-			/showInPalette -1
-			/type (unit real)
-			/value 8.0
-			/unit 592476268
-		}
-		/parameter-16 {
-			/key 1919247988
-			/showInPalette -1
-			/type (integer)
-			/value 0
-		}
-		/parameter-17 {
-			/key 1818324583
-			/showInPalette -1
-			/type (enumerated)
-			/name [ 14
-				ec9881ec96b43a20ebafb8eab5ad
-			]
-			/value 0
-		}
-		/parameter-18 {
-			/key 1634494823
-			/showInPalette -1
-			/type (integer)
-			/value 2
-		}
-		/parameter-19 {
-			/key 1634494835
-			/showInPalette -1
-			/type (ustring)
-			/value [ 23
-				eca084eab08120ec8381ec9e9020eab080ec9ab4eb8db0
-			]
-		}
-		/parameter-20 {
-			/key 1937075557
-			/showInPalette -1
-			/type (unit real)
-			/value 0.0
-			/unit 592474723
-		}
-		/parameter-21 {
-			/key 1635019883
-			/showInPalette -1
-			/type (boolean)
-			/value 1
-		}
-		/parameter-22 {
-			/key 1635021419
-			/showInPalette -1
-			/type (boolean)
-			/value 1
-		}
-		/parameter-23 {
-			/key 1919906915
-			/showInPalette -1
-			/type (unit real)
-			/value 0.0
-			/unit 591490663
-		}
-	}
-}
-/action-9 {
-	/name [ 10
 		47736d656469756d6331
 	]
 	/keyIndex 0
@@ -599,7 +427,7 @@
 		}
 	}
 }
-/action-10 {
+/action-9 {
 	/name [ 6
 		ed9995ec9ea5
 	]
@@ -655,7 +483,7 @@
 		/parameterCount 0
 	}
 }
-/action-11 {
+/action-10 {
 	/name [ 13
 		ec8898eb8aa520ec849cecb2b4
 	]
@@ -691,7 +519,7 @@
 		}
 	}
 }
-/action-12 {
+/action-11 {
 	/name [ 6
 		ed9db0ec8389
 	]
@@ -727,7 +555,7 @@
 		}
 	}
 }
-/action-13 {
+/action-12 {
 	/name [ 13
 		ed9db0ec838920eb9dbcec9db8
 	]
@@ -763,7 +591,7 @@
 		}
 	}
 }
-/action-14 {
+/action-13 {
 	/name [ 6
 		eba9b432304b
 	]
@@ -799,7 +627,7 @@
 		}
 	}
 }
-/action-15 {
+/action-14 {
 	/name [ 13
 		ec9d8cec988120ec84a0ed839d
 	]
@@ -835,7 +663,7 @@
 		}
 	}
 }
-/action-16 {
+/action-15 {
 	/name [ 9
 		eab280ec9d80ec8389
 	]
@@ -871,7 +699,7 @@
 		}
 	}
 }
-/action-17 {
+/action-16 {
 	/name [ 15
 		eab280ec9d80ec8389eb9dbcec9db8
 	]
@@ -907,7 +735,7 @@
 		}
 	}
 }
-/action-18 {
+/action-17 {
 	/name [ 14
 		ec84a020eb9190eabb9820302e33
 	]
@@ -1041,7 +869,7 @@
 		}
 	}
 }
-/action-19 {
+/action-18 {
 	/name [ 20
 		302e3320ed9994ec82b4ecb48920eb84a3eab8b0
 	]
@@ -1206,13 +1034,13 @@
 		}
 	}
 }
-/action-20 {
+/action-19 {
 	/name [ 27
 		302e3320ec9691ecaabd20ed9994ec82b4ecb48920eb84a3eab8b0
 	]
 	/keyIndex 55
 	/colorIndex 0
-	/isOpen 0
+	/isOpen 1
 	/eventCount 2
 	/event-1 {
 		/useRulersIn1stQuadrant 0
@@ -1377,7 +1205,7 @@
 		}
 	}
 }
-/action-21 {
+/action-20 {
 	/name [ 14
 		ec84a020eb9190eabb9820302e34
 	]
@@ -1511,7 +1339,7 @@
 		}
 	}
 }
-/action-22 {
+/action-21 {
 	/name [ 20
 		302e3420ed9994ec82b4ecb48920eb84a3eab8b0
 	]
@@ -1676,7 +1504,7 @@
 		}
 	}
 }
-/action-23 {
+/action-22 {
 	/name [ 27
 		302e3420ec9691ecaabd20ed9994ec82b4ecb48920eb84a3eab8b0
 	]
@@ -1847,7 +1675,7 @@
 		}
 	}
 }
-/action-24 {
+/action-23 {
 	/name [ 13
 		ec84a0eb9190eabb9820302e35
 	]
@@ -1981,7 +1809,7 @@
 		}
 	}
 }
-/action-25 {
+/action-24 {
 	/name [ 20
 		302e3520ed9994ec82b4ecb48920eb84a3eab8b0
 	]
@@ -2146,7 +1974,7 @@
 		}
 	}
 }
-/action-26 {
+/action-25 {
 	/name [ 14
 		ec84a020eb9190eabb9820302e38
 	]
@@ -2280,7 +2108,7 @@
 		}
 	}
 }
-/action-27 {
+/action-26 {
 	/name [ 22
 		eb9dbcec9db4ebb88ceb9faceba6ac20ed8faced95a8
 	]
@@ -2316,7 +2144,7 @@
 		}
 	}
 }
-/action-28 {
+/action-27 {
 	/name [ 6
 		eb8c80eca780
 	]
@@ -2352,7 +2180,7 @@
 		}
 	}
 }
-/action-29 {
+/action-28 {
 	/name [ 16
 		eb8f84ed989520ed95a9ecb998eab8b0
 	]
@@ -2381,7 +2209,7 @@
 		}
 	}
 }
-/action-30 {
+/action-29 {
 	/name [ 30
 		eab280ec9d8020ecb9a020ec8389ec838120ed9db0ec8389ec9cbceba19c
 	]
@@ -2451,7 +2279,7 @@
 		}
 	}
 }
-/action-31 {
+/action-30 {
 	/name [ 23
 		eab280ec9d8020ec84a020ed9db0ec8389ec9cbceba19c
 	]
@@ -2521,7 +2349,7 @@
 		}
 	}
 }
-/action-32 {
+/action-31 {
 	/name [ 13
 		ed919c20eba78ceb93a4eab8b0
 	]
@@ -2557,7 +2385,7 @@
 		}
 	}
 }
-/action-33 {
+/action-32 {
 	/name [ 21
 		eab880ec9e90eab9a8eab3a0ed9db0eb9dbcec9db8
 	]
@@ -2696,7 +2524,7 @@
 		}
 	}
 }
-/action-34 {
+/action-33 {
 	/name [ 15
 		ed858dec8aa4ed8ab8ec82bdec9e85
 	]
@@ -2732,7 +2560,7 @@
 		}
 	}
 }
-/action-35 {
+/action-34 {
 	/name [ 16
 		ed9994ec82b4ed919c20ed9995ec9ea5
 	]
@@ -2981,7 +2809,7 @@
 		}
 	}
 }
-/action-36 {
+/action-35 {
 	/name [ 16
 		ec9db4eca491ec84a020ed9aa8eab3bc
 	]
@@ -3260,225 +3088,76 @@
 		}
 	}
 }
-/action-37 {
+/action-36 {
 	/name [ 13
 		eca095eba0ac20ebb098ebb3b5
 	]
 	/keyIndex 9
 	/colorIndex 0
 	/isOpen 1
-	/eventCount 0
-}
-/action-38 {
-	/name [ 13
-		ed9994ec82b4ed919c20323025
-	]
-	/keyIndex 0
-	/colorIndex 0
-	/isOpen 1
-	/eventCount 2
+	/eventCount 1
 	/event-1 {
 		/useRulersIn1stQuadrant 0
-		/internalName (ai_plugin_setStroke)
-		/localizedName [ 10
-			ec84a020ec84a4eca095
+		/internalName (adobe_commandManager)
+		/localizedName [ 20
+			eca091eab7bc20eba994eb89b420ed95adebaaa9
 		]
 		/isOpen 0
 		/isOn 1
 		/hasDialog 0
-		/parameterCount 12
+		/parameterCount 2
 		/parameter-1 {
-			/key 2003072104
+			/key 1769238125
 			/showInPalette -1
-			/type (unit real)
-			/value 8.0
-			/unit 592476268
+			/type (ustring)
+			/value [ 17
+				5f30303030303233313044373944434130
+			]
 		}
 		/parameter-2 {
-			/key 1667330094
-			/showInPalette -1
-			/type (enumerated)
-			/name [ 13
-				eca091ed959c20eb8ba8eba9b4
-			]
-			/value 0
-		}
-		/parameter-3 {
-			/key 1836344690
-			/showInPalette -1
-			/type (real)
-			/value 10.0
-		}
-		/parameter-4 {
-			/key 1785686382
-			/showInPalette -1
-			/type (enumerated)
-			/name [ 13
-				eab081eca78420ec97b0eab2b0
-			]
-			/value 0
-		}
-		/parameter-5 {
-			/key 1684825454
-			/showInPalette -1
-			/type (integer)
-			/value 0
-		}
-		/parameter-6 {
-			/key 1684104298
-			/showInPalette -1
-			/type (boolean)
-			/value 0
-		}
-		/parameter-7 {
-			/key 1634231345
+			/key 1818455661
 			/showInPalette -1
 			/type (ustring)
-			/value [ 8
-				5bec9786ec9d8c5d
+			/value [ 27
+				30355feca095eba0ac3a20416c69676e5f5265706561744c617374
 			]
-		}
-		/parameter-8 {
-			/key 1634231346
-			/showInPalette -1
-			/type (ustring)
-			/value [ 11
-				ed9994ec82b4ed919c2033
-			]
-		}
-		/parameter-9 {
-			/key 1634951986
-			/showInPalette -1
-			/type (real)
-			/value 100.0
-		}
-		/parameter-10 {
-			/key 1634230636
-			/showInPalette -1
-			/type (enumerated)
-			/name [ 17
-				ed8ca8ec8aa420eb819dec9d9820ed8c81
-			]
-			/value 0
-		}
-		/parameter-11 {
-			/key 2003858022
-			/showInPalette -1
-			/type (ustring)
-			/value [ 11
-				ed8fad20ec868dec84b131
-			]
-		}
-		/parameter-12 {
-			/key 1634494318
-			/showInPalette -1
-			/type (enumerated)
-			/name [ 9
-				eab080ec9ab4eb8db0
-			]
-			/value 0
 		}
 	}
-	/event-2 {
+}
+/action-37 {
+	/name [ 12
+		ecb2a8ec9e90ebacb8ec9e90
+	]
+	/keyIndex 21
+	/colorIndex 0
+	/isOpen 1
+	/eventCount 1
+	/event-1 {
 		/useRulersIn1stQuadrant 0
-		/internalName (ai_plugin_setStroke)
-		/localizedName [ 10
-			ec84a020ec84a4eca095
+		/internalName (adobe_commandManager)
+		/localizedName [ 20
+			eca091eab7bc20eba994eb89b420ed95adebaaa9
 		]
 		/isOpen 0
 		/isOn 1
 		/hasDialog 0
-		/parameterCount 12
+		/parameterCount 2
 		/parameter-1 {
-			/key 2003072104
+			/key 1769238125
 			/showInPalette -1
-			/type (unit real)
-			/value 8.0
-			/unit 592476268
+			/type (ustring)
+			/value [ 17
+				5f30303030303230433142423134333330
+			]
 		}
 		/parameter-2 {
-			/key 1667330094
-			/showInPalette -1
-			/type (enumerated)
-			/name [ 13
-				eca091ed959c20eb8ba8eba9b4
-			]
-			/value 0
-		}
-		/parameter-3 {
-			/key 1836344690
-			/showInPalette -1
-			/type (real)
-			/value 10.0
-		}
-		/parameter-4 {
-			/key 1785686382
-			/showInPalette -1
-			/type (enumerated)
-			/name [ 13
-				eab081eca78420ec97b0eab2b0
-			]
-			/value 0
-		}
-		/parameter-5 {
-			/key 1684825454
-			/showInPalette -1
-			/type (integer)
-			/value 0
-		}
-		/parameter-6 {
-			/key 1684104298
-			/showInPalette -1
-			/type (boolean)
-			/value 0
-		}
-		/parameter-7 {
-			/key 1634231345
+			/key 1818455661
 			/showInPalette -1
 			/type (ustring)
-			/value [ 8
-				5bec9786ec9d8c5d
+			/value [ 35
+				30325febacb8ec9e903a20546578745f53756273637269707465645661726961
+				626c65
 			]
-		}
-		/parameter-8 {
-			/key 1634231346
-			/showInPalette -1
-			/type (ustring)
-			/value [ 11
-				ed9994ec82b4ed919c2033
-			]
-		}
-		/parameter-9 {
-			/key 1634951986
-			/showInPalette -1
-			/type (real)
-			/value 20.0
-		}
-		/parameter-10 {
-			/key 1634230636
-			/showInPalette -1
-			/type (enumerated)
-			/name [ 17
-				ed8ca8ec8aa420eb819dec9d9820ed8c81
-			]
-			/value 0
-		}
-		/parameter-11 {
-			/key 2003858022
-			/showInPalette -1
-			/type (ustring)
-			/value [ 11
-				ed8fad20ec868dec84b131
-			]
-		}
-		/parameter-12 {
-			/key 1634494318
-			/showInPalette -1
-			/type (enumerated)
-			/name [ 9
-				eab080ec9ab4eb8db0
-			]
-			/value 0
 		}
 	}
 }
