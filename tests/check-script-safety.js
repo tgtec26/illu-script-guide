@@ -19,6 +19,7 @@ const graySelection = "스크립트/03_색상/Color_graysel.jsx";
 const fitToMargin = "스크립트/10_기타/fit2mm.jsx";
 const findSimilar = "스크립트/10_기타/find-replace.jsx";
 const embedLinkedImages = "스크립트/10_기타/embed.jsx";
+const dashAlignHelper = "스크립트/01_도형/Object_setdash_align_helper.jsxinc";
 const updaterFiles = ["update-mac.command", "update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -210,6 +211,17 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
   }
   if (!source.includes('alert("먼저 문서를 열어주세요.")')) {
     console.error(`${embedLinkedImages}: missing-document warning must remain visible`);
+    failures++;
+  }
+}
+
+{
+  const source = read(dashAlignHelper);
+  if (!source.includes("function restoreDefaultStrokeEnds") ||
+      !source.includes("pathItem.strokeCap = StrokeCap.BUTTENDCAP") ||
+      !source.includes("pathItem.strokeJoin = StrokeJoin.MITERENDJOIN") ||
+      !/app\.doScript\(\s*actionName\s*,\s*actionSetName\s*\)[\s\S]*?restoreDefaultStrokeEnds\(\s*pathItem\s*\)/.test(source)) {
+    console.error(`${dashAlignHelper}: dash scripts must leave strokes with butt caps and miter joins after Illustrator action`);
     failures++;
   }
 }

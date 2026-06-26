@@ -27,14 +27,19 @@ function applyDashPatternToPath(pathItem, dashPattern, forceButtCap) {
     try {
         pathItem.stroked = true;
         pathItem.strokeDashes = dashPattern;
-        if (forceButtCap) {
-            pathItem.strokeCap = StrokeCap.BUTTENDCAP;
-        }
+        restoreDefaultStrokeEnds(pathItem);
 
         applyIllustratorDashCornerAlignment(pathItem, dashPattern);
     } catch(e) {
         // Locked or hidden artwork can throw; keep processing the rest.
     }
+}
+
+function restoreDefaultStrokeEnds(pathItem) {
+    try {
+        pathItem.strokeCap = StrokeCap.BUTTENDCAP;
+        pathItem.strokeJoin = StrokeJoin.MITERENDJOIN;
+    } catch(e) {}
 }
 
 function applyIllustratorDashCornerAlignment(pathItem, dashPattern) {
@@ -56,10 +61,12 @@ function applyIllustratorDashCornerAlignment(pathItem, dashPattern) {
 
         pathItem.stroked = true;
         pathItem.strokeDashes = dashPattern;
+        restoreDefaultStrokeEnds(pathItem);
     } catch(actionError) {
         // Some Illustrator versions can reject action-based stroke parameters.
         // The dash pattern remains applied even if the corner-alignment action fails.
     } finally {
+        restoreDefaultStrokeEnds(pathItem);
         removeActionSetIfLoaded(actionSetName);
         try {
             actionFile.remove();
