@@ -6,14 +6,14 @@
 
 ## macOS
 
-1. `update-mac.command` 더블클릭
+1. `script-action-update-mac.command` 더블클릭
 2. GitHub 로그인/권한 요청이 나오면 승인
 3. 관리자 암호 요청이 나오면 입력
 4. Illustrator 재시작
 
 ## Windows
 
-1. `update-windows.cmd` 더블클릭
+1. `script-action-update-windows.cmd` 더블클릭
 2. 권한 확인 창이 나오면 `예` 선택
 3. GitHub 로그인/권한 요청이 나오면 승인
 4. Illustrator 재시작
@@ -36,10 +36,12 @@
 
 ### 1. 파일 복사 (단축키 + 화살표 + 스크립트)
 
-- 일러스트를 **종료**한 상태에서 `새PC세팅.cmd` 더블클릭 (← 전체 세팅 전용)
+- macOS: 일러스트를 **종료**한 상태에서 `full-update-mac.command` 더블클릭 (← 전체 세팅 전용)
+- Windows: 일러스트를 **종료**한 상태에서 `full-update-windows.cmd` 더블클릭 (← 전체 세팅 전용)
 - 권한 확인 창이 나오면 `예`
 - 동작: GitHub 최신본 → 스크립트(`Scripts` 폴더), 단축키(`cjh250907.kys` → 설정 폴더), 화살표(`화살표.ai` → 설치 폴더 Resources) 복사
-- (참고) `새PC세팅.cmd` = `update-windows.ps1 -Full` 호출 런처. 터미널에서 `update-windows.cmd -Full` 해도 동일. 그냥 `update-windows.cmd`(더블클릭)는 **스크립트만** 갱신.
+- (참고) `full-update-mac.command` = `script-action-update-mac.command --full` 호출 런처. 터미널에서 `script-action-update-mac.command --full` 해도 동일. 그냥 `script-action-update-mac.command`(더블클릭)는 **스크립트만** 갱신.
+- (참고) `full-update-windows.cmd` = `script-action-update-windows.ps1 -Full` 호출 런처. 터미널에서 `script-action-update-windows.cmd -Full` 해도 동일. 그냥 `script-action-update-windows.cmd`(더블클릭)는 **스크립트만** 갱신.
 
 ### 2. 환경설정 + 액션 적용
 

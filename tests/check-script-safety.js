@@ -20,7 +20,7 @@ const fitToMargin = "스크립트/10_기타/fit2mm.jsx";
 const findSimilar = "스크립트/10_기타/find-replace.jsx";
 const embedLinkedImages = "스크립트/10_기타/embed.jsx";
 const dashAlignHelper = "스크립트/01_도형/Object_setdash_align_helper.jsxinc";
-const updaterFiles = ["update-mac.command", "update-windows.ps1", "UPDATE.md"];
+const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
@@ -268,57 +268,90 @@ for (const file of updaterFiles) {
 }
 
 {
-  const source = read("update-mac.command");
+  const source = read("script-action-update-mac.command");
   if (!source.includes("rsync -a --delete") || !source.includes("sudo")) {
-    console.error("update-mac.command: must sync managed folders and handle app-folder permissions");
+    console.error("script-action-update-mac.command: must sync managed folders and handle app-folder permissions");
     failures++;
   }
   if (!source.includes('TARGET_DIR="$APP_DIR/Presets.localized/ko_KR/스크립트"')) {
-    console.error("update-mac.command: must prefer Korean localized Illustrator script folder");
+    console.error("script-action-update-mac.command: must prefer Korean localized Illustrator script folder");
+    failures++;
+  }
+  if (!source.includes("FULL=0") ||
+      !source.includes("--full|-Full|-full|-f") ||
+      !source.includes('if [ "$FULL" -ne 1 ]') ||
+      !source.includes('KYS_NAME="cjh250907.kys"') ||
+      !source.includes('ARROW_NAME="화살표.ai"') ||
+      !source.includes('SETTINGS_BASE="$HOME/Library/Preferences/Adobe Illustrator $VER Settings"') ||
+      !source.includes('ARROW_DIR="$APP_DIR/Support Files/Required/Resources/ko_KR"')) {
+    console.error("script-action-update-mac.command: must support script-only mode and --full setup for shortcuts and arrows");
     failures++;
   }
 }
 
 {
-  const source = read("update-windows.ps1");
-  const bytes = readBuffer("update-windows.ps1");
+  const source = read("full-update-mac.command");
+  if (!source.includes('script-action-update-mac.command" --full')) {
+    console.error("full-update-mac.command: must launch the mac updater with --full");
+    failures++;
+  }
+}
+
+{
+  const source = read("script-action-update-windows.ps1");
+  const bytes = readBuffer("script-action-update-windows.ps1");
   if (!source.includes("Adobe Illustrator*") || !source.includes("Remove-Item") || !source.includes("Copy-Item")) {
-    console.error("update-windows.ps1: must find Illustrator and replace managed folders");
+    console.error("script-action-update-windows.ps1: must find Illustrator and replace managed folders");
     failures++;
   }
   if (!source.includes("InstallLocation") || !source.includes("Microsoft\\Windows\\CurrentVersion\\Uninstall")) {
-    console.error("update-windows.ps1: must find Illustrator from Windows installed-app registry entries");
+    console.error("script-action-update-windows.ps1: must find Illustrator from Windows installed-app registry entries");
     failures++;
   }
   if (!source.includes("Join-Path $Root \"Adobe\"")) {
-    console.error("update-windows.ps1: must search the common Program Files Adobe subfolder");
+    console.error("script-action-update-windows.ps1: must search the common Program Files Adobe subfolder");
     failures++;
   }
   if (!source.includes("#Requires -Version 5.1")) {
-    console.error("update-windows.ps1: must explicitly support Windows PowerShell 5.1 or newer");
+    console.error("script-action-update-windows.ps1: must explicitly support Windows PowerShell 5.1 or newer");
     failures++;
   }
   if (/Write-Host\s+"완료\.[\s\S]*?Read-Host\s+"Enter 키를 누르면 닫습니다"/.test(source)) {
-    console.error("update-windows.ps1: successful updates must close without waiting for Enter");
+    console.error("script-action-update-windows.ps1: successful updates must close without waiting for Enter");
     failures++;
   }
   if (bytes[0] !== 0xef || bytes[1] !== 0xbb || bytes[2] !== 0xbf) {
-    console.error("update-windows.ps1: must be saved as UTF-8 with BOM for Windows PowerShell 5.1 Korean paths");
+    console.error("script-action-update-windows.ps1: must be saved as UTF-8 with BOM for Windows PowerShell 5.1 Korean paths");
     failures++;
   }
 }
 
 {
-  const source = read("update-windows.cmd");
-  const bytes = readBuffer("update-windows.cmd");
+  const source = read("script-action-update-windows.cmd");
+  const bytes = readBuffer("script-action-update-windows.cmd");
   if (!source.includes("powershell.exe") ||
       !source.includes("-ExecutionPolicy Bypass") ||
-      !source.includes("-File \"%SCRIPT_DIR%update-windows.ps1\"")) {
-    console.error("update-windows.cmd: must launch the PowerShell updater by double-click");
+      !source.includes("-File \"%SCRIPT_DIR%script-action-update-windows.ps1\"")) {
+    console.error("script-action-update-windows.cmd: must launch the PowerShell updater by double-click");
     failures++;
   }
   if (!bytes.includes(Buffer.from("\r\n")) || bytes.includes(Buffer.from("@echo off\n"))) {
-    console.error("update-windows.cmd: must use CRLF line endings for cmd.exe");
+    console.error("script-action-update-windows.cmd: must use CRLF line endings for cmd.exe");
+    failures++;
+  }
+}
+
+{
+  const source = read("full-update-windows.cmd");
+  const bytes = readBuffer("full-update-windows.cmd");
+  if (!source.includes("powershell.exe") ||
+      !source.includes("-ExecutionPolicy Bypass") ||
+      !source.includes("-File \"%SCRIPT_DIR%script-action-update-windows.ps1\" -Full")) {
+    console.error("full-update-windows.cmd: must launch the PowerShell updater with -Full");
+    failures++;
+  }
+  if (!bytes.includes(Buffer.from("\r\n")) || bytes.includes(Buffer.from("@echo off\n"))) {
+    console.error("full-update-windows.cmd: must use CRLF line endings for cmd.exe");
     failures++;
   }
 }
