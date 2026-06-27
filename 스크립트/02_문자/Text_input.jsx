@@ -4,7 +4,7 @@
         return;
     }
     var doc = app.activeDocument;
-    
+
     // 현재 보고 있는 화면의 영역 가져오기
     var view = doc.views[0];
     var viewBounds = view.bounds;
@@ -12,70 +12,11 @@
     var viewRight = viewBounds[2];
     var viewBottom = viewBounds[3];
     var viewCenterX = (viewLeft + viewRight) / 2; // 화면의 가로 중앙
-    
+
     // 다이얼로그 생성
     var dialog = new Window("dialog", "텍스트 삽입 선택");
     dialog.alignChildren = "center";
-    
-    // 버튼 그룹
-    var buttonGroup = dialog.add("group");
-    buttonGroup.orientation = "column";
-    buttonGroup.alignChildren = "fill";
-    
-    var btn1 = buttonGroup.add("button", undefined, "(가), (나), (다), (라), (마), (바)");
-    var btn2 = buttonGroup.add("button", undefined, "A, B, C, D, E, F");
-    var btn3 = buttonGroup.add("button", undefined, "Ⅰ, Ⅱ, Ⅲ, Ⅳ, Ⅴ, Ⅵ");
-    var btn4 = buttonGroup.add("button", undefined, "㉠, ㉡, ㉢, ㉣, ㉤, ㉥");
-    var btn5 = buttonGroup.add("button", undefined, "ⓐ, ⓑ, ⓒ, ⓓ, ⓔ, ⓕ");
-    var btn6 = buttonGroup.add("button", undefined, "1, 2, 3, 4, 5, 6");
-    var btn7 = buttonGroup.add("button", undefined, "①, ②, ③, ④, ⑤, ⑥");
-    
-    var selectedOption = null;
-    
-    // 각 버튼 클릭 이벤트
-    btn1.onClick = function() {
-        selectedOption = 1;
-        dialog.close();
-    };
-    
-    btn2.onClick = function() {
-        selectedOption = 2;
-        dialog.close();
-    };
-    
-    btn3.onClick = function() {
-        selectedOption = 3;
-        dialog.close();
-    };
-    
-    btn4.onClick = function() {
-        selectedOption = 4;
-        dialog.close();
-    };
-    
-    btn5.onClick = function() {
-        selectedOption = 5;
-        dialog.close();
-    };
-    
-    btn6.onClick = function() {
-        selectedOption = 6;
-        dialog.close();
-    };
 
-    btn7.onClick = function() {
-        selectedOption = 7;
-        dialog.close();
-    };
-    
-    dialog.show();
-    
-    // 취소한 경우
-    if (selectedOption === null) {
-        return;
-    }
-    
-    // 선택에 따른 설정
     var romanFontCandidates = [
         "KoPubWorld바탕체_Pro",
         "KoPubWorld Batang Pro",
@@ -88,48 +29,59 @@
         "KoPubWorldBatangPro-Medium",
         "KoPubWorldBatangMedium"
     ];
-    var contentsArray, fontSize, fontNames;
-    
-    if (selectedOption === 1) {
-        contentsArray = ["(가)", "(나)", "(다)", "(라)", "(마)", "(바)"];
-        fontSize = 10;
-        fontNames = ["Batang"];
-    } else if (selectedOption === 2) {
-        contentsArray = ["A", "B", "C", "D", "E", "F"];
-        fontSize = 8;
-        fontNames = ["BEDFGG+GSMediumB1"];
-    } else if (selectedOption === 3) {
-        contentsArray = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ"];
-        fontSize = 8;
-        fontNames = romanFontCandidates;
-    } else if (selectedOption === 4) {
-        contentsArray = ["㉠", "㉡", "㉢", "㉣", "㉤", "㉥"];
-        fontSize = 9;
-        fontNames = ["Batang"];
-    } else if (selectedOption === 5) {
-        contentsArray = ["ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ"];
-        fontSize = 9;
-        fontNames = ["Batang"];
-    } else if (selectedOption === 6) {
-        contentsArray = ["1", "2", "3", "4", "5", "6"];
-        fontSize = 8;
-        fontNames = ["BEDFGG+GSMediumB1"];
-    } else if (selectedOption === 7) {
-        contentsArray = ["①", "②", "③", "④", "⑤", "⑥"];
-        fontSize = 8;
-        fontNames = ["BEDFGG+GSMediumB1"];
+    var textOptions = [
+        {contents: ["(가)", "(나)", "(다)", "(라)", "(마)", "(바)"], fontSize: 10, fontNames: ["Batang"]},
+        {contents: ["A", "B", "C", "D", "E", "F"], fontSize: 8, fontNames: ["BEDFGG+GSMediumB1"]},
+        {contents: ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ"], fontSize: 8, fontNames: romanFontCandidates},
+        {contents: ["㉠", "㉡", "㉢", "㉣", "㉤", "㉥"], fontSize: 9, fontNames: ["Batang"]},
+        {contents: ["ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ"], fontSize: 9, fontNames: ["Batang"]},
+        {contents: ["1", "2", "3", "4", "5", "6"], fontSize: 8, fontNames: ["BEDFGG+GSMediumB1"]},
+        {contents: ["①", "②", "③", "④", "⑤", "⑥"], fontSize: 8, fontNames: ["BEDFGG+GSMediumB1"]}
+    ];
+    var selectedOption = null;
+    var selectedCount = 0;
+
+    // 각 행은 6개의 버튼으로 구성되며, 누른 버튼까지의 문자만 생성합니다.
+    var buttonGroup = dialog.add("group");
+    buttonGroup.orientation = "column";
+    buttonGroup.alignChildren = "center";
+    var buttonSize = [40, 25];
+
+    for (var optionIndex = 0; optionIndex < textOptions.length; optionIndex++) {
+        var row = buttonGroup.add("group");
+        row.orientation = "row";
+        row.alignChildren = "center";
+
+        for (var charIndex = 0; charIndex < textOptions[optionIndex].contents.length; charIndex++) {
+            var btn = row.add("button", undefined, textOptions[optionIndex].contents[charIndex]);
+            btn.preferredSize = buttonSize;
+            btn.onClick = makeSelectHandler(optionIndex, charIndex + 1);
+        }
     }
-    
+
+    dialog.show();
+
+    // 취소한 경우
+    if (selectedOption === null) {
+        return;
+    }
+
+    var contentsArray, fontSize, fontNames;
+    var option = textOptions[selectedOption];
+    contentsArray = option.contents.slice(0, selectedCount);
+    fontSize = option.fontSize;
+    fontNames = option.fontNames;
+
     var horizontalGap = 5; // 가로 간격
     var bottomMargin = 20; // 화면 하단에서 띄울 간격
-    
-    var targetFont = findTextFont(fontNames, "Batang", selectedOption === 3);
-    
+
+    var targetFont = findTextFont(fontNames, "Batang", selectedOption === 2);
+
     // 먼저 모든 텍스트 프레임을 생성하여 전체 너비와 최대 높이 계산
     var textFrames = [];
     var totalWidth = 0;
     var maxHeight = 0;
-    
+
     for (var i = 0; i < contentsArray.length; i++) {
         var tf = doc.textFrames.add();
         tf.contents = contentsArray[i];
@@ -138,7 +90,7 @@
             tf.textRange.characterAttributes.textFont = targetFont;
         } catch(err) {}
         textFrames.push(tf);
-        
+
         totalWidth += tf.width;
         if (i < contentsArray.length - 1) {
             totalWidth += horizontalGap;
@@ -147,21 +99,21 @@
             maxHeight = tf.height;
         }
     }
-    
+
     // 현재 보이는 화면의 6시 방향에 가로로 배치
     var currentX = viewCenterX - (totalWidth / 2);
     var baselineY = viewBottom + bottomMargin + maxHeight;
-    
+
     for (var i = 0; i < textFrames.length; i++) {
         textFrames[i].position = [currentX, baselineY];
         currentX += textFrames[i].width + horizontalGap;
     }
-    
+
     doc.selection = null;
-    
+
     app.redraw();
     doc.activate();
-    
+
     view.zoom = view.zoom;
 
     function findTextFont(fontNames, fallbackName, useKoPubMetadata) {
@@ -207,5 +159,13 @@
         } catch (e) {
             return "";
         }
+    }
+
+    function makeSelectHandler(optionIndex, count) {
+        return function() {
+            selectedOption = optionIndex;
+            selectedCount = count;
+            dialog.close();
+        };
     }
 })();

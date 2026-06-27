@@ -73,27 +73,33 @@ for (const file of alignFiles) {
 
 {
   const source = read(textInput);
-  const textInputArrays = source.match(/contentsArray\s*=\s*\[[^\]]+\]/g) || [];
-  if (textInputArrays.length !== 7 ||
-      textInputArrays.some((arraySource) => {
+  const optionArrays = source.match(/contents:\s*\[[^\]]+\]/g) || [];
+  if (optionArrays.length !== 7 ||
+      optionArrays.some((arraySource) => {
         const items = arraySource.match(/"[^"]*"/g) || [];
         return items.length !== 6;
       })) {
-    console.error(`${textInput}: every text insert option must provide exactly 6 items`);
+    console.error(textInput + ": every text insert option must provide exactly 6 items");
     failures++;
   }
-  if (!source.includes('buttonGroup.add("button", undefined, "①, ②, ③, ④, ⑤, ⑥")') ||
-      !source.includes('selectedOption = 7') ||
-      !source.includes('contentsArray = ["①", "②", "③", "④", "⑤", "⑥"]')) {
-    console.error(`${textInput}: must offer circled number text inserts`);
+  if (!source.includes('row.add("button", undefined, textOptions[optionIndex].contents[charIndex])') ||
+      !source.includes('btn.onClick = makeSelectHandler(optionIndex, charIndex + 1)') ||
+      !source.includes('contentsArray = option.contents.slice(0, selectedCount)') ||
+      !source.includes('function makeSelectHandler(optionIndex, count)')) {
+    console.error(textInput + ": each row must have 6 buttons and insert only up to the clicked character");
     failures++;
   }
-  if (!/selectedOption\s*={2,3}\s*3[\s\S]*?fontNames\s*=\s*romanFontCandidates/.test(source) ||
+  if (!source.includes('{contents: ["①", "②", "③", "④", "⑤", "⑥"]') ||
+      !source.includes('selectedCount = count')) {
+    console.error(textInput + ": must offer circled number text inserts");
+    failures++;
+  }
+  if (!/contents:\s*\["Ⅰ",\s*"Ⅱ",\s*"Ⅲ",\s*"Ⅳ",\s*"Ⅴ",\s*"Ⅵ"\][\s\S]*?fontNames:\s*romanFontCandidates/.test(source) ||
       !/var\s+romanFontCandidates\s*=\s*\[[\s\S]*?"KoPubWorld바탕체_Pro"/.test(source) ||
       !source.includes('"KoPubWorldBatangPM"') ||
       !source.includes('"KoPubWorldBatangPL"') ||
       !source.includes('"KoPubWorldBatangPB"') ||
-      !source.includes("var targetFont = findTextFont(fontNames, \"Batang\", selectedOption === 3)") ||
+      !source.includes("var targetFont = findTextFont(fontNames, \"Batang\", selectedOption === 2)") ||
       !source.includes("function findTextFont(fontNames, fallbackName, useKoPubMetadata)") ||
       !source.includes("if (useKoPubMetadata)") ||
       !/for\s*\(\s*var\s+\w+\s*=\s*0;\s*\w+\s*<\s*app\.textFonts\.length;\s*\w+\+\+\s*\)/.test(source) ||
@@ -101,7 +107,7 @@ for (const file of alignFiles) {
       !source.includes('getFontText(font, "style")') ||
       !source.includes("nameMatchesKoPubWorldBatang") ||
       !source.includes("kopubworldbatangp[mlb]")) {
-    console.error(`${textInput}: roman numerals must resolve KoPubWorld바탕체_Pro by candidate names and font metadata`);
+    console.error(textInput + ": roman numerals must resolve KoPubWorld바탕체_Pro by candidate names and font metadata");
     failures++;
   }
   if (!source.includes("var viewLeft = viewBounds[0]") ||
@@ -111,7 +117,7 @@ for (const file of alignFiles) {
       !source.includes("textFrames[i].position = [currentX, baselineY]") ||
       !source.includes("currentX += textFrames[i].width + horizontalGap") ||
       /artboardLeft/.test(source)) {
-    console.error(`${textInput}: text inserts must be laid out horizontally at the bottom center of the current view`);
+    console.error(textInput + ": text inserts must be laid out horizontally at the bottom center of the current view");
     failures++;
   }
 }

@@ -1681,7 +1681,7 @@
 	]
 	/keyIndex 25
 	/colorIndex 0
-	/isOpen 1
+	/isOpen 0
 	/eventCount 2
 	/event-1 {
 		/useRulersIn1stQuadrant 0
@@ -2115,7 +2115,7 @@
 	/keyIndex 59
 	/colorIndex 0
 	/isOpen 1
-	/eventCount 1
+	/eventCount 2
 	/event-1 {
 		/useRulersIn1stQuadrant 0
 		/internalName (adobe_commandManager)
@@ -2140,6 +2140,33 @@
 			/type (ustring)
 			/value [ 16
 				31305feab8b0ed83803a20656d626564
+			]
+		}
+	}
+	/event-2 {
+		/useRulersIn1stQuadrant 0
+		/internalName (adobe_commandManager)
+		/localizedName [ 20
+			eca091eab7bc20eba994eb89b420ed95adebaaa9
+		]
+		/isOpen 0
+		/isOn 1
+		/hasDialog 0
+		/parameterCount 2
+		/parameter-1 {
+			/key 1769238125
+			/showInPalette -1
+			/type (ustring)
+			/value [ 17
+				5f30303030303231433438413244453130
+			]
+		}
+		/parameter-2 {
+			/key 1818455661
+			/showInPalette -1
+			/type (ustring)
+			/value [ 19
+				31305feab8b0ed83803a20656d70747964656c
 			]
 		}
 	}
@@ -3111,7 +3138,7 @@
 			/showInPalette -1
 			/type (ustring)
 			/value [ 17
-				5f30303030303231433438413244454530
+				5f30303030303233313044373944434130
 			]
 		}
 		/parameter-2 {
@@ -3147,7 +3174,7 @@
 			/showInPalette -1
 			/type (ustring)
 			/value [ 17
-				5f30303030303231433932443941443430
+				5f30303030303230433142423134333330
 			]
 		}
 		/parameter-2 {
