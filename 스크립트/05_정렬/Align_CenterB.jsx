@@ -44,20 +44,71 @@ try {
                     if (tempObj) tempObj.remove();
                 } catch(removeError) {}
             }
-        } else if (obj.typename === "GroupItem" && obj.clipped) {
-            for (var i = 0; i < obj.pageItems.length; i++) {
-                var currItem = obj.pageItems[i];
-                if (currItem.clipping) {
-                    bounds = currItem.geometricBounds;
-                    break;
-                }
-            }
-            if (!bounds) bounds = obj.visibleBounds;
+        } else if (obj.typename === "GroupItem") {
+            bounds = getGroupRealBounds(obj);
+            if (!bounds) bounds = obj.geometricBounds;
         } else {
             bounds = obj.geometricBounds;
         }
 
         return bounds;
+    }
+
+    function getGroupRealBounds(groupItem) {
+        var bounds = null;
+
+        if (groupItem.clipped) {
+            bounds = getClippingBounds(groupItem);
+            if (bounds) return bounds;
+        }
+
+        for (var i = 0; i < groupItem.pageItems.length; i++) {
+            var child = groupItem.pageItems[i];
+            if (isClippingPath(child)) continue;
+
+            var childBounds = getRealBounds(child);
+            bounds = unionBounds(bounds, childBounds);
+        }
+
+        return bounds;
+    }
+
+    function getClippingBounds(groupItem) {
+        for (var i = 0; i < groupItem.pageItems.length; i++) {
+            var child = groupItem.pageItems[i];
+            if (isClippingPath(child)) {
+                return child.geometricBounds;
+            }
+            if (child.typename === "GroupItem") {
+                var nested = getClippingBounds(child);
+                if (nested) return nested;
+            }
+        }
+        return null;
+    }
+
+    function isClippingPath(item) {
+        if (item.typename === "PathItem") {
+            return item.clipping;
+        }
+        if (item.typename === "CompoundPathItem") {
+            for (var i = 0; i < item.pathItems.length; i++) {
+                if (item.pathItems[i].clipping) return true;
+            }
+        }
+        return false;
+    }
+
+    function unionBounds(boundsA, boundsB) {
+        if (!boundsB) return boundsA;
+        if (!boundsA) return [boundsB[0], boundsB[1], boundsB[2], boundsB[3]];
+
+        return [
+            Math.min(boundsA[0], boundsB[0]),
+            Math.max(boundsA[1], boundsB[1]),
+            Math.max(boundsA[2], boundsB[2]),
+            Math.min(boundsA[3], boundsB[3])
+        ];
     }
 
     function getWidth(obj) {
