@@ -70,9 +70,9 @@
     rowNum.orientation = "row";
     rowNum.alignChildren = "left";
     var chkNums = [];
-    for (var j = 1; j <= 7; j++) {
-        chkNums[j-1] = rowNum.add("checkbox", undefined, j.toString());
-        chkNums[j-1].preferredSize.width = 40; // 간격 일정하게 맞춤
+    for (var j = 0; j <= 6; j++) {
+        chkNums[j] = rowNum.add("checkbox", undefined, j.toString());
+        chkNums[j].preferredSize.width = 40; // 간격 일정하게 맞춤
     }
 
     // 숫자 전체 해제 기능
@@ -222,7 +222,7 @@
 
         var selectedNums = [];
         for (var j = 0; j < chkNums.length; j++) {
-            if (chkNums[j].value) selectedNums.push((j + 1).toString());
+            if (chkNums[j].value) selectedNums.push(j.toString());
         }
 
         var selectedIonNums = [];
