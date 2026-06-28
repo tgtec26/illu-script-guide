@@ -1,6 +1,7 @@
 // Cabinet Projection Script for Adobe Illustrator
-// 선택한 정사각형을 캐비넷 투영법으로 정육면체로 변환
+// 선택한 사각형을 캐비넷 투영법으로 입체화
 
+(function() {
 if (app.documents.length > 0) {
     var doc = app.activeDocument;
     var sel = doc.selection;
@@ -10,60 +11,74 @@ if (app.documents.length > 0) {
         var bounds = frontFace.geometricBounds; // [left, top, right, bottom]
         var width   = bounds[2] - bounds[0];
         var height  = bounds[1] - bounds[3];
+        var defaultDepthMm = Math.round(Math.min(width, height) / 2 / 2.83464567 * 100) / 100;
+        var depthInput = prompt("뒤로 이동 거리(mm)를 입력하세요.", defaultDepthMm);
+
+        if (depthInput === null) {
+            return;
+        }
+
+        var depthMm = parseFloat(String(depthInput).replace(",", "."));
+        if (isNaN(depthMm) || depthMm <= 0) {
+            alert("0보다 큰 숫자를 입력해주세요.");
+            return;
+        }
+
+        var depth = depthMm * 2.83464567;
 
         // 1. 앞면 모서리 둥근 연결(Round Join) 적용
         frontFace.strokeJoin = StrokeJoin.ROUNDENDJOIN;
 
-        function makeShearMatrix(shearH, shearV) {
-            var m = app.getIdentityMatrix();
-            m.mValueA = 1;
-            m.mValueB = shearV;
-            m.mValueC = shearH;
-            m.mValueD = 1;
-            m.mValueTX = 0;
-            m.mValueTY = 0;
-            return m;
-        }
-
         // ── 오른쪽 면 (측면) ────────────────────────────────────
-        var rightFace = frontFace.duplicate();
-        rightFace.strokeJoin = StrokeJoin.ROUNDENDJOIN;
-
-        // 변형 전 먼저 앞면의 우측에 정확히 위치시킵니다.
-        rightFace.translate(width, 0);
-
-        // 가로 50% 축소 (좌측 하단 기준 - 앞면과 붙어있는 면이 움직이지 않게 고정)
-        var scaleM = app.getScaleMatrix(50, 100);
-        rightFace.transform(scaleM, true, false, false, false, 1, Transformation.BOTTOMLEFT);
-
-        // Vertical shear: +45도 (위로 기울이기)
-        var shearV = Math.tan(45 * Math.PI / 180); // 1
-        var shearMV = makeShearMatrix(0, shearV);
-        rightFace.transform(shearMV, true, false, false, false, 1, Transformation.BOTTOMLEFT);
+        var rightFace = doc.pathItems.add();
+        rightFace.setEntirePath([
+            [bounds[2], bounds[1]],
+            [bounds[2] + depth, bounds[1] + depth],
+            [bounds[2] + depth, bounds[3] + depth],
+            [bounds[2], bounds[3]]
+        ]);
+        rightFace.closed = true;
+        copyStyle(frontFace, rightFace);
 
 
         // ── 위쪽 면 (상면) ──────────────────────────────────────
-        var topFace = frontFace.duplicate();
-        topFace.strokeJoin = StrokeJoin.ROUNDENDJOIN;
+        var topFace = doc.pathItems.add();
+        topFace.setEntirePath([
+            [bounds[0], bounds[1]],
+            [bounds[2], bounds[1]],
+            [bounds[2] + depth, bounds[1] + depth],
+            [bounds[0] + depth, bounds[1] + depth]
+        ]);
+        topFace.closed = true;
+        copyStyle(frontFace, topFace);
 
-        // 변형 전 먼저 앞면의 위쪽에 정확히 위치시킵니다.
-        topFace.translate(0, height);
-
-        // 세로 50% 축소 (하단 좌측 기준 - 앞면과 붙어있는 면 고정)
-        var scaleMH = app.getScaleMatrix(100, 50);
-        topFace.transform(scaleMH, true, false, false, false, 1, Transformation.BOTTOMLEFT);
-
-        // Horizontal shear: +45도 (오른쪽으로 기울이기)
-        var shearH = Math.tan(45 * Math.PI / 180); // 1
-        var shearMH = makeShearMatrix(shearH, 0);
-        topFace.transform(shearMH, true, false, false, false, 1, Transformation.BOTTOMLEFT);
+        rightFace.move(frontFace, ElementPlacement.PLACEBEFORE);
+        topFace.move(frontFace, ElementPlacement.PLACEBEFORE);
 
         // 작업 완료 후 선택 해제 (결과를 한눈에 보기 위함)
         doc.selection = null;
 
     } else {
-        alert("정사각형 패스를 선택해주세요.");
+        alert("사각형 패스를 선택해주세요.");
     }
 } else {
     alert("열려있는 문서가 없습니다.");
 }
+
+function copyStyle(source, target) {
+    target.filled = source.filled;
+    if (source.filled) {
+        target.fillColor = source.fillColor;
+    }
+
+    target.stroked = source.stroked;
+    if (source.stroked) {
+        target.strokeColor = source.strokeColor;
+        target.strokeWidth = source.strokeWidth;
+        target.strokeDashes = source.strokeDashes;
+        target.strokeCap = source.strokeCap;
+        target.strokeJoin = StrokeJoin.ROUNDENDJOIN;
+        target.opacity = source.opacity;
+    }
+}
+})();
