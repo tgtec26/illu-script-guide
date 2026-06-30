@@ -19,7 +19,7 @@ if (app.documents.length > 0) {
       // 뒤에서부터 삭제해야 인덱스 문제가 발생하지 않음
       for (var i = rasterItems.length - 1; i >= 0; i--) {
           try {
-              if (!rasterItems[i].locked && !isInLockedLayer(rasterItems[i])) {
+              if (isEditableItem(rasterItems[i])) {
                   rasterItems[i].remove();
                   removedCount++;
               } else {
@@ -42,16 +42,26 @@ if (app.documents.length > 0) {
   alert("열린 문서가 없습니다. 문서를 열고 다시 시도하세요.");
 }
 
-// 아이템이 잠긴 레이어에 있는지 확인하는 함수
-function isInLockedLayer(item) {
+// 아이템 본인 또는 부모 그룹/레이어가 잠겨 있거나 숨겨져 있는지 확인
+function isEditableItem(item) {
+  if (item.locked || item.hidden) {
+      return false;
+  }
+
   var parent = item.parent;
   while (parent) {
-      if (parent.typename === "Layer" && parent.locked) {
-          return true;
+      if (parent.typename === "Layer") {
+          if (parent.locked || !parent.visible) {
+              return false;
+          }
+      } else {
+          if (parent.locked || parent.hidden) {
+              return false;
+          }
       }
       parent = parent.parent;
   }
-  return false;
+  return true;
 }
 
 // 래스터 이미지를 찾는 재귀 함수
