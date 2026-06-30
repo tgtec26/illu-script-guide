@@ -10,18 +10,13 @@
     var doc = app.activeDocument;
     var sel = doc.selection;
 
-    if (!sel || sel.length === 0 || sel[0].typename !== "PathItem") {
+    var targets = getClosedPathSelection(sel);
+    if (targets.length === 0) {
         alert("원 또는 타원 패스를 선택해주세요.");
         return;
     }
 
-    var frontFace = sel[0];
-    if (!frontFace.closed) {
-        alert("닫힌 원 또는 타원 패스를 선택해주세요.");
-        return;
-    }
-
-    var bounds = frontFace.geometricBounds; // [left, top, right, bottom]
+    var bounds = targets[0].geometricBounds; // [left, top, right, bottom]
     var width = bounds[2] - bounds[0];
     var height = bounds[1] - bounds[3];
     var mmToPt = 2.83464567;
@@ -30,7 +25,7 @@
 
     var depthMm = showDepthDialog(defaultDepthMm, function(valueMm) {
         clearPreview();
-        previewItems = createButton(valueMm * mmToPt);
+        previewItems = createButtons(valueMm * mmToPt, false);
         app.redraw();
     }, clearPreview);
 
@@ -40,10 +35,22 @@
     }
 
     saveDepth(depthMm);
-    createButton(depthMm * mmToPt);
+    createButtons(depthMm * mmToPt, true);
     doc.selection = null;
 
-    function createButton(depth) {
+    function createButtons(depth, makeGroup) {
+        var created = [];
+        for (var i = 0; i < targets.length; i++) {
+            var items = createButton(targets[i], depth, makeGroup);
+            for (var j = 0; j < items.length; j++) {
+                created.push(items[j]);
+            }
+        }
+        return created;
+    }
+
+    function createButton(frontFace, depth, makeGroup) {
+        var bounds = frontFace.geometricBounds; // [left, top, right, bottom]
         frontFace.strokeJoin = StrokeJoin.ROUNDENDJOIN;
 
         var backFace = frontFace.duplicate();
@@ -53,15 +60,34 @@
         backFace.move(frontFace, ElementPlacement.PLACEAFTER);
 
         var tangentPoints = getEllipseTangentPoints(bounds, depth, depth);
-        var tangentA = makeTangentLine(tangentPoints[0], depth, depth);
-        var tangentB = makeTangentLine(tangentPoints[1], depth, depth);
+        var tangentA = makeTangentLine(frontFace, tangentPoints[0], depth, depth);
+        var tangentB = makeTangentLine(frontFace, tangentPoints[1], depth, depth);
 
         try {
             tangentA.move(frontFace, ElementPlacement.PLACEAFTER);
             tangentB.move(frontFace, ElementPlacement.PLACEAFTER);
         } catch (e) {}
 
+        if (makeGroup) {
+            return [groupButtonItems(frontFace, [backFace, tangentA, tangentB])];
+        }
+
         return [backFace, tangentA, tangentB];
+    }
+
+    function groupButtonItems(frontFace, createdItems) {
+        var buttonGroup = doc.activeLayer.groupItems.add();
+        buttonGroup.name = "Button Projection";
+        try {
+            buttonGroup.move(frontFace, ElementPlacement.PLACEBEFORE);
+        } catch (e) {}
+
+        for (var i = 0; i < createdItems.length; i++) {
+            createdItems[i].move(buttonGroup, ElementPlacement.PLACEATEND);
+        }
+        frontFace.move(buttonGroup, ElementPlacement.PLACEATEND);
+
+        return buttonGroup;
     }
 
     function showDepthDialog(defaultValue, onPreview, onClearPreview) {
@@ -237,7 +263,17 @@
         return [p1, p2];
     }
 
-    function makeTangentLine(startPoint, dx, dy) {
+    function getClosedPathSelection(selection) {
+        var items = [];
+        for (var i = 0; selection && i < selection.length; i++) {
+            if (selection[i].typename === "PathItem" && selection[i].closed) {
+                items.push(selection[i]);
+            }
+        }
+        return items;
+    }
+
+    function makeTangentLine(frontFace, startPoint, dx, dy) {
         var line = doc.pathItems.add();
         line.setEntirePath([
             [startPoint[0], startPoint[1]],

@@ -10,20 +10,19 @@
     var doc = app.activeDocument;
     var sel = doc.selection;
 
-    if (!sel || sel.length === 0 || sel[0].typename !== "PathItem") {
+    var targets = getPathSelection(sel);
+    if (targets.length === 0) {
         alert("사각형 패스를 선택해주세요.");
         return;
     }
 
-    var frontFace = sel[0];
-    var bounds = frontFace.geometricBounds; // [left, top, right, bottom]
     var mmToPt = 2.83464567;
     var defaultDepthMm = getSavedDepth(0.5);
     var previewItems = [];
 
     var depthMm = showDepthDialog(defaultDepthMm, function(valueMm) {
         clearPreview();
-        previewItems = createCabinet(valueMm * mmToPt);
+        previewItems = createCabinets(valueMm * mmToPt, false);
         app.redraw();
     }, clearPreview);
 
@@ -33,10 +32,22 @@
     }
 
     saveDepth(depthMm);
-    createCabinet(depthMm * mmToPt, true);
+    createCabinets(depthMm * mmToPt, true);
     doc.selection = null;
 
-    function createCabinet(depth, makeGroup) {
+    function createCabinets(depth, makeGroup) {
+        var created = [];
+        for (var i = 0; i < targets.length; i++) {
+            var items = createCabinet(targets[i], depth, makeGroup);
+            for (var j = 0; j < items.length; j++) {
+                created.push(items[j]);
+            }
+        }
+        return created;
+    }
+
+    function createCabinet(frontFace, depth, makeGroup) {
+        var bounds = frontFace.geometricBounds; // [left, top, right, bottom]
         frontFace.strokeJoin = StrokeJoin.ROUNDENDJOIN;
 
         var rightFace = doc.pathItems.add();
@@ -63,13 +74,13 @@
         topFace.move(frontFace, ElementPlacement.PLACEBEFORE);
 
         if (makeGroup) {
-            return [groupCabinetItems([rightFace, topFace])];
+            return [groupCabinetItems(frontFace, [rightFace, topFace])];
         }
 
         return [rightFace, topFace];
     }
 
-    function groupCabinetItems(createdItems) {
+    function groupCabinetItems(frontFace, createdItems) {
         var cabinetGroup = doc.activeLayer.groupItems.add();
         cabinetGroup.name = "Cabinet Projection";
         try {
@@ -82,6 +93,16 @@
         frontFace.move(cabinetGroup, ElementPlacement.PLACEATEND);
 
         return cabinetGroup;
+    }
+
+    function getPathSelection(selection) {
+        var items = [];
+        for (var i = 0; selection && i < selection.length; i++) {
+            if (selection[i].typename === "PathItem") {
+                items.push(selection[i]);
+            }
+        }
+        return items;
     }
 
     function showDepthDialog(defaultValue, onPreview, onClearPreview) {
