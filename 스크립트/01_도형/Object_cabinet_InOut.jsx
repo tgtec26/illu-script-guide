@@ -94,6 +94,9 @@
             createdItems[i].move(cabinetGroup, ElementPlacement.PLACEATEND);
         }
         frontFace.move(cabinetGroup, ElementPlacement.PLACEATEND);
+        try {
+            frontFace.zOrder(ZOrderMethod.BRINGTOFRONT);
+        } catch (e) {}
 
         return cabinetGroup;
     }

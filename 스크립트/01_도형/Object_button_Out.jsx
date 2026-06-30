@@ -86,6 +86,9 @@
             createdItems[i].move(buttonGroup, ElementPlacement.PLACEATEND);
         }
         frontFace.move(buttonGroup, ElementPlacement.PLACEATEND);
+        try {
+            frontFace.zOrder(ZOrderMethod.BRINGTOFRONT);
+        } catch (e) {}
 
         return buttonGroup;
     }
