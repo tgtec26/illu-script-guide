@@ -66,13 +66,9 @@
 
     function showDepthDialog(defaultValue, onPreview, onClearPreview) {
         var depthStepMm = 0.05;
-        var repeatDelayMs = 300;
-        var repeatIntervalMs = 80;
-        var repeatActive = false;
-        var repeatDirection = 0;
-        var repeatDidRun = false;
-        var suppressNextClick = false;
-        var repeatTaskName = "__cabinetDepthRepeatTick";
+        var minDepthMm = depthStepMm;
+        var maxDepthMm = 100;
+        var isSyncingControl = false;
         var dialog = new Window("dialog", "캐비넷 깊이");
         dialog.orientation = "column";
         dialog.alignChildren = "fill";
@@ -83,6 +79,17 @@
         var input = inputGroup.add("edittext", undefined, String(defaultValue));
         input.characters = 8;
         var plusButton = inputGroup.add("button", undefined, "+0.05");
+
+        var depthControl = dialog.add(
+            "scrollbar",
+            undefined,
+            depthToStep(defaultValue),
+            depthToStep(minDepthMm),
+            depthToStep(maxDepthMm)
+        );
+        depthControl.preferredSize.width = 360;
+        depthControl.stepdelta = 1;
+        depthControl.jumpdelta = 10;
 
         var previewCheck = dialog.add("checkbox", undefined, "미리보기");
         previewCheck.value = true;
@@ -100,6 +107,26 @@
             return value.toFixed(2);
         }
 
+        function depthToStep(value) {
+            return Math.round(value / depthStepMm);
+        }
+
+        function stepToDepth(step) {
+            return step * depthStepMm;
+        }
+
+        function syncDepthControl(value) {
+            if (isSyncingControl || value === null) {
+                return;
+            }
+
+            var step = depthToStep(value);
+            step = Math.max(depthToStep(minDepthMm), Math.min(depthToStep(maxDepthMm), step));
+            isSyncingControl = true;
+            depthControl.value = step;
+            isSyncingControl = false;
+        }
+
         function readValue(showAlert) {
             var value = parseFloat(String(input.text).replace(",", "."));
             if (isNaN(value) || value <= 0) {
@@ -111,69 +138,19 @@
             return value;
         }
 
+        function setDepthValue(value) {
+            input.text = formatDepth(value);
+            syncDepthControl(value);
+            updatePreview();
+        }
+
         function changeValue(delta) {
             var value = readValue(false);
             if (value === null) {
                 value = defaultValue;
             }
 
-            input.text = formatDepth(value + delta);
-            updatePreview();
-        }
-
-        function scheduleRepeat(delayMs) {
-            if (!repeatActive || !app.scheduleTask) {
-                return;
-            }
-
-            app.scheduleTask(repeatTaskName + "()", delayMs, false);
-        }
-
-        $.global[repeatTaskName] = function() {
-            if (!repeatActive) {
-                return;
-            }
-
-            changeValue(repeatDirection * depthStepMm);
-            repeatDidRun = true;
-            suppressNextClick = true;
-            scheduleRepeat(repeatIntervalMs);
-        };
-
-        function startRepeat(direction) {
-            repeatActive = true;
-            repeatDirection = direction;
-            repeatDidRun = false;
-            suppressNextClick = false;
-            scheduleRepeat(repeatDelayMs);
-        }
-
-        function stopRepeat() {
-            repeatActive = false;
-            if (repeatDidRun) {
-                suppressNextClick = true;
-            }
-        }
-
-        function attachRepeatButton(button, direction) {
-            button.onClick = function() {
-                if (suppressNextClick) {
-                    suppressNextClick = false;
-                    return;
-                }
-
-                changeValue(direction * depthStepMm);
-            };
-
-            try {
-                if (button.addEventListener && app.scheduleTask) {
-                    button.addEventListener("mousedown", function() {
-                        startRepeat(direction);
-                    });
-                    button.addEventListener("mouseup", stopRepeat);
-                    button.addEventListener("mouseout", stopRepeat);
-                }
-            } catch (e) {}
+            setDepthValue(value + delta);
         }
 
         function updatePreview() {
@@ -192,20 +169,33 @@
         }
 
         input.onChanging = updatePreview;
-        attachRepeatButton(minusButton, -1);
-        attachRepeatButton(plusButton, 1);
+        input.onChange = function() {
+            var value = readValue(false);
+            syncDepthControl(value);
+        };
+        depthControl.onChanging = function() {
+            if (isSyncingControl) {
+                return;
+            }
+
+            setDepthValue(stepToDepth(depthControl.value));
+        };
+        minusButton.onClick = function() {
+            changeValue(-depthStepMm);
+        };
+        plusButton.onClick = function() {
+            changeValue(depthStepMm);
+        };
         previewCheck.onClick = updatePreview;
         okButton.onClick = function() {
             var value = readValue(true);
             if (value === null) {
                 return;
             }
-            repeatActive = false;
             result = parseFloat(formatDepth(value));
             dialog.close();
         };
         cancelButton.onClick = function() {
-            repeatActive = false;
             result = null;
             dialog.close();
         };
