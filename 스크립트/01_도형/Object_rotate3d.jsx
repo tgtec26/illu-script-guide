@@ -9,6 +9,9 @@
 
     var isPreviewing = false;
     var PREF_PREFIX = "Custom3DRotator_";
+    var angleStep = 1;
+    var minAngle = 0;
+    var maxAngle = 360;
 
     // --- 설정 불러오기 (환경설정에서 읽기) ---
     function getSavedSettings() {
@@ -58,7 +61,43 @@
 
     // 수치 입력
     var pnlInput = win.add("panel", undefined, "Rotation Settings");
-    pnlInput.alignChildren = "right";
+    pnlInput.alignChildren = "fill";
+
+    function addAngleInput(parent, label, defaultVal) {
+        var control = {};
+        var grp = parent.add("group");
+        grp.alignChildren = ["left", "center"];
+        grp.add("statictext", undefined, label);
+        control.input = grp.add("edittext", undefined, normalizeAngleText(defaultVal));
+        control.input.characters = 7;
+
+        control.scrollbar = parent.add(
+            "scrollbar",
+            undefined,
+            angleToStep(parseAngle(control.input.text)),
+            angleToStep(minAngle),
+            angleToStep(maxAngle)
+        );
+        control.scrollbar.preferredSize.width = 320;
+        control.scrollbar.stepdelta = 1;
+        control.scrollbar.jumpdelta = 15;
+        control.isSyncing = false;
+
+        control.input.onChange = function() {
+            syncAngleScrollbar(control, parseAngle(control.input.text));
+        };
+
+        control.scrollbar.onChanging = function() {
+            if (control.isSyncing) {
+                return;
+            }
+
+            control.input.text = String(stepToAngle(control.scrollbar.value));
+            if (checkPreview.value) runTransform();
+        };
+
+        return control;
+    }
 
     function addInput(parent, label, defaultVal) {
         var grp = parent.add("group");
@@ -68,9 +107,12 @@
         return txt;
     }
 
-    var inputX = addInput(pnlInput, "X Axis (Tilt):", lastValues.x);
-    var inputY = addInput(pnlInput, "Y Axis (Spin):", lastValues.y);
-    var inputZ = addInput(pnlInput, "Z Axis (Roll):", lastValues.z);
+    var controlX = addAngleInput(pnlInput, "X Axis (Tilt):", lastValues.x);
+    var controlY = addAngleInput(pnlInput, "Y Axis (Spin):", lastValues.y);
+    var controlZ = addAngleInput(pnlInput, "Z Axis (Roll):", lastValues.z);
+    var inputX = controlX.input;
+    var inputY = controlY.input;
+    var inputZ = controlZ.input;
 
     // 원근 옵션
     var pnlPersp = win.add("panel", undefined, "Perspective Options");
@@ -109,12 +151,51 @@
         isPreviewing = true;
     }
 
+    function parseAngle(text) {
+        var value = parseFloat(String(text).replace(",", "."));
+        if (isNaN(value)) {
+            return 0;
+        }
+        return value;
+    }
+
+    function normalizeAngleText(value) {
+        return String(Math.max(minAngle, Math.min(maxAngle, Math.round(parseAngle(value) / angleStep) * angleStep)));
+    }
+
+    function angleToStep(value) {
+        return Math.round(value / angleStep);
+    }
+
+    function stepToAngle(step) {
+        return step * angleStep;
+    }
+
+    function syncAngleScrollbar(control, value) {
+        if (control.isSyncing || isNaN(value)) {
+            return;
+        }
+
+        value = Math.max(minAngle, Math.min(maxAngle, value));
+        control.isSyncing = true;
+        control.scrollbar.value = angleToStep(value);
+        control.isSyncing = false;
+    }
+
+    function setAngle(control, value) {
+        control.input.text = normalizeAngleText(value);
+        syncAngleScrollbar(control, parseAngle(control.input.text));
+    }
+
     // --- 이벤트 핸들러 ---
-    btnTop.onClick = function() { inputX.text = "60"; inputY.text = "0"; inputZ.text = "0"; if (checkPreview.value) runTransform(); };
-    btnFront.onClick = function() { inputX.text = "0"; inputY.text = "0"; inputZ.text = "0"; if (checkPreview.value) runTransform(); };
-    btnSide.onClick = function() { inputX.text = "0"; inputY.text = "60"; inputZ.text = "0"; if (checkPreview.value) runTransform(); };
+    btnTop.onClick = function() { setAngle(controlX, 60); setAngle(controlY, 0); setAngle(controlZ, 0); if (checkPreview.value) runTransform(); };
+    btnFront.onClick = function() { setAngle(controlX, 0); setAngle(controlY, 0); setAngle(controlZ, 0); if (checkPreview.value) runTransform(); };
+    btnSide.onClick = function() { setAngle(controlX, 0); setAngle(controlY, 60); setAngle(controlZ, 0); if (checkPreview.value) runTransform(); };
 
     inputX.onChanging = inputY.onChanging = inputZ.onChanging = inputD.onChanging = function() { if (checkPreview.value) runTransform(); };
+    inputX.onChange = function() { syncAngleScrollbar(controlX, parseAngle(inputX.text)); };
+    inputY.onChange = function() { syncAngleScrollbar(controlY, parseAngle(inputY.text)); };
+    inputZ.onChange = function() { syncAngleScrollbar(controlZ, parseAngle(inputZ.text)); };
     checkPersp.onClick = function() { inputD.enabled = checkPersp.value; if (checkPreview.value) runTransform(); };
     checkPreview.onClick = function() { 
         if (checkPreview.value) runTransform(); 
