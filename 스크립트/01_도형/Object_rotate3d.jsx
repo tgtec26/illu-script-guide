@@ -58,6 +58,7 @@
     var btnTop = pnlPreset.add("button", undefined, "Top View");
     var btnFront = pnlPreset.add("button", undefined, "Front");
     var btnSide = pnlPreset.add("button", undefined, "Side View");
+    var btnReset = pnlPreset.add("button", undefined, "Reset");
 
     // 수치 입력
     var pnlInput = win.add("panel", undefined, "Rotation Settings");
@@ -68,13 +69,13 @@
         var grp = parent.add("group");
         grp.alignChildren = ["left", "center"];
         grp.add("statictext", undefined, label);
-        control.input = grp.add("edittext", undefined, normalizeAngleText(defaultVal));
+        control.input = grp.add("edittext", undefined, String(defaultVal));
         control.input.characters = 7;
 
         control.scrollbar = parent.add(
             "scrollbar",
             undefined,
-            angleToStep(parseAngle(control.input.text)),
+            angleToStep(clampAngle(parseAngle(control.input.text))),
             angleToStep(minAngle),
             angleToStep(maxAngle)
         );
@@ -160,7 +161,11 @@
     }
 
     function normalizeAngleText(value) {
-        return String(Math.max(minAngle, Math.min(maxAngle, Math.round(parseAngle(value) / angleStep) * angleStep)));
+        return String(clampAngle(Math.round(parseAngle(value) / angleStep) * angleStep));
+    }
+
+    function clampAngle(value) {
+        return Math.max(minAngle, Math.min(maxAngle, value));
     }
 
     function angleToStep(value) {
@@ -176,7 +181,7 @@
             return;
         }
 
-        value = Math.max(minAngle, Math.min(maxAngle, value));
+        value = clampAngle(value);
         control.isSyncing = true;
         control.scrollbar.value = angleToStep(value);
         control.isSyncing = false;
@@ -187,10 +192,18 @@
         syncAngleScrollbar(control, parseAngle(control.input.text));
     }
 
+    function resetAngles() {
+        setAngle(controlX, 0);
+        setAngle(controlY, 0);
+        setAngle(controlZ, 0);
+        if (checkPreview.value) runTransform();
+    }
+
     // --- 이벤트 핸들러 ---
     btnTop.onClick = function() { setAngle(controlX, 60); setAngle(controlY, 0); setAngle(controlZ, 0); if (checkPreview.value) runTransform(); };
     btnFront.onClick = function() { setAngle(controlX, 0); setAngle(controlY, 0); setAngle(controlZ, 0); if (checkPreview.value) runTransform(); };
     btnSide.onClick = function() { setAngle(controlX, 0); setAngle(controlY, 60); setAngle(controlZ, 0); if (checkPreview.value) runTransform(); };
+    btnReset.onClick = resetAngles;
 
     inputX.onChanging = inputY.onChanging = inputZ.onChanging = inputD.onChanging = function() { if (checkPreview.value) runTransform(); };
     inputX.onChange = function() { syncAngleScrollbar(controlX, parseAngle(inputX.text)); };
