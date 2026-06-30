@@ -10,8 +10,8 @@
     var isPreviewing = false;
     var PREF_PREFIX = "Custom3DRotator_";
     var angleStep = 1;
-    var minAngle = 0;
-    var maxAngle = 360;
+    var minAngle = -180;
+    var maxAngle = 180;
 
     // --- 설정 불러오기 (환경설정에서 읽기) ---
     function getSavedSettings() {
