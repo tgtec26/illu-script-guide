@@ -18,7 +18,7 @@
     var frontFace = sel[0];
     var bounds = frontFace.geometricBounds; // [left, top, right, bottom]
     var mmToPt = 2.83464567;
-    var defaultDepthMm = 0.5;
+    var defaultDepthMm = getSavedDepth(0.5);
     var previewItems = [];
 
     var depthMm = showDepthDialog(defaultDepthMm, function(valueMm) {
@@ -32,6 +32,7 @@
         return;
     }
 
+    saveDepth(depthMm);
     createCabinet(depthMm * mmToPt, true);
     doc.selection = null;
 
@@ -138,7 +139,7 @@
         var depthControl = dialog.add(
             "scrollbar",
             undefined,
-            depthToStep(defaultValue),
+            depthToStep(Math.min(maxSliderDepthMm, Math.max(minDepthMm, defaultValue))),
             depthToStep(minDepthMm),
             depthToStep(maxSliderDepthMm)
         );
@@ -259,6 +260,22 @@
         dialog.show();
 
         return result;
+    }
+
+    function getSavedDepth(fallbackValue) {
+        try {
+            var saved = parseFloat(app.preferences.getStringPreference("ObjectCabinetInOut_depthMm"));
+            if (!isNaN(saved) && saved > 0) {
+                return saved;
+            }
+        } catch (e) {}
+        return fallbackValue;
+    }
+
+    function saveDepth(value) {
+        try {
+            app.preferences.setStringPreference("ObjectCabinetInOut_depthMm", String(value));
+        } catch (e) {}
     }
 
     function clearPreview() {

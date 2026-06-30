@@ -25,7 +25,7 @@
     var width = bounds[2] - bounds[0];
     var height = bounds[1] - bounds[3];
     var mmToPt = 2.83464567;
-    var defaultDepthMm = Math.round(Math.min(width, height) / 5 / mmToPt * 100) / 100;
+    var defaultDepthMm = getSavedDepth(Math.round(Math.min(width, height) / 5 / mmToPt * 100) / 100);
     var previewItems = [];
 
     var depthMm = showDepthDialog(defaultDepthMm, function(valueMm) {
@@ -39,6 +39,7 @@
         return;
     }
 
+    saveDepth(depthMm);
     createButton(depthMm * mmToPt);
     doc.selection = null;
 
@@ -80,7 +81,7 @@
         var depthControl = dialog.add(
             "scrollbar",
             undefined,
-            depthToStep(defaultValue),
+            depthToStep(Math.min(maxSliderDepthMm, Math.max(minDepthMm, defaultValue))),
             depthToStep(minDepthMm),
             depthToStep(maxSliderDepthMm)
         );
@@ -186,6 +187,22 @@
         dialog.show();
 
         return result;
+    }
+
+    function getSavedDepth(fallbackValue) {
+        try {
+            var saved = parseFloat(app.preferences.getStringPreference("ObjectButtonOut_depthMm"));
+            if (!isNaN(saved) && saved > 0) {
+                return saved;
+            }
+        } catch (e) {}
+        return fallbackValue;
+    }
+
+    function saveDepth(value) {
+        try {
+            app.preferences.setStringPreference("ObjectButtonOut_depthMm", String(value));
+        } catch (e) {}
     }
 
     function clearPreview() {
