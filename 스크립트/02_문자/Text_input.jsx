@@ -36,7 +36,9 @@
         {contents: ["㉠", "㉡", "㉢", "㉣", "㉤", "㉥"], fontSize: 9, fontNames: ["Batang"]},
         {contents: ["ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ"], fontSize: 9, fontNames: ["Batang"]},
         {contents: ["1", "2", "3", "4", "5", "6"], fontSize: 8, fontNames: ["BEDFGG+GSMediumB1"]},
-        {contents: ["①", "②", "③", "④", "⑤", "⑥"], fontSize: 8, fontNames: ["BEDFGG+GSMediumB1"]}
+        {contents: ["①", "②", "③", "④", "⑤", "⑥"], fontSize: 8, fontNames: ["BEDFGG+GSMediumB1"]},
+        {contents: ["t1", "t2", "t3", "t4", "t5", "t6"], fontSize: 8, fontNames: ["BEDGOA+GSMediItaC1"], applySubscript: true},
+        {contents: ["d1", "d2", "d3", "d4", "d5", "d6"], fontSize: 8, fontNames: ["BEDGOA+GSMediItaC1"], applySubscript: true}
     ];
     var selectedOption = null;
     var selectedCount = 0;
@@ -89,6 +91,11 @@
         try {
             tf.textRange.characterAttributes.textFont = targetFont;
         } catch(err) {}
+        if (option.applySubscript) {
+            for (var charIndex = 1; charIndex < tf.contents.length; charIndex++) {
+                tf.textRange.characters[charIndex].characterAttributes.baselinePosition = FontBaselineOption.SUBSCRIPT;
+            }
+        }
         textFrames.push(tf);
 
         totalWidth += tf.width;
