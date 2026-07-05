@@ -3,7 +3,10 @@
   2. 간격 옵션: 0mm / 0.5mm / 1.0mm (기본: 1.0mm)
   3. 기준 개체 주변 12개 위치 버튼을 클릭하면 즉시 배치
      - 위: 좌/중/우, 아래: 좌/중/우, 왼쪽: 상/중/하, 오른쪽: 상/중/하
-  4. 텍스트는 글자 모양(Glyph), 클리핑 마스크는 마스크 경로 기준 계산
+  4. 모든 계산은 '눈에 보이는 영역' 기준 (선 두께/효과 포함)
+     - 텍스트: 라이브 상태 유지. 임시 복제본만 외곽선화해 실측 후 삭제하므로
+       깨서 정렬한 것과 같은 효과 (베이스라인 아래 빈 공간 제외)
+     - 클리핑 마스크: 마스크 경로 기준
 */
 
 // 마지막 실행 스크립트 기록 → Align_RepeatLast.jsx(F4)가 다시 실행
@@ -32,7 +35,8 @@ try {
     var MM_TO_PT = 2.834645669;
 
     // -------------------------------------------------------
-    // 경계 계산 (텍스트 글리프 / 클리핑 마스크 대응)
+    // 경계 계산: 눈에 보이는 영역 기준 (선 두께/효과 포함)
+    // 텍스트는 원본을 건드리지 않고 임시 복제본만 외곽선화해 실측 후 삭제
     // -------------------------------------------------------
     function getRealBounds(obj) {
         var bounds;
@@ -42,9 +46,9 @@ try {
             var outlined = null;
             try {
                 outlined = tempObj.createOutline();
-                bounds = outlined.geometricBounds;
+                bounds = outlined.visibleBounds;
             } catch(e) {
-                bounds = obj.geometricBounds;
+                bounds = obj.visibleBounds;
             } finally {
                 try {
                     if (outlined) outlined.remove();
@@ -53,9 +57,9 @@ try {
             }
         } else if (obj.typename === "GroupItem") {
             bounds = getGroupRealBounds(obj);
-            if (!bounds) bounds = obj.geometricBounds;
+            if (!bounds) bounds = obj.visibleBounds;
         } else {
-            bounds = obj.geometricBounds;
+            bounds = obj.visibleBounds;
         }
 
         return bounds;
