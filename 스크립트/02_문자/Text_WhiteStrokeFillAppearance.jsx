@@ -1,0 +1,326 @@
+/*
+  Illustrator Script: Text White Stroke Fill Appearance
+  Description: 선택한 문자에 모양 패널 기준 새 선, 새 면을 추가하고 선을 흰색 1pt 둥근 연결로 설정합니다.
+*/
+
+(function() {
+    if (app.documents.length === 0) {
+        alert("문서를 먼저 열어주세요.");
+        return;
+    }
+
+    var STROKE_WIDTH = 1;
+    var doc = app.activeDocument;
+    var sel = doc.selection;
+
+    if (!sel || sel.length === 0) {
+        alert("문자를 선택하고 실행해주세요.");
+        return;
+    }
+
+    var textFrames = [];
+    for (var i = 0; i < sel.length; i++) {
+        collectTextFrames(sel[i], textFrames);
+    }
+
+    if (textFrames.length === 0) {
+        alert("선택 항목 중 처리할 수 있는 문자가 없습니다.");
+        return;
+    }
+
+    var originalSelection = getSelectionArray(doc);
+    var whiteColor = makeWhiteColor(doc);
+
+    doc.selection = null;
+    for (var t = 0; t < textFrames.length; t++) {
+        prepareTextStroke(textFrames[t], whiteColor);
+        textFrames[t].selected = true;
+    }
+
+    addAppearanceStrokeThenFill(doc, whiteColor);
+    restoreSelection(doc, originalSelection);
+
+    function collectTextFrames(item, result) {
+        if (!item) return;
+
+        if (item.typename === "TextFrame") {
+            result.push(item);
+        } else if (item.typename === "GroupItem") {
+            for (var i = 0; i < item.pageItems.length; i++) {
+                collectTextFrames(item.pageItems[i], result);
+            }
+        }
+    }
+
+    function prepareTextStroke(textFrame, whiteColor) {
+        try {
+            textFrame.textRange.stroked = true;
+            textFrame.textRange.strokeWidth = STROKE_WIDTH;
+            textFrame.textRange.strokeColor = whiteColor;
+        } catch (e) {}
+
+        try {
+            textFrame.strokeJoin = StrokeJoin.ROUNDENDJOIN;
+        } catch (joinError) {}
+
+        try {
+            textFrame.textRange.characterAttributes.strokeWeight = STROKE_WIDTH;
+            textFrame.textRange.characterAttributes.strokeColor = whiteColor;
+        } catch (e2) {}
+    }
+
+    function addAppearanceStrokeThenFill(doc, whiteColor) {
+        var lines = [];
+        addNewStrokeEvent(lines, 1);
+        addNewFillEvent(lines, 2);
+        var previousDefaultStrokeColor = getDefaultStrokeColor(doc);
+        var previousDefaultStrokeWidth = getDefaultStrokeWidth(doc);
+
+        try {
+            doc.defaultStrokeColor = whiteColor;
+            doc.defaultStrokeWidth = STROKE_WIDTH;
+            app.executeMenuCommand("Adobe New Stroke Shortcut");
+        } catch (e) {
+            alert("모양 패널의 새 선을 추가할 수 없습니다.");
+            return;
+        }
+
+        applyStrokeStyleAction(doc);
+
+        try {
+            app.executeMenuCommand("Adobe New Fill Shortcut");
+        } catch (e2) {
+            alert("모양 패널의 새 면을 추가할 수 없습니다.");
+        } finally {
+            restoreDefaultStroke(doc, previousDefaultStrokeColor, previousDefaultStrokeWidth);
+        }
+    }
+
+    function addNewStrokeEvent(lines, eventIndex) {
+        lines.push("Add New Stroke " + eventIndex);
+    }
+
+    function addNewFillEvent(lines, eventIndex) {
+        lines.push("Add New Fill " + eventIndex);
+    }
+
+    function applyStrokeStyleAction(doc) {
+        var actionSetName = "Codex_TextWhiteStrokeFillAppearance";
+        var actionName = "SetWhiteRoundStroke";
+        var actionFile = new File(Folder.temp + "/Codex_TextWhiteStrokeFillAppearance.aia");
+
+        try {
+            removeActionSetIfLoaded(actionSetName);
+            writeStrokeAction(actionFile, actionSetName, actionName);
+            app.loadAction(actionFile);
+            app.doScript(actionName, actionSetName);
+        } catch (e) {
+            // 새 선은 이미 추가되어 있으므로, 액션 실패 시 문자 기본 선 속성만 유지합니다.
+        } finally {
+            removeActionSetIfLoaded(actionSetName);
+            try {
+                actionFile.remove();
+            } catch (removeError) {}
+        }
+    }
+
+    function writeStrokeAction(actionFile, actionSetName, actionName) {
+        var lines = [];
+
+        lines.push("/version 3");
+        lines.push("/name [ " + actionSetName.length);
+        lines.push("    " + asciiHex(actionSetName));
+        lines.push("]");
+        lines.push("/isOpen 1");
+        lines.push("/actionCount 1");
+        lines.push("/action-1 {");
+        lines.push("    /name [ " + actionName.length);
+        lines.push("        " + asciiHex(actionName));
+        lines.push("    ]");
+        lines.push("    /keyIndex 0");
+        lines.push("    /colorIndex 0");
+        lines.push("    /isOpen 1");
+        lines.push("    /eventCount 1");
+        lines.push("    /event-1 {");
+        lines.push("        /useRulersIn1stQuadrant 0");
+        lines.push("        /internalName (ai_plugin_setStroke)");
+        lines.push("        /localizedName [ 10");
+        lines.push("            536574205374726F6B65");
+        lines.push("        ]");
+        lines.push("        /isOpen 1");
+        lines.push("        /isOn 1");
+        lines.push("        /hasDialog 0");
+        lines.push("        /parameterCount 6");
+
+        addUnitRealParameter(lines, 1, 2003072104, STROKE_WIDTH);
+        addEnumeratedParameter(lines, 2, 1667330094, "중단 단면", 0);
+        addRealParameter(lines, 3, 1836344690, 10);
+        addEnumeratedParameter(lines, 4, 1785686382, "둥근 연결", 1);
+        addIntegerParameter(lines, 5, 1684825454, 0);
+        addBooleanParameter(lines, 6, 1684104298, 0);
+
+        lines.push("    }");
+        lines.push("}");
+
+        writeActionFile(actionFile, lines);
+    }
+
+    function makeWhiteColor(documentRef) {
+        var color;
+        if (documentRef.documentColorSpace === DocumentColorSpace.RGB) {
+            color = new RGBColor();
+            color.red = 255;
+            color.green = 255;
+            color.blue = 255;
+        } else {
+            color = new CMYKColor();
+            color.cyan = 0;
+            color.magenta = 0;
+            color.yellow = 0;
+            color.black = 0;
+        }
+        return color;
+    }
+
+    function getDefaultStrokeColor(doc) {
+        try {
+            return doc.defaultStrokeColor;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getDefaultStrokeWidth(doc) {
+        try {
+            return doc.defaultStrokeWidth;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function restoreDefaultStroke(doc, color, width) {
+        try {
+            if (color) {
+                doc.defaultStrokeColor = color;
+            }
+        } catch (e) {}
+
+        try {
+            if (width !== null) {
+                doc.defaultStrokeWidth = width;
+            }
+        } catch (e2) {}
+    }
+
+    function writeActionFile(actionFile, lines) {
+        actionFile.encoding = "UTF-8";
+        actionFile.open("w");
+        actionFile.write(lines.join("\n"));
+        actionFile.close();
+    }
+
+    function addUnitRealParameter(lines, index, key, value) {
+        lines.push("        /parameter-" + index + " {");
+        lines.push("            /key " + key);
+        lines.push("            /showInPalette 4294967295");
+        lines.push("            /type (unit real)");
+        lines.push("            /value " + formatReal(value));
+        lines.push("            /unit 592476268");
+        lines.push("        }");
+    }
+
+    function addRealParameter(lines, index, key, value) {
+        lines.push("        /parameter-" + index + " {");
+        lines.push("            /key " + key);
+        lines.push("            /showInPalette 4294967295");
+        lines.push("            /type (real)");
+        lines.push("            /value " + formatReal(value));
+        lines.push("        }");
+    }
+
+    function addIntegerParameter(lines, index, key, value) {
+        lines.push("        /parameter-" + index + " {");
+        lines.push("            /key " + key);
+        lines.push("            /showInPalette 4294967295");
+        lines.push("            /type (integer)");
+        lines.push("            /value " + value);
+        lines.push("        }");
+    }
+
+    function addBooleanParameter(lines, index, key, value) {
+        lines.push("        /parameter-" + index + " {");
+        lines.push("            /key " + key);
+        lines.push("            /showInPalette 4294967295");
+        lines.push("            /type (boolean)");
+        lines.push("            /value " + value);
+        lines.push("        }");
+    }
+
+    function addEnumeratedParameter(lines, index, key, name, value) {
+        lines.push("        /parameter-" + index + " {");
+        lines.push("            /key " + key);
+        lines.push("            /showInPalette 4294967295");
+        lines.push("            /type (enumerated)");
+        lines.push("            /name [ " + utf8HexLength(name));
+        lines.push("                " + utf8Hex(name));
+        lines.push("            ]");
+        lines.push("            /value " + value);
+        lines.push("        }");
+    }
+
+    function getSelectionArray(doc) {
+        var selected = [];
+        try {
+            for (var i = 0; i < doc.selection.length; i++) {
+                selected.push(doc.selection[i]);
+            }
+        } catch (e) {}
+        return selected;
+    }
+
+    function restoreSelection(doc, selected) {
+        try {
+            doc.selection = null;
+            for (var i = 0; i < selected.length; i++) {
+                try {
+                    selected[i].selected = true;
+                } catch (e) {}
+            }
+        } catch (e2) {}
+    }
+
+    function removeActionSetIfLoaded(actionSetName) {
+        try {
+            app.unloadAction(actionSetName, "");
+        } catch (e) {}
+    }
+
+    function formatReal(value) {
+        return (value % 1 === 0) ? value + ".0" : String(value);
+    }
+
+    function asciiHex(text) {
+        var hex = "";
+        for (var i = 0; i < text.length; i++) {
+            var code = text.charCodeAt(i).toString(16).toUpperCase();
+            while (code.length < 2) code = "0" + code;
+            hex += code;
+        }
+        return hex;
+    }
+
+    function utf8Hex(text) {
+        var bytes = unescape(encodeURIComponent(text));
+        var hex = "";
+        for (var i = 0; i < bytes.length; i++) {
+            var code = bytes.charCodeAt(i).toString(16).toUpperCase();
+            while (code.length < 2) code = "0" + code;
+            hex += code;
+        }
+        return hex;
+    }
+
+    function utf8HexLength(text) {
+        return utf8Hex(text).length / 2;
+    }
+})();
