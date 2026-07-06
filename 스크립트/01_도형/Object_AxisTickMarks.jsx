@@ -113,7 +113,7 @@
     var yEnd = topY - endMargin;
     var ySpacing = (yEnd - originY) / yCount;
 
-    var tickFont = app.textFonts.getByName("BEDFGG+GSMediumB1");
+    var tickFont = app.textFonts.getByName("GSMediumB1");
 
     // 텍스트 아웃라인 기준 배치 함수
     function createAlignedLabel(text, anchorX, anchorY, alignMode) {

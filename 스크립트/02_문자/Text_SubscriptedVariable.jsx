@@ -127,7 +127,7 @@
         var gap = 5 * MM;
 
         // 선택된 폰트 이름 결정
-        var fontName = (fontStyle === "Roman") ? "BEDFGG+GSMediumB1" : "BEDGOA+GSMediItaC1";
+        var fontName = (fontStyle === "Roman") ? "GSMediumB1" : "GSMediItaC1";
         var targetFont = null;
         try { targetFont = app.textFonts.getByName(fontName); } catch(e) {}
 

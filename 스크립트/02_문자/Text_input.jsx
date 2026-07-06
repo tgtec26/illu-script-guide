@@ -31,14 +31,14 @@
     ];
     var textOptions = [
         {contents: ["(가)", "(나)", "(다)", "(라)", "(마)", "(바)"], fontSize: 10, fontNames: ["Batang"]},
-        {contents: ["A", "B", "C", "D", "E", "F"], fontSize: 8, fontNames: ["BEDFGG+GSMediumB1"]},
+        {contents: ["A", "B", "C", "D", "E", "F"], fontSize: 8, fontNames: ["GSMediumB1"]},
         {contents: ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ"], fontSize: 8, fontNames: romanFontCandidates},
         {contents: ["㉠", "㉡", "㉢", "㉣", "㉤", "㉥"], fontSize: 9, fontNames: ["Batang"]},
         {contents: ["ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ"], fontSize: 9, fontNames: ["Batang"]},
-        {contents: ["1", "2", "3", "4", "5", "6"], fontSize: 8, fontNames: ["BEDFGG+GSMediumB1"]},
-        {contents: ["①", "②", "③", "④", "⑤", "⑥"], fontSize: 8, fontNames: ["BEDFGG+GSMediumB1"]},
-        {contents: ["t1", "t2", "t3", "t4", "t5", "t6"], fontSize: 8, fontNames: ["BEDGOA+GSMediItaC1"], applySubscript: true},
-        {contents: ["d1", "d2", "d3", "d4", "d5", "d6"], fontSize: 8, fontNames: ["BEDGOA+GSMediItaC1"], applySubscript: true}
+        {contents: ["1", "2", "3", "4", "5", "6"], fontSize: 8, fontNames: ["GSMediumB1"]},
+        {contents: ["①", "②", "③", "④", "⑤", "⑥"], fontSize: 8, fontNames: ["GSMediumB1"]},
+        {contents: ["t1", "t2", "t3", "t4", "t5", "t6"], fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
+        {contents: ["d1", "d2", "d3", "d4", "d5", "d6"], fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true}
     ];
     var selectedOption = null;
     var selectedCount = 0;

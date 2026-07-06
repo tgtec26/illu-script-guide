@@ -64,7 +64,7 @@
         var showNucleusText = (showNucleusTextStr === true);
         var elementSymbols = ["H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar"];
         var MM = 2.834645669;
-        var fontName = "BEDFGG+GSMediumB1"; // 지정 서체명
+        var fontName = "GSMediumB1"; // 지정 서체명
 
         var doc = app.activeDocument;
         var layer = doc.activeLayer;
