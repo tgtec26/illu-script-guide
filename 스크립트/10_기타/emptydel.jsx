@@ -14,70 +14,100 @@
     
     // 객체가 완전히 투명한지 확인하는 함수
     function isCompletelyTransparent(item) {
-        
+
         // 1. [핵심 수정] 클리핑 마스크인지 확인 (PathItem, CompoundPathItem 등)
         // item.clipping이 true면 마스크 역할을 하는 도형이므로 삭제 대상에서 제외
-        if (item.hasOwnProperty("clipping") && item.clipping === true) {
+        if (isClippingItem(item)) {
             return false;
         }
 
-        // 2. 그룹, 텍스트, 이미지 등은 제외 (내부 순환은 checkAndDeleteTransparent에서 처리)
-        if (item.typename === "GroupItem" || 
-            item.typename === "TextFrame" || 
-            item.typename === "PlacedItem" ||
-            item.typename === "RasterItem" ||
-            item.typename === "SymbolItem") {
+        // 2. 컴파운드 패스 처리
+        if (item.typename === "CompoundPathItem") {
+            return isTransparentCompoundPath(item);
+        }
+
+        // 3. 일반 패스(PathItem)만 삭제 후보로 처리합니다.
+        // 라이브 패스파인더/플러그인 개체는 화면에 보이는 선/면이 DOM의 filled/stroked로
+        // 드러나지 않을 수 있어 삭제 대상에서 제외합니다.
+        if (item.typename !== "PathItem") {
             return false;
         }
-        
-        // 3. 투명도(Opacity)가 0이면 무조건 투명으로 간주
+
+        return isTransparentPath(item);
+    }
+
+    function isTransparentCompoundPath(item) {
         if (item.opacity === 0) {
             return true;
         }
 
-        // 4. 컴파운드 패스 처리
-        if (item.typename === "CompoundPathItem") {
-            var hasFill = false;
-            var hasStroke = false;
-            
-            if (item.pathItems.length > 0) {
-                var firstPath = item.pathItems[0];
-                
-                if (firstPath.filled) {
-                    try {
-                        if (firstPath.fillColor.typename !== "NoColor") hasFill = true;
-                    } catch(e) {}
-                }
-                
-                if (firstPath.stroked) {
-                    try {
-                        if (firstPath.strokeColor.typename !== "NoColor" && firstPath.strokeWidth > 0) hasStroke = true;
-                    } catch(e) {}
-                }
+        if (item.pathItems.length === 0) {
+            return true;
+        }
+
+        for (var i = 0; i < item.pathItems.length; i++) {
+            if (!isTransparentPath(item.pathItems[i])) {
+                return false;
             }
-            return !hasFill && !hasStroke;
         }
-        
-        // 5. 일반 패스(PathItem) 처리
-        var hasFill = false;
-        var hasStroke = false;
-        
-        // Fill 확인
-        if (item.filled) {
+
+        return true;
+    }
+
+    function isTransparentPath(pathItem) {
+        if (isClippingItem(pathItem)) {
+            return false;
+        }
+
+        if (pathItem.opacity === 0) {
+            return true;
+        }
+
+        return !hasVisibleFill(pathItem) && !hasVisibleStroke(pathItem);
+    }
+
+    function hasVisibleFill(pathItem) {
+        if (!pathItem.filled) {
+            return false;
+        }
+
+        try {
+            return pathItem.fillColor.typename !== "NoColor";
+        } catch(e) {
+            return false;
+        }
+    }
+
+    function hasVisibleStroke(pathItem) {
+        if (!pathItem.stroked) {
+            return false;
+        }
+
+        try {
+            return pathItem.strokeColor.typename !== "NoColor" && pathItem.strokeWidth > 0;
+        } catch(e) {
+            return false;
+        }
+    }
+
+    function isClippingItem(item) {
+        try {
+            if (item.hasOwnProperty("clipping") && item.clipping === true) {
+                return true;
+            }
+        } catch(e) {}
+
+        if (item.typename === "CompoundPathItem") {
             try {
-                if (item.fillColor.typename !== "NoColor") hasFill = true;
+                for (var i = 0; i < item.pathItems.length; i++) {
+                    if (isClippingItem(item.pathItems[i])) {
+                        return true;
+                    }
+                }
             } catch(e) {}
         }
-        
-        // Stroke 확인
-        if (item.stroked) {
-            try {
-                if (item.strokeColor.typename !== "NoColor" && item.strokeWidth > 0) hasStroke = true;
-            } catch(e) {}
-        }
-        
-        // Fill도 Stroke도 없으면 투명
-        return !hasFill && !hasStroke;
+
+        return false;
     }
     
     // 재귀적으로 아이템 검사 및 삭제
