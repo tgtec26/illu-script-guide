@@ -105,6 +105,7 @@
     var timeText = activeLayer.textFrames.add();
     timeText.contents = "시간";
     styleText(timeText, labelFont);
+    timeText.paragraphs[0].paragraphAttributes.justification = Justification.RIGHT;
     var tb = glyphBounds(timeText);
     moveGlyphTo(timeText, xEnd[0] - (tb[2] - tb[0]), xEnd[1] - gapX);
 
