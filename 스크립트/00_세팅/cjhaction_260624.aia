@@ -3,7 +3,7 @@
 	ecb59ceca285ed9b88
 ]
 /isOpen 1
-/actionCount 37
+/actionCount 38
 /action-1 {
 	/name [ 20
 		ec84b8eba19c20eab3b5eab08420ebb684ed8fac
@@ -63,8 +63,9 @@
 	}
 }
 /action-3 {
-	/name [ 23
-		eca491ec959920eab080ec9ab4eb8db020eca095eba0ac
+	/name [ 33
+		eca491ec959920eab080ec9ab4eb8db020eca095eba0ac20eb8c80eab8b0eca4
+		80
 	]
 	/keyIndex 38
 	/colorIndex 0
@@ -99,6 +100,43 @@
 	}
 }
 /action-4 {
+	/name [ 33
+		eca491ec959920eab080ec9ab4eb8db020eca095eba0ac20ec868ceab8b0eca4
+		80
+	]
+	/keyIndex 54
+	/colorIndex 0
+	/isOpen 1
+	/eventCount 1
+	/event-1 {
+		/useRulersIn1stQuadrant 0
+		/internalName (adobe_commandManager)
+		/localizedName [ 20
+			eca091eab7bc20eba994eb89b420ed95adebaaa9
+		]
+		/isOpen 0
+		/isOn 1
+		/hasDialog 0
+		/parameterCount 2
+		/parameter-1 {
+			/key 1769238125
+			/showInPalette -1
+			/type (ustring)
+			/value [ 17
+				5f30303030303238303839453342333230
+			]
+		}
+		/parameter-2 {
+			/key 1818455661
+			/showInPalette -1
+			/type (ustring)
+			/value [ 24
+				30355feca095eba0ac3a20416c69676e5f43656e74657253
+			]
+		}
+	}
+}
+/action-5 {
 	/name [ 28
 		ec84b8eba19c20eab080ec9ab4eb8db020eca095eba0ac20316d6d42
 	]
@@ -134,7 +172,7 @@
 		}
 	}
 }
-/action-5 {
+/action-6 {
 	/name [ 28
 		ec84b8eba19c20eab080ec9ab4eb8db020eca095eba0ac20316d6d53
 	]
@@ -170,7 +208,7 @@
 		}
 	}
 }
-/action-6 {
+/action-7 {
 	/name [ 28
 		eab080eba19c20eab080ec9ab4eb8db020eca095eba0ac20316d6d42
 	]
@@ -206,7 +244,7 @@
 		}
 	}
 }
-/action-7 {
+/action-8 {
 	/name [ 28
 		eab080eba19c20eab080ec9ab4eb8db020eca095eba0ac20316d6d53
 	]
@@ -242,7 +280,7 @@
 		}
 	}
 }
-/action-8 {
+/action-9 {
 	/name [ 10
 		47736d656469756d6331
 	]
@@ -414,7 +452,7 @@
 		}
 	}
 }
-/action-9 {
+/action-10 {
 	/name [ 6
 		ed9995ec9ea5
 	]
@@ -470,7 +508,7 @@
 		/parameterCount 0
 	}
 }
-/action-10 {
+/action-11 {
 	/name [ 13
 		ec8898eb8aa520ec849cecb2b4
 	]
@@ -506,7 +544,7 @@
 		}
 	}
 }
-/action-11 {
+/action-12 {
 	/name [ 6
 		ed9db0ec8389
 	]
@@ -542,7 +580,7 @@
 		}
 	}
 }
-/action-12 {
+/action-13 {
 	/name [ 13
 		ed9db0ec838920eb9dbcec9db8
 	]
@@ -578,7 +616,7 @@
 		}
 	}
 }
-/action-13 {
+/action-14 {
 	/name [ 6
 		eba9b432304b
 	]
@@ -614,7 +652,7 @@
 		}
 	}
 }
-/action-14 {
+/action-15 {
 	/name [ 13
 		ec9d8cec988120ec84a0ed839d
 	]
@@ -650,7 +688,7 @@
 		}
 	}
 }
-/action-15 {
+/action-16 {
 	/name [ 9
 		eab280ec9d80ec8389
 	]
@@ -686,7 +724,7 @@
 		}
 	}
 }
-/action-16 {
+/action-17 {
 	/name [ 15
 		eab280ec9d80ec8389eb9dbcec9db8
 	]
@@ -722,7 +760,7 @@
 		}
 	}
 }
-/action-17 {
+/action-18 {
 	/name [ 14
 		ec84a020eb9190eabb9820302e33
 	]
@@ -856,7 +894,7 @@
 		}
 	}
 }
-/action-18 {
+/action-19 {
 	/name [ 20
 		302e3320ed9994ec82b4ecb48920eb84a3eab8b0
 	]
@@ -1021,7 +1059,7 @@
 		}
 	}
 }
-/action-19 {
+/action-20 {
 	/name [ 27
 		302e3320ec9691ecaabd20ed9994ec82b4ecb48920eb84a3eab8b0
 	]
@@ -1192,7 +1230,7 @@
 		}
 	}
 }
-/action-20 {
+/action-21 {
 	/name [ 14
 		ec84a020eb9190eabb9820302e34
 	]
@@ -1326,7 +1364,7 @@
 		}
 	}
 }
-/action-21 {
+/action-22 {
 	/name [ 20
 		302e3420ed9994ec82b4ecb48920eb84a3eab8b0
 	]
@@ -1491,7 +1529,7 @@
 		}
 	}
 }
-/action-22 {
+/action-23 {
 	/name [ 27
 		302e3420ec9691ecaabd20ed9994ec82b4ecb48920eb84a3eab8b0
 	]
@@ -1662,7 +1700,7 @@
 		}
 	}
 }
-/action-23 {
+/action-24 {
 	/name [ 13
 		ec84a0eb9190eabb9820302e35
 	]
@@ -1796,7 +1834,7 @@
 		}
 	}
 }
-/action-24 {
+/action-25 {
 	/name [ 20
 		302e3520ed9994ec82b4ecb48920eb84a3eab8b0
 	]
@@ -1961,7 +1999,7 @@
 		}
 	}
 }
-/action-25 {
+/action-26 {
 	/name [ 14
 		ec84a020eb9190eabb9820302e38
 	]
@@ -2095,7 +2133,7 @@
 		}
 	}
 }
-/action-26 {
+/action-27 {
 	/name [ 22
 		eb9dbcec9db4ebb88ceb9faceba6ac20ed8faced95a8
 	]
@@ -2158,7 +2196,7 @@
 		}
 	}
 }
-/action-27 {
+/action-28 {
 	/name [ 6
 		eb8c80eca780
 	]
@@ -2194,7 +2232,7 @@
 		}
 	}
 }
-/action-28 {
+/action-29 {
 	/name [ 16
 		eb8f84ed989520ed95a9ecb998eab8b0
 	]
@@ -2223,7 +2261,7 @@
 		}
 	}
 }
-/action-29 {
+/action-30 {
 	/name [ 30
 		eab280ec9d8020ecb9a020ec8389ec838120ed9db0ec8389ec9cbceba19c
 	]
@@ -2293,7 +2331,7 @@
 		}
 	}
 }
-/action-30 {
+/action-31 {
 	/name [ 23
 		eab280ec9d8020ec84a020ed9db0ec8389ec9cbceba19c
 	]
@@ -2363,7 +2401,7 @@
 		}
 	}
 }
-/action-31 {
+/action-32 {
 	/name [ 13
 		ed919c20eba78ceb93a4eab8b0
 	]
@@ -2399,7 +2437,7 @@
 		}
 	}
 }
-/action-32 {
+/action-33 {
 	/name [ 21
 		eab880ec9e90eab9a8eab3a0ed9db0eb9dbcec9db8
 	]
@@ -2538,7 +2576,7 @@
 		}
 	}
 }
-/action-33 {
+/action-34 {
 	/name [ 15
 		ed858dec8aa4ed8ab8ec82bdec9e85
 	]
@@ -2574,7 +2612,7 @@
 		}
 	}
 }
-/action-34 {
+/action-35 {
 	/name [ 16
 		ed9994ec82b4ed919c20ed9995ec9ea5
 	]
@@ -2823,7 +2861,7 @@
 		}
 	}
 }
-/action-35 {
+/action-36 {
 	/name [ 16
 		ec9db4eca491ec84a020ed9aa8eab3bc
 	]
@@ -3102,7 +3140,7 @@
 		}
 	}
 }
-/action-36 {
+/action-37 {
 	/name [ 13
 		eca095eba0ac20ebb098ebb3b5
 	]
@@ -3138,7 +3176,7 @@
 		}
 	}
 }
-/action-37 {
+/action-38 {
 	/name [ 12
 		ecb2a8ec9e90ebacb8ec9e90
 	]
