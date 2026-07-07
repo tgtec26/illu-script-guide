@@ -74,7 +74,7 @@ for (const file of alignFiles) {
 {
   const source = read(textInput);
   const optionArrays = source.match(/contents:\s*\[[^\]]+\]/g) || [];
-  if (optionArrays.length !== 7 ||
+  if (optionArrays.length !== 9 ||
       optionArrays.some((arraySource) => {
         const items = arraySource.match(/"[^"]*"/g) || [];
         return items.length !== 6;

@@ -6,7 +6,7 @@
     var doc = app.activeDocument;
 
     // 현재 보고 있는 화면의 영역 가져오기
-    var view = doc.views[0];
+    var view = getCurrentView(doc);
     var viewBounds = view.bounds;
     var viewLeft = viewBounds[0];
     var viewRight = viewBounds[2];
@@ -122,6 +122,15 @@
     doc.activate();
 
     view.zoom = view.zoom;
+
+    function getCurrentView(doc) {
+        try {
+            if (doc.activeView) {
+                return doc.activeView;
+            }
+        } catch (e) {}
+        return doc.views[0];
+    }
 
     function findTextFont(fontNames, fallbackName, useKoPubMetadata) {
         for (var i = 0; i < fontNames.length; i++) {
