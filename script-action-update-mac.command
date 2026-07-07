@@ -108,13 +108,27 @@ sync_scripts() {
       rsync -a --exclude '.DS_Store' "$item" "$TARGET_DIR/"
     fi
   done
+  normalize_names
+}
+
+# APFS는 정규화를 무시하고 경로를 찾기 때문에 기존에 NFD(자모 분해형)로 설치된
+# 한글 폴더명이 그대로 유지된다. Illustrator 액션은 메뉴 이름을 NFC(완성형)로
+# 기록하므로 이름이 어긋나면 "현재 사용할 수 없습니다" 오류가 난다. NFC로 강제 개명.
+normalize_names() {
+  find "$TARGET_DIR" -depth -mindepth 1 | while IFS= read -r p; do
+    base="$(basename "$p")"
+    nfc="$(printf '%s' "$base" | iconv -f UTF-8-MAC -t UTF-8 2>/dev/null || true)"
+    if [ -n "$nfc" ] && [ "$base" != "$nfc" ]; then
+      mv "$p" "$(dirname "$p")/$nfc"
+    fi
+  done
 }
 
 if [ -w "$TARGET_DIR" ] || [ -w "$(dirname "$TARGET_DIR")" ]; then
   sync_scripts
 else
   echo "관리자 권한으로 스크립트를 설치합니다. macOS 암호를 물을 수 있습니다."
-  sudo bash -c "$(declare -f sync_scripts); SOURCE_DIR='$SOURCE_DIR'; TARGET_DIR='$TARGET_DIR'; sync_scripts"
+  sudo bash -c "$(declare -f sync_scripts); $(declare -f normalize_names); SOURCE_DIR='$SOURCE_DIR'; TARGET_DIR='$TARGET_DIR'; sync_scripts"
 fi
 
 echo "  스크립트 복사 완료 -> $TARGET_DIR"
