@@ -2,7 +2,7 @@
 
 /*
   Image_LockRaster.jsx
-  기능: 현재 문서 안의 모든 래스터 이미지를 잠급니다.
+  기능: 현재 문서 안의 모든 래스터 이미지를 30% 불투명도로 설정한 뒤 잠급니다.
   - 포함된 이미지는 RasterItem으로 처리합니다.
   - 링크된 이미지는 PlacedItem 중 래스터 이미지 확장자만 처리합니다.
   - 잠긴/숨겨진 상위 레이어나 그룹은 잠시 풀고, 작업 후 원래 상태로 되돌립니다.
@@ -90,6 +90,7 @@
 
         try {
             restoreStates(states.targetDisplayStates);
+            item.opacity = 30;
             item.locked = true;
             return item.locked === true;
         } catch (e) {
