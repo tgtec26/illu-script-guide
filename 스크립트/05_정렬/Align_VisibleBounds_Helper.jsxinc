@@ -1,0 +1,180 @@
+// Visible-bounds alignment helper.
+// Caller must define ALIGN_VISIBLE_MODE:
+// hLeft, hCenter, hRight, vTop, vCenter, vBottom
+
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    var __scriptFile = (typeof ALIGN_VISIBLE_SCRIPT_FILE !== "undefined") ? ALIGN_VISIBLE_SCRIPT_FILE : $.fileName;
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write(__scriptFile);
+    __memo.close();
+} catch (e) {}
+
+(function() {
+    if (app.documents.length === 0) {
+        alert("열린 문서가 없습니다.");
+        return;
+    }
+
+    var doc = app.activeDocument;
+    var sel = doc.selection;
+    var mode = ALIGN_VISIBLE_MODE;
+
+    if (!sel || sel.length < 2) {
+        alert("최소 2개 이상의 개체를 선택해주세요.");
+        return;
+    }
+
+    function isClippingPath(item) {
+        if (!item) return false;
+        if (item.typename === "PathItem") {
+            return item.clipping;
+        }
+        if (item.typename === "CompoundPathItem") {
+            for (var i = 0; i < item.pathItems.length; i++) {
+                if (item.pathItems[i].clipping) return true;
+            }
+        }
+        return false;
+    }
+
+    function getClippingBounds(groupItem) {
+        for (var i = 0; i < groupItem.pageItems.length; i++) {
+            var child = groupItem.pageItems[i];
+            if (isClippingPath(child)) {
+                return child.geometricBounds;
+            }
+            if (child.typename === "GroupItem") {
+                var nested = getClippingBounds(child);
+                if (nested) return nested;
+            }
+        }
+        return null;
+    }
+
+    function unionBounds(boundsA, boundsB) {
+        if (!boundsB) return boundsA;
+        if (!boundsA) return [boundsB[0], boundsB[1], boundsB[2], boundsB[3]];
+
+        return [
+            Math.min(boundsA[0], boundsB[0]),
+            Math.max(boundsA[1], boundsB[1]),
+            Math.max(boundsA[2], boundsB[2]),
+            Math.min(boundsA[3], boundsB[3])
+        ];
+    }
+
+    function getGroupRealBounds(groupItem) {
+        var bounds = null;
+
+        if (groupItem.clipped) {
+            bounds = getClippingBounds(groupItem);
+            if (bounds) return bounds;
+        }
+
+        for (var i = 0; i < groupItem.pageItems.length; i++) {
+            var child = groupItem.pageItems[i];
+            if (!child || child.hidden || isClippingPath(child)) continue;
+
+            var childBounds = getRealBounds(child);
+            bounds = unionBounds(bounds, childBounds);
+        }
+
+        return bounds;
+    }
+
+    function getRealBounds(obj) {
+        if (!obj || obj.hidden) return null;
+
+        var bounds = null;
+
+        if (obj.typename === "TextFrame") {
+            var tempObj = obj.duplicate();
+            var outlined = null;
+            try {
+                outlined = tempObj.createOutline();
+                bounds = outlined.visibleBounds;
+            } catch(e) {
+                bounds = obj.visibleBounds;
+            } finally {
+                try {
+                    if (outlined) outlined.remove();
+                    if (tempObj) tempObj.remove();
+                } catch(removeError) {}
+            }
+        } else if (obj.typename === "GroupItem") {
+            bounds = getGroupRealBounds(obj);
+            if (!bounds) bounds = obj.visibleBounds;
+        } else {
+            bounds = obj.visibleBounds;
+        }
+
+        return bounds;
+    }
+
+    function centerX(bounds) {
+        return (bounds[0] + bounds[2]) / 2;
+    }
+
+    function centerY(bounds) {
+        return (bounds[1] + bounds[3]) / 2;
+    }
+
+    var items = [];
+    var selectionBounds = null;
+
+    for (var i = 0; i < sel.length; i++) {
+        var bounds = getRealBounds(sel[i]);
+        if (!bounds) continue;
+
+        items.push({ item: sel[i], bounds: bounds });
+        selectionBounds = unionBounds(selectionBounds, bounds);
+    }
+
+    if (items.length < 2 || !selectionBounds) {
+        alert("정렬할 수 있는 개체를 2개 이상 선택해주세요.");
+        return;
+    }
+
+    var target;
+    if (mode === "hLeft") {
+        target = selectionBounds[0];
+    } else if (mode === "hCenter") {
+        target = centerX(selectionBounds);
+    } else if (mode === "hRight") {
+        target = selectionBounds[2];
+    } else if (mode === "vTop") {
+        target = selectionBounds[1];
+    } else if (mode === "vCenter") {
+        target = centerY(selectionBounds);
+    } else if (mode === "vBottom") {
+        target = selectionBounds[3];
+    } else {
+        alert("알 수 없는 정렬 모드입니다: " + mode);
+        return;
+    }
+
+    for (var j = 0; j < items.length; j++) {
+        var obj = items[j].item;
+        var b = items[j].bounds;
+        var deltaX = 0;
+        var deltaY = 0;
+
+        if (mode === "hLeft") {
+            deltaX = target - b[0];
+        } else if (mode === "hCenter") {
+            deltaX = target - centerX(b);
+        } else if (mode === "hRight") {
+            deltaX = target - b[2];
+        } else if (mode === "vTop") {
+            deltaY = target - b[1];
+        } else if (mode === "vCenter") {
+            deltaY = target - centerY(b);
+        } else if (mode === "vBottom") {
+            deltaY = target - b[3];
+        }
+
+        obj.translate(deltaX, deltaY);
+    }
+})();

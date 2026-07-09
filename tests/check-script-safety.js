@@ -11,6 +11,15 @@ const alignFiles = [
 ];
 const centerAlignBig = "스크립트/05_정렬/Align_CenterB.jsx";
 const centerAlignSmall = "스크립트/05_정렬/Align_CenterS.jsx";
+const visibleAlignHelper = "스크립트/05_정렬/Align_VisibleBounds_Helper.jsxinc";
+const visibleAlignFiles = [
+  ["스크립트/05_정렬/Align_VisibleHLeft.jsx", "hLeft"],
+  ["스크립트/05_정렬/Align_VisibleHCenter.jsx", "hCenter"],
+  ["스크립트/05_정렬/Align_VisibleHRight.jsx", "hRight"],
+  ["스크립트/05_정렬/Align_VisibleVTop.jsx", "vTop"],
+  ["스크립트/05_정렬/Align_VisibleVCenter.jsx", "vCenter"],
+  ["스크립트/05_정렬/Align_VisibleVBottom.jsx", "vBottom"],
+];
 
 const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
 const textInput = "스크립트/02_문자/Text_input.jsx";
@@ -171,6 +180,49 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 }
 
 {
+  const source = read(visibleAlignHelper);
+  const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+  const activeDocLine = lineOf(source, /app\.activeDocument/);
+
+  if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+    console.error(`${visibleAlignHelper}: app.documents.length guard must run before app.activeDocument`);
+    failures++;
+  }
+
+  const requiredTokens = [
+    "ALIGN_VISIBLE_SCRIPT_FILE",
+    "tempObj.createOutline()",
+    "outlined.visibleBounds",
+    "function getGroupRealBounds",
+    "function getClippingBounds",
+    "function unionBounds",
+    "selectionBounds = unionBounds(selectionBounds, bounds)",
+    "obj.translate(deltaX, deltaY)",
+  ];
+  for (const token of requiredTokens) {
+    if (!source.includes(token)) {
+      console.error(`${visibleAlignHelper}: missing visible-bounds alignment token: ${token}`);
+      failures++;
+    }
+  }
+
+  if (!/finally\s*\{[\s\S]*tempObj\.remove\(\)/.test(source)) {
+    console.error(`${visibleAlignHelper}: temporary outlined text duplicate must be removed in finally`);
+    failures++;
+  }
+}
+
+for (const [file, mode] of visibleAlignFiles) {
+  const source = read(file);
+  if (!source.includes("Align_VisibleBounds_Helper.jsxinc") ||
+      !source.includes("ALIGN_VISIBLE_SCRIPT_FILE = $.fileName") ||
+      !source.includes(`ALIGN_VISIBLE_MODE = "${mode}"`)) {
+    console.error(`${file}: must invoke visible-bounds helper with mode ${mode}`);
+    failures++;
+  }
+}
+
+{
   const source = read(subscriptedVariable);
   if (!/var\s+radItalic\s*=\s*grpFont\.add\("radiobutton",\s*undefined,\s*"이탤릭체"\);[\s\S]*?var\s+radRoman\s*=\s*grpFont\.add\("radiobutton",\s*undefined,\s*"로만체"\);/.test(source) ||
       !source.includes("radItalic.value = true") ||
@@ -299,7 +351,8 @@ for (const file of updaterFiles) {
       !source.includes('KYS_NAME="cjh250907.kys"') ||
       !source.includes('ARROW_NAME="화살표.ai"') ||
       !source.includes('SETTINGS_BASE="$HOME/Library/Preferences/Adobe Illustrator $VER Settings"') ||
-      !source.includes('ARROW_DIR="$APP_DIR/Support Files/Required/Resources/ko_KR"')) {
+      !source.includes('"$APP_DIR/Support Files/Resources/ko_KR"') ||
+      !source.includes('"$APP_DIR/Support Files/Required/Resources/ko_KR"')) {
     console.error("script-action-update-mac.command: must support script-only mode and --full setup for shortcuts and arrows");
     failures++;
   }
