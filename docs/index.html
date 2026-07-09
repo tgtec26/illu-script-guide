@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Illustrator Scripts Guide</title>
+  <meta name="description" content="Illustrator 작업을 빠르게 만드는 스크립트 설명과 설치 안내">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#home" aria-label="홈으로 이동">
+      <span class="brand-mark">IS</span>
+      <span>
+        <strong>Illustrator Scripts</strong>
+        <small>작업을 줄이는 개인 도구집</small>
+      </span>
+    </a>
+    <nav class="nav" aria-label="주요 메뉴">
+      <a href="#catalog">스크립트</a>
+      <a href="#install">설치</a>
+      <a href="#loader">Loader Panel</a>
+      <a href="#admin">Admin</a>
+    </nav>
+  </header>
+
+  <main id="app">
+    <section class="hero view" id="home" data-view="home">
+      <div class="hero-copy">
+        <p class="eyebrow">Adobe Illustrator JSX Library</p>
+        <h1>자주 반복하는 일러스트 작업을, 설명까지 친절한 스크립트 도구집으로.</h1>
+        <p class="lead">
+          도형, 문자, 색상, 삽입, 정렬, 내보내기, 기타 정리 작업을 카테고리별로 정리했습니다.
+          스크린샷은 나중에 직접 붙일 수 있고, 설치 흐름도 한 페이지에서 확인할 수 있습니다.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="#catalog">스크립트 둘러보기</a>
+          <a class="button secondary" href="#install">원클릭 설치 보기</a>
+        </div>
+      </div>
+      <aside class="hero-panel" aria-label="사이트 요약">
+        <dl>
+          <div>
+            <dt id="scriptCount">0</dt>
+            <dd>등록 스크립트</dd>
+          </div>
+          <div>
+            <dt>7</dt>
+            <dd>주요 카테고리</dd>
+          </div>
+          <div>
+            <dt>1</dt>
+            <dd>설치 흐름</dd>
+          </div>
+        </dl>
+        <p>설명은 텍스트 중심, 이미지는 필요한 곳에만 추가하는 구조입니다.</p>
+      </aside>
+      <div class="home-categories" id="homeCategories" aria-label="카테고리 바로가기"></div>
+    </section>
+
+    <section class="notice" id="customNotice" hidden></section>
+
+    <section class="section view" id="catalog" data-view="catalog" hidden>
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Script Catalog</p>
+          <h2>스크립트 설명</h2>
+        </div>
+        <label class="search">
+          <span>검색</span>
+          <input id="searchInput" type="search" placeholder="예: 정렬, 화학식, 이미지, 대지">
+        </label>
+      </div>
+
+      <div class="category-tabs" id="categoryTabs" aria-label="카테고리 필터"></div>
+      <div class="script-grid" id="scriptGrid"></div>
+    </section>
+
+    <section class="section view detail-section" id="detail" data-view="detail" hidden>
+      <div id="detailContent"></div>
+    </section>
+
+    <section class="section install-section view" id="install" data-view="install" hidden>
+      <div class="section-head compact">
+        <div>
+          <p class="eyebrow">Install</p>
+          <h2>원클릭 설치 안내</h2>
+        </div>
+      </div>
+
+      <div class="install-layout">
+        <div class="install-card">
+          <h3>macOS</h3>
+          <ol>
+            <li>Illustrator를 종료합니다.</li>
+            <li><code>script-action-update-mac.command</code>를 더블클릭합니다.</li>
+            <li>GitHub 권한 또는 macOS 암호 요청이 나오면 승인합니다.</li>
+            <li>Illustrator를 다시 실행합니다.</li>
+          </ol>
+          <div class="card-actions">
+            <a class="button primary" href="https://github.com/tgtec26/illu-script/raw/main/script-action-update-mac.command">macOS 설치 파일</a>
+            <a class="button secondary" href="https://github.com/tgtec26/illu-script/raw/main/full-update-mac.command">전체 세팅 파일</a>
+          </div>
+          <p>새 PC 전체 세팅은 <code>full-update-mac.command</code>를 사용합니다.</p>
+        </div>
+        <div class="install-card">
+          <h3>Windows</h3>
+          <ol>
+            <li>Illustrator를 종료합니다.</li>
+            <li><code>script-action-update-windows.cmd</code>를 더블클릭합니다.</li>
+            <li>권한 확인 창이 나오면 <strong>예</strong>를 선택합니다.</li>
+            <li>Illustrator를 다시 실행합니다.</li>
+          </ol>
+          <div class="card-actions">
+            <a class="button primary" href="https://github.com/tgtec26/illu-script/raw/main/script-action-update-windows.cmd">Windows 설치 파일</a>
+            <a class="button secondary" href="https://github.com/tgtec26/illu-script/raw/main/full-update-windows.cmd">전체 세팅 파일</a>
+          </div>
+          <p>새 PC 전체 세팅은 <code>full-update-windows.cmd</code>를 사용합니다.</p>
+        </div>
+      </div>
+
+      <div class="setup-note">
+        <h3>전체 세팅 후 1회 확인</h3>
+        <p>
+          <code>파일 &gt; 스크립트 &gt; setup</code>을 실행하면 단위, 키보드 증감, 문자 증감,
+          액션 세트가 한 번에 맞춰집니다. 단축키 세트는 <code>cjh250907</code>을 선택합니다.
+        </p>
+      </div>
+    </section>
+
+    <section class="section loader-section view" id="loader" data-view="loader" hidden>
+      <div class="section-head compact">
+        <div>
+          <p class="eyebrow">Loader Script Panel</p>
+          <h2>패널로 실행할 때</h2>
+        </div>
+      </div>
+      <div class="loader-steps">
+        <article>
+          <span>1</span>
+          <h3>스크립트 폴더 연결</h3>
+          <p>Loader Script Panel에서 Illustrator Scripts 폴더 또는 이 저장소의 <code>스크립트</code> 폴더를 연결합니다.</p>
+        </article>
+        <article>
+          <span>2</span>
+          <h3>카테고리 유지</h3>
+          <p><code>01_도형</code>, <code>02_문자</code>처럼 폴더 구조를 유지하면 패널에서도 찾기 쉽습니다.</p>
+        </article>
+        <article>
+          <span>3</span>
+          <h3>갱신 후 새로고침</h3>
+          <p>업데이트 스크립트를 실행한 뒤 패널 목록을 새로고침합니다. 안 보이면 Illustrator를 재시작합니다.</p>
+        </article>
+        <article>
+          <span>4</span>
+          <h3>자주 쓰는 스크립트 고정</h3>
+          <p>정렬, 색상, 삽입처럼 반복 실행이 많은 스크립트는 패널의 즐겨찾기 영역에 묶어두면 빠릅니다.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section admin-section view" id="admin" data-view="admin" hidden>
+      <div class="section-head compact">
+        <div>
+          <p class="eyebrow">Admin</p>
+          <h2>문구와 이미지 추가</h2>
+        </div>
+      </div>
+
+      <div class="admin-grid">
+        <form id="noticeForm" class="admin-card">
+          <h3>상단 안내 문구</h3>
+          <label>
+            제목
+            <input name="title" type="text" placeholder="예: 7월 업데이트 안내">
+          </label>
+          <label>
+            내용
+            <textarea name="body" rows="5" placeholder="방문자에게 보여줄 안내 문구"></textarea>
+          </label>
+          <button class="button primary" type="submit">저장</button>
+        </form>
+
+        <form id="detailForm" class="admin-card">
+          <h3>세부 설명 페이지</h3>
+          <label>
+            스크립트 선택
+            <select name="scriptId" id="scriptSelect"></select>
+          </label>
+          <label>
+            제목
+            <input name="title" type="text" placeholder="예: 보이는 영역 기준 정렬">
+          </label>
+          <label>
+            기본 텍스트
+            <textarea name="body" rows="6" placeholder="사용 상황, 실행 방법, 주의할 점을 적습니다."></textarea>
+          </label>
+          <label>
+            이미지 설명
+            <input name="caption" type="text" placeholder="예: 실행 전후 비교">
+          </label>
+          <label>
+            이미지 파일
+            <input name="image" type="file" accept="image/*">
+          </label>
+          <button class="button primary" type="submit">세부 페이지 저장</button>
+        </form>
+
+        <div class="admin-card">
+          <h3>데이터 관리</h3>
+          <p>이 어드민은 현재 브라우저에 저장합니다. 다른 PC나 실제 사이트에 반영하려면 JSON을 내보내서 보관합니다.</p>
+          <div class="admin-actions">
+            <button class="button secondary" id="exportBtn" type="button">JSON 내보내기</button>
+            <label class="button secondary file-button">
+              JSON 가져오기
+              <input id="importInput" type="file" accept="application/json">
+            </label>
+            <button class="button danger" id="resetBtn" type="button">초기화</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Illustrator Scripts Guide. 차분하게 설명하고, 필요한 곳에만 이미지를 붙입니다.</p>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
