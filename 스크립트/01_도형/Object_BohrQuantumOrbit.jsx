@@ -186,7 +186,7 @@
     function drawNucleus(container, cx, cy, strokeColor, fillColor, strokeWidth, font) {
         var nucleusRadius = 1.5 * MM;
         var crossHalfLength = 0.9 * MM;
-        var crossStrokeWidth = 0.8;
+        var crossStrokeWidth = 0.5;
         var nucleus = container.pathItems.ellipse(
             cy + nucleusRadius,
             cx - nucleusRadius,

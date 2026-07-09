@@ -66,6 +66,7 @@
         try {
             textFrame.textRange.characterAttributes.strokeWeight = STROKE_WIDTH;
             textFrame.textRange.characterAttributes.strokeColor = whiteColor;
+            textFrame.textRange.characterAttributes.strokeJoin = StrokeJoin.ROUNDENDJOIN;
         } catch (e2) {}
     }
 
