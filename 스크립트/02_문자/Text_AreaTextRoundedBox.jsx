@@ -34,7 +34,7 @@
         var width = (bounds[2] - bounds[0]) + (paddingX * 2);
         var height = (bounds[1] - bounds[3]) + (paddingY * 2);
 
-        var box = doc.pathItems.roundedRectangle(top, left, width, height, radius, radius);
+        var box = makeLiveRoundedBox(doc, top, left, width, height, radius);
         box.name = "TextRoundedBox";
         box.filled = false;
         box.stroked = true;
@@ -63,6 +63,26 @@
 
     if (skipped > 0) {
         alert("선택 항목 " + created.length + "개에 둥근 사각형을 만들었습니다.\n처리할 수 없거나 비어 있는 항목 " + skipped + "개는 건너뛰었습니다.");
+    }
+
+    function makeLiveRoundedBox(documentRef, top, left, width, height, cornerRadius) {
+        var box = documentRef.pathItems.rectangle(top, left, width, height);
+
+        try {
+            box.applyEffect(
+                '<LiveEffect name="Adobe Round Corners">' +
+                '<Dict data="R radius ' + cornerRadius + '"/>' +
+                '</LiveEffect>'
+            );
+        } catch (e) {
+            try {
+                box.remove();
+            } catch (e1) {}
+
+            box = documentRef.pathItems.roundedRectangle(top, left, width, height, cornerRadius, cornerRadius);
+        }
+
+        return box;
     }
 
     function getTargetBounds(item) {
