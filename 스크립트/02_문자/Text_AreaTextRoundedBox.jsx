@@ -270,10 +270,25 @@
         if (item.typename === "TextFrame") {
             return getActualTextBounds(item);
         }
+        if (item.typename === "GroupItem") {
+            return getGroupContentBounds(item);
+        }
         if (isOutlineLikeItem(item)) {
             return getVisibleBounds(item);
         }
         return null;
+    }
+
+    function getGroupContentBounds(group) {
+        var bounds = null;
+
+        try {
+            for (var i = 0; i < group.pageItems.length; i++) {
+                bounds = mergeBounds(bounds, getTargetBounds(group.pageItems[i]));
+            }
+        } catch (e) {}
+
+        return bounds;
     }
 
     function getActualTextBounds(textFrame) {
@@ -309,9 +324,24 @@
     }
 
     function isOutlineLikeItem(item) {
-        return item.typename === "GroupItem" ||
-            item.typename === "CompoundPathItem" ||
+        return item.typename === "CompoundPathItem" ||
             item.typename === "PathItem";
+    }
+
+    function mergeBounds(a, b) {
+        if (!a) {
+            return b;
+        }
+        if (!b) {
+            return a;
+        }
+
+        return [
+            Math.min(a[0], b[0]),
+            Math.max(a[1], b[1]),
+            Math.max(a[2], b[2]),
+            Math.min(a[3], b[3])
+        ];
     }
 
     function getVisibleBounds(item) {
