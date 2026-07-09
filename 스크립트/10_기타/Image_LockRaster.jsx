@@ -2,13 +2,16 @@
 
 /*
   Image_LockRaster.jsx
-  기능: 현재 문서 안의 모든 래스터 이미지를 30% 불투명도로 설정한 뒤 잠급니다.
+  기능: 현재 문서 안의 모든 래스터 이미지를 전용 레이어로 이동한 뒤, 레이어를 30% 불투명도로 잠급니다.
   - 포함된 이미지는 RasterItem으로 처리합니다.
   - 링크된 이미지는 PlacedItem 중 래스터 이미지 확장자만 처리합니다.
   - 잠긴/숨겨진 상위 레이어나 그룹은 잠시 풀고, 작업 후 원래 상태로 되돌립니다.
 */
 
 (function () {
+    var RASTER_LAYER_NAME = "래스터 이미지 잠금";
+    var RASTER_LAYER_OPACITY = 30;
+
     if (app.documents.length === 0) {
         alert("문서를 먼저 열어주세요.");
         return;
@@ -16,40 +19,47 @@
 
     var doc = app.activeDocument;
     var items = [];
-    var lockedCount = 0;
-    var alreadyLockedCount = 0;
+    var movedCount = 0;
+    var alreadyInLayerCount = 0;
     var skippedPlacedCount = 0;
     var failedCount = 0;
 
     collectRasterImages(doc, items);
 
     if (items.length === 0) {
-        alert("잠글 래스터 이미지가 없습니다.");
+        alert("이동할 래스터 이미지가 없습니다.");
         return;
     }
 
     app.executeMenuCommand("deselectall");
 
+    var rasterLayer = getOrCreateRasterLayer(doc);
+    prepareRasterLayer(rasterLayer);
+
     for (var i = 0; i < items.length; i++) {
         var item = items[i];
 
-        if (isItemLocked(item)) {
-            alreadyLockedCount++;
+        if (getItemLayer(item) === rasterLayer) {
+            alreadyInLayerCount++;
             continue;
         }
 
-        if (lockImageItem(item)) {
-            lockedCount++;
+        if (moveImageItemToLayer(item, rasterLayer)) {
+            movedCount++;
         } else {
             failedCount++;
         }
     }
 
+    finalizeRasterLayer(rasterLayer);
+
     alert(
-        "래스터 이미지 잠금 완료\n" +
-        "새로 잠금: " + lockedCount + "개\n" +
-        "이미 잠김: " + alreadyLockedCount + "개\n" +
+        "래스터 이미지 레이어 이동 및 잠금 완료\n" +
+        "새로 이동: " + movedCount + "개\n" +
+        "이미 전용 레이어에 있음: " + alreadyInLayerCount + "개\n" +
         "래스터가 아닌 배치 파일 제외: " + skippedPlacedCount + "개\n" +
+        "레이어: " + RASTER_LAYER_NAME + "\n" +
+        "불투명도: " + RASTER_LAYER_OPACITY + "%\n" +
         "실패: " + failedCount + "개"
     );
 
@@ -85,22 +95,66 @@
         }
     }
 
-    function lockImageItem(item) {
-        var states = makeEditableForLock(item);
+    function getOrCreateRasterLayer(documentRef) {
+        try {
+            return documentRef.layers.getByName(RASTER_LAYER_NAME);
+        } catch (e) {
+            var layer = documentRef.layers.add();
+            layer.name = RASTER_LAYER_NAME;
+
+            try {
+                layer.zOrder(ZOrderMethod.SENDTOBACK);
+            } catch (e1) {}
+
+            return layer;
+        }
+    }
+
+    function prepareRasterLayer(layer) {
+        try {
+            layer.visible = true;
+        } catch (e1) {}
 
         try {
-            restoreStates(states.targetDisplayStates);
-            item.opacity = 30;
-            item.locked = true;
-            return item.locked === true;
+            layer.locked = false;
+        } catch (e2) {}
+    }
+
+    function finalizeRasterLayer(layer) {
+        try {
+            layer.opacity = RASTER_LAYER_OPACITY;
+        } catch (e1) {
+            applyOpacityToLayerItems(layer);
+        }
+
+        try {
+            layer.locked = true;
+        } catch (e2) {}
+    }
+
+    function applyOpacityToLayerItems(layer) {
+        for (var i = 0; i < layer.pageItems.length; i++) {
+            try {
+                layer.pageItems[i].opacity = RASTER_LAYER_OPACITY;
+            } catch (e) {}
+        }
+    }
+
+    function moveImageItemToLayer(item, targetLayer) {
+        var states = makeEditableForMove(item);
+
+        try {
+            item.move(targetLayer, ElementPlacement.PLACEATEND);
+            return getItemLayer(item) === targetLayer;
         } catch (e) {
             return false;
         } finally {
+            restoreStates(states.targetDisplayStates);
             restoreStates(states.ancestorStates);
         }
     }
 
-    function makeEditableForLock(item) {
+    function makeEditableForMove(item) {
         var targetDisplayStates = [];
         var ancestorStates = [];
         var current = item;
@@ -171,11 +225,25 @@
         }
     }
 
-    function isItemLocked(item) {
+    function getItemLayer(item) {
+        var current = item;
+
+        while (current && current.typename !== "Document") {
+            if (current.typename === "Layer") {
+                return current;
+            }
+
+            try {
+                current = current.parent;
+            } catch (e) {
+                break;
+            }
+        }
+
         try {
-            return item.locked === true;
-        } catch (e) {
-            return false;
+            return item.layer;
+        } catch (e1) {
+            return null;
         }
     }
 })();
