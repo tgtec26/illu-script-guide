@@ -506,19 +506,20 @@
             innerHoleGeometry(frontX, frontY, rearX, rearY, innerRadiusX, innerRadiusY) :
             {mode: "solid"};
 
-        var rearFill = makeRearRim(
+        var bodyFill = makeBodyFill(
             group,
+            frontX,
+            frontY,
             rearX,
             rearY,
-            capWidth,
-            capHeight,
-            rearX - frontX,
-            rearY - frontY
+            capWidth / 2,
+            capHeight / 2,
+            innerRadiusX,
+            innerRadiusY
         );
-        rearFill.closed = true;
-        rearFill.stroked = false;
-        applyFill(rearFill, faceK[FACE_OUTER]);
-        try { rearFill.zOrder(ZOrderMethod.SENDTOBACK); } catch(rearFillOrderError) {}
+        bodyFill.stroked = false;
+        applyFill(bodyFill, faceK[FACE_OUTER]);
+        try { bodyFill.zOrder(ZOrderMethod.SENDTOBACK); } catch(bodyFillOrderError) {}
 
         var rearCap = makeRearRim(
             group,
@@ -530,28 +531,6 @@
             rearY - frontY
         );
         copyStrokeStyle(source, rearCap);
-
-        var sideCorners = vertical ? [
-            [centerX - diameter / 2, centerY],
-            [centerX + diameter / 2, centerY],
-            [secondX + diameter / 2, secondY],
-            [secondX - diameter / 2, secondY]
-        ] : [
-            [centerX, centerY + diameter / 2],
-            [secondX, secondY + diameter / 2],
-            [secondX, secondY - diameter / 2],
-            [centerX, centerY - diameter / 2]
-        ];
-        if (holeGeometry.mode === "crescent") {
-            makeParallelogramWithHole(group, sideCorners, frontX, frontY,
-                innerRadiusX, innerRadiusY, faceK[FACE_OUTER]);
-        } else {
-            var side = group.pathItems.add();
-            side.setEntirePath(sideCorners);
-            side.closed = true;
-            side.stroked = false;
-            applyFill(side, faceK[FACE_OUTER]);
-        }
 
         var sideLineA;
         var sideLineB;
@@ -608,8 +587,8 @@
                         group,
                         innerDivisionPoint.innerFront[0],
                         innerDivisionPoint.innerFront[1],
-                        innerDivisionPoint.innerWallOpposite[0],
-                        innerDivisionPoint.innerWallOpposite[1]
+                        innerDivisionPoint.innerWallEnd[0],
+                        innerDivisionPoint.innerWallEnd[1]
                     );
                     copyStrokeStyle(source, innerWallDivision);
                 }
@@ -634,7 +613,8 @@
         var points = [];
         var axisX = rearX - frontX;
         var axisY = rearY - frontY;
-        var verticalAxis = Math.abs(axisY) >= Math.abs(axisX);
+        var holeRadiusX = capWidth / 2 * innerRatio;
+        var holeRadiusY = capHeight / 2 * innerRatio;
         var rotationRadians = rotation * Math.PI / 180;
 
         for (var i = 0; i < count; i++) {
@@ -644,12 +624,20 @@
             var sideDot = radialX * axisX + radialY * axisY;
             var innerX = radialX * innerRatio;
             var innerY = radialY * innerRatio;
+            // 내부 벽 분할선은 벽면을 따라 뒤쪽 구멍 테두리(t=1)까지 가되,
+            // 깊은 원기둥에서는 그 전에 앞 구멍 타원을 벗어나는 지점에서 멈춘다.
+            var wallT = 1;
+            if (holeRadiusX > 0 && holeRadiusY > 0) {
+                var axisU = axisX / holeRadiusX;
+                var axisV = axisY / holeRadiusY;
+                var axisLen2 = axisU * axisU + axisV * axisV;
+                var axisDot = Math.cos(angle) * axisU + Math.sin(angle) * axisV;
+                if (axisLen2 > 0 && axisDot < 0) wallT = Math.min(1, -2 * axisDot / axisLen2);
+            }
             points.push({
                 front: [frontX + radialX, frontY + radialY],
                 innerFront: [frontX + innerX, frontY + innerY],
-                innerWallOpposite: verticalAxis ?
-                    [frontX + innerX, frontY - innerY] :
-                    [frontX - innerX, frontY + innerY],
+                innerWallEnd: [frontX + innerX + wallT * axisX, frontY + innerY + wallT * axisY],
                 rear: [rearX + radialX, rearY + radialY],
                 visibleOnSide: sideDot > 0.0001,
                 visibleOnInnerWall: sideDot < -0.0001
@@ -710,12 +698,17 @@
         var rearSweep = pickArcSweep(rearX, rearY, radiusX, radiusY,
             geo.rearAngle2, geo.rearAngle1, frontX, frontY, radiusX, radiusY, true);
 
-        var points = [];
-        appendArcPoints(points, frontX, frontY, radiusX, radiusY, geo.frontAngle1, frontSweep, false);
-        appendArcPoints(points, rearX, rearY, radiusX, radiusY, geo.rearAngle2, rearSweep, true);
-        var first = points[0].anchor;
-        var last = points[points.length - 1].anchor;
-        if (Math.abs(first[0] - last[0]) < 0.0001 && Math.abs(first[1] - last[1]) < 0.0001) points.pop();
+        var frontPoints = [];
+        appendArcPoints(frontPoints, frontX, frontY, radiusX, radiusY, geo.frontAngle1, frontSweep, false);
+        var rearPoints = [];
+        appendArcPoints(rearPoints, rearX, rearY, radiusX, radiusY, geo.rearAngle2, rearSweep, false);
+        // 두 호가 만나는 접점에서는 이어지는 구간을 그리는 호의 접선 핸들을 써야
+        // 곡선이 경계 밖(비쳐 보여야 하는 영역)으로 불거지지 않는다.
+        frontPoints[frontPoints.length - 1].rightDirection = rearPoints[0].rightDirection;
+        frontPoints[frontPoints.length - 1].corner = true;
+        frontPoints[0].leftDirection = rearPoints[rearPoints.length - 1].leftDirection;
+        frontPoints[0].corner = true;
+        var points = frontPoints.concat(rearPoints.slice(1, rearPoints.length - 1));
 
         var crescent = createPathFromPoints(group, points, true);
         crescent.stroked = false;
@@ -819,13 +812,40 @@
 
     function makeArcPath(group, x, y, radiusX, radiusY, startAngle, sweep) {
         var points = [];
+        appendCornerArc(points, x, y, radiusX, radiusY, startAngle, sweep);
+        return createPathFromPoints(group, points, false);
+    }
+
+    // 양 끝 핸들을 앵커로 눌러 직선 변과 각지게 이어지는 호를 추가한다.
+    function appendCornerArc(points, x, y, radiusX, radiusY, startAngle, sweep) {
+        var start = points.length;
         appendArcPoints(points, x, y, radiusX, radiusY, startAngle, sweep, false);
+        points[start].leftDirection = points[start].anchor;
+        points[start].corner = true;
         var last = points.length - 1;
-        points[0].leftDirection = points[0].anchor;
-        points[0].corner = true;
         points[last].rightDirection = points[last].anchor;
         points[last].corner = true;
-        return createPathFromPoints(group, points, false);
+    }
+
+    function cornerPoint(anchor) {
+        return {anchor: anchor, leftDirection: anchor, rightDirection: anchor, corner: true};
+    }
+
+    // 옆면과 뒤 테두리를 하나로 채우는 몸통 경로. 앞 캡 중심선 변에서 앞 구멍(내경)의
+    // 뒤쪽 절반을 물어내, 구멍으로 비쳐 보여야 하는 배경을 가리지 않는다.
+    // 물린 부분 중 내부 벽이 보이는 곳은 이후 drawInnerHoleFill이 위에 다시 칠한다.
+    function makeBodyFill(group, frontX, frontY, rearX, rearY,
+            outerRadiusX, outerRadiusY, innerRadiusX, innerRadiusY) {
+        var axisAngle = Math.atan2(rearY - frontY, rearX - frontX);
+        var perpAngle = axisAngle + Math.PI / 2;
+        var points = [];
+        points.push(cornerPoint(ellipsePoint(frontX, frontY, outerRadiusX, outerRadiusY, perpAngle)));
+        if (innerRadiusX > 0 && innerRadiusY > 0) {
+            appendCornerArc(points, frontX, frontY, innerRadiusX, innerRadiusY, perpAngle, -Math.PI);
+        }
+        points.push(cornerPoint(ellipsePoint(frontX, frontY, outerRadiusX, outerRadiusY, perpAngle + Math.PI)));
+        appendCornerArc(points, rearX, rearY, outerRadiusX, outerRadiusY, perpAngle + Math.PI, Math.PI);
+        return createPathFromPoints(group, points, true);
     }
 
     function ellipseFullPoints(x, y, radiusX, radiusY) {
@@ -878,19 +898,6 @@
         var inside = ellipseContains(midPoint[0], midPoint[1], refX, refY, refRadiusX, refRadiusY);
         if (inside !== wantInside) sweep -= Math.PI * 2;
         return sweep;
-    }
-
-    function makeParallelogramWithHole(group, cornerPoints, holeX, holeY, holeRadiusX, holeRadiusY, k) {
-        var compound = group.compoundPathItems.add();
-        var outer = compound.pathItems.add();
-        outer.setEntirePath(cornerPoints);
-        outer.closed = true;
-        var hole = createPathFromPoints(compound, ellipseFullPoints(holeX, holeY, holeRadiusX, holeRadiusY), true);
-        outer.stroked = false;
-        hole.stroked = false;
-        applyFill(outer, k);
-        applyFill(hole, k);
-        return compound;
     }
 
     function addPoint(point, delta) {
