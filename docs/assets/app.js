@@ -401,6 +401,49 @@ document.getElementById("detailForm").addEventListener("submit", (event) => {
 
 document.getElementById("exportBtn").addEventListener("click", downloadJson);
 
+const publishPwKey = "illuScriptGuidePublishPw";
+const publishPasswordInput = document.getElementById("publishPassword");
+const publishStatusEl = document.getElementById("publishStatus");
+
+// 편의를 위해 이 브라우저에 게시 비밀번호를 기억해 둡니다.
+publishPasswordInput.value = localStorage.getItem(publishPwKey) || "";
+
+function setPublishStatus(message, kind) {
+  publishStatusEl.textContent = message;
+  publishStatusEl.dataset.kind = kind || "";
+}
+
+document.getElementById("publishBtn").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const password = publishPasswordInput.value.trim();
+  if (!password) {
+    setPublishStatus("게시 비밀번호를 입력하세요.", "error");
+    return;
+  }
+
+  button.disabled = true;
+  setPublishStatus("게시 중…", "info");
+  try {
+    const response = await fetch("/api/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password, content: state.custom })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data.ok) {
+      localStorage.setItem(publishPwKey, password);
+      const short = (data.commit || "").slice(0, 7);
+      setPublishStatus(`게시 완료${short ? ` (커밋 ${short})` : ""}. 1~2분 뒤 사이트에 반영됩니다.`, "success");
+    } else {
+      setPublishStatus(`게시 실패: ${data.error || `서버 응답 ${response.status}`}`, "error");
+    }
+  } catch (_) {
+    setPublishStatus("네트워크 오류로 게시하지 못했습니다. 로컬 환경에서는 /api가 없어 실패할 수 있습니다.", "error");
+  } finally {
+    button.disabled = false;
+  }
+});
+
 document.getElementById("importInput").addEventListener("change", (event) => {
   const file = event.target.files[0];
   if (!file) return;

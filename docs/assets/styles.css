@@ -577,15 +577,43 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 
 .file-button input { display: none; }
 
-.publish-steps {
-  margin: 0 0 4px;
-  padding-left: 1.15rem;
-  color: #4b5a70;
-  font-size: .9rem;
+.publish-status {
+  margin: 4px 0 0;
+  min-height: 1.2em;
+  font-size: .88rem;
+  font-weight: 700;
 }
 
-.publish-steps li + li { margin-top: 5px; }
-.publish-steps code { font-size: .86em; }
+.publish-status[data-kind="success"] { color: #2f7d43; }
+.publish-status[data-kind="error"] { color: var(--warn); }
+.publish-status[data-kind="info"] { color: var(--blue-700); }
+
+.publish-hint {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: .84rem;
+}
+
+.publish-fallback {
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.publish-fallback summary {
+  cursor: pointer;
+  color: var(--blue-700);
+  font-weight: 750;
+  font-size: .88rem;
+}
+
+.publish-fallback p {
+  margin: 10px 0;
+  color: #4b5a70;
+  font-size: .88rem;
+}
+
+.publish-fallback code { font-size: .86em; }
 
 .footer {
   max-width: 1180px;
