@@ -12,6 +12,7 @@
     var previewEnabled = true;
     var previewGroup = null;
     var sourceWasHidden = source.hidden;
+    var pathMetrics = buildPathMetrics(source, 80);
 
     var dlg = new Window("dialog", "오브젝트 전선");
     dlg.orientation = "column";
@@ -98,7 +99,8 @@
             try { if (typeof finalGroup !== "undefined" && finalGroup !== null) finalGroup.remove(); } catch(e3) {}
             source.hidden = sourceWasHidden;
             source.selected = true;
-            alert("전선을 만드는 중 오류가 발생했습니다.");
+            if (e2 && e2.weatherFrontTooShort) alert("선택한 패스가 도형 크기보다 짧습니다.");
+            else alert("전선을 만드는 중 오류가 발생했습니다.");
         }
     } else {
         source.hidden = sourceWasHidden;
@@ -113,6 +115,10 @@
             return;
         }
         previewGroup = createWeatherFront(true);
+        if (previewGroup === null) {
+            app.redraw();
+            return;
+        }
         previewGroup.name = "Weather Front Preview";
         try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         app.redraw();
@@ -130,11 +136,227 @@
             var baseline = source.duplicate(group, ElementPlacement.PLACEATEND);
             baseline.hidden = false;
             baseline.selected = false;
+            baseline.strokeWidth = strokeWidthPt;
+            if (drawSymbols(group) === 0) {
+                group.remove();
+                if (isPreview) return null;
+                var tooShort = new Error("선택한 패스가 도형 크기보다 짧습니다.");
+                tooShort.weatherFrontTooShort = true;
+                throw tooShort;
+            }
             return group;
         } catch(e) {
             try { group.remove(); } catch(e2) {}
             throw e;
         }
+    }
+
+    function drawSymbols(group) {
+        var shapeSize = shapeSizeMm * MM_TO_PT;
+        var gap = gapMm * MM_TO_PT;
+        var unitLength = shapeSize + gap;
+        var normalSign = reversed ? -1 : 1;
+        var color = getPlaceholderColor();
+        var count = 0;
+
+        for (var index = 0; shapeSize + index * unitLength <= pathMetrics.totalLength; index++) {
+            var centerDistance = shapeSize / 2 + index * unitLength;
+            var frame = getFrameAtLength(pathMetrics, centerDistance);
+
+            if (frontType === "warm") {
+                drawSemicircle(group, frame, shapeSize, normalSign, color);
+            } else if (frontType === "cold") {
+                drawTriangle(group, frame, shapeSize, normalSign, color);
+            } else if (frontType === "stationary") {
+                if (index % 2 === 0) {
+                    drawSemicircle(group, frame, shapeSize, normalSign, color);
+                } else {
+                    drawTriangle(group, frame, shapeSize, -normalSign, color);
+                }
+            } else if (frontType === "occluded") {
+                if (index % 2 === 0) {
+                    drawSemicircle(group, frame, shapeSize, normalSign, color);
+                } else {
+                    drawTriangle(group, frame, shapeSize, normalSign, color);
+                }
+            }
+            count++;
+        }
+        return count;
+    }
+
+    function getPlaceholderColor() {
+        if (source.stroked) return source.strokeColor;
+        var color = new RGBColor();
+        color.red = 0;
+        color.green = 0;
+        color.blue = 0;
+        return color;
+    }
+
+    function drawTriangle(group, frame, size, side, color) {
+        var halfSize = size / 2;
+        var height = Math.sqrt(3) * size / 2;
+        var left = offsetFrame(frame, -frame.tx * halfSize, -frame.ty * halfSize);
+        var right = offsetFrame(frame, frame.tx * halfSize, frame.ty * halfSize);
+        var apex = offsetFrame(frame, frame.nx * height * side, frame.ny * height * side);
+        var triangle = group.pathItems.add();
+        triangle.setEntirePath([[left.x, left.y], [right.x, right.y], [apex.x, apex.y]]);
+        triangle.closed = true;
+        triangle.stroked = false;
+        triangle.filled = true;
+        triangle.fillColor = color;
+        return triangle;
+    }
+
+    function drawSemicircle(group, frame, size, side, color) {
+        var halfSize = size / 2;
+        var handleScale = 0.5522847498;
+        var left = offsetFrame(frame, -frame.tx * halfSize, -frame.ty * halfSize);
+        var right = offsetFrame(frame, frame.tx * halfSize, frame.ty * halfSize);
+        var top = offsetFrame(frame, frame.nx * halfSize * side, frame.ny * halfSize * side);
+        var semicircle = group.pathItems.add();
+        semicircle.setEntirePath([[left.x, left.y], [top.x, top.y], [right.x, right.y]]);
+        semicircle.closed = true;
+        semicircle.stroked = false;
+        semicircle.filled = true;
+        semicircle.fillColor = color;
+
+        semicircle.pathPoints[0].rightDirection = [
+            left.x + frame.nx * halfSize * handleScale * side,
+            left.y + frame.ny * halfSize * handleScale * side
+        ];
+        semicircle.pathPoints[0].leftDirection = [left.x, left.y];
+        semicircle.pathPoints[1].leftDirection = [
+            top.x - frame.tx * halfSize * handleScale,
+            top.y - frame.ty * halfSize * handleScale
+        ];
+        semicircle.pathPoints[1].rightDirection = [
+            top.x + frame.tx * halfSize * handleScale,
+            top.y + frame.ty * halfSize * handleScale
+        ];
+        semicircle.pathPoints[2].leftDirection = [
+            right.x + frame.nx * halfSize * handleScale * side,
+            right.y + frame.ny * halfSize * handleScale * side
+        ];
+        semicircle.pathPoints[2].rightDirection = [right.x, right.y];
+        return semicircle;
+    }
+
+    function offsetFrame(frame, x, y) {
+        return {x: frame.x + x, y: frame.y + y};
+    }
+
+    function buildPathMetrics(path, samplesPerSegment) {
+        var segments = getCubicSegments(path);
+        var samples = [];
+        var distance = 0;
+        if (segments.length === 0) return {samples: samples, segments: segments, totalLength: distance};
+
+        var firstPoint = cubicPoint(segments[0].p0, segments[0].p1, segments[0].p2, segments[0].p3, 0);
+        samples.push({distance: 0, segmentIndex: 0, t: 0, x: firstPoint.x, y: firstPoint.y});
+        var previousPoint = firstPoint;
+        for (var segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
+            var segment = segments[segmentIndex];
+            for (var sampleIndex = 1; sampleIndex <= samplesPerSegment; sampleIndex++) {
+                var t = sampleIndex / samplesPerSegment;
+                var point = cubicPoint(segment.p0, segment.p1, segment.p2, segment.p3, t);
+                distance += distanceBetween(previousPoint, point);
+                samples.push({distance: distance, segmentIndex: segmentIndex, t: t, x: point.x, y: point.y});
+                previousPoint = point;
+            }
+        }
+        return {samples: samples, segments: segments, totalLength: distance};
+    }
+
+    function getCubicSegments(path) {
+        var points = path.pathPoints;
+        var segments = [];
+        for (var index = 0; index < points.length - 1; index++) {
+            segments.push({
+                p0: pointFromArray(points[index].anchor),
+                p1: pointFromArray(points[index].rightDirection),
+                p2: pointFromArray(points[index + 1].leftDirection),
+                p3: pointFromArray(points[index + 1].anchor)
+            });
+        }
+        return segments;
+    }
+
+    function pointFromArray(point) {
+        return {x: point[0], y: point[1]};
+    }
+
+    function cubicPoint(p0, p1, p2, p3, t) {
+        var inverseT = 1 - t;
+        var inverseTSquared = inverseT * inverseT;
+        var tSquared = t * t;
+        return {
+            x: inverseTSquared * inverseT * p0.x + 3 * inverseTSquared * t * p1.x + 3 * inverseT * tSquared * p2.x + tSquared * t * p3.x,
+            y: inverseTSquared * inverseT * p0.y + 3 * inverseTSquared * t * p1.y + 3 * inverseT * tSquared * p2.y + tSquared * t * p3.y
+        };
+    }
+
+    function cubicDerivative(p0, p1, p2, p3, t) {
+        var inverseT = 1 - t;
+        return {
+            x: 3 * inverseT * inverseT * (p1.x - p0.x) + 6 * inverseT * t * (p2.x - p1.x) + 3 * t * t * (p3.x - p2.x),
+            y: 3 * inverseT * inverseT * (p1.y - p0.y) + 6 * inverseT * t * (p2.y - p1.y) + 3 * t * t * (p3.y - p2.y)
+        };
+    }
+
+    function getFrameAtLength(metrics, distance) {
+        var samples = metrics.samples;
+        if (samples.length === 0) return null;
+        var clampedDistance = clamp(distance, 0, metrics.totalLength);
+        var low = 0;
+        var high = samples.length - 1;
+        while (low < high) {
+            var middle = Math.floor((low + high) / 2);
+            if (samples[middle].distance < clampedDistance) low = middle + 1;
+            else high = middle;
+        }
+        var after = samples[low];
+        var before = low > 0 ? samples[low - 1] : after;
+        var span = after.distance - before.distance;
+        var ratio = span > 0 ? (clampedDistance - before.distance) / span : 0;
+        var segmentIndex = before.segmentIndex;
+        var t = before.t + (after.t - before.t) * ratio;
+        if (after.segmentIndex !== before.segmentIndex && ratio > 0) {
+            segmentIndex = after.segmentIndex;
+            t = after.t * ratio;
+        }
+        var segment = metrics.segments[segmentIndex];
+        var point = cubicPoint(segment.p0, segment.p1, segment.p2, segment.p3, t);
+        var derivative = cubicDerivative(segment.p0, segment.p1, segment.p2, segment.p3, t);
+        var magnitude = Math.sqrt(derivative.x * derivative.x + derivative.y * derivative.y);
+        if (magnitude < 0.0001) {
+            derivative = sampleDirection(samples, low);
+            magnitude = Math.sqrt(derivative.x * derivative.x + derivative.y * derivative.y);
+        }
+        if (magnitude < 0.0001) derivative = {x: 1, y: 0};
+        else {
+            derivative.x /= magnitude;
+            derivative.y /= magnitude;
+        }
+        return {
+            x: point.x, y: point.y,
+            tx: derivative.x, ty: derivative.y,
+            nx: -derivative.y, ny: derivative.x,
+            segmentIndex: segmentIndex, t: t
+        };
+    }
+
+    function sampleDirection(samples, index) {
+        var before = samples[Math.max(0, index - 1)];
+        var after = samples[Math.min(samples.length - 1, index + 1)];
+        return {x: after.x - before.x, y: after.y - before.y};
+    }
+
+    function distanceBetween(first, second) {
+        var x = second.x - first.x;
+        var y = second.y - first.y;
+        return Math.sqrt(x * x + y * y);
     }
 
     function addNumericControl(parent, label, value, minimum, maximum, step, unit) {

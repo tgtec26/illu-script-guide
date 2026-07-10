@@ -666,6 +666,18 @@ for (const [file, mode] of visibleAlignFiles) {
       'source.hidden = sourceWasHidden',
       'source.remove()',
       'item.editable === false',
+      'var pathMetrics = buildPathMetrics(source, 80)',
+      'function cubicPoint(p0, p1, p2, p3, t)',
+      'function cubicDerivative(p0, p1, p2, p3, t)',
+      'function buildPathMetrics(path, samplesPerSegment)',
+      'function getFrameAtLength(metrics, distance)',
+      'var normalSign = reversed ? -1 : 1',
+      'var unitLength = shapeSize + gap',
+      'var centerDistance = shapeSize / 2 + index * unitLength',
+      'function drawSemicircle(group, frame, size, side, color)',
+      'function drawTriangle(group, frame, size, side, color)',
+      'frontType === "stationary"',
+      'frontType === "occluded"',
     ];
 
     for (const token of required) {
@@ -691,6 +703,12 @@ for (const [file, mode] of visibleAlignFiles) {
 
     if (!/source\.hidden\s*=\s*true;\s*source\.selected\s*=\s*false;\s*try\s*\{\s*updatePreview\(\);\s*\}\s*catch\s*\([^)]*\)\s*\{[\s\S]*?clearPreview\(\);[\s\S]*?source\.hidden\s*=\s*sourceWasHidden;[\s\S]*?source\.selected\s*=\s*true;[\s\S]*?alert\(\s*"미리보기를 만드는 중 오류가 발생했습니다\."\s*\);[\s\S]*?return;\s*\}\s*var\s+result\s*=\s*dlg\.show\(\)/.test(source)) {
       console.error(`${weatherFront}: initial preview failure must restore source state before showing the dialog`);
+      failures++;
+    }
+
+    if (/pathPoints\s*\[\s*index\s*\]/.test(source) ||
+        /index\s*\/\s*\(?\s*(?:count|symbolCount|pathPoints\.length)/.test(source)) {
+      console.error(`${weatherFront}: symbol placement must use cached path length, not parameter-index spacing`);
       failures++;
     }
   }
