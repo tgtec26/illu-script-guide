@@ -8,6 +8,14 @@
     var gapMm = 2;
     var strokeWidthPt = 0.5;
     var frontType = "warm";
+    var colorMode = "standard";
+    var kValue = 0;
+    var hexValue = "FF0000";
+    var lastValidHex = hexValue;
+    var K_STEP = 10;
+    var STANDARD_RED = "FF0000";
+    var STANDARD_BLUE = "0000FF";
+    var STANDARD_PURPLE = "7030A0";
     var reversed = false;
     var previewEnabled = true;
     var previewGroup = null;
@@ -37,7 +45,22 @@
     var colorPanel = dlg.add("panel", undefined, "컬러");
     colorPanel.orientation = "column";
     colorPanel.alignChildren = "left";
-    colorPanel.add("statictext", undefined, "표준색");
+    var standardColorRadio = colorPanel.add("radiobutton", undefined, "표준색");
+    var kColorRadio = colorPanel.add("radiobutton", undefined, "K 음영");
+    var kRow = colorPanel.add("group");
+    var kDecreaseButton = kRow.add("button", undefined, "<");
+    var kLabel = kRow.add("statictext", undefined, "0K");
+    var kIncreaseButton = kRow.add("button", undefined, ">");
+    var kBounds = colorPanel.add("group");
+    kBounds.add("statictext", undefined, "0K");
+    kBounds.add("statictext", undefined, "100K");
+    var hexColorRadio = colorPanel.add("radiobutton", undefined, "HEX");
+    var hexInput = colorPanel.add("edittext", undefined, hexValue);
+    hexInput.characters = 8;
+    standardColorRadio.value = true;
+    kRow.enabled = false;
+    kBounds.enabled = false;
+    hexInput.enabled = false;
 
     var linePanel = dlg.add("panel", undefined, "라인");
     linePanel.orientation = "column";
@@ -57,6 +80,23 @@
     occludedRadio.onClick = function() { frontType = "occluded"; updatePreview(); };
     reversedCheck.onClick = function() { reversed = reversedCheck.value; updatePreview(); };
     previewCheck.onClick = function() { previewEnabled = previewCheck.value; updatePreview(); };
+    standardColorRadio.onClick = function() { setColorMode("standard"); };
+    kColorRadio.onClick = function() { setColorMode("k"); };
+    hexColorRadio.onClick = function() { setColorMode("hex"); };
+    kDecreaseButton.onClick = function() { stepK(-10); };
+    kIncreaseButton.onClick = function() { stepK(10); };
+    hexInput.onChange = function() {
+        var value = hexInput.text;
+        if (!/^#?[0-9a-fA-F]{6}$/.test(value)) {
+            alert("HEX 색상은 6자리 16진수로 입력해주세요.");
+            hexInput.text = lastValidHex;
+            return;
+        }
+        hexValue = normalizeHex(value);
+        lastValidHex = hexValue;
+        hexInput.text = hexValue;
+        updatePreview();
+    };
 
     bindNumericControl(shapeSizeControl, function(value) {
         shapeSizeMm = value;
@@ -70,6 +110,21 @@
         strokeWidthPt = value;
         updatePreview();
     });
+
+    function setColorMode(mode) {
+        colorMode = mode;
+        kRow.enabled = mode === "k";
+        kBounds.enabled = mode === "k";
+        hexInput.enabled = mode === "hex";
+        updatePreview();
+    }
+
+    function stepK(delta) {
+        delta = delta < 0 ? -K_STEP : K_STEP;
+        kValue = clamp(kValue + delta, 0, 100);
+        kLabel.text = kValue + "K";
+        updatePreview();
+    }
 
     source.hidden = true;
     source.selected = false;
@@ -133,17 +188,26 @@
     function createWeatherFront(isPreview) {
         var group = source.layer.groupItems.add();
         try {
-            var baseline = source.duplicate(group, ElementPlacement.PLACEATEND);
-            baseline.hidden = false;
-            baseline.selected = false;
-            baseline.strokeWidth = strokeWidthPt;
-            if (drawSymbols(group) === 0) {
+            var shapeSize = shapeSizeMm * MM_TO_PT;
+            var gap = gapMm * MM_TO_PT;
+            var placements = getSymbolPlacements(pathMetrics.totalLength, shapeSize, gap);
+            if (placements.length === 0) {
                 group.remove();
                 if (isPreview) return null;
                 var tooShort = new Error("선택한 패스가 도형 크기보다 짧습니다.");
                 tooShort.weatherFrontTooShort = true;
                 throw tooShort;
             }
+            if (frontType === "stationary" && colorMode === "standard") {
+                var boundaries = getStationaryBoundaries(placements, pathMetrics.totalLength);
+                drawStationaryBaseline(group, boundaries, [makeHexColor(STANDARD_RED), makeHexColor(STANDARD_BLUE)]);
+            } else {
+                var baseline = source.duplicate(group, ElementPlacement.PLACEATEND);
+                baseline.hidden = false;
+                baseline.selected = false;
+                styleBaseline(baseline, getFrontColors(0));
+            }
+            drawSymbols(group, placements, shapeSize);
             return group;
         } catch(e) {
             try { group.remove(); } catch(e2) {}
@@ -151,17 +215,14 @@
         }
     }
 
-    function drawSymbols(group) {
-        var shapeSize = shapeSizeMm * MM_TO_PT;
-        var gap = gapMm * MM_TO_PT;
+    function drawSymbols(group, placements, shapeSize) {
         var normalSign = reversed ? -1 : 1;
-        var color = getPlaceholderColor();
-        var placements = getSymbolPlacements(pathMetrics.totalLength, shapeSize, gap);
 
         for (var placementIndex = 0; placementIndex < placements.length; placementIndex++) {
             var placement = placements[placementIndex];
             var frame = getFrameAtLength(pathMetrics, placement.centerDistance);
             var instruction = getSymbolInstruction(frontType, placement.index, normalSign);
+            var color = getFrontColors(placement.index);
             if (instruction.shape === "semicircle") {
                 drawSemicircle(group, frame, shapeSize, instruction.side, color);
             } else {
@@ -197,13 +258,82 @@
         return null;
     }
 
-    function getPlaceholderColor() {
-        if (source.stroked) return source.strokeColor;
-        var color = new RGBColor();
-        color.red = 0;
-        color.green = 0;
-        color.blue = 0;
-        return color;
+    function getFrontColors(index) {
+        if (colorMode === "k") return makeKColor(kValue);
+        if (colorMode === "hex") return makeHexColor(hexValue);
+        if (frontType === "warm") return makeHexColor(STANDARD_RED);
+        if (frontType === "cold") return makeHexColor(STANDARD_BLUE);
+        if (frontType === "occluded") return makeHexColor(STANDARD_PURPLE);
+        return makeHexColor(index % 2 === 0 ? STANDARD_RED : STANDARD_BLUE);
+    }
+
+    function normalizeHex(value) {
+        var text = String(value);
+        if (!/^#?[0-9a-fA-F]{6}$/.test(text)) return null;
+        return text.replace(/^#/, "").toUpperCase();
+    }
+
+    function hexToRgb(hex) {
+        var value = normalizeHex(hex);
+        return {
+            red: parseInt(value.substr(0, 2), 16),
+            green: parseInt(value.substr(2, 2), 16),
+            blue: parseInt(value.substr(4, 2), 16)
+        };
+    }
+
+    function rgbToCmyk(rgb) {
+        var red = rgb.red / 255;
+        var green = rgb.green / 255;
+        var blue = rgb.blue / 255;
+        var blackRatio = 1 - Math.max(red, green, blue);
+        if (blackRatio >= 1) return {cyan: 0, magenta: 0, yellow: 0, black: 100};
+        return {
+            cyan: (1 - red - blackRatio) / (1 - blackRatio) * 100,
+            magenta: (1 - green - blackRatio) / (1 - blackRatio) * 100,
+            yellow: (1 - blue - blackRatio) / (1 - blackRatio) * 100,
+            black: blackRatio * 100
+        };
+    }
+
+    function kToRgb(k) {
+        var channel = 255 * (1 - k / 100);
+        return {red: channel, green: channel, blue: channel};
+    }
+
+    function makeHexColor(hex) {
+        var rgb = hexToRgb(hex);
+        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+            var cmykValues = rgbToCmyk(rgb);
+            var cmykColor = new CMYKColor();
+            cmykColor.cyan = cmykValues.cyan;
+            cmykColor.magenta = cmykValues.magenta;
+            cmykColor.yellow = cmykValues.yellow;
+            cmykColor.black = cmykValues.black;
+            return cmykColor;
+        }
+        var rgbColor = new RGBColor();
+        rgbColor.red = rgb.red;
+        rgbColor.green = rgb.green;
+        rgbColor.blue = rgb.blue;
+        return rgbColor;
+    }
+
+    function makeKColor(k) {
+        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+            var cmykColor = new CMYKColor();
+            cmykColor.cyan = 0;
+            cmykColor.magenta = 0;
+            cmykColor.yellow = 0;
+            cmykColor.black = k;
+            return cmykColor;
+        }
+        var rgb = kToRgb(k);
+        var rgbColor = new RGBColor();
+        rgbColor.red = rgb.red;
+        rgbColor.green = rgb.green;
+        rgbColor.blue = rgb.blue;
+        return rgbColor;
     }
 
     function drawTriangle(group, frame, size, side, color) {
@@ -257,6 +387,83 @@
 
     function offsetFrame(frame, x, y) {
         return {x: frame.x + x, y: frame.y + y};
+    }
+
+    function styleBaseline(baseline, color) {
+        baseline.closed = false;
+        baseline.stroked = true;
+        baseline.filled = false;
+        baseline.strokeColor = color;
+        baseline.strokeWidth = strokeWidthPt;
+    }
+
+    function getStationaryBoundaries(placements, totalLength) {
+        var boundaries = [0];
+        for (var index = 0; index < placements.length - 1; index++) {
+            boundaries.push((placements[index].centerDistance + placements[index + 1].centerDistance) / 2);
+        }
+        boundaries.push(totalLength);
+        return boundaries;
+    }
+
+    function lerpPoint(first, second, t) {
+        return {
+            x: first.x + (second.x - first.x) * t,
+            y: first.y + (second.y - first.y) * t
+        };
+    }
+
+    function splitCubic(cubic, t) {
+        var p01 = lerpPoint(cubic.p0, cubic.p1, t);
+        var p12 = lerpPoint(cubic.p1, cubic.p2, t);
+        var p23 = lerpPoint(cubic.p2, cubic.p3, t);
+        var p012 = lerpPoint(p01, p12, t);
+        var p123 = lerpPoint(p12, p23, t);
+        var midpoint = lerpPoint(p012, p123, t);
+        return {
+            left: {p0: cubic.p0, p1: p01, p2: p012, p3: midpoint},
+            right: {p0: midpoint, p1: p123, p2: p23, p3: cubic.p3}
+        };
+    }
+
+    function extractCubicRange(cubic, startT, endT) {
+        var endSplit = splitCubic(cubic, endT);
+        if (startT <= 0) return endSplit.left;
+        var normalizedStart = endT === 0 ? 0 : startT / endT;
+        return splitCubic(endSplit.left, normalizedStart).right;
+    }
+
+    function drawStationaryBaseline(group, boundaries, colors) {
+        for (var boundaryIndex = 0; boundaryIndex < boundaries.length - 1; boundaryIndex++) {
+            var start = getFrameAtLength(pathMetrics, boundaries[boundaryIndex]);
+            var end = getFrameAtLength(pathMetrics, boundaries[boundaryIndex + 1]);
+            var pieces = [];
+            for (var segmentIndex = start.segmentIndex; segmentIndex <= end.segmentIndex; segmentIndex++) {
+                var startT = segmentIndex === start.segmentIndex ? start.t : 0;
+                var endT = segmentIndex === end.segmentIndex ? end.t : 1;
+                if (endT - startT > 0.0000001) {
+                    pieces.push(extractCubicRange(pathMetrics.segments[segmentIndex], startT, endT));
+                }
+            }
+            if (pieces.length === 0) continue;
+
+            var anchors = [[pieces[0].p0.x, pieces[0].p0.y]];
+            for (var pieceIndex = 0; pieceIndex < pieces.length; pieceIndex++) {
+                anchors.push([pieces[pieceIndex].p3.x, pieces[pieceIndex].p3.y]);
+            }
+            var baseline = group.pathItems.add();
+            baseline.setEntirePath(anchors);
+            for (var pointIndex = 0; pointIndex < baseline.pathPoints.length; pointIndex++) {
+                var anchor = baseline.pathPoints[pointIndex].anchor;
+                baseline.pathPoints[pointIndex].leftDirection = anchor;
+                baseline.pathPoints[pointIndex].rightDirection = anchor;
+            }
+            for (var handleIndex = 0; handleIndex < pieces.length; handleIndex++) {
+                baseline.pathPoints[handleIndex].rightDirection = [pieces[handleIndex].p1.x, pieces[handleIndex].p1.y];
+                baseline.pathPoints[handleIndex + 1].leftDirection = [pieces[handleIndex].p2.x, pieces[handleIndex].p2.y];
+            }
+            styleBaseline(baseline, colors[boundaryIndex % colors.length]);
+        }
     }
 
     function buildPathMetrics(path, samplesPerSegment) {

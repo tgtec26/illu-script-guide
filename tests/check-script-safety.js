@@ -718,6 +718,28 @@ for (const [file, mode] of visibleAlignFiles) {
       'function drawTriangle(group, frame, size, side, color)',
       'frontType === "stationary"',
       'frontType === "occluded"',
+      'colorPanel.add("radiobutton", undefined, "표준색")',
+      'colorPanel.add("radiobutton", undefined, "K 음영")',
+      'colorPanel.add("radiobutton", undefined, "HEX")',
+      'var colorMode = "standard"',
+      'var kValue = 0',
+      'var hexValue = "FF0000"',
+      'var K_STEP = 10',
+      'kValue = clamp(kValue + delta, 0, 100)',
+      '/^#?[0-9a-fA-F]{6}$/.test(value)',
+      'var STANDARD_RED = "FF0000"',
+      'var STANDARD_BLUE = "0000FF"',
+      'var STANDARD_PURPLE = "7030A0"',
+      'function makeHexColor(hex)',
+      'function makeKColor(k)',
+      'function getFrontColors(index)',
+      'function splitCubic(cubic, t)',
+      'function extractCubicRange(cubic, startT, endT)',
+      'function drawStationaryBaseline(group, boundaries, colors)',
+      'stepK(-10)',
+      'stepK(10)',
+      '"0K"',
+      '"100K"',
     ];
 
     for (const token of required) {
@@ -749,6 +771,26 @@ for (const [file, mode] of visibleAlignFiles) {
     if (/pathPoints\s*\[\s*index\s*\]/.test(source) ||
         /index\s*\/\s*\(?\s*(?:count|symbolCount|pathPoints\.length)/.test(source)) {
       console.error(`${weatherFront}: symbol placement must use cached path length, not parameter-index spacing`);
+      failures++;
+    }
+
+    if (/\^#\?\[0-9a-fA-F\]\{3\}/.test(source) || /\{3\}(?:\$|\|)/.test(source)) {
+      console.error(`${weatherFront}: Hex mode must not accept three-digit shorthand`);
+      failures++;
+    }
+
+    if (!/baseline\.stroked\s*=\s*true/.test(source) ||
+        !/baseline\.filled\s*=\s*false/.test(source) ||
+        !/baseline\.strokeWidth\s*=\s*strokeWidthPt/.test(source) ||
+        !/triangle\.stroked\s*=\s*false/.test(source) ||
+        !/semicircle\.stroked\s*=\s*false/.test(source)) {
+      console.error(`${weatherFront}: baseline must carry the stroke while symbols remain fill-only`);
+      failures++;
+    }
+
+    if (!/frontType\s*===\s*"stationary"\s*&&\s*colorMode\s*===\s*"standard"[\s\S]*?drawStationaryBaseline/.test(source) ||
+        !/else\s*\{[\s\S]*?source\.duplicate\(group,\s*ElementPlacement\.PLACEATEND\)/.test(source)) {
+      console.error(`${weatherFront}: only standard stationary fronts may replace the duplicated baseline`);
       failures++;
     }
 
@@ -807,6 +849,57 @@ for (const [file, mode] of visibleAlignFiles) {
       assertClose(frame.ny, 1, "straight cubic left normal y");
     } catch (error) {
       console.error(`${weatherFront}: executable geometry regression failed: ${error.message}`);
+      failures++;
+    }
+
+    try {
+      const helpers = extractWeatherFrontHelpers(source, [
+        "normalizeHex",
+        "hexToRgb",
+        "rgbToCmyk",
+        "kToRgb",
+        "lerpPoint",
+        "splitCubic",
+        "extractCubicRange",
+      ]);
+
+      assert.strictEqual(helpers.normalizeHex("#a1B2c3"), "A1B2C3");
+      assert.strictEqual(helpers.normalizeHex("abc"), null, "three-digit Hex must be rejected");
+      assert.strictEqual(helpers.normalizeHex("GG0000"), null, "non-Hex characters must be rejected");
+      assert.deepStrictEqual(helpers.hexToRgb("7030A0"), {red: 112, green: 48, blue: 160});
+      assert.deepStrictEqual(helpers.kToRgb(0), {red: 255, green: 255, blue: 255});
+      assert.deepStrictEqual(helpers.kToRgb(100), {red: 0, green: 0, blue: 0});
+
+      const redCmyk = helpers.rgbToCmyk({red: 255, green: 0, blue: 0});
+      assertClose(redCmyk.cyan, 0, "red CMYK cyan");
+      assertClose(redCmyk.magenta, 100, "red CMYK magenta");
+      assertClose(redCmyk.yellow, 100, "red CMYK yellow");
+      assertClose(redCmyk.black, 0, "red CMYK black");
+      assert.deepStrictEqual(
+        helpers.rgbToCmyk({red: 0, green: 0, blue: 0}),
+        {cyan: 0, magenta: 0, yellow: 0, black: 100}
+      );
+
+      const cubic = {
+        p0: {x: 0, y: 0},
+        p1: {x: 0, y: 8},
+        p2: {x: 8, y: 8},
+        p3: {x: 8, y: 0},
+      };
+      const halves = helpers.splitCubic(cubic, 0.5);
+      assert.deepStrictEqual(halves.left, {
+        p0: {x: 0, y: 0}, p1: {x: 0, y: 4}, p2: {x: 2, y: 6}, p3: {x: 4, y: 6},
+      });
+      assert.deepStrictEqual(halves.right, {
+        p0: {x: 4, y: 6}, p1: {x: 6, y: 6}, p2: {x: 8, y: 4}, p3: {x: 8, y: 0},
+      });
+
+      const middle = helpers.extractCubicRange(cubic, 0.25, 0.75);
+      assert.deepStrictEqual(middle, {
+        p0: {x: 1.25, y: 4.5}, p1: {x: 2.75, y: 6.5}, p2: {x: 5.25, y: 6.5}, p3: {x: 6.75, y: 4.5},
+      });
+    } catch (error) {
+      console.error(`${weatherFront}: executable color/subdivision regression failed: ${error.message}`);
       failures++;
     }
   }
