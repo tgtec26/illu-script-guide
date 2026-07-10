@@ -270,33 +270,23 @@
     }
 
     function drawLongitude(group, longitudeDegrees) {
-        var samples = [];
         var longitude = longitudeDegrees * Math.PI / 180;
-        var steps = 72;
-        for (var i = 0; i < steps; i++) {
-            var latitude = -Math.PI / 2 + 2 * Math.PI * i / steps;
-            samples.push(projectRotatedPoint(
-                Math.cos(latitude) * Math.cos(longitude),
-                Math.sin(latitude),
-                Math.cos(latitude) * Math.sin(longitude)
-            ));
-        }
-        drawVisibleSamples(group, samples);
+        drawParametricVisibleCurve(
+            group,
+            {x: 0, y: 0, z: 0},
+            {x: Math.cos(longitude), y: 0, z: Math.sin(longitude)},
+            {x: 0, y: 1, z: 0}
+        );
     }
 
     function drawLatitude(group, latitudeDegrees) {
-        var samples = [];
         var latitude = latitudeDegrees * Math.PI / 180;
-        var steps = 72;
-        for (var i = 0; i < steps; i++) {
-            var longitude = 2 * Math.PI * i / steps;
-            samples.push(projectRotatedPoint(
-                Math.cos(latitude) * Math.cos(longitude),
-                Math.sin(latitude),
-                Math.cos(latitude) * Math.sin(longitude)
-            ));
-        }
-        drawVisibleSamples(group, samples);
+        drawParametricVisibleCurve(
+            group,
+            {x: 0, y: Math.sin(latitude), z: 0},
+            {x: Math.cos(latitude), y: 0, z: 0},
+            {x: 0, y: 0, z: Math.cos(latitude)}
+        );
     }
 
     function projectRotatedPoint(x, y, z) {
@@ -324,60 +314,104 @@
         return {x: nextX, y: nextY, z: z};
     }
 
-    function drawVisibleSamples(group, samples) {
-        var invisibleIndex = -1;
+    function drawParametricVisibleCurve(group, curveCenter, cosineBasis, sineBasis) {
+        var projectedCenter = projectRotatedPoint(curveCenter.x, curveCenter.y, curveCenter.z);
+        var projectedCosine = projectRotatedPoint(cosineBasis.x, cosineBasis.y, cosineBasis.z);
+        var projectedSine = projectRotatedPoint(sineBasis.x, sineBasis.y, sineBasis.z);
+        var samples = [];
+        var steps = 72;
         var i;
+        for (i = 0; i < steps; i++) {
+            var angle = 2 * Math.PI * i / steps;
+            samples.push({
+                angle: angle,
+                visibility: projectedCenter.z +
+                    projectedCosine.z * Math.cos(angle) +
+                    projectedSine.z * Math.sin(angle)
+            });
+        }
+
+        var invisibleIndex = -1;
         for (i = 0; i < samples.length; i++) {
-            if (samples[i].z < 0) {
+            if (samples[i].visibility < 0) {
                 invisibleIndex = i;
                 break;
             }
         }
 
         if (invisibleIndex < 0) {
-            makeSmoothPath(group, samples, true);
+            makeParametricBezierPath(
+                group,
+                projectedCenter,
+                projectedCosine,
+                projectedSine,
+                0,
+                2 * Math.PI,
+                true
+            );
             return;
         }
 
-        var current = null;
+        var startAngle = null;
         var count = samples.length;
         for (i = 0; i < count; i++) {
             var a = samples[(invisibleIndex + i) % count];
             var b = samples[(invisibleIndex + i + 1) % count];
-            var aVisible = a.z >= 0;
-            var bVisible = b.z >= 0;
+            var aAngle = a.angle;
+            var bAngle = b.angle;
+            while (aAngle < samples[invisibleIndex].angle) aAngle += 2 * Math.PI;
+            while (bAngle <= aAngle) bAngle += 2 * Math.PI;
+            var aVisible = a.visibility >= 0;
+            var bVisible = b.visibility >= 0;
 
             if (!aVisible && bVisible) {
-                current = [intersectHorizon(a, b), b];
-            } else if (aVisible && bVisible) {
-                if (current === null) current = [a];
-                current.push(b);
+                startAngle = interpolateVisibilityAngle(a, b, aAngle, bAngle);
             } else if (aVisible && !bVisible) {
-                if (current === null) current = [a];
-                current.push(intersectHorizon(a, b));
-                makeSmoothPath(group, current, false);
-                current = null;
+                if (startAngle === null) startAngle = aAngle;
+                var endAngle = interpolateVisibilityAngle(a, b, aAngle, bAngle);
+                makeParametricBezierPath(
+                    group,
+                    projectedCenter,
+                    projectedCosine,
+                    projectedSine,
+                    startAngle,
+                    endAngle,
+                    false
+                );
+                startAngle = null;
             }
         }
     }
 
-    function intersectHorizon(a, b) {
-        var denominator = a.z - b.z;
-        var amount = Math.abs(denominator) < 0.0000001 ? 0 : a.z / denominator;
-        return {
-            x: a.x + (b.x - a.x) * amount,
-            y: a.y + (b.y - a.y) * amount,
-            z: 0
-        };
+    function interpolateVisibilityAngle(a, b, aAngle, bAngle) {
+        var denominator = a.visibility - b.visibility;
+        var amount = Math.abs(denominator) < 0.0000001 ? 0 : a.visibility / denominator;
+        return aAngle + (bAngle - aAngle) * amount;
     }
 
-    function makeSmoothPath(group, points, closed) {
-        if (points.length < 2) return null;
+    function makeParametricBezierPath(group, curveCenter, cosineBasis, sineBasis,
+            startAngle, endAngle, closed) {
+        var span = endAngle - startAngle;
+        var segmentCount = Math.max(1, Math.ceil(Math.abs(span) / (Math.PI / 2)));
+        var delta = span / segmentCount;
+        var handleFactor = 4 / 3 * Math.tan(delta / 4);
+        var anchorCount = closed ? segmentCount : segmentCount + 1;
         var path = group.pathItems.add();
         var anchors = [];
+        var derivatives = [];
         var i;
-        for (i = 0; i < points.length; i++) {
-            anchors.push([centerX + points[i].x * radius, centerY + points[i].y * radius]);
+        for (i = 0; i < anchorCount; i++) {
+            var angle = startAngle + delta * i;
+            var cosine = Math.cos(angle);
+            var sine = Math.sin(angle);
+            anchors.push([
+                centerX + (curveCenter.x + cosineBasis.x * cosine + sineBasis.x * sine) * radius,
+                centerY + (curveCenter.y + cosineBasis.y * cosine + sineBasis.y * sine) * radius
+            ]);
+            derivatives.push({
+                x: (-cosineBasis.x * sine + sineBasis.x * cosine) * radius,
+                y: (-cosineBasis.y * sine + sineBasis.y * cosine) * radius
+            });
         }
         path.setEntirePath(anchors);
         path.closed = closed;
@@ -385,26 +419,16 @@
         copyStrokeStyle(source, path);
 
         for (i = 0; i < anchors.length; i++) {
-            var previousIndex = i - 1;
-            var nextIndex = i + 1;
-            if (closed) {
-                previousIndex = (i - 1 + anchors.length) % anchors.length;
-                nextIndex = (i + 1) % anchors.length;
-            }
             var anchor = anchors[i];
             var left = anchor;
             var right = anchor;
-            if (previousIndex >= 0 && nextIndex < anchors.length) {
-                var dx = (anchors[nextIndex][0] - anchors[previousIndex][0]) / 6;
-                var dy = (anchors[nextIndex][1] - anchors[previousIndex][1]) / 6;
-                left = [anchor[0] - dx, anchor[1] - dy];
-                right = [anchor[0] + dx, anchor[1] + dy];
-            } else if (nextIndex < anchors.length) {
-                right = [anchor[0] + (anchors[nextIndex][0] - anchor[0]) / 3,
-                    anchor[1] + (anchors[nextIndex][1] - anchor[1]) / 3];
-            } else if (previousIndex >= 0) {
-                left = [anchor[0] - (anchor[0] - anchors[previousIndex][0]) / 3,
-                    anchor[1] - (anchor[1] - anchors[previousIndex][1]) / 3];
+            if (closed || i > 0) {
+                left = [anchor[0] - derivatives[i].x * handleFactor,
+                    anchor[1] - derivatives[i].y * handleFactor];
+            }
+            if (closed || i < anchors.length - 1) {
+                right = [anchor[0] + derivatives[i].x * handleFactor,
+                    anchor[1] + derivatives[i].y * handleFactor];
             }
             path.pathPoints[i].leftDirection = left;
             path.pathPoints[i].rightDirection = right;

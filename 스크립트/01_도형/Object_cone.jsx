@@ -375,7 +375,7 @@
         for (i = 0; i < topPoints.length; i++) hullInput.push(topPoints[i]);
         var hull = convexHull(hullInput);
 
-        var side = makePath(group, hull, true);
+        var side = makeSmoothHullPath(group, hull);
         side.name = "Cone Side";
         applyFill(side, faceK[FACE_SIDE]);
         copyStrokeStyle(source, side);
@@ -391,13 +391,13 @@
         var topNormal = rotatePoint(0, 1, 0);
         var baseNormal = rotatePoint(0, -1, 0);
         if (topRadius > 0.001 && topNormal.z > 0.0001) {
-            var topFace = makeSmoothClosedPath(group, topPoints);
+            var topFace = makeRingBezierPath(group, coneHeight, topRadius, 0, 2 * Math.PI, true);
             topFace.name = "Cone Top";
             applyFill(topFace, faceK[FACE_TOP]);
             copyStrokeStyle(source, topFace);
         }
         if (baseNormal.z > 0.0001) {
-            var baseFace = makeSmoothClosedPath(group, basePoints);
+            var baseFace = makeRingBezierPath(group, 0, baseRadius, 0, 2 * Math.PI, true);
             baseFace.name = "Cone Bottom";
             applySourceFill(baseFace);
             copyStrokeStyle(source, baseFace);
@@ -411,22 +411,16 @@
         var steps = 72;
         for (var i = 0; i < steps; i++) {
             var angle = 2 * Math.PI * i / steps;
-            var point = rotatePoint(
-                ringRadius * Math.cos(angle),
-                axisHeight,
-                ringRadius * Math.sin(angle)
-            );
             var normal = rotatePoint(Math.cos(angle), sideSlope, Math.sin(angle));
             samples.push({
-                x: centerX + point.x,
-                y: centerY + point.y,
+                angle: angle,
                 visibility: normal.z
             });
         }
-        drawVisibleDivisionSamples(group, samples);
+        drawVisibleDivisionSamples(group, samples, axisHeight, ringRadius);
     }
 
-    function drawVisibleDivisionSamples(group, samples) {
+    function drawVisibleDivisionSamples(group, samples, axisHeight, ringRadius) {
         var invisibleIndex = -1;
         var i;
         for (i = 0; i < samples.length; i++) {
@@ -436,47 +430,51 @@
             }
         }
         if (invisibleIndex < 0) {
-            var closedLine = makeSmoothClosedPath(group, samples);
+            var closedLine = makeRingBezierPath(group, axisHeight, ringRadius, 0, 2 * Math.PI, true);
             closedLine.filled = false;
             copyStrokeStyle(source, closedLine);
             return;
         }
 
-        var current = null;
+        var startAngle = null;
         var count = samples.length;
         for (i = 0; i < count; i++) {
             var a = samples[(invisibleIndex + i) % count];
             var b = samples[(invisibleIndex + i + 1) % count];
+            var aAngle = a.angle;
+            var bAngle = b.angle;
+            while (aAngle < samples[invisibleIndex].angle) aAngle += 2 * Math.PI;
+            while (bAngle <= aAngle) bAngle += 2 * Math.PI;
             var aVisible = a.visibility >= 0;
             var bVisible = b.visibility >= 0;
             if (!aVisible && bVisible) {
-                current = [interpolateVisibilityEdge(a, b), b];
-            } else if (aVisible && bVisible) {
-                if (current === null) current = [a];
-                current.push(b);
+                startAngle = interpolateVisibilityAngle(a, b, aAngle, bAngle);
             } else if (aVisible && !bVisible) {
-                if (current === null) current = [a];
-                current.push(interpolateVisibilityEdge(a, b));
-                var visibleLine = makeSmoothOpenPath(group, current);
+                if (startAngle === null) startAngle = aAngle;
+                var endAngle = interpolateVisibilityAngle(a, b, aAngle, bAngle);
+                var visibleLine = makeRingBezierPath(
+                    group,
+                    axisHeight,
+                    ringRadius,
+                    startAngle,
+                    endAngle,
+                    false
+                );
                 copyStrokeStyle(source, visibleLine);
-                current = null;
+                startAngle = null;
             }
         }
     }
 
-    function interpolateVisibilityEdge(a, b) {
+    function interpolateVisibilityAngle(a, b, aAngle, bAngle) {
         var denominator = a.visibility - b.visibility;
         var amount = Math.abs(denominator) < 0.0000001 ? 0 : a.visibility / denominator;
-        return {
-            x: a.x + (b.x - a.x) * amount,
-            y: a.y + (b.y - a.y) * amount,
-            visibility: 0
-        };
+        return aAngle + (bAngle - aAngle) * amount;
     }
 
     function makeProjectedRing(axisHeight, ringRadius) {
         var points = [];
-        var steps = ringRadius < 0.001 ? 1 : 72;
+        var steps = ringRadius < 0.001 ? 1 : 16;
         for (var i = 0; i < steps; i++) {
             var angle = steps === 1 ? 0 : 2 * Math.PI * i / steps;
             var rotated = rotatePoint(
@@ -487,7 +485,8 @@
             points.push({
                 x: centerX + rotated.x,
                 y: centerY + rotated.y,
-                z: rotated.z
+                z: rotated.z,
+                isApex: ringRadius < 0.001
             });
         }
         return points;
@@ -559,13 +558,19 @@
         return path;
     }
 
-    function makeSmoothClosedPath(group, points) {
+    function makeSmoothHullPath(group, points) {
         var path = makePath(group, points, true);
         var count = path.pathPoints.length;
         for (var i = 0; i < count; i++) {
             var previous = points[(i - 1 + count) % count];
             var next = points[(i + 1) % count];
             var anchor = path.pathPoints[i].anchor;
+            if (points[i].isApex) {
+                path.pathPoints[i].leftDirection = anchor;
+                path.pathPoints[i].rightDirection = anchor;
+                path.pathPoints[i].pointType = PointType.CORNER;
+                continue;
+            }
             var dx = (next.x - previous.x) / 6;
             var dy = (next.y - previous.y) / 6;
             path.pathPoints[i].leftDirection = [anchor[0] - dx, anchor[1] - dy];
@@ -575,25 +580,45 @@
         return path;
     }
 
-    function makeSmoothOpenPath(group, points) {
-        var path = makePath(group, points, false);
+    function makeRingBezierPath(group, axisHeight, ringRadius, startAngle, endAngle, closed) {
+        var span = endAngle - startAngle;
+        var segmentCount = Math.max(1, Math.ceil(Math.abs(span) / (Math.PI / 2)));
+        var delta = span / segmentCount;
+        var handleFactor = 4 / 3 * Math.tan(delta / 4);
+        var anchorCount = closed ? segmentCount : segmentCount + 1;
+        var points = [];
+        var derivatives = [];
+        var i;
+        for (i = 0; i < anchorCount; i++) {
+            var angle = startAngle + delta * i;
+            var point = rotatePoint(
+                ringRadius * Math.cos(angle),
+                axisHeight,
+                ringRadius * Math.sin(angle)
+            );
+            var derivative = rotatePoint(
+                -ringRadius * Math.sin(angle),
+                0,
+                ringRadius * Math.cos(angle)
+            );
+            points.push({x: centerX + point.x, y: centerY + point.y});
+            derivatives.push(derivative);
+        }
+
+        var path = makePath(group, points, closed);
         path.filled = false;
         var count = path.pathPoints.length;
-        for (var i = 0; i < count; i++) {
+        for (i = 0; i < count; i++) {
             var anchor = path.pathPoints[i].anchor;
             var left = anchor;
             var right = anchor;
-            if (i > 0 && i < count - 1) {
-                var dx = (points[i + 1].x - points[i - 1].x) / 6;
-                var dy = (points[i + 1].y - points[i - 1].y) / 6;
-                left = [anchor[0] - dx, anchor[1] - dy];
-                right = [anchor[0] + dx, anchor[1] + dy];
-            } else if (i < count - 1) {
-                right = [anchor[0] + (points[i + 1].x - points[i].x) / 3,
-                    anchor[1] + (points[i + 1].y - points[i].y) / 3];
-            } else if (i > 0) {
-                left = [anchor[0] - (points[i].x - points[i - 1].x) / 3,
-                    anchor[1] - (points[i].y - points[i - 1].y) / 3];
+            if (closed || i > 0) {
+                left = [anchor[0] - derivatives[i].x * handleFactor,
+                    anchor[1] - derivatives[i].y * handleFactor];
+            }
+            if (closed || i < count - 1) {
+                right = [anchor[0] + derivatives[i].x * handleFactor,
+                    anchor[1] + derivatives[i].y * handleFactor];
             }
             path.pathPoints[i].leftDirection = left;
             path.pathPoints[i].rightDirection = right;
