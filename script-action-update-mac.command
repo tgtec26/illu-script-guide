@@ -15,8 +15,8 @@ for arg in "$@"; do
   esac
 done
 
-REPO_URL="https://github.com/tgtec26/illu-script.git"
-CACHE_DIR="$HOME/.illu-script-updater/illu-script"
+REPO_URL="https://github.com/tgtec26/illu-script-guide.git"
+CACHE_DIR="$HOME/.illu-script-updater/illu-script-guide"
 SOURCE_SUBDIR="스크립트"
 KYS_NAME="cjh250907.kys"
 ARROW_NAME="화살표.ai"

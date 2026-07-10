@@ -2,8 +2,8 @@
 param([switch]$Full)   # -Full: 스크립트 + 단축키(.kys) + 화살표(.ai)까지 (새 PC 최초 세팅). 생략 시 스크립트만.
 $ErrorActionPreference = "Stop"
 
-$RepoUrl = "https://github.com/tgtec26/illu-script.git"
-$CacheDir = Join-Path $env:USERPROFILE ".illu-script-updater\illu-script"
+$RepoUrl = "https://github.com/tgtec26/illu-script-guide.git"
+$CacheDir = Join-Path $env:USERPROFILE ".illu-script-updater\illu-script-guide"
 $SourceSubdir = "스크립트"
 $KysName = "cjh250907.kys"
 $ArrowName = "화살표.ai"

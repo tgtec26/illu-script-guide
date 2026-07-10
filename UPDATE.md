@@ -2,7 +2,7 @@
 
 이 저장소 최신 스크립트를 현재 기기 Illustrator Scripts 폴더로 복사합니다.
 
-저장소: https://github.com/tgtec26/illu-script.git
+저장소: https://github.com/tgtec26/illu-script-guide.git
 
 ## macOS
 

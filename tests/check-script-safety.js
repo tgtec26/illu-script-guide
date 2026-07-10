@@ -484,7 +484,7 @@ for (const [file, mode] of visibleAlignFiles) {
 
 for (const file of updaterFiles) {
   const source = read(file);
-  if (!source.includes("https://github.com/tgtec26/illu-script.git")) {
+  if (!source.includes("https://github.com/tgtec26/illu-script-guide.git")) {
     console.error(`${file}: updater must point to GitHub repository`);
     failures++;
   }
