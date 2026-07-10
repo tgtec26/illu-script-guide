@@ -577,6 +577,16 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 
 .file-button input { display: none; }
 
+.publish-steps {
+  margin: 0 0 4px;
+  padding-left: 1.15rem;
+  color: #4b5a70;
+  font-size: .9rem;
+}
+
+.publish-steps li + li { margin-top: 5px; }
+.publish-steps code { font-size: .86em; }
+
 .footer {
   max-width: 1180px;
   margin: 0 auto;

@@ -95,6 +95,8 @@ function orderedCategories() {
 }
 
 const storageKey = "illuScriptGuideAdmin";
+// 저장소에 커밋되어 모든 방문자에게 배포되는 콘텐츠 파일. 어드민에서 내보낸 JSON을 이 경로에 덮어쓰고 커밋하면 사이트에 반영됩니다.
+const contentUrl = "assets/content.json";
 const state = {
   category: "전체",
   query: "",
@@ -102,16 +104,46 @@ const state = {
   custom: loadCustomData()
 };
 
+function normalizeCustom(data) {
+  data = data || {};
+  return {
+    notice: data.notice || null,
+    images: data.images || {},
+    details: data.details || {}
+  };
+}
+
+// 브라우저 localStorage에 저장된 개인 작업본(아직 게시하지 않은 초안)
 function loadCustomData() {
   try {
-    const data = JSON.parse(localStorage.getItem(storageKey)) || {};
-    return {
-      notice: data.notice || null,
-      images: data.images || {},
-      details: data.details || {}
-    };
+    return normalizeCustom(JSON.parse(localStorage.getItem(storageKey)));
   } catch (_) {
-    return { notice: null, images: {}, details: {} };
+    return normalizeCustom(null);
+  }
+}
+
+// 게시본(content.json)을 기준으로 하고, 로컬 초안이 있으면 위에 덮어씁니다.
+function mergeCustom(base, overlay) {
+  return {
+    notice: overlay.notice || base.notice || null,
+    images: Object.assign({}, base.images, overlay.images),
+    details: Object.assign({}, base.details, overlay.details)
+  };
+}
+
+// 배포된 content.json을 불러와 기준 콘텐츠로 삼습니다. 파일이 없으면(404) 조용히 넘어갑니다.
+async function loadPublishedContent() {
+  try {
+    const response = await fetch(contentUrl, { cache: "no-cache" });
+    if (!response.ok) return;
+    const published = normalizeCustom(await response.json());
+    state.custom = mergeCustom(published, loadCustomData());
+    renderNotice();
+    renderScripts();
+    if (state.route.view === "detail") renderDetail(state.route.id);
+    syncDetailForm();
+  } catch (_) {
+    /* content.json이 아직 없거나 읽기 실패 시 로컬/기본값 유지 */
   }
 }
 
@@ -306,7 +338,7 @@ function downloadJson() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "illu-script-guide-content.json";
+  link.download = "content.json";
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -411,3 +443,4 @@ renderScriptSelect();
 syncDetailForm();
 renderScripts();
 renderRoute();
+loadPublishedContent();

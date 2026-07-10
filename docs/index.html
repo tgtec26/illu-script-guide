@@ -208,15 +208,21 @@
         </form>
 
         <div class="admin-card">
-          <h3>데이터 관리</h3>
-          <p>이 어드민은 현재 브라우저에 저장합니다. 다른 PC나 실제 사이트에 반영하려면 JSON을 내보내서 보관합니다.</p>
+          <h3>데이터 관리 · 사이트에 반영하기</h3>
+          <p>어드민 수정은 먼저 이 브라우저에만 저장됩니다. 실제 사이트(모든 방문자)에 반영하려면:</p>
+          <ol class="publish-steps">
+            <li><strong>JSON 내보내기</strong>로 <code>content.json</code>을 받습니다.</li>
+            <li>받은 파일을 저장소의 <code>docs/assets/content.json</code>에 덮어씁니다.</li>
+            <li>커밋 후 push하면 배포되어 모든 방문자에게 반영됩니다.</li>
+          </ol>
+          <p>사이트는 시작할 때 <code>content.json</code>을 기준으로 불러오고, 이 브라우저의 미게시 수정본이 있으면 그 위에 미리보기로 덮어씁니다.</p>
           <div class="admin-actions">
             <button class="button secondary" id="exportBtn" type="button">JSON 내보내기</button>
             <label class="button secondary file-button">
               JSON 가져오기
               <input id="importInput" type="file" accept="application/json">
             </label>
-            <button class="button danger" id="resetBtn" type="button">초기화</button>
+            <button class="button danger" id="resetBtn" type="button">이 브라우저 수정 초기화</button>
           </div>
         </div>
       </div>
