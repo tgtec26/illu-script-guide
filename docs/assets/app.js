@@ -83,6 +83,17 @@ const categoryColors = {
   "기타": ["#596673", "#eceef1"]
 };
 
+const categoryOrder = Object.keys(categoryColors).filter((category) => category !== "전체");
+
+function categoryRank(category) {
+  const index = categoryOrder.indexOf(category);
+  return index === -1 ? categoryOrder.length : index;
+}
+
+function orderedCategories() {
+  return categoryOrder.filter((category) => scripts.some((script) => script.category === category));
+}
+
 const storageKey = "illuScriptGuideAdmin";
 const state = {
   category: "전체",
@@ -135,39 +146,31 @@ function parseRoute() {
 
 function renderRoute() {
   state.route = parseRoute();
-  document.querySelectorAll("[data-view]").forEach((view) => {
-    view.hidden = view.dataset.view !== state.route.view;
+  const view = state.route.view;
+  // Home and catalog share one scrollable page: the hero flows straight into the catalog.
+  const showLanding = view === "home" || view === "catalog";
+  document.querySelectorAll("[data-view]").forEach((section) => {
+    const sectionView = section.dataset.view;
+    if (sectionView === "home" || sectionView === "catalog") {
+      section.hidden = !showLanding;
+    } else {
+      section.hidden = sectionView !== view;
+    }
   });
   document.querySelectorAll(".nav a").forEach((link) => {
     const target = link.getAttribute("href").replace("#", "");
-    link.classList.toggle("is-active", target === state.route.view);
+    const active = target === view || (target === "catalog" && view === "home");
+    link.classList.toggle("is-active", active);
   });
-  if (state.route.view === "detail") renderDetail(state.route.id);
-}
-
-function renderHomeCategories() {
-  const container = document.getElementById("homeCategories");
-  const categories = Array.from(new Set(scripts.map((script) => script.category)));
-  container.innerHTML = categories.map((category) => {
-    const count = scripts.filter((script) => script.category === category).length;
-    return `
-      <a class="category-card" style="${categoryStyle(category)}" href="#catalog" data-category="${escapeHtml(category)}">
-        <strong>${escapeHtml(category)}</strong>
-        <small>${count}개 스크립트</small>
-      </a>
-    `;
-  }).join("");
-  container.querySelectorAll("a").forEach((link) => {
-    link.addEventListener("click", () => {
-      state.category = link.dataset.category;
-      renderTabs();
-      renderScripts();
-    });
-  });
+  if (view === "detail") renderDetail(state.route.id);
+  if (view === "catalog") {
+    const anchor = document.getElementById("catalog");
+    if (anchor) anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function renderTabs() {
-  const categories = ["전체", ...Array.from(new Set(scripts.map((script) => script.category)))];
+  const categories = ["전체", ...orderedCategories()];
   const tabs = document.getElementById("categoryTabs");
   tabs.innerHTML = categories.map((category) => (
     `<button class="tab" type="button" style="${categoryStyle(category)}" aria-selected="${category === state.category}" data-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`
@@ -183,17 +186,20 @@ function renderTabs() {
 
 function getFilteredScripts() {
   const query = state.query.trim().toLowerCase();
-  return scripts.filter((script) => {
-    const categoryMatch = state.category === "전체" || script.category === state.category;
-    const text = `${script.name} ${script.file} ${script.summary} ${script.tags.join(" ")}`.toLowerCase();
-    return categoryMatch && (!query || text.includes(query));
-  });
+  return scripts
+    .filter((script) => {
+      const categoryMatch = state.category === "전체" || script.category === state.category;
+      const text = `${script.name} ${script.file} ${script.summary} ${script.tags.join(" ")}`.toLowerCase();
+      return categoryMatch && (!query || text.includes(query));
+    })
+    .sort((a, b) => categoryRank(a.category) - categoryRank(b.category));
 }
 
 function renderScripts() {
   const grid = document.getElementById("scriptGrid");
   const filtered = getFilteredScripts();
   document.getElementById("scriptCount").textContent = scripts.length;
+  document.getElementById("categoryCount").textContent = orderedCategories().length;
   if (!filtered.length) {
     grid.innerHTML = `<p class="empty">검색 결과가 없습니다.</p>`;
     return;
@@ -399,11 +405,9 @@ document.getElementById("resetBtn").addEventListener("click", () => {
 
 window.addEventListener("hashchange", renderRoute);
 
-renderHomeCategories();
 renderTabs();
 renderNotice();
 renderScriptSelect();
 syncDetailForm();
 renderScripts();
-renderRoute();
 renderRoute();
