@@ -9,6 +9,7 @@ const scripts = [
   { id: "cabinet-inout", category: "도형", name: "캐비넷 투영 + 숨은선", file: "01_도형/Object_cabinet_InOut.jsx", summary: "사각형을 캐비넷 투영법으로 입체화하고 숨은 선을 파선으로 추가합니다.", tags: ["입체", "숨은선"] },
   { id: "cabinet-out", category: "도형", name: "캐비넷 투영", file: "01_도형/Object_cabinet_Out.jsx", summary: "선택한 사각형을 캐비넷 투영법으로 빠르게 입체화합니다.", tags: ["입체", "사각형"] },
   { id: "cylinder", category: "도형", name: "원기둥", file: "01_도형/Object_cylinder.jsx", summary: "선택한 원을 기준으로 원기둥을 세웁니다. 면별 K 농도 음영과 속이 비치는 관 구멍을 지원합니다.", tags: ["입체", "원기둥"] },
+  { id: "cone", category: "도형", name: "원뿔", file: "01_도형/Object_cone.jsx", summary: "선택한 원을 기준으로 원뿔 또는 원뿔대를 만듭니다. 밑면·윗면 지름과 높이, 면별 K 농도, X·Y·Z축 시점을 조절합니다.", tags: ["입체", "원뿔", "원뿔대"] },
   { id: "sphere", category: "도형", name: "구", file: "01_도형/Object_sphere.jsx", summary: "선택한 원을 기준으로 구를 만들고 경도선과 위도선을 배치합니다. 경도선 회전과 X·Y·Z축 시점 조절을 지원합니다.", tags: ["입체", "구", "위도", "경도"] },
   { id: "circle-guide", category: "도형", name: "끝점 원 안내선", file: "01_도형/Object_circleguideline.jsx", summary: "선의 양 끝점에 반지름 0.5mm 원을 만들고 안내선으로 바꿉니다.", tags: ["안내선", "끝점"] },
   { id: "dash-shift", category: "도형", name: "파선 오프셋", file: "01_도형/Object_dashshift.jsx", summary: "파선의 시작 위치를 미세 조정합니다. 도판에서 점선이 모서리와 어긋날 때 유용합니다.", tags: ["파선", "미세조정"] },

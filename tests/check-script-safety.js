@@ -32,6 +32,7 @@ const extUngroup = "스크립트/10_기타/ExtUngroup.jsx";
 const dashAlignHelper = "스크립트/01_도형/Object_setdash_align_helper.jsxinc";
 const dashShift = "스크립트/01_도형/Object_dashshift.jsx";
 const cylinder = "스크립트/01_도형/Object_cylinder.jsx";
+const cone = "스크립트/01_도형/Object_cone.jsx";
 const sphere = "스크립트/01_도형/Object_sphere.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
@@ -508,6 +509,40 @@ for (const [file, mode] of visibleAlignFiles) {
   for (const token of required) {
     if (!source.includes(token)) {
       console.error(`${sphere}: missing sphere control or projection token: ${token}`);
+      failures++;
+    }
+  }
+}
+
+{
+  const source = read(cone);
+  const required = [
+    'new Window("dialog", "오브젝트 콘")',
+    'var topDiameterMm = 0',
+    'var baseDiameterMm = roundTo(diameterMm, SIZE_STEP_MM)',
+    'sizePanel.add("slider", undefined, baseDiameterMm, SIZE_STEP_MM, maxBaseDiameterMm)',
+    'sizePanel.add("slider", undefined, topDiameterMm, 0, baseDiameterMm)',
+    'sizePanel.add("slider", undefined, heightMm, SIZE_STEP_MM, maxHeightMm)',
+    'addAngleControls(viewPanel, "X축", viewX)',
+    'addAngleControls(viewPanel, "Y축", viewY)',
+    'addAngleControls(viewPanel, "Z축", viewZ)',
+    'faceRow.add("radiobutton", undefined, "윗면")',
+    'faceRow.add("radiobutton", undefined, "옆면")',
+    'faceK[activeFace] = clamp(faceK[activeFace] + delta, 0, 100)',
+    'function makeKColor(k)',
+    'function createCone()',
+    'function updateTopDiameterLimit()',
+    'function convexHull(points)',
+    'var topNormal = rotatePoint(0, 1, 0)',
+    'applyFill(side, faceK[FACE_SIDE])',
+    'applyFill(topFace, faceK[FACE_TOP])',
+    'previewGroup = createCone()',
+    'source.hidden = sourceWasHidden',
+    'source.remove()',
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${cone}: missing cone control or projection token: ${token}`);
       failures++;
     }
   }
