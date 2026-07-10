@@ -28,7 +28,10 @@ const graySelection = "스크립트/03_색상/Color_graysel.jsx";
 const fitToMargin = "스크립트/10_기타/fit2mm.jsx";
 const findSimilar = "스크립트/10_기타/find-replace.jsx";
 const embedLinkedImages = "스크립트/10_기타/embed.jsx";
+const extUngroup = "스크립트/10_기타/ExtUngroup.jsx";
 const dashAlignHelper = "스크립트/01_도형/Object_setdash_align_helper.jsxinc";
+const dashShift = "스크립트/01_도형/Object_dashshift.jsx";
+const cylinder = "스크립트/01_도형/Object_cylinder.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -37,6 +40,10 @@ function read(file) {
 
 function readBuffer(file) {
   return fs.readFileSync(path.join(root, file));
+}
+
+function exists(file) {
+  return fs.existsSync(path.join(root, file));
 }
 
 function lineOf(source, pattern) {
@@ -101,6 +108,11 @@ for (const file of alignFiles) {
   if (!source.includes('{contents: ["①", "②", "③", "④", "⑤", "⑥"]') ||
       !source.includes('selectedCount = count')) {
     console.error(textInput + ": must offer circled number text inserts");
+    failures++;
+  }
+  if (!source.includes('{contents: ["t0", "t1", "t2", "t3", "t4", "t5"]') ||
+      source.includes('{contents: ["t1", "t2", "t3", "t4", "t5", "t6"]')) {
+    console.error(textInput + ": t-series text inserts must run from t0 through t5");
     failures++;
   }
   if (!/contents:\s*\["Ⅰ",\s*"Ⅱ",\s*"Ⅲ",\s*"Ⅳ",\s*"Ⅴ",\s*"Ⅵ"\][\s\S]*?fontNames:\s*romanFontCandidates/.test(source) ||
@@ -317,6 +329,56 @@ for (const [file, mode] of visibleAlignFiles) {
 }
 
 {
+  if (!exists(extUngroup)) {
+    console.error(`${extUngroup}: ExtUngroup script must live in 기타 without the Object_ filename prefix`);
+    failures++;
+  } else {
+    const source = read(extUngroup);
+    const requiredKoreanUi = [
+      "그룹 해제",
+      "대상",
+      "선택한 오브젝트",
+      "활성 레이어",
+      "현재 아트보드",
+      "문서 전체",
+      "옵션",
+      "전체 그룹 해제",
+      "클리핑 마스크 해제",
+      "마스크 도형 삭제",
+      "취소",
+      "확인",
+      "문서에 그룹이 없습니다.",
+      "스크립트를 실행하기 전에 문서를 열어주세요.",
+    ];
+    for (const token of requiredKoreanUi) {
+      if (!source.includes(token)) {
+        console.error(`${extUngroup}: missing Korean UI text: ${token}`);
+        failures++;
+      }
+    }
+    const englishUi = [
+      "Selected objects",
+      "Active layer",
+      "All in document",
+      "Ungroup All",
+      "Release Clipping Masks",
+      "Remove Masks Shapes",
+      "Cancel",
+    ];
+    for (const token of englishUi) {
+      if (source.includes(token)) {
+        console.error(`${extUngroup}: modal UI must not contain English text: ${token}`);
+        failures++;
+      }
+    }
+  }
+  if (exists("스크립트/01_도형/Object_ExtUngroup.jsx")) {
+    console.error("스크립트/01_도형/Object_ExtUngroup.jsx: old Object_ prefixed script must be removed from 도형");
+    failures++;
+  }
+}
+
+{
   const source = read(dashAlignHelper);
   if (!source.includes("function restoreDefaultStrokeEnds") ||
       !source.includes("pathItem.strokeCap = StrokeCap.BUTTENDCAP") ||
@@ -324,6 +386,99 @@ for (const [file, mode] of visibleAlignFiles) {
       !/app\.doScript\(\s*actionName\s*,\s*actionSetName\s*\)[\s\S]*?restoreDefaultStrokeEnds\(\s*pathItem\s*\)/.test(source)) {
     console.error(`${dashAlignHelper}: dash scripts must leave strokes with butt caps and miter joins after Illustrator action`);
     failures++;
+  }
+}
+
+{
+  const source = read(dashShift);
+  const required = [
+    'var previewCheck = dlg.add("checkbox", undefined, "미리보기")',
+    "previewCheck.value = true",
+    "applyPendingOffset();",
+    "app.redraw()",
+    "restoreOriginalOffsets()",
+    "applyPendingOffset()",
+    "disableDashCornerAlignment",
+    "writeDashCornerAlignmentOffAction",
+    "addBooleanParameter(lines, 4, 1684104298, 0)",
+    "Codex_DashShift",
+    "doc.selection = null",
+    "restoreSelection(doc, originalSelection)",
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${dashShift}: missing preview or dash corner-alignment reset token: ${token}`);
+      failures++;
+    }
+  }
+  if (!source.includes("var strokeStyle = captureStrokeStyle(pathItem)") ||
+      !source.includes("restoreStrokeStyle(pathItem, strokeStyle)") ||
+      !source.includes("style.strokeCapValue = pathItem.strokeCap === StrokeCap.ROUNDENDCAP") ||
+      !source.includes("style.strokeJoinValue = pathItem.strokeJoin === StrokeJoin.ROUNDENDJOIN") ||
+      !source.includes("style.strokeMiterLimit = safeNumber(pathItem.strokeMiterLimit, 10)") ||
+      !source.includes("addEnumeratedParameter(lines, 1, 1667330094") ||
+      !source.includes("addRealParameter(lines, 2, 1836344690") ||
+      !source.includes("addEnumeratedParameter(lines, 3, 1785686382")) {
+    console.error(`${dashShift}: dash corner-alignment reset must preserve stroke cap, join, and miter limit`);
+    failures++;
+  }
+}
+
+{
+  const source = read(cylinder);
+  const required = [
+    'new Window("dialog", "오브젝트 실린더")',
+    'heightPanel.add("slider", undefined, heightMm, 0, maxHeightMm)',
+    'var HEIGHT_STEP_MM = 0.05',
+    'var DIAMETER_STEP_MM = 0.05',
+    'heightSlider.stepdelta = HEIGHT_STEP_MM',
+    'var viewAngle = 70',
+    'var divisionRotation = 90',
+    'viewPanel.add("slider", undefined, viewAngle, -180, 180)',
+    'directionPanel.add("radiobutton", undefined, "상하")',
+    'directionPanel.add("radiobutton", undefined, "좌우")',
+    'divisionPanel.add("checkbox", undefined, "분할선 표시")',
+    'divisionPanel.add("slider", undefined, divisionCount, 2, 24)',
+    'divisionPanel.add("slider", undefined, divisionRotation, -180, 180)',
+    'var K_STEP = 10',
+    'faceRow.add("radiobutton", undefined, "보이는면")',
+    'faceRow.add("radiobutton", undefined, "내부")',
+    'faceRow.add("radiobutton", undefined, "외부")',
+    'function makeKColor(k)',
+    'cmyk.black = k',
+    'gray.gray = k',
+    'faceK[activeFace] = clamp(faceK[activeFace] + delta, 0, 100)',
+    'var projectedLength = cylinderHeight * Math.abs(Math.sin(radians))',
+    'var capScale = Math.abs(Math.cos(radians))',
+    'var rearIsSecond = angleDegrees >= 0',
+    'function hasCircularPathPoints(item)',
+    'function getDivisionPoints(',
+    'function makeRearRim(',
+    'function makeFrontFace(',
+    'function makeRingFillSegments(',
+    'applyFill(rearFill, faceK[FACE_OUTER])',
+    'applyFill(side, faceK[FACE_OUTER])',
+    'innerWallOpposite: verticalAxis ?',
+    'visibleOnInnerWall: sideDot < -0.0001',
+    'innerDivisionPoint.innerWallOpposite[0]',
+    'function innerHoleGeometry(',
+    'function drawInnerHoleFill(',
+    'makeParallelogramWithHole(group, sideCorners',
+    'applyFill(crescent, faceK[FACE_INNER])',
+    'applyFill(wall, faceK[FACE_INNER])',
+    'for (var innerDivisionIndex = 0;',
+    'var handleScale = 0.5522847498',
+    'visibleOnSide: sideDot > 0.0001',
+    'divisionPoint.front[0]',
+    'previewGroup = createCylinder(heightMm * MM_TO_PT, viewAngle, isVertical)',
+    'source.hidden = sourceWasHidden',
+    'source.remove()',
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${cylinder}: missing cylinder control or preview token: ${token}`);
+      failures++;
+    }
   }
 }
 
