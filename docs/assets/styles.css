@@ -306,31 +306,59 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
   outline-offset: 2px;
 }
 
+.catalog-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
 .category-tabs {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin-bottom: 24px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+  position: sticky;
+  top: 88px;
 }
 
 .tab {
-  flex: 0 0 auto;
-  min-height: 38px;
-  border: 1px solid color-mix(in srgb, var(--category) 26%, var(--line));
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid color-mix(in srgb, var(--category) 30%, var(--line));
+  border-left: 4px solid var(--category);
   border-radius: 8px;
   background: color-mix(in srgb, var(--category-soft) 74%, white);
-  color: color-mix(in srgb, var(--category) 70%, var(--blue-900));
+  color: color-mix(in srgb, var(--category) 74%, var(--blue-950));
   padding: 8px 13px;
   font: inherit;
   font-weight: 750;
+  text-align: left;
   cursor: pointer;
+  transition: background .14s ease, color .14s ease, border-color .14s ease;
 }
+
+.tab::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  background: var(--category);
+}
+
+.tab:hover { border-color: var(--category); }
 
 .tab[aria-selected="true"] {
   background: var(--category);
   color: #f5f8fd;
   border-color: var(--category);
+}
+
+.tab[aria-selected="true"]::before {
+  background: #f5f8fd;
 }
 
 .script-grid {
@@ -345,6 +373,7 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
   min-height: 220px;
   padding: 20px;
   border: 1px solid color-mix(in srgb, var(--category) 24%, var(--line));
+  border-top: 4px solid var(--category);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, .76);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--category) 10%, transparent);
@@ -556,9 +585,18 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 }
 
 @media (max-width: 920px) {
-  .hero, .script-grid, .install-layout, .admin-grid, .home-categories {
+  .hero, .script-grid, .install-layout, .admin-grid, .home-categories, .catalog-layout {
     grid-template-columns: 1fr;
   }
+
+  .category-tabs {
+    flex-direction: row;
+    position: static;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .tab { width: auto; flex: 0 0 auto; }
 
   .loader-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 

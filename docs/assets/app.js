@@ -71,15 +71,15 @@ const scripts = [
 ];
 
 const categoryColors = {
-  "전체": ["#0b2344", "#edf2f8"],
-  "세팅": ["#19456b", "#e8f0f7"],
-  "도형": ["#2f5d50", "#e8f2ef"],
-  "문자": ["#5a4b86", "#eeeaf7"],
-  "색상": ["#8a5a2b", "#f5eee5"],
-  "삽입": ["#3f6675", "#e7f1f4"],
-  "정렬": ["#1e5a93", "#e6f0fa"],
-  "내보내기": ["#6b5b2d", "#f4f0e4"],
-  "기타": ["#4f6178", "#edf1f6"]
+  "전체": ["#0b2344", "#e9eef6"],
+  "세팅": ["#3b5bdb", "#e8ecfb"],
+  "도형": ["#2f9e44", "#e6f4ea"],
+  "문자": ["#7048e8", "#eee9fc"],
+  "색상": ["#e8590c", "#fceee4"],
+  "삽입": ["#0c8599", "#e1f2f4"],
+  "정렬": ["#1971c2", "#e5eff9"],
+  "내보내기": ["#c2830a", "#f8f0dd"],
+  "기타": ["#596673", "#eceef1"]
 };
 
 const storageKey = "illuScriptGuideAdmin";
@@ -404,4 +404,5 @@ renderNotice();
 renderScriptSelect();
 syncDetailForm();
 renderScripts();
+renderRoute();
 renderRoute();
