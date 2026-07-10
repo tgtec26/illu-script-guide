@@ -35,6 +35,7 @@ const cylinder = "스크립트/01_도형/Object_cylinder.jsx";
 const cone = "스크립트/01_도형/Object_cone.jsx";
 const sphere = "스크립트/01_도형/Object_sphere.jsx";
 const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
+const weatherFront = "스크립트/01_도형/Object_front.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -636,6 +637,54 @@ for (const [file, mode] of visibleAlignFiles) {
   for (const token of required) {
     if (!source.includes(token)) {
       console.error(`${cone}: missing cone control or projection token: ${token}`);
+      failures++;
+    }
+  }
+}
+
+{
+  if (!exists(weatherFront)) {
+    console.error(`${weatherFront}: weather-front script is missing`);
+    failures++;
+  } else {
+    const source = read(weatherFront);
+    const required = [
+      'new Window("dialog", "오브젝트 전선")',
+      'frontPanel.add("radiobutton", undefined, "온난전선")',
+      'frontPanel.add("radiobutton", undefined, "한랭전선")',
+      'frontPanel.add("radiobutton", undefined, "정체전선")',
+      'frontPanel.add("radiobutton", undefined, "폐색전선")',
+      'var shapeSizeMm = 2',
+      'var gapMm = 2',
+      'var strokeWidthPt = 0.5',
+      'addNumericControl(layoutPanel, "도형 크기", shapeSizeMm, 0.5, 20, 0.1, "mm")',
+      'addNumericControl(layoutPanel, "빈 간격", gapMm, 0, 20, 0.1, "mm")',
+      'addNumericControl(linePanel, "라인 두께", strokeWidthPt, 0.1, 10, 0.1, "pt")',
+      'layoutPanel.add("checkbox", undefined, "방향 반전")',
+      'function updatePreview()',
+      'function clearPreview()',
+      'source.hidden = sourceWasHidden',
+      'source.remove()',
+    ];
+
+    for (const token of required) {
+      if (!source.includes(token)) {
+        console.error(`${weatherFront}: missing Task 1 shell token: ${token}`);
+        failures++;
+      }
+    }
+
+    const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+    const activeDocLine = lineOf(source, /app\.activeDocument/);
+    if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+      console.error(`${weatherFront}: app.documents.length guard must run before app.activeDocument`);
+      failures++;
+    }
+
+    const finalCreationLine = lineOf(source, /var\s+finalGroup\s*=\s*createWeatherFront\(false\)/);
+    const sourceRemovalLine = lineOf(source, /source\.remove\(\)/);
+    if (finalCreationLine < 1 || sourceRemovalLine < 1 || sourceRemovalLine < finalCreationLine) {
+      console.error(`${weatherFront}: source removal must follow final weather-front creation`);
       failures++;
     }
   }
