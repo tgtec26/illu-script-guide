@@ -34,6 +34,7 @@ const dashShift = "스크립트/01_도형/Object_dashshift.jsx";
 const cylinder = "스크립트/01_도형/Object_cylinder.jsx";
 const cone = "스크립트/01_도형/Object_cone.jsx";
 const sphere = "스크립트/01_도형/Object_sphere.jsx";
+const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -511,6 +512,36 @@ for (const [file, mode] of visibleAlignFiles) {
   for (const token of required) {
     if (!source.includes(token)) {
       console.error(`${sphere}: missing sphere control or projection token: ${token}`);
+      failures++;
+    }
+  }
+}
+
+{
+  const source = read(coilSpring);
+  const required = [
+    'new Window("dialog", "오브젝트 코일 스프링")',
+    'var LINE_WIDTH_PT = 0.3',
+    'path.strokeWidth = LINE_WIDTH_PT',
+    'var MIN_TURNS = 5',
+    'var MAX_TURNS = 10',
+    'widthRow.add("statictext", undefined, "좌우 폭")',
+    'heightRow.add("statictext", undefined, "위아래 높이")',
+    'turnsRow.add("statictext", undefined, "감는 횟수")',
+    'sizePanel.add("slider", undefined, coilWidthMm, SIZE_STEP_MM, maxCoilWidthMm)',
+    'sizePanel.add("slider", undefined, coilHeightMm, SIZE_STEP_MM, maxCoilHeightMm)',
+    'turnsPanel.add("slider", undefined, turnCount, MIN_TURNS, MAX_TURNS)',
+    'function createCoilSpring()',
+    'function drawEllipse(group, y, radiusX, radiusY)',
+    'function drawStem(group, y1, y2)',
+    'source.hidden = true',
+    'previewGroup = createCoilSpring()',
+    'source.hidden = sourceWasHidden',
+    'source.remove()',
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${coilSpring}: missing coil spring control or drawing token: ${token}`);
       failures++;
     }
   }
