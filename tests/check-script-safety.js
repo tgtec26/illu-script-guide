@@ -665,6 +665,7 @@ for (const [file, mode] of visibleAlignFiles) {
       'function clearPreview()',
       'source.hidden = sourceWasHidden',
       'source.remove()',
+      'item.editable === false',
     ];
 
     for (const token of required) {
@@ -685,6 +686,11 @@ for (const [file, mode] of visibleAlignFiles) {
     const sourceRemovalLine = lineOf(source, /source\.remove\(\)/);
     if (finalCreationLine < 1 || sourceRemovalLine < 1 || sourceRemovalLine < finalCreationLine) {
       console.error(`${weatherFront}: source removal must follow final weather-front creation`);
+      failures++;
+    }
+
+    if (!/source\.hidden\s*=\s*true;\s*source\.selected\s*=\s*false;\s*try\s*\{\s*updatePreview\(\);\s*\}\s*catch\s*\([^)]*\)\s*\{[\s\S]*?clearPreview\(\);[\s\S]*?source\.hidden\s*=\s*sourceWasHidden;[\s\S]*?source\.selected\s*=\s*true;[\s\S]*?alert\(\s*"미리보기를 만드는 중 오류가 발생했습니다\."\s*\);[\s\S]*?return;\s*\}\s*var\s+result\s*=\s*dlg\.show\(\)/.test(source)) {
+      console.error(`${weatherFront}: initial preview failure must restore source state before showing the dialog`);
       failures++;
     }
   }

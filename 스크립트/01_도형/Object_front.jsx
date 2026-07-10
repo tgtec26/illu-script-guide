@@ -72,7 +72,16 @@
 
     source.hidden = true;
     source.selected = false;
-    updatePreview();
+    try {
+        updatePreview();
+    } catch(e) {
+        clearPreview();
+        source.hidden = sourceWasHidden;
+        source.selected = true;
+        alert("미리보기를 만드는 중 오류가 발생했습니다.");
+        app.redraw();
+        return;
+    }
     var result = dlg.show();
     clearPreview();
 
@@ -117,10 +126,15 @@
 
     function createWeatherFront(isPreview) {
         var group = source.layer.groupItems.add();
-        var baseline = source.duplicate(group, ElementPlacement.PLACEATEND);
-        baseline.hidden = false;
-        baseline.selected = false;
-        return group;
+        try {
+            var baseline = source.duplicate(group, ElementPlacement.PLACEATEND);
+            baseline.hidden = false;
+            baseline.selected = false;
+            return group;
+        } catch(e) {
+            try { group.remove(); } catch(e2) {}
+            throw e;
+        }
     }
 
     function addNumericControl(parent, label, value, minimum, maximum, step, unit) {
@@ -189,7 +203,7 @@
     function getSelectedOpenPath(selection) {
         if (!selection || selection.length !== 1) return null;
         var item = selection[0];
-        if (!item || item.typename !== "PathItem" || item.closed || item.guides || item.clipping || item.locked) return null;
+        if (!item || item.typename !== "PathItem" || item.closed || item.guides || item.clipping || item.locked || item.editable === false) return null;
         return item;
     }
 })();
