@@ -56,11 +56,14 @@
     latitudeRow.add("statictext", undefined, "위도선 수");
     var latitudeInput = latitudeRow.add("edittext", undefined, String(latitudeCount));
     latitudeInput.characters = 6;
-    latitudeRow.add("statictext", undefined, "개  (0 = 없음, 1 ~ 5)");
-    var latitudeSlider = gridPanel.add("slider", undefined, latitudeCount, 0, 5);
+    latitudeRow.add("statictext", undefined, "개  (0 = 없음, 1 ~ 11)");
+    var latitudeSlider = gridPanel.add("slider", undefined, latitudeCount, 0, 11);
     latitudeSlider.preferredSize.width = 380;
     latitudeSlider.stepdelta = 1;
-    gridPanel.add("statictext", undefined, "순서: 적도 → 북30° → 남30° → 북60° → 남60°");
+    gridPanel.add("statictext", undefined,
+        "순서: 적도 → 북15° → 남15° → 북30° → 남30° → 북45°");
+    gridPanel.add("statictext", undefined,
+        "      → 남45° → 북60° → 남60° → 북75° → 남75°");
 
     var rotationRow = gridPanel.add("group");
     rotationRow.add("statictext", undefined, "경도선 회전");
@@ -76,6 +79,8 @@
     var xControls = addAngleControls(viewPanel, "X축", viewX);
     var yControls = addAngleControls(viewPanel, "Y축", viewY);
     var zControls = addAngleControls(viewPanel, "Z축", viewZ);
+    var resetViewButton = viewPanel.add("button", undefined, "시점 리셋");
+    resetViewButton.alignment = "right";
 
     var previewCheck = dlg.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;
@@ -110,14 +115,14 @@
     };
     latitudeInput.onChanging = function() {
         var value = parseNumber(latitudeInput.text);
-        if (value !== null && value >= 0 && value <= 5) {
+        if (value !== null && value >= 0 && value <= 11) {
             latitudeCount = Math.round(value);
             latitudeSlider.value = latitudeCount;
             updatePreview();
         }
     };
     latitudeInput.onChange = function() {
-        latitudeCount = normalizeIntegerInput(latitudeInput, latitudeSlider, latitudeCount, 0, 5);
+        latitudeCount = normalizeIntegerInput(latitudeInput, latitudeSlider, latitudeCount, 0, 11);
         updatePreview();
     };
 
@@ -142,6 +147,7 @@
     bindViewControls(xControls, function(value) { viewX = value; }, function() { return viewX; });
     bindViewControls(yControls, function(value) { viewY = value; }, function() { return viewY; });
     bindViewControls(zControls, function(value) { viewZ = value; }, function() { return viewZ; });
+    resetViewButton.onClick = resetViewControls;
 
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
@@ -155,8 +161,8 @@
             alert("경도선 수는 0부터 24 사이의 정수로 입력해주세요.");
             return;
         }
-        if (validLatitude === null || validLatitude < 0 || validLatitude > 5) {
-            alert("위도선 수는 0부터 5 사이의 정수로 입력해주세요.");
+        if (validLatitude === null || validLatitude < 0 || validLatitude > 11) {
+            alert("위도선 수는 0부터 11 사이의 정수로 입력해주세요.");
             return;
         }
         longitudeCount = Math.round(validLongitude);
@@ -227,6 +233,19 @@
         };
     }
 
+    function resetViewControls() {
+        viewX = 0;
+        viewY = 0;
+        viewZ = 0;
+        xControls.input.text = formatSignedAngle(0);
+        yControls.input.text = formatSignedAngle(0);
+        zControls.input.text = formatSignedAngle(0);
+        xControls.slider.value = 0;
+        yControls.slider.value = 0;
+        zControls.slider.value = 0;
+        updatePreview();
+    }
+
     function updatePreview() {
         clearPreview();
         if (!previewEnabled) {
@@ -262,7 +281,7 @@
             }
         }
 
-        var latitudeSequence = [0, 30, -30, 60, -60];
+        var latitudeSequence = [0, 15, -15, 30, -30, 45, -45, 60, -60, 75, -75];
         for (i = 0; i < latitudeCount; i++) {
             drawLatitude(group, latitudeSequence[i]);
         }

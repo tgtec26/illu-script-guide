@@ -490,14 +490,26 @@ for (const [file, mode] of visibleAlignFiles) {
   const required = [
     'new Window("dialog", "오브젝트 스피어")',
     'gridPanel.add("slider", undefined, longitudeCount, 0, 24)',
-    'gridPanel.add("slider", undefined, latitudeCount, 0, 5)',
+    'gridPanel.add("slider", undefined, latitudeCount, 0, 11)',
     'var LINE_WIDTH_PT = 0.3',
     'to.strokeWidth = LINE_WIDTH_PT',
     'gridPanel.add("slider", undefined, gridRotation, -180, 180)',
     'addAngleControls(viewPanel, "X축", viewX)',
     'addAngleControls(viewPanel, "Y축", viewY)',
     'addAngleControls(viewPanel, "Z축", viewZ)',
-    'var latitudeSequence = [0, 30, -30, 60, -60]',
+    'var resetViewButton = viewPanel.add("button", undefined, "시점 리셋")',
+    'resetViewButton.onClick = resetViewControls',
+    'function resetViewControls()',
+    'viewX = 0',
+    'viewY = 0',
+    'viewZ = 0',
+    'xControls.input.text = formatSignedAngle(0)',
+    'yControls.input.text = formatSignedAngle(0)',
+    'zControls.input.text = formatSignedAngle(0)',
+    'xControls.slider.value = 0',
+    'yControls.slider.value = 0',
+    'zControls.slider.value = 0',
+    'var latitudeSequence = [0, 15, -15, 30, -30, 45, -45, 60, -60, 75, -75]',
     'var longitudeSpacing = 180 / longitudeCount',
     'if (longitudeCount > 0)',
     'function projectRotatedPoint(x, y, z)',
@@ -514,6 +526,30 @@ for (const [file, mode] of visibleAlignFiles) {
       console.error(`${sphere}: missing sphere control or projection token: ${token}`);
       failures++;
     }
+  }
+  if (source.includes('latitudeCount, 0, 5') || source.includes('validLatitude > 5')) {
+    console.error(`${sphere}: latitude count must support 0 through 11`);
+    failures++;
+  }
+  const resetViewMatch = source.match(/function resetViewControls\(\)\s*\{([\s\S]*?)\n\s*\}/);
+  const resetViewBody = resetViewMatch ? resetViewMatch[1] : "";
+  const resetViewTokens = [
+    "viewX = 0",
+    "viewY = 0",
+    "viewZ = 0",
+    "xControls.input.text = formatSignedAngle(0)",
+    "yControls.input.text = formatSignedAngle(0)",
+    "zControls.input.text = formatSignedAngle(0)",
+    "xControls.slider.value = 0",
+    "yControls.slider.value = 0",
+    "zControls.slider.value = 0",
+  ];
+  if (!resetViewMatch ||
+      resetViewTokens.some((token) => !resetViewBody.includes(token)) ||
+      (resetViewBody.match(/updatePreview\(\)/g) || []).length !== 1 ||
+      /gridRotation\s*=/.test(resetViewBody)) {
+    console.error(`${sphere}: view reset must update X/Y/Z controls once without resetting grid rotation`);
+    failures++;
   }
 }
 
