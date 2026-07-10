@@ -35,6 +35,7 @@
     var viewX = 20;
     var viewY = 0;
     var viewZ = 0;
+    var divisionCount = 0;
     var FACE_TOP = 0;
     var FACE_SIDE = 1;
     var faceK = [0, 0];
@@ -78,6 +79,18 @@
     var heightSlider = sizePanel.add("slider", undefined, heightMm, SIZE_STEP_MM, maxHeightMm);
     heightSlider.preferredSize.width = 380;
     heightSlider.stepdelta = SIZE_STEP_MM;
+
+    var divisionPanel = dlg.add("panel", undefined, "분할선");
+    divisionPanel.orientation = "column";
+    divisionPanel.alignChildren = "fill";
+    var divisionRow = divisionPanel.add("group");
+    divisionRow.add("statictext", undefined, "분할선 수");
+    var divisionInput = divisionRow.add("edittext", undefined, String(divisionCount));
+    divisionInput.characters = 6;
+    divisionRow.add("statictext", undefined, "개  (0 = 없음, 1 = 1/2, 2 = 1/3·2/3)");
+    var divisionSlider = divisionPanel.add("slider", undefined, divisionCount, 0, 24);
+    divisionSlider.preferredSize.width = 380;
+    divisionSlider.stepdelta = 1;
 
     var viewPanel = dlg.add("panel", undefined, "콘을 바라보는 시점");
     viewPanel.orientation = "column";
@@ -180,6 +193,28 @@
         updatePreview();
     };
 
+    divisionSlider.onChanging = function() {
+        divisionCount = Math.round(divisionSlider.value);
+        divisionInput.text = String(divisionCount);
+        updatePreview();
+    };
+    divisionInput.onChanging = function() {
+        var value = parseNumber(divisionInput.text);
+        if (value !== null && value >= 0 && value <= 24) {
+            divisionCount = Math.round(value);
+            divisionSlider.value = divisionCount;
+            updatePreview();
+        }
+    };
+    divisionInput.onChange = function() {
+        var value = parseNumber(divisionInput.text);
+        if (value === null) value = divisionCount;
+        divisionCount = clamp(Math.round(value), 0, 24);
+        divisionInput.text = String(divisionCount);
+        divisionSlider.value = divisionCount;
+        updatePreview();
+    };
+
     bindViewControls(xControls, function(value) { viewX = value; }, function() { return viewX; });
     bindViewControls(yControls, function(value) { viewY = value; }, function() { return viewY; });
     bindViewControls(zControls, function(value) { viewZ = value; }, function() { return viewZ; });
@@ -204,6 +239,7 @@
         var validBase = parseNumber(baseInput.text);
         var validTop = parseNumber(topInput.text);
         var validHeight = parseNumber(heightInput.text);
+        var validDivision = parseNumber(divisionInput.text);
         if (validBase === null || validBase < SIZE_STEP_MM || validBase > maxBaseDiameterMm) {
             alert("밑면 지름은 " + formatNumber(SIZE_STEP_MM, 2) + "mm부터 " +
                 formatNumber(maxBaseDiameterMm, 2) + "mm 사이로 입력해주세요.");
@@ -217,6 +253,10 @@
             alert("높이는 0보다 큰 숫자로 입력해주세요.");
             return;
         }
+        if (validDivision === null || validDivision < 0 || validDivision > 24) {
+            alert("분할선 수는 0부터 24 사이의 정수로 입력해주세요.");
+            return;
+        }
         if (!commitAngleInput(xControls.input, function(value) { viewX = value; }) ||
                 !commitAngleInput(yControls.input, function(value) { viewY = value; }) ||
                 !commitAngleInput(zControls.input, function(value) { viewZ = value; })) {
@@ -226,6 +266,7 @@
         baseDiameterMm = clamp(roundTo(validBase, SIZE_STEP_MM), SIZE_STEP_MM, maxBaseDiameterMm);
         topDiameterMm = clamp(roundTo(validTop, SIZE_STEP_MM), 0, baseDiameterMm);
         heightMm = Math.max(SIZE_STEP_MM, roundTo(validHeight, SIZE_STEP_MM));
+        divisionCount = clamp(Math.round(validDivision), 0, 24);
         dlg.close(1);
     };
 
@@ -339,6 +380,14 @@
         applyFill(side, faceK[FACE_SIDE]);
         copyStrokeStyle(source, side);
 
+        var sideSlope = coneHeight > 0 ? (baseRadius - topRadius) / coneHeight : 0;
+        for (i = 1; i <= divisionCount; i++) {
+            var fraction = i / (divisionCount + 1);
+            var divisionHeight = coneHeight * fraction;
+            var divisionRadius = baseRadius + (topRadius - baseRadius) * fraction;
+            drawDivisionRing(group, divisionHeight, divisionRadius, sideSlope);
+        }
+
         var topNormal = rotatePoint(0, 1, 0);
         var baseNormal = rotatePoint(0, -1, 0);
         if (topRadius > 0.001 && topNormal.z > 0.0001) {
@@ -354,6 +403,75 @@
             copyStrokeStyle(source, baseFace);
         }
         return group;
+    }
+
+    function drawDivisionRing(group, axisHeight, ringRadius, sideSlope) {
+        if (ringRadius < 0.001) return;
+        var samples = [];
+        var steps = 72;
+        for (var i = 0; i < steps; i++) {
+            var angle = 2 * Math.PI * i / steps;
+            var point = rotatePoint(
+                ringRadius * Math.cos(angle),
+                axisHeight,
+                ringRadius * Math.sin(angle)
+            );
+            var normal = rotatePoint(Math.cos(angle), sideSlope, Math.sin(angle));
+            samples.push({
+                x: centerX + point.x,
+                y: centerY + point.y,
+                visibility: normal.z
+            });
+        }
+        drawVisibleDivisionSamples(group, samples);
+    }
+
+    function drawVisibleDivisionSamples(group, samples) {
+        var invisibleIndex = -1;
+        var i;
+        for (i = 0; i < samples.length; i++) {
+            if (samples[i].visibility < 0) {
+                invisibleIndex = i;
+                break;
+            }
+        }
+        if (invisibleIndex < 0) {
+            var closedLine = makeSmoothClosedPath(group, samples);
+            closedLine.filled = false;
+            copyStrokeStyle(source, closedLine);
+            return;
+        }
+
+        var current = null;
+        var count = samples.length;
+        for (i = 0; i < count; i++) {
+            var a = samples[(invisibleIndex + i) % count];
+            var b = samples[(invisibleIndex + i + 1) % count];
+            var aVisible = a.visibility >= 0;
+            var bVisible = b.visibility >= 0;
+            if (!aVisible && bVisible) {
+                current = [interpolateVisibilityEdge(a, b), b];
+            } else if (aVisible && bVisible) {
+                if (current === null) current = [a];
+                current.push(b);
+            } else if (aVisible && !bVisible) {
+                if (current === null) current = [a];
+                current.push(interpolateVisibilityEdge(a, b));
+                var visibleLine = makeSmoothOpenPath(group, current);
+                copyStrokeStyle(source, visibleLine);
+                current = null;
+            }
+        }
+    }
+
+    function interpolateVisibilityEdge(a, b) {
+        var denominator = a.visibility - b.visibility;
+        var amount = Math.abs(denominator) < 0.0000001 ? 0 : a.visibility / denominator;
+        return {
+            x: a.x + (b.x - a.x) * amount,
+            y: a.y + (b.y - a.y) * amount,
+            visibility: 0
+        };
     }
 
     function makeProjectedRing(axisHeight, ringRadius) {
@@ -452,6 +570,33 @@
             var dy = (next.y - previous.y) / 6;
             path.pathPoints[i].leftDirection = [anchor[0] - dx, anchor[1] - dy];
             path.pathPoints[i].rightDirection = [anchor[0] + dx, anchor[1] + dy];
+            path.pathPoints[i].pointType = PointType.SMOOTH;
+        }
+        return path;
+    }
+
+    function makeSmoothOpenPath(group, points) {
+        var path = makePath(group, points, false);
+        path.filled = false;
+        var count = path.pathPoints.length;
+        for (var i = 0; i < count; i++) {
+            var anchor = path.pathPoints[i].anchor;
+            var left = anchor;
+            var right = anchor;
+            if (i > 0 && i < count - 1) {
+                var dx = (points[i + 1].x - points[i - 1].x) / 6;
+                var dy = (points[i + 1].y - points[i - 1].y) / 6;
+                left = [anchor[0] - dx, anchor[1] - dy];
+                right = [anchor[0] + dx, anchor[1] + dy];
+            } else if (i < count - 1) {
+                right = [anchor[0] + (points[i + 1].x - points[i].x) / 3,
+                    anchor[1] + (points[i + 1].y - points[i].y) / 3];
+            } else if (i > 0) {
+                left = [anchor[0] - (points[i].x - points[i - 1].x) / 3,
+                    anchor[1] - (points[i].y - points[i - 1].y) / 3];
+            }
+            path.pathPoints[i].leftDirection = left;
+            path.pathPoints[i].rightDirection = right;
             path.pathPoints[i].pointType = PointType.SMOOTH;
         }
         return path;
