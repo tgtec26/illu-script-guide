@@ -239,11 +239,13 @@
 
     function drawHelix(group, radiusX, radiusY, startY, endY) {
         var startT = Math.PI / 2;
-        var endT = startT + Math.PI * 2 * turnCount;
+        var endT = startT + Math.PI * 2 * (turnCount - 0.5);
         var span = endT - startT;
         var segmentCount = Math.max(16, turnCount * 8);
         var delta = span / segmentCount;
-        var ySlope = (endY - startY) / span;
+        var baselineStartY = startY - radiusY * Math.sin(startT);
+        var baselineEndY = endY - radiusY * Math.sin(endT);
+        var ySlope = (baselineEndY - baselineStartY) / span;
         var handleFactor = 4 / 3 * Math.tan(delta / 4);
         var path = group.pathItems.add();
         var anchors = [];
@@ -253,7 +255,7 @@
             var t = startT + delta * i;
             anchors.push([
                 centerX + radiusX * Math.cos(t),
-                startY + ySlope * (t - startT) + radiusY * Math.sin(t)
+                baselineStartY + ySlope * (t - startT) + radiusY * Math.sin(t)
             ]);
             derivatives.push({
                 x: -radiusX * Math.sin(t),

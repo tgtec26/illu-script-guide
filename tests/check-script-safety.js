@@ -533,6 +533,9 @@ for (const [file, mode] of visibleAlignFiles) {
     'turnsPanel.add("slider", undefined, turnCount, MIN_TURNS, MAX_TURNS)',
     'function createCoilSpring()',
     'function drawHelix(group, radiusX, radiusY, startY, endY)',
+    'var endT = startT + Math.PI * 2 * (turnCount - 0.5)',
+    'var baselineStartY = startY - radiusY * Math.sin(startT)',
+    'var baselineEndY = endY - radiusY * Math.sin(endT)',
     'var segmentCount = Math.max(16, turnCount * 8)',
     'var handleFactor = 4 / 3 * Math.tan(delta / 4)',
     'function drawStem(group, y1, y2)',
@@ -546,6 +549,10 @@ for (const [file, mode] of visibleAlignFiles) {
       console.error(`${coilSpring}: missing coil spring control or drawing token: ${token}`);
       failures++;
     }
+  }
+  if (source.includes('var endT = startT + Math.PI * 2 * turnCount')) {
+    console.error(`${coilSpring}: helix must end on the opposite center-axis phase`);
+    failures++;
   }
 }
 
