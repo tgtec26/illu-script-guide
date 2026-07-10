@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
 
@@ -56,6 +57,45 @@ function lineOf(source, pattern) {
     if (pattern.test(lines[i])) return i + 1;
   }
   return -1;
+}
+
+function extractFunction(source, name) {
+  const declaration = `function ${name}(`;
+  const start = source.indexOf(declaration);
+  if (start < 0) throw new Error(`missing production helper: ${name}`);
+  const bodyStart = source.indexOf("{", start);
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+
+  for (let index = bodyStart; index < source.length; index++) {
+    const character = source[index];
+    if (quote !== null) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      continue;
+    }
+    if (character === "{") depth++;
+    if (character === "}") {
+      depth--;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  throw new Error(`unbalanced production helper: ${name}`);
+}
+
+function extractWeatherFrontHelpers(source, names) {
+  const declarations = names.map((name) => extractFunction(source, name)).join("\n");
+  return new Function(`${declarations}\nreturn {${names.join(",")}};`)();
+}
+
+function assertClose(actual, expected, label) {
+  assert.ok(Math.abs(actual - expected) < 0.000001, `${label}: expected ${expected}, got ${actual}`);
 }
 
 let failures = 0;
@@ -682,7 +722,7 @@ for (const [file, mode] of visibleAlignFiles) {
 
     for (const token of required) {
       if (!source.includes(token)) {
-        console.error(`${weatherFront}: missing Task 1 shell token: ${token}`);
+        console.error(`${weatherFront}: missing weather-front control/geometry token: ${token}`);
         failures++;
       }
     }
@@ -709,6 +749,64 @@ for (const [file, mode] of visibleAlignFiles) {
     if (/pathPoints\s*\[\s*index\s*\]/.test(source) ||
         /index\s*\/\s*\(?\s*(?:count|symbolCount|pathPoints\.length)/.test(source)) {
       console.error(`${weatherFront}: symbol placement must use cached path length, not parameter-index spacing`);
+      failures++;
+    }
+
+    try {
+      const helpers = extractWeatherFrontHelpers(source, [
+        "getSymbolPlacements",
+        "getSymbolInstruction",
+        "pointFromArray",
+        "cubicPoint",
+        "cubicDerivative",
+        "getCubicSegments",
+        "distanceBetween",
+        "buildPathMetrics",
+        "clamp",
+        "sampleDirection",
+        "getFrameAtLength",
+      ]);
+
+      assert.deepStrictEqual(
+        helpers.getSymbolPlacements(25, 10, 5),
+        [{index: 0, centerDistance: 5}, {index: 1, centerDistance: 20}],
+        "complete symbols must use size-plus-gap center spacing"
+      );
+      assert.deepStrictEqual(
+        helpers.getSymbolPlacements(24, 10, 5),
+        [{index: 0, centerDistance: 5}],
+        "partial trailing symbols must not be placed"
+      );
+      assert.deepStrictEqual(
+        helpers.getSymbolPlacements(9, 10, 5),
+        [],
+        "paths shorter than one symbol must have no placements"
+      );
+
+      assert.deepStrictEqual(helpers.getSymbolInstruction("warm", 0, 1), {shape: "semicircle", side: 1});
+      assert.deepStrictEqual(helpers.getSymbolInstruction("cold", 0, -1), {shape: "triangle", side: -1});
+      assert.deepStrictEqual(helpers.getSymbolInstruction("stationary", 0, -1), {shape: "semicircle", side: -1});
+      assert.deepStrictEqual(helpers.getSymbolInstruction("stationary", 1, -1), {shape: "triangle", side: 1});
+      assert.deepStrictEqual(helpers.getSymbolInstruction("occluded", 0, -1), {shape: "semicircle", side: -1});
+      assert.deepStrictEqual(helpers.getSymbolInstruction("occluded", 1, -1), {shape: "triangle", side: -1});
+
+      const straightPath = {
+        pathPoints: [
+          {anchor: [0, 0], rightDirection: [10 / 3, 0]},
+          {anchor: [10, 0], leftDirection: [20 / 3, 0]},
+        ],
+      };
+      const metrics = helpers.buildPathMetrics(straightPath, 80);
+      const frame = helpers.getFrameAtLength(metrics, 5);
+      assertClose(metrics.totalLength, 10, "straight cubic total length");
+      assertClose(frame.x, 5, "straight cubic midpoint x");
+      assertClose(frame.y, 0, "straight cubic midpoint y");
+      assertClose(frame.tx, 1, "straight cubic tangent x");
+      assertClose(frame.ty, 0, "straight cubic tangent y");
+      assertClose(frame.nx, 0, "straight cubic left normal x");
+      assertClose(frame.ny, 1, "straight cubic left normal y");
+    } catch (error) {
+      console.error(`${weatherFront}: executable geometry regression failed: ${error.message}`);
       failures++;
     }
   }

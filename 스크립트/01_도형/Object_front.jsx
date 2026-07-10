@@ -154,35 +154,47 @@
     function drawSymbols(group) {
         var shapeSize = shapeSizeMm * MM_TO_PT;
         var gap = gapMm * MM_TO_PT;
-        var unitLength = shapeSize + gap;
         var normalSign = reversed ? -1 : 1;
         var color = getPlaceholderColor();
-        var count = 0;
+        var placements = getSymbolPlacements(pathMetrics.totalLength, shapeSize, gap);
 
-        for (var index = 0; shapeSize + index * unitLength <= pathMetrics.totalLength; index++) {
-            var centerDistance = shapeSize / 2 + index * unitLength;
-            var frame = getFrameAtLength(pathMetrics, centerDistance);
-
-            if (frontType === "warm") {
-                drawSemicircle(group, frame, shapeSize, normalSign, color);
-            } else if (frontType === "cold") {
-                drawTriangle(group, frame, shapeSize, normalSign, color);
-            } else if (frontType === "stationary") {
-                if (index % 2 === 0) {
-                    drawSemicircle(group, frame, shapeSize, normalSign, color);
-                } else {
-                    drawTriangle(group, frame, shapeSize, -normalSign, color);
-                }
-            } else if (frontType === "occluded") {
-                if (index % 2 === 0) {
-                    drawSemicircle(group, frame, shapeSize, normalSign, color);
-                } else {
-                    drawTriangle(group, frame, shapeSize, normalSign, color);
-                }
+        for (var placementIndex = 0; placementIndex < placements.length; placementIndex++) {
+            var placement = placements[placementIndex];
+            var frame = getFrameAtLength(pathMetrics, placement.centerDistance);
+            var instruction = getSymbolInstruction(frontType, placement.index, normalSign);
+            if (instruction.shape === "semicircle") {
+                drawSemicircle(group, frame, shapeSize, instruction.side, color);
+            } else {
+                drawTriangle(group, frame, shapeSize, instruction.side, color);
             }
-            count++;
         }
-        return count;
+        return placements.length;
+    }
+
+    function getSymbolPlacements(totalLength, shapeSize, gap) {
+        var placements = [];
+        var unitLength = shapeSize + gap;
+        for (var index = 0; shapeSize + index * unitLength <= totalLength; index++) {
+            var centerDistance = shapeSize / 2 + index * unitLength;
+            placements.push({index: index, centerDistance: centerDistance});
+        }
+        return placements;
+    }
+
+    function getSymbolInstruction(frontType, index, normalSign) {
+        if (frontType === "warm") return {shape: "semicircle", side: normalSign};
+        if (frontType === "cold") return {shape: "triangle", side: normalSign};
+        if (frontType === "stationary") {
+            return index % 2 === 0 ?
+                {shape: "semicircle", side: normalSign} :
+                {shape: "triangle", side: -normalSign};
+        }
+        if (frontType === "occluded") {
+            return index % 2 === 0 ?
+                {shape: "semicircle", side: normalSign} :
+                {shape: "triangle", side: normalSign};
+        }
+        return null;
     }
 
     function getPlaceholderColor() {
