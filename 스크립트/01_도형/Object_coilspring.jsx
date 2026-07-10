@@ -221,23 +221,11 @@
         var startY = topY - radiusY;
         var endY = bottomY + radiusY;
 
-        drawStem(group, topY, startY);
-        drawHelix(group, radiusX, radiusY, startY, endY);
-        drawStem(group, endY, bottomY);
+        drawCoilSpringPath(group, radiusX, radiusY, topY, startY, endY, bottomY);
         return group;
     }
 
-    function drawStem(group, y1, y2) {
-        if (Math.abs(y1 - y2) < 0.01) return null;
-        var path = group.pathItems.add();
-        path.setEntirePath([[centerX, y1], [centerX, y2]]);
-        path.closed = false;
-        path.filled = false;
-        applyStroke(path);
-        return path;
-    }
-
-    function drawHelix(group, radiusX, radiusY, startY, endY) {
+    function drawCoilSpringPath(group, radiusX, radiusY, topY, startY, endY, bottomY) {
         var startT = Math.PI / 2;
         var endT = startT + Math.PI * 2 * (turnCount - 0.5);
         var span = endT - startT;
@@ -251,6 +239,8 @@
         var anchors = [];
         var derivatives = [];
         var i;
+        anchors.push([centerX, topY]);
+        derivatives.push(null);
         for (i = 0; i <= segmentCount; i++) {
             var t = startT + delta * i;
             anchors.push([
@@ -262,22 +252,24 @@
                 y: ySlope + radiusY * Math.cos(t)
             });
         }
+        anchors.push([centerX, bottomY]);
+        derivatives.push(null);
         path.setEntirePath(anchors);
         path.closed = false;
         path.filled = false;
         applyStroke(path);
 
-        for (i = 0; i < anchors.length; i++) {
+        for (i = 1; i < anchors.length - 1; i++) {
             var anchor = anchors[i];
             var left = anchor;
             var right = anchor;
-            if (i > 0) {
+            if (i > 1) {
                 left = [
                     anchor[0] - derivatives[i].x * handleFactor,
                     anchor[1] - derivatives[i].y * handleFactor
                 ];
             }
-            if (i < anchors.length - 1) {
+            if (i < anchors.length - 2) {
                 right = [
                     anchor[0] + derivatives[i].x * handleFactor,
                     anchor[1] + derivatives[i].y * handleFactor
@@ -285,6 +277,10 @@
             }
             setSmooth(path.pathPoints[i], left, right);
         }
+        path.pathPoints[0].pointType = PointType.CORNER;
+        path.pathPoints[1].pointType = PointType.CORNER;
+        path.pathPoints[path.pathPoints.length - 2].pointType = PointType.CORNER;
+        path.pathPoints[path.pathPoints.length - 1].pointType = PointType.CORNER;
         return path;
     }
 

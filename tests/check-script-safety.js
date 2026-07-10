@@ -532,13 +532,16 @@ for (const [file, mode] of visibleAlignFiles) {
     'sizePanel.add("slider", undefined, coilHeightMm, SIZE_STEP_MM, maxCoilHeightMm)',
     'turnsPanel.add("slider", undefined, turnCount, MIN_TURNS, MAX_TURNS)',
     'function createCoilSpring()',
-    'function drawHelix(group, radiusX, radiusY, startY, endY)',
+    'function drawCoilSpringPath(group, radiusX, radiusY, topY, startY, endY, bottomY)',
+    'anchors.push([centerX, topY])',
+    'anchors.push([centerX, bottomY])',
+    'path.pathPoints[1].pointType = PointType.CORNER',
+    'path.pathPoints[path.pathPoints.length - 2].pointType = PointType.CORNER',
     'var endT = startT + Math.PI * 2 * (turnCount - 0.5)',
     'var baselineStartY = startY - radiusY * Math.sin(startT)',
     'var baselineEndY = endY - radiusY * Math.sin(endT)',
     'var segmentCount = Math.max(16, turnCount * 8)',
     'var handleFactor = 4 / 3 * Math.tan(delta / 4)',
-    'function drawStem(group, y1, y2)',
     'source.hidden = true',
     'previewGroup = createCoilSpring()',
     'source.hidden = sourceWasHidden',
@@ -552,6 +555,11 @@ for (const [file, mode] of visibleAlignFiles) {
   }
   if (source.includes('var endT = startT + Math.PI * 2 * turnCount')) {
     console.error(`${coilSpring}: helix must end on the opposite center-axis phase`);
+    failures++;
+  }
+  const pathCreationCount = (source.match(/group\.pathItems\.add\(\)/g) || []).length;
+  if (pathCreationCount !== 1 || source.includes('function drawStem(')) {
+    console.error(`${coilSpring}: stems and helix must form one connected PathItem`);
     failures++;
   }
 }
