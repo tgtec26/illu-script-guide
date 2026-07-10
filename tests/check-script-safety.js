@@ -32,6 +32,7 @@ const extUngroup = "스크립트/10_기타/ExtUngroup.jsx";
 const dashAlignHelper = "스크립트/01_도형/Object_setdash_align_helper.jsxinc";
 const dashShift = "스크립트/01_도형/Object_dashshift.jsx";
 const cylinder = "스크립트/01_도형/Object_cylinder.jsx";
+const sphere = "스크립트/01_도형/Object_sphere.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -477,6 +478,36 @@ for (const [file, mode] of visibleAlignFiles) {
   for (const token of required) {
     if (!source.includes(token)) {
       console.error(`${cylinder}: missing cylinder control or preview token: ${token}`);
+      failures++;
+    }
+  }
+}
+
+{
+  const source = read(sphere);
+  const required = [
+    'new Window("dialog", "오브젝트 스피어")',
+    'gridPanel.add("slider", undefined, longitudeCount, 0, 24)',
+    'gridPanel.add("slider", undefined, latitudeCount, 0, 5)',
+    'var LINE_WIDTH_PT = 0.3',
+    'to.strokeWidth = LINE_WIDTH_PT',
+    'gridPanel.add("slider", undefined, gridRotation, -180, 180)',
+    'addAngleControls(viewPanel, "X축", viewX)',
+    'addAngleControls(viewPanel, "Y축", viewY)',
+    'addAngleControls(viewPanel, "Z축", viewZ)',
+    'var latitudeSequence = [0, 30, -30, 60, -60]',
+    'var longitudeSpacing = 180 / longitudeCount',
+    'if (longitudeCount > 0)',
+    'function projectRotatedPoint(x, y, z)',
+    'function drawVisibleSamples(group, samples)',
+    'intersectHorizon(a, b)',
+    'previewGroup = createSphere()',
+    'source.hidden = sourceWasHidden',
+    'source.remove()',
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${sphere}: missing sphere control or projection token: ${token}`);
       failures++;
     }
   }
