@@ -218,15 +218,12 @@
         var radiusY = Math.max(LINE_WIDTH_PT * 3, ellipseHeight / 2);
         var topY = centerY + height / 2;
         var bottomY = centerY - height / 2;
-        var loopTop = topY - radiusY;
-        var firstCenterY = loopTop - radiusY;
-        var lastCenterY = firstCenterY - pitch * (turnCount - 1);
+        var startY = topY - radiusY;
+        var endY = bottomY + radiusY;
 
-        drawStem(group, topY, firstCenterY + radiusY);
-        for (var i = 0; i < turnCount; i++) {
-            drawEllipse(group, firstCenterY - pitch * i, radiusX, radiusY);
-        }
-        drawStem(group, lastCenterY - radiusY, bottomY);
+        drawStem(group, topY, startY);
+        drawHelix(group, radiusX, radiusY, startY, endY);
+        drawStem(group, endY, bottomY);
         return group;
     }
 
@@ -240,32 +237,52 @@
         return path;
     }
 
-    function drawEllipse(group, y, radiusX, radiusY) {
-        var handle = 0.5522847498;
+    function drawHelix(group, radiusX, radiusY, startY, endY) {
+        var startT = Math.PI / 2;
+        var endT = startT + Math.PI * 2 * turnCount;
+        var span = endT - startT;
+        var segmentCount = Math.max(16, turnCount * 8);
+        var delta = span / segmentCount;
+        var ySlope = (endY - startY) / span;
+        var handleFactor = 4 / 3 * Math.tan(delta / 4);
         var path = group.pathItems.add();
-        var anchors = [
-            [centerX + radiusX, y],
-            [centerX, y - radiusY],
-            [centerX - radiusX, y],
-            [centerX, y + radiusY]
-        ];
+        var anchors = [];
+        var derivatives = [];
+        var i;
+        for (i = 0; i <= segmentCount; i++) {
+            var t = startT + delta * i;
+            anchors.push([
+                centerX + radiusX * Math.cos(t),
+                startY + ySlope * (t - startT) + radiusY * Math.sin(t)
+            ]);
+            derivatives.push({
+                x: -radiusX * Math.sin(t),
+                y: ySlope + radiusY * Math.cos(t)
+            });
+        }
         path.setEntirePath(anchors);
-        path.closed = true;
+        path.closed = false;
         path.filled = false;
         applyStroke(path);
 
-        setSmooth(path.pathPoints[0],
-            [centerX + radiusX, y + radiusY * handle],
-            [centerX + radiusX, y - radiusY * handle]);
-        setSmooth(path.pathPoints[1],
-            [centerX + radiusX * handle, y - radiusY],
-            [centerX - radiusX * handle, y - radiusY]);
-        setSmooth(path.pathPoints[2],
-            [centerX - radiusX, y - radiusY * handle],
-            [centerX - radiusX, y + radiusY * handle]);
-        setSmooth(path.pathPoints[3],
-            [centerX - radiusX * handle, y + radiusY],
-            [centerX + radiusX * handle, y + radiusY]);
+        for (i = 0; i < anchors.length; i++) {
+            var anchor = anchors[i];
+            var left = anchor;
+            var right = anchor;
+            if (i > 0) {
+                left = [
+                    anchor[0] - derivatives[i].x * handleFactor,
+                    anchor[1] - derivatives[i].y * handleFactor
+                ];
+            }
+            if (i < anchors.length - 1) {
+                right = [
+                    anchor[0] + derivatives[i].x * handleFactor,
+                    anchor[1] + derivatives[i].y * handleFactor
+                ];
+            }
+            setSmooth(path.pathPoints[i], left, right);
+        }
         return path;
     }
 
