@@ -53,39 +53,18 @@
     }
 
     function addAppearanceStrokeThenFill(doc, whiteColor) {
-        var lines = [];
-        addNewStrokeEvent(lines, 1);
-        addNewFillEvent(lines, 2);
         var previousDefaultStrokeColor = getDefaultStrokeColor(doc);
         var previousDefaultStrokeWidth = getDefaultStrokeWidth(doc);
 
         try {
+            // 새로 추가되는 선이 흰색 1pt가 되도록 기본 선 속성을 맞춘다.
             doc.defaultStrokeColor = whiteColor;
             doc.defaultStrokeWidth = STROKE_WIDTH;
-            app.executeMenuCommand("Adobe New Stroke Shortcut");
-        } catch (e) {
-            alert("모양 패널의 새 선을 추가할 수 없습니다.");
-            return;
+            // 사용자가 녹화한 6이벤트 액션(문자 밖 획·칠 + 둥근 연결)을 그대로 재생.
+            applyStrokeStyleAction(doc);
+        } finally {
+            restoreDefaultStroke(doc, previousDefaultStrokeColor, previousDefaultStrokeWidth);
         }
-
-        try {
-            app.executeMenuCommand("Adobe New Fill Shortcut");
-        } catch (e2) {
-            alert("모양 패널의 새 면을 추가할 수 없습니다.");
-        }
-
-        // 둥근 연결은 새 면 추가 이후(맨 마지막)에 적용해야 되돌려지지 않는다.
-        applyStrokeStyleAction(doc);
-
-        restoreDefaultStroke(doc, previousDefaultStrokeColor, previousDefaultStrokeWidth);
-    }
-
-    function addNewStrokeEvent(lines, eventIndex) {
-        lines.push("Add New Stroke " + eventIndex);
-    }
-
-    function addNewFillEvent(lines, eventIndex) {
-        lines.push("Add New Fill " + eventIndex);
     }
 
     function applyStrokeStyleAction(doc) {
@@ -111,6 +90,8 @@
         }
     }
 
+    // 사용자가 녹화한 test2 액션(6이벤트)을 바이트 단위로 그대로 생성한다.
+    // 선 색상 선택 → 새 선 추가 → 칠 색상 선택 → 새 칠 추가 → 선 색상 선택 → 선 속성(둥근 연결)
     function writeStrokeAction(actionFile, actionSetName, actionName) {
         var lines = [];
 
@@ -127,31 +108,89 @@
         lines.push("    /keyIndex 0");
         lines.push("    /colorIndex 0");
         lines.push("    /isOpen 1");
-        lines.push("    /eventCount 1");
-        lines.push("    /event-1 {");
+        lines.push("    /eventCount 6");
+
+        pushSetColorFocus(lines, 1, "ec84a020ec8389ec8381", 0);              // 선 색상
+        pushAppearanceEvent(lines, 2, "ec838820ec84a020ecb694eab080", 2);    // 새 선 추가
+        pushSetColorFocus(lines, 3, "ecb9a020ec8389ec8381", 1);              // 칠 색상
+        pushAppearanceEvent(lines, 4, "ec838820ecb9a020ecb694eab080", 1);    // 새 칠 추가
+        pushSetColorFocus(lines, 5, "ec84a020ec8389ec8381", 0);              // 선 색상
+        pushSetStrokeEvent(lines, 6);                                        // 선 속성(둥근 연결)
+
+        lines.push("}");
+
+        writeActionFile(actionFile, lines);
+    }
+
+    function pushSetColorFocus(lines, idx, nameHex, boolVal) {
+        lines.push("    /event-" + idx + " {");
+        lines.push("        /useRulersIn1stQuadrant 0");
+        lines.push("        /internalName (ai_plugin_setColor)");
+        lines.push("        /localizedName [ 13");
+        lines.push("            ec8389ec838120ec84a4eca095");   // 색상 설정
+        lines.push("        ]");
+        lines.push("        /isOpen 0");
+        lines.push("        /isOn 1");
+        lines.push("        /hasDialog 0");
+        lines.push("        /parameterCount 2");
+        lines.push("        /parameter-1 {");
+        lines.push("            /key 1768186740");
+        lines.push("            /showInPalette -1");
+        lines.push("            /type (ustring)");
+        lines.push("            /value [ " + (nameHex.length / 2));
+        lines.push("                " + nameHex);
+        lines.push("            ]");
+        lines.push("        }");
+        lines.push("        /parameter-2 {");
+        lines.push("            /key 1718185068");
+        lines.push("            /showInPalette -1");
+        lines.push("            /type (boolean)");
+        lines.push("            /value " + boolVal);
+        lines.push("        }");
+        lines.push("    }");
+    }
+
+    function pushAppearanceEvent(lines, idx, itemNameHex, value) {
+        lines.push("    /event-" + idx + " {");
+        lines.push("        /useRulersIn1stQuadrant 0");
+        lines.push("        /internalName (ai_plugin_appearance)");
+        lines.push("        /localizedName [ 6");
+        lines.push("            ebaaa8ec9691");   // 모양
+        lines.push("        ]");
+        lines.push("        /isOpen 0");
+        lines.push("        /isOn 1");
+        lines.push("        /hasDialog 0");
+        lines.push("        /parameterCount 1");
+        lines.push("        /parameter-1 {");
+        lines.push("            /key 1835363957");
+        lines.push("            /showInPalette -1");
+        lines.push("            /type (enumerated)");
+        lines.push("            /name [ " + (itemNameHex.length / 2));
+        lines.push("                " + itemNameHex);
+        lines.push("            ]");
+        lines.push("            /value " + value);
+        lines.push("        }");
+        lines.push("    }");
+    }
+
+    function pushSetStrokeEvent(lines, idx) {
+        lines.push("    /event-" + idx + " {");
         lines.push("        /useRulersIn1stQuadrant 0");
         lines.push("        /internalName (ai_plugin_setStroke)");
         lines.push("        /localizedName [ 10");
-        lines.push("            536574205374726F6B65");
+        lines.push("            ec84a020ec84a4eca095");   // 선 설정
         lines.push("        ]");
-        lines.push("        /isOpen 1");
+        lines.push("        /isOpen 0");
         lines.push("        /isOn 1");
         lines.push("        /hasDialog 0");
         lines.push("        /parameterCount 6");
-
-        // 녹화된 "둥근 연결" 액션과 바이트 단위로 동일하게 구성.
-        // (miter-limit 파라미터를 넣으면 각진 연결로 처리되므로 제외한다.)
-        addUnitRealParameter(lines, 1, 2003072104, STROKE_WIDTH);            // 선 두께
+        addUnitRealParameter(lines, 1, 2003072104, STROKE_WIDTH);            // 선 두께 1pt
         addEnumeratedParameterHex(lines, 2, 1667330094, "eca091ed959c20eb8ba8eba9b4", 0); // 단면
         addEnumeratedParameterHex(lines, 3, 1785686382, "eb91a5eab7bc20ec97b0eab2b0", 1); // 둥근 연결
         addIntegerParameter(lines, 4, 1684825454, 0);
         addBooleanParameter(lines, 5, 1684104298, 0);
         addEnumeratedParameterHex(lines, 6, 1634494318, "eab080ec9ab4eb8db0", 0);         // 가운데 정렬
-
         lines.push("    }");
-        lines.push("}");
-
-        writeActionFile(actionFile, lines);
     }
 
     function makeWhiteColor(documentRef) {
@@ -211,7 +250,7 @@
     function addUnitRealParameter(lines, index, key, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
+        lines.push("            /showInPalette -1");
         lines.push("            /type (unit real)");
         lines.push("            /value " + formatReal(value));
         lines.push("            /unit 592476268");
@@ -221,7 +260,7 @@
     function addIntegerParameter(lines, index, key, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
+        lines.push("            /showInPalette -1");
         lines.push("            /type (integer)");
         lines.push("            /value " + value);
         lines.push("        }");
@@ -230,7 +269,7 @@
     function addBooleanParameter(lines, index, key, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
+        lines.push("            /showInPalette -1");
         lines.push("            /type (boolean)");
         lines.push("            /value " + value);
         lines.push("        }");
@@ -252,7 +291,7 @@
     function addEnumeratedParameter(lines, index, key, name, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
+        lines.push("            /showInPalette -1");
         lines.push("            /type (enumerated)");
         lines.push("            /name [ " + utf8HexLength(name));
         lines.push("                " + utf8Hex(name));
