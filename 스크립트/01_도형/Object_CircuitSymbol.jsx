@@ -23,43 +23,48 @@
     }
     var line = sel[0];
 
-    // ===== 크기 설정 (pt) — 필요하면 여기 숫자만 조정 =====
+    var MM = 2.834645669;   // 1mm = 2.834645669pt
+
+    // ===== 크기 설정 — 필요하면 여기 숫자만 조정 =====
     var CFG = {
         fontName: "GSMediumB1",
         textSize: 8,
 
-        resistorHalf: 9,        // 저항 전체 폭의 절반
-        resistorAmp: 3,         // 지그재그 진폭
-        resistorStroke: 0.4,
+        resistorHalf: 2 * MM,       // 저항 전체 폭 4mm의 절반
+        resistorAmp: 0.75 * MM,     // 진폭 (전체 높이 1.5mm의 절반)
+        resistorStroke: 0.5,
 
-        batteryLongHalf: 5,     // 긴 극판 높이의 절반
-        batteryShortHalf: 2.5,  // 짧은 극판 높이의 절반
-        batterySpacing: 3.6,    // 극판 사이 간격
-        batteryLongStroke: 0.3,
-        batteryShortStroke: 0.5,
+        batteryLongHalf: 1.5 * MM,  // 긴 극판 높이 3mm의 절반
+        batteryShortHalf: 0.75 * MM,// 짧은 극판 높이 1.5mm의 절반
+        batterySpacing: 0.6 * MM,   // 두 극판 사이 간격 0.6mm
+        batteryLongStroke: 0.5,
+        batteryShortStroke: 1.0,
 
-        acRadius: 7,
+        acRadius: 2 * MM,           // 원 지름 4mm의 절반
         acCircleStroke: 0.3,
-        acWaveHalf: 4.5,        // 물결 폭의 절반
+        acWaveHalf: 1.5 * MM,       // 물결 폭의 절반
         acWaveStroke: 0.4,
 
-        switchHalf: 6,          // 접점 사이 거리의 절반
+        switchHalf: 1.75 * MM,  // 접점 사이 거리 3.5mm의 절반
         switchContactR: 1.1,
         switchContactStroke: 0.3,
         switchLeverStroke: 0.5,
         switchOpenAngle: 25,    // 열린 스위치 레버 각도(도)
 
         coilBumps: 4,           // 위쪽 반원 개수
-        coilRadius: 3,          // 코일 반지름
-        coilAdvance: 0.9,       // 감김당 전진량 계수
+        coilRadius: 1.648,      // 코일 반지름 (전체 폭 5mm에 맞춤)
+        coilAdvance: 0.494,     // 감김당 전진량 계수 (반지름과 비율 유지)
         coilStroke: 0.3,
 
-        capHalfGap: 1.6,        // 극판 사이 간격의 절반
-        capPlateHalf: 5,        // 극판 높이의 절반
+        capHalfGap: 0.35 * MM,  // 극판 사이 간격 0.7mm의 절반
+        capPlateHalf: 1.5 * MM, // 극판 높이 3mm의 절반
         capStroke: 0.5,
 
+        acWaveAmp: 0.85 * MM,   // 교류 물결 진폭
+
         meterRadius: 7,
-        meterStroke: 0.3
+        meterStroke: 0.3,
+        meterUnderlineStroke: 0.3
     };
 
     var SYMBOLS = [
@@ -126,10 +131,10 @@
     var halfGap;
     switch (chosen) {
         case "resistor":     halfGap = CFG.resistorHalf; break;
-        case "battery":      halfGap = CFG.batterySpacing * 1.5; break;
+        case "battery":      halfGap = CFG.batterySpacing / 2; break;
         case "ac":           halfGap = CFG.acRadius; break;
         case "switchOpen":
-        case "switchClosed": halfGap = CFG.switchHalf; break;
+        case "switchClosed": halfGap = CFG.switchHalf + CFG.switchContactR; break;
         case "inductor":     halfGap = coilHalfWidth(); break;
         case "capacitor":    halfGap = CFG.capHalfGap; break;
         case "ammeter":
@@ -173,44 +178,58 @@
         var w = CFG.resistorHalf;
         var a = CFG.resistorAmp;
         var seg = w * 2 / 12;
-        var pts = [pt(-w, 0)];
+        var anchors = [pt(-w, 0)];
         var sign = 1;
         for (var i = 1; i <= 11; i += 2) {
-            pts.push(pt(-w + seg * i, a * sign));
+            anchors.push(pt(-w + seg * i, a * sign));
             sign = -sign;
         }
-        pts.push(pt(w, 0));
-        addLine(pts, CFG.resistorStroke);
+        anchors.push(pt(w, 0));
+
+        // 각 봉우리를 부드러운(둥근) 곡선으로 연결
+        var path = group.pathItems.add();
+        path.setEntirePath(anchors);
+        path.closed = false;
+        var hLen = seg * 0.8;               // 봉우리에서 라인 방향으로 뻗는 핸들 길이
+        var hx = hLen * ca, hy = hLen * sa;
+        for (var j = 0; j < anchors.length; j++) {
+            var pp = path.pathPoints[j];
+            if (j === 0 || j === anchors.length - 1) {
+                pp.pointType = PointType.CORNER;
+                continue;
+            }
+            var an = anchors[j];
+            pp.leftDirection = [an[0] - hx, an[1] - hy];
+            pp.rightDirection = [an[0] + hx, an[1] + hy];
+            pp.pointType = PointType.SMOOTH;
+        }
+        styleStroke(path, CFG.resistorStroke);
     }
 
     function drawBattery() {
-        var s = CFG.batterySpacing;
-        // 긴 극판(0.3pt) - 짧은 극판(0.5pt) 교대로 2셀
-        var plates = [
-            { u: -s * 1.5, half: CFG.batteryLongHalf,  stroke: CFG.batteryLongStroke },
-            { u: -s * 0.5, half: CFG.batteryShortHalf, stroke: CFG.batteryShortStroke },
-            { u:  s * 0.5, half: CFG.batteryLongHalf,  stroke: CFG.batteryLongStroke },
-            { u:  s * 1.5, half: CFG.batteryShortHalf, stroke: CFG.batteryShortStroke }
-        ];
-        for (var i = 0; i < plates.length; i++) {
-            var p = plates[i];
-            addLine([pt(p.u, -p.half), pt(p.u, p.half)], p.stroke);
-        }
+        var half = CFG.batterySpacing / 2;
+        // 긴 극판(+극) 하나 + 짧은 극판(-극) 하나 = 전지 1개
+        addLine([pt(-half, -CFG.batteryLongHalf), pt(-half, CFG.batteryLongHalf)], CFG.batteryLongStroke);
+        addLine([pt(half, -CFG.batteryShortHalf), pt(half, CFG.batteryShortHalf)], CFG.batteryShortStroke);
     }
 
     function drawAC() {
         addCircle(cx, cy, CFG.acRadius, CFG.acCircleStroke, false);
-        // 물결: 반원 두 개를 베지어로 근사 (회전 없이 항상 수평)
+        // 물결(사인 1주기 S자): 왼쪽 위로 볼록, 오른쪽 아래로 볼록. 회전 없이 항상 수평.
         var hw = CFG.acWaveHalf;
-        var r = hw / 2;
-        var h = r * 4 / 3;
+        var amp = CFG.acWaveAmp;
+        var dx = hw * 0.55;
         var wave = group.pathItems.add();
         wave.setEntirePath([[cx - hw, cy], [cx, cy], [cx + hw, cy]]);
-        wave.pathPoints[0].rightDirection = [cx - hw, cy + h];
-        wave.pathPoints[1].leftDirection = [cx - r, cy + h];
-        wave.pathPoints[1].rightDirection = [cx + r, cy - h];
+        wave.pathPoints[0].leftDirection = [cx - hw, cy];
+        wave.pathPoints[0].rightDirection = [cx - hw + dx, cy + amp];
+        wave.pathPoints[0].pointType = PointType.SMOOTH;
+        wave.pathPoints[1].leftDirection = [cx - dx, cy + amp];
+        wave.pathPoints[1].rightDirection = [cx + dx, cy - amp];
         wave.pathPoints[1].pointType = PointType.SMOOTH;
-        wave.pathPoints[2].leftDirection = [cx + hw, cy - h];
+        wave.pathPoints[2].leftDirection = [cx + hw - dx, cy - amp];
+        wave.pathPoints[2].rightDirection = [cx + hw, cy];
+        wave.pathPoints[2].pointType = PointType.SMOOTH;
         styleStroke(wave, CFG.acWaveStroke);
     }
 
@@ -303,6 +322,14 @@
         // 글자 바운딩 박스 중심을 원 중심에 맞춤
         var b = tf.geometricBounds;
         tf.translate(cx - (b[0] + b[2]) / 2, cy - (b[1] + b[3]) / 2);
+
+        // 글자 아래 밑줄 (회전 없이 수평)
+        var nb = tf.geometricBounds;   // 이동 후 최종 위치
+        var underlineY = nb[3] - 1;    // 글자 하단에서 1pt 아래
+        var underline = group.pathItems.add();
+        underline.setEntirePath([[nb[0], underlineY], [nb[2], underlineY]]);
+        underline.closed = false;
+        styleStroke(underline, CFG.meterUnderlineStroke);
     }
 
     // ===== 공통 헬퍼 =====
