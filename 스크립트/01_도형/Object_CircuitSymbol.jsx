@@ -320,9 +320,9 @@
         ob = outline.geometricBounds;   // [left, top, right, bottom] — 폰트 여백 없는 실제 글자 경계
         outline.remove();
 
-        // 잉크 경계 중심을 원 중심에 맞춤
+        // 잉크 경계 중심을 원 중심에 맞춤 (밑줄 공간 확보를 위해 0.3mm 위로 보정)
         var dx = cx - (ob[0] + ob[2]) / 2;
-        var dy = cy - (ob[1] + ob[3]) / 2;
+        var dy = cy - (ob[1] + ob[3]) / 2 + 0.3 * MM;
         tf.translate(dx, dy);
 
         // 밑줄: 이동 후 잉크 하단에서 0.4mm 아래, 글자 폭만큼 (회전 없이 수평)
