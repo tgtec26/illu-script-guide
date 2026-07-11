@@ -29,15 +29,16 @@
         return;
     }
 
-    var range = app.selection[0];
-    var story = range.story;
-    var insertIndex = range.end;
-    var refAttrs = range.characterAttributes;
+    try {
+        var range = app.selection[0];
+        var refAttrs = range.characterAttributes;
+        var insertionPoint = range.story.insertionPoints[range.end];
 
-    story.insertionPoints[insertIndex].contents = degreeChar;
-
-    var degreeAttrs = story.characters[insertIndex].characterAttributes;
-    degreeAttrs.textFont = degreeFont;
-    degreeAttrs.size = refAttrs.size;
-    degreeAttrs.baselineShift = refAttrs.baselineShift;
+        var newChars = insertionPoint.characters.add(degreeChar);
+        newChars.characterAttributes.textFont = degreeFont;
+        newChars.characterAttributes.size = refAttrs.size;
+        newChars.characterAttributes.baselineShift = refAttrs.baselineShift;
+    } catch (e) {
+        alert("도 기호 삽입 중 오류가 발생했습니다: " + e.message);
+    }
 })();
