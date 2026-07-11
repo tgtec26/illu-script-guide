@@ -88,9 +88,12 @@
     }
 
     function applyStrokeStyleAction(doc) {
-        var actionSetName = "Codex_TextWhiteStrokeFillAppearance";
+        // 액션셋 이름을 매 실행 고유하게 만들어, 이전 실행이 남긴 동일 이름 셋과
+        // 충돌해 loadAction이 실패(→ 각진 기본값 유지)하는 것을 방지한다.
+        var stamp = (new Date()).getTime();
+        var actionSetName = "Codex_TWSFA_" + stamp;
         var actionName = "SetWhiteRoundStroke";
-        var actionFile = new File(Folder.temp + "/Codex_TextWhiteStrokeFillAppearance.aia");
+        var actionFile = new File(Folder.temp + "/Codex_TWSFA_" + stamp + ".aia");
 
         try {
             removeActionSetIfLoaded(actionSetName);
