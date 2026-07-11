@@ -37,6 +37,7 @@ const cone = "스크립트/01_도형/Object_cone.jsx";
 const sphere = "스크립트/01_도형/Object_sphere.jsx";
 const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
 const weatherFront = "스크립트/01_도형/Object_front.jsx";
+const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -923,6 +924,56 @@ for (const [file, mode] of visibleAlignFiles) {
       });
     } catch (error) {
       console.error(`${weatherFront}: executable color/subdivision regression failed: ${error.message}`);
+      failures++;
+    }
+  }
+}
+
+{
+  if (!exists(lewisDots)) {
+    console.error(`${lewisDots}: Lewis-dot script is missing`);
+    failures++;
+  } else {
+    const source = read(lewisDots);
+    const required = [
+      'new Window("dialog", "루이스 전자점식")',
+      'addDotCountControls(dlg, "12시", dotCounts, "top")',
+      'addDotCountControls(dlg, "3시", dotCounts, "right")',
+      'addDotCountControls(dlg, "6시", dotCounts, "bottom")',
+      'addDotCountControls(dlg, "9시", dotCounts, "left")',
+      'var DOT_DIAMETER_MM = 0.6',
+      'var GAP_MM = 1',
+      'tempText.createOutline()',
+      'outlined.visibleBounds',
+      'function getDotCenters(bounds, direction, count, gap, diameter)',
+      'function drawDot(group, center)',
+      'dot.fillColor = makeBlackColor()',
+      'try { finalGroup.move(source, ElementPlacement.PLACEAFTER); } catch(e) {}',
+    ];
+    for (const token of required) {
+      if (!source.includes(token)) {
+        console.error(`${lewisDots}: missing Lewis-dot token: ${token}`);
+        failures++;
+      }
+    }
+    if (!/finally\s*\{[\s\S]*outlined\.remove\(\)[\s\S]*tempText\.remove\(\)/.test(source)) {
+      console.error(`${lewisDots}: outlined temporary text must be cleaned up`);
+      failures++;
+    }
+    try {
+      const getDotCenters = new Function(`${extractFunction(source, "getDotCenters")}\nreturn getDotCenters;`)();
+      const bounds = [0, 10, 8, 0];
+      const gap = 2.83464567;
+      const diameter = 0.6 * gap;
+      const radius = diameter / 2;
+      const separation = gap + diameter;
+      assert.deepStrictEqual(getDotCenters(bounds, "top", 1, gap, diameter), [[4, 10 + gap + radius]]);
+      assert.deepStrictEqual(getDotCenters(bounds, "right", 2, gap, diameter), [
+        [8 + gap + radius, 5 + separation / 2],
+        [8 + gap + radius, 5 - separation / 2],
+      ]);
+    } catch (error) {
+      console.error(`${lewisDots}: dot-placement regression failed: ${error.message}`);
       failures++;
     }
   }
