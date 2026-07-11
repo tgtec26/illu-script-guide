@@ -13,8 +13,10 @@
         return;
     }
 
-    if (!app.selection.length || app.selection[0].typename !== "TextRange") {
-        alert("텍스트 편집 모드에서 도(°)를 붙일 숫자를 선택한 뒤 실행해주세요.");
+    // 텍스트 편집 모드에서는 app.selection이 배열이 아니라 TextRange 객체로 들어온다
+    var sel = app.selection;
+    if (!sel || sel.typename !== "TextRange") {
+        alert("텍스트 편집 모드에서 도(°)를 붙일 숫자를 선택(더블클릭)한 뒤 실행해주세요.");
         return;
     }
 
@@ -30,14 +32,23 @@
     }
 
     try {
-        var range = app.selection[0];
-        var refAttrs = range.characterAttributes;
-        var insertionPoint = range.story.insertionPoints[range.end];
+        var story = sel.story;
+        var insertIndex = sel.end;
 
-        var newChars = insertionPoint.characters.add(degreeChar);
+        // 삽입 위치 바로 앞 문자에서 크기/기준선 이동 값을 미리 읽어둔다 (커서만 놓은 경우도 지원)
+        var refSize = null, refBaseline = null;
+        if (insertIndex > 0) {
+            var refAttrs = story.characters[insertIndex - 1].characterAttributes;
+            refSize = refAttrs.size;
+            refBaseline = refAttrs.baselineShift;
+        }
+
+        var newChars = story.insertionPoints[insertIndex].characters.add(degreeChar);
         newChars.characterAttributes.textFont = degreeFont;
-        newChars.characterAttributes.size = refAttrs.size;
-        newChars.characterAttributes.baselineShift = refAttrs.baselineShift;
+        if (refSize !== null) {
+            newChars.characterAttributes.size = refSize;
+            newChars.characterAttributes.baselineShift = refBaseline;
+        }
     } catch (e) {
         alert("도 기호 삽입 중 오류가 발생했습니다: " + e.message);
     }
