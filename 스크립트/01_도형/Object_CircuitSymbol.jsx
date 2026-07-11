@@ -102,28 +102,67 @@
         b.onClick = makeAddHandler(SYMBOLS[i].key, SYMBOLS[i].label);
     }
 
-    var seqPnl = dlg.add("panel", undefined, "삽입 순서");
+    var seqPnl = dlg.add("panel", undefined, "삽입 순서 (항목 선택 후 편집)");
+    seqPnl.orientation = "row";
     seqPnl.alignChildren = "fill";
     seqPnl.margins = 12;
-    var seqText = seqPnl.add("statictext", undefined, "(기호 버튼을 클릭하세요)", { multiline: true });
-    seqText.preferredSize = [330, 40];
+
+    var seqList = seqPnl.add("listbox", undefined, [], { multiselect: false });
+    seqList.preferredSize = [250, 96];
+
+    var editCol = seqPnl.add("group");
+    editCol.orientation = "column";
+    editCol.alignChildren = "fill";
+    var btnUp = editCol.add("button", undefined, "▲ 위로");
+    var btnDown = editCol.add("button", undefined, "▼ 아래로");
+    var btnDel = editCol.add("button", undefined, "삭제");
+    var btnClear = editCol.add("button", undefined, "전체 초기화");
 
     var btns = dlg.add("group");
     btns.alignment = "right";
-    var btnClear = btns.add("button", undefined, "초기화");
-    btnClear.onClick = function () { queue = []; refreshSeq(); };
     btns.add("button", undefined, "취소", { name: "cancel" });
     btns.add("button", undefined, "실행", { name: "ok" });
 
     function makeAddHandler(key, label) {
-        return function () { queue.push({ key: key, label: label }); refreshSeq(); };
+        return function () {
+            queue.push({ key: key, label: label });
+            refreshSeq();
+            seqList.selection = queue.length - 1;
+        };
+    }
+    function selIndex() {
+        return seqList.selection ? seqList.selection.index : -1;
     }
     function refreshSeq() {
-        if (queue.length === 0) { seqText.text = "(기호 버튼을 클릭하세요)"; return; }
-        var names = [];
-        for (var k = 0; k < queue.length; k++) names.push((k + 1) + ". " + queue[k].label);
-        seqText.text = names.join("    ");
+        var s = selIndex();
+        seqList.removeAll();
+        for (var k = 0; k < queue.length; k++) {
+            seqList.add("item", (k + 1) + ". " + queue[k].label);
+        }
+        if (s >= 0 && s < queue.length) seqList.selection = s;
     }
+    btnDel.onClick = function () {
+        var s = selIndex();
+        if (s < 0) return;
+        queue.splice(s, 1);
+        refreshSeq();
+        if (queue.length) seqList.selection = Math.min(s, queue.length - 1);
+    };
+    btnUp.onClick = function () {
+        var s = selIndex();
+        if (s <= 0) return;
+        var t = queue[s - 1]; queue[s - 1] = queue[s]; queue[s] = t;
+        refreshSeq();
+        seqList.selection = s - 1;
+    };
+    btnDown.onClick = function () {
+        var s = selIndex();
+        if (s < 0 || s >= queue.length - 1) return;
+        var t = queue[s + 1]; queue[s + 1] = queue[s]; queue[s] = t;
+        refreshSeq();
+        seqList.selection = s + 1;
+    };
+    btnClear.onClick = function () { queue = []; refreshSeq(); };
 
     if (dlg.show() !== 1) return;
     if (queue.length === 0) { alert("기호를 하나 이상 선택해주세요."); return; }
