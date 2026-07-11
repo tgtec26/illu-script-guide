@@ -33,7 +33,7 @@
 
     doc.selection = null;
     for (var t = 0; t < textFrames.length; t++) {
-        prepareTextStroke(textFrames[t], whiteColor);
+        // 문자 자체에는 획을 추가하지 않는다(모양 패널의 새 획/새 면만 사용).
         textFrames[t].selected = true;
     }
 
@@ -50,24 +50,6 @@
                 collectTextFrames(item.pageItems[i], result);
             }
         }
-    }
-
-    function prepareTextStroke(textFrame, whiteColor) {
-        try {
-            textFrame.textRange.stroked = true;
-            textFrame.textRange.strokeWidth = STROKE_WIDTH;
-            textFrame.textRange.strokeColor = whiteColor;
-        } catch (e) {}
-
-        try {
-            textFrame.strokeJoin = StrokeJoin.ROUNDENDJOIN;
-        } catch (joinError) {}
-
-        try {
-            textFrame.textRange.characterAttributes.strokeWeight = STROKE_WIDTH;
-            textFrame.textRange.characterAttributes.strokeColor = whiteColor;
-            textFrame.textRange.characterAttributes.strokeJoin = StrokeJoin.ROUNDENDJOIN;
-        } catch (e2) {}
     }
 
     function addAppearanceStrokeThenFill(doc, whiteColor) {
