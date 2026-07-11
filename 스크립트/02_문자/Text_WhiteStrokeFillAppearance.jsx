@@ -138,12 +138,14 @@
         lines.push("        /hasDialog 0");
         lines.push("        /parameterCount 6");
 
-        addUnitRealParameter(lines, 1, 2003072104, STROKE_WIDTH);
-        addEnumeratedParameter(lines, 2, 1667330094, "Butt Cap", 0);
-        addRealParameter(lines, 3, 1836344690, 10);
-        addEnumeratedParameter(lines, 4, 1785686382, "Round Join", 1);
-        addIntegerParameter(lines, 5, 1684825454, 0);
-        addBooleanParameter(lines, 6, 1684104298, 0);
+        // 녹화된 "둥근 연결" 액션과 바이트 단위로 동일하게 구성.
+        // (miter-limit 파라미터를 넣으면 각진 연결로 처리되므로 제외한다.)
+        addUnitRealParameter(lines, 1, 2003072104, STROKE_WIDTH);            // 선 두께
+        addEnumeratedParameterHex(lines, 2, 1667330094, "eca091ed959c20eb8ba8eba9b4", 0); // 단면
+        addEnumeratedParameterHex(lines, 3, 1785686382, "eb91a5eab7bc20ec97b0eab2b0", 1); // 둥근 연결
+        addIntegerParameter(lines, 4, 1684825454, 0);
+        addBooleanParameter(lines, 5, 1684104298, 0);
+        addEnumeratedParameterHex(lines, 6, 1634494318, "eab080ec9ab4eb8db0", 0);         // 가운데 정렬
 
         lines.push("    }");
         lines.push("}");
@@ -215,15 +217,6 @@
         lines.push("        }");
     }
 
-    function addRealParameter(lines, index, key, value) {
-        lines.push("        /parameter-" + index + " {");
-        lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
-        lines.push("            /type (real)");
-        lines.push("            /value " + formatReal(value));
-        lines.push("        }");
-    }
-
     function addIntegerParameter(lines, index, key, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
@@ -238,6 +231,19 @@
         lines.push("            /key " + key);
         lines.push("            /showInPalette 4294967295");
         lines.push("            /type (boolean)");
+        lines.push("            /value " + value);
+        lines.push("        }");
+    }
+
+    // 이름을 원본 액션의 UTF-8 hex 그대로 기록(로케일/인코딩 차이로 인한 불일치 방지)
+    function addEnumeratedParameterHex(lines, index, key, hexName, value) {
+        lines.push("        /parameter-" + index + " {");
+        lines.push("            /key " + key);
+        lines.push("            /showInPalette -1");
+        lines.push("            /type (enumerated)");
+        lines.push("            /name [ " + (hexName.length / 2));
+        lines.push("                " + hexName);
+        lines.push("            ]");
         lines.push("            /value " + value);
         lines.push("        }");
     }
