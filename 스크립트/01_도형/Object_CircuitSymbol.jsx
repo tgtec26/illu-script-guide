@@ -42,8 +42,8 @@
 
         acRadius: 2 * MM,           // 원 지름 4mm의 절반
         acCircleStroke: 0.3,
-        acWaveHalf: 1.5 * MM,       // 물결 폭의 절반
-        acWaveStroke: 0.4,
+        acWaveHalf: 1.7 * MM,       // 물결 폭의 절반
+        acWaveStroke: 0.5,
 
         switchHalf: 1.75 * MM,  // 접점 사이 거리 3.5mm의 절반
         switchContactR: 1.1,
@@ -60,7 +60,7 @@
         capPlateHalf: 1.5 * MM, // 극판 높이 3mm의 절반
         capStroke: 0.5,
 
-        acWaveAmp: 0.85 * MM,   // 교류 물결 진폭
+        acWaveAmp: 1.1 * MM,    // 교류 물결 진폭
 
         meterRadius: 7,
         meterStroke: 0.3,
