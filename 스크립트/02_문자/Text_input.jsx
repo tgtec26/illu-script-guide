@@ -38,7 +38,16 @@
         {contents: ["1", "2", "3", "4", "5", "6"], fontSize: 8, fontNames: ["GSMediumB1"]},
         {contents: ["①", "②", "③", "④", "⑤", "⑥"], fontSize: 8, fontNames: ["GSMediumB1"]},
         {contents: ["t0", "t1", "t2", "t3", "t4", "t5"], fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
-        {contents: ["d1", "d2", "d3", "d4", "d5", "d6"], fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true}
+        {contents: ["d1", "d2", "d3", "d4", "d5", "d6"], fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
+        {contents: [
+            String.fromCharCode(0xE0A4), String.fromCharCode(0xE0FC), String.fromCharCode(0xE0FD),
+            String.fromCharCode(0xE0FE), String.fromCharCode(0xE0AD)
+        ], fontSize: 8, fontNames: ["HyhwpEQ", "HyhwpEQ-Regular", "HyhwpEQRegular", "HyhwpEQ Regular"]},
+        {contents: [
+            String.fromCharCode(0x228E), String.fromCharCode(0xE09D), String.fromCharCode(0xE09E),
+            String.fromCharCode(0xE09F), String.fromCharCode(0xE0E5), String.fromCharCode(0xE0E6),
+            String.fromCharCode(0xE0E7)
+        ], fontSize: 8, fontNames: ["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular"]}
     ];
     var selectedOption = null;
     var selectedCount = 0;
