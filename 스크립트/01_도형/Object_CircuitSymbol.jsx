@@ -60,9 +60,10 @@
         capPlateHalf: 1.5 * MM, // 극판 높이 3mm의 절반
         capStroke: 0.5,
 
-        meterRadius: 7,
+        meterRadius: 2 * MM,    // 원 지름 4mm의 절반
         meterStroke: 0.3,
-        meterUnderlineStroke: 0.3
+        meterUnderlineStroke: 0.3,
+        meterUnderlineGap: 0.4 * MM  // 글자 하단과 밑줄 사이 간격
     };
 
     var SYMBOLS = [
@@ -317,7 +318,7 @@
 
         // 글자 아래 밑줄 (회전 없이 수평)
         var nb = tf.geometricBounds;   // 이동 후 최종 위치
-        var underlineY = nb[3] - 1;    // 글자 하단에서 1pt 아래
+        var underlineY = nb[3] - CFG.meterUnderlineGap;    // 글자 하단에서 0.4mm 아래
         var underline = group.pathItems.add();
         underline.setEntirePath([[nb[0], underlineY], [nb[2], underlineY]]);
         underline.closed = false;
