@@ -312,15 +312,25 @@
         try {
             if (line.stroked) tf.textRange.characterAttributes.fillColor = line.strokeColor;
         } catch (e2) {}
-        // 글자 바운딩 박스 중심을 원 중심에 맞춤
-        var b = tf.geometricBounds;
-        tf.translate(cx - (b[0] + b[2]) / 2, cy - (b[1] + b[3]) / 2);
 
-        // 글자 아래 밑줄 (회전 없이 수평)
-        var nb = tf.geometricBounds;   // 이동 후 최종 위치
-        var underlineY = nb[3] - CFG.meterUnderlineGap;    // 글자 하단에서 0.4mm 아래
+        // 실제 보이는 글자(잉크) 경계를 아웃라인 복제본으로 측정
+        var ob;
+        var dup = tf.duplicate();
+        var outline = dup.createOutline();
+        ob = outline.geometricBounds;   // [left, top, right, bottom] — 폰트 여백 없는 실제 글자 경계
+        outline.remove();
+
+        // 잉크 경계 중심을 원 중심에 맞춤
+        var dx = cx - (ob[0] + ob[2]) / 2;
+        var dy = cy - (ob[1] + ob[3]) / 2;
+        tf.translate(dx, dy);
+
+        // 밑줄: 이동 후 잉크 하단에서 0.4mm 아래, 글자 폭만큼 (회전 없이 수평)
+        var left = ob[0] + dx;
+        var right = ob[2] + dx;
+        var underlineY = (ob[3] + dy) - CFG.meterUnderlineGap;
         var underline = group.pathItems.add();
-        underline.setEntirePath([[nb[0], underlineY], [nb[2], underlineY]]);
+        underline.setEntirePath([[left, underlineY], [right, underlineY]]);
         underline.closed = false;
         styleStroke(underline, CFG.meterUnderlineStroke);
     }
