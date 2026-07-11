@@ -139,9 +139,9 @@
         lines.push("        /parameterCount 6");
 
         addUnitRealParameter(lines, 1, 2003072104, STROKE_WIDTH);
-        addEnumeratedParameter(lines, 2, 1667330094, "중단 단면", 0);
+        addEnumeratedParameter(lines, 2, 1667330094, "Butt Cap", 0);
         addRealParameter(lines, 3, 1836344690, 10);
-        addEnumeratedParameter(lines, 4, 1785686382, "둥근 연결", 1);
+        addEnumeratedParameter(lines, 4, 1785686382, "Round Join", 1);
         addIntegerParameter(lines, 5, 1684825454, 0);
         addBooleanParameter(lines, 6, 1684104298, 0);
 
