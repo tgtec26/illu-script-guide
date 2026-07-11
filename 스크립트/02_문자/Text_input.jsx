@@ -318,7 +318,13 @@
             var g = this.graphics;
             var w = this.size[0], h = this.size[1];
 
-            var border = g.newPen(g.PenType.SOLID_COLOR, [0.7, 0.7, 0.7, 1], 1);
+            // 흰 배경(어두운 UI 테마에서도 검정 글리프가 보이도록)
+            var bgBrush = g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 1]);
+            g.newPath();
+            g.rectPath(0, 0, w, h);
+            g.fillPath(bgBrush);
+
+            var border = g.newPen(g.PenType.SOLID_COLOR, [0.5, 0.5, 0.5, 1], 1);
             g.newPath();
             g.rectPath(0, 0, w, h);
             g.strokePath(border);
