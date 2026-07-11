@@ -59,11 +59,29 @@ try {
             }
             if (!bounds) bounds = obj.visibleBounds;
         }
-        // 3. 일반 개체
+        // 3. 일반 그룹: 보이는 자식들의 실제 경계 합집합 (바운딩 박스 대신)
+        else if (obj.typename === "GroupItem") {
+            bounds = getGroupVisibleBounds(obj);
+            if (!bounds) bounds = obj.visibleBounds;
+        }
+        // 4. 일반 개체
         else {
             bounds = obj.geometricBounds;
         }
         return bounds;
+    }
+
+    // 그룹 내부의 보이는 자식들을 재귀적으로 훑어 실제 경계를 합집합
+    function getGroupVisibleBounds(groupItem) {
+        var gb = null;
+        for (var i = 0; i < groupItem.pageItems.length; i++) {
+            var child = groupItem.pageItems[i];
+            if (!child || child.hidden || child.clipping) continue;
+            var cb = getRealBounds(child);
+            if (!cb) continue;
+            gb = gb ? [Math.min(gb[0], cb[0]), Math.max(gb[1], cb[1]), Math.max(gb[2], cb[2]), Math.min(gb[3], cb[3])] : cb;
+        }
+        return gb;
     }
 
     // --- 헬퍼 함수들 ---

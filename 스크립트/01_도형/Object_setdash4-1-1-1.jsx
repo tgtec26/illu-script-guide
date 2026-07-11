@@ -21,9 +21,7 @@
     // 3. 패턴 정의: [긴 선, 간격, 짧은 선, 간격]
     var dashPattern = [4, 1, 1, 1]; 
 
-    // 6. 실행 루프
-    for (var k = 0; k < sel.length; k++) {
-        applyDashPatternWithCornerAlignment(sel[k], dashPattern, true);
-    }
+    // 6. 실행 (전체 한 번에 처리)
+    applyDashPatternToItems(sel, dashPattern, true);
 
 })(); // <-- 이 마지막 괄호들이 꼭 포함되어야 합니다.

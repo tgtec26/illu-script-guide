@@ -29,6 +29,16 @@
         "KoPubWorldBatangPro-Medium",
         "KoPubWorldBatangMedium"
     ];
+
+    // 특수문자 버튼에 표시할 대응 표준문자(모양이 같은 글자). 삽입되는 실제 문자는 contents.
+    var HYHWP_LABELS = [
+        String.fromCharCode(0x03B8), "x", "y", "z", String.fromCharCode(0x03C1)
+    ];
+    var HANCOM_LABELS = [
+        String.fromCharCode(0x2103), String.fromCharCode(0x03B1), String.fromCharCode(0x03B3),
+        String.fromCharCode(0x03B2), "a", "b", "c"
+    ];
+
     var textOptions = [
         {contents: ["(가)", "(나)", "(다)", "(라)", "(마)", "(바)"], fontSize: 10, fontNames: ["Batang"]},
         {contents: ["A", "B", "C", "D", "E", "F"], fontSize: 8, fontNames: ["GSMediumB1"]},
@@ -38,7 +48,18 @@
         {contents: ["1", "2", "3", "4", "5", "6"], fontSize: 8, fontNames: ["GSMediumB1"]},
         {contents: ["①", "②", "③", "④", "⑤", "⑥"], fontSize: 8, fontNames: ["GSMediumB1"]},
         {contents: ["t0", "t1", "t2", "t3", "t4", "t5"], fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
-        {contents: ["d1", "d2", "d3", "d4", "d5", "d6"], fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true}
+        {contents: ["d1", "d2", "d3", "d4", "d5", "d6"], fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
+        {contents: [
+            String.fromCharCode(0xE0A4), String.fromCharCode(0xE0FC), String.fromCharCode(0xE0FD),
+            String.fromCharCode(0xE0FE), String.fromCharCode(0xE0AD)
+        ], fontSize: 8, fontNames: ["HyhwpEQ", "HyhwpEQ-Regular", "HyhwpEQRegular", "HyhwpEQ Regular"],
+            independent: true, labels: HYHWP_LABELS},
+        {contents: [
+            String.fromCharCode(0x2103), String.fromCharCode(0xE09D), String.fromCharCode(0xE09E),
+            String.fromCharCode(0xE09F), String.fromCharCode(0xE0E5), String.fromCharCode(0xE0E6),
+            String.fromCharCode(0xE0E7)
+        ], fontSize: 8, fontNames: ["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular"],
+            independent: true, labels: HANCOM_LABELS}
     ];
     var selectedOption = null;
     var selectedCount = 0;
@@ -54,8 +75,11 @@
         row.orientation = "row";
         row.alignChildren = "center";
 
-        for (var charIndex = 0; charIndex < textOptions[optionIndex].contents.length; charIndex++) {
-            var btn = row.add("button", undefined, textOptions[optionIndex].contents[charIndex]);
+        var opt = textOptions[optionIndex];
+        for (var charIndex = 0; charIndex < opt.contents.length; charIndex++) {
+            // 특수문자 행은 대응 표준문자(labels)를 버튼에 표시, 클릭 시 실제 문자 삽입
+            var label = opt.labels ? opt.labels[charIndex] : opt.contents[charIndex];
+            var btn = row.add("button", undefined, label);
             btn.preferredSize = buttonSize;
             btn.onClick = makeSelectHandler(optionIndex, charIndex + 1);
         }
@@ -70,7 +94,12 @@
 
     var contentsArray, fontSize, fontNames;
     var option = textOptions[selectedOption];
-    contentsArray = option.contents.slice(0, selectedCount);
+    if (option.independent) {
+        // 특수문자 행: 클릭한 한 글자만 삽입 (연속 아님)
+        contentsArray = [option.contents[selectedCount - 1]];
+    } else {
+        contentsArray = option.contents.slice(0, selectedCount);
+    }
     fontSize = option.fontSize;
     fontNames = option.fontNames;
 
@@ -185,3 +214,4 @@
         };
     }
 })();
+
