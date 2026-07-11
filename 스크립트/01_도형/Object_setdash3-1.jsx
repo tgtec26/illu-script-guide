@@ -21,9 +21,7 @@
     // 3. 점선 패턴 정의 [점선길이, 간격]
     var dashPattern = [3, 1]; 
 
-    // 6. 실행
-    for (var k = 0; k < sel.length; k++) {
-        applyDashPatternWithCornerAlignment(sel[k], dashPattern, false);
-    }
+    // 6. 실행 (전체 한 번에 처리)
+    applyDashPatternToItems(sel, dashPattern, false);
 
 })();

@@ -7,6 +7,65 @@ function applyDashPatternWithCornerAlignment(item, dashPattern, forceButtCap) {
     }
 }
 
+// 여러 개체를 한 번에 처리: 점선/캡은 API로 개별 설정하고,
+// 느린 액션(모서리 정렬)은 전체 선택에 대해 딱 1회만 실행한다.
+function applyDashPatternToItems(items, dashPattern, forceButtCap) {
+    var paths = [];
+    for (var i = 0; i < items.length; i++) {
+        collectDashTargetPaths(items[i], paths);
+    }
+    if (paths.length === 0) return;
+
+    for (var i = 0; i < paths.length; i++) {
+        try {
+            paths[i].stroked = true;
+            paths[i].strokeDashes = dashPattern;
+            restoreDefaultStrokeEnds(paths[i]);
+        } catch (e) {}
+    }
+
+    alignDashToCornersBatch(paths, dashPattern);
+}
+
+function alignDashToCornersBatch(paths, dashPattern) {
+    var doc = app.activeDocument;
+    var originalSelection = getSelectionArray(doc);
+    var actionSetName = "Codex_DashTools";
+    var actionName = "AlignDashToCorners";
+    var actionFile = new File(Folder.temp + "/Codex_DashAlignToCorners.aia");
+
+    try {
+        doc.selection = null;
+        for (var i = 0; i < paths.length; i++) {
+            try { paths[i].selected = true; } catch (e) {}
+        }
+
+        removeActionSetIfLoaded(actionSetName);
+        writeDashCornerAction(actionFile, actionSetName, actionName, paths[0], dashPattern);
+
+        app.loadAction(actionFile);
+        app.doScript(actionName, actionSetName);
+
+        // 액션이 점선 설정을 초기화할 수 있으므로 다시 적용
+        for (var i = 0; i < paths.length; i++) {
+            try {
+                paths[i].stroked = true;
+                paths[i].strokeDashes = dashPattern;
+                restoreDefaultStrokeEnds(paths[i]);
+            } catch (e) {}
+        }
+    } catch (actionError) {
+        // 일부 버전에서 액션 기반 스트로크 파라미터를 거부할 수 있음. 점선 자체는 이미 적용됨.
+    } finally {
+        for (var i = 0; i < paths.length; i++) {
+            try { restoreDefaultStrokeEnds(paths[i]); } catch (e) {}
+        }
+        removeActionSetIfLoaded(actionSetName);
+        try { actionFile.remove(); } catch (removeError) {}
+        restoreSelection(doc, originalSelection);
+    }
+}
+
 function collectDashTargetPaths(item, paths) {
     if (!item) return;
 
