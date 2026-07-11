@@ -27,7 +27,6 @@ const scripts = [
   { id: "nuclide", category: "문자", name: "핵종 표기", file: "02_문자/Text_NuclideNotation.jsx", summary: "예: 23H 입력을 왼쪽 위 2, 왼쪽 아래 3, 오른쪽 H 구조로 만듭니다.", tags: ["핵종", "첨자"] },
   { id: "number-seq", category: "문자", name: "번호 넣기", file: "02_문자/Text_NumberSequence.jsx", summary: "현재 화면 기준으로 번호 텍스트를 배치할 때 사용합니다.", tags: ["번호", "텍스트"] },
   { id: "subscript-variable", category: "문자", name: "첨자 변수", file: "02_문자/Text_SubscriptedVariable.jsx", summary: "변수 문자와 아래첨자, 이온 위첨자를 조합해 과학 표기용 텍스트를 만듭니다.", tags: ["변수", "첨자"] },
-  { id: "white-stroke-text", category: "문자", name: "문자 흰색 외곽선", file: "02_문자/Text_WhiteStrokeFillAppearance.jsx", summary: "문자 모양 패널에 새 선과 새 면을 추가하고 흰색 1pt 외곽선을 적용합니다.", tags: ["외곽선", "문자"] },
   { id: "text-check", category: "문자", name: "폰트 이름 확인", file: "02_문자/Text_check.jsx", summary: "스크립트에서 사용할 수 있는 폰트 이름을 확인할 때 씁니다.", tags: ["폰트", "확인"] },
   { id: "text-input", category: "문자", name: "문자 입력 패널", file: "02_문자/Text_input.jsx", summary: "자주 쓰는 특수문자와 기호를 현재 화면 하단 중앙에 넣습니다.", tags: ["기호", "입력"] },
   { id: "ko-en", category: "문자", name: "한영 텍스트", file: "02_문자/Text_koen.jsx", summary: "한글과 영문 텍스트 크기나 스타일을 빠르게 맞출 때 쓰는 보조 스크립트입니다.", tags: ["한글", "영문"] },
