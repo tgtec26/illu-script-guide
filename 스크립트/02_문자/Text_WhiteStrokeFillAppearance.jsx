@@ -68,15 +68,16 @@
             return;
         }
 
-        applyStrokeStyleAction(doc);
-
         try {
             app.executeMenuCommand("Adobe New Fill Shortcut");
         } catch (e2) {
             alert("모양 패널의 새 면을 추가할 수 없습니다.");
-        } finally {
-            restoreDefaultStroke(doc, previousDefaultStrokeColor, previousDefaultStrokeWidth);
         }
+
+        // 둥근 연결은 새 면 추가 이후(맨 마지막)에 적용해야 되돌려지지 않는다.
+        applyStrokeStyleAction(doc);
+
+        restoreDefaultStroke(doc, previousDefaultStrokeColor, previousDefaultStrokeWidth);
     }
 
     function addNewStrokeEvent(lines, eventIndex) {
