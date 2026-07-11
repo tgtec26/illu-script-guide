@@ -150,15 +150,25 @@
         return [mx + u * ca - v * sa, my + u * sa + v * ca];
     }
 
-    // ===== 각 기호를 선 방향 따라 균등 분배 =====
+    // ===== 각 기호를 선 방향 따라 균등 분배 (N개 → 1/(N+1), 2/(N+1) ... 지점) =====
     var N = queue.length;
-    var slot = lineLen / N;                 // 기호 하나가 차지하는 구간 길이
+    var spacing = lineLen / (N + 1);        // 분배 지점 간격
     var centers = [];                       // 각 기호 중심의 u좌표(라인 중심 기준)
     for (var i = 0; i < N; i++) {
-        centers[i] = -lineLen / 2 + slot * (i + 0.5);
+        centers[i] = -lineLen / 2 + spacing * (i + 1);
         queue[i].hg = halfGapFor(queue[i].key);
-        if (slot <= queue[i].hg * 2 + 2) {
-            alert("라인이 너무 짧습니다.\n'" + queue[i].label + "' 기호를 넣을 공간이 부족합니다.\n더 긴 라인을 선택하거나 기호 수를 줄여주세요.");
+    }
+
+    // 공간 검증: 도선 경계가 순증가해야 함(겹치면 공간 부족)
+    var bounds = [-lineLen / 2];
+    for (var i = 0; i < N; i++) {
+        bounds.push(centers[i] - queue[i].hg);
+        bounds.push(centers[i] + queue[i].hg);
+    }
+    bounds.push(lineLen / 2);
+    for (var i = 1; i < bounds.length; i++) {
+        if (bounds[i] < bounds[i - 1] - 0.01) {
+            alert("라인이 너무 짧아 기호들이 겹칩니다.\n더 긴 라인을 선택하거나 기호 수를 줄여주세요.");
             return;
         }
     }
