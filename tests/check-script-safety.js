@@ -740,6 +740,10 @@ for (const [file, mode] of visibleAlignFiles) {
       'stepK(10)',
       '"0K"',
       '"100K"',
+      'var previousCoordinateSystem = app.coordinateSystem',
+      'app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM',
+      'app.coordinateSystem = previousCoordinateSystem',
+      'function restoreSourceAfterPreviewFailure()',
     ];
 
     for (const token of required) {
@@ -763,8 +767,22 @@ for (const [file, mode] of visibleAlignFiles) {
       failures++;
     }
 
-    if (!/source\.hidden\s*=\s*true;\s*source\.selected\s*=\s*false;\s*try\s*\{\s*updatePreview\(\);\s*\}\s*catch\s*\([^)]*\)\s*\{[\s\S]*?clearPreview\(\);[\s\S]*?source\.hidden\s*=\s*sourceWasHidden;[\s\S]*?source\.selected\s*=\s*true;[\s\S]*?alert\(\s*"미리보기를 만드는 중 오류가 발생했습니다\."\s*\);[\s\S]*?return;\s*\}\s*var\s+result\s*=\s*dlg\.show\(\)/.test(source)) {
-      console.error(`${weatherFront}: initial preview failure must restore source state before showing the dialog`);
+    const coordinateCaptureLine = lineOf(source, /var\s+previousCoordinateSystem\s*=\s*app\.coordinateSystem/);
+    const coordinateNormalizeLine = lineOf(source, /app\.coordinateSystem\s*=\s*CoordinateSystem\.DOCUMENTCOORDINATESYSTEM/);
+    const metricsLine = lineOf(source, /var\s+pathMetrics\s*=\s*buildPathMetrics\(source,\s*80\)/);
+    if (coordinateCaptureLine < 1 || coordinateNormalizeLine < coordinateCaptureLine || metricsLine < coordinateNormalizeLine) {
+      console.error(`${weatherFront}: source geometry must be read after document-coordinate normalization`);
+      failures++;
+    }
+
+    if (!/try\s*\{[\s\S]*?app\.coordinateSystem\s*=\s*CoordinateSystem\.DOCUMENTCOORDINATESYSTEM;[\s\S]*?var\s+result\s*=\s*dlg\.show\(\);[\s\S]*?\}\s*finally\s*\{\s*app\.coordinateSystem\s*=\s*previousCoordinateSystem;\s*\}/.test(source)) {
+      console.error(`${weatherFront}: document coordinate system must be restored after preview, cancel, and final creation paths`);
+      failures++;
+    }
+
+    const updatePreviewBody = extractFunction(source, "updatePreview");
+    if (!/try\s*\{[\s\S]*?source\.hidden\s*=\s*true;\s*source\.selected\s*=\s*false;[\s\S]*?previewGroup\s*=\s*createWeatherFront\(true\);[\s\S]*?\}\s*catch\s*\([^)]*\)\s*\{[\s\S]*?clearPreview\(\);[\s\S]*?restoreSourceAfterPreviewFailure\(\);[\s\S]*?alert\(\s*"미리보기를 만드는 중 오류가 발생했습니다\."\s*\);[\s\S]*?app\.redraw\(\);[\s\S]*?\}/.test(updatePreviewBody)) {
+      console.error(`${weatherFront}: preview callbacks must recover DOM failures and re-hide the source before successful rebuilds`);
       failures++;
     }
 

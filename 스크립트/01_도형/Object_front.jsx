@@ -3,6 +3,9 @@
     var doc = app.activeDocument;
     var source = getSelectedOpenPath(doc.selection);
     if (source === null) { alert("잠기지 않은 열린 패스 하나만 선택해주세요."); return; }
+    var previousCoordinateSystem = app.coordinateSystem;
+    try {
+    app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM;
     var MM_TO_PT = 2.83464567;
     var shapeSizeMm = 2;
     var gapMm = 2;
@@ -126,18 +129,7 @@
         updatePreview();
     }
 
-    source.hidden = true;
-    source.selected = false;
-    try {
-        updatePreview();
-    } catch(e) {
-        clearPreview();
-        source.hidden = sourceWasHidden;
-        source.selected = true;
-        alert("미리보기를 만드는 중 오류가 발생했습니다.");
-        app.redraw();
-        return;
-    }
+    updatePreview();
     var result = dlg.show();
     clearPreview();
 
@@ -162,27 +154,45 @@
         source.selected = true;
     }
     app.redraw();
+    } finally {
+        app.coordinateSystem = previousCoordinateSystem;
+    }
 
     function updatePreview() {
-        clearPreview();
-        if (!previewEnabled) {
+        try {
+            clearPreview();
+            if (!previewEnabled) {
+                restoreSourceAfterPreviewFailure();
+                app.redraw();
+                return;
+            }
+            source.hidden = true;
+            source.selected = false;
+            previewGroup = createWeatherFront(true);
+            if (previewGroup === null) {
+                app.redraw();
+                return;
+            }
+            previewGroup.name = "Weather Front Preview";
+            try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
             app.redraw();
-            return;
-        }
-        previewGroup = createWeatherFront(true);
-        if (previewGroup === null) {
+        } catch(e2) {
+            clearPreview();
+            restoreSourceAfterPreviewFailure();
+            alert("미리보기를 만드는 중 오류가 발생했습니다.");
             app.redraw();
-            return;
         }
-        previewGroup.name = "Weather Front Preview";
-        try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
-        app.redraw();
     }
 
     function clearPreview() {
         if (previewGroup === null) return;
         try { previewGroup.remove(); } catch(e) {}
         previewGroup = null;
+    }
+
+    function restoreSourceAfterPreviewFailure() {
+        source.hidden = sourceWasHidden;
+        source.selected = true;
     }
 
     function createWeatherFront(isPreview) {
