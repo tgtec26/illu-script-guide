@@ -52,8 +52,8 @@
         switchOpenAngle: 25,    // 열린 스위치 레버 각도(도)
 
         coilBumps: 4,           // 위쪽 반원 개수
-        coilRadius: 1.648,      // 코일 반지름 (전체 폭 5mm에 맞춤)
-        coilAdvance: 0.494,     // 감김당 전진량 계수 (반지름과 비율 유지)
+        coilRadius: 0.75 * MM,  // 코일 반지름 (전체 높이 1.5mm = 2r)
+        coilAdvance: 2.5 * MM / (7 * Math.PI), // 전진량 (전체 폭 4mm = 7aπ + 2r*2)
         coilStroke: 0.3,
 
         capHalfGap: 0.35 * MM,  // 극판 사이 간격 0.7mm의 절반
