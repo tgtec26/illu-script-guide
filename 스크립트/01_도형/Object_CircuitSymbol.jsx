@@ -81,33 +81,52 @@
     ];
 
     // ===== 다이얼로그 =====
+    var queue = [];   // 클릭한 기호들 {key, label}
     var dlg = new Window("dialog", "회로 기호 삽입");
     dlg.orientation = "column";
     dlg.alignChildren = "fill";
 
-    var pnl = dlg.add("panel", undefined, "기호 선택");
-    pnl.orientation = "column";
-    pnl.alignChildren = "left";
+    var pnl = dlg.add("panel", undefined, "기호 (클릭한 순서대로 선 방향에 배치)");
+    pnl.orientation = "row";
+    pnl.alignChildren = "top";
     pnl.margins = 15;
+    pnl.spacing = 8;
 
-    var radios = [];
+    // 버튼 2열 배치
+    var col1 = pnl.add("group"); col1.orientation = "column"; col1.alignChildren = "fill";
+    var col2 = pnl.add("group"); col2.orientation = "column"; col2.alignChildren = "fill";
     for (var i = 0; i < SYMBOLS.length; i++) {
-        radios[i] = pnl.add("radiobutton", undefined, SYMBOLS[i].label);
+        var col = (i % 2 === 0) ? col1 : col2;
+        var b = col.add("button", undefined, SYMBOLS[i].label);
+        b.preferredSize.width = 150;
+        b.onClick = makeAddHandler(SYMBOLS[i].key, SYMBOLS[i].label);
     }
-    radios[0].value = true;
+
+    var seqPnl = dlg.add("panel", undefined, "삽입 순서");
+    seqPnl.alignChildren = "fill";
+    seqPnl.margins = 12;
+    var seqText = seqPnl.add("statictext", undefined, "(기호 버튼을 클릭하세요)", { multiline: true });
+    seqText.preferredSize = [330, 40];
 
     var btns = dlg.add("group");
     btns.alignment = "right";
+    var btnClear = btns.add("button", undefined, "초기화");
+    btnClear.onClick = function () { queue = []; refreshSeq(); };
     btns.add("button", undefined, "취소", { name: "cancel" });
     btns.add("button", undefined, "실행", { name: "ok" });
 
-    if (dlg.show() !== 1) return;
-
-    var chosen = null;
-    for (var r = 0; r < radios.length; r++) {
-        if (radios[r].value) { chosen = SYMBOLS[r].key; break; }
+    function makeAddHandler(key, label) {
+        return function () { queue.push({ key: key, label: label }); refreshSeq(); };
     }
-    if (!chosen) return;
+    function refreshSeq() {
+        if (queue.length === 0) { seqText.text = "(기호 버튼을 클릭하세요)"; return; }
+        var names = [];
+        for (var k = 0; k < queue.length; k++) names.push((k + 1) + ". " + queue[k].label);
+        seqText.text = names.join("    ");
+    }
+
+    if (dlg.show() !== 1) return;
+    if (queue.length === 0) { alert("기호를 하나 이상 선택해주세요."); return; }
 
     // ===== 좌표계: 라인 중심 기준 (u=라인 방향, v=수직 방향) =====
     var p1 = [line.pathPoints[0].anchor[0], line.pathPoints[0].anchor[1]];
@@ -124,58 +143,100 @@
     var ca = dx / lineLen;
     var sa = dy / lineLen;
 
+    // 현재 그리는 기호의 중심(절대 좌표). 기호마다 갱신됨. pt()는 이 중심 기준.
+    var mx = cx, my = cy;
+
     function pt(u, v) {
-        return [cx + u * ca - v * sa, cy + u * sa + v * ca];
+        return [mx + u * ca - v * sa, my + u * sa + v * ca];
     }
 
-    // 기호별 라인 절단 폭(중심에서 절반)
-    var halfGap;
-    switch (chosen) {
-        case "resistor":     halfGap = CFG.resistorHalf; break;
-        case "battery":      halfGap = CFG.batterySpacing / 2; break;
-        case "ac":           halfGap = CFG.acRadius; break;
-        case "switchOpen":
-        case "switchClosed": halfGap = CFG.switchHalf + CFG.switchContactR; break;
-        case "inductor":     halfGap = coilHalfWidth(); break;
-        case "capacitor":    halfGap = CFG.capHalfGap; break;
-        case "ammeterDC":
-        case "voltmeterDC":
-        case "ammeterAC":
-        case "voltmeterAC":  halfGap = CFG.meterRadius; break;
+    // ===== 각 기호를 선 방향 따라 균등 분배 =====
+    var N = queue.length;
+    var slot = lineLen / N;                 // 기호 하나가 차지하는 구간 길이
+    var centers = [];                       // 각 기호 중심의 u좌표(라인 중심 기준)
+    for (var i = 0; i < N; i++) {
+        centers[i] = -lineLen / 2 + slot * (i + 0.5);
+        queue[i].hg = halfGapFor(queue[i].key);
+        if (slot <= queue[i].hg * 2 + 2) {
+            alert("라인이 너무 짧습니다.\n'" + queue[i].label + "' 기호를 넣을 공간이 부족합니다.\n더 긴 라인을 선택하거나 기호 수를 줄여주세요.");
+            return;
+        }
     }
 
-    if (lineLen <= halfGap * 2 + 2) {
-        alert("라인이 기호보다 짧습니다. 더 긴 라인을 선택해주세요.");
-        return;
-    }
+    // ===== 도선 스타일 저장 후, 기호 사이를 세그먼트로 재구성 =====
+    var wLayer = line.layer;
+    var wStroked = line.stroked;
+    var wColor = wStroked ? line.strokeColor : null;
+    var wWidth = wStroked ? line.strokeWidth : 0;
 
-    // ===== 라인 절단: 원본을 왼쪽 절반으로, 복제본을 오른쪽 절반으로 =====
-    var secondHalf = line.duplicate();
-    line.setEntirePath([p1, pt(-halfGap, 0)]);
-    secondHalf.setEntirePath([pt(halfGap, 0), p2]);
+    addWireSegment(-lineLen / 2, centers[0] - queue[0].hg);
+    for (var i = 1; i < N; i++) {
+        addWireSegment(centers[i - 1] + queue[i - 1].hg, centers[i] - queue[i].hg);
+    }
+    addWireSegment(centers[N - 1] + queue[N - 1].hg, lineLen / 2);
+
+    line.remove();
 
     // ===== 기호 그리기 =====
-    var group = line.layer.groupItems.add();
-    group.name = "Circuit Symbol";
-    try { group.move(line, ElementPlacement.PLACEBEFORE); } catch (e) {}
+    var group = wLayer.groupItems.add();
+    group.name = "Circuit Symbols";
 
-    switch (chosen) {
-        case "resistor":     drawResistor(); break;
-        case "battery":      drawBattery(); break;
-        case "ac":           drawAC(); break;
-        case "switchOpen":   drawSwitch(true); break;
-        case "switchClosed": drawSwitch(false); break;
-        case "inductor":     drawInductor(); break;
-        case "capacitor":    drawCapacitor(); break;
-        case "ammeterDC":    drawMeter("A", false); break;
-        case "voltmeterDC":  drawMeter("V", false); break;
-        case "ammeterAC":    drawMeter("A", true); break;
-        case "voltmeterAC":  drawMeter("V", true); break;
+    for (var i = 0; i < N; i++) {
+        mx = cx + centers[i] * ca;
+        my = cy + centers[i] * sa;
+        drawSymbol(queue[i].key);
     }
 
     doc.selection = null;
     group.selected = true;
     app.redraw();
+
+    // ===== 배치 헬퍼 =====
+
+    function halfGapFor(key) {
+        switch (key) {
+            case "resistor":     return CFG.resistorHalf;
+            case "battery":      return CFG.batterySpacing / 2;
+            case "ac":           return CFG.acRadius;
+            case "switchOpen":
+            case "switchClosed": return CFG.switchHalf + CFG.switchContactR;
+            case "inductor":     return coilHalfWidth();
+            case "capacitor":    return CFG.capHalfGap;
+            case "ammeterDC":
+            case "voltmeterDC":
+            case "ammeterAC":
+            case "voltmeterAC":  return CFG.meterRadius;
+        }
+        return 0;
+    }
+
+    function lineAt(u) { return [cx + u * ca, cy + u * sa]; }
+
+    function addWireSegment(uStart, uEnd) {
+        if (uEnd - uStart < 0.01) return;   // 기호가 선 끝에 붙는 경우 빈 세그먼트 생략
+        var seg = wLayer.pathItems.add();
+        seg.setEntirePath([lineAt(uStart), lineAt(uEnd)]);
+        seg.closed = false;
+        seg.filled = false;
+        seg.stroked = wStroked;
+        if (wStroked) { seg.strokeColor = wColor; seg.strokeWidth = wWidth; }
+    }
+
+    function drawSymbol(key) {
+        switch (key) {
+            case "resistor":     drawResistor(); break;
+            case "battery":      drawBattery(); break;
+            case "ac":           drawAC(); break;
+            case "switchOpen":   drawSwitch(true); break;
+            case "switchClosed": drawSwitch(false); break;
+            case "inductor":     drawInductor(); break;
+            case "capacitor":    drawCapacitor(); break;
+            case "ammeterDC":    drawMeter("A", false); break;
+            case "voltmeterDC":  drawMeter("V", false); break;
+            case "ammeterAC":    drawMeter("A", true); break;
+            case "voltmeterAC":  drawMeter("V", true); break;
+        }
+    }
 
     // ===== 기호 함수들 =====
 
@@ -204,7 +265,7 @@
     }
 
     function drawAC() {
-        addCircle(cx, cy, CFG.acRadius, CFG.acCircleStroke, false);
+        addCircle(mx, my, CFG.acRadius, CFG.acCircleStroke, false);
 
         // 물결: 사용자 제공 SVG(자산 2.svg) 좌표를 그대로 재현.
         // SVG 좌표계(y 아래로 증가)를 중심 정렬 후 뒤집고, acWaveHalf 폭에 맞춰 균일 축소.
@@ -305,7 +366,7 @@
     }
 
     function drawMeter(letter, isAC) {
-        addCircle(cx, cy, CFG.meterRadius, CFG.meterStroke, false);
+        addCircle(mx, my, CFG.meterRadius, CFG.meterStroke, false);
         var tf = group.textFrames.add();
         tf.contents = letter;
         var attrs = tf.textRange.characterAttributes;
@@ -316,7 +377,7 @@
             alert("폰트를 찾지 못해 기본 폰트로 넣습니다: " + CFG.fontName);
         }
         try {
-            if (line.stroked) tf.textRange.characterAttributes.fillColor = line.strokeColor;
+            if (wStroked) tf.textRange.characterAttributes.fillColor = wColor;
         } catch (e2) {}
 
         // 실제 보이는 글자(잉크) 경계를 아웃라인 복제본으로 측정
@@ -327,14 +388,14 @@
         outline.remove();
 
         // 잉크 경계 중심을 원 중심에 맞춤 (밑줄 공간 확보를 위해 0.3mm 위로 보정)
-        var dx = cx - (ob[0] + ob[2]) / 2;
-        var dy = cy - (ob[1] + ob[3]) / 2 + 0.3 * MM;
+        var dx = mx - (ob[0] + ob[2]) / 2;
+        var dy = my - (ob[1] + ob[3]) / 2 + 0.3 * MM;
         tf.translate(dx, dy);
 
         // 밑줄: 이동 후 잉크 하단에서 0.4mm 아래 (회전 없이 수평)
         var underlineY = (ob[3] + dy) - CFG.meterUnderlineGap;
         if (isAC) {
-            drawMeterWave(cx, underlineY);   // 교류: 물결(~)
+            drawMeterWave(mx, underlineY);   // 교류: 물결(~)
         } else {
             // 직류: 직선, 글자 폭만큼
             var left = ob[0] + dx;
@@ -385,8 +446,8 @@
         path.filled = false;
         path.stroked = true;
         path.strokeWidth = strokeW;
-        if (line.stroked) {
-            try { path.strokeColor = line.strokeColor; } catch (e) {}
+        if (wStroked) {
+            try { path.strokeColor = wColor; } catch (e) {}
         }
         try { path.strokeCap = StrokeCap.BUTTENDCAP; } catch (e2) {}
         try { path.strokeDashes = []; } catch (e3) {}
