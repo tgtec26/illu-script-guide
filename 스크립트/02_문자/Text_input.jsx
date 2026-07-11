@@ -92,9 +92,8 @@
                 // 특수문자: 아웃라인 미리보기 셀(클릭 시 해당 문자만 삽입)
                 var cell = row.add("group");
                 cell.preferredSize = cellSize;
-                cell.glyphOps = parseSvgPath(opt.glyphPaths[charIndex]);
-                cell.glyphBB = glyphBBox(cell.glyphOps);
-                cell.onDraw = drawGlyphCell;
+                var gOps = parseSvgPath(opt.glyphPaths[charIndex]);
+                cell.onDraw = makeGlyphDrawer(gOps, glyphBBox(gOps));
                 cell.addEventListener("mousedown", makeSelectHandler(optionIndex, charIndex + 1));
             } else {
                 var btn = row.add("button", undefined, opt.contents[charIndex]);
@@ -312,36 +311,38 @@
         return [minX, minY, maxX, maxY];
     }
 
-    // ScriptUI onDraw: 셀 안에 글리프를 맞춰서 채워 그림 (SVG와 동일하게 y 아래 방향)
-    function drawGlyphCell() {
-        var g = this.graphics;
-        var w = this.size[0], h = this.size[1];
+    // ScriptUI onDraw 생성기: 셀 안에 글리프를 맞춰 채워 그림 (SVG와 동일하게 y 아래 방향)
+    // ops/bb는 클로저로 캡처 (컨트롤에 붙인 커스텀 속성은 onDraw에서 유실될 수 있음)
+    function makeGlyphDrawer(ops, bb) {
+        return function () {
+            var g = this.graphics;
+            var w = this.size[0], h = this.size[1];
 
-        var border = g.newPen(g.PenType.SOLID_COLOR, [0.7, 0.7, 0.7, 1], 1);
-        g.newPath();
-        g.rectPath(0, 0, w, h);
-        g.strokePath(border);
+            var border = g.newPen(g.PenType.SOLID_COLOR, [0.7, 0.7, 0.7, 1], 1);
+            g.newPath();
+            g.rectPath(0, 0, w, h);
+            g.strokePath(border);
 
-        var ops = this.glyphOps, bb = this.glyphBB;
-        if (!ops || !bb) return;
+            if (!ops || !bb) return;
 
-        var pad = 6;
-        var gw = bb[2] - bb[0], gh = bb[3] - bb[1];
-        if (gw <= 0) gw = 1;
-        if (gh <= 0) gh = 1;
-        var s = Math.min((w - 2 * pad) / gw, (h - 2 * pad) / gh);
-        var ox = (w - gw * s) / 2 - bb[0] * s;
-        var oy = (h - gh * s) / 2 - bb[1] * s;
+            var pad = 6;
+            var gw = bb[2] - bb[0], gh = bb[3] - bb[1];
+            if (gw <= 0) gw = 1;
+            if (gh <= 0) gh = 1;
+            var s = Math.min((w - 2 * pad) / gw, (h - 2 * pad) / gh);
+            var ox = (w - gw * s) / 2 - bb[0] * s;
+            var oy = (h - gh * s) / 2 - bb[1] * s;
 
-        g.newPath();
-        for (var k = 0; k < ops.length; k++) {
-            var o = ops[k];
-            if (o.t === 0) g.moveTo(o.x * s + ox, o.y * s + oy);
-            else if (o.t === 3) g.lineTo(o.x * s + ox, o.y * s + oy);
-            else if (o.t === 1) g.bezierCurveTo(o.x1 * s + ox, o.y1 * s + oy, o.x2 * s + ox, o.y2 * s + oy, o.x * s + ox, o.y * s + oy);
-            else if (o.t === 2) g.closePath();
-        }
-        var brush = g.newBrush(g.BrushType.SOLID_COLOR, [0, 0, 0, 1]);
-        g.fillPath(brush);
+            g.newPath();
+            for (var k = 0; k < ops.length; k++) {
+                var o = ops[k];
+                if (o.t === 0) g.moveTo(o.x * s + ox, o.y * s + oy);
+                else if (o.t === 3) g.lineTo(o.x * s + ox, o.y * s + oy);
+                else if (o.t === 1) g.bezierCurveTo(o.x1 * s + ox, o.y1 * s + oy, o.x2 * s + ox, o.y2 * s + oy, o.x * s + ox, o.y * s + oy);
+                else if (o.t === 2) g.closePath();
+            }
+            var brush = g.newBrush(g.BrushType.SOLID_COLOR, [0, 0, 0, 1]);
+            g.fillPath(brush);
+        };
     }
 })();
