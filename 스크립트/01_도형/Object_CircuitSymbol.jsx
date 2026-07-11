@@ -42,7 +42,7 @@
 
         acRadius: 2 * MM,           // 원 지름 4mm의 절반
         acCircleStroke: 0.3,
-        acWaveHalf: 1.7 * MM,       // 물결 폭의 절반
+        acWaveHalf: 1.6 * MM,       // 물결 폭의 절반 (SVG 모양을 이 폭에 맞춰 축소)
         acWaveStroke: 0.5,
 
         switchHalf: 1.75 * MM,  // 접점 사이 거리 3.5mm의 절반
@@ -59,8 +59,6 @@
         capHalfGap: 0.35 * MM,  // 극판 사이 간격 0.7mm의 절반
         capPlateHalf: 1.5 * MM, // 극판 높이 3mm의 절반
         capStroke: 0.5,
-
-        acWaveAmp: 1.1 * MM,    // 교류 물결 진폭
 
         meterRadius: 7,
         meterStroke: 0.3,
@@ -215,21 +213,30 @@
 
     function drawAC() {
         addCircle(cx, cy, CFG.acRadius, CFG.acCircleStroke, false);
-        // 물결(사인 1주기 S자): 왼쪽 위로 볼록, 오른쪽 아래로 볼록. 회전 없이 항상 수평.
-        var hw = CFG.acWaveHalf;
-        var amp = CFG.acWaveAmp;
-        var dx = hw * 0.55;
+
+        // 물결: 사용자 제공 SVG(자산 2.svg) 좌표를 그대로 재현.
+        // SVG 좌표계(y 아래로 증가)를 중심 정렬 후 뒤집고, acWaveHalf 폭에 맞춰 균일 축소.
+        var SVG_CX = 5.205, SVG_CY = 2.69, SVG_HALF = 4.965; // SVG 상의 중심/반폭
+        var s = CFG.acWaveHalf / SVG_HALF;
+        function w(X, Y) { return pt((X - SVG_CX) * s, -(Y - SVG_CY) * s); }
+
+        var anchors = [
+            w(0.24, 2.69),
+            w(2.72, 5.13),
+            w(5.20, 2.69),
+            w(7.69, 0.25),
+            w(10.17, 2.69)
+        ];
         var wave = group.pathItems.add();
-        wave.setEntirePath([[cx - hw, cy], [cx, cy], [cx + hw, cy]]);
-        wave.pathPoints[0].leftDirection = [cx - hw, cy];
-        wave.pathPoints[0].rightDirection = [cx - hw + dx, cy + amp];
-        wave.pathPoints[0].pointType = PointType.SMOOTH;
-        wave.pathPoints[1].leftDirection = [cx - dx, cy + amp];
-        wave.pathPoints[1].rightDirection = [cx + dx, cy - amp];
-        wave.pathPoints[1].pointType = PointType.SMOOTH;
-        wave.pathPoints[2].leftDirection = [cx + hw - dx, cy - amp];
-        wave.pathPoints[2].rightDirection = [cx + hw, cy];
-        wave.pathPoints[2].pointType = PointType.SMOOTH;
+        wave.setEntirePath(anchors);
+        wave.closed = false;
+
+        var pp = wave.pathPoints;
+        pp[0].rightDirection = w(0.99, 4.80); pp[0].pointType = PointType.CORNER;
+        pp[1].leftDirection  = w(2.13, 5.13); pp[1].rightDirection = w(3.39, 5.13); pp[1].pointType = PointType.SMOOTH;
+        pp[2].leftDirection  = w(4.46, 4.80); pp[2].rightDirection = w(5.95, 0.58); pp[2].pointType = PointType.SMOOTH;
+        pp[3].leftDirection  = w(7.08, 0.25); pp[3].rightDirection = w(8.41, 0.25); pp[3].pointType = PointType.SMOOTH;
+        pp[4].leftDirection  = w(9.43, 0.58); pp[4].pointType = PointType.CORNER;
         styleStroke(wave, CFG.acWaveStroke);
     }
 
