@@ -13,7 +13,7 @@
         return;
     }
 
-    if (app.selection.length === 0 || app.selection[0].typename !== "TextRange") {
+    if (!app.selection.length || app.selection[0].typename !== "TextRange") {
         alert("텍스트 편집 모드에서 도(°)를 붙일 숫자를 선택한 뒤 실행해주세요.");
         return;
     }
