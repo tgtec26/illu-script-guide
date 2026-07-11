@@ -74,8 +74,10 @@
         { key: "switchClosed", label: "닫힌 스위치" },
         { key: "inductor",     label: "인덕터(코일)" },
         { key: "capacitor",    label: "축전기" },
-        { key: "ammeter",      label: "전류계 (A)" },
-        { key: "voltmeter",    label: "전압계 (V)" }
+        { key: "ammeterDC",    label: "전류계(직류) A" },
+        { key: "voltmeterDC",  label: "전압계(직류) V" },
+        { key: "ammeterAC",    label: "전류계(교류) A" },
+        { key: "voltmeterAC",  label: "전압계(교류) V" }
     ];
 
     // ===== 다이얼로그 =====
@@ -136,8 +138,10 @@
         case "switchClosed": halfGap = CFG.switchHalf + CFG.switchContactR; break;
         case "inductor":     halfGap = coilHalfWidth(); break;
         case "capacitor":    halfGap = CFG.capHalfGap; break;
-        case "ammeter":
-        case "voltmeter":    halfGap = CFG.meterRadius; break;
+        case "ammeterDC":
+        case "voltmeterDC":
+        case "ammeterAC":
+        case "voltmeterAC":  halfGap = CFG.meterRadius; break;
     }
 
     if (lineLen <= halfGap * 2 + 2) {
@@ -163,8 +167,10 @@
         case "switchClosed": drawSwitch(false); break;
         case "inductor":     drawInductor(); break;
         case "capacitor":    drawCapacitor(); break;
-        case "ammeter":      drawMeter("A"); break;
-        case "voltmeter":    drawMeter("V"); break;
+        case "ammeterDC":    drawMeter("A", false); break;
+        case "voltmeterDC":  drawMeter("V", false); break;
+        case "ammeterAC":    drawMeter("A", true); break;
+        case "voltmeterAC":  drawMeter("V", true); break;
     }
 
     doc.selection = null;
@@ -298,7 +304,7 @@
         addLine([pt(g, -h), pt(g, h)], CFG.capStroke);
     }
 
-    function drawMeter(letter) {
+    function drawMeter(letter, isAC) {
         addCircle(cx, cy, CFG.meterRadius, CFG.meterStroke, false);
         var tf = group.textFrames.add();
         tf.contents = letter;
@@ -325,14 +331,32 @@
         var dy = cy - (ob[1] + ob[3]) / 2 + 0.3 * MM;
         tf.translate(dx, dy);
 
-        // 밑줄: 이동 후 잉크 하단에서 0.4mm 아래, 글자 폭만큼 (회전 없이 수평)
-        var left = ob[0] + dx;
-        var right = ob[2] + dx;
+        // 밑줄: 이동 후 잉크 하단에서 0.4mm 아래 (회전 없이 수평)
         var underlineY = (ob[3] + dy) - CFG.meterUnderlineGap;
-        var underline = group.pathItems.add();
-        underline.setEntirePath([[left, underlineY], [right, underlineY]]);
-        underline.closed = false;
-        styleStroke(underline, CFG.meterUnderlineStroke);
+        if (isAC) {
+            drawMeterWave(cx, underlineY);   // 교류: 물결(~)
+        } else {
+            // 직류: 직선, 글자 폭만큼
+            var left = ob[0] + dx;
+            var right = ob[2] + dx;
+            var underline = group.pathItems.add();
+            underline.setEntirePath([[left, underlineY], [right, underlineY]]);
+            underline.closed = false;
+            styleStroke(underline, CFG.meterUnderlineStroke);
+        }
+    }
+
+    // 교류 계기 밑줄 물결: 자산 3/4.svg 좌표(기준선 y=9.24, 중심 x=5.82) 그대로 사용
+    function drawMeterWave(centerX, baseY) {
+        function W(X, Y) { return [centerX + (X - 5.82), baseY - (Y - 9.24)]; }
+        var wave = group.pathItems.add();
+        wave.setEntirePath([W(2.64, 9.24), W(5.82, 9.24), W(9.00, 9.24)]);
+        wave.closed = false;
+        var pp = wave.pathPoints;
+        pp[0].rightDirection = W(3.03, 8.56); pp[0].pointType = PointType.CORNER;
+        pp[1].leftDirection  = W(4.66, 8.23); pp[1].rightDirection = W(6.98, 10.25); pp[1].pointType = PointType.SMOOTH;
+        pp[2].leftDirection  = W(8.63, 9.88); pp[2].pointType = PointType.CORNER;
+        styleStroke(wave, CFG.meterUnderlineStroke);
     }
 
     // ===== 공통 헬퍼 =====
