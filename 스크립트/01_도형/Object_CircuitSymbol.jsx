@@ -184,24 +184,9 @@
         }
         anchors.push(pt(w, 0));
 
-        // 각 봉우리를 부드러운(둥근) 곡선으로 연결
-        var path = group.pathItems.add();
-        path.setEntirePath(anchors);
-        path.closed = false;
-        var hLen = seg * 0.8;               // 봉우리에서 라인 방향으로 뻗는 핸들 길이
-        var hx = hLen * ca, hy = hLen * sa;
-        for (var j = 0; j < anchors.length; j++) {
-            var pp = path.pathPoints[j];
-            if (j === 0 || j === anchors.length - 1) {
-                pp.pointType = PointType.CORNER;
-                continue;
-            }
-            var an = anchors[j];
-            pp.leftDirection = [an[0] - hx, an[1] - hy];
-            pp.rightDirection = [an[0] + hx, an[1] + hy];
-            pp.pointType = PointType.SMOOTH;
-        }
-        styleStroke(path, CFG.resistorStroke);
+        // 직선 지그재그 + 모퉁이만 둥근 연결(strokeJoin)
+        var path = addLine(anchors, CFG.resistorStroke);
+        try { path.strokeJoin = StrokeJoin.ROUNDENDJOIN; } catch (e) {}
     }
 
     function drawBattery() {
