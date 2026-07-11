@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
 
@@ -35,6 +36,7 @@ const cylinder = "스크립트/01_도형/Object_cylinder.jsx";
 const cone = "스크립트/01_도형/Object_cone.jsx";
 const sphere = "스크립트/01_도형/Object_sphere.jsx";
 const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
+const weatherFront = "스크립트/01_도형/Object_front.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -55,6 +57,45 @@ function lineOf(source, pattern) {
     if (pattern.test(lines[i])) return i + 1;
   }
   return -1;
+}
+
+function extractFunction(source, name) {
+  const declaration = `function ${name}(`;
+  const start = source.indexOf(declaration);
+  if (start < 0) throw new Error(`missing production helper: ${name}`);
+  const bodyStart = source.indexOf("{", start);
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+
+  for (let index = bodyStart; index < source.length; index++) {
+    const character = source[index];
+    if (quote !== null) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      continue;
+    }
+    if (character === "{") depth++;
+    if (character === "}") {
+      depth--;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  throw new Error(`unbalanced production helper: ${name}`);
+}
+
+function extractWeatherFrontHelpers(source, names) {
+  const declarations = names.map((name) => extractFunction(source, name)).join("\n");
+  return new Function(`${declarations}\nreturn {${names.join(",")}};`)();
+}
+
+function assertClose(actual, expected, label) {
+  assert.ok(Math.abs(actual - expected) < 0.000001, `${label}: expected ${expected}, got ${actual}`);
 }
 
 let failures = 0;
@@ -636,6 +677,247 @@ for (const [file, mode] of visibleAlignFiles) {
   for (const token of required) {
     if (!source.includes(token)) {
       console.error(`${cone}: missing cone control or projection token: ${token}`);
+      failures++;
+    }
+  }
+}
+
+{
+  if (!exists(weatherFront)) {
+    console.error(`${weatherFront}: weather-front script is missing`);
+    failures++;
+  } else {
+    const source = read(weatherFront);
+    const required = [
+      'new Window("dialog", "오브젝트 전선")',
+      'frontPanel.add("radiobutton", undefined, "온난전선")',
+      'frontPanel.add("radiobutton", undefined, "한랭전선")',
+      'frontPanel.add("radiobutton", undefined, "정체전선")',
+      'frontPanel.add("radiobutton", undefined, "폐색전선")',
+      'var shapeSizeMm = 2',
+      'var gapMm = 2',
+      'var strokeWidthPt = 0.5',
+      'addNumericControl(layoutPanel, "도형 크기", shapeSizeMm, 0.5, 20, 0.1, "mm")',
+      'addNumericControl(layoutPanel, "빈 간격", gapMm, 0, 20, 0.1, "mm")',
+      'addNumericControl(linePanel, "라인 두께", strokeWidthPt, 0.1, 10, 0.1, "pt")',
+      'layoutPanel.add("checkbox", undefined, "방향 반전")',
+      'function updatePreview()',
+      'function clearPreview()',
+      'source.hidden = sourceWasHidden',
+      'source.remove()',
+      'item.editable === false',
+      'var pathMetrics = buildPathMetrics(source, 80)',
+      'function cubicPoint(p0, p1, p2, p3, t)',
+      'function cubicDerivative(p0, p1, p2, p3, t)',
+      'function buildPathMetrics(path, samplesPerSegment)',
+      'function getFrameAtLength(metrics, distance)',
+      'var normalSign = reversed ? -1 : 1',
+      'var unitLength = shapeSize + gap',
+      'var centerDistance = shapeSize / 2 + index * unitLength',
+      'function drawSemicircle(group, frame, size, side, color)',
+      'function drawTriangle(group, frame, size, side, color)',
+      'frontType === "stationary"',
+      'frontType === "occluded"',
+      'colorPanel.add("radiobutton", undefined, "표준색")',
+      'colorPanel.add("radiobutton", undefined, "K 음영")',
+      'colorPanel.add("radiobutton", undefined, "HEX")',
+      'var colorMode = "standard"',
+      'var kValue = 0',
+      'var hexValue = "FF0000"',
+      'var K_STEP = 10',
+      'kValue = clamp(kValue + delta, 0, 100)',
+      '/^#?[0-9a-fA-F]{6}$/.test(value)',
+      'var STANDARD_RED = "FF0000"',
+      'var STANDARD_BLUE = "0000FF"',
+      'var STANDARD_PURPLE = "7030A0"',
+      'function makeHexColor(hex)',
+      'function makeKColor(k)',
+      'function getFrontColors(index)',
+      'function splitCubic(cubic, t)',
+      'function extractCubicRange(cubic, startT, endT)',
+      'function drawStationaryBaseline(group, boundaries, colors)',
+      'stepK(-10)',
+      'stepK(10)',
+      '"0K"',
+      '"100K"',
+      'var previousCoordinateSystem = app.coordinateSystem',
+      'app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM',
+      'app.coordinateSystem = previousCoordinateSystem',
+      'function restoreSourceAfterPreviewFailure()',
+    ];
+
+    for (const token of required) {
+      if (!source.includes(token)) {
+        console.error(`${weatherFront}: missing weather-front control/geometry token: ${token}`);
+        failures++;
+      }
+    }
+
+    const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+    const activeDocLine = lineOf(source, /app\.activeDocument/);
+    if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+      console.error(`${weatherFront}: app.documents.length guard must run before app.activeDocument`);
+      failures++;
+    }
+
+    const finalCreationLine = lineOf(source, /var\s+finalGroup\s*=\s*createWeatherFront\(false\)/);
+    const sourceRemovalLine = lineOf(source, /source\.remove\(\)/);
+    if (finalCreationLine < 1 || sourceRemovalLine < 1 || sourceRemovalLine < finalCreationLine) {
+      console.error(`${weatherFront}: source removal must follow final weather-front creation`);
+      failures++;
+    }
+
+    const coordinateCaptureLine = lineOf(source, /var\s+previousCoordinateSystem\s*=\s*app\.coordinateSystem/);
+    const coordinateNormalizeLine = lineOf(source, /app\.coordinateSystem\s*=\s*CoordinateSystem\.DOCUMENTCOORDINATESYSTEM/);
+    const metricsLine = lineOf(source, /var\s+pathMetrics\s*=\s*buildPathMetrics\(source,\s*80\)/);
+    if (coordinateCaptureLine < 1 || coordinateNormalizeLine < coordinateCaptureLine || metricsLine < coordinateNormalizeLine) {
+      console.error(`${weatherFront}: source geometry must be read after document-coordinate normalization`);
+      failures++;
+    }
+
+    if (!/try\s*\{[\s\S]*?app\.coordinateSystem\s*=\s*CoordinateSystem\.DOCUMENTCOORDINATESYSTEM;[\s\S]*?var\s+result\s*=\s*dlg\.show\(\);[\s\S]*?\}\s*finally\s*\{\s*app\.coordinateSystem\s*=\s*previousCoordinateSystem;\s*\}/.test(source)) {
+      console.error(`${weatherFront}: document coordinate system must be restored after preview, cancel, and final creation paths`);
+      failures++;
+    }
+
+    const updatePreviewBody = extractFunction(source, "updatePreview");
+    if (!/try\s*\{[\s\S]*?source\.hidden\s*=\s*true;\s*source\.selected\s*=\s*false;[\s\S]*?previewGroup\s*=\s*createWeatherFront\(true\);[\s\S]*?\}\s*catch\s*\([^)]*\)\s*\{[\s\S]*?clearPreview\(\);[\s\S]*?restoreSourceAfterPreviewFailure\(\);[\s\S]*?alert\(\s*"미리보기를 만드는 중 오류가 발생했습니다\."\s*\);[\s\S]*?app\.redraw\(\);[\s\S]*?\}/.test(updatePreviewBody)) {
+      console.error(`${weatherFront}: preview callbacks must recover DOM failures and re-hide the source before successful rebuilds`);
+      failures++;
+    }
+
+    if (/pathPoints\s*\[\s*index\s*\]/.test(source) ||
+        /index\s*\/\s*\(?\s*(?:count|symbolCount|pathPoints\.length)/.test(source)) {
+      console.error(`${weatherFront}: symbol placement must use cached path length, not parameter-index spacing`);
+      failures++;
+    }
+
+    if (/\^#\?\[0-9a-fA-F\]\{3\}/.test(source) || /\{3\}(?:\$|\|)/.test(source)) {
+      console.error(`${weatherFront}: Hex mode must not accept three-digit shorthand`);
+      failures++;
+    }
+
+    if (!/baseline\.stroked\s*=\s*true/.test(source) ||
+        !/baseline\.filled\s*=\s*false/.test(source) ||
+        !/baseline\.strokeWidth\s*=\s*strokeWidthPt/.test(source) ||
+        !/triangle\.stroked\s*=\s*false/.test(source) ||
+        !/semicircle\.stroked\s*=\s*false/.test(source)) {
+      console.error(`${weatherFront}: baseline must carry the stroke while symbols remain fill-only`);
+      failures++;
+    }
+
+    if (!/frontType\s*===\s*"stationary"\s*&&\s*colorMode\s*===\s*"standard"[\s\S]*?drawStationaryBaseline/.test(source) ||
+        !/else\s*\{[\s\S]*?source\.duplicate\(group,\s*ElementPlacement\.PLACEATEND\)/.test(source)) {
+      console.error(`${weatherFront}: only standard stationary fronts may replace the duplicated baseline`);
+      failures++;
+    }
+
+    try {
+      const helpers = extractWeatherFrontHelpers(source, [
+        "getSymbolPlacements",
+        "getSymbolInstruction",
+        "pointFromArray",
+        "cubicPoint",
+        "cubicDerivative",
+        "getCubicSegments",
+        "distanceBetween",
+        "buildPathMetrics",
+        "clamp",
+        "sampleDirection",
+        "getFrameAtLength",
+      ]);
+
+      assert.deepStrictEqual(
+        helpers.getSymbolPlacements(25, 10, 5),
+        [{index: 0, centerDistance: 5}, {index: 1, centerDistance: 20}],
+        "complete symbols must use size-plus-gap center spacing"
+      );
+      assert.deepStrictEqual(
+        helpers.getSymbolPlacements(24, 10, 5),
+        [{index: 0, centerDistance: 5}],
+        "partial trailing symbols must not be placed"
+      );
+      assert.deepStrictEqual(
+        helpers.getSymbolPlacements(9, 10, 5),
+        [],
+        "paths shorter than one symbol must have no placements"
+      );
+
+      assert.deepStrictEqual(helpers.getSymbolInstruction("warm", 0, 1), {shape: "semicircle", side: 1});
+      assert.deepStrictEqual(helpers.getSymbolInstruction("cold", 0, -1), {shape: "triangle", side: -1});
+      assert.deepStrictEqual(helpers.getSymbolInstruction("stationary", 0, -1), {shape: "semicircle", side: -1});
+      assert.deepStrictEqual(helpers.getSymbolInstruction("stationary", 1, -1), {shape: "triangle", side: 1});
+      assert.deepStrictEqual(helpers.getSymbolInstruction("occluded", 0, -1), {shape: "semicircle", side: -1});
+      assert.deepStrictEqual(helpers.getSymbolInstruction("occluded", 1, -1), {shape: "triangle", side: -1});
+
+      const straightPath = {
+        pathPoints: [
+          {anchor: [0, 0], rightDirection: [10 / 3, 0]},
+          {anchor: [10, 0], leftDirection: [20 / 3, 0]},
+        ],
+      };
+      const metrics = helpers.buildPathMetrics(straightPath, 80);
+      const frame = helpers.getFrameAtLength(metrics, 5);
+      assertClose(metrics.totalLength, 10, "straight cubic total length");
+      assertClose(frame.x, 5, "straight cubic midpoint x");
+      assertClose(frame.y, 0, "straight cubic midpoint y");
+      assertClose(frame.tx, 1, "straight cubic tangent x");
+      assertClose(frame.ty, 0, "straight cubic tangent y");
+      assertClose(frame.nx, 0, "straight cubic left normal x");
+      assertClose(frame.ny, 1, "straight cubic left normal y");
+    } catch (error) {
+      console.error(`${weatherFront}: executable geometry regression failed: ${error.message}`);
+      failures++;
+    }
+
+    try {
+      const helpers = extractWeatherFrontHelpers(source, [
+        "normalizeHex",
+        "hexToRgb",
+        "rgbToCmyk",
+        "kToRgb",
+        "lerpPoint",
+        "splitCubic",
+        "extractCubicRange",
+      ]);
+
+      assert.strictEqual(helpers.normalizeHex("#a1B2c3"), "A1B2C3");
+      assert.strictEqual(helpers.normalizeHex("abc"), null, "three-digit Hex must be rejected");
+      assert.strictEqual(helpers.normalizeHex("GG0000"), null, "non-Hex characters must be rejected");
+      assert.deepStrictEqual(helpers.hexToRgb("7030A0"), {red: 112, green: 48, blue: 160});
+      assert.deepStrictEqual(helpers.kToRgb(0), {red: 255, green: 255, blue: 255});
+      assert.deepStrictEqual(helpers.kToRgb(100), {red: 0, green: 0, blue: 0});
+
+      const redCmyk = helpers.rgbToCmyk({red: 255, green: 0, blue: 0});
+      assertClose(redCmyk.cyan, 0, "red CMYK cyan");
+      assertClose(redCmyk.magenta, 100, "red CMYK magenta");
+      assertClose(redCmyk.yellow, 100, "red CMYK yellow");
+      assertClose(redCmyk.black, 0, "red CMYK black");
+      assert.deepStrictEqual(
+        helpers.rgbToCmyk({red: 0, green: 0, blue: 0}),
+        {cyan: 0, magenta: 0, yellow: 0, black: 100}
+      );
+
+      const cubic = {
+        p0: {x: 0, y: 0},
+        p1: {x: 0, y: 8},
+        p2: {x: 8, y: 8},
+        p3: {x: 8, y: 0},
+      };
+      const halves = helpers.splitCubic(cubic, 0.5);
+      assert.deepStrictEqual(halves.left, {
+        p0: {x: 0, y: 0}, p1: {x: 0, y: 4}, p2: {x: 2, y: 6}, p3: {x: 4, y: 6},
+      });
+      assert.deepStrictEqual(halves.right, {
+        p0: {x: 4, y: 6}, p1: {x: 6, y: 6}, p2: {x: 8, y: 4}, p3: {x: 8, y: 0},
+      });
+
+      const middle = helpers.extractCubicRange(cubic, 0.25, 0.75);
+      assert.deepStrictEqual(middle, {
+        p0: {x: 1.25, y: 4.5}, p1: {x: 2.75, y: 6.5}, p2: {x: 5.25, y: 6.5}, p3: {x: 6.75, y: 4.5},
+      });
+    } catch (error) {
+      console.error(`${weatherFront}: executable color/subdivision regression failed: ${error.message}`);
       failures++;
     }
   }
