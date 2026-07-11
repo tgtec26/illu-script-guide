@@ -134,19 +134,24 @@ for (const file of alignFiles) {
 {
   const source = read(textInput);
   const optionArrays = source.match(/contents:\s*\[[^\]]+\]/g) || [];
-  if (optionArrays.length !== 9 ||
-      optionArrays.some((arraySource) => {
+  const standardOptionArrays = optionArrays.slice(0, 9);
+  if (optionArrays.length !== 11 ||
+      standardOptionArrays.length !== 9 ||
+      standardOptionArrays.some((arraySource) => {
         const items = arraySource.match(/"[^"]*"/g) || [];
         return items.length !== 6;
       })) {
-    console.error(textInput + ": every text insert option must provide exactly 6 items");
+    console.error(textInput + ": nine standard text rows must provide exactly 6 items");
     failures++;
   }
-  if (!source.includes('row.add("button", undefined, textOptions[optionIndex].contents[charIndex])') ||
+  if (!source.includes('var label = opt.labels ? opt.labels[charIndex] : opt.contents[charIndex]') ||
+      !source.includes('row.add("button", undefined, label)') ||
       !source.includes('btn.onClick = makeSelectHandler(optionIndex, charIndex + 1)') ||
       !source.includes('contentsArray = option.contents.slice(0, selectedCount)') ||
+      !source.includes('if (option.independent)') ||
+      !source.includes('contentsArray = [option.contents[selectedCount - 1]]') ||
       !source.includes('function makeSelectHandler(optionIndex, count)')) {
-    console.error(textInput + ": each row must have 6 buttons and insert only up to the clicked character");
+    console.error(textInput + ": standard rows must insert through the clicked character and special rows must insert one glyph");
     failures++;
   }
   if (!source.includes('{contents: ["①", "②", "③", "④", "⑤", "⑥"]') ||
