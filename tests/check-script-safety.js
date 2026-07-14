@@ -37,6 +37,7 @@ const cone = "스크립트/01_도형/Object_cone.jsx";
 const sphere = "스크립트/01_도형/Object_sphere.jsx";
 const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
 const weatherFront = "스크립트/01_도형/Object_front.jsx";
+const anchorAngle = "스크립트/01_도형/Object_AnchorAngle.jsx";
 const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
@@ -924,6 +925,53 @@ for (const [file, mode] of visibleAlignFiles) {
       });
     } catch (error) {
       console.error(`${weatherFront}: executable color/subdivision regression failed: ${error.message}`);
+      failures++;
+    }
+  }
+}
+
+{
+  if (!exists(anchorAngle)) {
+    console.error(`${anchorAngle}: anchor-angle rotation script is missing`);
+    failures++;
+  } else {
+    const source = read(anchorAngle);
+    const required = [
+      'new Window("dialog", "앵커 기준 각도 맞추기")',
+      'var presetAngles = [0, 30, 45, 60, 90]',
+      'PathPointSelection.ANCHORPOINT',
+      'selectedPoints.length !== 2',
+      'Transformation.CENTER',
+      'function getLineAngle(first, second)',
+      'function getShortestRotation(currentAngle, targetAngle)',
+      'function rotatePoint(point, origin, angleDegrees)',
+      'function rotateOwners(owners, selectedPoints, pivot, angleDegrees)',
+    ];
+    for (const token of required) {
+      if (!source.includes(token)) {
+        console.error(`${anchorAngle}: missing anchor-angle token: ${token}`);
+        failures++;
+      }
+    }
+
+    try {
+      const helpers = extractWeatherFrontHelpers(source, [
+        "normalizeLineAngle",
+        "getLineAngle",
+        "getShortestRotation",
+        "rotatePoint",
+      ]);
+      assertClose(helpers.getLineAngle([0, 0], [10, 0]), 0, "horizontal line angle");
+      assertClose(helpers.getLineAngle([10, 0], [0, 0]), 0, "reversed horizontal line angle");
+      assertClose(helpers.getLineAngle([0, 0], [10, 10]), 45, "diagonal line angle");
+      assertClose(helpers.getShortestRotation(30, 0), -30, "thirty degrees to horizontal");
+      assertClose(helpers.getShortestRotation(150, 30), 60, "shortest undirected rotation");
+      assertClose(helpers.getShortestRotation(0, 90), 90, "horizontal to vertical");
+      const rotated = helpers.rotatePoint([10, 0], [0, 0], 90);
+      assertClose(rotated[0], 0, "rotated point x");
+      assertClose(rotated[1], 10, "rotated point y");
+    } catch (error) {
+      console.error(`${anchorAngle}: executable angle regression failed: ${error.message}`);
       failures++;
     }
   }
