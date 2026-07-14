@@ -107,15 +107,38 @@
         s.preferredSize.width = 150;
         var t = g.add("statictext", undefined, fmt(initV));
         t.preferredSize.width = 55;
-        s.onChanging = function() { t.text = fmt(s.value); updatePreview(); };
-        sliderSyncers.push(function() { t.text = fmt(s.value); });
+        s.syncLabel = function() { t.text = fmt(s.value); };
+        s.onChanging = function() { s.syncLabel(); updatePreview(); };
+        sliderSyncers.push(s.syncLabel);
         return s;
     }
     function syncSliderLabels() { for (var i = 0; i < sliderSyncers.length; i++) sliderSyncers[i](); }
     var sldOverall = addSlider("전체 크기", 0.3, 2.5, 1.0, function(v){ return Math.round(v*100) + "%"; });
     var sldNucleus = addSlider("핵 지름", 1, 15, 5.5, function(v){ return v.toFixed(1) + "mm"; });
     var sldElectron = addSlider("전자 지름", 0.5, 5, 1.5, function(v){ return v.toFixed(1) + "mm"; });
-    var sldChargeFont = addSlider("핵 전하량 글자", 3, 20, 7, function(v){ return v.toFixed(1) + "pt"; });
+    // 핵 전하량 글자: 슬라이더 값 = 실제 적용 pt. 전체 크기·핵 지름 변경 시 그 비율만큼 함께 조정된다.
+    var sldChargeFont = addSlider("핵 전하량 글자", 1, 100, 7, function(v){ return v.toFixed(1) + "pt"; });
+
+    // 전체 크기/핵 지름을 바꾸면 글자 크기도 같은 비율로 조정하고, 글자 슬라이더/값을 갱신한다.
+    var prevOverall = sldOverall.value;
+    var prevNucleus = sldNucleus.value;
+    function scaleFontBy(ratio) {
+        if (!isFinite(ratio) || ratio <= 0) return;
+        sldChargeFont.value = sldChargeFont.value * ratio; // 슬라이더가 [min,max]로 클램프
+        sldChargeFont.syncLabel();
+    }
+    sldOverall.onChanging = function() {
+        scaleFontBy(sldOverall.value / prevOverall);
+        prevOverall = sldOverall.value;
+        sldOverall.syncLabel();
+        updatePreview();
+    };
+    sldNucleus.onChanging = function() {
+        scaleFontBy(sldNucleus.value / prevNucleus);
+        prevNucleus = sldNucleus.value;
+        sldNucleus.syncLabel();
+        updatePreview();
+    };
 
 
     var btnGenerate = win.add("button", undefined, "원자 모형 생성하기", {name: "ok"});
@@ -307,7 +330,7 @@
                 nucleus.fillColor = colorGray80;
                 var t = atomGroup.textFrames.add();
                 t.contents = atomicNumber + "+";
-                t.textRange.characterAttributes.size = chargeFontPt * overallScale;
+                t.textRange.characterAttributes.size = chargeFontPt;
                 t.textRange.characterAttributes.fillColor = colorWhite;
                 try { t.textRange.characterAttributes.textFont = app.textFonts.getByName(fontName); } catch(e) {}
                 
@@ -400,7 +423,7 @@
     // --- 옵션 기억 (마지막 실행 설정을 다음 실행 때 복원) ---
     var PREF_KEY = "AtomModelMaker/settings";
     function collectSettings() {
-        var parts = ["v2"];
+        var parts = ["v3"];
         var elems = "";
         for (var i = 0; i < checkBoxes.length; i++) elems += checkBoxes[i].value ? "1" : "0";
         parts.push(elems);
@@ -429,7 +452,7 @@
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length < 15) return;
+        if (p[0] !== "v3" || p.length < 15) return;
         try {
             var elems = p[1];
             for (var i = 0; i < checkBoxes.length && i < elems.length; i++) checkBoxes[i].value = (elems.charAt(i) === "1");
@@ -448,6 +471,9 @@
             sldElectron.value = parseFloat(p[13]);
             sldChargeFont.value = parseFloat(p[14]);
             syncSliderLabels();
+            // 복원값을 기준선으로 삼아 이후 비율 계산이 맞도록 갱신
+            prevOverall = sldOverall.value;
+            prevNucleus = sldNucleus.value;
         } catch (e) {}
     }
 
