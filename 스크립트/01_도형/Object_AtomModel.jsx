@@ -47,11 +47,18 @@
     var chkHorizontalFirst = win.add("checkbox", undefined, "1번 전자 껍질 수평 배열");
     var chkRotateElectrons = win.add("checkbox", undefined, "2, 3번 전자 껍질 22.5도 이동");
 
+    // 전자 - 기호 표시 여부
+    var chkShowMinus = win.add("checkbox", undefined, "전자 - 기호 표시");
+    chkShowMinus.value = true;
+    // 핵을 좌측 상단 조명(3D 구) 느낌으로
+    var chkLit3D = win.add("checkbox", undefined, "핵 좌측 상단 조명 (3D)");
+    chkLit3D.value = true;
+
     var btnGenerate = win.add("button", undefined, "원자 모형 생성하기", {name: "ok"});
     btnGenerate.preferredSize.height = 40;
 
     // 3. 핵심 그리기 로직 (추가된 파라미터 적용)
-    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateElectrons) {
+    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateElectrons, optShowMinus, optLit3D) {
         if (app.documents.length === 0) return "에러: 열려있는 문서가 없습니다.";
         
         var atomStrings = atomicNumbersStr.split(",");
@@ -97,6 +104,26 @@
 
         var shellGrad = createUniqueGradient("Shell", [{pos:0, color:colorWhite}, {pos:83, color:colorWhite, mid:87}, {pos:100, color:colorGray40}]);
         var sphereGrad = createUniqueGradient("Sphere", [{pos:0, color:colorWhite, mid:13.3}, {pos:100, color:colorGray80}]);
+
+        // 구(핵/전자)에 방사형 그라데이션을 적용하는 헬퍼
+        function applySphereFill(item, ox, oy, dia, lit3D) {
+            var gc = new GradientColor();
+            gc.gradient = sphereGrad;
+            gc.origin = [ox, oy];
+            gc.length = dia / 2;
+            if (lit3D) {
+                // 좌측 상단에서 조명을 받는 3D 구 느낌: 하이라이트를 좌측 상단으로 이동
+                gc.matrix = app.getIdentityMatrix();
+                gc.hiliteAngle = 135;   // 0=오른쪽, 90=위, 135=좌측 상단
+                gc.hiliteLength = 60;   // 중심에서 하이라이트를 이동시키는 비율(%)
+            } else {
+                // 기존 방식(중앙 부근 하이라이트, 완만한 음영)
+                var m = app.getScaleMatrix(180, 180);
+                m.mValueTX = -(dia/2 * 0.4); m.mValueTY = (dia/2 * 0.4);
+                gc.matrix = m;
+            }
+            item.fillColor = gc;
+        }
 
         var currentCx = startCx;
         var GAP = 5 * MM;
@@ -158,11 +185,7 @@
                 outlinedGroup.translate(cx - (gb[0] + gb[2]) / 2, cy - (gb[1] + gb[3]) / 2);
             } else {
                 nucleus.filled = true;
-                var ngc = new GradientColor(); ngc.gradient = sphereGrad;
-                var nMat = app.getScaleMatrix(180, 180); 
-                nMat.mValueTX = -(nDia/2 * 0.4); nMat.mValueTY = (nDia/2 * 0.4);  
-                ngc.matrix = nMat; ngc.origin = [cx, cy]; ngc.length = nDia / 2;
-                nucleus.fillColor = ngc;
+                applySphereFill(nucleus, cx, cy, nDia, optLit3D);
             }
 
             // 3. 전자
@@ -189,13 +212,11 @@
                     var ey = cy + shellR * Math.sin(rad);
                     var electron = atomGroup.pathItems.ellipse(ey + eDia/2, ex - eDia/2, eDia, eDia);
                     electron.filled = true; electron.stroked = false;
-                    var egc = new GradientColor(); egc.gradient = sphereGrad;
-                    var eMat = app.getScaleMatrix(180, 180);
-                    eMat.mValueTX = -(eDia/2 * 0.4); eMat.mValueTY = (eDia/2 * 0.4);
-                    egc.matrix = eMat; egc.origin = [ex, ey]; egc.length = eDia / 2;
-                    electron.fillColor = egc;
-                    var minus = atomGroup.pathItems.rectangle(ey + 0.1*MM, ex - 0.6*MM, 1.2*MM, 0.2*MM);
-                    minus.fillColor = colorWhite;
+                    applySphereFill(electron, ex, ey, eDia, false);
+                    if (optShowMinus) {
+                        var minus = atomGroup.pathItems.rectangle(ey + 0.1*MM, ex - 0.6*MM, 1.2*MM, 0.2*MM);
+                        minus.fillColor = colorWhite;
+                    }
                 }
             }
 
@@ -240,7 +261,7 @@
         }
 
         // 체크박스 값(.value)들을 함수로 넘겨줍니다.
-        drawAtomModel(selected.join(","), charge, chkNucleus.value, chkHorizontalFirst.value, chkRotateElectrons.value);
+        drawAtomModel(selected.join(","), charge, chkNucleus.value, chkHorizontalFirst.value, chkRotateElectrons.value, chkShowMinus.value, chkLit3D.value);
         
         // 원한다면 창을 닫지 않고 계속 생성하게 할 수도 있습니다. 현재는 생성 후 창 닫기 유지.
         win.close();
