@@ -67,22 +67,32 @@
         if (chargeLabels[j] === "0") chargeRadios[j].value = true;
     }
 
-    // --- 옵션 ---
-    var chkNucleus = win.add("checkbox", undefined, "핵 전하량 표시");
-    chkNucleus.value = true;
-    
-    // 추가된 배열 옵션 체크박스
-    var chkHorizontalFirst = win.add("checkbox", undefined, "1번 전자 껍질 수평 배열");
-    var chkRotateElectrons = win.add("checkbox", undefined, "2, 3번 전자 껍질 22.5도 이동");
+    // --- 옵션 (2열 배치) ---
+    var pnlOptions = win.add("panel", undefined, "옵션");
+    pnlOptions.orientation = "row";
+    pnlOptions.alignChildren = ["fill", "top"];
+    pnlOptions.spacing = 20;
+    var optCol1 = pnlOptions.add("group");
+    optCol1.orientation = "column"; optCol1.alignChildren = "left"; optCol1.spacing = 6;
+    var optCol2 = pnlOptions.add("group");
+    optCol2.orientation = "column"; optCol2.alignChildren = "left"; optCol2.spacing = 6;
 
-    // 전자 - 기호 표시 여부
-    var chkShowMinus = win.add("checkbox", undefined, "전자 - 기호 표시");
+    // 1열: 배치 관련
+    var chkNucleus = optCol1.add("checkbox", undefined, "핵 전하량 표시");
+    chkNucleus.value = true;
+    var chkHorizontalFirst = optCol1.add("checkbox", undefined, "1번 껍질 수평 배열");
+    var chkRotateShell2 = optCol1.add("checkbox", undefined, "2번 껍질 22.5° 이동");
+    var chkRotateShell3 = optCol1.add("checkbox", undefined, "3번 껍질 22.5° 이동");
+
+    // 2열: 외형/미리보기 관련
+    var chkShowMinus = optCol2.add("checkbox", undefined, "전자 - 기호 표시");
     chkShowMinus.value = true;
-    // 핵/전자를 좌측 상단 조명(3D 구) 느낌으로 (각각 독립 선택)
-    var chkLit3DNucleus = win.add("checkbox", undefined, "핵 3D 조명 효과");
+    var chkLit3DNucleus = optCol2.add("checkbox", undefined, "핵 3D 조명 효과");
     chkLit3DNucleus.value = true;
-    var chkLit3DElectron = win.add("checkbox", undefined, "전자 3D 조명 효과");
+    var chkLit3DElectron = optCol2.add("checkbox", undefined, "전자 3D 조명 효과");
     chkLit3DElectron.value = true;
+    var chkPreview = optCol2.add("checkbox", undefined, "미리보기 실시간 표시");
+    chkPreview.value = true;
 
     // --- 크기 조절 슬라이더 ---
     var pnlSize = win.add("panel", undefined, "크기 조절");
@@ -107,9 +117,6 @@
     var sldElectron = addSlider("전자 지름", 0.5, 5, 1.5, function(v){ return v.toFixed(1) + "mm"; });
     var sldChargeFont = addSlider("핵 전하량 글자", 3, 20, 7, function(v){ return v.toFixed(1) + "pt"; });
 
-    // --- 미리보기 (아트보드 실시간) ---
-    var chkPreview = win.add("checkbox", undefined, "미리보기 (아트보드에 실시간 표시)");
-    chkPreview.value = true;
 
     var btnGenerate = win.add("button", undefined, "원자 모형 생성하기", {name: "ok"});
     btnGenerate.preferredSize.height = 40;
@@ -128,7 +135,7 @@
         var sel = getSelectedElements();
         if (sel.length === 0) return [];
         return drawAtomModel(sel.join(","), String(currentCharge()), chkNucleus.value,
-            chkHorizontalFirst.value, chkRotateElectrons.value, chkShowMinus.value,
+            chkHorizontalFirst.value, chkRotateShell2.value, chkRotateShell3.value, chkShowMinus.value,
             chkLit3DNucleus.value, chkLit3DElectron.value,
             sldOverall.value, sldNucleus.value, sldElectron.value, sldChargeFont.value, targetLayer, consumeGuide);
     }
@@ -154,14 +161,15 @@
     for (var ri = 0; ri < chargeRadios.length; ri++) chargeRadios[ri].onClick = updatePreview;
     chkNucleus.onClick = updatePreview;
     chkHorizontalFirst.onClick = updatePreview;
-    chkRotateElectrons.onClick = updatePreview;
+    chkRotateShell2.onClick = updatePreview;
+    chkRotateShell3.onClick = updatePreview;
     chkShowMinus.onClick = updatePreview;
     chkLit3DNucleus.onClick = updatePreview;
     chkLit3DElectron.onClick = updatePreview;
     chkPreview.onClick = updatePreview;
 
     // 3. 핵심 그리기 로직 (추가된 파라미터 적용)
-    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateElectrons, optShowMinus, optLit3DNucleus, optLit3DElectron, overallScale, nucleusDiaMM, electronDiaMM, chargeFontPt, targetLayer, consumeGuide) {
+    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateShell2, optRotateShell3, optShowMinus, optLit3DNucleus, optLit3DElectron, overallScale, nucleusDiaMM, electronDiaMM, chargeFontPt, targetLayer, consumeGuide) {
         if (app.documents.length === 0) return [];
 
         var atomStrings = atomicNumbersStr.split(",");
@@ -317,18 +325,21 @@
             // 1번 껍질 전자 배열 옵션 (수평 옵션 체크 시 0/180도, 기본은 수직 90/270도)
             var angles1 = optHorizontalFirst ? [0, 180] : [90, 270];
 
-            // 2, 3번 껍질 전자 회전 옵션
+            // 2, 3번 껍질 전자 회전 옵션 (각 껍질 독립)
             var baseAnglesO = [90, -90, 0, 180, -135, 45, 135, -45];
-            var anglesO = [];
-            for (var a = 0; a < baseAnglesO.length; a++) {
-                anglesO.push(optRotateElectrons ? baseAnglesO[a] + 22.5 : baseAnglesO[a]);
+            function shellAngles(rotate) {
+                var arr = [];
+                for (var a = 0; a < baseAnglesO.length; a++) arr.push(rotate ? baseAnglesO[a] + 22.5 : baseAnglesO[a]);
+                return arr;
             }
-            
+            var angles2 = shellAngles(optRotateShell2);
+            var angles3 = shellAngles(optRotateShell3);
+
             var eDia = electronDiaMM * MM * overallScale;
 
             for (var s = 1; s <= shellsNeeded; s++) {
                 var shellR = shellD[s-1]/2;
-                var curAngles = (s === 1) ? angles1 : anglesO;
+                var curAngles = (s === 1) ? angles1 : (s === 2 ? angles2 : angles3);
                 for (var e = 0; e < counts[s-1]; e++) {
                     var rad = curAngles[e] * Math.PI / 180;
                     var ex = cx + shellR * Math.cos(rad);
@@ -389,7 +400,7 @@
     // --- 옵션 기억 (마지막 실행 설정을 다음 실행 때 복원) ---
     var PREF_KEY = "AtomModelMaker/settings";
     function collectSettings() {
-        var parts = ["v1"];
+        var parts = ["v2"];
         var elems = "";
         for (var i = 0; i < checkBoxes.length; i++) elems += checkBoxes[i].value ? "1" : "0";
         parts.push(elems);
@@ -398,7 +409,8 @@
         parts.push(ci);
         parts.push(chkNucleus.value ? "1" : "0");
         parts.push(chkHorizontalFirst.value ? "1" : "0");
-        parts.push(chkRotateElectrons.value ? "1" : "0");
+        parts.push(chkRotateShell2.value ? "1" : "0");
+        parts.push(chkRotateShell3.value ? "1" : "0");
         parts.push(chkShowMinus.value ? "1" : "0");
         parts.push(chkLit3DNucleus.value ? "1" : "0");
         parts.push(chkLit3DElectron.value ? "1" : "0");
@@ -417,7 +429,7 @@
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length < 14) return;
+        if (p[0] !== "v2" || p.length < 15) return;
         try {
             var elems = p[1];
             for (var i = 0; i < checkBoxes.length && i < elems.length; i++) checkBoxes[i].value = (elems.charAt(i) === "1");
@@ -425,15 +437,16 @@
             for (var r = 0; r < chargeRadios.length; r++) chargeRadios[r].value = (r === ci);
             chkNucleus.value = (p[3] === "1");
             chkHorizontalFirst.value = (p[4] === "1");
-            chkRotateElectrons.value = (p[5] === "1");
-            chkShowMinus.value = (p[6] === "1");
-            chkLit3DNucleus.value = (p[7] === "1");
-            chkLit3DElectron.value = (p[8] === "1");
-            chkPreview.value = (p[9] === "1");
-            sldOverall.value = parseFloat(p[10]);
-            sldNucleus.value = parseFloat(p[11]);
-            sldElectron.value = parseFloat(p[12]);
-            sldChargeFont.value = parseFloat(p[13]);
+            chkRotateShell2.value = (p[5] === "1");
+            chkRotateShell3.value = (p[6] === "1");
+            chkShowMinus.value = (p[7] === "1");
+            chkLit3DNucleus.value = (p[8] === "1");
+            chkLit3DElectron.value = (p[9] === "1");
+            chkPreview.value = (p[10] === "1");
+            sldOverall.value = parseFloat(p[11]);
+            sldNucleus.value = parseFloat(p[12]);
+            sldElectron.value = parseFloat(p[13]);
+            sldChargeFont.value = parseFloat(p[14]);
             syncSliderLabels();
         } catch (e) {}
     }
