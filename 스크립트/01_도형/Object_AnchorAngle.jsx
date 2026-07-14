@@ -48,7 +48,7 @@
         dlg.alignChildren = "fill";
         dlg.margins = 16;
 
-        var currentLabel = dlg.add("statictext", undefined, "현재 각도: " + formatAngle(angle) + "°");
+        var currentLabel = dlg.add("statictext", undefined, "수평선 기준 현재 각도: " + formatAngle(getSignedHorizontalAngle(angle)) + "°");
         currentLabel.alignment = "left";
 
         var presetPanel = dlg.add("panel", undefined, "각도 선택");
@@ -171,6 +171,11 @@
         if (angle < 0) angle += 180;
         if (Math.abs(angle - 180) < 0.000001) return 0;
         return angle;
+    }
+
+    function getSignedHorizontalAngle(angle) {
+        var normalized = normalizeLineAngle(angle);
+        return normalized > 90 ? normalized - 180 : normalized;
     }
 
     function getLineAngle(first, second) {

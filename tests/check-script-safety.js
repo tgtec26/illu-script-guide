@@ -938,6 +938,7 @@ for (const [file, mode] of visibleAlignFiles) {
     const source = read(anchorAngle);
     const required = [
       'new Window("dialog", "앵커 기준 각도 맞추기")',
+      '"수평선 기준 현재 각도: " + formatAngle(getSignedHorizontalAngle(angle)) + "°"',
       'var presetAngles = [0, 30, 45, 60, 90]',
       'PathPointSelection.ANCHORPOINT',
       'selectedPoints.length !== 2',
@@ -957,6 +958,7 @@ for (const [file, mode] of visibleAlignFiles) {
     try {
       const helpers = extractWeatherFrontHelpers(source, [
         "normalizeLineAngle",
+        "getSignedHorizontalAngle",
         "getLineAngle",
         "getShortestRotation",
         "rotatePoint",
@@ -964,6 +966,9 @@ for (const [file, mode] of visibleAlignFiles) {
       assertClose(helpers.getLineAngle([0, 0], [10, 0]), 0, "horizontal line angle");
       assertClose(helpers.getLineAngle([10, 0], [0, 0]), 0, "reversed horizontal line angle");
       assertClose(helpers.getLineAngle([0, 0], [10, 10]), 45, "diagonal line angle");
+      assertClose(helpers.getSignedHorizontalAngle(150), -30, "descending line signed horizontal angle");
+      assertClose(helpers.getSignedHorizontalAngle(30), 30, "ascending line signed horizontal angle");
+      assertClose(helpers.getSignedHorizontalAngle(90), 90, "vertical signed horizontal angle");
       assertClose(helpers.getShortestRotation(30, 0), -30, "thirty degrees to horizontal");
       assertClose(helpers.getShortestRotation(150, 30), 60, "shortest undirected rotation");
       assertClose(helpers.getShortestRotation(0, 90), 90, "horizontal to vertical");
