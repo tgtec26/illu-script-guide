@@ -106,23 +106,30 @@
         var sphereGrad = createUniqueGradient("Sphere", [{pos:0, color:colorWhite, mid:13.3}, {pos:100, color:colorGray80}]);
 
         // 구(핵/전자)에 방사형 그라데이션을 적용하는 헬퍼
+        // 주의: 최신 Illustrator에서는 GradientColor의 origin/matrix/hilite 속성이
+        // 스크립트로는 무시되므로, 3D 조명은 "하이라이트를 중심으로 한 큰 원을
+        // 원래 크기 원으로 클리핑"하는 방식으로 구현한다.
         function applySphereFill(item, ox, oy, dia, lit3D) {
             var gc = new GradientColor();
             gc.gradient = sphereGrad;
-            gc.origin = [ox, oy];
-            gc.length = dia / 2;
-            if (lit3D) {
-                // 좌측 상단에서 조명을 받는 3D 구 느낌: 하이라이트를 좌측 상단으로 이동
-                gc.matrix = app.getIdentityMatrix();
-                gc.hiliteAngle = 135;   // 0=오른쪽, 90=위, 135=좌측 상단
-                gc.hiliteLength = 60;   // 중심에서 하이라이트를 이동시키는 비율(%)
-            } else {
-                // 기존 방식(중앙 부근 하이라이트, 완만한 음영)
-                var m = app.getScaleMatrix(180, 180);
-                m.mValueTX = -(dia/2 * 0.4); m.mValueTY = (dia/2 * 0.4);
-                gc.matrix = m;
+            if (!lit3D) {
+                item.fillColor = gc;
+                return item;
             }
-            item.fillColor = gc;
+            var r = dia / 2;
+            var hx = ox - r * 0.5;  // 하이라이트 중심 (좌측 상단)
+            var hy = oy + r * 0.5;
+            var R = r * 1.7;        // 큰 원 반지름: 우하단 가장자리가 어두워지도록 확대
+            var grp = item.parent.groupItems.add();
+            var big = grp.pathItems.ellipse(hy + R, hx - R, R * 2, R * 2);
+            big.filled = true; big.stroked = false;
+            big.fillColor = gc;
+            var mask = grp.pathItems.ellipse(oy + r, ox - r, dia, dia);
+            mask.filled = false; mask.stroked = false;
+            mask.clipping = true;
+            grp.clipped = true;
+            item.remove();
+            return grp;
         }
 
         var currentCx = startCx;
