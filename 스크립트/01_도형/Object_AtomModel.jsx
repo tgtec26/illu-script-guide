@@ -88,6 +88,7 @@
     var pnlSize = win.add("panel", undefined, "크기 조절");
     pnlSize.alignChildren = "left";
     pnlSize.spacing = 6;
+    var sliderSyncers = []; // 값 변경(복원 등) 후 라벨 텍스트를 다시 맞추는 함수 목록
     function addSlider(labelText, minV, maxV, initV, fmt) {
         var g = pnlSize.add("group");
         var lab = g.add("statictext", undefined, labelText);
@@ -97,8 +98,10 @@
         var t = g.add("statictext", undefined, fmt(initV));
         t.preferredSize.width = 55;
         s.onChanging = function() { t.text = fmt(s.value); updatePreview(); };
+        sliderSyncers.push(function() { t.text = fmt(s.value); });
         return s;
     }
+    function syncSliderLabels() { for (var i = 0; i < sliderSyncers.length; i++) sliderSyncers[i](); }
     var sldOverall = addSlider("전체 크기", 0.3, 2.5, 1.0, function(v){ return Math.round(v*100) + "%"; });
     var sldNucleus = addSlider("핵 지름", 1, 15, 5.5, function(v){ return v.toFixed(1) + "mm"; });
     var sldElectron = addSlider("전자 지름", 0.5, 5, 1.5, function(v){ return v.toFixed(1) + "mm"; });
@@ -383,11 +386,67 @@
         return created;
     }
 
-    // 생성 버튼: 검증 후 닫고, 실제 생성은 show() 반환 후 처리
+    // --- 옵션 기억 (마지막 실행 설정을 다음 실행 때 복원) ---
+    var PREF_KEY = "AtomModelMaker/settings";
+    function collectSettings() {
+        var parts = ["v1"];
+        var elems = "";
+        for (var i = 0; i < checkBoxes.length; i++) elems += checkBoxes[i].value ? "1" : "0";
+        parts.push(elems);
+        var ci = 3;
+        for (var r = 0; r < chargeRadios.length; r++) if (chargeRadios[r].value) { ci = r; break; }
+        parts.push(ci);
+        parts.push(chkNucleus.value ? "1" : "0");
+        parts.push(chkHorizontalFirst.value ? "1" : "0");
+        parts.push(chkRotateElectrons.value ? "1" : "0");
+        parts.push(chkShowMinus.value ? "1" : "0");
+        parts.push(chkLit3DNucleus.value ? "1" : "0");
+        parts.push(chkLit3DElectron.value ? "1" : "0");
+        parts.push(chkPreview.value ? "1" : "0");
+        parts.push(sldOverall.value);
+        parts.push(sldNucleus.value);
+        parts.push(sldElectron.value);
+        parts.push(sldChargeFont.value);
+        return parts.join("|");
+    }
+    function saveSettings() {
+        try { app.preferences.setStringPreference(PREF_KEY, collectSettings()); } catch (e) {}
+    }
+    function applySettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 14) return;
+        try {
+            var elems = p[1];
+            for (var i = 0; i < checkBoxes.length && i < elems.length; i++) checkBoxes[i].value = (elems.charAt(i) === "1");
+            var ci = parseInt(p[2], 10);
+            for (var r = 0; r < chargeRadios.length; r++) chargeRadios[r].value = (r === ci);
+            chkNucleus.value = (p[3] === "1");
+            chkHorizontalFirst.value = (p[4] === "1");
+            chkRotateElectrons.value = (p[5] === "1");
+            chkShowMinus.value = (p[6] === "1");
+            chkLit3DNucleus.value = (p[7] === "1");
+            chkLit3DElectron.value = (p[8] === "1");
+            chkPreview.value = (p[9] === "1");
+            sldOverall.value = parseFloat(p[10]);
+            sldNucleus.value = parseFloat(p[11]);
+            sldElectron.value = parseFloat(p[12]);
+            sldChargeFont.value = parseFloat(p[13]);
+            syncSliderLabels();
+        } catch (e) {}
+    }
+
+    // 생성 버튼: 검증 후 설정 저장하고 닫는다. 실제 생성은 show() 반환 후 처리
     btnGenerate.onClick = function() {
         if (getSelectedElements().length === 0) { alert("원소를 선택하세요."); return; }
+        saveSettings();
         win.close(1);
     };
+
+    // 마지막 실행 설정 복원 (없으면 기본값 유지)
+    applySettings();
 
     // 초기 미리보기: 표시 전 1회 + 표시 시점(onShow)에 다시 그려야 화면에 보인다.
     // (show() 전 redraw는 모달 창이 뜨며 이전 화면으로 덮이므로 초기 미리보기가 안 보임)
