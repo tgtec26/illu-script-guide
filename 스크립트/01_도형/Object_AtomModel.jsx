@@ -27,7 +27,7 @@
 
     var btnDeselect = pnlElement.add("button", undefined, "전체 해제");
     btnDeselect.alignment = "right";
-    btnDeselect.onClick = function() { for (var i = 0; i < checkBoxes.length; i++) checkBoxes[i].value = false; };
+    btnDeselect.onClick = function() { for (var i = 0; i < checkBoxes.length; i++) checkBoxes[i].value = false; refreshPreview(); };
 
     // --- 이온 전하 패널 ---
     var pnlCharge = win.add("panel", undefined, "이온 전하");
@@ -50,15 +50,138 @@
     // 전자 - 기호 표시 여부
     var chkShowMinus = win.add("checkbox", undefined, "전자 - 기호 표시");
     chkShowMinus.value = true;
-    // 핵/전자를 좌측 상단 조명(3D 구) 느낌으로
-    var chkLit3D = win.add("checkbox", undefined, "핵/전자 3D 조명 효과");
-    chkLit3D.value = true;
+    // 핵/전자를 좌측 상단 조명(3D 구) 느낌으로 (각각 독립 선택)
+    var chkLit3DNucleus = win.add("checkbox", undefined, "핵 3D 조명 효과");
+    chkLit3DNucleus.value = true;
+    var chkLit3DElectron = win.add("checkbox", undefined, "전자 3D 조명 효과");
+    chkLit3DElectron.value = true;
+
+    // --- 크기 조절 슬라이더 ---
+    var pnlSize = win.add("panel", undefined, "크기 조절");
+    pnlSize.alignChildren = "left";
+    pnlSize.spacing = 6;
+    function addSlider(labelText, minV, maxV, initV, fmt) {
+        var g = pnlSize.add("group");
+        var lab = g.add("statictext", undefined, labelText);
+        lab.preferredSize.width = 70;
+        var s = g.add("slider", undefined, initV, minV, maxV);
+        s.preferredSize.width = 150;
+        var t = g.add("statictext", undefined, fmt(initV));
+        t.preferredSize.width = 55;
+        s.onChanging = function() { t.text = fmt(s.value); refreshPreview(); };
+        return s;
+    }
+    var sldOverall = addSlider("전체 크기", 0.3, 2.5, 1.0, function(v){ return Math.round(v*100) + "%"; });
+    var sldNucleus = addSlider("핵 지름", 1, 15, 5.5, function(v){ return v.toFixed(1) + "mm"; });
+    var sldElectron = addSlider("전자 지름", 0.5, 5, 1.5, function(v){ return v.toFixed(1) + "mm"; });
+
+    // --- 미리보기 (도식) ---
+    var pnlPreview = win.add("panel", undefined, "미리보기 (도식)");
+    var preview = pnlPreview.add("group");
+    preview.preferredSize = [240, 240];
+    preview.onDraw = drawPreview;
 
     var btnGenerate = win.add("button", undefined, "원자 모형 생성하기", {name: "ok"});
     btnGenerate.preferredSize.height = 40;
 
+    // --- 미리보기용 헬퍼 ---
+    function firstSelectedZ() {
+        for (var i = 0; i < checkBoxes.length; i++) if (checkBoxes[i].value) return i + 1;
+        return 0;
+    }
+    function currentCharge() {
+        for (var r = 0; r < chargeRadios.length; r++) if (chargeRadios[r].value) return parseInt(chargeLabels[r], 10);
+        return 0;
+    }
+    function circlePath(g, cx, cy, r) {
+        var n = 40;
+        g.newPath();
+        for (var i = 0; i <= n; i++) {
+            var a = i / n * 2 * Math.PI;
+            var x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
+            if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+        }
+        g.closePath();
+    }
+    function fillCircle(g, brush, cx, cy, r) { if (r <= 0) return; circlePath(g, cx, cy, r); g.fillPath(brush); }
+    function strokeCircle(g, pen, cx, cy, r) { if (r <= 0) return; circlePath(g, cx, cy, r); g.strokePath(pen); }
+    function fillRect(g, brush, x, y, w, h) {
+        g.newPath(); g.moveTo(x, y); g.lineTo(x + w, y); g.lineTo(x + w, y + h); g.lineTo(x, y + h); g.closePath();
+        g.fillPath(brush);
+    }
+    function drawPreview() {
+        try {
+            var g = this.graphics;
+            var W = this.size[0], H = this.size[1];
+            var bg = g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 1]);
+            fillRect(g, bg, 0, 0, W, H);
+
+            var Z = firstSelectedZ();
+            if (Z === 0) return;
+            var charge = currentCharge();
+            var eCount = Math.max(0, Z - charge);
+            var e1 = Math.min(eCount, 2);
+            var e2 = Math.min(Math.max(0, eCount - 2), 8);
+            var e3 = Math.min(Math.max(0, eCount - 10), 8);
+            var shellsNeeded = (e3 > 0) ? 3 : (e2 > 0 ? 2 : (e1 > 0 ? 1 : 0));
+            var counts = [e1, e2, e3];
+
+            var baseShellD = [11.5, 17.5, 23.5];
+            var nDiaMM = sldNucleus.value, eDiaMM = sldElectron.value, ov = sldOverall.value;
+            var outerShellR = (shellsNeeded > 0) ? baseShellD[shellsNeeded - 1] / 2 : nDiaMM / 2;
+            var reach = outerShellR * 1.15; // 껍질 기준 여백(슬라이더와 무관)
+            var fitPx = Math.min(W, H) / 2 - 10;
+            var pxPerMM = (fitPx / reach) * ov; // 전체 크기 슬라이더가 미리보기 배율에 반영
+            var cx = W / 2, cy = H / 2;
+
+            var shellPen = g.newPen(g.PenType.SOLID_COLOR, [0.72, 0.72, 0.72, 1], 1.4);
+            var nucBrush = g.newBrush(g.BrushType.SOLID_COLOR, [0.42, 0.42, 0.42, 1]);
+            var eBrush = g.newBrush(g.BrushType.SOLID_COLOR, [0.35, 0.35, 0.35, 1]);
+            var hiBrush = g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 0.85]);
+            var whiteBrush = g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 1]);
+
+            for (var s = shellsNeeded; s >= 1; s--) {
+                strokeCircle(g, shellPen, cx, cy, baseShellD[s - 1] / 2 * pxPerMM);
+            }
+            var nR = nDiaMM / 2 * pxPerMM;
+            fillCircle(g, nucBrush, cx, cy, nR);
+            if (chkLit3DNucleus.value) fillCircle(g, hiBrush, cx - nR * 0.35, cy - nR * 0.35, nR * 0.3);
+
+            var angles1 = chkHorizontalFirst.value ? [0, 180] : [90, 270];
+            var baseO = [90, -90, 0, 180, -135, 45, 135, -45];
+            var anglesO = [];
+            for (var a = 0; a < baseO.length; a++) anglesO.push(chkRotateElectrons.value ? baseO[a] + 22.5 : baseO[a]);
+            var eR = eDiaMM / 2 * pxPerMM;
+            for (var s2 = 1; s2 <= shellsNeeded; s2++) {
+                var shellR = baseShellD[s2 - 1] / 2 * pxPerMM;
+                var ang = (s2 === 1) ? angles1 : anglesO;
+                for (var e = 0; e < counts[s2 - 1]; e++) {
+                    var rad = ang[e] * Math.PI / 180;
+                    var ex = cx + shellR * Math.cos(rad);
+                    var ey = cy - shellR * Math.sin(rad); // 화면 y는 아래로 증가하므로 부호 반전
+                    fillCircle(g, eBrush, ex, ey, eR);
+                    if (chkLit3DElectron.value) fillCircle(g, hiBrush, ex - eR * 0.35, ey - eR * 0.35, eR * 0.32);
+                    if (chkShowMinus.value) {
+                        var mW = eR * 1.6, mH = Math.max(1, eR * 0.4);
+                        fillRect(g, whiteBrush, ex - mW / 2, ey - mH / 2, mW, mH);
+                    }
+                }
+            }
+        } catch (err) { /* 미리보기 실패는 생성에 영향 없음 */ }
+    }
+    function refreshPreview() { try { preview.notify("onDraw"); } catch (e) {} }
+
+    // 컨트롤 변경 시 미리보기 갱신
+    for (var ci = 0; ci < checkBoxes.length; ci++) checkBoxes[ci].onClick = refreshPreview;
+    for (var ri = 0; ri < chargeRadios.length; ri++) chargeRadios[ri].onClick = refreshPreview;
+    chkHorizontalFirst.onClick = refreshPreview;
+    chkRotateElectrons.onClick = refreshPreview;
+    chkShowMinus.onClick = refreshPreview;
+    chkLit3DNucleus.onClick = refreshPreview;
+    chkLit3DElectron.onClick = refreshPreview;
+
     // 3. 핵심 그리기 로직 (추가된 파라미터 적용)
-    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateElectrons, optShowMinus, optLit3D) {
+    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateElectrons, optShowMinus, optLit3DNucleus, optLit3DElectron, overallScale, nucleusDiaMM, electronDiaMM) {
         if (app.documents.length === 0) return "에러: 열려있는 문서가 없습니다.";
         
         var atomStrings = atomicNumbersStr.split(",");
@@ -149,7 +272,7 @@
         }
 
         var currentCx = startCx;
-        var GAP = 5 * MM;
+        var GAP = 5 * MM * overallScale;
         var previousRightBounds = 0;
 
         // 가이드 원이 있으면 모든 원자를 하나의 그룹에 담아 마지막에 함께 변환한다.
@@ -160,20 +283,20 @@
         for (var i = 0; i < atomicNumbers.length; i++) {
             var atomicNumber = atomicNumbers[i];
             var electronCount = Math.max(0, atomicNumber - ionCharge);
-            var shellD = [11.5*MM, 17.5*MM, 23.5*MM];
-            var nDia = 5.5 * MM;
+            var shellD = [11.5*MM*overallScale, 17.5*MM*overallScale, 23.5*MM*overallScale];
+            var nDia = nucleusDiaMM * MM * overallScale;
             var eCount1 = Math.min(electronCount, 2);
             var eCount2 = Math.min(Math.max(0, electronCount - 2), 8);
             var eCount3 = Math.min(Math.max(0, electronCount - 10), 8);
             var shellsNeeded = (eCount3 > 0) ? 3 : (eCount2 > 0 ? 2 : (eCount1 > 0 ? 1 : 0));
 
             var baseRadius = (shellsNeeded > 0) ? shellD[shellsNeeded-1]/2 : nDia/2;
-            var leftBounds = baseRadius + (1 * MM);  
-            var rightBounds = baseRadius + (1 * MM);
+            var leftBounds = baseRadius + (1 * MM * overallScale);
+            var rightBounds = baseRadius + (1 * MM * overallScale);
 
             if (ionCharge !== 0) {
-                leftBounds = baseRadius + (4 * MM);
-                rightBounds = baseRadius + (7 * MM);
+                leftBounds = baseRadius + (4 * MM * overallScale);
+                rightBounds = baseRadius + (7 * MM * overallScale);
             }
 
             if (i === 0) { currentCx = startCx; } 
@@ -206,7 +329,7 @@
                 nucleus.fillColor = colorGray80;
                 var t = atomGroup.textFrames.add();
                 t.contents = atomicNumber + "+";
-                t.textRange.characterAttributes.size = 7;
+                t.textRange.characterAttributes.size = 7 * overallScale;
                 t.textRange.characterAttributes.fillColor = colorWhite;
                 try { t.textRange.characterAttributes.textFont = app.textFonts.getByName(fontName); } catch(e) {}
                 
@@ -215,7 +338,7 @@
                 outlinedGroup.translate(cx - (gb[0] + gb[2]) / 2, cy - (gb[1] + gb[3]) / 2);
             } else {
                 nucleus.filled = true;
-                applySphereFill(nucleus, cx, cy, nDia, optLit3D);
+                applySphereFill(nucleus, cx, cy, nDia, optLit3DNucleus);
             }
 
             // 3. 전자
@@ -231,7 +354,7 @@
                 anglesO.push(optRotateElectrons ? baseAnglesO[a] + 22.5 : baseAnglesO[a]);
             }
             
-            var eDia = 1.5 * MM;
+            var eDia = electronDiaMM * MM * overallScale;
 
             for (var s = 1; s <= shellsNeeded; s++) {
                 var shellR = shellD[s-1]/2;
@@ -242,9 +365,11 @@
                     var ey = cy + shellR * Math.sin(rad);
                     var electron = atomGroup.pathItems.ellipse(ey + eDia/2, ex - eDia/2, eDia, eDia);
                     electron.filled = true; electron.stroked = false;
-                    applySphereFill(electron, ex, ey, eDia, optLit3D);
+                    applySphereFill(electron, ex, ey, eDia, optLit3DElectron);
                     if (optShowMinus) {
-                        var minus = atomGroup.pathItems.rectangle(ey + 0.1*MM, ex - 0.6*MM, 1.2*MM, 0.2*MM);
+                        // - 기호는 전자 지름에 비례 (기존 1.5mm 전자 기준 폭 1.2mm, 높이 0.2mm)
+                        var mW = eDia * 0.8, mH = eDia * (0.2/1.5);
+                        var minus = atomGroup.pathItems.rectangle(ey + mH/2, ex - mW/2, mW, mH);
                         minus.filled = true; minus.stroked = false;
                         minus.fillColor = colorWhite;
                     }
@@ -254,24 +379,25 @@
             // 4. 이온 대괄호 및 전하량 (서체 적용 부분)
             if (ionCharge !== 0) {
                 var brR = (shellsNeeded > 0) ? shellD[shellsNeeded-1]/2 : nDia/2;
-                var gap = 2 * MM;
+                var gap = 2 * MM * overallScale;
+                var brW = 2 * MM * overallScale;
                 var drawBracket = function(isL, center_x, center_y, brRadius) {
                     var path = atomGroup.pathItems.add();
                     var m = isL ? -1 : 1;
                     var bx = center_x + (brRadius + gap) * m;
-                    path.setEntirePath([[bx - 2*MM*m, center_y + brRadius], [bx, center_y + brRadius], [bx, center_y - brRadius], [bx - 2*MM*m, center_y - brRadius]]);
-                    path.filled = false; path.stroked = true; path.strokeWidth = 0.3; path.strokeColor = getCMYK(0,0,0,100);
+                    path.setEntirePath([[bx - brW*m, center_y + brRadius], [bx, center_y + brRadius], [bx, center_y - brRadius], [bx - brW*m, center_y - brRadius]]);
+                    path.filled = false; path.stroked = true; path.strokeWidth = 0.3 * overallScale; path.strokeColor = getCMYK(0,0,0,100);
                 };
                 drawBracket(true, cx, cy, brR); drawBracket(false, cx, cy, brR);
-                
+
                 var lbl = atomGroup.textFrames.add();
                 var absC = Math.abs(ionCharge);
                 lbl.contents = (absC > 1 ? absC : "") + (ionCharge > 0 ? "+" : "-");
-                lbl.textRange.characterAttributes.size = 8;
+                lbl.textRange.characterAttributes.size = 8 * overallScale;
                 // 이온 전하량 서체 적용
                 try { lbl.textRange.characterAttributes.textFont = app.textFonts.getByName(fontName); } catch(e) {}
-                
-                lbl.left = cx + brR + gap + 0.5*MM;
+
+                lbl.left = cx + brR + gap + 0.5*MM*overallScale;
                 lbl.top = cy + brR + lbl.height * 0.7;
             }
         }
@@ -303,7 +429,7 @@
         }
 
         // 체크박스 값(.value)들을 함수로 넘겨줍니다.
-        drawAtomModel(selected.join(","), charge, chkNucleus.value, chkHorizontalFirst.value, chkRotateElectrons.value, chkShowMinus.value, chkLit3D.value);
+        drawAtomModel(selected.join(","), charge, chkNucleus.value, chkHorizontalFirst.value, chkRotateElectrons.value, chkShowMinus.value, chkLit3DNucleus.value, chkLit3DElectron.value, sldOverall.value, sldNucleus.value, sldElectron.value);
         
         // 원한다면 창을 닫지 않고 계속 생성하게 할 수도 있습니다. 현재는 생성 후 창 닫기 유지.
         win.close();
