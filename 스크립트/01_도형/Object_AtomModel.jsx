@@ -213,12 +213,13 @@
         // 스크립트로는 무시되므로, 3D 조명은 "하이라이트를 중심으로 한 큰 원을
         // 원래 크기 원으로 클리핑"하는 방식으로 구현한다.
         function applySphereFill(item, ox, oy, dia, lit3D) {
-            var gc = new GradientColor();
-            gc.gradient = sphereGrad;
             if (!lit3D) {
-                item.fillColor = gc;
+                // 3D 효과 꺼짐 → 그라데이션 없이 플랫 단색 (핵 전하량 표시와 동일한 톤)
+                item.fillColor = colorGray80;
                 return item;
             }
+            var gc = new GradientColor();
+            gc.gradient = sphereGrad;
             var r = dia / 2;
             var hx = ox - r * 0.35;  // 하이라이트 중심 (좌측 상단, 중심에서 살짝 치우침)
             var hy = oy + r * 0.35;
