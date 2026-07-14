@@ -1,6 +1,34 @@
 (function() {
+    if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
+
     // 1. 데이터 정의
     var elements = ["H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar"];
+
+    // 그라데이션은 문서당 1회만 만들어 재사용한다(미리보기 반복 시 스와치 폭증 방지).
+    var _gradCache = null, _gradCacheDoc = null;
+    function getGradients(doc) {
+        if (_gradCache && _gradCacheDoc === doc) return _gradCache;
+        function cmyk(c, m, y, k) { var col = new CMYKColor(); col.cyan = c; col.magenta = m; col.yellow = y; col.black = k; return col; }
+        var white = cmyk(0, 0, 0, 0), gray40 = cmyk(0, 0, 0, 40), gray80 = cmyk(0, 0, 0, 80);
+        function uniq(baseName, stops) {
+            var grad = doc.gradients.add();
+            grad.name = baseName + "_" + (new Date().getTime());
+            grad.type = GradientType.RADIAL;
+            while (grad.gradientStops.length < stops.length) grad.gradientStops.add();
+            for (var i = 0; i < stops.length; i++) {
+                grad.gradientStops[i].rampPoint = stops[i].pos;
+                grad.gradientStops[i].color = stops[i].color;
+                if (stops[i].mid) grad.gradientStops[i].midPoint = stops[i].mid;
+            }
+            return grad;
+        }
+        _gradCache = {
+            shell: uniq("Shell", [{pos:0, color:white}, {pos:83, color:white, mid:87}, {pos:100, color:gray40}]),
+            sphere: uniq("Sphere", [{pos:0, color:white, mid:13.3}, {pos:100, color:gray80}])
+        };
+        _gradCacheDoc = doc;
+        return _gradCache;
+    }
 
     // 2. ScriptUI 창 구성
     var win = new Window("dialog", "원자 모형 생성기");
@@ -27,7 +55,7 @@
 
     var btnDeselect = pnlElement.add("button", undefined, "전체 해제");
     btnDeselect.alignment = "right";
-    btnDeselect.onClick = function() { for (var i = 0; i < checkBoxes.length; i++) checkBoxes[i].value = false; refreshPreview(); };
+    btnDeselect.onClick = function() { for (var i = 0; i < checkBoxes.length; i++) checkBoxes[i].value = false; updatePreview(); };
 
     // --- 이온 전하 패널 ---
     var pnlCharge = win.add("panel", undefined, "이온 전하");
@@ -68,122 +96,70 @@
         s.preferredSize.width = 150;
         var t = g.add("statictext", undefined, fmt(initV));
         t.preferredSize.width = 55;
-        s.onChanging = function() { t.text = fmt(s.value); refreshPreview(); };
+        s.onChanging = function() { t.text = fmt(s.value); updatePreview(); };
         return s;
     }
     var sldOverall = addSlider("전체 크기", 0.3, 2.5, 1.0, function(v){ return Math.round(v*100) + "%"; });
     var sldNucleus = addSlider("핵 지름", 1, 15, 5.5, function(v){ return v.toFixed(1) + "mm"; });
     var sldElectron = addSlider("전자 지름", 0.5, 5, 1.5, function(v){ return v.toFixed(1) + "mm"; });
 
-    // --- 미리보기 (도식) ---
-    var pnlPreview = win.add("panel", undefined, "미리보기 (도식)");
-    var preview = pnlPreview.add("group");
-    preview.preferredSize = [240, 240];
-    preview.onDraw = drawPreview;
+    // --- 미리보기 (아트보드 실시간) ---
+    var chkPreview = win.add("checkbox", undefined, "미리보기 (아트보드에 실시간 표시)");
+    chkPreview.value = true;
 
     var btnGenerate = win.add("button", undefined, "원자 모형 생성하기", {name: "ok"});
     btnGenerate.preferredSize.height = 40;
 
-    // --- 미리보기용 헬퍼 ---
-    function firstSelectedZ() {
-        for (var i = 0; i < checkBoxes.length; i++) if (checkBoxes[i].value) return i + 1;
-        return 0;
+    // --- 현재 UI 값 읽기 / 그리기 호출 ---
+    function getSelectedElements() {
+        var sel = [];
+        for (var k = 0; k < checkBoxes.length; k++) if (checkBoxes[k].value) sel.push(k + 1);
+        return sel;
     }
     function currentCharge() {
         for (var r = 0; r < chargeRadios.length; r++) if (chargeRadios[r].value) return parseInt(chargeLabels[r], 10);
         return 0;
     }
-    function circlePath(g, cx, cy, r) {
-        var n = 40;
-        g.newPath();
-        for (var i = 0; i <= n; i++) {
-            var a = i / n * 2 * Math.PI;
-            var x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
-            if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    function drawWith(targetLayer, consumeGuide) {
+        var sel = getSelectedElements();
+        if (sel.length === 0) return [];
+        return drawAtomModel(sel.join(","), String(currentCharge()), chkNucleus.value,
+            chkHorizontalFirst.value, chkRotateElectrons.value, chkShowMinus.value,
+            chkLit3DNucleus.value, chkLit3DElectron.value,
+            sldOverall.value, sldNucleus.value, sldElectron.value, targetLayer, consumeGuide);
+    }
+
+    // --- 아트보드 실시간 미리보기 (Object_sphere 방식) ---
+    var previewItems = [];
+    function clearPreview() {
+        for (var i = 0; i < previewItems.length; i++) { try { previewItems[i].remove(); } catch (e) {} }
+        previewItems = [];
+    }
+    function updatePreview() {
+        if (app.documents.length === 0) return;
+        clearPreview();
+        if (chkPreview.value && getSelectedElements().length > 0) {
+            // 미리보기는 가이드 원을 삭제하지 않는다(consumeGuide=false).
+            try { previewItems = drawWith(app.activeDocument.activeLayer, false); } catch (e) { previewItems = []; }
         }
-        g.closePath();
+        try { app.redraw(); } catch (e) {}
     }
-    function fillCircle(g, brush, cx, cy, r) { if (r <= 0) return; circlePath(g, cx, cy, r); g.fillPath(brush); }
-    function strokeCircle(g, pen, cx, cy, r) { if (r <= 0) return; circlePath(g, cx, cy, r); g.strokePath(pen); }
-    function fillRect(g, brush, x, y, w, h) {
-        g.newPath(); g.moveTo(x, y); g.lineTo(x + w, y); g.lineTo(x + w, y + h); g.lineTo(x, y + h); g.closePath();
-        g.fillPath(brush);
-    }
-    function drawPreview() {
-        try {
-            var g = this.graphics;
-            var W = this.size[0], H = this.size[1];
-            var bg = g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 1]);
-            fillRect(g, bg, 0, 0, W, H);
-
-            var Z = firstSelectedZ();
-            if (Z === 0) return;
-            var charge = currentCharge();
-            var eCount = Math.max(0, Z - charge);
-            var e1 = Math.min(eCount, 2);
-            var e2 = Math.min(Math.max(0, eCount - 2), 8);
-            var e3 = Math.min(Math.max(0, eCount - 10), 8);
-            var shellsNeeded = (e3 > 0) ? 3 : (e2 > 0 ? 2 : (e1 > 0 ? 1 : 0));
-            var counts = [e1, e2, e3];
-
-            var baseShellD = [11.5, 17.5, 23.5];
-            var nDiaMM = sldNucleus.value, eDiaMM = sldElectron.value, ov = sldOverall.value;
-            var outerShellR = (shellsNeeded > 0) ? baseShellD[shellsNeeded - 1] / 2 : nDiaMM / 2;
-            var reach = outerShellR * 1.15; // 껍질 기준 여백(슬라이더와 무관)
-            var fitPx = Math.min(W, H) / 2 - 10;
-            var pxPerMM = (fitPx / reach) * ov; // 전체 크기 슬라이더가 미리보기 배율에 반영
-            var cx = W / 2, cy = H / 2;
-
-            var shellPen = g.newPen(g.PenType.SOLID_COLOR, [0.72, 0.72, 0.72, 1], 1.4);
-            var nucBrush = g.newBrush(g.BrushType.SOLID_COLOR, [0.42, 0.42, 0.42, 1]);
-            var eBrush = g.newBrush(g.BrushType.SOLID_COLOR, [0.35, 0.35, 0.35, 1]);
-            var hiBrush = g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 0.85]);
-            var whiteBrush = g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 1]);
-
-            for (var s = shellsNeeded; s >= 1; s--) {
-                strokeCircle(g, shellPen, cx, cy, baseShellD[s - 1] / 2 * pxPerMM);
-            }
-            var nR = nDiaMM / 2 * pxPerMM;
-            fillCircle(g, nucBrush, cx, cy, nR);
-            if (chkLit3DNucleus.value) fillCircle(g, hiBrush, cx - nR * 0.35, cy - nR * 0.35, nR * 0.3);
-
-            var angles1 = chkHorizontalFirst.value ? [0, 180] : [90, 270];
-            var baseO = [90, -90, 0, 180, -135, 45, 135, -45];
-            var anglesO = [];
-            for (var a = 0; a < baseO.length; a++) anglesO.push(chkRotateElectrons.value ? baseO[a] + 22.5 : baseO[a]);
-            var eR = eDiaMM / 2 * pxPerMM;
-            for (var s2 = 1; s2 <= shellsNeeded; s2++) {
-                var shellR = baseShellD[s2 - 1] / 2 * pxPerMM;
-                var ang = (s2 === 1) ? angles1 : anglesO;
-                for (var e = 0; e < counts[s2 - 1]; e++) {
-                    var rad = ang[e] * Math.PI / 180;
-                    var ex = cx + shellR * Math.cos(rad);
-                    var ey = cy - shellR * Math.sin(rad); // 화면 y는 아래로 증가하므로 부호 반전
-                    fillCircle(g, eBrush, ex, ey, eR);
-                    if (chkLit3DElectron.value) fillCircle(g, hiBrush, ex - eR * 0.35, ey - eR * 0.35, eR * 0.32);
-                    if (chkShowMinus.value) {
-                        var mW = eR * 1.6, mH = Math.max(1, eR * 0.4);
-                        fillRect(g, whiteBrush, ex - mW / 2, ey - mH / 2, mW, mH);
-                    }
-                }
-            }
-        } catch (err) { /* 미리보기 실패는 생성에 영향 없음 */ }
-    }
-    function refreshPreview() { try { preview.notify("onDraw"); } catch (e) {} }
 
     // 컨트롤 변경 시 미리보기 갱신
-    for (var ci = 0; ci < checkBoxes.length; ci++) checkBoxes[ci].onClick = refreshPreview;
-    for (var ri = 0; ri < chargeRadios.length; ri++) chargeRadios[ri].onClick = refreshPreview;
-    chkHorizontalFirst.onClick = refreshPreview;
-    chkRotateElectrons.onClick = refreshPreview;
-    chkShowMinus.onClick = refreshPreview;
-    chkLit3DNucleus.onClick = refreshPreview;
-    chkLit3DElectron.onClick = refreshPreview;
+    for (var ci = 0; ci < checkBoxes.length; ci++) checkBoxes[ci].onClick = updatePreview;
+    for (var ri = 0; ri < chargeRadios.length; ri++) chargeRadios[ri].onClick = updatePreview;
+    chkNucleus.onClick = updatePreview;
+    chkHorizontalFirst.onClick = updatePreview;
+    chkRotateElectrons.onClick = updatePreview;
+    chkShowMinus.onClick = updatePreview;
+    chkLit3DNucleus.onClick = updatePreview;
+    chkLit3DElectron.onClick = updatePreview;
+    chkPreview.onClick = updatePreview;
 
     // 3. 핵심 그리기 로직 (추가된 파라미터 적용)
-    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateElectrons, optShowMinus, optLit3DNucleus, optLit3DElectron, overallScale, nucleusDiaMM, electronDiaMM) {
-        if (app.documents.length === 0) return "에러: 열려있는 문서가 없습니다.";
-        
+    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateElectrons, optShowMinus, optLit3DNucleus, optLit3DElectron, overallScale, nucleusDiaMM, electronDiaMM, targetLayer, consumeGuide) {
+        if (app.documents.length === 0) return [];
+
         var atomStrings = atomicNumbersStr.split(",");
         var atomicNumbers = [];
         for (var k = 0; k < atomStrings.length; k++) {
@@ -197,7 +173,7 @@
         var fontName = "GSMediumB1"; // 지정 서체명
 
         var doc = app.activeDocument;
-        var layer = doc.activeLayer;
+        var layer = targetLayer ? targetLayer : doc.activeLayer;
         var centerPoint = doc.activeView.centerPoint;
         var startCx = centerPoint[0];
         var cy = centerPoint[1];
@@ -224,25 +200,12 @@
             return color;
         }
         var colorWhite = getCMYK(0, 0, 0, 0);
-        var colorGray40 = getCMYK(0, 0, 0, 40);
         var colorGray80 = getCMYK(0, 0, 0, 80);
 
-        function createUniqueGradient(baseName, stops) {
-            var uniqueName = baseName + "_" + new Date().getTime();
-            var grad = doc.gradients.add();
-            grad.name = uniqueName;
-            grad.type = GradientType.RADIAL;
-            while (grad.gradientStops.length < stops.length) grad.gradientStops.add();
-            for (var i = 0; i < stops.length; i++) {
-                grad.gradientStops[i].rampPoint = stops[i].pos;
-                grad.gradientStops[i].color = stops[i].color;
-                if (stops[i].mid) grad.gradientStops[i].midPoint = stops[i].mid;
-            }
-            return grad;
-        }
-
-        var shellGrad = createUniqueGradient("Shell", [{pos:0, color:colorWhite}, {pos:83, color:colorWhite, mid:87}, {pos:100, color:colorGray40}]);
-        var sphereGrad = createUniqueGradient("Sphere", [{pos:0, color:colorWhite, mid:13.3}, {pos:100, color:colorGray80}]);
+        // 그라데이션은 문서당 1회만 생성해 재사용 (미리보기 반복 대비)
+        var grads = getGradients(doc);
+        var shellGrad = grads.shell;
+        var sphereGrad = grads.sphere;
 
         // 구(핵/전자)에 방사형 그라데이션을 적용하는 헬퍼
         // 주의: 최신 Illustrator에서는 GradientColor의 origin/matrix/hilite 속성이
@@ -279,6 +242,7 @@
         var masterGroup = guide ? layer.groupItems.add() : null;
         var container = masterGroup ? masterGroup : layer;
         var firstOuterD = 0;
+        var created = []; // 최상위로 추가된 항목(미리보기 제거용)
 
         for (var i = 0; i < atomicNumbers.length; i++) {
             var atomicNumber = atomicNumbers[i];
@@ -309,6 +273,7 @@
 
             var atomGroup = container.groupItems.add();
             atomGroup.name = "Atom_" + elementSymbols[atomicNumber-1];
+            if (!masterGroup) created.push(atomGroup);
 
             // 1. 전자 껍질
             for (var s = shellsNeeded; s >= 1; s--) {
@@ -410,30 +375,29 @@
             mtx.mValueTX = guideCx - startCx * sc;
             mtx.mValueTY = guideCy - cy * sc;
             masterGroup.transform(mtx, true, true, true, true, 1, Transformation.DOCUMENTORIGIN);
-            guide.remove();
+            if (consumeGuide !== false) guide.remove(); // 미리보기에서는 원을 지우지 않는다
         }
-        return "성공";
+        if (masterGroup) created = [masterGroup];
+        return created;
     }
 
-    // 실행 버튼 이벤트 연동 (새로 추가된 체크박스 값 전달)
+    // 생성 버튼: 검증 후 닫고, 실제 생성은 show() 반환 후 처리
     btnGenerate.onClick = function() {
-        var selected = [];
-        for (var k = 0; k < checkBoxes.length; k++) {
-            if (checkBoxes[k].value) selected.push(k + 1);
-        }
-        if (selected.length === 0) { alert("원소를 선택하세요."); return; }
-
-        var charge = 0;
-        for (var r = 0; r < chargeRadios.length; r++) {
-            if (chargeRadios[r].value) { charge = chargeLabels[r]; break; }
-        }
-
-        // 체크박스 값(.value)들을 함수로 넘겨줍니다.
-        drawAtomModel(selected.join(","), charge, chkNucleus.value, chkHorizontalFirst.value, chkRotateElectrons.value, chkShowMinus.value, chkLit3DNucleus.value, chkLit3DElectron.value, sldOverall.value, sldNucleus.value, sldElectron.value);
-        
-        // 원한다면 창을 닫지 않고 계속 생성하게 할 수도 있습니다. 현재는 생성 후 창 닫기 유지.
-        win.close();
+        if (getSelectedElements().length === 0) { alert("원소를 선택하세요."); return; }
+        win.close(1);
     };
 
-    win.show();
+    // 초기 미리보기: 표시 전 1회 + 표시 시점(onShow)에 다시 그려야 화면에 보인다.
+    // (show() 전 redraw는 모달 창이 뜨며 이전 화면으로 덮이므로 초기 미리보기가 안 보임)
+    win.onShow = function() { updatePreview(); };
+    updatePreview();
+
+    var result = win.show();
+
+    // 미리보기 정리 후, 확인(1)일 때만 최종 오브젝트 생성(가이드 원 삭제 포함)
+    clearPreview();
+    if (result === 1 && app.documents.length > 0) {
+        try { drawWith(app.activeDocument.activeLayer, true); } catch (e) { alert("생성 오류: " + e); }
+        try { app.redraw(); } catch (e) {}
+    }
 })();
