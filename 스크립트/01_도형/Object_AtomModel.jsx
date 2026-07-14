@@ -50,8 +50,8 @@
     // 전자 - 기호 표시 여부
     var chkShowMinus = win.add("checkbox", undefined, "전자 - 기호 표시");
     chkShowMinus.value = true;
-    // 핵을 좌측 상단 조명(3D 구) 느낌으로
-    var chkLit3D = win.add("checkbox", undefined, "핵 좌측 상단 조명 (3D)");
+    // 핵/전자를 좌측 상단 조명(3D 구) 느낌으로
+    var chkLit3D = win.add("checkbox", undefined, "핵/전자 3D 조명 효과");
     chkLit3D.value = true;
 
     var btnGenerate = win.add("button", undefined, "원자 모형 생성하기", {name: "ok"});
@@ -78,6 +78,22 @@
         var centerPoint = doc.activeView.centerPoint;
         var startCx = centerPoint[0];
         var cy = centerPoint[1];
+
+        // 선택된 정원(원)을 최외각 껍질의 크기·위치 기준으로 사용.
+        // 그린 뒤 이 원의 크기에 맞춰 모형 전체를 확대/축소·이동하고, 원은 삭제한다.
+        var guide = null, guideCx = 0, guideCy = 0, guideD = 0;
+        if (doc.selection && doc.selection.length === 1 && doc.selection[0].typename === "PathItem" && doc.selection[0].closed) {
+            var gsel = doc.selection[0];
+            var gb = gsel.geometricBounds; // [left, top, right, bottom]
+            var gw = gb[2] - gb[0];
+            var gh = gb[1] - gb[3];
+            if (gw > 0 && gh > 0 && Math.abs(gw - gh) <= gw * 0.05) {
+                guide = gsel;
+                guideCx = (gb[0] + gb[2]) / 2;
+                guideCy = (gb[1] + gb[3]) / 2;
+                guideD = gw;
+            }
+        }
 
         function getCMYK(c, m, y, k) {
             var color = new CMYKColor();
@@ -117,9 +133,9 @@
                 return item;
             }
             var r = dia / 2;
-            var hx = ox - r * 0.5;  // 하이라이트 중심 (좌측 상단)
-            var hy = oy + r * 0.5;
-            var R = r * 1.7;        // 큰 원 반지름: 우하단 가장자리가 어두워지도록 확대
+            var hx = ox - r * 0.35;  // 하이라이트 중심 (좌측 상단, 중심에서 살짝 치우침)
+            var hy = oy + r * 0.35;
+            var R = r * 1.7;         // 큰 원 반지름: 우하단 가장자리가 어두워지도록 확대
             var grp = item.parent.groupItems.add();
             var big = grp.pathItems.ellipse(hy + R, hx - R, R * 2, R * 2);
             big.filled = true; big.stroked = false;
@@ -135,6 +151,11 @@
         var currentCx = startCx;
         var GAP = 5 * MM;
         var previousRightBounds = 0;
+
+        // 가이드 원이 있으면 모든 원자를 하나의 그룹에 담아 마지막에 함께 변환한다.
+        var masterGroup = guide ? layer.groupItems.add() : null;
+        var container = masterGroup ? masterGroup : layer;
+        var firstOuterD = 0;
 
         for (var i = 0; i < atomicNumbers.length; i++) {
             var atomicNumber = atomicNumbers[i];
@@ -161,7 +182,9 @@
             previousRightBounds = rightBounds;
             var cx = currentCx;
 
-            var atomGroup = layer.groupItems.add();
+            if (i === 0) firstOuterD = (shellsNeeded > 0) ? shellD[shellsNeeded-1] : nDia;
+
+            var atomGroup = container.groupItems.add();
             atomGroup.name = "Atom_" + elementSymbols[atomicNumber-1];
 
             // 1. 전자 껍질
@@ -219,9 +242,10 @@
                     var ey = cy + shellR * Math.sin(rad);
                     var electron = atomGroup.pathItems.ellipse(ey + eDia/2, ex - eDia/2, eDia, eDia);
                     electron.filled = true; electron.stroked = false;
-                    applySphereFill(electron, ex, ey, eDia, false);
+                    applySphereFill(electron, ex, ey, eDia, optLit3D);
                     if (optShowMinus) {
                         var minus = atomGroup.pathItems.rectangle(ey + 0.1*MM, ex - 0.6*MM, 1.2*MM, 0.2*MM);
+                        minus.filled = true; minus.stroked = false;
                         minus.fillColor = colorWhite;
                     }
                 }
@@ -247,9 +271,20 @@
                 // 이온 전하량 서체 적용
                 try { lbl.textRange.characterAttributes.textFont = app.textFonts.getByName(fontName); } catch(e) {}
                 
-                lbl.left = cx + brR + gap + 0.5*MM; 
+                lbl.left = cx + brR + gap + 0.5*MM;
                 lbl.top = cy + brR + lbl.height * 0.7;
             }
+        }
+
+        // 가이드 원 기준으로 모형 전체를 확대/축소·이동한 뒤 원을 삭제.
+        // 첫 원자의 중심(startCx, cy)을 기준점으로 스케일하고 가이드 중심으로 옮긴다.
+        if (guide && firstOuterD > 0) {
+            var sc = guideD / firstOuterD;
+            var mtx = app.getScaleMatrix(sc * 100, sc * 100);
+            mtx.mValueTX = guideCx - startCx * sc;
+            mtx.mValueTY = guideCy - cy * sc;
+            masterGroup.transform(mtx, true, true, true, true, 1, Transformation.DOCUMENTORIGIN);
+            guide.remove();
         }
         return "성공";
     }
