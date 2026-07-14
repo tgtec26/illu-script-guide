@@ -102,6 +102,7 @@
     var sldOverall = addSlider("전체 크기", 0.3, 2.5, 1.0, function(v){ return Math.round(v*100) + "%"; });
     var sldNucleus = addSlider("핵 지름", 1, 15, 5.5, function(v){ return v.toFixed(1) + "mm"; });
     var sldElectron = addSlider("전자 지름", 0.5, 5, 1.5, function(v){ return v.toFixed(1) + "mm"; });
+    var sldChargeFont = addSlider("핵 전하량 글자", 3, 20, 7, function(v){ return v.toFixed(1) + "pt"; });
 
     // --- 미리보기 (아트보드 실시간) ---
     var chkPreview = win.add("checkbox", undefined, "미리보기 (아트보드에 실시간 표시)");
@@ -126,7 +127,7 @@
         return drawAtomModel(sel.join(","), String(currentCharge()), chkNucleus.value,
             chkHorizontalFirst.value, chkRotateElectrons.value, chkShowMinus.value,
             chkLit3DNucleus.value, chkLit3DElectron.value,
-            sldOverall.value, sldNucleus.value, sldElectron.value, targetLayer, consumeGuide);
+            sldOverall.value, sldNucleus.value, sldElectron.value, sldChargeFont.value, targetLayer, consumeGuide);
     }
 
     // --- 아트보드 실시간 미리보기 (Object_sphere 방식) ---
@@ -157,7 +158,7 @@
     chkPreview.onClick = updatePreview;
 
     // 3. 핵심 그리기 로직 (추가된 파라미터 적용)
-    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateElectrons, optShowMinus, optLit3DNucleus, optLit3DElectron, overallScale, nucleusDiaMM, electronDiaMM, targetLayer, consumeGuide) {
+    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateElectrons, optShowMinus, optLit3DNucleus, optLit3DElectron, overallScale, nucleusDiaMM, electronDiaMM, chargeFontPt, targetLayer, consumeGuide) {
         if (app.documents.length === 0) return [];
 
         var atomStrings = atomicNumbersStr.split(",");
@@ -294,7 +295,7 @@
                 nucleus.fillColor = colorGray80;
                 var t = atomGroup.textFrames.add();
                 t.contents = atomicNumber + "+";
-                t.textRange.characterAttributes.size = 7 * overallScale;
+                t.textRange.characterAttributes.size = chargeFontPt * overallScale;
                 t.textRange.characterAttributes.fillColor = colorWhite;
                 try { t.textRange.characterAttributes.textFont = app.textFonts.getByName(fontName); } catch(e) {}
                 
