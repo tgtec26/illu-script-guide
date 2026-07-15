@@ -181,9 +181,25 @@
             }
         } catch (e) {}
     }
-    function updatePreview() {
+    // 현재 컨트롤 값 전체의 서명. 값이 안 바뀌면 미리보기를 다시 그리지 않는다
+    // (이미 선택된 라디오를 다시 클릭하는 등 무의미한 지웠다-그리기 깜빡임 방지)
+    function settingsSignature() {
+        var sig = [];
+        for (var i = 0; i < checkBoxes.length; i++) sig.push(checkBoxes[i].value ? 1 : 0);
+        sig.push(currentCharge());
+        sig.push(chkNucleus.value, chkHorizontalFirst.value, chkRotateShell2.value, chkRotateShell3.value);
+        sig.push(chkShowMinus.value, chkLit3DNucleus.value, chkLit3DElectron.value, chkPreview.value);
+        sig.push(sldOverall.value, sldNucleus.value, sldElectron.value, sldChargeFont.value);
+        return sig.join(",");
+    }
+    var lastPreviewSig = null;
+    function updatePreview(force) {
         if (app.documents.length === 0) return;
+        var sig = settingsSignature();
+        // 미리보기가 살아있고 설정이 동일하면 재드로우 생략
+        if (!force && sig === lastPreviewSig && previewItems.length > 0) return;
         clearPreview();
+        lastPreviewSig = sig;
         if (chkPreview.value && getSelectedElements().length > 0) {
             // 그리기 도중 오류(MRAP 등)가 나도 남은 조각을 제거할 수 있도록,
             // 먼저 홀더 그룹을 만들어 캡처한 뒤 그 안에 그린다. (유령 누적 방지)
@@ -496,10 +512,21 @@
         } catch (e) {}
     }
 
-    // 생성 버튼: 검증 후 설정 저장하고 닫는다. 실제 생성은 show() 반환 후 처리
+    // 생성 버튼: 모달 상태(미리보기와 같은 컨텍스트)에서 최종 생성까지 수행 후 닫는다.
+    // show() 반환 후(뷰 전환 중)에 그리면 간헐적으로 MRAP 오류가 나므로 여기서 그린다.
     btnGenerate.onClick = function() {
         if (getSelectedElements().length === 0) { alert("원소를 선택하세요."); return; }
         saveSettings();
+        clearPreview();
+        try {
+            drawWith(app.activeDocument.activeLayer, true);
+        } catch (e) {
+            alert("생성 오류: " + e + "\n다시 시도해주세요.");
+            lastPreviewSig = null; // 재시도 시 미리보기 다시 그리도록
+            updatePreview();
+            return; // 창을 열어둔 채 재시도 가능
+        }
+        try { app.redraw(); } catch (e) {}
         win.close(1);
     };
 
@@ -507,18 +534,13 @@
     removeLeftoverPreviews();
     applySettings();
 
-    // 초기 미리보기: 표시 전 1회 + 표시 시점(onShow)에 다시 그려야 화면에 보인다.
-    // (show() 전 redraw는 모달 창이 뜨며 이전 화면으로 덮이므로 초기 미리보기가 안 보임)
+    // 초기 미리보기는 표시 시점(onShow)에 그린다.
+    // (show() 전에 그리고 redraw하면 모달 창이 뜨며 이전 화면으로 덮여 안 보임)
     win.onShow = function() { updatePreview(); };
-    updatePreview();
 
-    var result = win.show();
+    win.show();
 
-    // 미리보기 정리 후, 확인(1)일 때만 최종 오브젝트 생성(가이드 원 삭제 포함)
+    // 생성은 onClick(모달 상태)에서 이미 완료. 취소로 닫힌 경우 미리보기만 정리.
     clearPreview();
-    try { app.redraw(); } catch (e) {} // 미리보기 잔여 제거를 먼저 반영해 깨끗한 상태에서 생성
-    if (result === 1 && app.documents.length > 0) {
-        try { drawWith(app.activeDocument.activeLayer, true); } catch (e) { alert("생성 오류: " + e); }
-        try { app.redraw(); } catch (e) {}
-    }
+    try { app.redraw(); } catch (e) {}
 })();
