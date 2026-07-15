@@ -4,18 +4,15 @@
     // 1. 데이터 정의
     var elements = ["H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar"];
 
-    // 그라데이션은 고정 이름으로 문서에서 찾아 재사용하고, 없으면 만든다.
-    // (매 그리기마다 재검증하므로 참조가 깨져도 자동 복구, 스와치도 2개로 유지)
+    // 그라데이션은 문서당 1회만 만들어 재사용한다(미리보기 반복 시 스와치 폭증 방지).
+    var _gradCache = null, _gradCacheDoc = null;
     function getGradients(doc) {
+        if (_gradCache && _gradCacheDoc === doc) return _gradCache;
         function cmyk(c, m, y, k) { var col = new CMYKColor(); col.cyan = c; col.magenta = m; col.yellow = y; col.black = k; return col; }
         var white = cmyk(0, 0, 0, 0), gray40 = cmyk(0, 0, 0, 40), gray80 = cmyk(0, 0, 0, 80);
-        function ensure(name, stops) {
-            var grad = null;
-            try { grad = doc.gradients.getByName(name); } catch (e) { grad = null; }
-            if (!grad) {
-                grad = doc.gradients.add();
-                grad.name = name;
-            }
+        function uniq(baseName, stops) {
+            var grad = doc.gradients.add();
+            grad.name = baseName + "_" + (new Date().getTime());
             grad.type = GradientType.RADIAL;
             while (grad.gradientStops.length < stops.length) grad.gradientStops.add();
             for (var i = 0; i < stops.length; i++) {
@@ -25,10 +22,12 @@
             }
             return grad;
         }
-        return {
-            shell: ensure("AtomModel_Shell", [{pos:0, color:white}, {pos:83, color:white, mid:87}, {pos:100, color:gray40}]),
-            sphere: ensure("AtomModel_Sphere", [{pos:0, color:white, mid:13.3}, {pos:100, color:gray80}])
+        _gradCache = {
+            shell: uniq("Shell", [{pos:0, color:white}, {pos:83, color:white, mid:87}, {pos:100, color:gray40}]),
+            sphere: uniq("Sphere", [{pos:0, color:white, mid:13.3}, {pos:100, color:gray80}])
         };
+        _gradCacheDoc = doc;
+        return _gradCache;
     }
 
     // 2. ScriptUI 창 구성
@@ -182,62 +181,19 @@
             }
         } catch (e) {}
     }
-    // 그릴 수 있는(잠기지 않고 보이는) 레이어를 찾는다.
-    // 활성 레이어가 잠김/숨김이면 오브젝트 추가가 MRAP 오류로 실패하므로,
-    // 실제로 그룹 생성을 시도해 성공하는 레이어를 찾는다. 실패 시 null.
-    function acquireHolder(name) {
-        var doc = app.activeDocument;
-        var candidates = [];
-        try { candidates.push(doc.activeLayer); } catch (e) {}
-        for (var i = 0; i < doc.layers.length; i++) candidates.push(doc.layers[i]);
-        for (var c = 0; c < candidates.length; c++) {
-            var L = candidates[c];
-            try {
-                if (!L || L.locked || !L.visible) continue;
-                var g = L.groupItems.add(); // 잠김/숨김이면 여기서 throw
-                g.name = name;
-                return g;
-            } catch (e) {}
-        }
-        return null;
-    }
-
-    // 현재 컨트롤 값 전체의 서명. 값이 안 바뀌면 미리보기를 다시 그리지 않는다
-    // (이미 선택된 라디오를 다시 클릭하는 등 무의미한 지웠다-그리기 깜빡임 방지)
-    function settingsSignature() {
-        var sig = [];
-        for (var i = 0; i < checkBoxes.length; i++) sig.push(checkBoxes[i].value ? 1 : 0);
-        sig.push(currentCharge());
-        sig.push(chkNucleus.value, chkHorizontalFirst.value, chkRotateShell2.value, chkRotateShell3.value);
-        sig.push(chkShowMinus.value, chkLit3DNucleus.value, chkLit3DElectron.value, chkPreview.value);
-        sig.push(sldOverall.value, sldNucleus.value, sldElectron.value, sldChargeFont.value);
-        return sig.join(",");
-    }
-    var lastPreviewSig = null;
-    function updatePreview(force) {
+    function updatePreview() {
         if (app.documents.length === 0) return;
-        var sig = settingsSignature();
-        // 미리보기가 살아있고 설정이 동일하면 재드로우 생략
-        if (!force && sig === lastPreviewSig && previewItems.length > 0) return;
         clearPreview();
-        lastPreviewSig = sig;
         if (chkPreview.value && getSelectedElements().length > 0) {
             // 그리기 도중 오류(MRAP 등)가 나도 남은 조각을 제거할 수 있도록,
             // 먼저 홀더 그룹을 만들어 캡처한 뒤 그 안에 그린다. (유령 누적 방지)
             // 미리보기는 가이드 원을 삭제하지 않는다(consumeGuide=false).
-            var holder = acquireHolder("AtomModel_Preview");
-            if (holder) {
-                try {
-                    drawWith(holder, false);
-                    previewItems = [holder]; // 성공 시에만 유지
-                } catch (e) {
-                    // 실패: 부분 잔해 제거 + 서명 리셋(다음 이벤트에서 재시도)
-                    try { holder.remove(); } catch (e2) {}
-                    lastPreviewSig = null;
-                }
-            } else {
-                lastPreviewSig = null;
-            }
+            try {
+                var holder = app.activeDocument.activeLayer.groupItems.add();
+                holder.name = "AtomModel_Preview";
+                previewItems = [holder];
+                drawWith(holder, false);
+            } catch (e) {}
         }
         try { app.redraw(); } catch (e) {}
     }
@@ -256,7 +212,6 @@
 
     // 3. 핵심 그리기 로직 (추가된 파라미터 적용)
     function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateShell2, optRotateShell3, optShowMinus, optLit3DNucleus, optLit3DElectron, overallScale, nucleusDiaMM, electronDiaMM, chargeFontPt, targetLayer, consumeGuide) {
-        drawAtomModel.lastStep = "시작"; // 오류 진단용 단계 기록
         if (app.documents.length === 0) return [];
 
         var atomStrings = atomicNumbersStr.split(",");
@@ -375,7 +330,6 @@
             atomGroup.name = "Atom_" + elementSymbols[atomicNumber-1];
             if (!masterGroup) created.push(atomGroup);
 
-            drawAtomModel.lastStep = "전자 껍질";
             // 1. 전자 껍질
             for (var s = shellsNeeded; s >= 1; s--) {
                 var dia = shellD[s-1];
@@ -387,33 +341,26 @@
                 shell.fillColor = gc;
             }
 
-            drawAtomModel.lastStep = "원자핵";
             // 2. 원자핵
             var nucleus = atomGroup.pathItems.ellipse(cy + nDia/2, cx - nDia/2, nDia, nDia);
             nucleus.stroked = false;
 
             if (showNucleusText) {
-                drawAtomModel.lastStep = "핵 전하량 텍스트";
                 nucleus.fillColor = colorGray80;
                 var t = atomGroup.textFrames.add();
                 t.contents = atomicNumber + "+";
                 t.textRange.characterAttributes.size = chargeFontPt;
                 t.textRange.characterAttributes.fillColor = colorWhite;
                 try { t.textRange.characterAttributes.textFont = app.textFonts.getByName(fontName); } catch(e) {}
-
-                // createOutline이 실패해도 그리기가 중단되거나 원시 텍스트가
-                // 엉뚱한 위치에 남지 않도록 방어: 실패 시 라이브 텍스트를 중앙 배치.
-                var outlinedGroup = null;
-                try { outlinedGroup = t.createOutline(); } catch (eOut) { outlinedGroup = null; }
-                var tgtItem = outlinedGroup ? outlinedGroup : t;
-                var gb = tgtItem.geometricBounds;
-                tgtItem.translate(cx - (gb[0] + gb[2]) / 2, cy - (gb[1] + gb[3]) / 2);
+                
+                var outlinedGroup = t.createOutline();
+                var gb = outlinedGroup.geometricBounds;
+                outlinedGroup.translate(cx - (gb[0] + gb[2]) / 2, cy - (gb[1] + gb[3]) / 2);
             } else {
                 nucleus.filled = true;
                 applySphereFill(nucleus, cx, cy, nDia, optLit3DNucleus);
             }
 
-            drawAtomModel.lastStep = "전자";
             // 3. 전자
             var counts = [eCount1, eCount2, eCount3];
             
@@ -452,7 +399,6 @@
                 }
             }
 
-            drawAtomModel.lastStep = "이온 대괄호";
             // 4. 이온 대괄호 및 전하량 (서체 적용 부분)
             if (ionCharge !== 0) {
                 var brR = (shellsNeeded > 0) ? shellD[shellsNeeded-1]/2 : nDia/2;
@@ -479,7 +425,6 @@
             }
         }
 
-        drawAtomModel.lastStep = "가이드 변환";
         // 가이드 원 기준으로 모형 전체를 확대/축소·이동한 뒤 원을 삭제.
         // 첫 원자의 중심(startCx, cy)을 기준점으로 스케일하고 가이드 중심으로 옮긴다.
         if (guide && firstOuterD > 0) {
@@ -551,29 +496,10 @@
         } catch (e) {}
     }
 
-    // 생성 버튼: 모달 상태(미리보기와 같은 컨텍스트)에서 최종 생성까지 수행 후 닫는다.
-    // show() 반환 후(뷰 전환 중)에 그리면 간헐적으로 MRAP 오류가 나므로 여기서 그린다.
+    // 생성 버튼: 검증 후 설정 저장하고 닫는다. 실제 생성은 show() 반환 후 처리
     btnGenerate.onClick = function() {
         if (getSelectedElements().length === 0) { alert("원소를 선택하세요."); return; }
         saveSettings();
-        clearPreview();
-        // 그릴 수 있는 레이어에 홀더 그룹을 만들어 그 안에 생성.
-        // 도중에 오류가 나면 홀더째 제거해 부분 잔해(엉뚱한 텍스트 등)를 남기지 않는다.
-        var finalHolder = acquireHolder("AtomModel");
-        if (!finalHolder) {
-            alert("그릴 수 있는 레이어가 없습니다.\n레이어의 잠금(자물쇠)/숨김(눈) 상태를 확인하고,\n격리 모드(그룹 더블클릭 진입)라면 Esc로 빠져나온 뒤 다시 시도해주세요.");
-            return;
-        }
-        try {
-            drawWith(finalHolder, true);
-        } catch (e) {
-            try { finalHolder.remove(); } catch (e2) {}
-            alert("생성 오류 (단계: " + (drawAtomModel.lastStep || "?") + ")\n" + e + "\n다시 시도해주세요.");
-            lastPreviewSig = null; // 재시도 시 미리보기 다시 그리도록
-            updatePreview();
-            return; // 창을 열어둔 채 재시도 가능
-        }
-        try { app.redraw(); } catch (e) {}
         win.close(1);
     };
 
@@ -581,13 +507,18 @@
     removeLeftoverPreviews();
     applySettings();
 
-    // 초기 미리보기는 표시 시점(onShow)에 그린다.
-    // (show() 전에 그리고 redraw하면 모달 창이 뜨며 이전 화면으로 덮여 안 보임)
+    // 초기 미리보기: 표시 전 1회 + 표시 시점(onShow)에 다시 그려야 화면에 보인다.
+    // (show() 전 redraw는 모달 창이 뜨며 이전 화면으로 덮이므로 초기 미리보기가 안 보임)
     win.onShow = function() { updatePreview(); };
+    updatePreview();
 
-    win.show();
+    var result = win.show();
 
-    // 생성은 onClick(모달 상태)에서 이미 완료. 취소로 닫힌 경우 미리보기만 정리.
+    // 미리보기 정리 후, 확인(1)일 때만 최종 오브젝트 생성(가이드 원 삭제 포함)
     clearPreview();
-    try { app.redraw(); } catch (e) {}
+    try { app.redraw(); } catch (e) {} // 미리보기 잔여 제거를 먼저 반영해 깨끗한 상태에서 생성
+    if (result === 1 && app.documents.length > 0) {
+        try { drawWith(app.activeDocument.activeLayer, true); } catch (e) { alert("생성 오류: " + e); }
+        try { app.redraw(); } catch (e) {}
+    }
 })();
