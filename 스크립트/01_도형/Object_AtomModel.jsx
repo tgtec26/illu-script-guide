@@ -181,6 +181,26 @@
             }
         } catch (e) {}
     }
+    // 그릴 수 있는(잠기지 않고 보이는) 레이어를 찾는다.
+    // 활성 레이어가 잠김/숨김이면 오브젝트 추가가 MRAP 오류로 실패하므로,
+    // 실제로 그룹 생성을 시도해 성공하는 레이어를 찾는다. 실패 시 null.
+    function acquireHolder(name) {
+        var doc = app.activeDocument;
+        var candidates = [];
+        try { candidates.push(doc.activeLayer); } catch (e) {}
+        for (var i = 0; i < doc.layers.length; i++) candidates.push(doc.layers[i]);
+        for (var c = 0; c < candidates.length; c++) {
+            var L = candidates[c];
+            try {
+                if (!L || L.locked || !L.visible) continue;
+                var g = L.groupItems.add(); // 잠김/숨김이면 여기서 throw
+                g.name = name;
+                return g;
+            } catch (e) {}
+        }
+        return null;
+    }
+
     // 현재 컨트롤 값 전체의 서명. 값이 안 바뀌면 미리보기를 다시 그리지 않는다
     // (이미 선택된 라디오를 다시 클릭하는 등 무의미한 지웠다-그리기 깜빡임 방지)
     function settingsSignature() {
@@ -204,12 +224,11 @@
             // 그리기 도중 오류(MRAP 등)가 나도 남은 조각을 제거할 수 있도록,
             // 먼저 홀더 그룹을 만들어 캡처한 뒤 그 안에 그린다. (유령 누적 방지)
             // 미리보기는 가이드 원을 삭제하지 않는다(consumeGuide=false).
-            try {
-                var holder = app.activeDocument.activeLayer.groupItems.add();
-                holder.name = "AtomModel_Preview";
+            var holder = acquireHolder("AtomModel_Preview");
+            if (holder) {
                 previewItems = [holder];
-                drawWith(holder, false);
-            } catch (e) {}
+                try { drawWith(holder, false); } catch (e) {}
+            }
         }
         try { app.redraw(); } catch (e) {}
     }
@@ -518,8 +537,16 @@
         if (getSelectedElements().length === 0) { alert("원소를 선택하세요."); return; }
         saveSettings();
         clearPreview();
+        // 그릴 수 있는 레이어를 탐색(잠김/숨김 레이어 회피). 탐색용 그룹은 즉시 제거.
+        var probe = acquireHolder("__AtomModel_Probe");
+        if (!probe) {
+            alert("그릴 수 있는 레이어가 없습니다.\n레이어의 잠금(자물쇠)/숨김(눈) 상태를 확인하고,\n격리 모드(그룹 더블클릭 진입)라면 Esc로 빠져나온 뒤 다시 시도해주세요.");
+            return;
+        }
+        var targetLayer = probe.parent;
+        try { probe.remove(); } catch (e) {}
         try {
-            drawWith(app.activeDocument.activeLayer, true);
+            drawWith(targetLayer, true);
         } catch (e) {
             alert("생성 오류: " + e + "\n다시 시도해주세요.");
             lastPreviewSig = null; // 재시도 시 미리보기 다시 그리도록
