@@ -108,7 +108,9 @@
         var t = g.add("statictext", undefined, fmt(initV));
         t.preferredSize.width = 55;
         s.syncLabel = function() { t.text = fmt(s.value); };
-        s.onChanging = function() { s.syncLabel(); updatePreview(); };
+        // 드래그 중엔 라벨만(가벼움), 놓을 때(onChange) 무거운 미리보기 재드로우 → MRAP 부하 감소
+        s.onChanging = function() { s.syncLabel(); };
+        s.onChange = function() { s.syncLabel(); updatePreview(); };
         sliderSyncers.push(s.syncLabel);
         return s;
     }
@@ -127,18 +129,19 @@
         sldChargeFont.value = sldChargeFont.value * ratio; // 슬라이더가 [min,max]로 클램프
         sldChargeFont.syncLabel();
     }
+    // 드래그 중엔 글자 연동+라벨만 갱신, 놓을 때(onChange) 미리보기 재드로우
     sldOverall.onChanging = function() {
         scaleFontBy(sldOverall.value / prevOverall);
         prevOverall = sldOverall.value;
         sldOverall.syncLabel();
-        updatePreview();
     };
+    sldOverall.onChange = function() { sldOverall.syncLabel(); updatePreview(); };
     sldNucleus.onChanging = function() {
         scaleFontBy(sldNucleus.value / prevNucleus);
         prevNucleus = sldNucleus.value;
         sldNucleus.syncLabel();
-        updatePreview();
     };
+    sldNucleus.onChange = function() { sldNucleus.syncLabel(); updatePreview(); };
 
 
     var btnGenerate = win.add("button", undefined, "원자 모형 생성하기", {name: "ok"});
@@ -169,12 +172,28 @@
         for (var i = 0; i < previewItems.length; i++) { try { previewItems[i].remove(); } catch (e) {} }
         previewItems = [];
     }
+    // 이전 세션이 비정상 종료되며 남겼을 수 있는 미리보기 홀더를 정리 (이름이 고유해 안전)
+    function removeLeftoverPreviews() {
+        try {
+            var d = app.activeDocument;
+            for (var i = d.groupItems.length - 1; i >= 0; i--) {
+                if (d.groupItems[i].name === "AtomModel_Preview") { try { d.groupItems[i].remove(); } catch (e) {} }
+            }
+        } catch (e) {}
+    }
     function updatePreview() {
         if (app.documents.length === 0) return;
         clearPreview();
         if (chkPreview.value && getSelectedElements().length > 0) {
+            // 그리기 도중 오류(MRAP 등)가 나도 남은 조각을 제거할 수 있도록,
+            // 먼저 홀더 그룹을 만들어 캡처한 뒤 그 안에 그린다. (유령 누적 방지)
             // 미리보기는 가이드 원을 삭제하지 않는다(consumeGuide=false).
-            try { previewItems = drawWith(app.activeDocument.activeLayer, false); } catch (e) { previewItems = []; }
+            try {
+                var holder = app.activeDocument.activeLayer.groupItems.add();
+                holder.name = "AtomModel_Preview";
+                previewItems = [holder];
+                drawWith(holder, false);
+            } catch (e) {}
         }
         try { app.redraw(); } catch (e) {}
     }
@@ -484,7 +503,8 @@
         win.close(1);
     };
 
-    // 마지막 실행 설정 복원 (없으면 기본값 유지)
+    // 이전 세션 잔여 미리보기 정리 + 마지막 실행 설정 복원
+    removeLeftoverPreviews();
     applySettings();
 
     // 초기 미리보기: 표시 전 1회 + 표시 시점(onShow)에 다시 그려야 화면에 보인다.
@@ -496,6 +516,7 @@
 
     // 미리보기 정리 후, 확인(1)일 때만 최종 오브젝트 생성(가이드 원 삭제 포함)
     clearPreview();
+    try { app.redraw(); } catch (e) {} // 미리보기 잔여 제거를 먼저 반영해 깨끗한 상태에서 생성
     if (result === 1 && app.documents.length > 0) {
         try { drawWith(app.activeDocument.activeLayer, true); } catch (e) { alert("생성 오류: " + e); }
         try { app.redraw(); } catch (e) {}
