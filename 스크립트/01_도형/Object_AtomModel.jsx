@@ -441,7 +441,7 @@
                 var lbl = atomGroup.textFrames.add();
                 var absC = Math.abs(ionCharge);
                 lbl.contents = (absC > 1 ? absC : "") + (ionCharge > 0 ? "+" : "-");
-                lbl.textRange.characterAttributes.size = 8 * scale;
+                lbl.textRange.characterAttributes.size = 8; // 이온 전하량 글자: 8pt 고정
                 // 이온 전하량 서체 적용
                 try { lbl.textRange.characterAttributes.textFont = app.textFonts.getByName(fontName); } catch(e) {}
 
