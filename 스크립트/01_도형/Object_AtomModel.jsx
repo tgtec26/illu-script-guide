@@ -108,6 +108,7 @@
     chkLit3DNucleus.value = true;
     var chkLit3DElectron = optCol2.add("checkbox", undefined, "전자 3D 조명 효과");
     chkLit3DElectron.value = true;
+    var chkShellLine = optCol2.add("checkbox", undefined, "전자 껍질 선");
     var chkPreview = optCol2.add("checkbox", undefined, "미리보기 실시간 표시");
     chkPreview.value = true;
 
@@ -186,7 +187,7 @@
         if (sel.length === 0) return [];
         return drawAtomModel(sel.join(","), String(currentCharge()), chkNucleus.value,
             chkHorizontalFirst.value, chkRotateShell2.value, chkRotateShell3.value, chkShowMinus.value,
-            chkLit3DNucleus.value, chkLit3DElectron.value,
+            chkLit3DNucleus.value, chkLit3DElectron.value, chkShellLine.value,
             sldOverall.value, sldNucleus.value, sldElectron.value, sldChargeFont.value, targetLayer, consumeGuide);
     }
 
@@ -232,10 +233,11 @@
     chkShowMinus.onClick = updatePreview;
     chkLit3DNucleus.onClick = updatePreview;
     chkLit3DElectron.onClick = updatePreview;
+    chkShellLine.onClick = updatePreview;
     chkPreview.onClick = updatePreview;
 
     // 3. 핵심 그리기 로직 (추가된 파라미터 적용)
-    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateShell2, optRotateShell3, optShowMinus, optLit3DNucleus, optLit3DElectron, outerMM, nucMM, elecMM, fontPt, targetLayer, consumeGuide) {
+    function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateShell2, optRotateShell3, optShowMinus, optLit3DNucleus, optLit3DElectron, optShellLine, outerMM, nucMM, elecMM, fontPt, targetLayer, consumeGuide) {
         if (app.documents.length === 0) return [];
 
         var atomStrings = atomicNumbersStr.split(",");
@@ -355,15 +357,20 @@
             atomGroup.name = "Atom_" + elementSymbols[atomicNumber-1];
             if (!masterGroup) created.push(atomGroup);
 
-            // 1. 전자 껍질
+            // 1. 전자 껍질 (선 옵션: 내부 투명 + 0.3pt 선 / 기본: 그라데이션 면)
             for (var s = shellsNeeded; s >= 1; s--) {
                 var dia = shellD[s-1];
                 var shell = atomGroup.pathItems.ellipse(cy + dia/2, cx - dia/2, dia, dia);
-                shell.filled = true; shell.stroked = false;
-                var gc = new GradientColor(); gc.gradient = shellGrad;
-                gc.matrix = app.getIdentityMatrix();
-                gc.origin = [cx, cy]; gc.length = dia / 2;
-                shell.fillColor = gc;
+                if (optShellLine) {
+                    shell.filled = false; shell.stroked = true;
+                    shell.strokeWidth = 0.3; shell.strokeColor = getCMYK(0, 0, 0, 100);
+                } else {
+                    shell.filled = true; shell.stroked = false;
+                    var gc = new GradientColor(); gc.gradient = shellGrad;
+                    gc.matrix = app.getIdentityMatrix();
+                    gc.origin = [cx, cy]; gc.length = dia / 2;
+                    shell.fillColor = gc;
+                }
             }
 
             // 2. 원자핵
@@ -482,6 +489,7 @@
         parts.push(sldNucleus.value);
         parts.push(sldElectron.value);
         parts.push(sldChargeFont.value);
+        parts.push(chkShellLine.value ? "1" : "0");
         return parts.join("|");
     }
     function saveSettings() {
@@ -510,6 +518,7 @@
             sldNucleus.value = parseFloat(p[12]);
             sldElectron.value = parseFloat(p[13]);
             sldChargeFont.value = parseFloat(p[14]);
+            if (p.length > 15) chkShellLine.value = (p[15] === "1"); // v4 후반 추가 필드(없으면 기본값 유지)
             syncSliderLabels();
             // 복원값을 기준선으로 삼아 이후 비율 계산이 맞도록 갱신
             prevOverall = sldOverall.value;
