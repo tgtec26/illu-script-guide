@@ -2,7 +2,7 @@
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
 
     var MM = 2.834645669;               // 1mm = 2.834645669pt
-    var shellRatio = [11.5, 17.5, 23.5]; // 껍질 지름 비율(원자 모형과 동일)
+    var shellRatio = [8, 16, 24]; // 껍질 지름 비율(원자 모형과 동일, 중심부터 등간격)
     var fontName = "GSMediumB1";         // 지정 서체명
 
     // 원소 데이터: 원자번호, 껍질 수
@@ -17,7 +17,8 @@
 
     // 분자 프리셋: center를 원점에 두고 terminals를 angle 방향(도)으로 배치.
     // order = 공유 전자쌍 수(단일1/이중2/삼중3), lonePairs = 비공유 전자쌍 수.
-    // 비공유 전자는 하나씩 따로, 결합 방향 사이 빈 호에 균등 분배(반발)로 자동 배치.
+    // 비공유 전자는 22.5° 회전 그리드(±22.5, ±67.5, ±112.5, ±157.5) 자리 중
+    // 결합 방향에서 먼 자리부터 채운다.
     var MOLS = [
         { key: "H2",  label: "H₂",  center: { el: "H",  lonePairs: 0 },
           terminals: [ { el: "H", angle: 0, order: 1, lonePairs: 0 } ] },
@@ -51,31 +52,10 @@
                        { el: "H", angle: 180, order: 1, lonePairs: 0 } ] }
     ];
 
-    // 결합 방향들 사이의 빈 호(gap)에 전자 k개를 고르게 분배 (전자 반발 표현).
-    // 전자를 하나씩 "배치 후 간격이 가장 넓게 남는" gap에 할당하고, gap 안에서 균등 배치.
-    function distributeEvenly(bondDirs, k) {
-        if (k <= 0) return [];
-        var dirs = [];
-        for (var i = 0; i < bondDirs.length; i++) dirs.push(((bondDirs[i] % 360) + 360) % 360);
-        dirs.sort(function(a, b) { return a - b; });
-        var gaps = [];
-        for (var i2 = 0; i2 < dirs.length; i2++) {
-            var start = dirs[i2];
-            var end = (i2 === dirs.length - 1) ? dirs[0] + 360 : dirs[i2 + 1];
-            gaps.push({ start: start, size: end - start, n: 0 });
-        }
-        for (var p = 0; p < k; p++) {
-            var best = 0;
-            for (var g = 1; g < gaps.length; g++) {
-                if (gaps[g].size / (gaps[g].n + 1) > gaps[best].size / (gaps[best].n + 1)) best = g;
-            }
-            gaps[best].n++;
-        }
-        var out = [];
-        for (var g2 = 0; g2 < gaps.length; g2++) {
-            for (var j = 1; j <= gaps[g2].n; j++) out.push(gaps[g2].start + gaps[g2].size * j / (gaps[g2].n + 1));
-        }
-        return out;
+    // 두 각도(도) 사이의 최소 각거리
+    function angDist(a, b) {
+        var d = Math.abs(((a - b) % 360 + 360) % 360);
+        return d > 180 ? 360 - d : d;
     }
 
     // 그라데이션은 문서당 1회만 만들어 재사용한다(미리보기 반복 시 스와치 폭증 방지).
@@ -83,7 +63,7 @@
     function getGradients(doc) {
         if (_gradCache && _gradCacheDoc === doc) return _gradCache;
         function cmyk(c, m, y, k) { var col = new CMYKColor(); col.cyan = c; col.magenta = m; col.yellow = y; col.black = k; return col; }
-        var white = cmyk(0, 0, 0, 0), gray40 = cmyk(0, 0, 0, 40), gray80 = cmyk(0, 0, 0, 80);
+        var white = cmyk(0, 0, 0, 0), gray40 = cmyk(0, 0, 0, 40), gray60 = cmyk(0, 0, 0, 60), gray80 = cmyk(0, 0, 0, 80);
         function uniq(baseName, stops) {
             var grad = doc.gradients.add();
             grad.name = baseName + "_" + (new Date().getTime());
@@ -98,7 +78,8 @@
         }
         _gradCache = {
             shell: uniq("Shell", [{pos:0, color:white}, {pos:83, color:white, mid:87}, {pos:100, color:gray40}]),
-            sphere: uniq("Sphere", [{pos:0, color:white, mid:13.3}, {pos:100, color:gray80}])
+            sphere: uniq("Sphere", [{pos:0, color:white, mid:13.3}, {pos:100, color:gray80}]),
+            sphereNuc: uniq("SphereNuc", [{pos:0, color:white, mid:13.3}, {pos:100, color:gray60}]) // 핵: 전자보다 밝게
         };
         _gradCacheDoc = doc;
         return _gradCache;
@@ -186,12 +167,13 @@
         return s;
     }
     function syncSliderLabels() { for (var i = 0; i < sliderSyncers.length; i++) sliderSyncers[i](); }
-    // 모든 크기는 실제 적용값(화면 실측치). 전체 크기 = 분자 내 가장 큰 원자의 최외곽 껍질 지름(mm).
-    var sldOverall = addSlider("전체 크기", 5, 300, 40, function(v){ return v.toFixed(1) + "mm"; });
-    var sldNucleus = addSlider("핵 지름", 0.5, 40, 6, function(v){ return v.toFixed(1) + "mm"; });
-    var sldElectron = addSlider("전자 지름", 0.2, 15, 2, function(v){ return v.toFixed(1) + "mm"; });
-    var sldChargeFont = addSlider("핵 전하량 글자", 1, 100, 8, function(v){ return v.toFixed(1) + "pt"; });
-    var sldOverlap = addSlider("껍질 겹침", 10, 50, 15, function(v){ return Math.round(v) + "%"; });
+    // 모든 크기는 실제 적용값(화면 실측치). 기준 = 1번 껍질 지름(mm).
+    // 껍질 수가 달라도 껍질 지름이 같아 여러 모형 간 통일감 유지(1:2:3 등간격).
+    var sldOverall = addSlider("1껍질 지름", 2, 16, 13, function(v){ return v.toFixed(1) + "mm"; });
+    var sldNucleus = addSlider("핵 지름", 0.5, 8, 6, function(v){ return v.toFixed(1) + "mm"; });
+    var sldElectron = addSlider("전자 지름", 0.2, 4, 2, function(v){ return v.toFixed(1) + "mm"; });
+    var sldChargeFont = addSlider("핵 전하량 글자", 1, 20, 8, function(v){ return v.toFixed(1) + "pt"; });
+    var sldOverlap = addSlider("껍질 겹침", 5, 50, 15, function(v){ return Math.round(v) + "%"; });
 
     // 연동 규칙(원자 모형과 동일):
     //  전체 크기 변경 → 핵·전자·글자가 같은 비율로 함께 조정. 겹침(%)은 무관.
@@ -302,20 +284,23 @@
             return color;
         }
         var colorWhite = getCMYK(0, 0, 0, 0);
+        var colorGray50 = getCMYK(0, 0, 0, 50);
         var colorGray80 = getCMYK(0, 0, 0, 80);
+        var colorBlack = getCMYK(0, 0, 0, 100);
 
         var grads = getGradients(doc);
         var shellGrad = grads.shell;
         var sphereGrad = grads.sphere;
+        var sphereNucGrad = grads.sphereNuc;
 
         // 구(핵/전자) 방사형 그라데이션: 하이라이트 중심의 큰 원을 원래 크기 원으로 클리핑
-        function applySphereFill(item, ox, oy, dia, lit3D) {
+        function applySphereFill(item, ox, oy, dia, lit3D, flatColor, grad) {
             if (!lit3D) {
-                item.fillColor = colorGray80;
+                item.fillColor = flatColor ? flatColor : colorGray80;
                 return item;
             }
             var gc = new GradientColor();
-            gc.gradient = sphereGrad;
+            gc.gradient = grad ? grad : sphereGrad;
             var r = dia / 2;
             var hx = ox - r * 0.35;
             var hy = oy + r * 0.35;
@@ -345,12 +330,8 @@
         for (var m = 0; m < mols.length; m++) {
             var mol = mols[m];
 
-            // 이 분자에서 껍질이 가장 많은 원자의 최외곽 지름 = 전체 크기(mm)가 되도록 배율 산출
-            var maxShells = ELEM[mol.center.el].shells;
-            for (var t = 0; t < mol.terminals.length; t++) {
-                if (ELEM[mol.terminals[t].el].shells > maxShells) maxShells = ELEM[mol.terminals[t].el].shells;
-            }
-            var scale = o.outerMM / shellRatio[maxShells - 1];
+            // 1번 껍질 지름 = 슬라이더 값(mm)이 되도록 배율 산출 (껍질 수와 무관하게 동일)
+            var scale = o.outerMM / shellRatio[0];
             function outerR(el) { return shellRatio[ELEM[el].shells - 1] / 2 * MM * scale; }
 
             // 원자 배치(로컬 좌표, pt): 중심 원자 원점, 말단 원자는 angle 방향으로 껍질이 겹치는 거리에
@@ -386,7 +367,7 @@
             function drawElectron(exx, eyy) {
                 var el = grp.pathItems.ellipse(eyy + eDia/2, exx - eDia/2, eDia, eDia);
                 el.filled = true; el.stroked = false;
-                applySphereFill(el, exx, eyy, eDia, o.lit3DElectron);
+                applySphereFill(el, exx, eyy, eDia, o.lit3DElectron, colorBlack); // 전자 플랫은 K100
                 if (o.showMinus) {
                     var mW = eDia * 0.8, mH = eDia * (0.2/1.5);
                     var minus = grp.pathItems.rectangle(eyy + mH/2, exx - mW/2, mW, mH);
@@ -436,7 +417,7 @@
                     og.translate(ax2 - (gb2[0] + gb2[2]) / 2, ay2 - (gb2[1] + gb2[3]) / 2);
                 } else {
                     nucleus.filled = true;
-                    applySphereFill(nucleus, ax2, ay2, nDia, o.lit3DNucleus);
+                    applySphereFill(nucleus, ax2, ay2, nDia, o.lit3DNucleus, colorGray50, sphereNucGrad); // 핵: 플랫 K50, 3D는 밝은 그라데이션
                 }
 
                 // 안쪽 껍질 전자(최외각 제외): 1번 껍질 2개, 2번 껍질 8개
@@ -450,18 +431,33 @@
                     }
                 }
 
-                // 비공유 전자: 쌍으로 묶지 않고 하나씩, 결합 방향 사이 빈 호에 균등 분배
-                var loneAngles = distributeEvenly(A2.bondDirs, A2.lonePairs * 2);
-                for (var L = 0; L < loneAngles.length; L++) {
-                    var la = loneAngles[L] * Math.PI / 180;
-                    drawElectron(ax2 + A2.r * Math.cos(la), ay2 + A2.r * Math.sin(la));
+                // 비공유 전자: 공유(최외각) 껍질은 22.5° 회전 그리드 자리를 쓴다.
+                // 각 자리의 "모든 결합 방향과의 최소 각거리"가 큰 자리부터 비공유 전자 수만큼 채움.
+                var loneN = A2.lonePairs * 2;
+                if (loneN > 0) {
+                    var grid = (S2 === 1) ? innerAngles1
+                        : [22.5, 67.5, 112.5, 157.5, -157.5, -112.5, -67.5, -22.5];
+                    var scored = [];
+                    for (var gi = 0; gi < grid.length; gi++) {
+                        var minD = 360;
+                        for (var bi = 0; bi < A2.bondDirs.length; bi++) {
+                            var dd = angDist(grid[gi], A2.bondDirs[bi]);
+                            if (dd < minD) minD = dd;
+                        }
+                        scored.push({ ang: grid[gi], d: minD });
+                    }
+                    scored.sort(function(a, b) { return b.d - a.d; });
+                    for (var L = 0; L < loneN && L < scored.length; L++) {
+                        var la = scored[L].ang * Math.PI / 180;
+                        drawElectron(ax2 + A2.r * Math.cos(la), ay2 + A2.r * Math.sin(la));
+                    }
                 }
             }
 
             // 3) 공유 전자: 항상 껍질 선 위에 배치.
-            //    단일: 위/아래 교차점에 1개씩.
-            //    2중: 교차점 양옆, 두 원의 호 위에 1개씩 (2×2 모양).
-            //    3중: 교차점 1개 + 양옆 호 위 1개씩.
+            //    단일: 두 껍질 선의 교차점(위/아래)에 1개씩.
+            //    2중/3중: 겹침 렌즈의 좌/우 경계 호 위에 각각 2개/3개씩,
+            //             결합 축을 기준으로 대칭 배치.
             for (var b = 0; b < bonds.length; b++) {
                 var B = bonds[b];
                 var A0 = atoms[B.a], A1 = atoms[B.b];
@@ -471,38 +467,23 @@
                 var bondRad = B.angle * Math.PI / 180;
                 var cxA = A0.x + offX, cyA = A0.y + baseCy;
                 var cxB = A1.x + offX, cyB = A1.y + baseCy;
-                // 중심(A)/말단(B) 원자의 호 위에서, sgn쪽 교차점으로부터 렌즈 안쪽으로 delta(pt)만큼 이동한 점
-                var onA = function(sgn, delta) {
-                    var a = bondRad + sgn * (phiA - delta / A0.r);
-                    return [cxA + A0.r * Math.cos(a), cyA + A0.r * Math.sin(a)];
-                };
-                var onB = function(sgn, delta) {
-                    var a = bondRad + Math.PI - sgn * (phiB - delta / A1.r);
-                    return [cxB + A1.r * Math.cos(a), cyB + A1.r * Math.sin(a)];
-                };
-                // 두 호 위 전자(같은 delta)의 실제 간격이 target이 되도록 delta를 반복 수렴.
-                // 호가 렌즈 안쪽에서 다시 모이므로 선형 추정 대신 실측-보정을 쓴다.
-                var solveDelta = function(target, init) {
-                    var delta = init;
-                    for (var it = 0; it < 8; it++) {
-                        var pA = onA(1, delta), pB = onB(1, delta);
-                        var dx = pA[0]-pB[0], dy = pA[1]-pB[1];
-                        var dist = Math.sqrt(dx*dx + dy*dy);
-                        if (dist < 0.0001) { delta *= 2; continue; }
-                        delta = delta * target / dist;
-                    }
-                    // 렌즈 밖으로 벗어나지 않게 제한 (교차점→결합 축까지 호 길이의 80%)
-                    var maxD = 0.8 * Math.min(A0.r * phiA, A1.r * phiB);
-                    return Math.min(delta, maxD);
-                };
-                var off2 = solveDelta(eDia * 1.15, eDia * 0.75);
-                var off3 = Math.max(eDia * 1.25, solveDelta(eDia * 1.15, eDia * 1.25));
-                for (var si = 0; si < 2; si++) {
-                    var sgn = (si === 0) ? 1 : -1; // 위/아래 교차점
-                    var pts;
-                    if (B.order === 1) pts = [onA(sgn, 0)];
-                    else if (B.order === 2) pts = [onA(sgn, off2), onB(sgn, off2)];
-                    else pts = [onA(sgn, off3), onA(sgn, 0), onB(sgn, off3)];
+                // 렌즈 경계: 원 A의 호(결합 축 ±phiA), 원 B의 호(반대쪽 축 ±phiB)
+                var ptOnA = function(t) { var a = bondRad + t; return [cxA + A0.r * Math.cos(a), cyA + A0.r * Math.sin(a)]; };
+                var ptOnB = function(t) { var a = bondRad + Math.PI + t; return [cxB + A1.r * Math.cos(a), cyB + A1.r * Math.sin(a)]; };
+                if (B.order === 1) {
+                    drawElectron(ptOnA(phiA)[0], ptOnA(phiA)[1]);
+                    drawElectron(ptOnA(-phiA)[0], ptOnA(-phiA)[1]);
+                } else {
+                    // 같은 호 위 전자 중심 간 목표 간격(호 길이) = 전자 지름의 1.2배.
+                    // 렌즈 밖으로 벗어나지 않게 교차점 각의 80%로 제한.
+                    var arcGap = eDia * 1.2;
+                    var stepA = (B.order === 2) ? arcGap / 2 / A0.r : arcGap / A0.r;
+                    var stepB = (B.order === 2) ? arcGap / 2 / A1.r : arcGap / A1.r;
+                    stepA = Math.min(stepA, 0.8 * phiA);
+                    stepB = Math.min(stepB, 0.8 * phiB);
+                    var pts = (B.order === 2)
+                        ? [ptOnA(stepA), ptOnA(-stepA), ptOnB(stepB), ptOnB(-stepB)]
+                        : [ptOnA(stepA), ptOnA(0), ptOnA(-stepA), ptOnB(stepB), ptOnB(0), ptOnB(-stepB)];
                     for (var pi2 = 0; pi2 < pts.length; pi2++) drawElectron(pts[pi2][0], pts[pi2][1]);
                 }
             }
@@ -520,7 +501,7 @@
     // --- 옵션 기억 (마지막 실행 설정을 다음 실행 때 복원) ---
     var PREF_KEY = "MoleculeModelMaker/settings";
     function collectSettings() {
-        var parts = ["v1"];
+        var parts = ["v2"]; // v2: 크기 기준이 전체 크기 → 1번 껍질 지름으로 변경
         var sel = "";
         for (var i = 0; i < checkBoxes.length; i++) sel += checkBoxes[i].value ? "1" : "0";
         parts.push(sel);
@@ -539,13 +520,54 @@
     }
     function saveSettings() {
         try { app.preferences.setStringPreference(PREF_KEY, collectSettings()); } catch (e) {}
+        saveSharedSettings();
+    }
+
+    // 3개 모형 스크립트(원자/분자/이온)가 공유하는 공통 옵션.
+    // 어느 스크립트든 생성 시 저장하고, 실행 시 자기 설정 위에 덮어써서
+    // 마지막에 실행한 스크립트의 값이 항상 우선한다.
+    var SHARED_PREF_KEY = "ModelMakerShared/settings";
+    function saveSharedSettings() {
+        var parts = ["v2", // v2: 크기 기준이 1번 껍질 지름
+
+            chkNucleus.value ? "1" : "0",
+            chkShowMinus.value ? "1" : "0",
+            chkShellLine.value ? "1" : "0",
+            chkLit3DNucleus.value ? "1" : "0",
+            chkLit3DElectron.value ? "1" : "0",
+            sldOverall.value,
+            sldNucleus.value,
+            sldElectron.value,
+            sldChargeFont.value];
+        try { app.preferences.setStringPreference(SHARED_PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+    function applySharedSettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(SHARED_PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v2" || p.length < 10) return;
+        try {
+            chkNucleus.value = (p[1] === "1");
+            chkShowMinus.value = (p[2] === "1");
+            chkShellLine.value = (p[3] === "1");
+            chkLit3DNucleus.value = (p[4] === "1");
+            chkLit3DElectron.value = (p[5] === "1");
+            sldOverall.value = parseFloat(p[6]);
+            sldNucleus.value = parseFloat(p[7]);
+            sldElectron.value = parseFloat(p[8]);
+            sldChargeFont.value = parseFloat(p[9]);
+            syncSliderLabels();
+            prevOverall = sldOverall.value;
+            prevNucleus = sldNucleus.value;
+        } catch (e) {}
     }
     function applySettings() {
         var raw = "";
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length < 12) return;
+        if (p[0] !== "v2" || p.length < 12) return;
         try {
             var sel = p[1];
             for (var i = 0; i < checkBoxes.length && i < sel.length; i++) checkBoxes[i].value = (sel.charAt(i) === "1");
@@ -559,7 +581,7 @@
             sldElectron.value = parseFloat(p[9]);
             sldChargeFont.value = parseFloat(p[10]);
             sldOverlap.value = parseFloat(p[11]);
-            if (p.length > 12) chkShellLine.value = (p[12] === "1"); // v1 후반 추가 필드(없으면 기본값 유지)
+            if (p.length > 12) chkShellLine.value = (p[12] === "1"); // 후반 추가 필드(없으면 기본값 유지)
             syncSliderLabels();
             prevOverall = sldOverall.value;
             prevNucleus = sldNucleus.value;
@@ -575,13 +597,27 @@
     // 이전 세션 잔여 미리보기 정리 + 마지막 실행 설정 복원
     removeLeftoverPreviews();
     applySettings();
+    applySharedSettings(); // 공통 옵션은 마지막 실행 스크립트 값으로 덮어씀
 
-    // 가이드 원이 선택돼 있으면 '전체 크기'를 그 원 지름(mm)으로 세팅하고 비례 연동
+    // 가이드 원(=최외곽 껍질 지름)이 선택돼 있으면 선택된 분자의 최대 껍질 수로
+    // 환산해 '1껍질 지름'을 세팅하고 비례 연동
     (function seedFromGuideCircle() {
         var g = detectGuideCircle();
         if (!g) return;
+        var sel = getSelectedMols();
+        var maxShells = 3;
+        if (sel.length > 0) {
+            maxShells = 1;
+            for (var si = 0; si < sel.length; si++) {
+                var mol = sel[si];
+                if (ELEM[mol.center.el].shells > maxShells) maxShells = ELEM[mol.center.el].shells;
+                for (var ti = 0; ti < mol.terminals.length; ti++) {
+                    if (ELEM[mol.terminals[ti].el].shells > maxShells) maxShells = ELEM[mol.terminals[ti].el].shells;
+                }
+            }
+        }
         var before = sldOverall.value;
-        sldOverall.value = g.d / MM;
+        sldOverall.value = (g.d / MM) * shellRatio[0] / shellRatio[maxShells - 1];
         var r = sldOverall.value / before;
         scaleSlider(sldNucleus, r);
         scaleSlider(sldElectron, r);

@@ -9,7 +9,7 @@
     function getGradients(doc) {
         if (_gradCache && _gradCacheDoc === doc) return _gradCache;
         function cmyk(c, m, y, k) { var col = new CMYKColor(); col.cyan = c; col.magenta = m; col.yellow = y; col.black = k; return col; }
-        var white = cmyk(0, 0, 0, 0), gray40 = cmyk(0, 0, 0, 40), gray80 = cmyk(0, 0, 0, 80);
+        var white = cmyk(0, 0, 0, 0), gray40 = cmyk(0, 0, 0, 40), gray60 = cmyk(0, 0, 0, 60), gray80 = cmyk(0, 0, 0, 80);
         function uniq(baseName, stops) {
             var grad = doc.gradients.add();
             grad.name = baseName + "_" + (new Date().getTime());
@@ -24,14 +24,15 @@
         }
         _gradCache = {
             shell: uniq("Shell", [{pos:0, color:white}, {pos:83, color:white, mid:87}, {pos:100, color:gray40}]),
-            sphere: uniq("Sphere", [{pos:0, color:white, mid:13.3}, {pos:100, color:gray80}])
+            sphere: uniq("Sphere", [{pos:0, color:white, mid:13.3}, {pos:100, color:gray80}]),
+            sphereNuc: uniq("SphereNuc", [{pos:0, color:white, mid:13.3}, {pos:100, color:gray60}]) // 핵: 전자보다 밝게
         };
         _gradCacheDoc = doc;
         return _gradCache;
     }
 
     var MM = 2.834645669;               // 1mm = 2.834645669pt
-    var shellRatio = [11.5, 17.5, 23.5]; // 껍질 지름 비율(mm 기준). 최외곽 = 전체 크기.
+    var shellRatio = [8, 16, 24]; // 껍질 지름 비율(mm 기준, 중심부터 등간격). 최외곽 = 전체 크기.
 
     // 선택 오브젝트가 "가이드 정원"인지 판별. 맞으면 중심/지름(pt)을 돌려준다.
     // 하나의 닫힌 패스이고 가로·세로 차이가 5% 이내여야 원으로 간주.
@@ -133,11 +134,12 @@
         return s;
     }
     function syncSliderLabels() { for (var i = 0; i < sliderSyncers.length; i++) sliderSyncers[i](); }
-    // 모든 크기는 실제 적용값(화면 실측치). 전체 크기 = 최외곽 껍질 지름(mm).
-    var sldOverall = addSlider("전체 크기", 5, 300, 40, function(v){ return v.toFixed(1) + "mm"; });
-    var sldNucleus = addSlider("핵 지름", 0.5, 40, 6, function(v){ return v.toFixed(1) + "mm"; });
-    var sldElectron = addSlider("전자 지름", 0.2, 15, 2, function(v){ return v.toFixed(1) + "mm"; });
-    var sldChargeFont = addSlider("핵 전하량 글자", 1, 100, 8, function(v){ return v.toFixed(1) + "pt"; });
+    // 모든 크기는 실제 적용값(화면 실측치). 기준 = 1번 껍질 지름(mm).
+    // 껍질 수가 달라도 껍질 지름이 같아 여러 모형 간 통일감 유지(1:2:3 등간격).
+    var sldOverall = addSlider("1껍질 지름", 2, 16, 13, function(v){ return v.toFixed(1) + "mm"; });
+    var sldNucleus = addSlider("핵 지름", 0.5, 8, 6, function(v){ return v.toFixed(1) + "mm"; });
+    var sldElectron = addSlider("전자 지름", 0.2, 4, 2, function(v){ return v.toFixed(1) + "mm"; });
+    var sldChargeFont = addSlider("핵 전하량 글자", 1, 20, 8, function(v){ return v.toFixed(1) + "pt"; });
 
     // 연동 규칙:
     //  전체 크기 변경 → 핵 지름·전자 지름·핵 전하량 글자가 같은 비율로 함께 조정(전체 비례).
@@ -262,21 +264,9 @@
         var g = detectGuideCircle();
         var guide = g ? g.item : null, guideCx = g ? g.cx : 0, guideCy = g ? g.cy : 0;
 
-        // 선택된 원소들의 최대 껍질 수를 구해, 그 최외곽 껍질 지름 = 전체 크기(mm)가 되도록 배율(scale) 산출.
-        function shellsFor(z) {
-            var ec = Math.max(0, z - ionCharge);
-            var c1 = Math.min(ec, 2), c2 = Math.min(Math.max(0, ec - 2), 8), c3 = Math.min(Math.max(0, ec - 10), 8);
-            return (c3 > 0) ? 3 : (c2 > 0 ? 2 : (c1 > 0 ? 1 : 0));
-        }
-        var maxShells = 0;
-        for (var mi = 0; mi < atomicNumbers.length; mi++) {
-            var sc0 = shellsFor(atomicNumbers[mi]);
-            if (sc0 > maxShells) maxShells = sc0;
-        }
         // scale: 도형 전반(껍질·간격·괄호)에 곱하는 무차원 배율. 핵/전자/글자는 절대값을 그대로 사용.
-        var refBase = shellRatio[(maxShells > 0 ? maxShells : 3) - 1];
-        var scale = outerMM / refBase;
-        // 실제 껍질 지름(pt): 최외곽 = outerMM(mm) 그대로.
+        // 1번 껍질 지름 = outerMM(mm)이 되도록 산출 (껍질 수와 무관하게 동일).
+        var scale = outerMM / shellRatio[0];
         var shellD = [shellRatio[0]*MM*scale, shellRatio[1]*MM*scale, shellRatio[2]*MM*scale];
 
         function getCMYK(c, m, y, k) {
@@ -285,25 +275,28 @@
             return color;
         }
         var colorWhite = getCMYK(0, 0, 0, 0);
+        var colorGray50 = getCMYK(0, 0, 0, 50);
         var colorGray80 = getCMYK(0, 0, 0, 80);
+        var colorBlack = getCMYK(0, 0, 0, 100);
 
         // 그라데이션은 문서당 1회만 생성해 재사용 (미리보기 반복 대비)
         var grads = getGradients(doc);
         var shellGrad = grads.shell;
         var sphereGrad = grads.sphere;
+        var sphereNucGrad = grads.sphereNuc;
 
         // 구(핵/전자)에 방사형 그라데이션을 적용하는 헬퍼
         // 주의: 최신 Illustrator에서는 GradientColor의 origin/matrix/hilite 속성이
         // 스크립트로는 무시되므로, 3D 조명은 "하이라이트를 중심으로 한 큰 원을
         // 원래 크기 원으로 클리핑"하는 방식으로 구현한다.
-        function applySphereFill(item, ox, oy, dia, lit3D) {
+        function applySphereFill(item, ox, oy, dia, lit3D, flatColor, grad) {
             if (!lit3D) {
-                // 3D 효과 꺼짐 → 그라데이션 없이 플랫 단색 (핵 전하량 표시와 동일한 톤)
-                item.fillColor = colorGray80;
+                // 3D 효과 꺼짐 → 그라데이션 없이 플랫 단색 (기본: 핵 전하량 표시와 동일한 톤)
+                item.fillColor = flatColor ? flatColor : colorGray80;
                 return item;
             }
             var gc = new GradientColor();
-            gc.gradient = sphereGrad;
+            gc.gradient = grad ? grad : sphereGrad;
             var r = dia / 2;
             var hx = ox - r * 0.35;  // 하이라이트 중심 (좌측 상단, 중심에서 살짝 치우침)
             var hy = oy + r * 0.35;
@@ -390,7 +383,7 @@
                 outlinedGroup.translate(cx - (gb[0] + gb[2]) / 2, cy - (gb[1] + gb[3]) / 2);
             } else {
                 nucleus.filled = true;
-                applySphereFill(nucleus, cx, cy, nDia, optLit3DNucleus);
+                applySphereFill(nucleus, cx, cy, nDia, optLit3DNucleus, colorGray50, sphereNucGrad); // 핵: 플랫 K50, 3D는 밝은 그라데이션
             }
 
             // 3. 전자
@@ -420,7 +413,7 @@
                     var ey = cy + shellR * Math.sin(rad);
                     var electron = atomGroup.pathItems.ellipse(ey + eDia/2, ex - eDia/2, eDia, eDia);
                     electron.filled = true; electron.stroked = false;
-                    applySphereFill(electron, ex, ey, eDia, optLit3DElectron);
+                    applySphereFill(electron, ex, ey, eDia, optLit3DElectron, colorBlack); // 전자 플랫은 K100
                     if (optShowMinus) {
                         // - 기호는 전자 지름에 비례 (기존 1.5mm 전자 기준 폭 1.2mm, 높이 0.2mm)
                         var mW = eDia * 0.8, mH = eDia * (0.2/1.5);
@@ -448,7 +441,7 @@
                 var lbl = atomGroup.textFrames.add();
                 var absC = Math.abs(ionCharge);
                 lbl.contents = (absC > 1 ? absC : "") + (ionCharge > 0 ? "+" : "-");
-                lbl.textRange.characterAttributes.size = 8; // 이온 전하량 글자: 8pt 고정
+                lbl.textRange.characterAttributes.size = 6; // 이온 전하량 글자: 6pt 고정
                 // 이온 전하량 서체 적용
                 try { lbl.textRange.characterAttributes.textFont = app.textFonts.getByName(fontName); } catch(e) {}
 
@@ -470,7 +463,7 @@
     // --- 옵션 기억 (마지막 실행 설정을 다음 실행 때 복원) ---
     var PREF_KEY = "AtomModelMaker/settings";
     function collectSettings() {
-        var parts = ["v4"];
+        var parts = ["v5"]; // v5: 크기 기준이 전체 크기 → 1번 껍질 지름으로 변경
         var elems = "";
         for (var i = 0; i < checkBoxes.length; i++) elems += checkBoxes[i].value ? "1" : "0";
         parts.push(elems);
@@ -494,13 +487,54 @@
     }
     function saveSettings() {
         try { app.preferences.setStringPreference(PREF_KEY, collectSettings()); } catch (e) {}
+        saveSharedSettings();
+    }
+
+    // 3개 모형 스크립트(원자/분자/이온)가 공유하는 공통 옵션.
+    // 어느 스크립트든 생성 시 저장하고, 실행 시 자기 설정 위에 덮어써서
+    // 마지막에 실행한 스크립트의 값이 항상 우선한다.
+    var SHARED_PREF_KEY = "ModelMakerShared/settings";
+    function saveSharedSettings() {
+        var parts = ["v2", // v2: 크기 기준이 1번 껍질 지름
+
+            chkNucleus.value ? "1" : "0",
+            chkShowMinus.value ? "1" : "0",
+            chkShellLine.value ? "1" : "0",
+            chkLit3DNucleus.value ? "1" : "0",
+            chkLit3DElectron.value ? "1" : "0",
+            sldOverall.value,
+            sldNucleus.value,
+            sldElectron.value,
+            sldChargeFont.value];
+        try { app.preferences.setStringPreference(SHARED_PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+    function applySharedSettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(SHARED_PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v2" || p.length < 10) return;
+        try {
+            chkNucleus.value = (p[1] === "1");
+            chkShowMinus.value = (p[2] === "1");
+            chkShellLine.value = (p[3] === "1");
+            chkLit3DNucleus.value = (p[4] === "1");
+            chkLit3DElectron.value = (p[5] === "1");
+            sldOverall.value = parseFloat(p[6]);
+            sldNucleus.value = parseFloat(p[7]);
+            sldElectron.value = parseFloat(p[8]);
+            sldChargeFont.value = parseFloat(p[9]);
+            syncSliderLabels();
+            prevOverall = sldOverall.value;
+            prevNucleus = sldNucleus.value;
+        } catch (e) {}
     }
     function applySettings() {
         var raw = "";
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v4" || p.length < 15) return;
+        if (p[0] !== "v5" || p.length < 15) return;
         try {
             var elems = p[1];
             for (var i = 0; i < checkBoxes.length && i < elems.length; i++) checkBoxes[i].value = (elems.charAt(i) === "1");
@@ -518,7 +552,7 @@
             sldNucleus.value = parseFloat(p[12]);
             sldElectron.value = parseFloat(p[13]);
             sldChargeFont.value = parseFloat(p[14]);
-            if (p.length > 15) chkShellLine.value = (p[15] === "1"); // v4 후반 추가 필드(없으면 기본값 유지)
+            if (p.length > 15) chkShellLine.value = (p[15] === "1"); // 후반 추가 필드(없으면 기본값 유지)
             syncSliderLabels();
             // 복원값을 기준선으로 삼아 이후 비율 계산이 맞도록 갱신
             prevOverall = sldOverall.value;
@@ -536,14 +570,26 @@
     // 이전 세션 잔여 미리보기 정리 + 마지막 실행 설정 복원
     removeLeftoverPreviews();
     applySettings();
+    applySharedSettings(); // 공통 옵션은 마지막 실행 스크립트 값으로 덮어씀
 
-    // 가이드 원이 선택돼 있으면 '전체 크기'를 그 원 지름(mm)으로 세팅하고
-    // 핵/전자/글자를 같은 비율로 함께 조정한다(전체 크기 변경과 동일 규칙).
+    // 가이드 원(=최외곽 껍질 지름)이 선택돼 있으면 선택된 원소의 최대 껍질 수로
+    // 환산해 '1껍질 지름'을 세팅하고, 핵/전자/글자를 같은 비율로 함께 조정한다.
     (function seedFromGuideCircle() {
         var g = detectGuideCircle();
         if (!g) return;
+        var zs = getSelectedElements();
+        var q = currentCharge();
+        var maxShells = 3;
+        if (zs.length > 0) {
+            maxShells = 1;
+            for (var zi = 0; zi < zs.length; zi++) {
+                var ec = Math.max(0, zs[zi] - q);
+                var sn = (ec > 10) ? 3 : (ec > 2 ? 2 : (ec > 0 ? 1 : 0));
+                if (sn > maxShells) maxShells = sn;
+            }
+        }
         var before = sldOverall.value;
-        sldOverall.value = g.d / MM; // pt → mm (슬라이더 범위로 클램프)
+        sldOverall.value = (g.d / MM) * shellRatio[0] / shellRatio[maxShells - 1]; // pt → mm 환산 후 1껍질 기준
         var r = sldOverall.value / before;
         scaleSlider(sldNucleus, r);
         scaleSlider(sldElectron, r);
