@@ -5,6 +5,13 @@
 
   Based on TrimMasks.jsx by Sergey Osokin.
   원본 방식처럼 임시 액션으로 Pathfinder > Crop을 호출합니다.
+
+  래스터/배치/메시 이미지 처리 (cropulka.jsx 방식 참고):
+  Pathfinder Crop은 이미지 데이터를 잘라내지 못하므로, 이미지가 포함된
+  클리핑 그룹은 마스크 경계와 이미지 경계의 교차 영역만 재래스터화하여
+  (doc.rasterize) 보이지 않는 픽셀 데이터를 실제로 삭제합니다.
+  매우 큰 이미지의 좁은 영역만 클리핑했을 때 파일 용량이 크게 줄어듭니다.
+  이미지가 있는 그룹은 마스크를 유지합니다 (비사각형 마스크 대응).
 */
 
 //@target illustrator
@@ -42,10 +49,11 @@
         return;
     }
 
-    var mode = showOptionsDialog();
-    if (!mode) {
+    var opts = showOptionsDialog();
+    if (!opts) {
         return;
     }
+    var mode = opts.mode;
 
     app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
 
@@ -65,6 +73,7 @@
             mBlending: BlendModes.NORMAL
         };
         var doneCount = 0;
+        var imageCount = 0;
         var skipCount = 0;
         var failCount = 0;
 
@@ -73,6 +82,14 @@
             try {
                 if (!isUsableClippedGroup(targets[i])) {
                     skipCount++;
+                    continue;
+                }
+
+                if (opts.imageCrop && hasImageItems(targets[i])) {
+                    // 이미지 포함 그룹: Pathfinder 대신 마스크 영역만 재래스터화
+                    var trimmed = trimImagesToMask(targets[i], opts.imageRes);
+                    if (trimmed > 0) imageCount++;
+                    else skipCount++; // 이미지가 이미 마스크 안에 들어 있음
                     continue;
                 }
 
@@ -87,7 +104,8 @@
         deselect();
 
         var msg = "완료: " + doneCount + "개의 클리핑 마스크를 보이는 부분만 남기도록 잘랐습니다.";
-        if (skipCount > 0) msg += "\n건너뜀: " + skipCount + "개 (잠김/숨김/처리 불가)";
+        if (imageCount > 0) msg += "\n이미지 트리밍: " + imageCount + "개 그룹 (마스크 유지, 보이는 영역만 재래스터화)";
+        if (skipCount > 0) msg += "\n건너뜀: " + skipCount + "개 (잠김/숨김/처리 불가/변경 불필요)";
         if (failCount > 0) msg += "\n실패: " + failCount + "개";
         msg += "\n\n※ 결과가 이상하면 실행 직후 Ctrl+Z로 되돌릴 수 있습니다.";
         alert(msg);
@@ -246,29 +264,164 @@
         var note = win.add("statictext", undefined, "3번은 사각형 클리핑 마스크와 직선 구간 중심의 라인에 맞춘 옵션입니다.", { multiline: true });
         note.preferredSize.width = 430;
 
+        var imgPanel = win.add("panel", undefined, "래스터/배치/메시 이미지");
+        imgPanel.orientation = "column";
+        imgPanel.alignChildren = "left";
+        imgPanel.margins = [12, 18, 12, 12];
+
+        var imgCrop = imgPanel.add("checkbox", undefined, "마스크 영역만 남기고 재래스터화 (큰 이미지 용량 축소)");
+        imgCrop.value = true;
+
+        var resGroup = imgPanel.add("group");
+        resGroup.orientation = "row";
+        resGroup.add("statictext", undefined, "해상도(ppi):");
+        var resInput = resGroup.add("edittext", undefined, "300");
+        resInput.characters = 6;
+
+        var imgNote = imgPanel.add("statictext", undefined, "이미지가 포함된 그룹은 마스크를 유지한 채 보이지 않는 픽셀만 삭제합니다.", { multiline: true });
+        imgNote.preferredSize.width = 430;
+
+        imgCrop.onClick = function () {
+            resGroup.enabled = imgCrop.value;
+        };
+
         var buttons = win.add("group");
         buttons.alignment = "right";
         var cancel = buttons.add("button", undefined, "취소", { name: "cancel" });
         var ok = buttons.add("button", undefined, "실행", { name: "ok" });
 
-        var result = 0;
+        var result = null;
         ok.onClick = function () {
+            var m;
             if (optClipLive.value) {
-                result = MODE_CLIP_LIVE_LINES;
+                m = MODE_CLIP_LIVE_LINES;
             } else if (optRelease.value) {
-                result = MODE_RELEASE_LINES;
+                m = MODE_RELEASE_LINES;
             } else {
-                result = MODE_OUTLINE_LINES;
+                m = MODE_OUTLINE_LINES;
             }
+
+            var res = parseFloat(resInput.text);
+            if (isNaN(res) || res < 36) res = 36;
+            if (res > 2400) res = 2400;
+
+            result = {
+                mode: m,
+                imageCrop: imgCrop.value,
+                imageRes: res
+            };
             win.close();
         };
         cancel.onClick = function () {
-            result = 0;
+            result = null;
             win.close();
         };
 
         win.show();
         return result;
+    }
+
+    function isImageItem(item) {
+        return item.typename === "RasterItem" ||
+               item.typename === "PlacedItem" ||
+               item.typename === "MeshItem";
+    }
+
+    function hasImageItems(item) {
+        if (isImageItem(item)) {
+            return true;
+        }
+        if (!item.pageItems) {
+            return false;
+        }
+        for (var i = 0; i < item.pageItems.length; i++) {
+            if (hasImageItems(item.pageItems[i])) return true;
+        }
+        return false;
+    }
+
+    function collectImageItems(item, result) {
+        if (isImageItem(item)) {
+            result.push(item);
+            return;
+        }
+        if (!item.pageItems) {
+            return;
+        }
+        for (var i = 0; i < item.pageItems.length; i++) {
+            collectImageItems(item.pageItems[i], result);
+        }
+    }
+
+    // 마스크 경계와 이미지 경계의 교차 영역만 재래스터화해서
+    // 보이지 않는 픽셀 데이터를 실제로 삭제한다. 마스크는 유지.
+    // 반환값: 삭제/재래스터화된 이미지 개수
+    function trimImagesToMask(group, resolution) {
+        var mask = findClippingPath(group);
+        if (!mask) {
+            return 0;
+        }
+
+        var mb = mask.geometricBounds; // [left, top, right, bottom]
+        var pad = 1; // pt, 경계 안티앨리어싱 여유
+        var maskL = Math.min(mb[0], mb[2]) - pad;
+        var maskR = Math.max(mb[0], mb[2]) + pad;
+        var maskB = Math.min(mb[1], mb[3]) - pad;
+        var maskT = Math.max(mb[1], mb[3]) + pad;
+
+        var images = [];
+        collectImageItems(group, images);
+
+        var changed = 0;
+
+        for (var i = 0; i < images.length; i++) {
+            var img = images[i];
+            var b = img.geometricBounds;
+
+            var L = Math.max(Math.min(b[0], b[2]), maskL);
+            var R = Math.min(Math.max(b[0], b[2]), maskR);
+            var B = Math.max(Math.min(b[1], b[3]), maskB);
+            var T = Math.min(Math.max(b[1], b[3]), maskT);
+
+            // 마스크와 전혀 겹치지 않음 → 어차피 안 보이므로 삭제
+            if (L >= R || B >= T) {
+                img.remove();
+                changed++;
+                continue;
+            }
+
+            // 이미 마스크 안에 완전히 들어 있음 → 잘라낼 것이 없음
+            if (b[0] >= maskL && b[2] <= maskR && b[3] >= maskB && b[1] <= maskT) {
+                continue;
+            }
+
+            var parent = img.parent;
+            var blend = img.blendingMode;
+            var opa = img.opacity;
+
+            // rasterize 결과가 다른 위치에 놓일 수 있으므로 원래 z-순서 표시용 마커
+            var marker = parent.pathItems.add();
+            marker.stroked = false;
+            marker.filled = false;
+            marker.move(img, ElementPlacement.PLACEBEFORE);
+
+            var options = new RasterizeOptions();
+            options.resolution = resolution;
+            options.transparency = true;
+            options.antiAliasingMethod = AntiAliasingMethod.ARTOPTIMIZED;
+            options.clippingMask = false;
+            options.convertSpotColors = false;
+            options.padding = 0;
+
+            var rastered = doc.rasterize(img, [L, T, R, B], options);
+            rastered.move(marker, ElementPlacement.PLACEAFTER);
+            rastered.blendingMode = blend;
+            rastered.opacity = opa;
+            marker.remove();
+            changed++;
+        }
+
+        return changed;
     }
 
     function trim(item, attr, isSaveMask, actionSet, actionName, mode) {
