@@ -59,7 +59,9 @@
             String.fromCharCode(0xE09F), String.fromCharCode(0xE0E5), String.fromCharCode(0xE0E6),
             String.fromCharCode(0xE0E7)
         ], fontSize: 8, fontNames: ["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular"],
-            independent: true, labels: HANCOM_LABELS}
+            independent: true, labels: HANCOM_LABELS},
+        {contents: [String.fromCharCode(0x02D8)], fontSize: 8, fontNames: ["GSMediumB1"], independent: true,
+            labels: [String.fromCharCode(0x00B0)]}
     ];
     var selectedOption = null;
     var selectedCount = 0;
