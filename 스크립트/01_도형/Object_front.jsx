@@ -3,6 +3,24 @@
     var doc = app.activeDocument;
     var source = getSelectedOpenPath(doc.selection);
     if (source === null) { alert("잠기지 않은 열린 패스 하나만 선택해주세요."); return; }
+    // 일부 객체는 Illustrator 내부 상태가 손상되어 (layer 참조 불가, hidden/remove 거부)
+    // 모든 DOM 조작이 실패한다. 복제본은 정상이므로 복제본으로 대체해 진행한다.
+    try {
+        var layerCheck = source.layer.name;
+        source.hidden = source.hidden;
+    } catch (eBroken) {
+        try {
+            var healed = source.duplicate(doc.activeLayer, ElementPlacement.PLACEATEND);
+            source = healed;
+            alert("선택한 선의 내부 상태가 손상되어 복제본으로 진행합니다.\n" +
+                  "원본 선은 스크립트로 삭제할 수 없으니, 완료 후 직접 선택해 삭제해주세요.\n" +
+                  "(문서를 저장 후 다시 열면 이런 손상이 해소되는 경우가 많습니다.)");
+        } catch (eHeal) {
+            alert("선택한 선이 손상되어 처리할 수 없습니다.\n문서를 저장 후 다시 열어 재시도해주세요.");
+            return;
+        }
+    }
+
     var previousCoordinateSystem = app.coordinateSystem;
     try {
     app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM;
@@ -12,7 +30,7 @@
     var strokeWidthPt = 0.5;
     var frontType = "warm";
     var colorMode = "standard";
-    var kValue = 0;
+    var kValue = 100;
     var hexValue = "FF0000";
     var lastValidHex = hexValue;
     var K_STEP = 10;
@@ -23,7 +41,8 @@
     var previewEnabled = true;
     var previewGroup = null;
     var sourceWasHidden = source.hidden;
-    var pathMetrics = buildPathMetrics(source, 80);
+    var TRIANGLE_SCALE = 0.85; // 삼각형은 반원 대비 살짝 작게
+    var pathMetrics = buildPathMetrics(source, 200);
 
     var dlg = new Window("dialog", "오브젝트 전선");
     dlg.orientation = "column";
@@ -52,10 +71,10 @@
     var kColorRadio = colorPanel.add("radiobutton", undefined, "K 음영");
     var kRow = colorPanel.add("group");
     var kDecreaseButton = kRow.add("button", undefined, "<");
-    var kLabel = kRow.add("statictext", undefined, "0K");
+    var kLabel = kRow.add("statictext", undefined, "100K");
     var kIncreaseButton = kRow.add("button", undefined, ">");
     var kBounds = colorPanel.add("group");
-    kBounds.add("statictext", undefined, "0K");
+    kBounds.add("statictext", undefined, "50K");
     kBounds.add("statictext", undefined, "100K");
     var hexColorRadio = colorPanel.add("radiobutton", undefined, "HEX");
     var hexInput = colorPanel.add("edittext", undefined, hexValue);
@@ -124,7 +143,7 @@
 
     function stepK(delta) {
         delta = delta < 0 ? -K_STEP : K_STEP;
-        kValue = clamp(kValue + delta, 0, 100);
+        kValue = clamp(kValue + delta, 50, 100);
         kLabel.text = kValue + "K";
         updatePreview();
     }
@@ -136,7 +155,7 @@
     if (result === 1) {
         try {
             source.hidden = false;
-            var finalGroup = createWeatherFront(false);
+            var finalGroup = tryCreateWeatherFront(false, 3);
             finalGroup.name = "Weather Front";
             try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
             source.remove();
@@ -147,7 +166,7 @@
             source.hidden = sourceWasHidden;
             source.selected = true;
             if (e2 && e2.weatherFrontTooShort) alert("선택한 패스가 도형 크기보다 짧습니다.");
-            else alert("전선을 만드는 중 오류가 발생했습니다.");
+            else alert("전선을 만드는 중 오류가 발생했습니다.\n" + e2 + " (line " + e2.line + ")");
         }
     } else {
         source.hidden = sourceWasHidden;
@@ -156,6 +175,22 @@
     app.redraw();
     } finally {
         app.coordinateSystem = previousCoordinateSystem;
+    }
+
+    // Illustrator가 연속 DOM 수정 중 간헐적으로 'Target layer cannot be modified' 등을
+    // 던지는 경우가 있어 전선 생성 전체를 재시도한다
+    function tryCreateWeatherFront(isPreview, attempts) {
+        var lastError = null;
+        for (var attempt = 0; attempt < attempts; attempt++) {
+            try {
+                return createWeatherFront(isPreview);
+            } catch (e) {
+                if (e && e.weatherFrontTooShort) throw e;
+                lastError = e;
+                try { $.sleep(100); app.redraw(); } catch (e2) {}
+            }
+        }
+        throw lastError;
     }
 
     function updatePreview() {
@@ -168,7 +203,7 @@
             }
             source.hidden = true;
             source.selected = false;
-            previewGroup = createWeatherFront(true);
+            previewGroup = tryCreateWeatherFront(true, 2);
             if (previewGroup === null) {
                 app.redraw();
                 return;
@@ -177,9 +212,9 @@
             try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
             app.redraw();
         } catch(e2) {
+            // 일시적 오류: 다음 조작에서 미리보기가 다시 그려지므로 경고 없이 넘어간다
             clearPreview();
             restoreSourceAfterPreviewFailure();
-            alert("미리보기를 만드는 중 오류가 발생했습니다.");
             app.redraw();
         }
     }
@@ -195,8 +230,21 @@
         source.selected = true;
     }
 
+    // 일부 손상된 객체는 .layer 접근이 'No such element'로 실패하므로
+    // parent(레이어/그룹) → activeLayer 순으로 대체 컨테이너를 찾는다
+    function getItemContainer(item) {
+        try {
+            if (item.layer) return item.layer;
+        } catch (eLayer) {}
+        try {
+            var p = item.parent;
+            if (p && (p.typename === "Layer" || p.typename === "GroupItem")) return p;
+        } catch (eParent) {}
+        return doc.activeLayer;
+    }
+
     function createWeatherFront(isPreview) {
-        var group = source.layer.groupItems.add();
+        var group = getItemContainer(source).groupItems.add();
         try {
             var shapeSize = shapeSizeMm * MM_TO_PT;
             var gap = gapMm * MM_TO_PT;
@@ -230,16 +278,267 @@
 
         for (var placementIndex = 0; placementIndex < placements.length; placementIndex++) {
             var placement = placements[placementIndex];
-            var frame = getFrameAtLength(pathMetrics, placement.centerDistance);
             var instruction = getSymbolInstruction(frontType, placement.index, normalSign);
             var color = getFrontColors(placement.index);
             if (instruction.shape === "semicircle") {
-                drawSemicircle(group, frame, shapeSize, instruction.side, color);
+                drawWarmSymbol(group, placement.centerDistance, shapeSize, instruction.side, color);
             } else {
-                drawTriangle(group, frame, shapeSize, instruction.side, color);
+                drawColdSymbol(group, placement.centerDistance, shapeSize, instruction.side, color);
             }
         }
         return placements.length;
+    }
+
+    // 지정 구간의 실제 곡선을 따라 점 목록 생성 (양 끝 포함)
+    function collectCurvePoints(startDistance, endDistance, steps) {
+        var points = [];
+        for (var i = 0; i <= steps; i++) {
+            var frame = getFrameAtLength(pathMetrics, startDistance + (endDistance - startDistance) * i / steps);
+            points.push([frame.x, frame.y]);
+        }
+        return points;
+    }
+
+    // 유한한 좌표만 남기고 닫힌 칠 도형 생성 (비정상 좌표로 인한 PARM 오류 방지)
+    function makeFilledShape(group, points, color) {
+        var clean = [];
+        for (var i = 0; i < points.length; i++) {
+            var x = points[i][0], y = points[i][1];
+            if (typeof x !== "number" || typeof y !== "number" || !isFinite(x) || !isFinite(y)) continue;
+            if (clean.length > 0) {
+                var prev = clean[clean.length - 1];
+                if (Math.abs(prev[0] - x) < 0.0001 && Math.abs(prev[1] - y) < 0.0001) continue;
+            }
+            clean.push([x, y]);
+        }
+        if (clean.length < 3) return null;
+        return buildFilledPath(group, clean, null, color);
+    }
+
+    // anchors + (선택) 핸들로 닫힌 칠 도형 생성.
+    // handles[i] = null(코너) 또는 [[lx,ly],[rx,ry]].
+    // Illustrator가 연속 도형 생성 중 간헐적으로 'Target layer cannot be modified' /
+    // PARM 오류를 던지는 경우가 있어 redraw로 상태를 정리한 뒤 재시도한다
+    function buildFilledPath(group, anchors, handles, color) {
+        var lastError = null;
+        for (var attempt = 0; attempt < 3; attempt++) {
+            var shape = null;
+            try {
+                shape = group.pathItems.add();
+                shape.setEntirePath(anchors);
+                if (handles !== null) {
+                    for (var hi = 0; hi < shape.pathPoints.length && hi < handles.length; hi++) {
+                        if (handles[hi] === null) continue;
+                        shape.pathPoints[hi].leftDirection = handles[hi][0];
+                        shape.pathPoints[hi].rightDirection = handles[hi][1];
+                    }
+                }
+                shape.closed = true;
+                shape.stroked = false;
+                shape.filled = true;
+                shape.fillColor = color;
+                return shape;
+            } catch (eShape) {
+                lastError = eShape;
+                try { if (shape !== null) shape.remove(); } catch (eCleanup) {}
+                try { $.sleep(30); app.redraw(); } catch (eRedraw) {}
+            }
+        }
+        throw lastError;
+    }
+
+    // Douglas-Peucker 단순화: 직선 구간의 불필요한 앵커 제거
+    function simplifyPolyline(pts, tol) {
+        if (pts.length <= 2) return pts;
+        var a = pts[0], b = pts[pts.length - 1];
+        var maxD = -1, maxI = -1;
+        for (var i = 1; i < pts.length - 1; i++) {
+            var d = perpDistance(pts[i], a, b);
+            if (d > maxD) { maxD = d; maxI = i; }
+        }
+        if (maxD <= tol) return [a, b];
+        var left = simplifyPolyline(pts.slice(0, maxI + 1), tol);
+        var right = simplifyPolyline(pts.slice(maxI), tol);
+        return left.slice(0, left.length - 1).concat(right);
+    }
+
+    function perpDistance(p, a, b) {
+        var dx = b[0] - a[0], dy = b[1] - a[1];
+        var len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.000001) {
+            var px = p[0] - a[0], py = p[1] - a[1];
+            return Math.sqrt(px * px + py * py);
+        }
+        return Math.abs(dx * (a[1] - p[1]) - dy * (a[0] - p[0])) / len;
+    }
+
+    // 중심에서 반지름 r인 원이 곡선과 만나는 지점(호 길이)을 탐색. dir: -1 뒤쪽, +1 앞쪽
+    function findCircleCrossing(centerDistance, center, radius, dir) {
+        var step = radius / 8;
+        var limit = pathMetrics.totalLength;
+        var sPrev = centerDistance;
+        var s = centerDistance;
+
+        for (var i = 0; i < 96; i++) {
+            s += dir * step;
+            if (s <= 0) return 0;
+            if (s >= limit) return limit;
+            var p = getFrameAtLength(pathMetrics, s);
+            var dxp = p.x - center.x, dyp = p.y - center.y;
+            if (Math.sqrt(dxp * dxp + dyp * dyp) >= radius) {
+                var lo = sPrev, hi = s;
+                for (var j = 0; j < 24; j++) {
+                    var mid = (lo + hi) / 2;
+                    var pm = getFrameAtLength(pathMetrics, mid);
+                    var dxm = pm.x - center.x, dym = pm.y - center.y;
+                    if (Math.sqrt(dxm * dxm + dym * dym) < radius) lo = mid;
+                    else hi = mid;
+                }
+                return (lo + hi) / 2;
+            }
+            sPrev = s;
+        }
+        return clamp(s, 0, limit);
+    }
+
+    // 온난 기호: 곡선 위 중심에 정원을 그린 뒤, 곡선과의 두 교점 사이의
+    // 실제 곡선(밑변) + 법선 쪽 원호(윗변, 베지어)로 닫아 채운다
+    function drawWarmSymbol(group, centerDistance, size, side, color) {
+        var radius = size / 2;
+        var center = getFrameAtLength(pathMetrics, centerDistance);
+        var s1 = findCircleCrossing(centerDistance, center, radius, -1);
+        var s2 = findCircleCrossing(centerDistance, center, radius, 1);
+
+        // 밑변: 직선 구간의 불필요한 앵커 제거
+        var basePoints = simplifyPolyline(collectCurvePoints(s1, s2, 16), 0.05);
+        var first = basePoints[0];
+        var last = basePoints[basePoints.length - 1];
+
+        var angleA = Math.atan2(first[1] - center.y, first[0] - center.x);
+        var angleB = Math.atan2(last[1] - center.y, last[0] - center.x);
+        var bulgeAngle = Math.atan2(center.ny * side, center.nx * side);
+
+        function normAngle(a) {
+            var TWO_PI = Math.PI * 2;
+            return ((a % TWO_PI) + TWO_PI) % TWO_PI;
+        }
+
+        // 마지막 교점(B)에서 첫 교점(A)으로, 법선 쪽을 지나는 방향으로 원호를 돈다
+        var sweep = normAngle(angleA - angleB);
+        if (normAngle(bulgeAngle - angleB) > sweep) sweep -= Math.PI * 2;
+
+        // 원호를 90도 이하 베지어 세그먼트로 분할
+        var segCount = Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2)));
+        var segAngle = sweep / segCount;
+        var handleLen = (4 / 3) * Math.tan(Math.abs(segAngle) / 4) * radius;
+        var dirSign = segAngle >= 0 ? 1 : -1;
+
+        function arcTangent(ang) {
+            return [-Math.sin(ang) * dirSign, Math.cos(ang) * dirSign];
+        }
+
+        var anchors = basePoints.slice(0);
+        var handles = [];
+        for (var bi = 0; bi < basePoints.length; bi++) handles.push(null);
+
+        // B(밑변 끝, 원호 시작): 나가는 핸들만 원호 방향
+        var tB = arcTangent(angleB);
+        handles[handles.length - 1] = [
+            [last[0], last[1]],
+            [last[0] + tB[0] * handleLen, last[1] + tB[1] * handleLen]
+        ];
+
+        // 원호 내부 앵커
+        for (var ai = 1; ai < segCount; ai++) {
+            var ang = angleB + segAngle * ai;
+            var ax = center.x + radius * Math.cos(ang);
+            var ay = center.y + radius * Math.sin(ang);
+            var t = arcTangent(ang);
+            anchors.push([ax, ay]);
+            handles.push([
+                [ax - t[0] * handleLen, ay - t[1] * handleLen],
+                [ax + t[0] * handleLen, ay + t[1] * handleLen]
+            ]);
+        }
+
+        // A(밑변 시작, 원호 끝): 들어오는 핸들만 원호 방향
+        var tA = arcTangent(angleA);
+        handles[0] = [
+            [first[0] - tA[0] * handleLen, first[1] - tA[1] * handleLen],
+            [first[0], first[1]]
+        ];
+
+        return buildFilledPath(group, anchors, handles, color);
+    }
+
+    // 꼭짓점에서 특정 방향으로 나가는 광선이 곡선(샘플 폴리라인)과 처음 만나는 지점
+    function rayCurveIntersect(apex, dirX, dirY, centerDistance, searchRange) {
+        var samples = pathMetrics.samples;
+        var best = null;
+
+        for (var i = 0; i < samples.length - 1; i++) {
+            var p = samples[i], q = samples[i + 1];
+            if (q.distance < centerDistance - searchRange) continue;
+            if (p.distance > centerDistance + searchRange) break;
+
+            var ex = q.x - p.x, ey = q.y - p.y;
+            var denom = dirX * ey - dirY * ex;
+            if (Math.abs(denom) < 0.0000001) continue;
+
+            var wx = p.x - apex.x, wy = p.y - apex.y;
+            var u = (wx * ey - wy * ex) / denom;
+            var v = (wx * dirY - wy * dirX) / denom;
+            if (u > 0.0001 && v >= 0 && v <= 1) {
+                if (best === null || u < best.u) {
+                    best = {u: u, s: p.distance + (q.distance - p.distance) * v};
+                }
+            }
+        }
+        return best;
+    }
+
+    // 한랭 기호: 법선 위 꼭짓점에서 이등변 빗변을 곡선과 만날 때까지 내리고,
+    // 두 접점 사이의 실제 곡선을 밑변으로 하여 채운다
+    function drawColdSymbol(group, centerDistance, size, side, color) {
+        var scaled = size * TRIANGLE_SCALE;
+        var halfBase = scaled / 2;
+        var height = Math.sqrt(3) * scaled / 2;
+        var frame = getFrameAtLength(pathMetrics, centerDistance);
+        var apex = {
+            x: frame.x + frame.nx * height * side,
+            y: frame.y + frame.ny * height * side
+        };
+
+        // 직선일 때의 밑변 꼭짓점 방향으로 광선을 쏜다
+        var cornerL = {x: frame.x - frame.tx * halfBase, y: frame.y - frame.ty * halfBase};
+        var cornerR = {x: frame.x + frame.tx * halfBase, y: frame.y + frame.ty * halfBase};
+
+        function rayTo(corner) {
+            var dx = corner.x - apex.x, dy = corner.y - apex.y;
+            var len = Math.sqrt(dx * dx + dy * dy);
+            if (len < 0.0001) return null;
+            return rayCurveIntersect(apex, dx / len, dy / len, centerDistance, size * 2.5);
+        }
+
+        var hitL = rayTo(cornerL);
+        var hitR = rayTo(cornerR);
+
+        if (hitL === null || hitR === null || Math.abs(hitL.s - hitR.s) < 0.001) {
+            // 곡선과 만나지 않으면 직선 근사 삼각형으로 대체
+            return drawTriangle(group, frame, scaled, side, color);
+        }
+
+        var sStart = Math.min(hitL.s, hitR.s);
+        var sEnd = Math.max(hitL.s, hitR.s);
+        var basePoints = simplifyPolyline(collectCurvePoints(sStart, sEnd, 12), 0.05);
+        var points = [[apex.x, apex.y]];
+        if (hitL.s <= hitR.s) {
+            points = points.concat(basePoints);
+        } else {
+            for (var i = basePoints.length - 1; i >= 0; i--) points.push(basePoints[i]);
+        }
+
+        return makeFilledShape(group, points, color);
     }
 
     function getSymbolPlacements(totalLength, shapeSize, gap) {
@@ -352,47 +651,7 @@
         var left = offsetFrame(frame, -frame.tx * halfSize, -frame.ty * halfSize);
         var right = offsetFrame(frame, frame.tx * halfSize, frame.ty * halfSize);
         var apex = offsetFrame(frame, frame.nx * height * side, frame.ny * height * side);
-        var triangle = group.pathItems.add();
-        triangle.setEntirePath([[left.x, left.y], [right.x, right.y], [apex.x, apex.y]]);
-        triangle.closed = true;
-        triangle.stroked = false;
-        triangle.filled = true;
-        triangle.fillColor = color;
-        return triangle;
-    }
-
-    function drawSemicircle(group, frame, size, side, color) {
-        var halfSize = size / 2;
-        var handleScale = 0.5522847498;
-        var left = offsetFrame(frame, -frame.tx * halfSize, -frame.ty * halfSize);
-        var right = offsetFrame(frame, frame.tx * halfSize, frame.ty * halfSize);
-        var top = offsetFrame(frame, frame.nx * halfSize * side, frame.ny * halfSize * side);
-        var semicircle = group.pathItems.add();
-        semicircle.setEntirePath([[left.x, left.y], [top.x, top.y], [right.x, right.y]]);
-        semicircle.closed = true;
-        semicircle.stroked = false;
-        semicircle.filled = true;
-        semicircle.fillColor = color;
-
-        semicircle.pathPoints[0].rightDirection = [
-            left.x + frame.nx * halfSize * handleScale * side,
-            left.y + frame.ny * halfSize * handleScale * side
-        ];
-        semicircle.pathPoints[0].leftDirection = [left.x, left.y];
-        semicircle.pathPoints[1].leftDirection = [
-            top.x - frame.tx * halfSize * handleScale,
-            top.y - frame.ty * halfSize * handleScale
-        ];
-        semicircle.pathPoints[1].rightDirection = [
-            top.x + frame.tx * halfSize * handleScale,
-            top.y + frame.ty * halfSize * handleScale
-        ];
-        semicircle.pathPoints[2].leftDirection = [
-            right.x + frame.nx * halfSize * handleScale * side,
-            right.y + frame.ny * halfSize * handleScale * side
-        ];
-        semicircle.pathPoints[2].rightDirection = [right.x, right.y];
-        return semicircle;
+        return makeFilledShape(group, [[left.x, left.y], [right.x, right.y], [apex.x, apex.y]], color);
     }
 
     function offsetFrame(frame, x, y) {
@@ -654,7 +913,12 @@
     function getSelectedOpenPath(selection) {
         if (!selection || selection.length !== 1) return null;
         var item = selection[0];
-        if (!item || item.typename !== "PathItem" || item.closed || item.guides || item.clipping || item.locked || item.editable === false) return null;
+        if (!item || item.typename !== "PathItem") return null;
+        if (item.closed || item.guides || item.clipping || item.locked) return null;
+        // 일부 손상된 객체는 editable 조회만으로 PARM을 던지므로 조회 실패는 통과시킨다
+        try {
+            if (item.editable === false) return null;
+        } catch (eEditable) {}
         return item;
     }
 })();
