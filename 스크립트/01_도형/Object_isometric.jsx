@@ -166,9 +166,32 @@ function drawIsometricBox() {
     clearPreview();
     if (dialogResult === 1 && result !== null) {
         if (guideItem !== null) {
-            try { guideItem.remove(); } catch (eGuide) {}
+            var guideRemoved = false;
+            for (var gr = 0; gr < 3 && !guideRemoved; gr++) {
+                try {
+                    guideItem.remove();
+                    guideRemoved = true;
+                } catch (eGuide) {
+                    try { $.sleep(50); app.redraw(); } catch (eGr) {}
+                }
+            }
+            if (!guideRemoved) {
+                alert("가이드 오브젝트를 삭제하지 못했습니다. 직접 삭제해주세요.\n(같은 자리에 이전 도형이 남아 겹쳐 보일 수 있습니다.)");
+            }
         }
-        createIsometricBox(doc, result.w, result.d, result.h, result.angleR, result.angleL, result.offX, result.offY, originX, originY, result.compress, result.lift, result.layers, result.shape, result.cut, true);
+        var finalOk = false, lastFinalError = null;
+        for (var fa = 0; fa < 3 && !finalOk; fa++) {
+            try {
+                createIsometricBox(doc, result.w, result.d, result.h, result.angleR, result.angleL, result.offX, result.offY, originX, originY, result.compress, result.lift, result.layers, result.shape, result.cut, true);
+                finalOk = true;
+            } catch (eFinal) {
+                lastFinalError = eFinal;
+                try { $.sleep(100); app.redraw(); } catch (eFa) {}
+            }
+        }
+        if (!finalOk) {
+            alert("도형을 만드는 중 오류가 발생했습니다.\n" + lastFinalError + " (line " + lastFinalError.line + ")");
+        }
     }
 
     function addCompressControl(parent, label, defaultPct, minPct, maxPct) {
@@ -577,20 +600,27 @@ function drawIsometricBox() {
     }
 
     function updatePreview() {
-        clearPreview();
-        if (!previewCheck.value) {
-            return;
-        }
+        try {
+            clearPreview();
+            if (!previewCheck.value) {
+                return;
+            }
 
-        var size = readSizeInputs(false);
-        var angles = readAngleInputs(false);
-        if (size === null || angles === null) {
-            return;
-        }
+            var size = readSizeInputs(false);
+            var angles = readAngleInputs(false);
+            if (size === null || angles === null) {
+                return;
+            }
 
-        var offsets = readOffsetInputs();
-        previewGroup = createIsometricBox(doc, size.w, size.d, size.h, angles.angleR, angles.angleL, offsets.offX, offsets.offY, originX, originY, readCompressInput(), readLiftInput(), readLayersInput(), readShapeInput(), readCutInput(), false);
-        app.redraw();
+            var offsets = readOffsetInputs();
+            previewGroup = createIsometricBox(doc, size.w, size.d, size.h, angles.angleR, angles.angleL, offsets.offX, offsets.offY, originX, originY, readCompressInput(), readLiftInput(), readLayersInput(), readShapeInput(), readCutInput(), false);
+            app.redraw();
+        } catch (ePreview) {
+            // Illustrator가 바쁠 때 간헐적으로 DOM 오류를 던진다.
+            // 다음 조작에서 미리보기가 다시 그려지므로 경고 없이 넘어간다.
+            clearPreview();
+            try { app.redraw(); } catch (eR) {}
+        }
     }
 
     function clearPreview() {
@@ -794,6 +824,9 @@ function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY
 
         var i, gi, ivs, iv, vi;
 
+        // 층 앞면/끝면은 일단 모아두고, 바닥·윗면과 함께 뒤에서 깊이 순서대로 배치한다
+        var frontFacesArr = [];
+
         for (li = 0; li < layers; li++) {
             hLo = H * li / layers;
             hHi = H * (li + 1) / layers;
@@ -813,13 +846,13 @@ function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY
                 for (i = iv.i0; i <= iv.i1; i++) frontPts.push(projXY(xs[i], 0, ysBottom[i] + hLo));
                 if (iv.x1 > xs[iv.i1]) frontPts.push(projXY(iv.x1, 0, yBAt(iv.x1) + hLo));
                 for (i = iv.i1; i >= iv.i0; i--) frontPts.push(projXY(xs[i], 0, Math.min(ysBottom[i] + hHi, yCut)));
-                faceDefs.push({white: lw, pts: frontPts});
+                frontFacesArr.push({white: lw, pts: frontPts});
             }
 
             // 왼쪽(깊이) 끝면 띠 (x=0): 절단면 아래 부분만
             if (ysBottom[0] + hLo < yCut) {
                 var endTop = Math.min(ysBottom[0] + hHi, yCut);
-                faceDefs.push({white: lw, pts: [
+                frontFacesArr.push({white: lw, pts: [
                     projXY(0, 0, ysBottom[0] + hLo),
                     projXY(0, 0, endTop),
                     projXY(0, D, endTop),
@@ -828,20 +861,85 @@ function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY
             }
         }
 
-        // 곡면 윗면 (h=H): 절단면보다 낮은 구간만 남는다
-        gi = [];
-        for (i = 0; i <= N; i++) gi.push(ysBottom[i] + H - yCut);
-        ivs = findIntervals(gi);
-        for (vi = 0; vi < ivs.length; vi++) {
-            iv = ivs[vi];
-            var topPts = [];
-            if (iv.x0 < xs[iv.i0]) topPts.push(projXY(iv.x0, 0, Math.min(yBAt(iv.x0) + H, yCut)));
-            for (i = iv.i0; i <= iv.i1; i++) topPts.push(projXY(xs[i], 0, ysBottom[i] + H));
-            if (iv.x1 > xs[iv.i1]) topPts.push(projXY(iv.x1, 0, Math.min(yBAt(iv.x1) + H, yCut)));
-            if (iv.x1 > xs[iv.i1]) topPts.push(projXY(iv.x1, D, Math.min(yBAt(iv.x1) + H, yCut)));
-            for (i = iv.i1; i >= iv.i0; i--) topPts.push(projXY(xs[i], D, ysBottom[i] + H));
-            if (iv.x0 < xs[iv.i0]) topPts.push(projXY(iv.x0, D, Math.min(yBAt(iv.x0) + H, yCut)));
-            faceDefs.push({white: 100, pts: topPts});
+        // 곡면(등고면, h=hOff)을 실루엣 기준 가시 run 폴리곤들로 분해.
+        // 앞 곡선(z=0)과 뒤 곡선(z=D)의 투영이 겹치는(가파른 내리막) 구간은
+        // 자기교차 폴리곤이 되므로, 관찰자를 향하는(front-facing) 구간만 남긴다.
+        var shiftX = -D * cosL; // z: 0→D 깊이 오프셋 (문서 좌표)
+        var shiftY = D * sinL;
+
+        // invert=true 이면 방향이 뒤집힌(밑면이 보이는) 구간을 수집한다
+        var collectSurfaceRuns = function (hOff, clampToCut, invert) {
+            var runs = [];
+            var g2 = [];
+            for (var s1 = 0; s1 <= N; s1++) g2.push(ysBottom[s1] + hOff - yCut);
+            var ivs2 = findIntervals(g2);
+
+            for (var v2 = 0; v2 < ivs2.length; v2++) {
+                var iv2 = ivs2[v2];
+
+                // 구간 샘플 x 좌표 (양 끝 절단 교차점 포함)
+                var us = [];
+                if (iv2.x0 < xs[iv2.i0]) us.push(iv2.x0);
+                for (var s2 = iv2.i0; s2 <= iv2.i1; s2++) us.push(xs[s2]);
+                if (iv2.x1 > xs[iv2.i1]) us.push(iv2.x1);
+                if (us.length < 2) continue;
+
+                var Fpts = [];
+                for (var s3 = 0; s3 < us.length; s3++) {
+                    var yv = yBAt(us[s3]) + hOff;
+                    if (clampToCut && yv > yCut) yv = yCut;
+                    Fpts.push(projXY(us[s3], 0, yv));
+                }
+
+                // 세그먼트 가시성: cross(접선, 깊이오프셋) > 0 이면 front-facing (y 위쪽 좌표계)
+                var visibleSeg = [];
+                for (var s4 = 0; s4 < Fpts.length - 1; s4++) {
+                    var tdx = Fpts[s4 + 1][0] - Fpts[s4][0];
+                    var tdy = Fpts[s4 + 1][1] - Fpts[s4][1];
+                    var facing = tdx * shiftY - tdy * shiftX > 0;
+                    visibleSeg.push(invert ? !facing : facing);
+                }
+
+                // 연속 가시 구간(run)마다 폴리곤 하나 (x0 = 구간 시작 재료 좌표, 깊이 정렬용)
+                var runStartIdx = null;
+                for (var s5 = 0; s5 <= visibleSeg.length; s5++) {
+                    var vis = (s5 < visibleSeg.length) && visibleSeg[s5];
+                    if (vis && runStartIdx === null) {
+                        runStartIdx = s5;
+                    } else if (!vis && runStartIdx !== null) {
+                        var runPts = [];
+                        var kk;
+                        for (kk = runStartIdx; kk <= s5; kk++) runPts.push(Fpts[kk]);
+                        for (kk = s5; kk >= runStartIdx; kk--) {
+                            runPts.push([Fpts[kk][0] + shiftX, Fpts[kk][1] + shiftY]);
+                        }
+                        runs.push({pts: runPts, x0: us[runStartIdx]});
+                        runStartIdx = null;
+                    }
+                }
+            }
+            return runs;
+        };
+
+        var topRuns = collectSurfaceRuns(H, true, false);       // 윗면 (절단 클램프)
+        var bottomRuns = collectSurfaceRuns(0, false, true);    // 밑면 (뒤집힌 구간에서 노출)
+
+        // Illustrator는 먼저 만든 면이 위에 쌓이므로(PLACEATEND) 앞에 보일 것부터 push:
+        // 층 앞면/끝면 → 곡면 run들을 x가 작은 것(왼쪽 = 가까운 쪽)부터.
+        // 예: 왼쪽 윗면(맨 위) > 노출된 밑면 > 오른쪽 윗면(맨 뒤)
+        for (i = 0; i < frontFacesArr.length; i++) {
+            faceDefs.push(frontFacesArr[i]);
+        }
+        var surfaceRuns = [];
+        for (i = 0; i < topRuns.length; i++) {
+            surfaceRuns.push({white: 100, pts: topRuns[i].pts, x0: topRuns[i].x0});
+        }
+        for (i = 0; i < bottomRuns.length; i++) {
+            surfaceRuns.push({white: layerWhite(0), pts: bottomRuns[i].pts, x0: bottomRuns[i].x0});
+        }
+        surfaceRuns.sort(function (a, b) { return a.x0 - b.x0; });
+        for (i = 0; i < surfaceRuns.length; i++) {
+            faceDefs.push({white: surfaceRuns[i].white, pts: surfaceRuns[i].pts});
         }
 
         // 절단 평면: 노출된 층별로 수평 띠를 그린다 (층 색 = 해당 층 명도)
@@ -938,11 +1036,24 @@ function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY
 }
 
 function makeFace(doc, group, points) {
-    var face = doc.pathItems.add();
-    face.setEntirePath(points);
-    face.closed = true;
-    face.move(group, ElementPlacement.PLACEATEND);
-    return face;
+    // Illustrator가 연속 도형 생성 중 간헐적으로 'Target layer cannot be modified' /
+    // PARM 오류를 던지는 경우가 있어 redraw로 상태를 정리한 뒤 재시도한다
+    var lastError = null;
+    for (var attempt = 0; attempt < 3; attempt++) {
+        var face = null;
+        try {
+            face = doc.pathItems.add();
+            face.setEntirePath(points);
+            face.closed = true;
+            face.move(group, ElementPlacement.PLACEATEND);
+            return face;
+        } catch (eFace) {
+            lastError = eFace;
+            try { if (face !== null) face.remove(); } catch (eCleanup) {}
+            try { $.sleep(30); app.redraw(); } catch (eRedraw) {}
+        }
+    }
+    throw lastError;
 }
 
 function makeColor(doc, whitePercent) {
