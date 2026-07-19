@@ -10,6 +10,15 @@
   원형 기호는 어떤 각도에서도 시각적 간격이 일정합니다.
 */
 
+// 마지막 실행 스크립트 기록 → Align_RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 (function () {
     if (app.documents.length === 0) {
         alert("문서를 열고 실행해주세요.");
