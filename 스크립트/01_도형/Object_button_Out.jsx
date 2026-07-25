@@ -53,26 +53,69 @@
         var bounds = frontFace.geometricBounds; // [left, top, right, bottom]
         frontFace.strokeJoin = StrokeJoin.ROUNDENDJOIN;
 
-        var backFace = frontFace.duplicate();
-        backFace.name = "ButtonDepthOut";
-        backFace.translate(depth, depth);
-        backFace.strokeJoin = StrokeJoin.ROUNDENDJOIN;
-        backFace.move(frontFace, ElementPlacement.PLACEAFTER);
-
-        var tangentPoints = getEllipseTangentPoints(bounds, depth, depth);
-        var tangentA = makeTangentLine(frontFace, tangentPoints[0], depth, depth);
-        var tangentB = makeTangentLine(frontFace, tangentPoints[1], depth, depth);
-
-        try {
-            tangentA.move(frontFace, ElementPlacement.PLACEAFTER);
-            tangentB.move(frontFace, ElementPlacement.PLACEAFTER);
-        } catch (e) {}
+        var body = makeButtonBody(frontFace, bounds, depth, depth);
+        body.move(frontFace, ElementPlacement.PLACEAFTER);
 
         if (makeGroup) {
-            return [groupButtonItems(frontFace, [backFace, tangentA, tangentB])];
+            return [groupButtonItems(frontFace, [body])];
         }
 
-        return [backFace, tangentA, tangentB];
+        return [body];
+    }
+
+    // 앞면 원 + 뒷면 원의 외곽선만 남긴 원기둥 실루엣.
+    // 뒷면의 가려지는 반원을 빼고 [뒤쪽 반원호 → 접선 → 앞쪽 반원호 → 접선]을 닫힌 패스 하나로 만든다.
+    function makeButtonBody(frontFace, itemBounds, dx, dy) {
+        var cx = (itemBounds[0] + itemBounds[2]) / 2;
+        var cy = (itemBounds[1] + itemBounds[3]) / 2;
+        var rx = (itemBounds[2] - itemBounds[0]) / 2;
+        var ry = (itemBounds[1] - itemBounds[3]) / 2;
+
+        // 접점: 이동 방향과 나란한 접선이 원에 닿는 두 지점(매개변수 각도)
+        var startAngle = Math.atan2(-ry * dx, rx * dy);
+        // 뒷면에서 그릴 반원이 이동 방향(바깥쪽)으로 부풀도록 시작 각도를 고른다
+        if ((rx * Math.cos(startAngle + (Math.PI / 2)) * dx) + (ry * Math.sin(startAngle + (Math.PI / 2)) * dy) < 0) {
+            startAngle += Math.PI;
+        }
+
+        var body = frontFace.duplicate();
+        body.name = "ButtonDepthOut";
+        body.strokeJoin = StrokeJoin.ROUNDENDJOIN;
+
+        var originalPointCount = body.pathPoints.length;
+        var quarter = Math.PI / 2;
+        var handleScale = (4 / 3) * Math.tan(quarter / 4);
+
+        // 뒤쪽 반원(0~2) → 앞쪽 반원(3~5). 0-5, 2-3 구간이 접선이 된다.
+        for (var i = 0; i < 6; i++) {
+            var isBack = i < 3;
+            var t = startAngle + (quarter * (isBack ? i : i - 1));
+            var ox = isBack ? dx : 0;
+            var oy = isBack ? dy : 0;
+            var anchorX = cx + ox + (rx * Math.cos(t));
+            var anchorY = cy + oy + (ry * Math.sin(t));
+            var handleX = -rx * Math.sin(t) * handleScale;
+            var handleY = ry * Math.cos(t) * handleScale;
+            var isArcStart = (i === 0 || i === 3);
+            var isArcEnd = (i === 2 || i === 5);
+
+            var point = body.pathPoints.add();
+            point.anchor = [anchorX, anchorY];
+            point.leftDirection = isArcStart
+                ? [anchorX, anchorY]
+                : [anchorX - handleX, anchorY - handleY];
+            point.rightDirection = isArcEnd
+                ? [anchorX, anchorY]
+                : [anchorX + handleX, anchorY + handleY];
+            point.pointType = (isArcStart || isArcEnd) ? PointType.CORNER : PointType.SMOOTH;
+        }
+
+        for (var j = 0; j < originalPointCount; j++) {
+            body.pathPoints[0].remove();
+        }
+
+        body.closed = true;
+        return body;
     }
 
     function groupButtonItems(frontFace, createdItems) {
@@ -243,29 +286,6 @@
         previewItems = [];
     }
 
-    function getEllipseTangentPoints(itemBounds, dx, dy) {
-        var left = itemBounds[0];
-        var top = itemBounds[1];
-        var right = itemBounds[2];
-        var bottom = itemBounds[3];
-        var cx = (left + right) / 2;
-        var cy = (top + bottom) / 2;
-        var rx = (right - left) / 2;
-        var ry = (top - bottom) / 2;
-        var angle = Math.atan2(-ry * dx, rx * dy);
-
-        var p1 = [
-            cx + (rx * Math.cos(angle)),
-            cy + (ry * Math.sin(angle))
-        ];
-        var p2 = [
-            cx + (rx * Math.cos(angle + Math.PI)),
-            cy + (ry * Math.sin(angle + Math.PI))
-        ];
-
-        return [p1, p2];
-    }
-
     function getClosedPathSelection(selection) {
         var items = [];
         for (var i = 0; selection && i < selection.length; i++) {
@@ -274,26 +294,5 @@
             }
         }
         return items;
-    }
-
-    function makeTangentLine(frontFace, startPoint, dx, dy) {
-        var line = doc.pathItems.add();
-        line.setEntirePath([
-            [startPoint[0], startPoint[1]],
-            [startPoint[0] + dx, startPoint[1] + dy]
-        ]);
-        line.closed = false;
-        line.filled = false;
-        line.stroked = true;
-
-        if (frontFace.stroked) {
-            line.strokeColor = frontFace.strokeColor;
-            line.strokeWidth = frontFace.strokeWidth;
-            line.strokeDashes = frontFace.strokeDashes;
-            line.strokeCap = frontFace.strokeCap;
-            line.strokeJoin = StrokeJoin.ROUNDENDJOIN;
-        }
-
-        return line;
     }
 })();
