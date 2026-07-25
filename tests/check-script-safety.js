@@ -39,6 +39,7 @@ const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
 const weatherFront = "스크립트/01_도형/Object_front.jsx";
 const anchorAngle = "스크립트/01_도형/Object_AnchorAngle.jsx";
 const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
+const cubicLattice = "스크립트/01_도형/Object_CubicLattice.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -1027,6 +1028,243 @@ for (const [file, mode] of visibleAlignFiles) {
       ]);
     } catch (error) {
       console.error(`${lewisDots}: dot-placement regression failed: ${error.message}`);
+      failures++;
+    }
+  }
+}
+
+{
+  if (!exists(cubicLattice)) {
+    console.error(`${cubicLattice}: cubic-lattice script is missing`);
+    failures++;
+  } else {
+    const source = read(cubicLattice);
+    const required = [
+      'new Window("dialog", "입방정계 단위세포 생성기")',
+      'var LINE_WIDTH_PT = 0.3',
+      'function setProjectionAngles(angleR, angleL, depthPercent)',
+      'setProjectionAngles(131, 109, 100)',
+      '{ key: "sc",  label: "단순 입방" }',
+      '{ key: "bcc", label: "체심 입방" }',
+      '{ key: "fcc", label: "면심 입방" }',
+      '{ key: "nacl", label: "NaCl" }',
+      '{ key: "cscl", label: "CsCl" }',
+      'var btnNaCl = pnlPreset.add("button", undefined, "NaCl 프리셋")',
+      'var btnCsCl = pnlPreset.add("button", undefined, "CsCl 프리셋")',
+      'function selectOnlyLattice(key)',
+      '{ key: "wire", label: "라인 + 작은 구" }',
+      '{ key: "pack", label: "밀집 구(전체 원자)" }',
+      '{ key: "cut",  label: "단위세포 절단" }',
+      'addSlider("셀 한 변", 5, 80, 20',
+      'addSlider("꼭짓점 구 지름(라인)", 0.5, 20, 3',
+      'addSlider("나머지 구 지름(라인)", 0.5, 20, 3',
+      'addSlider("꼭짓점 밝기", 40, 160, 100',
+      'addSlider("나머지 밝기", 40, 160, 100',
+      'addSlider("셀 간격", 0, 40, 8',
+      'sldCornerSphere.enabled = chkMode[0].value',
+      'sldOtherSphere.enabled = chkMode[0].value',
+      'cornerSphereMM: sldCornerSphere.value',
+      'otherSphereMM: sldOtherSphere.value',
+      'cornerBrightness: sldCornerBrightness.value',
+      'otherBrightness: sldOtherBrightness.value',
+      'var sldAngleR = addAngleSlider("오른쪽 각도", 131)',
+      'var sldAngleL = addAngleSlider("왼쪽 각도", 109)',
+      'var sldDepth = addDepthSlider()',
+      'var btnAngleIso = anglePresetRow.add("button", undefined, "Isometric (120/120)")',
+      'var btnAngleDi = anglePresetRow.add("button", undefined, "Dimetric (110/110)")',
+      'var btnAngleTri = anglePresetRow.add("button", undefined, "Trimetric (120/105)")',
+      'angleR: sldAngleR.value',
+      'angleL: sldAngleL.value',
+      'depthPercent: sldDepth.value',
+      'function configureGradients(grads, o)',
+      'var radOneCell = pnlCells.add("radiobutton", undefined, "1셀")',
+      'var radEightCells = pnlCells.add("radiobutton", undefined, "8셀 (2×2×2)")',
+      'cellSpan: radEightCells.value ? 2 : 1',
+      'var chkHiddenDashed = pnlLine.add("checkbox", undefined, "숨김선 점선 표시 (해제: 실선)")',
+      'hiddenDashed: chkHiddenDashed.value && radOneCell.value',
+      'chkHiddenDashed.enabled = chkMode[0].value && radOneCell.value',
+      '&& o.hiddenDashed) line.strokeDashes = [3, 2]',
+      'var radColor = pnlColor.add("radiobutton", undefined, "컬러")',
+      'var radGray = pnlColor.add("radiobutton", undefined, "회색 음영")',
+      'colorMode: radColor.value ? "color" : "gray"',
+      'cutCenterGray: makeRadialGradient(doc, "CutGray", kColor(0), kColor(55), 13.3)',
+      'isCorner ? [128, 128, 128] : [180, 180, 180]',
+      'function latticePoints(key)',
+      'function latticeSites(key, span)',
+      'function siteRoleAtPoint(key, p)',
+      'function cellEdgeSegments(span)',
+      'function touchRatio(key)',
+      'function screenPoint(p, edge, ox, oy)',
+      'function drawNucleusLitSphere(parent, cx, cy, dia, o, grads, isCorner, brightOtherGray)',
+      'isCorner ? grads.corner : grads.center',
+      'brightOtherGray ? grads.cutCenterGray : grads.otherWireSphere',
+      'var hx = cx - r * 0.35',
+      'var hy = cy + r * 0.35',
+      'var gradientRadius = r * 1.7',
+      'drawSphere(parent, center[0], center[1], dia, o, grads, true, isCorner, false)',
+      'function viewDepth(p)',
+      'function convexHull(points)',
+      'function cellSilhouette(edge, ox, oy, span)',
+      'function cellBounds(edge, ox, oy, span)',
+      'var d = viewDepth(p.p) - viewDepth(q.p)',
+      'function clipPolygonToCell(poly, span)',
+      'function addSphereSurface(faces, center, radius, baseColor, span)',
+      'function addCutDisks(faces, center, radius, baseColor, span)',
+      'function projectedHullFromFaces(faces, edge, ox, oy)',
+      'function drawBezierHull(parent, hull, fillColor, o, useGradient)',
+      'function drawCutCell(parent, key, o, ox, oy, edge, grads)',
+      'function drawWireCell(parent, key, o, ox, oy, edge, grads)',
+      'var startRole = siteRoleAtPoint(key, segments[e].a)',
+      'Math.min(0.49, startRadius / screenLength)',
+      'Math.min(0.49, endRadius / screenLength)',
+      'depth: (viewDepth(a) + viewDepth(b)) / 2',
+      'if (a.type !== b.type) return a.type === "line" ? -1 : 1',
+      'atomRecords.sort(function(a, b)',
+      'atomGroup.name = "CubicAtom_" + atomRecords[atomIndex].index',
+      'isCorner ? [184, 52, 55] : [132, 168, 47]',
+      'previewItems = [holder]',
+      'CubicLattice_Preview',
+    ];
+    for (const token of required) {
+      if (!source.includes(token)) {
+        console.error(`${cubicLattice}: missing cubic-lattice token: ${token}`);
+        failures++;
+      }
+    }
+
+    const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+    const activeDocLine = lineOf(source, /app\.activeDocument/);
+    if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+      console.error(`${cubicLattice}: app.documents.length guard must run before app.activeDocument`);
+      failures++;
+    }
+
+    try {
+      const arrayDeclaration = (name) => {
+        const match = source.match(new RegExp(`var ${name} = \\[[\\s\\S]*?\\];`));
+        if (!match) throw new Error(`missing array declaration: ${name}`);
+        return match[0];
+      };
+      const declarations = [
+        arrayDeclaration("CELL_CORNERS"),
+        arrayDeclaration("CELL_EDGES"),
+        arrayDeclaration("FACE_CENTERS"),
+        extractFunction(source, "latticePoints"),
+        extractFunction(source, "latticeSites"),
+        extractFunction(source, "siteRoleAtPoint"),
+        extractFunction(source, "cellEdgeSegments"),
+        extractFunction(source, "touchRatio"),
+        extractFunction(source, "setProjectionAngles"),
+        extractFunction(source, "screenPoint"),
+        extractFunction(source, "viewDepth"),
+        extractFunction(source, "convexHull"),
+        extractFunction(source, "dot3"),
+        extractFunction(source, "normalize3"),
+        extractFunction(source, "cross3"),
+        extractFunction(source, "adjustedRgb"),
+        extractFunction(source, "adjustedK"),
+        extractFunction(source, "boundaryCount"),
+        extractFunction(source, "clipPolygonAtPlane"),
+        extractFunction(source, "clipPolygonToCell"),
+      ].join("\n");
+      const helpers = new Function(
+        `var SCREEN_X = [0, 0, 0], SCREEN_Y = [0, 0, 0];\n` +
+        `var VIEW_X = 0, VIEW_Y = 0, VIEW_Z = 0;\n` +
+        `${declarations}\n` +
+        `setProjectionAngles(131, 109, 100);\n` +
+        `return {latticePoints, latticeSites, siteRoleAtPoint, cellEdgeSegments, touchRatio, setProjectionAngles, screenPoint, viewDepth, convexHull, adjustedRgb, adjustedK, boundaryCount, clipPolygonToCell, CELL_CORNERS, CELL_EDGES, projectionState: function () { return {SCREEN_X: SCREEN_X, SCREEN_Y: SCREEN_Y, VIEW: [VIEW_X, VIEW_Y, VIEW_Z]}; }};`
+      )();
+
+      assert.strictEqual(helpers.CELL_EDGES.length, 12, "unit cell must have 12 edges");
+      assert.strictEqual(helpers.latticePoints("sc").length, 8, "simple cubic must have 8 lattice points");
+      assert.strictEqual(helpers.latticePoints("bcc").length, 9, "body-centered cubic must add the cell center");
+      assert.strictEqual(helpers.latticePoints("fcc").length, 14, "face-centered cubic must add 6 face centers");
+      assert.strictEqual(helpers.latticePoints("cscl").length, 9, "CsCl cell must have corners and one body center");
+      assert.strictEqual(helpers.latticePoints("nacl").length, 8, "one NaCl cell must use eight alternating corners");
+      assertClose(helpers.touchRatio("sc"), 1, "simple cubic contact diameter ratio");
+      assertClose(helpers.touchRatio("bcc"), Math.sqrt(3) / 2, "body-centered contact diameter ratio");
+      assertClose(helpers.touchRatio("fcc"), Math.sqrt(2) / 2, "face-centered contact diameter ratio");
+      assertClose(helpers.touchRatio("cscl"), Math.sqrt(3) / 2, "CsCl nearest-neighbor contact ratio");
+      assertClose(helpers.touchRatio("nacl"), 1, "NaCl corner-neighbor contact ratio");
+
+      assert.strictEqual(helpers.latticeSites("sc", 2).length, 27, "eight SC cells must share boundary sites");
+      assert.strictEqual(helpers.latticeSites("bcc", 2).length, 35, "eight BCC cells must share 27 corners");
+      assert.strictEqual(helpers.latticeSites("fcc", 2).length, 63, "eight FCC cells must deduplicate shared face sites");
+      assert.strictEqual(helpers.latticeSites("cscl", 2).length, 35, "eight CsCl cells must share corner ions");
+      assert.strictEqual(helpers.latticeSites("nacl", 2).length, 27, "eight NaCl cells must share a 3x3x3 corner grid");
+      assert.strictEqual(
+        helpers.latticeSites("nacl", 1).filter((site) => site.role === 0).length,
+        4,
+        "one NaCl cell must place four ions on alternating corners"
+      );
+      assert.strictEqual(
+        helpers.latticeSites("nacl", 1).filter((site) => site.role === 1).length,
+        4,
+        "one NaCl cell must place the other four ions on alternating corners"
+      );
+      assert.strictEqual(helpers.cellEdgeSegments(1).length, 12, "one cell must draw 12 edge segments");
+      assert.strictEqual(helpers.cellEdgeSegments(2).length, 54, "eight cells must draw the complete 2x2x2 grid");
+      assert.deepStrictEqual(helpers.adjustedRgb([100, 150, 200], 100), [100, 150, 200], "100% must preserve RGB");
+      assert.deepStrictEqual(helpers.adjustedRgb([100, 150, 200], 40), [40, 60, 80], "lower brightness must darken RGB");
+      assert.deepStrictEqual(helpers.adjustedRgb([100, 150, 200], 160), [255, 255, 255], "maximum brightness must approach white");
+      assertClose(helpers.adjustedK(80, 100), 80, "100% must preserve grayscale K");
+      assertClose(helpers.adjustedK(80, 160), 0, "maximum grayscale brightness must reach K0");
+      assertClose(helpers.adjustedK(0, 40), 60, "lower grayscale brightness must darken a white base");
+
+      const projectedCorners = helpers.CELL_CORNERS.map((p) => helpers.screenPoint(p, 1, 0, 0));
+      assert.strictEqual(
+        helpers.convexHull(projectedCorners).length,
+        6,
+        "orthographic cube silhouette must be a hexagon"
+      );
+      const origin = helpers.screenPoint([0, 0, 0], 1, 0, 0);
+      const opposite = helpers.screenPoint([1, 1, 1], 1, 0, 0);
+      assert.ok(
+        Math.hypot(opposite[0] - origin[0], opposite[1] - origin[1]) > 0.1,
+        "three-quarter view must not collapse opposite corners"
+      );
+      assert.ok(helpers.viewDepth([1, 1, 1]) > helpers.viewDepth([0, 0, 0]), "camera depth must use all three axes");
+      assert.ok(
+        helpers.projectionState().VIEW.every((value) => value > 0),
+        "valid corner angles must produce a positive three-axis camera depth"
+      );
+      helpers.setProjectionAngles(120, 120, 100);
+      const isoOrigin = helpers.screenPoint([0, 0, 0], 1, 0, 0);
+      const isoAxisLengths = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map((axis) => {
+        const projected = helpers.screenPoint(axis, 1, 0, 0);
+        return Math.hypot(projected[0] - isoOrigin[0], projected[1] - isoOrigin[1]);
+      });
+      isoAxisLengths.forEach((length) => assertClose(length, 1, "isometric axes must have equal length"));
+      helpers.setProjectionAngles(120, 120, 50);
+      const compressedOrigin = helpers.screenPoint([0, 0, 0], 1, 0, 0);
+      const compressedAxisLengths = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map((axis) => {
+        const projected = helpers.screenPoint(axis, 1, 0, 0);
+        return Math.hypot(projected[0] - compressedOrigin[0], projected[1] - compressedOrigin[1]);
+      });
+      assertClose(compressedAxisLengths[0], 1, "depth ratio must preserve the near-face width axis");
+      assertClose(compressedAxisLengths[1], 1, "depth ratio must preserve the vertical axis");
+      assertClose(compressedAxisLengths[2], 0.5, "depth ratio must change only the near-to-far axis");
+      helpers.setProjectionAngles(131, 109, 100);
+      assert.strictEqual(helpers.boundaryCount([0, 0, 0]), 3, "corner atoms must touch three cell planes");
+      assert.strictEqual(helpers.boundaryCount([0.5, 0.5, 0]), 1, "face atoms must touch one cell plane");
+      assert.strictEqual(helpers.boundaryCount([0.5, 0.5, 0.5]), 0, "body atoms must not touch a cell plane");
+      const clippedTriangle = helpers.clipPolygonToCell([
+        [-0.5, 0.5, 0.5],
+        [0.5, 0.5, 0.5],
+        [0.5, 1.5, 0.5],
+      ]);
+      assert.ok(clippedTriangle.length >= 3, "cell clipping must retain the triangle portion inside the unit cell");
+      assert.ok(
+        clippedTriangle.every((point) => point.every((value) => value >= -1e-9 && value <= 1 + 1e-9)),
+        "cell-clipped mesh vertices must stay inside the unit cell"
+      );
+      assert.deepStrictEqual(
+        helpers.convexHull([[0, 0], [2, 0], [2, 2], [0, 2], [1, 1]]),
+        [[0, 0], [2, 0], [2, 2], [0, 2]],
+        "interior points must be dropped from the silhouette"
+      );
+    } catch (error) {
+      console.error(`${cubicLattice}: executable lattice geometry regression failed: ${error.message}`);
       failures++;
     }
   }
