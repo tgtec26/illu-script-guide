@@ -1050,6 +1050,7 @@ for (const [file, mode] of visibleAlignFiles) {
       '{ key: "nacl", label: "NaCl" }',
       '{ key: "cscl", label: "CsCl" }',
       '{ key: "i2", label: "I2 (아이오딘)" }',
+      '{ key: "co2", label: "CO2 (드라이아이스)" }',
       '{ key: "wire", label: "라인 + 작은 구" }',
       '{ key: "pack", label: "밀집 구(전체 원자)" }',
       '{ key: "cut",  label: "단위세포 절단" }',
@@ -1089,10 +1090,11 @@ for (const [file, mode] of visibleAlignFiles) {
       'isCorner ? [128, 128, 128] : [180, 180, 180]',
       'function latticePoints(key)',
       'function latticeSites(key, span)',
-      'function atomSites(key, span, atomDiameterRatio)',
+      'function atomSites(key, span, atomDiameterRatio, otherDiameterRatio)',
       'function siteRoleAtPoint(key, p)',
       'function cellEdgeSegments(span)',
       'function touchRatio(key)',
+      'function otherTouchRatio(key)',
       'function screenPoint(p, edge, ox, oy)',
       'function drawNucleusLitSphere(parent, cx, cy, dia, o, grads, isCorner, brightOtherGray)',
       'isCorner ? grads.corner : grads.center',
@@ -1113,6 +1115,8 @@ for (const [file, mode] of visibleAlignFiles) {
       'function drawBezierHull(parent, hull, fillColor, o, useGradient)',
       'function drawCutCell(parent, key, o, ox, oy, edge, grads)',
       'function drawWireCell(parent, key, o, ox, oy, edge, grads)',
+      'return a.site.moleculeOrder - b.site.moleculeOrder',
+      'return p.moleculeOrder - q.moleculeOrder',
       'linkIodineSliders(sldCornerSphere, sldOtherSphere)',
       'linkIodineSliders(sldCornerBrightness, sldOtherBrightness)',
       'var startRole = siteRoleAtPoint(key, segments[e].a)',
@@ -1160,6 +1164,7 @@ for (const [file, mode] of visibleAlignFiles) {
         extractFunction(source, "siteRoleAtPoint"),
         extractFunction(source, "cellEdgeSegments"),
         extractFunction(source, "touchRatio"),
+        extractFunction(source, "otherTouchRatio"),
         extractFunction(source, "setProjectionAngles"),
         extractFunction(source, "screenPoint"),
         extractFunction(source, "viewDepth"),
@@ -1178,7 +1183,7 @@ for (const [file, mode] of visibleAlignFiles) {
         `var VIEW_X = 0, VIEW_Y = 0, VIEW_Z = 0;\n` +
         `${declarations}\n` +
         `setProjectionAngles(131, 109, 100);\n` +
-        `return {latticePoints, latticeSites, atomSites, siteRoleAtPoint, cellEdgeSegments, touchRatio, setProjectionAngles, screenPoint, viewDepth, convexHull, adjustedRgb, adjustedK, boundaryCount, clipPolygonToCell, CELL_CORNERS, CELL_EDGES, projectionState: function () { return {SCREEN_X: SCREEN_X, SCREEN_Y: SCREEN_Y, VIEW: [VIEW_X, VIEW_Y, VIEW_Z]}; }};`
+        `return {latticePoints, latticeSites, atomSites, siteRoleAtPoint, cellEdgeSegments, touchRatio, otherTouchRatio, setProjectionAngles, screenPoint, viewDepth, convexHull, adjustedRgb, adjustedK, boundaryCount, clipPolygonToCell, CELL_CORNERS, CELL_EDGES, projectionState: function () { return {SCREEN_X: SCREEN_X, SCREEN_Y: SCREEN_Y, VIEW: [VIEW_X, VIEW_Y, VIEW_Z]}; }};`
       )();
 
       assert.strictEqual(helpers.CELL_EDGES.length, 12, "unit cell must have 12 edges");
@@ -1188,12 +1193,15 @@ for (const [file, mode] of visibleAlignFiles) {
       assert.strictEqual(helpers.latticePoints("cscl").length, 9, "CsCl cell must have corners and one body center");
       assert.strictEqual(helpers.latticePoints("nacl").length, 8, "one NaCl cell must use eight alternating corners");
       assert.strictEqual(helpers.latticePoints("i2").length, 14, "I2 molecular centers must use an FCC cell");
+      assert.strictEqual(helpers.latticePoints("co2").length, 14, "CO2 molecular centers must use an FCC cell");
       assertClose(helpers.touchRatio("sc"), 1, "simple cubic contact diameter ratio");
       assertClose(helpers.touchRatio("bcc"), Math.sqrt(3) / 2, "body-centered contact diameter ratio");
       assertClose(helpers.touchRatio("fcc"), Math.sqrt(2) / 2, "face-centered contact diameter ratio");
       assertClose(helpers.touchRatio("cscl"), Math.sqrt(3) / 2, "CsCl nearest-neighbor contact ratio");
       assertClose(helpers.touchRatio("nacl"), 1, "NaCl corner-neighbor contact ratio");
       assertClose(helpers.touchRatio("i2"), 0.22, "I2 atom diameter ratio");
+      assertClose(helpers.touchRatio("co2"), 0.22, "CO2 carbon diameter ratio");
+      assertClose(helpers.otherTouchRatio("co2"), 0.16, "CO2 oxygen diameter ratio");
 
       assert.strictEqual(helpers.latticeSites("sc", 2).length, 27, "eight SC cells must share boundary sites");
       assert.strictEqual(helpers.latticeSites("bcc", 2).length, 35, "eight BCC cells must share 27 corners");
@@ -1203,8 +1211,61 @@ for (const [file, mode] of visibleAlignFiles) {
       assert.strictEqual(helpers.latticeSites("i2", 1).length, 14, "one I2 cell must have 14 FCC molecular centers");
       assert.strictEqual(helpers.atomSites("i2", 1, 0.15).length, 28, "each I2 molecular center must expand to two atoms");
       assert.ok(
-        helpers.atomSites("i2", 1, 0.15).every((site) => site.role === 0),
+        helpers.atomSites("i2", 1, 0.15, 0.15).every((site) => site.role === 0),
         "I2 corner and face-center atoms must use one visual role"
+      );
+      const carbonDioxideAtoms = helpers.atomSites("co2", 1, 0.22, 0.16);
+      assert.strictEqual(carbonDioxideAtoms.length, 42, "each CO2 molecular center must expand to three atoms");
+      assert.strictEqual(
+        carbonDioxideAtoms.filter((site) => site.role === 0).length,
+        14,
+        "each CO2 molecule must have one central carbon"
+      );
+      assert.strictEqual(
+        carbonDioxideAtoms.filter((site) => site.role === 1).length,
+        28,
+        "each CO2 molecule must have two terminal oxygens"
+      );
+      const firstCarbonDioxide = carbonDioxideAtoms.slice(0, 3);
+      assert.deepStrictEqual(
+        firstCarbonDioxide.map((site) => site.moleculeOrder),
+        [0, 1, 2],
+        "CO2 z-order must be oxygen, carbon, oxygen"
+      );
+      const carbonOxygenDistance = Math.sqrt(
+        firstCarbonDioxide[0].p.reduce(
+          (sum, value, axis) => sum + Math.pow(value - firstCarbonDioxide[1].p[axis], 2),
+          0
+        )
+      );
+      assertClose(carbonOxygenDistance, 0.0988, "CO2 oxygens must overlap tightly with carbon");
+      for (let axis = 0; axis < 3; axis++) {
+        assertClose(
+          (firstCarbonDioxide[0].p[axis] + firstCarbonDioxide[2].p[axis]) / 2,
+          firstCarbonDioxide[1].p[axis],
+          "CO2 carbon must lie midway between both oxygens"
+        );
+      }
+      const projectedCarbonDioxide = firstCarbonDioxide.map((site) => helpers.screenPoint(site.p, 1, 0, 0));
+      const projectedBondLengths = [0, 2].map((oxygenIndex) =>
+        Math.hypot(
+          projectedCarbonDioxide[oxygenIndex][0] - projectedCarbonDioxide[1][0],
+          projectedCarbonDioxide[oxygenIndex][1] - projectedCarbonDioxide[1][1]
+        )
+      );
+      assert.ok(
+        projectedBondLengths.every((length) => length > 0.05),
+        "both CO2 oxygens must remain visibly separated from carbon"
+      );
+      assertClose(
+        helpers.viewDepth(firstCarbonDioxide[0].p),
+        helpers.viewDepth(firstCarbonDioxide[1].p),
+        "CO2 molecular axis must stay in the visible screen plane"
+      );
+      assertClose(
+        helpers.viewDepth(firstCarbonDioxide[2].p),
+        helpers.viewDepth(firstCarbonDioxide[1].p),
+        "both CO2 oxygens must remain in the visible screen plane"
       );
       assert.strictEqual(
         helpers.latticeSites("nacl", 1).filter((site) => site.role === 0).length,

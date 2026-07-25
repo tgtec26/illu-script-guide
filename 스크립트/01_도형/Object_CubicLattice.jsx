@@ -56,7 +56,8 @@
         { key: "fcc", label: "면심 입방" },
         { key: "nacl", label: "NaCl" },
         { key: "cscl", label: "CsCl" },
-        { key: "i2", label: "I2 (아이오딘)" }
+        { key: "i2", label: "I2 (아이오딘)" },
+        { key: "co2", label: "CO2 (드라이아이스)" }
     ];
     var MODES = [
         { key: "wire", label: "라인 + 작은 구" },
@@ -68,7 +69,7 @@
         var pts = [], i;
         for (i = 0; i < CELL_CORNERS.length; i++) pts.push(CELL_CORNERS[i]);
         if (key === "bcc" || key === "cscl") pts.push([0.5, 0.5, 0.5]);
-        if (key === "fcc" || key === "i2") {
+        if (key === "fcc" || key === "i2" || key === "co2") {
             for (i = 0; i < FACE_CENTERS.length; i++) pts.push(FACE_CENTERS[i]);
         }
         return pts;
@@ -80,8 +81,15 @@
         if (key === "fcc") return Math.sqrt(2) / 2;
         // I2는 FCC 격자점마다 작은 원자 두 개가 겹쳐 보이는 분자 모형이다.
         if (key === "i2") return 0.22;
+        // CO2의 중앙 탄소 원자 지름. 말단 산소는 otherTouchRatio에서 정한다.
+        if (key === "co2") return 0.22;
         if (key === "nacl") return 1;
         return 1;
+    }
+
+    function otherTouchRatio(key) {
+        if (key === "co2") return 0.16;
+        return touchRatio(key);
     }
 
     function siteRoleAtPoint(key, p) {
@@ -117,11 +125,11 @@
                     }
                     if (key === "bcc" || key === "cscl") {
                         addSite([x + 0.5, y + 0.5, z + 0.5], 1);
-                    } else if (key === "fcc" || key === "i2") {
+                    } else if (key === "fcc" || key === "i2" || key === "co2") {
                         for (i = 0; i < FACE_CENTERS.length; i++) {
                             addSite(
                                 offsetPoint(FACE_CENTERS[i], x, y, z),
-                                key === "i2" ? 0 : 1
+                                (key === "i2" || key === "co2") ? 0 : 1
                             );
                         }
                     }
@@ -133,16 +141,25 @@
 
     // I2의 각 FCC 격자점은 같은 크기·색의 원자 두 개가 결합된 분자 중심이다.
     // 위치에 따라 세 방향을 순환시켜 모든 분자가 한 덩어리처럼 겹치지 않게 한다.
-    function atomSites(key, span, atomDiameterRatio) {
+    function atomSites(key, span, atomDiameterRatio, otherDiameterRatio) {
         var centers = latticeSites(key, span);
-        if (key !== "i2") return centers;
+        if (key !== "i2" && key !== "co2") return centers;
         var atoms = [];
-        var directions = [
-            [1, 0.35, 0],
-            [0, 1, 0.35],
-            [0.35, 0, 1]
-        ];
-        var separation = atomDiameterRatio * 0.72;
+        var iodineDirections = [[1, 0.35, 0], [0, 1, 0.35], [0.35, 0, 1]];
+        // CO2 축은 카메라 깊이 방향에 수직인 화면 평면 안에서 회전시킨다.
+        // 따라서 관찰 각도를 바꾸어도 O-C-O 세 원자가 한 점으로 겹치지 않는다.
+        var carbonDioxideDirections = [];
+        for (var directionIndex = 0; directionIndex < 4; directionIndex++) {
+            var directionAngle = directionIndex * Math.PI / 4;
+            var directionCos = Math.cos(directionAngle);
+            var directionSin = Math.sin(directionAngle);
+            carbonDioxideDirections.push([
+                SCREEN_X[0] * directionCos + SCREEN_Y[0] * directionSin,
+                SCREEN_X[1] * directionCos + SCREEN_Y[1] * directionSin,
+                SCREEN_X[2] * directionCos + SCREEN_Y[2] * directionSin
+            ]);
+        }
+        var directions = key === "i2" ? iodineDirections : carbonDioxideDirections;
         for (var i = 0; i < centers.length; i++) {
             var p = centers[i].p;
             var selector = Math.abs(
@@ -156,21 +173,47 @@
                 direction[1] * direction[1] +
                 direction[2] * direction[2]
             );
+            var separation = key === "i2" ?
+                atomDiameterRatio * 0.72 :
+                // CO2는 공간 채움 모형처럼 산소가 탄소 안쪽으로 깊게 겹친다.
+                (atomDiameterRatio + otherDiameterRatio) / 2 * 0.52;
             var offset = [
                 direction[0] / length * separation / 2,
                 direction[1] / length * separation / 2,
                 direction[2] / length * separation / 2
             ];
-            atoms.push({
-                p: [p[0] - offset[0], p[1] - offset[1], p[2] - offset[2]],
-                role: 0,
-                molecule: i
-            });
-            atoms.push({
-                p: [p[0] + offset[0], p[1] + offset[1], p[2] + offset[2]],
-                role: 0,
-                molecule: i
-            });
+            if (key === "i2") {
+                atoms.push({
+                    p: [p[0] - offset[0], p[1] - offset[1], p[2] - offset[2]],
+                    role: 0,
+                    molecule: i
+                });
+                atoms.push({
+                    p: [p[0] + offset[0], p[1] + offset[1], p[2] + offset[2]],
+                    role: 0,
+                    molecule: i
+                });
+            } else {
+                // O=C=O: 중앙 탄소(role 0)와 동일 거리의 말단 산소(role 1).
+                atoms.push({
+                    p: [p[0] - offset[0] * 2, p[1] - offset[1] * 2, p[2] - offset[2] * 2],
+                    role: 1,
+                    molecule: i,
+                    moleculeOrder: 0
+                });
+                atoms.push({
+                    p: [p[0], p[1], p[2]],
+                    role: 0,
+                    molecule: i,
+                    moleculeOrder: 1
+                });
+                atoms.push({
+                    p: [p[0] + offset[0] * 2, p[1] + offset[1] * 2, p[2] + offset[2] * 2],
+                    role: 1,
+                    molecule: i,
+                    moleculeOrder: 2
+                });
+            }
         }
         return atoms;
     }
@@ -981,9 +1024,9 @@
 
     function drawCutCell(parent, key, o, ox, oy, edge, grads) {
         var atomRecords = [];
-        var diameterRatio = touchRatio(key);
-        var sites = atomSites(key, o.cellSpan, diameterRatio);
-        var radius = diameterRatio / 2;
+        var cornerDiameterRatio = touchRatio(key);
+        var otherDiameterRatio = otherTouchRatio(key);
+        var sites = atomSites(key, o.cellSpan, cornerDiameterRatio, otherDiameterRatio);
         for (var i = 0; i < sites.length; i++) {
             var point = sites[i].p;
             // role 0은 적색/어두운 이온, role 1은 녹색/밝은 이온이다.
@@ -992,6 +1035,7 @@
                 (isCorner ? [184, 52, 55] : [132, 168, 47]) :
                 (isCorner ? [128, 128, 128] : [180, 180, 180]);
             var baseColor = adjustedRgb(rawBaseColor, roleBrightness(o, isCorner));
+            var radius = (isCorner ? cornerDiameterRatio : otherDiameterRatio) / 2;
             var parts = [];
             var atomFaces = [];
             addSphereSurface(atomFaces, point, radius, baseColor, o.cellSpan);
@@ -1049,13 +1093,18 @@
                 depth: viewDepth(point),
                 parts: parts,
                 corner: isCorner,
-                index: i
+                index: i,
+                molecule: sites[i].molecule,
+                moleculeOrder: sites[i].moleculeOrder
             });
         }
 
         atomRecords.sort(function(a, b) {
             var depthDifference = a.depth - b.depth;
             if (Math.abs(depthDifference) > 1e-9) return depthDifference;
+            if (key === "co2" && a.molecule === b.molecule) {
+                return a.moleculeOrder - b.moleculeOrder;
+            }
             // 접촉점에서 깊이가 같으면 꼭짓점 원자를 마지막에 두어 잘린
             // 1/8 구의 경계가 면심 원자 아래로 사라지지 않게 한다.
             if (a.corner !== b.corner) return a.corner ? 1 : -1;
@@ -1149,8 +1198,9 @@
             }
         }
 
-        var wireAtomRatio = o.cornerSphereMM * MM / edge;
-        var sites = atomSites(key, o.cellSpan, wireAtomRatio);
+        var wireCornerRatio = o.cornerSphereMM * MM / edge;
+        var wireOtherRatio = o.otherSphereMM * MM / edge;
+        var sites = atomSites(key, o.cellSpan, wireCornerRatio, wireOtherRatio);
         for (var i = 0; i < sites.length; i++) {
             records.push({
                 type: "atom",
@@ -1162,6 +1212,13 @@
         records.sort(function(a, b) {
             var depthDifference = a.depth - b.depth;
             if (Math.abs(depthDifference) > 1e-9) return depthDifference;
+            if (
+                key === "co2" &&
+                a.type === "atom" && b.type === "atom" &&
+                a.site.molecule === b.site.molecule
+            ) {
+                return a.site.moleculeOrder - b.site.moleculeOrder;
+            }
             // 같은 깊이에서는 선을 먼저 그려 원자의 외곽이 연결선을 덮는다.
             if (a.type !== b.type) return a.type === "line" ? -1 : 1;
             return 0;
@@ -1204,11 +1261,15 @@
 
         // 카메라 깊이순으로 뒤에서 앞으로 그린다. z값만 비교하면 서로 다른
         // x/y 평면의 FCC 면심 원자가 잘못 포개진다.
-        var packDiameterRatio = touchRatio(key);
-        var sites = atomSites(key, o.cellSpan, packDiameterRatio);
+        var packCornerRatio = touchRatio(key);
+        var packOtherRatio = otherTouchRatio(key);
+        var sites = atomSites(key, o.cellSpan, packCornerRatio, packOtherRatio);
         sites.sort(function(p, q) {
             var d = viewDepth(p.p) - viewDepth(q.p);
             if (Math.abs(d) > 1e-9) return d;
+            if (key === "co2" && p.molecule === q.molecule) {
+                return p.moleculeOrder - q.moleculeOrder;
+            }
             var sp = screenPoint(p.p, 1, 0, 0);
             var sq = screenPoint(q.p, 1, 0, 0);
             return (sq[1] - sp[1]) || (sp[0] - sq[0]);
@@ -1217,7 +1278,7 @@
         for (var i = 0; i < sites.length; i++) {
             var s = screenPoint(sites[i].p, edge, ox, oy);
             var isCorner = sites[i].role === 0;
-            var dia = edge * packDiameterRatio;
+            var dia = edge * (isCorner ? packCornerRatio : packOtherRatio);
             drawSphere(
                 holder,
                 s[0],
