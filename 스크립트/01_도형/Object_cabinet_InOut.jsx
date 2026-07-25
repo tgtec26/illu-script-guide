@@ -1,6 +1,8 @@
 // Cabinet Projection Script for Adobe Illustrator (With Hidden Lines)
 // 선택한 사각형을 캐비넷 투영법으로 입체화하고 숨은 선(파선) 추가
 
+#include "Object_setdash_align_helper.jsxinc"
+
 (function() {
     if (app.documents.length === 0) {
         alert("열려있는 문서가 없습니다.");
@@ -17,8 +19,10 @@
     }
 
     var mmToPt = 2.83464567;
+    var hiddenDashPattern = [2, 1];
     var defaultDepthMm = getSavedDepth(0.5);
     var previewItems = [];
+    var hiddenGroups = [];
 
     var depthMm = showDepthDialog(defaultDepthMm, function(valueMm) {
         clearPreview();
@@ -33,10 +37,31 @@
 
     saveDepth(depthMm);
     createCabinets(depthMm * mmToPt, true);
+    alignHiddenDashes();
     doc.selection = null;
+
+    // 파선을 모퉁이와 패스 끝에 맞춰 정렬(스트로크 패널의 두 번째 파선 옵션).
+    // 액션을 거치는 느린 작업이라 미리보기에서는 생략하고 최종 생성에서만 실행한다.
+    function alignHiddenDashes() {
+        if (hiddenGroups.length === 0) {
+            return;
+        }
+
+        applyDashPatternToItems(hiddenGroups, hiddenDashPattern, false);
+
+        for (var i = 0; i < hiddenGroups.length; i++) {
+            var paths = hiddenGroups[i].pathItems;
+            for (var j = 0; j < paths.length; j++) {
+                try {
+                    paths[j].strokeJoin = StrokeJoin.ROUNDENDJOIN;
+                } catch (e) {}
+            }
+        }
+    }
 
     function createCabinets(depth, makeGroup) {
         var created = [];
+        hiddenGroups = [];
         for (var i = 0; i < targets.length; i++) {
             var items = createCabinet(targets[i], depth, makeGroup);
             for (var j = 0; j < items.length; j++) {
@@ -77,7 +102,10 @@
         hiddenGroup.zOrder(ZOrderMethod.SENDTOBACK);
 
         if (makeGroup) {
-            return [groupCabinetItems(frontFace, [hiddenGroup, rightFace, topFace])];
+            var cabinetGroup = groupCabinetItems(frontFace, [hiddenGroup, rightFace, topFace]);
+            // 그룹으로 옮기는 과정에서 순서가 바뀌므로, 그룹 안에서 숨은 선을 다시 맨 뒤로 보낸다
+            hiddenGroup.zOrder(ZOrderMethod.SENDTOBACK);
+            return [cabinetGroup];
         }
 
         return [rightFace, topFace, hiddenGroup];
@@ -127,10 +155,11 @@
             p.stroked = true;
             p.strokeWidth = frontFace.strokeWidth;
             p.strokeColor = k60Color;
-            p.strokeDashes = [2, 1];
+            p.strokeDashes = hiddenDashPattern;
             p.strokeJoin = StrokeJoin.ROUNDENDJOIN;
         }
 
+        hiddenGroups.push(hiddenGroup);
         return hiddenGroup;
     }
 
