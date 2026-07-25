@@ -24,6 +24,7 @@
     var MM_TO_PT = 2.83464567;
     var SIZE_STEP_MM = 0.05;
     var LINE_WIDTH_PT = 0.3;
+    var RING_SAMPLE_COUNT = 24;
     var centerX = (bounds[0] + bounds[2]) / 2;
     var centerY = (bounds[1] + bounds[3]) / 2;
     var diameterMm = diameter / MM_TO_PT;
@@ -38,91 +39,77 @@
     var divisionCount = 0;
     var FACE_TOP = 0;
     var FACE_SIDE = 1;
-    var faceK = [0, 0];
+    var FACE_BOTTOM = 2;
+    var faceK = [0, 0, 0];
     var activeFace = FACE_TOP;
     var K_STEP = 10;
     var previewEnabled = true;
     var previewGroup = null;
     var sourceWasHidden = source.hidden;
 
+    var LABEL_WIDTH = 58;
+    var SLIDER_WIDTH = 200;
+    var STEP_BUTTON_WIDTH = 30;
+
     var dlg = new Window("dialog", "오브젝트 콘");
     dlg.orientation = "column";
     dlg.alignChildren = "fill";
+    dlg.spacing = 6;
+    dlg.margins = 12;
 
-    var sizePanel = dlg.add("panel", undefined, "크기");
-    sizePanel.orientation = "column";
-    sizePanel.alignChildren = "fill";
+    var sizePanel = addPanel(dlg, "크기");
+    var baseControls = addSizeRow(sizePanel, "밑면 지름", baseDiameterMm, SIZE_STEP_MM, maxBaseDiameterMm);
+    var baseInput = baseControls.input;
+    var baseSlider = baseControls.slider;
+    var topControls = addSizeRow(sizePanel, "윗면 지름", topDiameterMm, 0, baseDiameterMm);
+    var topInput = topControls.input;
+    var topSlider = topControls.slider;
+    var heightControls = addSizeRow(sizePanel, "높이", heightMm, SIZE_STEP_MM, maxHeightMm);
+    var heightInput = heightControls.input;
+    var heightSlider = heightControls.slider;
 
-    var baseRow = sizePanel.add("group");
-    baseRow.add("statictext", undefined, "밑면 지름");
-    var baseInput = baseRow.add("edittext", undefined, formatNumber(baseDiameterMm, 2));
-    baseInput.characters = 8;
-    baseRow.add("statictext", undefined, "mm");
-    var baseSlider = sizePanel.add("slider", undefined, baseDiameterMm, SIZE_STEP_MM, maxBaseDiameterMm);
-    baseSlider.preferredSize.width = 380;
-    baseSlider.stepdelta = SIZE_STEP_MM;
-
-    var topRow = sizePanel.add("group");
-    topRow.add("statictext", undefined, "윗면 지름");
-    var topInput = topRow.add("edittext", undefined, formatNumber(topDiameterMm, 2));
-    topInput.characters = 8;
-    topRow.add("statictext", undefined, "mm");
-    var topSlider = sizePanel.add("slider", undefined, topDiameterMm, 0, baseDiameterMm);
-    topSlider.preferredSize.width = 380;
-    topSlider.stepdelta = SIZE_STEP_MM;
-
-    var heightRow = sizePanel.add("group");
-    heightRow.add("statictext", undefined, "높이");
-    var heightInput = heightRow.add("edittext", undefined, formatNumber(heightMm, 2));
-    heightInput.characters = 8;
-    heightRow.add("statictext", undefined, "mm");
-    var heightSlider = sizePanel.add("slider", undefined, heightMm, SIZE_STEP_MM, maxHeightMm);
-    heightSlider.preferredSize.width = 380;
-    heightSlider.stepdelta = SIZE_STEP_MM;
-
-    var divisionPanel = dlg.add("panel", undefined, "분할선");
-    divisionPanel.orientation = "column";
-    divisionPanel.alignChildren = "fill";
-    var divisionRow = divisionPanel.add("group");
-    divisionRow.add("statictext", undefined, "분할선 수");
-    var divisionInput = divisionRow.add("edittext", undefined, String(divisionCount));
-    divisionInput.characters = 6;
-    divisionRow.add("statictext", undefined, "개  (0 = 없음, 1 = 1/2, 2 = 1/3·2/3)");
-    var divisionSlider = divisionPanel.add("slider", undefined, divisionCount, 0, 24);
-    divisionSlider.preferredSize.width = 380;
-    divisionSlider.stepdelta = 1;
-
-    var viewPanel = dlg.add("panel", undefined, "콘을 바라보는 시점");
-    viewPanel.orientation = "column";
-    viewPanel.alignChildren = "fill";
+    var viewPanel = addPanel(dlg, "시점");
     var xControls = addAngleControls(viewPanel, "X축", viewX);
     var yControls = addAngleControls(viewPanel, "Y축", viewY);
     var zControls = addAngleControls(viewPanel, "Z축", viewZ);
 
-    var colorPanel = dlg.add("panel", undefined, "컬러");
-    colorPanel.orientation = "column";
-    colorPanel.alignChildren = "fill";
-    var faceRow = colorPanel.add("group");
-    var topFaceRadio = faceRow.add("radiobutton", undefined, "윗면");
-    var sideFaceRadio = faceRow.add("radiobutton", undefined, "옆면");
+    var extraPanel = addPanel(dlg, "분할선 · 컬러");
+
+    var divisionRow = extraPanel.add("group");
+    divisionRow.alignChildren = ["left", "center"];
+    var divisionLabel = divisionRow.add("statictext", undefined, "분할선");
+    divisionLabel.preferredSize.width = LABEL_WIDTH;
+    var divisionDownButton = divisionRow.add("button", undefined, "◀");
+    divisionDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
+    var divisionInput = divisionRow.add("edittext", undefined, String(divisionCount));
+    divisionInput.characters = 4;
+    divisionInput.justify = "center";
+    var divisionUpButton = divisionRow.add("button", undefined, "▶");
+    divisionUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
+
+    var colorRow = extraPanel.add("group");
+    colorRow.alignChildren = ["left", "center"];
+    var colorLabel = colorRow.add("statictext", undefined, "컬러");
+    colorLabel.preferredSize.width = LABEL_WIDTH;
+    var topFaceRadio = colorRow.add("radiobutton", undefined, "윗면");
+    var sideFaceRadio = colorRow.add("radiobutton", undefined, "옆면");
+    var bottomFaceRadio = colorRow.add("radiobutton", undefined, "아랫면");
     topFaceRadio.value = true;
-
-    var kRow = colorPanel.add("group");
-    var kDownButton = kRow.add("button", undefined, "◀");
-    kDownButton.preferredSize.width = 40;
-    var kValueText = kRow.add("statictext", undefined, "0K");
-    kValueText.preferredSize.width = 60;
+    var kDownButton = colorRow.add("button", undefined, "◀");
+    kDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
+    var kValueText = colorRow.add("statictext", undefined, "0K");
+    kValueText.preferredSize.width = 42;
     kValueText.justify = "center";
-    var kUpButton = kRow.add("button", undefined, "▶");
-    kUpButton.preferredSize.width = 40;
+    var kUpButton = colorRow.add("button", undefined, "▶");
+    kUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
 
-    var previewCheck = dlg.add("checkbox", undefined, "미리보기");
+    var footer = dlg.add("group");
+    var previewCheck = footer.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;
-
-    var buttons = dlg.add("group");
-    buttons.alignment = "right";
-    var okButton = buttons.add("button", undefined, "확인", {name: "ok"});
-    var cancelButton = buttons.add("button", undefined, "취소", {name: "cancel"});
+    var footerSpacer = footer.add("group");
+    footerSpacer.alignment = ["fill", "center"];
+    var okButton = footer.add("button", undefined, "확인", {name: "ok"});
+    var cancelButton = footer.add("button", undefined, "취소", {name: "cancel"});
 
     baseSlider.onChanging = function() {
         baseDiameterMm = roundTo(baseSlider.value, SIZE_STEP_MM);
@@ -193,16 +180,10 @@
         updatePreview();
     };
 
-    divisionSlider.onChanging = function() {
-        divisionCount = Math.round(divisionSlider.value);
-        divisionInput.text = String(divisionCount);
-        updatePreview();
-    };
     divisionInput.onChanging = function() {
         var value = parseNumber(divisionInput.text);
         if (value !== null && value >= 0 && value <= 24) {
             divisionCount = Math.round(value);
-            divisionSlider.value = divisionCount;
             updatePreview();
         }
     };
@@ -211,9 +192,10 @@
         if (value === null) value = divisionCount;
         divisionCount = clamp(Math.round(value), 0, 24);
         divisionInput.text = String(divisionCount);
-        divisionSlider.value = divisionCount;
         updatePreview();
     };
+    divisionDownButton.onClick = function() { stepDivision(-1); };
+    divisionUpButton.onClick = function() { stepDivision(1); };
 
     bindViewControls(xControls, function(value) { viewX = value; }, function() { return viewX; });
     bindViewControls(yControls, function(value) { viewY = value; }, function() { return viewY; });
@@ -225,6 +207,10 @@
     };
     sideFaceRadio.onClick = function() {
         activeFace = FACE_SIDE;
+        updateKDisplay();
+    };
+    bottomFaceRadio.onClick = function() {
+        activeFace = FACE_BOTTOM;
         updateKDisplay();
     };
     kDownButton.onClick = function() { stepK(-K_STEP); };
@@ -293,15 +279,37 @@
     }
     app.redraw();
 
-    function addAngleControls(parent, label, value) {
+    function addPanel(parent, title) {
+        var panel = parent.add("panel", undefined, title);
+        panel.orientation = "column";
+        panel.alignChildren = "left";
+        panel.spacing = 4;
+        panel.margins = [10, 14, 10, 8];
+        return panel;
+    }
+
+    // 라벨 · 입력칸 · 단위 · 슬라이더를 한 줄에 배치
+    function addValueRow(parent, label, unit, value, minimum, maximum, step) {
         var row = parent.add("group");
-        row.add("statictext", undefined, label);
-        var input = row.add("edittext", undefined, formatSignedAngle(value));
-        input.characters = 7;
-        row.add("statictext", undefined, "°  (-180 ~ +180)");
-        var slider = parent.add("slider", undefined, value, -180, 180);
-        slider.preferredSize.width = 380;
+        row.alignChildren = ["left", "center"];
+        var labelText = row.add("statictext", undefined, label);
+        labelText.preferredSize.width = LABEL_WIDTH;
+        var input = row.add("edittext", undefined, value);
+        input.characters = 6;
+        input.justify = "right";
+        row.add("statictext", undefined, unit);
+        var slider = row.add("slider", undefined, Number(value), minimum, maximum);
+        slider.preferredSize.width = SLIDER_WIDTH;
+        slider.stepdelta = step;
         return {input: input, slider: slider};
+    }
+
+    function addSizeRow(parent, label, value, minimum, maximum) {
+        return addValueRow(parent, label, "mm", formatNumber(value, 2), minimum, maximum, SIZE_STEP_MM);
+    }
+
+    function addAngleControls(parent, label, value) {
+        return addValueRow(parent, label, "°", formatSignedAngle(value), -180, 180, 1);
     }
 
     function bindViewControls(controls, setter, getter) {
@@ -338,6 +346,12 @@
         topSlider.value = topDiameterMm;
     }
 
+    function stepDivision(delta) {
+        divisionCount = clamp(divisionCount + delta, 0, 24);
+        divisionInput.text = String(divisionCount);
+        updatePreview();
+    }
+
     function stepK(delta) {
         faceK[activeFace] = clamp(faceK[activeFace] + delta, 0, 100);
         updateKDisplay();
@@ -367,8 +381,8 @@
         var baseRadius = baseDiameterMm * MM_TO_PT / 2;
         var topRadius = topDiameterMm * MM_TO_PT / 2;
         var coneHeight = heightMm * MM_TO_PT;
-        var basePoints = makeProjectedRing(0, baseRadius);
-        var topPoints = makeProjectedRing(coneHeight, topRadius);
+        var basePoints = makeProjectedRing(0, baseRadius, 0);
+        var topPoints = makeProjectedRing(coneHeight, topRadius, 1);
         var hullInput = [];
         var i;
         for (i = 0; i < basePoints.length; i++) hullInput.push(basePoints[i]);
@@ -399,7 +413,7 @@
         if (baseNormal.z > 0.0001) {
             var baseFace = makeRingBezierPath(group, 0, baseRadius, 0, 2 * Math.PI, true);
             baseFace.name = "Cone Bottom";
-            applySourceFill(baseFace);
+            applyFill(baseFace, faceK[FACE_BOTTOM]);
             copyStrokeStyle(source, baseFace);
         }
         return group;
@@ -472,9 +486,9 @@
         return aAngle + (bAngle - aAngle) * amount;
     }
 
-    function makeProjectedRing(axisHeight, ringRadius) {
+    function makeProjectedRing(axisHeight, ringRadius, ringId) {
         var points = [];
-        var steps = ringRadius < 0.001 ? 1 : 16;
+        var steps = ringRadius < 0.001 ? 1 : RING_SAMPLE_COUNT;
         for (var i = 0; i < steps; i++) {
             var angle = steps === 1 ? 0 : 2 * Math.PI * i / steps;
             var rotated = rotatePoint(
@@ -486,7 +500,8 @@
                 x: centerX + rotated.x,
                 y: centerY + rotated.y,
                 z: rotated.z,
-                isApex: ringRadius < 0.001
+                isApex: ringRadius < 0.001,
+                ring: ringId
             });
         }
         return points;
@@ -558,26 +573,75 @@
         return path;
     }
 
+    // 실루엣에서 서로 다른 링(또는 꼭짓점)을 잇는 구간은 원뿔의 모선이므로 직선으로 둔다
+    function isSilhouetteEdge(a, b) {
+        return a.isApex || b.isApex || a.ring !== b.ring;
+    }
+
     function makeSmoothHullPath(group, points) {
         var path = makePath(group, points, true);
         var count = path.pathPoints.length;
         for (var i = 0; i < count; i++) {
             var previous = points[(i - 1 + count) % count];
             var next = points[(i + 1) % count];
+            var current = points[i];
             var anchor = path.pathPoints[i].anchor;
-            if (points[i].isApex) {
+            var leftIsStraight = isSilhouetteEdge(previous, current);
+            var rightIsStraight = isSilhouetteEdge(current, next);
+
+            if (current.isApex || (leftIsStraight && rightIsStraight)) {
                 path.pathPoints[i].leftDirection = anchor;
                 path.pathPoints[i].rightDirection = anchor;
                 path.pathPoints[i].pointType = PointType.CORNER;
                 continue;
             }
-            var dx = (next.x - previous.x) / 6;
-            var dy = (next.y - previous.y) / 6;
-            path.pathPoints[i].leftDirection = [anchor[0] - dx, anchor[1] - dy];
-            path.pathPoints[i].rightDirection = [anchor[0] + dx, anchor[1] + dy];
-            path.pathPoints[i].pointType = PointType.SMOOTH;
+
+            // 접선 방향은 곡선 쪽 이웃만 사용한다.
+            // 모선 끝점에서 반대쪽 꼭짓점까지의 긴 현을 쓰면 핸들이 과도하게 길어져 밑면이 부풀어 오른다.
+            var tangentX, tangentY;
+            if (leftIsStraight) {
+                tangentX = next.x - current.x;
+                tangentY = next.y - current.y;
+            } else if (rightIsStraight) {
+                tangentX = current.x - previous.x;
+                tangentY = current.y - previous.y;
+            } else {
+                tangentX = (next.x - previous.x) / 2;
+                tangentY = (next.y - previous.y) / 2;
+            }
+
+            var tangentLength = Math.sqrt(tangentX * tangentX + tangentY * tangentY);
+            if (tangentLength < 0.000001) {
+                path.pathPoints[i].leftDirection = anchor;
+                path.pathPoints[i].rightDirection = anchor;
+                path.pathPoints[i].pointType = PointType.CORNER;
+                continue;
+            }
+            tangentX /= tangentLength;
+            tangentY /= tangentLength;
+
+            // 핸들 길이는 각 이웃까지의 실제 거리 기준(현의 1/3)
+            var leftLength = leftIsStraight ? 0 : distanceBetween(current, previous) / 3;
+            var rightLength = rightIsStraight ? 0 : distanceBetween(current, next) / 3;
+
+            path.pathPoints[i].leftDirection = [
+                anchor[0] - tangentX * leftLength,
+                anchor[1] - tangentY * leftLength
+            ];
+            path.pathPoints[i].rightDirection = [
+                anchor[0] + tangentX * rightLength,
+                anchor[1] + tangentY * rightLength
+            ];
+            path.pathPoints[i].pointType =
+                (leftIsStraight || rightIsStraight) ? PointType.CORNER : PointType.SMOOTH;
         }
         return path;
+    }
+
+    function distanceBetween(a, b) {
+        var dx = a.x - b.x;
+        var dy = a.y - b.y;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
     function makeRingBezierPath(group, axisHeight, ringRadius, startAngle, endAngle, closed) {
@@ -645,14 +709,6 @@
         item.filled = true;
         item.fillColor = makeKColor(k);
         try { item.opacity = source.opacity; } catch(e) {}
-    }
-
-    function applySourceFill(item) {
-        item.filled = source.filled;
-        if (source.filled) {
-            try { item.fillColor = source.fillColor; } catch(e) {}
-        }
-        try { item.opacity = source.opacity; } catch(e2) {}
     }
 
     function copyStrokeStyle(from, to) {
