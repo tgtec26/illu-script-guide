@@ -132,20 +132,24 @@
 
     function drawArc(container, cx, cy, radius, startDeg, endDeg, strokeColor, strokeWidth) {
         var arc = container.pathItems.add();
-        var points = [];
-        var steps = Math.max(16, Math.ceil(Math.abs(endDeg - startDeg) / 3));
+        // 90도 이하 구간마다 3차 베지어 1개로 근사한다. 앵커 수를 최소로 유지한다.
+        var segments = Math.max(1, Math.ceil(Math.abs(endDeg - startDeg) / 90));
+        var segDeg = (endDeg - startDeg) / segments;
+        var handleLength = radius * (4 / 3) * Math.tan((segDeg * Math.PI / 180) / 4);
 
-        for (var i = 0; i <= steps; i++) {
-            var t = i / steps;
-            var deg = startDeg + ((endDeg - startDeg) * t);
-            var rad = deg * Math.PI / 180;
-            points.push([
-                cx + (radius * Math.cos(rad)),
-                cy + (radius * Math.sin(rad))
-            ]);
+        for (var i = 0; i <= segments; i++) {
+            var rad = (startDeg + (segDeg * i)) * Math.PI / 180;
+            var cos = Math.cos(rad);
+            var sin = Math.sin(rad);
+            var anchorX = cx + (radius * cos);
+            var anchorY = cy + (radius * sin);
+            var point = arc.pathPoints.add();
+            point.anchor = [anchorX, anchorY];
+            point.leftDirection = [anchorX + (sin * handleLength), anchorY - (cos * handleLength)];
+            point.rightDirection = [anchorX - (sin * handleLength), anchorY + (cos * handleLength)];
+            point.pointType = PointType.SMOOTH;
         }
 
-        arc.setEntirePath(points);
         arc.closed = false;
         arc.filled = false;
         arc.stroked = true;
