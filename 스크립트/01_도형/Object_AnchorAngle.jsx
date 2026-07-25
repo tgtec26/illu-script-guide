@@ -22,16 +22,15 @@
     }
 
     var currentAngle = getLineAngle(firstAnchor, secondAnchor);
-    var targetAngle = showAngleDialog(currentAngle);
-    if (targetAngle === null) return;
+    var dialogResult = showAngleDialog(currentAngle);
+    if (dialogResult === null) return;
 
-    var rotationAngle = getShortestRotation(currentAngle, targetAngle);
+    var rotationAngle = getShortestRotation(currentAngle, dialogResult.angle);
     if (Math.abs(rotationAngle) < 0.000001) return;
 
-    var pivot = [
-        (firstAnchor[0] + secondAnchor[0]) / 2,
-        (firstAnchor[1] + secondAnchor[1]) / 2
-    ];
+    var pivot = dialogResult.pivotSide === "right"
+        ? getRightAnchor(firstAnchor, secondAnchor)
+        : getLeftAnchor(firstAnchor, secondAnchor);
 
     try {
         rotateOwners(owners, selectedPoints, pivot, rotationAngle);
@@ -61,6 +60,13 @@
         angleInput.characters = 8;
         inputRow.add("statictext", undefined, "°");
 
+        var pivotPanel = dlg.add("panel", undefined, "고정시킬 고정점");
+        pivotPanel.orientation = "row";
+        pivotPanel.alignChildren = ["left", "center"];
+        var leftPivotRadio = pivotPanel.add("radiobutton", undefined, "왼쪽");
+        var rightPivotRadio = pivotPanel.add("radiobutton", undefined, "오른쪽");
+        leftPivotRadio.value = true;
+
         for (var i = 0; i < presetAngles.length; i++) {
             var presetButton = presetPanel.add("button", undefined, presetAngles[i] + "°");
             presetButton.onClick = makePresetHandler(presetAngles[i]);
@@ -78,16 +84,20 @@
                 angleInput.active = true;
                 return;
             }
-            result = parsed;
+            result = {angle: parsed, pivotSide: getPivotSide()};
             dlg.close(1);
         };
         cancelButton.onClick = function() { dlg.close(0); };
 
         function makePresetHandler(value) {
             return function() {
-                result = value;
+                result = {angle: value, pivotSide: getPivotSide()};
                 dlg.close(1);
             };
+        }
+
+        function getPivotSide() {
+            return rightPivotRadio.value ? "right" : "left";
         }
 
         angleInput.active = true;
@@ -164,6 +174,19 @@
             if (points[i].owner === owner) return points[i];
         }
         throw new Error("회전 기준 앵커를 찾을 수 없습니다.");
+    }
+
+    function getLeftAnchor(first, second) {
+        return isLeftOf(first, second) ? first : second;
+    }
+
+    function getRightAnchor(first, second) {
+        return isLeftOf(first, second) ? second : first;
+    }
+
+    function isLeftOf(candidate, other) {
+        if (Math.abs(candidate[0] - other[0]) > 0.000001) return candidate[0] < other[0];
+        return candidate[1] > other[1];
     }
 
     function normalizeLineAngle(angle) {
