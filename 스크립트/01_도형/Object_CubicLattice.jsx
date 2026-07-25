@@ -55,7 +55,8 @@
         { key: "bcc", label: "체심 입방" },
         { key: "fcc", label: "면심 입방" },
         { key: "nacl", label: "NaCl" },
-        { key: "cscl", label: "CsCl" }
+        { key: "cscl", label: "CsCl" },
+        { key: "i2", label: "I2 (아이오딘)" }
     ];
     var MODES = [
         { key: "wire", label: "라인 + 작은 구" },
@@ -67,7 +68,9 @@
         var pts = [], i;
         for (i = 0; i < CELL_CORNERS.length; i++) pts.push(CELL_CORNERS[i]);
         if (key === "bcc" || key === "cscl") pts.push([0.5, 0.5, 0.5]);
-        if (key === "fcc") for (i = 0; i < FACE_CENTERS.length; i++) pts.push(FACE_CENTERS[i]);
+        if (key === "fcc" || key === "i2") {
+            for (i = 0; i < FACE_CENTERS.length; i++) pts.push(FACE_CENTERS[i]);
+        }
         return pts;
     }
 
@@ -75,6 +78,8 @@
     function touchRatio(key) {
         if (key === "bcc" || key === "cscl") return Math.sqrt(3) / 2;
         if (key === "fcc") return Math.sqrt(2) / 2;
+        // I2는 FCC 격자점마다 작은 원자 두 개가 겹쳐 보이는 분자 모형이다.
+        if (key === "i2") return 0.22;
         if (key === "nacl") return 1;
         return 1;
     }
@@ -112,15 +117,62 @@
                     }
                     if (key === "bcc" || key === "cscl") {
                         addSite([x + 0.5, y + 0.5, z + 0.5], 1);
-                    } else if (key === "fcc") {
+                    } else if (key === "fcc" || key === "i2") {
                         for (i = 0; i < FACE_CENTERS.length; i++) {
-                            addSite(offsetPoint(FACE_CENTERS[i], x, y, z), 1);
+                            addSite(
+                                offsetPoint(FACE_CENTERS[i], x, y, z),
+                                key === "i2" ? 0 : 1
+                            );
                         }
                     }
                 }
             }
         }
         return sites;
+    }
+
+    // I2의 각 FCC 격자점은 같은 크기·색의 원자 두 개가 결합된 분자 중심이다.
+    // 위치에 따라 세 방향을 순환시켜 모든 분자가 한 덩어리처럼 겹치지 않게 한다.
+    function atomSites(key, span, atomDiameterRatio) {
+        var centers = latticeSites(key, span);
+        if (key !== "i2") return centers;
+        var atoms = [];
+        var directions = [
+            [1, 0.35, 0],
+            [0, 1, 0.35],
+            [0.35, 0, 1]
+        ];
+        var separation = atomDiameterRatio * 0.72;
+        for (var i = 0; i < centers.length; i++) {
+            var p = centers[i].p;
+            var selector = Math.abs(
+                Math.round(p[0] * 2) +
+                Math.round(p[1] * 2) * 3 +
+                Math.round(p[2] * 2) * 5
+            ) % directions.length;
+            var direction = directions[selector];
+            var length = Math.sqrt(
+                direction[0] * direction[0] +
+                direction[1] * direction[1] +
+                direction[2] * direction[2]
+            );
+            var offset = [
+                direction[0] / length * separation / 2,
+                direction[1] / length * separation / 2,
+                direction[2] / length * separation / 2
+            ];
+            atoms.push({
+                p: [p[0] - offset[0], p[1] - offset[1], p[2] - offset[2]],
+                role: 0,
+                molecule: i
+            });
+            atoms.push({
+                p: [p[0] + offset[0], p[1] + offset[1], p[2] + offset[2]],
+                role: 0,
+                molecule: i
+            });
+        }
+        return atoms;
     }
 
     function cellEdgeSegments(span) {
@@ -240,7 +292,9 @@
 
     function adjustedK(k, brightness) {
         var value = Math.max(40, Math.min(160, brightness));
-        if (value <= 100) return Math.min(100, k + (100 - k) * (100 - value) / 100);
+        // 100%에서는 원래 K값을 유지하고, 최저 밝기(40%)에서는
+        // 기본 음영과 관계없이 K90에 도달하도록 선형 보간한다.
+        if (value <= 100) return Math.min(90, k + (90 - k) * (100 - value) / 60);
         return Math.max(0, k * (160 - value) / 60);
     }
 
@@ -360,20 +414,6 @@
         chkLattice[li] = pnlLattice.add("checkbox", undefined, LATTICES[li].label);
         chkLattice[li].value = li < 3;
     }
-
-    var pnlPreset = win.add("panel", undefined, "이온 결정 프리셋");
-    pnlPreset.orientation = "row";
-    pnlPreset.alignChildren = "fill";
-    var btnNaCl = pnlPreset.add("button", undefined, "NaCl 프리셋");
-    var btnCsCl = pnlPreset.add("button", undefined, "CsCl 프리셋");
-    function selectOnlyLattice(key) {
-        for (var i = 0; i < LATTICES.length; i++) {
-            chkLattice[i].value = (LATTICES[i].key === key);
-        }
-        updatePreview();
-    }
-    btnNaCl.onClick = function() { selectOnlyLattice("nacl"); };
-    btnCsCl.onClick = function() { selectOnlyLattice("cscl"); };
 
     var pnlCells = win.add("panel", undefined, "셀 구성");
     pnlCells.orientation = "row";
@@ -509,6 +549,34 @@
     var sldOtherBrightness = addSlider("나머지 밝기", 40, 160, 100, function(v) { return Math.round(v) + "%"; });
     var sldGap = addSlider("셀 간격", 0, 40, 8, function(v) { return v.toFixed(1) + "mm"; });
 
+    function isIodineSelected() {
+        for (var i = 0; i < LATTICES.length; i++) {
+            if (LATTICES[i].key === "i2") return chkLattice[i].value;
+        }
+        return false;
+    }
+    function syncIodinePair(source, target) {
+        source.syncLabel();
+        if (!isIodineSelected()) return;
+        target.value = source.value;
+        target.syncLabel();
+    }
+    function linkIodineSliders(first, second) {
+        first.onChanging = function() { syncIodinePair(first, second); };
+        first.onChange = function() { syncIodinePair(first, second); updatePreview(); };
+        second.onChanging = function() { syncIodinePair(second, first); };
+        second.onChange = function() { syncIodinePair(second, first); updatePreview(); };
+    }
+    function syncIodineControls() {
+        if (!isIodineSelected()) return;
+        sldOtherSphere.value = sldCornerSphere.value;
+        sldOtherBrightness.value = sldCornerBrightness.value;
+        sldOtherSphere.syncLabel();
+        sldOtherBrightness.syncLabel();
+    }
+    linkIodineSliders(sldCornerSphere, sldOtherSphere);
+    linkIodineSliders(sldCornerBrightness, sldOtherBrightness);
+
     // 셀 한 변을 바꾸면 구 지름과 간격이 같은 비율로 따라온다.
     var prevCell = sldCell.value;
     function scaleSlider(sld, ratio) {
@@ -595,7 +663,12 @@
         }
         try { app.redraw(); } catch (e) {}
     }
-    for (var ci = 0; ci < chkLattice.length; ci++) chkLattice[ci].onClick = updatePreview;
+    for (var ci = 0; ci < chkLattice.length; ci++) {
+        chkLattice[ci].onClick = function() {
+            syncIodineControls();
+            updatePreview();
+        };
+    }
     for (var mj = 0; mj < chkMode.length; mj++) chkMode[mj].onClick = updatePreview;
     radOneCell.onClick = updatePreview;
     radEightCells.onClick = updatePreview;
@@ -908,8 +981,9 @@
 
     function drawCutCell(parent, key, o, ox, oy, edge, grads) {
         var atomRecords = [];
-        var sites = latticeSites(key, o.cellSpan);
-        var radius = touchRatio(key) / 2;
+        var diameterRatio = touchRatio(key);
+        var sites = atomSites(key, o.cellSpan, diameterRatio);
+        var radius = diameterRatio / 2;
         for (var i = 0; i < sites.length; i++) {
             var point = sites[i].p;
             // role 0은 적색/어두운 이온, role 1은 녹색/밝은 이온이다.
@@ -1075,7 +1149,8 @@
             }
         }
 
-        var sites = latticeSites(key, o.cellSpan);
+        var wireAtomRatio = o.cornerSphereMM * MM / edge;
+        var sites = atomSites(key, o.cellSpan, wireAtomRatio);
         for (var i = 0; i < sites.length; i++) {
             records.push({
                 type: "atom",
@@ -1129,7 +1204,8 @@
 
         // 카메라 깊이순으로 뒤에서 앞으로 그린다. z값만 비교하면 서로 다른
         // x/y 평면의 FCC 면심 원자가 잘못 포개진다.
-        var sites = latticeSites(key, o.cellSpan);
+        var packDiameterRatio = touchRatio(key);
+        var sites = atomSites(key, o.cellSpan, packDiameterRatio);
         sites.sort(function(p, q) {
             var d = viewDepth(p.p) - viewDepth(q.p);
             if (Math.abs(d) > 1e-9) return d;
@@ -1141,7 +1217,7 @@
         for (var i = 0; i < sites.length; i++) {
             var s = screenPoint(sites[i].p, edge, ox, oy);
             var isCorner = sites[i].role === 0;
-            var dia = edge * touchRatio(key);
+            var dia = edge * packDiameterRatio;
             drawSphere(
                 holder,
                 s[0],
@@ -1252,6 +1328,7 @@
             if (p.length >= 16) sldAngleR.value = parseFloat(p[15]);
             if (p.length >= 17) sldAngleL.value = parseFloat(p[16]);
             if (p.length >= 18) sldDepth.value = parseFloat(p[17]);
+            syncIodineControls();
             syncSliderLabels();
             sldAngleR.syncLabel();
             sldAngleL.syncLabel();

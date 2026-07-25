@@ -1049,9 +1049,7 @@ for (const [file, mode] of visibleAlignFiles) {
       '{ key: "fcc", label: "면심 입방" }',
       '{ key: "nacl", label: "NaCl" }',
       '{ key: "cscl", label: "CsCl" }',
-      'var btnNaCl = pnlPreset.add("button", undefined, "NaCl 프리셋")',
-      'var btnCsCl = pnlPreset.add("button", undefined, "CsCl 프리셋")',
-      'function selectOnlyLattice(key)',
+      '{ key: "i2", label: "I2 (아이오딘)" }',
       '{ key: "wire", label: "라인 + 작은 구" }',
       '{ key: "pack", label: "밀집 구(전체 원자)" }',
       '{ key: "cut",  label: "단위세포 절단" }',
@@ -1091,6 +1089,7 @@ for (const [file, mode] of visibleAlignFiles) {
       'isCorner ? [128, 128, 128] : [180, 180, 180]',
       'function latticePoints(key)',
       'function latticeSites(key, span)',
+      'function atomSites(key, span, atomDiameterRatio)',
       'function siteRoleAtPoint(key, p)',
       'function cellEdgeSegments(span)',
       'function touchRatio(key)',
@@ -1114,6 +1113,8 @@ for (const [file, mode] of visibleAlignFiles) {
       'function drawBezierHull(parent, hull, fillColor, o, useGradient)',
       'function drawCutCell(parent, key, o, ox, oy, edge, grads)',
       'function drawWireCell(parent, key, o, ox, oy, edge, grads)',
+      'linkIodineSliders(sldCornerSphere, sldOtherSphere)',
+      'linkIodineSliders(sldCornerBrightness, sldOtherBrightness)',
       'var startRole = siteRoleAtPoint(key, segments[e].a)',
       'Math.min(0.49, startRadius / screenLength)',
       'Math.min(0.49, endRadius / screenLength)',
@@ -1130,6 +1131,10 @@ for (const [file, mode] of visibleAlignFiles) {
         console.error(`${cubicLattice}: missing cubic-lattice token: ${token}`);
         failures++;
       }
+    }
+    if (source.includes("이온 결정 프리셋") || source.includes("selectOnlyLattice")) {
+      console.error(`${cubicLattice}: duplicate ionic-crystal preset controls must not be present`);
+      failures++;
     }
 
     const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
@@ -1151,6 +1156,7 @@ for (const [file, mode] of visibleAlignFiles) {
         arrayDeclaration("FACE_CENTERS"),
         extractFunction(source, "latticePoints"),
         extractFunction(source, "latticeSites"),
+        extractFunction(source, "atomSites"),
         extractFunction(source, "siteRoleAtPoint"),
         extractFunction(source, "cellEdgeSegments"),
         extractFunction(source, "touchRatio"),
@@ -1172,7 +1178,7 @@ for (const [file, mode] of visibleAlignFiles) {
         `var VIEW_X = 0, VIEW_Y = 0, VIEW_Z = 0;\n` +
         `${declarations}\n` +
         `setProjectionAngles(131, 109, 100);\n` +
-        `return {latticePoints, latticeSites, siteRoleAtPoint, cellEdgeSegments, touchRatio, setProjectionAngles, screenPoint, viewDepth, convexHull, adjustedRgb, adjustedK, boundaryCount, clipPolygonToCell, CELL_CORNERS, CELL_EDGES, projectionState: function () { return {SCREEN_X: SCREEN_X, SCREEN_Y: SCREEN_Y, VIEW: [VIEW_X, VIEW_Y, VIEW_Z]}; }};`
+        `return {latticePoints, latticeSites, atomSites, siteRoleAtPoint, cellEdgeSegments, touchRatio, setProjectionAngles, screenPoint, viewDepth, convexHull, adjustedRgb, adjustedK, boundaryCount, clipPolygonToCell, CELL_CORNERS, CELL_EDGES, projectionState: function () { return {SCREEN_X: SCREEN_X, SCREEN_Y: SCREEN_Y, VIEW: [VIEW_X, VIEW_Y, VIEW_Z]}; }};`
       )();
 
       assert.strictEqual(helpers.CELL_EDGES.length, 12, "unit cell must have 12 edges");
@@ -1181,17 +1187,25 @@ for (const [file, mode] of visibleAlignFiles) {
       assert.strictEqual(helpers.latticePoints("fcc").length, 14, "face-centered cubic must add 6 face centers");
       assert.strictEqual(helpers.latticePoints("cscl").length, 9, "CsCl cell must have corners and one body center");
       assert.strictEqual(helpers.latticePoints("nacl").length, 8, "one NaCl cell must use eight alternating corners");
+      assert.strictEqual(helpers.latticePoints("i2").length, 14, "I2 molecular centers must use an FCC cell");
       assertClose(helpers.touchRatio("sc"), 1, "simple cubic contact diameter ratio");
       assertClose(helpers.touchRatio("bcc"), Math.sqrt(3) / 2, "body-centered contact diameter ratio");
       assertClose(helpers.touchRatio("fcc"), Math.sqrt(2) / 2, "face-centered contact diameter ratio");
       assertClose(helpers.touchRatio("cscl"), Math.sqrt(3) / 2, "CsCl nearest-neighbor contact ratio");
       assertClose(helpers.touchRatio("nacl"), 1, "NaCl corner-neighbor contact ratio");
+      assertClose(helpers.touchRatio("i2"), 0.22, "I2 atom diameter ratio");
 
       assert.strictEqual(helpers.latticeSites("sc", 2).length, 27, "eight SC cells must share boundary sites");
       assert.strictEqual(helpers.latticeSites("bcc", 2).length, 35, "eight BCC cells must share 27 corners");
       assert.strictEqual(helpers.latticeSites("fcc", 2).length, 63, "eight FCC cells must deduplicate shared face sites");
       assert.strictEqual(helpers.latticeSites("cscl", 2).length, 35, "eight CsCl cells must share corner ions");
       assert.strictEqual(helpers.latticeSites("nacl", 2).length, 27, "eight NaCl cells must share a 3x3x3 corner grid");
+      assert.strictEqual(helpers.latticeSites("i2", 1).length, 14, "one I2 cell must have 14 FCC molecular centers");
+      assert.strictEqual(helpers.atomSites("i2", 1, 0.15).length, 28, "each I2 molecular center must expand to two atoms");
+      assert.ok(
+        helpers.atomSites("i2", 1, 0.15).every((site) => site.role === 0),
+        "I2 corner and face-center atoms must use one visual role"
+      );
       assert.strictEqual(
         helpers.latticeSites("nacl", 1).filter((site) => site.role === 0).length,
         4,
@@ -1209,7 +1223,8 @@ for (const [file, mode] of visibleAlignFiles) {
       assert.deepStrictEqual(helpers.adjustedRgb([100, 150, 200], 160), [255, 255, 255], "maximum brightness must approach white");
       assertClose(helpers.adjustedK(80, 100), 80, "100% must preserve grayscale K");
       assertClose(helpers.adjustedK(80, 160), 0, "maximum grayscale brightness must reach K0");
-      assertClose(helpers.adjustedK(0, 40), 60, "lower grayscale brightness must darken a white base");
+      assertClose(helpers.adjustedK(0, 40), 90, "minimum grayscale brightness must reach K90");
+      assertClose(helpers.adjustedK(15, 40), 90, "minimum flat-sphere brightness must reach K90");
 
       const projectedCorners = helpers.CELL_CORNERS.map((p) => helpers.screenPoint(p, 1, 0, 0));
       assert.strictEqual(
