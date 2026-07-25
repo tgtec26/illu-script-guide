@@ -40,6 +40,8 @@ const weatherFront = "스크립트/01_도형/Object_front.jsx";
 const anchorAngle = "스크립트/01_도형/Object_AnchorAngle.jsx";
 const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
 const cubicLattice = "스크립트/01_도형/Object_CubicLattice.jsx";
+const graphiteCrystal = "스크립트/01_도형/Object_GraphiteCrystal.jsx";
+const diamondCrystal = "스크립트/01_도형/Object_DiamondCrystal.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -1341,6 +1343,284 @@ for (const [file, mode] of visibleAlignFiles) {
       );
     } catch (error) {
       console.error(`${cubicLattice}: executable lattice geometry regression failed: ${error.message}`);
+      failures++;
+    }
+  }
+}
+
+{
+  if (!exists(graphiteCrystal)) {
+    console.error(`${graphiteCrystal}: graphite-crystal script is missing`);
+    failures++;
+  } else {
+    const source = read(graphiteCrystal);
+    const required = [
+      'new Window("dialog", "흑연 결정 구조 생성기")',
+      'function generateHoneycombSheet(columns, rows, shiftX, shiftZ)',
+      'function buildGraphiteGeometry(columns, rows, layerCount, layerGapRatio, stacking, interlayer)',
+      'radAB = pnlStack.add("radiobutton", undefined, "AB 적층 (흑연)")',
+      'radAA = pnlStack.add("radiobutton", undefined, "AA 적층")',
+      'var chkInterlayer = pnlOptions.add("checkbox", undefined, "층간 점선")',
+      'var chkLit3D = pnlOptions.add("checkbox", undefined, "구 3D 조명 효과")',
+      'var chkOutline = pnlOptions.add("checkbox", undefined, "구 외곽선")',
+      'var sldColumns = addSlider(pnlGeometry, "가로 육각형", 1, 10, 4',
+      'var sldRows = addSlider(pnlGeometry, "세로 육각형", 1, 8, 3',
+      'var sldLayers = addSlider(pnlGeometry, "적층 수", 1, 8, 3',
+      'var sldBond = addSlider(pnlGeometry, "C-C 결합 길이", 2, 15, 6',
+      'var sldLayerGap = addSlider(pnlGeometry, "층간 거리", 3, 35, 14',
+      'var sldAtom = addSlider(pnlGeometry, "탄소 구 지름", 1, 12, 4',
+      'var sldBrightness = addSlider(pnlGeometry, "탄소 밝기", 40, 160, 100',
+      'var sldAngleR = addSlider(pnlView, "오른쪽 각도", 91, 179, 132',
+      'var sldAngleL = addSlider(pnlView, "왼쪽 각도", 91, 179, 108',
+      'var sldDepth = addSlider(pnlView, "앞·뒤 면 거리", 40, 160, 100',
+      'record.interlayer ? kColor(65) : kColor(100)',
+      'if (record.interlayer) line.strokeDashes = [3, 2]',
+      'holder.name = "GraphiteCrystal_Preview"',
+      'var PREF_KEY = "GraphiteCrystalMaker/settings"',
+      'drawGraphite(collectOptions(), app.activeDocument.activeLayer)',
+    ];
+    for (const token of required) {
+      if (!source.includes(token)) {
+        console.error(`${graphiteCrystal}: missing graphite-crystal token: ${token}`);
+        failures++;
+      }
+    }
+
+    const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+    const activeDocLine = lineOf(source, /app\.activeDocument/);
+    if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+      console.error(`${graphiteCrystal}: app.documents.length guard must run before app.activeDocument`);
+      failures++;
+    }
+
+    try {
+      const declarations = [
+        extractFunction(source, "pointKey"),
+        extractFunction(source, "generateHoneycombSheet"),
+        extractFunction(source, "buildGraphiteGeometry"),
+      ].join("\n");
+      const helpers = new Function(
+        `var SQRT3 = Math.sqrt(3);\n${declarations}\n` +
+        `return {generateHoneycombSheet, buildGraphiteGeometry};`
+      )();
+
+      const singleHexagon = helpers.generateHoneycombSheet(1, 1, 0, 0);
+      assert.strictEqual(singleHexagon.atoms.length, 6, "one graphite hexagon must have six carbon atoms");
+      assert.strictEqual(singleHexagon.bonds.length, 6, "one graphite hexagon must have six C-C bonds");
+
+      const fusedHexagons = helpers.generateHoneycombSheet(2, 1, 0, 0);
+      assert.strictEqual(fusedHexagons.atoms.length, 10, "two fused hexagons must share two carbon atoms");
+      assert.strictEqual(fusedHexagons.bonds.length, 11, "two fused hexagons must share one C-C bond");
+      const fusedKeys = new Set(fusedHexagons.atoms.map((atom) => atom.key));
+      assert.strictEqual(fusedKeys.size, fusedHexagons.atoms.length, "graphite sheet atoms must be deduplicated");
+      for (const bond of fusedHexagons.bonds) {
+        const a = fusedHexagons.atoms[bond.a];
+        const b = fusedHexagons.atoms[bond.b];
+        assertClose(Math.hypot(a.x - b.x, a.z - b.z), 1, "all in-layer C-C bonds must have unit length");
+      }
+
+      const baseSheet = helpers.generateHoneycombSheet(2, 2, 0, 0);
+      const aaGeometry = helpers.buildGraphiteGeometry(2, 2, 3, 2.4, "AA", true);
+      assert.strictEqual(
+        aaGeometry.atoms.length,
+        baseSheet.atoms.length * 3,
+        "three graphite layers must repeat the complete sheet"
+      );
+      assert.strictEqual(
+        aaGeometry.bonds.filter((bond) => bond.interlayer).length,
+        baseSheet.atoms.length * 2,
+        "AA stacking must align every atom between adjacent layers"
+      );
+      const abGeometry = helpers.buildGraphiteGeometry(2, 2, 3, 2.4, "AB", true);
+      const abInterlayerCount = abGeometry.bonds.filter((bond) => bond.interlayer).length;
+      assert.ok(abInterlayerCount > 0, "AB stacking must retain aligned interlayer sites");
+      assert.ok(
+        abInterlayerCount < baseSheet.atoms.length * 2,
+        "AB stacking must align fewer atoms than AA stacking"
+      );
+      const noInterlayer = helpers.buildGraphiteGeometry(2, 2, 3, 2.4, "AB", false);
+      assert.strictEqual(
+        noInterlayer.bonds.filter((bond) => bond.interlayer).length,
+        0,
+        "disabling interlayer lines must remove all vertical dashed bonds"
+      );
+    } catch (error) {
+      console.error(`${graphiteCrystal}: executable graphite geometry regression failed: ${error.message}`);
+      failures++;
+    }
+  }
+}
+
+{
+  if (!exists(diamondCrystal)) {
+    console.error(`${diamondCrystal}: diamond-crystal script is missing`);
+    failures++;
+  } else {
+    const source = read(diamondCrystal);
+    const required = [
+      'new Window("dialog", "다이아몬드 결정 구조 생성기")',
+      'var DIAMOND_NEIGHBOR_DISTANCE = Math.sqrt(3) / 4',
+      'function diamondSites(span)',
+      'function diamondBonds(sites)',
+      'function cellEdgeSegments(span)',
+      'var radOneCell = pnlCell.add("radiobutton", undefined, "1셀")',
+      'var radEightCells = pnlCell.add("radiobutton", undefined, "8셀 (2×2×2)")',
+      'var radPyramid = pnlCell.add("radiobutton", undefined, "피라미드 클러스터")',
+      'var chkCell = pnlDisplay.add("checkbox", undefined, "단위세포 라인")',
+      'var chkBonds = pnlDisplay.add("checkbox", undefined, "C-C 결합선")',
+      'var chkCompleteBoundary = pnlDisplay.add("checkbox", undefined, "경계 결합 완성")',
+      'var chkHiddenDashed = pnlDisplay.add("checkbox", undefined, "숨김선 점선 (해제: 실선)")',
+      'var sldCell = addSlider(pnlSize, "셀 한 변", 8, 80, 28',
+      'pyramidInfoRow.add("statictext", undefined, "3층 (고정)")',
+      'var sldAtom = addSlider(pnlSize, "탄소 구 지름", 1, 12, 4',
+      'var sldBondWidth = addSlider(pnlSize, "결합선 굵기", 0.1, 2, 0.5',
+      'var sldBrightness = addSlider(pnlSize, "탄소 밝기", 40, 160, 100',
+      'var sldAngleR = addSlider(pnlView, "오른쪽 각도", 91, 179, 131',
+      'var sldAngleL = addSlider(pnlView, "왼쪽 각도", 91, 179, 109',
+      'var sldDepth = addSlider(pnlView, "앞·뒤 면 거리", 40, 160, 100',
+      'hiddenDashed: chkHiddenDashed.value && (radOneCell.value || radPyramid.value)',
+      'function completeDiamondNetwork(span)',
+      'function diamondPyramidGeometry(levels)',
+      'holder.name = "DiamondCrystal_Preview"',
+      'var PREF_KEY = "DiamondCrystalMaker/settings"',
+      'drawDiamond(collectOptions(), app.activeDocument.activeLayer)',
+    ];
+    for (const token of required) {
+      if (!source.includes(token)) {
+        console.error(`${diamondCrystal}: missing diamond-crystal token: ${token}`);
+        failures++;
+      }
+    }
+
+    const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+    const activeDocLine = lineOf(source, /app\.activeDocument/);
+    if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+      console.error(`${diamondCrystal}: app.documents.length guard must run before app.activeDocument`);
+      failures++;
+    }
+
+    try {
+      const basisMatch = source.match(/var DIAMOND_BASIS = \[[\s\S]*?\n    \];/);
+      if (!basisMatch) throw new Error("missing diamond basis declaration");
+      const declarations = [
+        basisMatch[0],
+        extractFunction(source, "coordinateKey"),
+        extractFunction(source, "diamondSitesInBounds"),
+        extractFunction(source, "diamondSites"),
+        extractFunction(source, "diamondBonds"),
+        extractFunction(source, "completeDiamondNetwork"),
+        extractFunction(source, "diamondPyramidGeometry"),
+        extractFunction(source, "cellEdgeSegments"),
+      ].join("\n");
+      const helpers = new Function(
+        `var DIAMOND_NEIGHBOR_DISTANCE = Math.sqrt(3) / 4;\n${declarations}\n` +
+        `return {diamondSites, diamondBonds, completeDiamondNetwork, diamondPyramidGeometry, cellEdgeSegments};`
+      )();
+
+      const oneCellSites = helpers.diamondSites(1);
+      const oneCellBonds = helpers.diamondBonds(oneCellSites);
+      assert.strictEqual(oneCellSites.length, 18, "one diamond cell must include 14 FCC boundary atoms and 4 internal atoms");
+      assert.strictEqual(oneCellBonds.length, 16, "one diamond cell must contain sixteen internal nearest-neighbor bonds");
+      assert.strictEqual(
+        new Set(oneCellSites.map((site) => site.key)).size,
+        oneCellSites.length,
+        "diamond atoms shared by periodic cells must be deduplicated"
+      );
+      for (const bond of oneCellBonds) {
+        const a = oneCellSites[bond.a].p;
+        const b = oneCellSites[bond.b].p;
+        assertClose(
+          Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]),
+          Math.sqrt(3) / 4,
+          "diamond bonds must use the tetrahedral nearest-neighbor distance"
+        );
+      }
+      const internalAtoms = oneCellSites
+        .map((site, index) => ({ site, index }))
+        .filter(({ site }) => site.p.every((value) => value > 0 && value < 1));
+      assert.strictEqual(internalAtoms.length, 4, "one diamond cell must contain four internal tetrahedral atoms");
+      for (const { index } of internalAtoms) {
+        assert.strictEqual(
+          oneCellBonds.filter((bond) => bond.a === index || bond.b === index).length,
+          4,
+          "each internal diamond carbon must have four tetrahedral bonds"
+        );
+      }
+      const completedCell = helpers.completeDiamondNetwork(1);
+      const completedIndexByKey = new Map(
+        completedCell.sites.map((site, index) => [site.key, index])
+      );
+      for (const coreSite of oneCellSites) {
+        const completedIndex = completedIndexByKey.get(coreSite.key);
+        assert.notStrictEqual(completedIndex, undefined, "completed diamond network must retain every cell atom");
+        assert.strictEqual(
+          completedCell.bonds.filter(
+            (bond) => bond.a === completedIndex || bond.b === completedIndex
+          ).length,
+          4,
+          "boundary completion must give every unit-cell carbon four nearest neighbors"
+        );
+      }
+
+      const pyramid = helpers.diamondPyramidGeometry(3);
+      assert.strictEqual(pyramid.sites.length, 14, "three-layer diamond pyramid must contain 1 + 1 + 3 + 3 + 6 atoms");
+      assert.strictEqual(pyramid.bonds.length, 16, "three-layer diamond pyramid must connect all adjacent carbon rows");
+      assert.deepStrictEqual(
+        [...new Set(pyramid.sites.map((site) => site.tier))].sort(),
+        [0, 1, 2],
+        "diamond pyramid must contain exactly three atomic layers"
+      );
+      assert.deepStrictEqual(
+        [0, 1, 2, 3, 4].map(
+          (row) => pyramid.sites.filter((site) => site.row === row).length
+        ),
+        [1, 1, 3, 3, 6],
+        "diamond pyramid rows must follow the requested 1-1-3-3-6 arrangement"
+      );
+      const pyramidDegrees = pyramid.sites.map((site, index) =>
+        pyramid.bonds.filter((bond) => bond.a === index || bond.b === index).length
+      );
+      assert.strictEqual(pyramidDegrees[0], 1, "diamond pyramid apex must connect to the upper center");
+      assert.strictEqual(pyramidDegrees[1], 4, "upper-center carbon must connect to apex and three lower carbons");
+      assert.ok(
+        pyramid.sites
+          .map((site, index) => ({ site, degree: pyramidDegrees[index] }))
+          .filter(({ site }) => site.row === 2)
+          .every(({ degree }) => degree === 2),
+        "three upper lower-row carbons must bridge the two tetrahedral levels"
+      );
+      assert.ok(
+        pyramid.sites
+          .map((site, index) => ({ site, degree: pyramidDegrees[index] }))
+          .filter(({ site }) => site.row === 3)
+          .every(({ degree }) => degree === 4),
+        "three lower-center carbons must each have four bonds"
+      );
+      assert.ok(
+        pyramid.sites
+          .map((site, index) => ({ site, degree: pyramidDegrees[index] }))
+          .filter(({ site }) => site.row === 4)
+          .every(({ degree }) => degree === 1 || degree === 2),
+        "finite pyramid boundary carbons may terminate with one or two bonds"
+      );
+      for (const bond of pyramid.bonds) {
+        const a = pyramid.sites[bond.a].p;
+        const b = pyramid.sites[bond.b].p;
+        assertClose(
+          Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]),
+          Math.sqrt(3) / 4,
+          "diamond pyramid must preserve tetrahedral nearest-neighbor bonds"
+        );
+      }
+
+      const eightCellSites = helpers.diamondSites(2);
+      const eightCellBonds = helpers.diamondBonds(eightCellSites);
+      assert.strictEqual(eightCellSites.length, 95, "eight diamond cells must deduplicate shared boundary atoms");
+      assert.strictEqual(eightCellBonds.length, 128, "eight diamond cells must contain all internal nearest-neighbor bonds");
+      assert.strictEqual(helpers.cellEdgeSegments(1).length, 12, "one diamond cell must draw twelve frame edges");
+      assert.strictEqual(helpers.cellEdgeSegments(2).length, 54, "eight diamond cells must draw the complete 2x2x2 frame");
+    } catch (error) {
+      console.error(`${diamondCrystal}: executable diamond geometry regression failed: ${error.message}`);
       failures++;
     }
   }
