@@ -11,6 +11,40 @@ For contained Adobe Illustrator JSX requests, default to direct implementation i
 - Commit, push, and copy into Illustrator only when the user asks to publish, update, or finish the work.
 - Keep progress updates short. Do not pause for process-only choices.
 
+## Dialog Option Persistence (required)
+
+Any script with a dialog must remember the options from the last run and preselect them next time. Apply this to every new script and to any existing script whose dialog gains options.
+
+- Store with `app.preferences.setStringPreference(PREF_KEY, ...)` and read back with `getStringPreference`. No settings files.
+- `PREF_KEY` is `"<ScriptName>/settings"` (e.g. `"ObjectSphere/settings"`).
+- Serialize as a `|`-joined string starting with a version tag: `["v1", countA, countB, angle].join("|")`. Bump the tag whenever the field layout changes; on load, ignore any value whose tag or field count does not match, so an old string falls back to defaults instead of corrupting the dialog.
+- Save on confirm only. Cancel must not overwrite the stored options.
+- Validate every restored value against the same range the dialog enforces before applying it.
+- Wrap reads and writes in `try/catch`; a preference failure must never block the script.
+
+Reference implementations: `스크립트/01_도형/Object_sphere.jsx`, `스크립트/01_도형/Object_AxisTickMarks.jsx`, `스크립트/01_도형/Object_AtomModel.jsx`.
+
+## Stroke Properties Missing From the DOM
+
+Arrowheads and dash corner alignment are not exposed on `PathItem`, but they can still be set from a script: write a temporary `.aia` action, then `app.loadAction` → `app.doScript` → `app.unloadAction`. This is verified working, not a workaround to avoid.
+
+Parameter keys for the `ai_plugin_setStroke` event (integer form of the four-character OSType):
+
+| Key | OSType | Meaning |
+| --- | --- | --- |
+| 2003072104 | `wdth` | stroke width (unit real, unit `592476268` = pt) |
+| 1634231345 / 1634231346 | `ahd1` / `ahd2` | start / end arrowhead name |
+| 1634951985 / 1634951986 | `asc1` / `asc2` | start / end arrowhead scale % |
+| 1634230636 | `ahal` | arrowhead alignment |
+| 1684104298 | `dadj` | align dashes to corners and path ends |
+| 1667330094 / 1785686382 / 1634494318 | `cap.` / `join` / `algn` | cap, join, stroke alignment |
+| 1684825454 / 1836344690 | `dlen` / `mter` | dash length, miter limit |
+
+- Strings in an action file are UTF-8 bytes written as uppercase hex, and the declared length is the **byte** count, not the character count.
+- Arrowhead names and the `/name` of enumerated parameters follow the Illustrator UI language. Keep them in one named constant per script so another language only needs that constant changed (Korean build: `화살표 1` = `ED9994EC82B4ED919C2031`, 11 bytes).
+- Wrap the whole action call in `try/catch` so the artwork survives a failure, and always unload the action set and delete the temporary file afterwards.
+- Reference implementations: `스크립트/01_도형/Object_AxisTickMarks.jsx` (`applyAxisArrowheads`), `스크립트/01_도형/Object_setdash_align_helper.jsxinc`. To find more keys, parse `스크립트/00_세팅/cjhaction_260624.aia` — it holds real recorded values.
+
 ## Escalation
 
 Ask before expanding scope, changing unrelated files, using multiple agents, or starting a formal design workflow.
