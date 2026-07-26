@@ -29,8 +29,8 @@
     var diameterMm = diameter / MM_TO_PT;
     var innerDiameterMm = 0;
     var maxInnerDiameterMm = Math.max(0, roundTo(diameterMm - DIAMETER_STEP_MM, DIAMETER_STEP_MM));
-    var heightMm = roundTo(diameterMm, HEIGHT_STEP_MM);
-    var maxHeightMm = Math.max(HEIGHT_STEP_MM, roundTo(diameterMm * 5, HEIGHT_STEP_MM));
+    var maxHeightMm = 50;
+    var heightMm = Math.min(maxHeightMm, roundTo(diameterMm, HEIGHT_STEP_MM));
     var viewAngle = 70;
     var viewY = 0;
     var viewZ = 0;
@@ -38,6 +38,7 @@
     var divisionsEnabled = false;
     var divisionCount = 2;
     var divisionRotation = 90;
+    var divisionRatioText = "";
     var K_STEP = 10;
     var FACE_TOP = 0;
     var FACE_INNER = 1;
@@ -48,12 +49,12 @@
     var previewGroup = null;
     var sourceWasHidden = source.hidden;
 
-    // 지름·높이는 선택한 원에서 계산하므로 저장하지 않는다. 시점·방향·분할선·컬러만 기억한다.
+    // 외경은 선택한 원에서 오므로 저장하지 않는다. 내경·높이는 새 원 크기에 맞춰 잘라서 복원한다.
     var PREF_KEY = "ObjectCylinder/settings";
     applySavedSettings();
 
     var LABEL_WIDTH = 58;
-    var SLIDER_WIDTH = 200;
+    var SLIDER_WIDTH = 170;
     var STEP_BUTTON_WIDTH = 30;
 
     var dlg = new Window("dialog", "오브젝트 실린더");
@@ -120,6 +121,14 @@
     var rotationSlider = rotationControls.slider;
     var rotationRow = rotationControls.row;
 
+    var ratioRow = shapePanel.add("group");
+    ratioRow.alignChildren = ["left", "center"];
+    var ratioLabel = ratioRow.add("statictext", undefined, "분할 비율");
+    ratioLabel.preferredSize.width = LABEL_WIDTH;
+    var ratioInput = ratioRow.add("edittext", undefined, divisionRatioText);
+    ratioInput.preferredSize.width = 200;
+    ratioRow.add("statictext", undefined, "(예: 43,11,40,6 · 빈칸=균등)");
+
     setDivisionControlsEnabled(divisionsEnabled);
 
     var colorPanel = addPanel(dlg, "컬러");
@@ -137,7 +146,7 @@
     var kUpButton = colorRow.add("button", undefined, "▶");
     kUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
 
-    setInnerFaceEnabled(false);
+    setInnerFaceEnabled(innerDiameterMm > 0);
     updateKDisplay();
 
     var footer = dlg.add("group");
@@ -169,6 +178,18 @@
         }
     };
 
+    innerControls.down.onClick = function() { stepInnerDiameter(-1); };
+    innerControls.up.onClick = function() { stepInnerDiameter(1); };
+
+    // 버튼 한 번 = 0.1mm
+    function stepInnerDiameter(direction) {
+        innerDiameterMm = clamp(roundTo(innerDiameterMm + direction * 0.1, 0.1), 0, maxInnerDiameterMm);
+        innerDiameterInput.text = formatNumber(innerDiameterMm, 2);
+        innerDiameterSlider.value = innerDiameterMm;
+        setInnerFaceEnabled(innerDiameterMm > 0);
+        updatePreview();
+    }
+
     innerDiameterInput.onChange = function() {
         var value = parseNumber(innerDiameterInput.text);
         if (value === null || value < 0 || value >= diameterMm) value = innerDiameterMm;
@@ -184,6 +205,17 @@
         heightInput.text = formatNumber(heightMm, 2);
         updatePreview();
     };
+
+    heightControls.down.onClick = function() { stepHeight(-1); };
+    heightControls.up.onClick = function() { stepHeight(1); };
+
+    // 버튼 한 번 = 0.1mm
+    function stepHeight(direction) {
+        heightMm = clamp(roundTo(heightMm + direction * 0.1, 0.1), 0, maxHeightMm);
+        heightInput.text = formatNumber(heightMm, 2);
+        heightSlider.value = heightMm;
+        updatePreview();
+    }
 
     heightInput.onChanging = function() {
         var value = parseNumber(heightInput.text);
@@ -243,6 +275,7 @@
         updatePreview();
     };
 
+    ratioInput.onChanging = updatePreview;
     countSlider.onChanging = function() {
         divisionCount = clamp(Math.round(countSlider.value), 2, 24);
         countInput.text = String(divisionCount);
@@ -349,6 +382,7 @@
         viewZ = validAngleZ;
         divisionCount = Math.max(2, Math.round(validCount));
         divisionRotation = validRotation;
+        divisionRatioText = ratioInput.text;
         saveSettings();
         dlg.close(1);
     };
@@ -458,11 +492,13 @@
 
     function saveSettings() {
         var parts = [
-            "v1", viewAngle, viewY, viewZ,
+            "v3", viewAngle, viewY, viewZ,
             isVertical ? "1" : "0",
             divisionsEnabled ? "1" : "0",
             divisionCount, divisionRotation,
-            faceK[0], faceK[1], faceK[2]
+            faceK[0], faceK[1], faceK[2],
+            encodeURIComponent(divisionRatioText),
+            innerDiameterMm, heightMm
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -472,7 +508,7 @@
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length < 11) return;
+        if (p[0] !== "v3" || p.length < 14) return;
         viewAngle = restoreNumber(p[1], viewAngle, -180, 180);
         viewY = restoreNumber(p[2], viewY, -180, 180);
         viewZ = restoreNumber(p[3], viewZ, -180, 180);
@@ -483,6 +519,9 @@
         for (var i = 0; i < 3; i++) {
             faceK[i] = Math.round(restoreNumber(p[8 + i], faceK[i], 0, 100));
         }
+        try { divisionRatioText = decodeURIComponent(p[11]); } catch (e2) {}
+        innerDiameterMm = roundTo(restoreNumber(p[12], innerDiameterMm, 0, maxInnerDiameterMm), DIAMETER_STEP_MM);
+        heightMm = roundTo(restoreNumber(p[13], heightMm, 0, maxHeightMm), HEIGHT_STEP_MM);
     }
 
     function restoreNumber(text, fallback, minimum, maximum) {
@@ -516,10 +555,14 @@
         input.characters = 6;
         input.justify = "right";
         row.add("statictext", undefined, unit);
+        var down = row.add("button", undefined, "◀");
+        down.preferredSize.width = 22;
         var slider = row.add("slider", undefined, Number(value), minimum, maximum);
         slider.preferredSize.width = SLIDER_WIDTH;
         slider.stepdelta = step;
-        return {row: row, input: input, slider: slider, reset: reset};
+        var up = row.add("button", undefined, "▶");
+        up.preferredSize.width = 22;
+        return {row: row, input: input, slider: slider, reset: reset, down: down, up: up};
     }
 
     function addAngleRow(parent, label, value, hasReset) {
@@ -558,12 +601,24 @@
                 updatePreview();
             };
         }
+
+        // 버튼 한 번 = 5도. 5도 격자에 맞춰 움직인다.
+        function stepAngle(direction) {
+            var value = clamp(Math.round((getter() + direction * 5) / 5) * 5, -180, 180);
+            setter(value);
+            controls.input.text = formatSignedAngle(value);
+            controls.slider.value = value;
+            updatePreview();
+        }
+        controls.down.onClick = function() { stepAngle(-1); };
+        controls.up.onClick = function() { stepAngle(1); };
     }
 
 
     function setDivisionControlsEnabled(enabled) {
         countGroup.enabled = enabled;
         rotationRow.enabled = enabled;
+        ratioRow.enabled = enabled;
     }
 
     function setInnerFaceEnabled(enabled) {
@@ -627,8 +682,7 @@
                     diameter,
                     diameter,
                     innerRatio,
-                    divisionCount,
-                    divisionRotation
+                    getDivisionAngles()
                 );
                 for (var singleIndex = 0; singleIndex < singleCapPoints.length; singleIndex++) {
                     var singleDivision = makeLine(
@@ -703,8 +757,7 @@
             capWidth,
             capHeight,
             innerRatio,
-            divisionCount,
-            divisionRotation
+            getDivisionAngles()
         ) : [];
         for (var divisionIndex = 0; divisionIndex < divisionPoints.length; divisionIndex++) {
             var divisionPoint = divisionPoints[divisionIndex];
@@ -760,16 +813,51 @@
         return group;
     }
 
-    function getDivisionPoints(frontX, frontY, rearX, rearY, capWidth, capHeight, innerRatio, count, rotation) {
+    // 쉼표로 구분한 비율 목록. 2개 이상, 전부 0보다 커야 유효. 아니면 null(균등 분할).
+    function parseDivisionRatios(text) {
+        var pieces = String(text).split(",");
+        var ratios = [];
+        for (var i = 0; i < pieces.length; i++) {
+            var piece = pieces[i].replace(/^\s+|\s+$/g, "");
+            if (piece === "") continue;
+            var value = parseFloat(piece);
+            if (isNaN(value) || value <= 0) return null;
+            ratios.push(value);
+        }
+        return ratios.length >= 2 ? ratios : null;
+    }
+
+    // 분할선 각도 목록: 비율이 있으면 누적 비율 위치(12시부터 시계 방향), 없으면 균등
+    function getDivisionAngles() {
+        var rotationRadians = divisionRotation * Math.PI / 180;
+        var ratios = parseDivisionRatios(ratioInput.text);
+        var angles = [];
+
+        if (ratios !== null) {
+            var total = 0;
+            for (var r = 0; r < ratios.length; r++) total += ratios[r];
+            var cumulative = 0;
+            for (var i = 0; i < ratios.length; i++) {
+                angles.push(rotationRadians - (cumulative / total) * Math.PI * 2);
+                cumulative += ratios[i];
+            }
+        } else {
+            for (var j = 0; j < divisionCount; j++) {
+                angles.push(rotationRadians + (Math.PI * 2 * j / divisionCount));
+            }
+        }
+        return angles;
+    }
+
+    function getDivisionPoints(frontX, frontY, rearX, rearY, capWidth, capHeight, innerRatio, angles) {
         var points = [];
         var axisX = rearX - frontX;
         var axisY = rearY - frontY;
         var holeRadiusX = capWidth / 2 * innerRatio;
         var holeRadiusY = capHeight / 2 * innerRatio;
-        var rotationRadians = rotation * Math.PI / 180;
 
-        for (var i = 0; i < count; i++) {
-            var angle = rotationRadians + (Math.PI * 2 * i / count);
+        for (var i = 0; i < angles.length; i++) {
+            var angle = angles[i];
             var radialX = capWidth / 2 * Math.cos(angle);
             var radialY = capHeight / 2 * Math.sin(angle);
             var sideDot = radialX * axisX + radialY * axisY;
