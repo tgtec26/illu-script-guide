@@ -6,6 +6,9 @@
 (function() {
     if (app.documents.length === 0) return;
 
+    var STROKE_WIDTH_PT = 8;
+    var ARROW_SCALE = 20;
+
     var doc = app.activeDocument;
     var sel = doc.selection;
 
@@ -39,6 +42,43 @@
 
     restoreSelection(doc, originalSelection);
 
+    if (!hasWidthProfile(profileName)) {
+        alert("화살표는 적용했지만 가변 폭 프로파일 '" + profileName + "'을(를) 찾지 못했습니다.\n\n" +
+            "이 기기에 프로파일이 아직 등록되지 않은 상태입니다.\n" +
+            "일러스트레이터를 완전히 종료한 뒤 script-action-update 를 다시 실행하면 자동으로 등록됩니다.\n\n" +
+            "직접 만들려면: 선을 하나 그린 뒤 폭 도구로 시작점 폭을 0까지 줄이고,\n" +
+            "획 패널의 프로파일 목록에서 '프로파일에 추가'로 '" + profileName + "' 이름으로 저장하세요.");
+    }
+
+    // 프로파일 프리셋 파일에 해당 이름이 있는지 확인한다.
+    // 파일을 읽을 수 없으면 판단을 보류하고 경고를 띄우지 않는다.
+    function hasWidthProfile(name) {
+        try {
+            // 설정 폴더 위치: macOS는 ~/Library/Preferences, Windows는 %APPDATA%
+            var settingsName = "Adobe Illustrator " + parseInt(app.version, 10) + " Settings";
+            var settingsFolder = /mac/i.test($.os)
+                ? Folder(Folder("~/Library/Preferences").fsName + "/" + settingsName)
+                : Folder(Folder.userData.fsName + "/Adobe/" + settingsName);
+            if (!settingsFolder.exists) return true;
+
+            var marker = utf8Hex(name).toLowerCase();
+            var localeFolders = settingsFolder.getFiles(function(f) { return f instanceof Folder; });
+            for (var i = 0; i < localeFolders.length; i++) {
+                var presetFile = File(localeFolders[i].fsName + "/가변 폭 속성");
+                if (!presetFile.exists) continue;
+
+                presetFile.encoding = "UTF-8";
+                presetFile.open("r");
+                var contents = presetFile.read();
+                presetFile.close();
+                if (String(contents).toLowerCase().indexOf(marker) !== -1) return true;
+            }
+            return false;
+        } catch (e) {
+            return true;
+        }
+    }
+
     function collectPathItems(item, result) {
         if (!item) return;
 
@@ -59,7 +99,7 @@
         try {
             pathItem.stroked = true;
             pathItem.filled = false;
-            pathItem.strokeWidth = 8;
+            pathItem.strokeWidth = STROKE_WIDTH_PT;
             pathItem.strokeCap = StrokeCap.BUTTENDCAP;
             pathItem.strokeJoin = StrokeJoin.ROUNDENDJOIN;
             pathItem.strokeDashes = [];
@@ -132,9 +172,8 @@
         lines.push("    /keyIndex 0");
         lines.push("    /colorIndex 0");
         lines.push("    /isOpen 1");
-        lines.push("    /eventCount 2");
-        addArrowStrokeEvent(lines, 1, arrowName, profileName, 100);
-        addArrowStrokeEvent(lines, 2, arrowName, profileName, 20);
+        lines.push("    /eventCount 1");
+        addArrowStrokeEvent(lines, 1, arrowName, profileName, ARROW_SCALE);
 
         lines.push("}");
 
@@ -153,7 +192,9 @@
         lines.push("        /hasDialog 0");
         lines.push("        /parameterCount 12");
 
-        addUnitRealParameter(lines, 1, 2003072104, 8);
+        // 파라미터 순서는 Illustrator가 실제로 녹화한 액션과 동일하게 두고,
+        // 녹화본에 없던 폭 프로파일만 맨 뒤에 덧붙인다
+        addUnitRealParameter(lines, 1, 2003072104, STROKE_WIDTH_PT);
         addEnumeratedParameter(lines, 2, 1667330094, "중단 단면", 0);
         addRealParameter(lines, 3, 1836344690, 10);
         addEnumeratedParameter(lines, 4, 1785686382, "각진 연결", 0);
@@ -163,8 +204,8 @@
         addUStringParameter(lines, 8, 1634231346, arrowName);
         addRealParameter(lines, 9, 1634951986, arrowScale);
         addEnumeratedParameter(lines, 10, 1634230636, "패스 끝의 팁", 0);
-        addUStringParameter(lines, 11, 2003858022, profileName);
-        addEnumeratedParameter(lines, 12, 1634494318, "가운데", 0);
+        addEnumeratedParameter(lines, 11, 1634494318, "가운데", 0);
+        addUStringParameter(lines, 12, 2003858022, profileName);
 
         lines.push("    }");
     }
@@ -215,7 +256,7 @@
     function addUnitRealParameter(lines, index, key, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
+        lines.push("            /showInPalette -1");
         lines.push("            /type (unit real)");
         lines.push("            /value " + formatReal(value));
         lines.push("            /unit 592476268");
@@ -225,7 +266,7 @@
     function addRealParameter(lines, index, key, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
+        lines.push("            /showInPalette -1");
         lines.push("            /type (real)");
         lines.push("            /value " + formatReal(value));
         lines.push("        }");
@@ -234,7 +275,7 @@
     function addIntegerParameter(lines, index, key, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
+        lines.push("            /showInPalette -1");
         lines.push("            /type (integer)");
         lines.push("            /value " + value);
         lines.push("        }");
@@ -243,7 +284,7 @@
     function addBooleanParameter(lines, index, key, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
+        lines.push("            /showInPalette -1");
         lines.push("            /type (boolean)");
         lines.push("            /value " + value);
         lines.push("        }");
@@ -252,7 +293,7 @@
     function addEnumeratedParameter(lines, index, key, name, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
+        lines.push("            /showInPalette -1");
         lines.push("            /type (enumerated)");
         lines.push("            /name [ " + utf8HexLength(name));
         lines.push("                " + utf8Hex(name));
@@ -264,7 +305,7 @@
     function addUStringParameter(lines, index, key, value) {
         lines.push("        /parameter-" + index + " {");
         lines.push("            /key " + key);
-        lines.push("            /showInPalette 4294967295");
+        lines.push("            /showInPalette -1");
         lines.push("            /type (ustring)");
         lines.push("            /value [ " + utf8HexLength(value));
         lines.push("                " + utf8Hex(value));

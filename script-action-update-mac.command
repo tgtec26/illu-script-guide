@@ -20,6 +20,8 @@ CACHE_DIR="$HOME/.illu-script-updater/illu-script-guide"
 SOURCE_SUBDIR="스크립트"
 KYS_NAME="cjh250907.kys"
 ARROW_NAME="화살표.ai"
+WIDTH_PROFILE_NAME="가변폭속성_폭속성1.txt"
+WIDTH_PROFILE_LABEL="폭 속성1"
 
 if [ "$FULL" -eq 1 ]; then
   echo "illu-script 새 PC 세팅 (--full, macOS)"
@@ -184,9 +186,54 @@ else
   echo "    대상: ${ARROW_DIR:-(ko_KR Resources 폴더를 찾지 못함)}"
 fi
 
+# 가변 폭 프로파일 "폭 속성1" 등록
+# Illustrator는 종료할 때 이 파일을 메모리 내용으로 덮어쓰므로, 실행 중이면 건너뛴다.
+WIDTH_PROFILE_SRC="$CACHE_DIR/$WIDTH_PROFILE_NAME"
+if [ -f "$WIDTH_PROFILE_SRC" ] && [ -n "$VER" ]; then
+  WP_BASE="$HOME/Library/Preferences/Adobe Illustrator $VER Settings"
+  WP_DIR=""
+  for CAND in "$WP_BASE/ko_KR" "$WP_BASE/en_US"; do
+    if [ -d "$CAND" ]; then WP_DIR="$CAND"; break; fi
+  done
+
+  if [ -z "$WP_DIR" ]; then
+    echo "  폭 프로파일 건너뜀 (설정 폴더를 찾지 못함): $WP_BASE"
+  elif pgrep -x "Adobe Illustrator" >/dev/null 2>&1; then
+    echo "  폭 프로파일 건너뜀 (Illustrator 실행 중)"
+    echo "    일러스트레이터를 완전히 종료한 뒤 이 스크립트를 다시 실행하세요."
+  else
+    WP_FILE="$WP_DIR/가변 폭 속성"
+    if [ -f "$WP_FILE" ] && grep -q "ed8fad20ec868dec84b131" "$WP_FILE"; then
+      echo "  폭 프로파일 이미 등록됨: $WIDTH_PROFILE_LABEL"
+    else
+      if [ -f "$WP_FILE" ]; then
+        cp "$WP_FILE" "$WP_FILE.bak"
+        # 기존에 쓰지 않은 collection 번호를 골라 프로파일을 덧붙인다
+        NEXT_NUM="$(
+          grep -o '/collection[0-9]\{1,\}' "$WP_FILE" \
+            | grep -o '[0-9]\{1,\}' \
+            | sort -n | tail -n 1
+        )"
+        NEXT_NUM=$(( ${NEXT_NUM:-0} + 1 ))
+        # 파일이 CR 개행이므로 덧붙이는 줄도 CR로 맞춘다
+        sed "s/{N}/$NEXT_NUM/" "$WIDTH_PROFILE_SRC" | tr '\n' '\r' >> "$WP_FILE"
+        echo "  폭 프로파일 추가 완료 -> $WP_FILE (collection$NEXT_NUM, 백업: $WP_FILE.bak)"
+      else
+        sed "s/{N}/1/" "$WIDTH_PROFILE_SRC" | tr '\n' '\r' > "$WP_FILE"
+        echo "  폭 프로파일 새로 생성 -> $WP_FILE"
+      fi
+    fi
+  fi
+elif [ -z "$VER" ]; then
+  echo "  Illustrator 버전을 알 수 없어 폭 프로파일 등록을 건너뜀"
+else
+  echo "  폭 프로파일 파일 없음(건너뜀): $WIDTH_PROFILE_SRC"
+fi
+
 echo ""
 echo "파일 복사 끝. 남은 단계:"
 echo "  1) 일러스트 실행"
 echo "  2) 파일 > 스크립트 > setup 실행 (환경설정 + 액션 적용)"
 echo "  3) 편집 > 키보드 단축키 에서 'cjh250907' 세트 1회 선택"
 echo "  4) 일러스트 재시작"
+echo "  5) 획 패널의 프로파일 목록에 '폭 속성1'이 보이는지 확인"

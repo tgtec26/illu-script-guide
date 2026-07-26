@@ -1,0 +1,16 @@
+/collection{N} {
+	/attributes {
+		/VariableWidth_ProfileType 0
+		/VariableWidth_Distances [ 4
+			30203120
+		]
+		/VariableWidth_Widths [ 4
+			30203120
+		]
+		/collectionName [ 11
+			ed8fad20ec868dec84b131
+		]
+	}
+	/canEdit 0
+	/canDelete 0
+}

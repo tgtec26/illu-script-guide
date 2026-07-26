@@ -7,6 +7,7 @@ $CacheDir = Join-Path $env:USERPROFILE ".illu-script-updater\illu-script-guide"
 $SourceSubdir = "스크립트"
 $KysName = "cjh250907.kys"
 $ArrowName = "화살표.ai"
+$WidthProfileName = "가변폭속성_폭속성1.txt"
 
 Write-Host ("illu-script {0} (Windows)" -f $(if ($Full) { "새 PC 세팅 (-Full)" } else { "updater" }))
 
@@ -178,9 +179,52 @@ if ((Test-Path $ArrowSrc) -and (Test-Path $ArrowDir)) {
     Write-Host "    대상: $ArrowDir"
 }
 
+# -Full: 가변 폭 프로파일 "폭 속성1" 등록
+# Illustrator는 종료할 때 이 파일을 메모리 내용으로 덮어쓰므로, 실행 중이면 건너뛴다.
+$WidthProfileSrc = Join-Path $CacheDir $WidthProfileName
+if (Test-Path $WidthProfileSrc) {
+    if (Get-Process -Name "Illustrator" -ErrorAction SilentlyContinue) {
+        Write-Host "  폭 프로파일 건너뜀 (Illustrator 실행 중)"
+        Write-Host "    일러스트레이터를 완전히 종료한 뒤 이 스크립트를 다시 실행하세요."
+    } else {
+        $WpDir = Join-Path $env:APPDATA "Adobe\Adobe Illustrator $Ver Settings\ko_KR"
+        $WpFile = Join-Path $WpDir "가변 폭 속성"
+        if (-not (Test-Path $WpDir)) {
+            Write-Host "  폭 프로파일 건너뜀 (설정 폴더 없음): $WpDir"
+        } else {
+            $Marker = "ed8fad20ec868dec84b131"
+            $Existing = ""
+            if (Test-Path $WpFile) { $Existing = [IO.File]::ReadAllText($WpFile) }
+            if ($Existing -like "*$Marker*") {
+                Write-Host "  폭 프로파일 이미 등록됨: 폭 속성1"
+            } else {
+                # 기존에 쓰지 않은 collection 번호를 고른다
+                $Next = 1
+                $Nums = [regex]::Matches($Existing, "/collection(\d+)") | ForEach-Object { [int]$_.Groups[1].Value }
+                if ($Nums.Count -gt 0) { $Next = ($Nums | Measure-Object -Maximum).Maximum + 1 }
+                # 파일이 CR 개행이므로 덧붙이는 줄도 CR로 맞춘다
+                $Snippet = [IO.File]::ReadAllText($WidthProfileSrc).Replace("{N}", "$Next")
+                $Snippet = $Snippet -replace "`r`n", "`n"
+                $Snippet = $Snippet -replace "`n", "`r"
+                if (Test-Path $WpFile) {
+                    Copy-Item -Path $WpFile -Destination "$WpFile.bak" -Force
+                    [IO.File]::WriteAllText($WpFile, $Existing + $Snippet)
+                    Write-Host "  폭 프로파일 추가 완료 -> $WpFile (collection$Next, 백업: $WpFile.bak)"
+                } else {
+                    [IO.File]::WriteAllText($WpFile, $Snippet)
+                    Write-Host "  폭 프로파일 새로 생성 -> $WpFile"
+                }
+            }
+        }
+    }
+} else {
+    Write-Host "  폭 프로파일 파일 없음(건너뜀): $WidthProfileSrc"
+}
+
 Write-Host ""
 Write-Host "파일 복사 끝. 남은 단계:"
 Write-Host "  1) 일러스트 실행"
 Write-Host "  2) 파일 > 스크립트 > setup 실행 (환경설정 + 액션 적용)"
 Write-Host "  3) 편집 > 키보드 단축키 에서 'cjh250907' 세트 1회 선택"
 Write-Host "  4) 일러스트 재시작"
+Write-Host "  5) 획 패널의 프로파일 목록에 '폭 속성1'이 보이는지 확인"
