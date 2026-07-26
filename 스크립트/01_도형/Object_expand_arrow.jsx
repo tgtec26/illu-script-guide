@@ -45,7 +45,7 @@
     if (!hasWidthProfile(profileName)) {
         alert("화살표는 적용했지만 가변 폭 프로파일 '" + profileName + "'을(를) 찾지 못했습니다.\n\n" +
             "이 기기에 프로파일이 아직 등록되지 않은 상태입니다.\n" +
-            "일러스트레이터를 완전히 종료한 뒤 script-action-update 를 다시 실행하면 자동으로 등록됩니다.\n\n" +
+            "일러스트레이터를 완전히 종료한 뒤 setup(세팅) 명령을 다시 실행하면 자동으로 등록됩니다.\n\n" +
             "직접 만들려면: 선을 하나 그린 뒤 폭 도구로 시작점 폭을 0까지 줄이고,\n" +
             "획 패널의 프로파일 목록에서 '프로파일에 추가'로 '" + profileName + "' 이름으로 저장하세요.");
     }
@@ -131,30 +131,6 @@
         }
     }
 
-    function applyProfileActionToPaths(doc, paths, profileName) {
-        var actionSetName = "Codex_ExpandArrowProfile";
-        var actionName = "Profile";
-        var actionFile = new File(Folder.temp + "/Codex_ExpandArrowProfile.aia");
-
-        try {
-            doc.selection = null;
-            for (var i = 0; i < paths.length; i++) {
-                paths[i].selected = true;
-            }
-
-            removeActionSetIfLoaded(actionSetName);
-            writeProfileAction(actionFile, actionSetName, actionName, profileName);
-            app.loadAction(actionFile);
-            app.doScript(actionName, actionSetName);
-        } catch(e) {
-            // Profile names are localized; the base arrow style remains applied.
-        } finally {
-            removeActionSetIfLoaded(actionSetName);
-            try {
-                actionFile.remove();
-            } catch(removeError) {}
-        }
-    }
 
     function writeArrowAction(actionFile, actionSetName, actionName, arrowName, profileName) {
         var lines = [];
@@ -210,41 +186,6 @@
         lines.push("    }");
     }
 
-    function writeProfileAction(actionFile, actionSetName, actionName, profileName) {
-        var lines = [];
-
-        lines.push("/version 3");
-        lines.push("/name [ " + actionSetName.length);
-        lines.push("    " + asciiHex(actionSetName));
-        lines.push("]");
-        lines.push("/isOpen 1");
-        lines.push("/actionCount 1");
-        lines.push("/action-1 {");
-        lines.push("    /name [ " + actionName.length);
-        lines.push("        " + asciiHex(actionName));
-        lines.push("    ]");
-        lines.push("    /keyIndex 0");
-        lines.push("    /colorIndex 0");
-        lines.push("    /isOpen 1");
-        lines.push("    /eventCount 1");
-        lines.push("    /event-1 {");
-        lines.push("        /useRulersIn1stQuadrant 0");
-        lines.push("        /internalName (ai_plugin_setStroke)");
-        lines.push("        /localizedName [ 10");
-        lines.push("            536574205374726F6B65");
-        lines.push("        ]");
-        lines.push("        /isOpen 1");
-        lines.push("        /isOn 1");
-        lines.push("        /hasDialog 0");
-        lines.push("        /parameterCount 1");
-
-        addUStringParameter(lines, 1, 2003858022, profileName);
-
-        lines.push("    }");
-        lines.push("}");
-
-        writeActionFile(actionFile, lines);
-    }
 
     function writeActionFile(actionFile, lines) {
         actionFile.encoding = "UTF-8";

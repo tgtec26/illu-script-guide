@@ -1,60 +1,48 @@
-# Illustrator Scripts Update
-
-이 저장소 최신 스크립트를 현재 기기 Illustrator Scripts 폴더로 복사합니다.
+# Illustrator 스크립트 세팅 / 업데이트
 
 저장소: https://github.com/tgtec26/illu-script-guide.git
 
-## macOS
+명령은 하나뿐이고, 항상 전체(스크립트 + 단축키 + 화살표 + 폭 프로파일)를 맞춘다.
 
-1. `script-action-update-mac.command` 더블클릭
-2. GitHub 로그인/권한 요청이 나오면 승인
-3. 관리자 암호 요청이 나오면 입력
-4. Illustrator 재시작
+- macOS: `setup-mac.command` 더블클릭
+- Windows: `setup-windows.cmd` 더블클릭
 
-## Windows
+일러스트레이터는 **종료한 상태**에서 실행한다. 폭 프로파일은 일러스트레이터가 종료할 때 파일을 덮어쓰므로, 실행 중이면 그 단계만 건너뛴다.
 
-1. `script-action-update-windows.cmd` 더블클릭
-2. 권한 확인 창이 나오면 `예` 선택
-3. GitHub 로그인/권한 요청이 나오면 승인
-4. Illustrator 재시작
+## 설치 방식
 
-## 동작
+스크립트는 복사하지 않고 **원본을 실행하는 한 줄짜리 스텁**으로 등록한다.
 
-- GitHub 저장소 최신본을 `~/.illu-script-updater` 또는 `%USERPROFILE%\.illu-script-updater`에 받습니다.
-- 최신 Illustrator 설치 폴더를 자동으로 찾습니다.
-- `스크립트` 폴더 안의 카테고리 폴더만 Illustrator Scripts 폴더에 동기화합니다.
-- 다른 사용자가 따로 넣은 루트 스크립트는 건드리지 않습니다.
+- 스크립트 내용을 고치면 재실행 없이 바로 반영된다.
+- 스크립트 파일을 **추가·삭제·이름변경**했을 때만 이 명령을 다시 실행한다.
+- 심볼릭 링크를 쓰지 않는 이유: 일러스트레이터가 스크립트 폴더의 링크를 건너뛰어 메뉴에 나오지 않는다.
+
+원본 위치는 실행 위치에 따라 자동으로 정해진다.
+
+- 저장소 안에서 실행 → 그 저장소를 원본으로 사용 (작업 기기)
+- 그 외 → GitHub 사본(`~/.illu-script-updater`)을 받아 원본으로 사용 (새 기기)
+
+## 하는 일
+
+1. GitHub 최신본 확인
+2. 스크립트를 일러스트레이터 스크립트 폴더에 스텁으로 등록 (한글 폴더명은 NFC로 맞춤)
+3. 단축키 `cjh250907.kys` → 설정 폴더
+4. `화살표.ai` → 설치 폴더 Resources (이미 같으면 건너뜀)
+5. 가변 폭 프로파일 `폭 속성1` → 프리셋 파일에 병합 (이미 있으면 건너뜀, 기존 파일은 `.bak`으로 백업)
+
+## 실행 후 남은 단계
+
+1. 일러스트레이터 실행
+2. **파일 > 스크립트 > setup** 실행 — 단위 mm, 키 증감 0.05mm, 문자 크기/행간 증감 1pt, 고정점/핸들 최대, 기본 액션 제거 후 내 액션 로드
+3. **편집 > 키보드 단축키**에서 `cjh250907` 세트 1회 선택
+4. 일러스트레이터 재시작 — 단위·문자 증감 등은 재시작 후 반영
+5. 획 패널 프로파일 목록에 `폭 속성1`이 보이는지 확인
 
 ## 필요 조건
 
 - Git 설치 필요
 - 저장소가 private이면 GitHub 접근 권한 필요
+- macOS는 스크립트 폴더 소유권 변경에 최초 1회 관리자 암호가 필요하다. 이후 실행은 암호 없이 진행된다.
+- Windows는 관리자 권한으로 자동 상승한다.
 
-## 새 PC 최초 세팅 (전체)
-
-스크립트뿐 아니라 단축키·화살표·환경설정·액션까지 한 번에 맞춘다.
-
-### 1. 파일 복사 (단축키 + 화살표 + 스크립트)
-
-- macOS: 일러스트를 **종료**한 상태에서 `full-update-mac.command` 더블클릭 (← 전체 세팅 전용)
-- Windows: 일러스트를 **종료**한 상태에서 `full-update-windows.cmd` 더블클릭 (← 전체 세팅 전용)
-- 권한 확인 창이 나오면 `예`
-- 동작: GitHub 최신본 → 스크립트(`Scripts` 폴더), 단축키(`cjh250907.kys` → 설정 폴더), 화살표(`화살표.ai` → 설치 폴더 Resources) 복사
-- (참고) `full-update-mac.command` = `script-action-update-mac.command --full` 호출 런처. 터미널에서 `script-action-update-mac.command --full` 해도 동일. 그냥 `script-action-update-mac.command`(더블클릭)는 **스크립트만** 갱신.
-- (참고) `full-update-windows.cmd` = `script-action-update-windows.ps1 -Full` 호출 런처. 터미널에서 `script-action-update-windows.cmd -Full` 해도 동일. 그냥 `script-action-update-windows.cmd`(더블클릭)는 **스크립트만** 갱신.
-
-### 2. 환경설정 + 액션 적용
-
-- 일러스트 실행 → **파일 > 스크립트 > setup** 실행
-- 적용: 단위 mm · 키 증감 0.05mm · 문자 크기/행간 증감 1pt · 고정점/핸들 최대 · 기본 액션 제거 후 내 액션 로드
-- 실행 후 뜨는 alert에서 적용값 확인
-
-### 3. 단축키 세트 선택 (1회)
-
-- 편집 > 키보드 단축키 → 세트에서 `cjh250907` 선택
-
-### 4. 일러스트 재시작
-
-- 단위·문자 증감 등 일부 항목은 재시작 후 반영됨
-
-> 참고: 단위/액션 값은 기존 PC에서 추출해 그대로 복제한 값이다. 설정을 바꾸면 `스크립트/00_세팅/setup.jsx`의 값과 `cjh250907.kys`·`화살표.ai`를 다시 떠서 갱신한다.
+> 단위·액션 값은 기존 기기에서 추출해 복제한 값이다. 설정을 바꾸면 `스크립트/00_세팅/setup.jsx`의 값과 `cjh250907.kys`·`화살표.ai`를 다시 떠서 갱신한다.

@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-param([switch]$Full)   # -Full: 스크립트 + 단축키(.kys) + 화살표(.ai)까지 (새 PC 최초 세팅). 생략 시 스크립트만.
+param()   # 항상 전체 세팅: 스크립트 + 단축키(.kys) + 화살표(.ai) + 폭 프로파일
 $ErrorActionPreference = "Stop"
 
 $RepoUrl = "https://github.com/tgtec26/illu-script-guide.git"
@@ -7,9 +7,9 @@ $CacheDir = Join-Path $env:USERPROFILE ".illu-script-updater\illu-script-guide"
 $SourceSubdir = "스크립트"
 $KysName = "cjh250907.kys"
 $ArrowName = "화살표.ai"
-$WidthProfileName = "가변폭속성_폭속성1.txt"
+$WidthProfileName = "폭속성1.txt"
 
-Write-Host ("illu-script {0} (Windows)" -f $(if ($Full) { "새 PC 세팅 (-Full)" } else { "updater" }))
+Write-Host "illu-script 세팅/업데이트 (Windows)"
 
 function Test-IsAdministrator {
     $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -26,7 +26,6 @@ function Restart-AsAdministrator {
         "-ExecutionPolicy", "Bypass",
         "-File", "`"$PSCommandPath`""
     )
-    if ($Full) { $Arguments += "-Full" }
     Start-Process -FilePath $PowerShellExe -ArgumentList $Arguments -Verb RunAs | Out-Null
     exit
 }
@@ -67,16 +66,30 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-if (Test-Path (Join-Path $CacheDir ".git")) {
-    Write-Host "GitHub 최신본 확인 중..."
-    git -C $CacheDir pull --ff-only
+# 저장소 안에서 실행하면 그 저장소를, 아니면 GitHub 사본을 원본으로 쓴다.
+# 스크립트는 원본을 그대로 실행하는 방식으로 설치하므로, 원본이 갱신되면 즉시 반영된다.
+$SelfDir = Split-Path -Parent $PSCommandPath
+if (Test-Path (Join-Path $SelfDir $SourceSubdir)) {
+    $RepoDir = $SelfDir
+    Write-Host "원본: 이 저장소 ($RepoDir)"
+    if (Test-Path (Join-Path $RepoDir ".git")) {
+        Write-Host "GitHub 최신본 확인 중..."
+        try { git -C $RepoDir pull --ff-only } catch { Write-Host "  (pull 실패, 현재 상태로 진행)" }
+    }
 } else {
-    Write-Host "GitHub 저장소 내려받는 중..."
-    New-Item -ItemType Directory -Force -Path (Split-Path $CacheDir) | Out-Null
-    git clone $RepoUrl $CacheDir
+    $RepoDir = $CacheDir
+    Write-Host "원본: GitHub 사본 ($RepoDir)"
+    if (Test-Path (Join-Path $CacheDir ".git")) {
+        Write-Host "GitHub 최신본 확인 중..."
+        git -C $CacheDir pull --ff-only
+    } else {
+        Write-Host "GitHub 저장소 내려받는 중..."
+        New-Item -ItemType Directory -Force -Path (Split-Path $CacheDir) | Out-Null
+        git clone $RepoUrl $CacheDir
+    }
 }
 
-$SourceDir = Join-Path $CacheDir $SourceSubdir
+$SourceDir = Join-Path $RepoDir $SourceSubdir
 if (-not (Test-Path $SourceDir)) {
     throw "스크립트 폴더를 찾지 못했습니다: $SourceDir"
 }
@@ -133,27 +146,44 @@ if (-not (Test-IsAdministrator)) {
 
 New-Item -ItemType Directory -Force -Path $TargetPath | Out-Null
 
-Get-ChildItem -Path $SourceDir -Force | Where-Object { $_.Name -ne ".DS_Store" } | ForEach-Object {
-    $Destination = Join-Path $TargetPath $_.Name
-    if ($_.PSIsContainer) {
-        if (Test-Path $Destination) {
-            Remove-Item -Path $Destination -Recurse -Force
-        }
-        Copy-Item -Path $_.FullName -Destination $Destination -Recurse -Force
-    } else {
-        Copy-Item -Path $_.FullName -Destination $TargetPath -Force
+# Illustrator는 스크립트 폴더 안의 링크를 건너뛴다.
+# 그래서 실제 폴더를 만들고, 원본을 그대로 실행하는 한 줄짜리 스텁을 넣는다.
+# 원본을 고치거나 git pull 하면 재실행 없이 바로 반영된다.
+$StubCount = 0
+Get-ChildItem -Path $SourceDir -Directory | ForEach-Object {
+    $Dir = Join-Path $TargetPath $_.Name
+    if (Test-Path $Dir) {
+        $Existing = Get-Item -LiteralPath $Dir
+        if ($Existing.LinkType) { Remove-Item -LiteralPath $Dir -Force }
     }
+    New-Item -ItemType Directory -Force -Path $Dir | Out-Null
+
+    # 이전에 만든 스텁 제거 (이름이 바뀌거나 삭제된 스크립트 정리)
+    Get-ChildItem -Path $Dir -Filter *.jsx -File -ErrorAction SilentlyContinue | Remove-Item -Force
+
+    Get-ChildItem -Path $_.FullName -Filter *.jsx -File | ForEach-Object {
+        $Stub = Join-Path $Dir $_.Name
+        $Body = @(
+            "// 자동 생성 로더 - 직접 수정하지 마세요.",
+            "// 원본: $($_.FullName)",
+            "`$.evalFile(new File(`"$($_.FullName.Replace('\','/'))`"));"
+        ) -join "`n"
+        [IO.File]::WriteAllText($Stub, $Body, (New-Object Text.UTF8Encoding $false))
+        $script:StubCount++
+    }
+
+    # setup.jsx가 자기 폴더에서 액션 파일을 찾으므로 .aia는 실물로 함께 둔다
+    Get-ChildItem -Path $_.FullName -Filter *.aia -File -ErrorAction SilentlyContinue | ForEach-Object {
+        Copy-Item -Path $_.FullName -Destination (Join-Path $Dir $_.Name) -Force
+    }
+
+    Write-Host "  등록: $($_.Name)"
 }
 
-Write-Host "  스크립트 복사 완료 -> $TargetPath"
-
-if (-not $Full) {
-    Write-Host "완료. Illustrator가 열려 있다면 재시작하세요."
-    return
-}
+Write-Host "  스크립트 $StubCount개 등록 완료 -> $TargetPath"
 
 # -Full: 단축키(.kys) → 설정 폴더 ko_KR\x64 (없으면 ko_KR)
-$KysSrc = Join-Path $CacheDir $KysName
+$KysSrc = Join-Path $RepoDir $KysName
 if (Test-Path $KysSrc) {
     $SettingsBase = Join-Path $env:APPDATA "Adobe\Adobe Illustrator $Ver Settings\ko_KR"
     $SettingsDir = Join-Path $SettingsBase "x64"
@@ -168,7 +198,7 @@ if (Test-Path $KysSrc) {
 }
 
 # -Full: 화살표(.ai) → 설치 폴더 Resources (덮어쓰기)
-$ArrowSrc = Join-Path $CacheDir $ArrowName
+$ArrowSrc = Join-Path $RepoDir $ArrowName
 $ArrowDir = Join-Path $AppDir.FullName "Support Files\Required\Resources\ko_KR"
 if ((Test-Path $ArrowSrc) -and (Test-Path $ArrowDir)) {
     Copy-Item -Path $ArrowSrc -Destination (Join-Path $ArrowDir $ArrowName) -Force
@@ -181,7 +211,7 @@ if ((Test-Path $ArrowSrc) -and (Test-Path $ArrowDir)) {
 
 # -Full: 가변 폭 프로파일 "폭 속성1" 등록
 # Illustrator는 종료할 때 이 파일을 메모리 내용으로 덮어쓰므로, 실행 중이면 건너뛴다.
-$WidthProfileSrc = Join-Path $CacheDir $WidthProfileName
+$WidthProfileSrc = Join-Path $RepoDir $WidthProfileName
 if (Test-Path $WidthProfileSrc) {
     if (Get-Process -Name "Illustrator" -ErrorAction SilentlyContinue) {
         Write-Host "  폭 프로파일 건너뜀 (Illustrator 실행 중)"
@@ -222,9 +252,12 @@ if (Test-Path $WidthProfileSrc) {
 }
 
 Write-Host ""
-Write-Host "파일 복사 끝. 남은 단계:"
+Write-Host "설치 끝. 남은 단계:"
 Write-Host "  1) 일러스트 실행"
 Write-Host "  2) 파일 > 스크립트 > setup 실행 (환경설정 + 액션 적용)"
 Write-Host "  3) 편집 > 키보드 단축키 에서 'cjh250907' 세트 1회 선택"
 Write-Host "  4) 일러스트 재시작"
 Write-Host "  5) 획 패널의 프로파일 목록에 '폭 속성1'이 보이는지 확인"
+Write-Host ""
+Write-Host "이후 스크립트 내용 수정은 원본만 고치면 바로 반영됩니다."
+Write-Host "스크립트 파일을 추가·삭제·이름변경했을 때만 이 명령을 다시 실행하세요."
