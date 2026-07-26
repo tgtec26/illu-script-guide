@@ -1,13 +1,18 @@
 /*
   Illustrator Script: Apply Expanding Arrow Style
-  Description: 선택한 패스에 8pt 선, 끝 화살표 3번(20%), 폭 속성1을 적용합니다.
+  Description: 선택한 패스에 확장 화살표(선 + 끝 화살표 3 + 폭 속성1)를 적용합니다.
+               면으로 확장할지, 확장한 면에 흰색 선을 넣을지 옵션으로 고릅니다.
 */
 
-(function() {
-    if (app.documents.length === 0) return;
+#include "Object_expand_arrow_helper.jsxinc"
 
-    var STROKE_WIDTH_PT = 8;
-    var ARROW_SCALE = 20;
+(function() {
+    if (app.documents.length === 0) {
+        alert("문서를 먼저 열어주세요.");
+        return;
+    }
+
+    var PREF_KEY = "ObjectExpandArrow/settings";
 
     var doc = app.activeDocument;
     var sel = doc.selection;
@@ -17,310 +22,281 @@
         return;
     }
 
-    var paths = [];
+    var sourcePaths = [];
     for (var i = 0; i < sel.length; i++) {
-        collectPathItems(sel[i], paths);
+        collectPathItems(sel[i], sourcePaths);
     }
 
-    if (paths.length === 0) {
+    if (sourcePaths.length === 0) {
         alert("선택 항목 안에 적용 가능한 패스가 없습니다.");
         return;
     }
 
-    var originalSelection = getSelectionArray(doc);
+    var strokeWidthPt = 8;
+    var arrowScale = 20;
+    var expandToFill = true;
+    var addWhiteLine = true;
+    var whiteLineWidthPt = 0.3;
+    var previewEnabled = true;
+    var previewItems = [];
 
-    for (var p = 0; p < paths.length; p++) {
-        applyBaseStroke(paths[p]);
+    applySavedSettings();
+
+    var LABEL_WIDTH = 74;
+    var STEP_BUTTON_WIDTH = 26;
+
+    var dlg = new Window("dialog", "확장 화살표");
+    dlg.orientation = "column";
+    dlg.alignChildren = "fill";
+    dlg.spacing = 6;
+    dlg.margins = 12;
+
+    var strokePanel = addPanel(dlg, "선");
+    var strokeField = addNumberField(strokePanel, "획 굵기", "pt", strokeWidthPt, 0.5, 0.5, 200);
+    var arrowField = addNumberField(strokePanel, "화살표 크기", "%", arrowScale, 1, 1, 1000);
+
+    var outlinePanel = addPanel(dlg, "확장");
+    var expandCheck = outlinePanel.add("checkbox", undefined, "선을 면으로 확장 (화살촉과 몸통 합치기)");
+    expandCheck.value = expandToFill;
+    var whiteRow = outlinePanel.add("group");
+    whiteRow.alignChildren = ["left", "center"];
+    var whiteCheck = whiteRow.add("checkbox", undefined, "흰색 선 추가");
+    whiteCheck.value = addWhiteLine;
+    var whiteField = addNumberField(whiteRow, "", "pt", whiteLineWidthPt, 0.1, 0.1, 20, true);
+
+    var footer = dlg.add("group");
+    var previewCheck = footer.add("checkbox", undefined, "미리보기");
+    previewCheck.value = previewEnabled;
+    var footerSpacer = footer.add("group");
+    footerSpacer.alignment = ["fill", "center"];
+    var okButton = footer.add("button", undefined, "확인", {name: "ok"});
+    var cancelButton = footer.add("button", undefined, "취소", {name: "cancel"});
+
+    expandCheck.onClick = function() {
+        expandToFill = expandCheck.value;
+        updateWhiteEnabled();
+        updatePreview();
+    };
+    whiteCheck.onClick = function() {
+        addWhiteLine = whiteCheck.value;
+        updatePreview();
+    };
+    previewCheck.onClick = function() {
+        previewEnabled = previewCheck.value;
+        updatePreview();
+    };
+    okButton.onClick = function() {
+        if (!readFields(true)) return;
+        dlg.close(1);
+    };
+
+    updateWhiteEnabled();
+
+    // 원본은 숨겨두고 복제본으로 미리보기를 만든다.
+    // 확인하면 그 복제본을 그대로 결과로 쓰고 원본을 지운다.
+    var sourceHidden = [];
+    for (var h = 0; h < sourcePaths.length; h++) {
+        sourceHidden.push(sourcePaths[h].hidden);
     }
+    hideSources(true);
+    updatePreview();
 
-    var locale = getAppLocale();
-    var isKorean = locale === "" || locale.indexOf("ko") === 0;
-    var arrowName = isKorean ? "화살표 3" : "Arrow 3";
-    var profileName = isKorean ? "폭 속성1" : "Width Profile 1";
+    var result = dlg.show();
 
-    applyArrowActionToPaths(doc, paths, arrowName, profileName);
-
-    restoreSelection(doc, originalSelection);
-
-    if (!hasWidthProfile(profileName)) {
-        alert("화살표는 적용했지만 가변 폭 프로파일 '" + profileName + "'을(를) 찾지 못했습니다.\n\n" +
-            "이 기기에 프로파일이 아직 등록되지 않은 상태입니다.\n" +
-            "일러스트레이터를 완전히 종료한 뒤 setup(세팅) 명령을 다시 실행하면 자동으로 등록됩니다.\n\n" +
-            "직접 만들려면: 선을 하나 그린 뒤 폭 도구로 시작점 폭을 0까지 줄이고,\n" +
-            "획 패널의 프로파일 목록에서 '프로파일에 추가'로 '" + profileName + "' 이름으로 저장하세요.");
-    }
-
-    // 프로파일 프리셋 파일에 해당 이름이 있는지 확인한다.
-    // 파일을 읽을 수 없으면 판단을 보류하고 경고를 띄우지 않는다.
-    function hasWidthProfile(name) {
-        try {
-            // 설정 폴더 위치: macOS는 ~/Library/Preferences, Windows는 %APPDATA%
-            var settingsName = "Adobe Illustrator " + parseInt(app.version, 10) + " Settings";
-            var settingsFolder = /mac/i.test($.os)
-                ? Folder(Folder("~/Library/Preferences").fsName + "/" + settingsName)
-                : Folder(Folder.userData.fsName + "/Adobe/" + settingsName);
-            if (!settingsFolder.exists) return true;
-
-            var marker = utf8Hex(name).toLowerCase();
-            var localeFolders = settingsFolder.getFiles(function(f) { return f instanceof Folder; });
-            for (var i = 0; i < localeFolders.length; i++) {
-                var presetFile = File(localeFolders[i].fsName + "/가변 폭 속성");
-                if (!presetFile.exists) continue;
-
-                presetFile.encoding = "UTF-8";
-                presetFile.open("r");
-                var contents = presetFile.read();
-                presetFile.close();
-                if (String(contents).toLowerCase().indexOf(marker) !== -1) return true;
-            }
-            return false;
-        } catch (e) {
-            return true;
+    if (result === 1) {
+        readFields(false);
+        if (previewItems.length === 0) {
+            buildResult(true);
+        }
+        for (var r = 0; r < sourcePaths.length; r++) {
+            try { sourcePaths[r].remove(); } catch (e) {}
+        }
+        doc.selection = null;
+        for (var s = 0; s < previewItems.length; s++) {
+            try { previewItems[s].selected = true; } catch (e2) {}
+        }
+        saveSettings();
+    } else {
+        clearPreview();
+        hideSources(false);
+        doc.selection = null;
+        for (var t = 0; t < sourcePaths.length; t++) {
+            try { sourcePaths[t].selected = true; } catch (e3) {}
         }
     }
+    app.redraw();
 
-    function collectPathItems(item, result) {
-        if (!item) return;
-
-        if (item.typename === "GroupItem") {
-            for (var i = 0; i < item.pageItems.length; i++) {
-                collectPathItems(item.pageItems[i], result);
-            }
-        } else if (item.typename === "CompoundPathItem") {
-            for (var j = 0; j < item.pathItems.length; j++) {
-                result.push(item.pathItems[j]);
-            }
-        } else if (item.typename === "PathItem") {
-            result.push(item);
-        }
-    }
-
-    function applyBaseStroke(pathItem) {
-        try {
-            pathItem.stroked = true;
-            pathItem.filled = false;
-            pathItem.strokeWidth = STROKE_WIDTH_PT;
-            pathItem.strokeCap = StrokeCap.BUTTENDCAP;
-            pathItem.strokeJoin = StrokeJoin.ROUNDENDJOIN;
-            pathItem.strokeDashes = [];
-        } catch(e) {}
-    }
-
-    function applyArrowActionToPaths(doc, paths, arrowName, profileName) {
-        var actionSetName = "Codex_ExpandArrow";
-        var actionName = "Arrow";
-        var actionFile = new File(Folder.temp + "/Codex_ExpandArrow.aia");
-
-        try {
-            doc.selection = null;
-            for (var i = 0; i < paths.length; i++) {
-                paths[i].selected = true;
-            }
-
-            removeActionSetIfLoaded(actionSetName);
-            writeArrowAction(actionFile, actionSetName, actionName, arrowName, profileName);
-            app.loadAction(actionFile);
-            app.doScript(actionName, actionSetName);
-        } catch(e) {
-            // Locale-specific arrow names can fail on non-matching Illustrator installs.
-        } finally {
-            removeActionSetIfLoaded(actionSetName);
+    function hideSources(hidden) {
+        for (var i = 0; i < sourcePaths.length; i++) {
             try {
-                actionFile.remove();
-            } catch(removeError) {}
+                sourcePaths[i].hidden = hidden ? true : sourceHidden[i];
+            } catch (e) {}
         }
     }
 
-
-    function writeArrowAction(actionFile, actionSetName, actionName, arrowName, profileName) {
-        var lines = [];
-
-        lines.push("/version 3");
-        lines.push("/name [ " + actionSetName.length);
-        lines.push("    " + asciiHex(actionSetName));
-        lines.push("]");
-        lines.push("/isOpen 1");
-        lines.push("/actionCount 1");
-        lines.push("/action-1 {");
-        lines.push("    /name [ " + actionName.length);
-        lines.push("        " + asciiHex(actionName));
-        lines.push("    ]");
-        lines.push("    /keyIndex 0");
-        lines.push("    /colorIndex 0");
-        lines.push("    /isOpen 1");
-        lines.push("    /eventCount 1");
-        addArrowStrokeEvent(lines, 1, arrowName, profileName, ARROW_SCALE);
-
-        lines.push("}");
-
-        writeActionFile(actionFile, lines);
+    function updateWhiteEnabled() {
+        whiteRow.enabled = expandCheck.value;
     }
 
-    function addArrowStrokeEvent(lines, eventIndex, arrowName, profileName, arrowScale) {
-        lines.push("    /event-" + eventIndex + " {");
-        lines.push("        /useRulersIn1stQuadrant 0");
-        lines.push("        /internalName (ai_plugin_setStroke)");
-        lines.push("        /localizedName [ 10");
-        lines.push("            536574205374726F6B65");
-        lines.push("        ]");
-        lines.push("        /isOpen 1");
-        lines.push("        /isOn 1");
-        lines.push("        /hasDialog 0");
-        lines.push("        /parameterCount 12");
+    // 원본을 복제해 전체 과정을 적용한다. 미리보기와 최종 결과가 같은 경로를 쓴다.
+    function buildResult(warnMissingProfile) {
+        var copies = [];
+        for (var i = 0; i < sourcePaths.length; i++) {
+            try {
+                var copy = sourcePaths[i].duplicate();
+                copy.hidden = false;
+                copies.push(copy);
+            } catch (e) {}
+        }
 
-        // 파라미터 순서는 Illustrator가 실제로 녹화한 액션과 동일하게 두고,
-        // 녹화본에 없던 폭 프로파일만 맨 뒤에 덧붙인다
-        addUnitRealParameter(lines, 1, 2003072104, STROKE_WIDTH_PT);
-        addEnumeratedParameter(lines, 2, 1667330094, "중단 단면", 0);
-        addRealParameter(lines, 3, 1836344690, 10);
-        addEnumeratedParameter(lines, 4, 1785686382, "각진 연결", 0);
-        addIntegerParameter(lines, 5, 1684825454, 0);
-        addBooleanParameter(lines, 6, 1684104298, 0);
-        addUStringParameter(lines, 7, 1634231345, getNoneArrowName());
-        addUStringParameter(lines, 8, 1634231346, arrowName);
-        addRealParameter(lines, 9, 1634951986, arrowScale);
-        addEnumeratedParameter(lines, 10, 1634230636, "패스 끝의 팁", 0);
-        addEnumeratedParameter(lines, 11, 1634494318, "가운데", 0);
-        addUStringParameter(lines, 12, 2003858022, profileName);
+        if (copies.length === 0) return;
 
-        lines.push("    }");
-    }
+        applyExpandArrow(doc, copies, strokeWidthPt, arrowScale, warnMissingProfile);
 
-
-    function writeActionFile(actionFile, lines) {
-        actionFile.encoding = "UTF-8";
-        actionFile.open("w");
-        actionFile.write(lines.join("\n"));
-        actionFile.close();
-    }
-
-    function addUnitRealParameter(lines, index, key, value) {
-        lines.push("        /parameter-" + index + " {");
-        lines.push("            /key " + key);
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (unit real)");
-        lines.push("            /value " + formatReal(value));
-        lines.push("            /unit 592476268");
-        lines.push("        }");
-    }
-
-    function addRealParameter(lines, index, key, value) {
-        lines.push("        /parameter-" + index + " {");
-        lines.push("            /key " + key);
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (real)");
-        lines.push("            /value " + formatReal(value));
-        lines.push("        }");
-    }
-
-    function addIntegerParameter(lines, index, key, value) {
-        lines.push("        /parameter-" + index + " {");
-        lines.push("            /key " + key);
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (integer)");
-        lines.push("            /value " + value);
-        lines.push("        }");
-    }
-
-    function addBooleanParameter(lines, index, key, value) {
-        lines.push("        /parameter-" + index + " {");
-        lines.push("            /key " + key);
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (boolean)");
-        lines.push("            /value " + value);
-        lines.push("        }");
-    }
-
-    function addEnumeratedParameter(lines, index, key, name, value) {
-        lines.push("        /parameter-" + index + " {");
-        lines.push("            /key " + key);
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (enumerated)");
-        lines.push("            /name [ " + utf8HexLength(name));
-        lines.push("                " + utf8Hex(name));
-        lines.push("            ]");
-        lines.push("            /value " + value);
-        lines.push("        }");
-    }
-
-    function addUStringParameter(lines, index, key, value) {
-        lines.push("        /parameter-" + index + " {");
-        lines.push("            /key " + key);
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (ustring)");
-        lines.push("            /value [ " + utf8HexLength(value));
-        lines.push("                " + utf8Hex(value));
-        lines.push("            ]");
-        lines.push("        }");
-    }
-
-    function getSelectionArray(doc) {
-        var selected = [];
-        try {
-            for (var i = 0; i < doc.selection.length; i++) {
-                selected.push(doc.selection[i]);
-            }
-        } catch(e) {}
-        return selected;
-    }
-
-    function restoreSelection(doc, selected) {
-        try {
-            doc.selection = null;
-            for (var i = 0; i < selected.length; i++) {
-                try {
-                    selected[i].selected = true;
-                } catch(e) {}
-            }
-        } catch(e) {}
-    }
-
-    function removeActionSetIfLoaded(actionSetName) {
-        try {
-            app.unloadAction(actionSetName, "");
-        } catch(e) {}
-    }
-
-    function getAppLocale() {
-        try {
-            return String(app.locale).toLowerCase();
-        } catch(e) {
-            return "";
+        if (expandToFill) {
+            previewItems = outlineExpandArrow(doc, copies, addWhiteLine, whiteLineWidthPt);
+        } else {
+            previewItems = copies;
         }
     }
 
-    function getNoneArrowName() {
-        var locale = getAppLocale();
-        return locale === "" || locale.indexOf("ko") === 0 ? "[없음]" : "[None]";
-    }
-
-    function formatReal(value) {
-        // 일러스트 액션 파서는 real/unit real 값에 소수점을 요구함 (20 → 20.0).
-        return (value % 1 === 0) ? value + ".0" : String(value);
-    }
-
-    function asciiHex(text) {
-        var hex = "";
-        for (var i = 0; i < text.length; i++) {
-            var code = text.charCodeAt(i).toString(16).toUpperCase();
-            while (code.length < 2) code = "0" + code;
-            hex += code;
+    function updatePreview() {
+        clearPreview();
+        if (!previewEnabled) {
+            app.redraw();
+            return;
         }
-        return hex;
-    }
-
-    function utf8Hex(text) {
-        var bytes = unescape(encodeURIComponent(text));
-        var hex = "";
-        for (var i = 0; i < bytes.length; i++) {
-            var code = bytes.charCodeAt(i).toString(16).toUpperCase();
-            while (code.length < 2) code = "0" + code;
-            hex += code;
+        if (!readFields(false)) {
+            app.redraw();
+            return;
         }
-        return hex;
+        buildResult(false);
+        app.redraw();
     }
 
-    function utf8HexLength(text) {
-        return utf8Hex(text).length / 2;
+    function clearPreview() {
+        for (var i = previewItems.length - 1; i >= 0; i--) {
+            try { previewItems[i].remove(); } catch (e) {}
+        }
+        previewItems = [];
+    }
+
+    function readFields(showAlert) {
+        var width = parseNumber(strokeField.input.text);
+        var scale = parseNumber(arrowField.input.text);
+        var whiteWidth = parseNumber(whiteField.input.text);
+
+        if (width === null || width <= 0) {
+            if (showAlert) alert("획 굵기는 0보다 큰 숫자로 입력해주세요.");
+            return false;
+        }
+        if (scale === null || scale <= 0) {
+            if (showAlert) alert("화살표 크기는 0보다 큰 숫자로 입력해주세요.");
+            return false;
+        }
+        if (whiteWidth === null || whiteWidth <= 0) {
+            if (showAlert) alert("흰색 선 굵기는 0보다 큰 숫자로 입력해주세요.");
+            return false;
+        }
+
+        strokeWidthPt = width;
+        arrowScale = scale;
+        whiteLineWidthPt = whiteWidth;
+        expandToFill = expandCheck.value;
+        addWhiteLine = whiteCheck.value;
+        return true;
+    }
+
+    // 라벨 · ◀ · 입력칸 · 단위 · ▶ 를 한 줄에 배치
+    function addNumberField(parent, labelText, unit, value, step, minimum, maximum, compact) {
+        var row = parent.add("group");
+        row.alignChildren = ["left", "center"];
+        if (labelText !== "") {
+            var label = row.add("statictext", undefined, labelText);
+            label.preferredSize.width = compact ? 0 : LABEL_WIDTH;
+        }
+        var down = row.add("button", undefined, "◀");
+        down.preferredSize.width = STEP_BUTTON_WIDTH;
+        var input = row.add("edittext", undefined, formatValue(value));
+        input.characters = 5;
+        input.justify = "center";
+        var up = row.add("button", undefined, "▶");
+        up.preferredSize.width = STEP_BUTTON_WIDTH;
+        row.add("statictext", undefined, unit);
+
+        var field = {row: row, input: input, step: step, minimum: minimum, maximum: maximum};
+        down.onClick = function() { stepField(field, -1); };
+        up.onClick = function() { stepField(field, 1); };
+        // 드래그하듯 값이 바뀔 때마다 액션을 돌리면 느리므로 입력을 마칠 때만 갱신한다
+        input.onChange = function() {
+            var parsed = parseNumber(input.text);
+            if (parsed === null) parsed = field.minimum;
+            input.text = formatValue(clampField(field, parsed));
+            updatePreview();
+        };
+        return field;
+    }
+
+    function stepField(field, direction) {
+        var value = parseNumber(field.input.text);
+        if (value === null) value = field.minimum;
+        value = Math.round((value + (field.step * direction)) / field.step) * field.step;
+        field.input.text = formatValue(clampField(field, value));
+        updatePreview();
+    }
+
+    function clampField(field, value) {
+        if (value < field.minimum) value = field.minimum;
+        if (field.maximum !== undefined && value > field.maximum) value = field.maximum;
+        return value;
+    }
+
+    function addPanel(parent, title) {
+        var panel = parent.add("panel", undefined, title);
+        panel.orientation = "column";
+        panel.alignChildren = "left";
+        panel.spacing = 4;
+        panel.margins = [10, 14, 10, 8];
+        return panel;
+    }
+
+    function parseNumber(text) {
+        var normalized = String(text).replace(/,/g, ".").replace(/^\s+|\s+$/g, "");
+        if (normalized === "") return null;
+        var value = Number(normalized);
+        return isFinite(value) ? value : null;
+    }
+
+    function formatValue(value) {
+        return String(Math.round(value * 100) / 100);
+    }
+
+    function saveSettings() {
+        var parts = [
+            "v1",
+            strokeWidthPt,
+            arrowScale,
+            expandToFill ? "1" : "0",
+            addWhiteLine ? "1" : "0",
+            whiteLineWidthPt
+        ];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function applySavedSettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 6) return;
+
+        var width = parseFloat(p[1]);
+        var scale = parseFloat(p[2]);
+        var whiteWidth = parseFloat(p[5]);
+        if (width > 0) strokeWidthPt = width;
+        if (scale > 0) arrowScale = scale;
+        if (whiteWidth > 0) whiteLineWidthPt = whiteWidth;
+        expandToFill = (p[3] === "1");
+        addWhiteLine = (p[4] === "1");
     }
 })();
