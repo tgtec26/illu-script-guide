@@ -33,8 +33,17 @@
     var savedGap = app.preferences.getStringPreference(PREF_PREFIX + "Gap") || "1";
     var savedShapeStroke = app.preferences.getStringPreference(PREF_PREFIX + "ShapeStroke") || "1";
     var savedConnStroke = app.preferences.getStringPreference(PREF_PREFIX + "ConnStroke") || "1";
-    var savedHexColor = app.preferences.getStringPreference(PREF_PREFIX + "HexColor") || "FFFFFF";
+    var savedInnerK = app.preferences.getStringPreference(PREF_PREFIX + "InnerK") || "0";
+    // 헥사 코드는 특수한 경우에만 쓰므로 기본은 빈 값(= K값 사용)
+    var savedHexColor = app.preferences.getStringPreference(PREF_PREFIX + "InnerHex") || "";
     var savedShade = app.preferences.getStringPreference(PREF_PREFIX + "Shade") === "true";
+
+    var MM = 2.834645; // mm to points conversion
+    var SAMPLES = 2000;
+    var previewEnabled = true;
+    var previewGroups = [];
+    var pathMetrics = [];      // 패스는 변하지 않으므로 길이 계산은 한 번만 하고 재사용
+    var originalHidden = [];
 
     // ── 2. ScriptUI 창 구성 ────────────────────────────────────────────
     var win = new Window("dialog", "중합체 생성기");
@@ -46,59 +55,47 @@
     panelShape.orientation = "row";
     panelShape.alignChildren = ["center", "center"]; // 중앙 정렬
     panelShape.margins = 15;
-    panelShape.spacing = 60; // 라디오 버튼 사이의 일정 간격
-    
+    panelShape.spacing = 20; // 라디오 버튼 사이의 일정 간격
+
     var rCircle = panelShape.add("radiobutton", undefined, "원");
     var rRect = panelShape.add("radiobutton", undefined, "둥근 사각형");
     var rHex = panelShape.add("radiobutton", undefined, "육각형");
-    
+    var rRandom = panelShape.add("radiobutton", undefined, "랜덤");
+    var btnShuffle = panelShape.add("button", undefined, "랜덤 재배치");
+
     if (savedShape === "rect") rRect.value = true;
     else if (savedShape === "hex") rHex.value = true;
+    else if (savedShape === "random") rRandom.value = true;
     else rCircle.value = true;
 
-    // 크기, 간격 및 굵기 패널 (2줄 배치)
+    // 크기, 간격 및 굵기 패널 (2줄 배치, 좌우 버튼으로 증감)
     var panelSize = win.add("panel", undefined, "크기 및 굵기 설정");
     panelSize.orientation = "column";
     panelSize.alignChildren = ["left", "top"];
     panelSize.margins = 15;
     panelSize.spacing = 10;
-    
+
     // 첫 번째 줄: 단위체 가로 폭 / 단위체 선 굵기
     var row1 = panelSize.add("group");
     row1.orientation = "row";
     row1.alignChildren = ["left", "center"];
-    
-    var groupW = row1.add("group");
-    var stW = groupW.add("statictext", undefined, "단위체 가로 폭 (mm):");
-    stW.preferredSize.width = 120; // 텍스트 길이 고정으로 열 맞춤
-    var inW = groupW.add("edittext", undefined, savedWidth);
-    inW.characters = 5;
-    
-    var groupSW = row1.add("group");
-    groupSW.margins = [15, 0, 0, 0]; // 왼쪽 여백 추가
-    var stSW = groupSW.add("statictext", undefined, "단위체 선 굵기 (pt):");
-    stSW.preferredSize.width = 110;
-    var inSW = groupSW.add("edittext", undefined, savedShapeStroke);
-    inSW.characters = 5;
+    var fieldW = addNumberField(row1, "단위체 가로 폭 (mm):", 120, savedWidth, 1, 1);
+    var fieldSW = addNumberField(row1, "단위체 선 굵기 (pt):", 110, savedShapeStroke, 0.1, 0);
+    fieldSW.group.margins = [15, 0, 0, 0];
 
     // 두 번째 줄: 연결선 길이 / 연결선 굵기
     var row2 = panelSize.add("group");
     row2.orientation = "row";
     row2.alignChildren = ["left", "center"];
-    
-    var groupG = row2.add("group");
-    var stG = groupG.add("statictext", undefined, "연결선 길이 (mm):");
-    stG.preferredSize.width = 120;
-    var inG = groupG.add("edittext", undefined, savedGap);
-    inG.characters = 5;
+    var fieldG = addNumberField(row2, "연결선 길이 (mm):", 120, savedGap, 0.1, 0);
+    var fieldCSW = addNumberField(row2, "연결선 굵기 (pt):", 110, savedConnStroke, 0.1, 0);
+    fieldCSW.group.margins = [15, 0, 0, 0];
 
-    var groupCSW = row2.add("group");
-    groupCSW.margins = [15, 0, 0, 0];
-    var stCSW = groupCSW.add("statictext", undefined, "연결선 굵기 (pt):");
-    stCSW.preferredSize.width = 110;
-    var inCSW = groupCSW.add("edittext", undefined, savedConnStroke);
-    inCSW.characters = 5;
-    
+    var inW = fieldW.input;
+    var inSW = fieldSW.input;
+    var inG = fieldG.input;
+    var inCSW = fieldCSW.input;
+
     // 옵션 및 색상 패널
     var panelOpt = win.add("panel", undefined, "색상 옵션");
     panelOpt.orientation = "column";
@@ -106,18 +103,93 @@
     panelOpt.margins = 15;
 
     var groupColor = panelOpt.add("group");
-    groupColor.add("statictext", undefined, "내부 컬러 (Hex 코드): #");
-    var inHexColor = groupColor.add("edittext", undefined, savedHexColor);
+    var fieldK = addNumberField(groupColor, "내부 컬러 (K):", 90, savedInnerK, 10, 0, 100);
+
+    var groupHex = groupColor.add("group");
+    groupHex.margins = [15, 0, 0, 0];
+    groupHex.add("statictext", undefined, "특수 색상 Hex (비우면 K값): #");
+    var inHexColor = groupHex.add("edittext", undefined, savedHexColor);
     inHexColor.characters = 8;
 
-    var chkShade = panelOpt.add("checkbox", undefined, "내부 컬러 무시하고 단위체 내부 랜덤 음영(그레이스케일) 적용");
+    var groupShade = panelOpt.add("group");
+    groupShade.alignChildren = ["left", "center"];
+    var chkShade = groupShade.add("checkbox", undefined, "내부 컬러 무시하고 단위체 내부 랜덤 음영(그레이스케일) 적용");
     chkShade.value = savedShade;
+    var btnShadeShuffle = groupShade.add("button", undefined, "음영 재배치");
 
     // 하단 버튼
     var groupBtn = win.add("group");
     groupBtn.alignment = ["center", "top"];
+    var chkPreview = groupBtn.add("checkbox", undefined, "미리보기");
+    chkPreview.value = true;
     var btnOk = groupBtn.add("button", undefined, "중합체 생성기", {name: "ok"});
     var btnCancel = groupBtn.add("button", undefined, "취소", {name: "cancel"});
+
+    rCircle.onClick = updatePreview;
+    rRect.onClick = updatePreview;
+    rHex.onClick = updatePreview;
+    rRandom.onClick = updatePreview;
+    btnShuffle.onClick = function () {
+        rollShapeSequence();
+        updatePreview();
+    };
+    btnShadeShuffle.onClick = function () {
+        rollShadeSequence();
+        updatePreview();
+    };
+    inHexColor.onChanging = updatePreview;
+    chkShade.onClick = updatePreview;
+    chkPreview.onClick = function () {
+        previewEnabled = chkPreview.value;
+        updatePreview();
+    };
+
+    // 라벨 · ◀ · 입력칸 · ▶ 를 한 줄에 배치. step 단위로 증감한다.
+    function addNumberField(parent, labelText, labelWidth, initialValue, step, minimum, maximum) {
+        var group = parent.add("group");
+        group.orientation = "row";
+        group.alignChildren = ["left", "center"];
+        var label = group.add("statictext", undefined, labelText);
+        label.preferredSize.width = labelWidth;
+        var down = group.add("button", undefined, "◀");
+        down.preferredSize.width = 26;
+        var input = group.add("edittext", undefined, formatValue(parseFloat(initialValue)));
+        input.characters = 5;
+        input.justify = "center";
+        var up = group.add("button", undefined, "▶");
+        up.preferredSize.width = 26;
+
+        var field = {group: group, input: input, step: step, minimum: minimum, maximum: maximum};
+        down.onClick = function () { stepField(field, -1); };
+        up.onClick = function () { stepField(field, 1); };
+        input.onChanging = updatePreview;
+        input.onChange = function () {
+            var value = parseFloat(input.text);
+            if (isNaN(value)) value = minimum;
+            input.text = formatValue(clampField(field, value));
+            updatePreview();
+        };
+        return field;
+    }
+
+    function stepField(field, direction) {
+        var value = parseFloat(field.input.text);
+        if (isNaN(value)) value = field.minimum;
+        value = Math.round((value + (field.step * direction)) / field.step) * field.step;
+        field.input.text = formatValue(clampField(field, value));
+        updatePreview();
+    }
+
+    function clampField(field, value) {
+        if (value < field.minimum) value = field.minimum;
+        if (field.maximum !== undefined && value > field.maximum) value = field.maximum;
+        return value;
+    }
+
+    function formatValue(value) {
+        if (isNaN(value)) return "0";
+        return String(Math.round(value * 100) / 100);
+    }
 
     // ── 3. 수학 및 그리기 로직 함수 ────────────────────────────────────
     function cubicBezier(t, p0, p1, p2, p3) {
@@ -174,12 +246,49 @@
     
     // 색상 관련 함수
     var graySteps = [10, 20, 30, 40, 50, 60, 70, 80];
-    function getRandomFill() {
-        var k = graySteps[Math.floor(Math.random() * graySteps.length)];
+    // 음영·랜덤 모양 순서를 미리 뽑아두고 매번 같은 순서로 쓴다.
+    // 미리보기를 갱신할 때마다 새로 섞이면 결과를 판단할 수 없기 때문이다.
+    // "랜덤 재배치" 버튼이 이 순서를 새로 뽑는다.
+    var randomShapePool = ["circle", "tri", "square", "penta", "hexa"];
+    var shadeSequence = [];
+    var shapeSequence = [];
+    rollShadeSequence();
+    rollShapeSequence();
+
+    function rollShadeSequence() {
+        shadeSequence = [];
+        for (var s = 0; s < 512; s++) {
+            shadeSequence.push(graySteps[Math.floor(Math.random() * graySteps.length)]);
+        }
+    }
+
+    function rollShapeSequence() {
+        shapeSequence = [];
+        for (var s = 0; s < 512; s++) {
+            shapeSequence.push(randomShapePool[Math.floor(Math.random() * randomShapePool.length)]);
+        }
+    }
+    function getShadeFill(index) {
         var c = new CMYKColor();
-        c.cyan = 0; c.magenta = 0; c.yellow = 0; c.black = k;
+        c.cyan = 0; c.magenta = 0; c.yellow = 0;
+        c.black = shadeSequence[index % shadeSequence.length];
         return c;
     }
+    // 내부 색: 헥사 코드가 비어 있으면 K값, 값이 있으면 헥사 코드를 쓴다
+    function getInnerFill(innerK, hexCode) {
+        var hex = String(hexCode).replace(/^\s+|\s+$/g, "").replace(/^#/, "");
+        if (hex !== "") return getHexFill(hex);
+
+        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+            var cmyk = new CMYKColor();
+            cmyk.cyan = 0; cmyk.magenta = 0; cmyk.yellow = 0; cmyk.black = innerK;
+            return cmyk;
+        }
+        var gray = new GrayColor();
+        gray.gray = innerK;
+        return gray;
+    }
+
     function getHexFill(hex) {
         hex = hex.replace(/^#/, '');
         if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
@@ -236,6 +345,32 @@
         }
         return item;
     }
+    // 정다각형: 외접원 지름 d, 꼭짓점 하나가 진행 방향(+x)을 향하도록 배치 후 경로 각도만큼 회전.
+    // 홀수 다각형은 반대쪽이 변의 중심이 되고, 짝수 다각형은 반대쪽도 꼭짓점이 된다.
+    // (정사각형은 마름모 방향) 연결선 접점 계산은 getAttachHalfWidth와 짝을 이룬다.
+    function drawRegularPolygon(container, cx, cy, d, sides, angleDeg, strokeW, strokeColor, fillColor) {
+        var radius = d / 2;
+        var startDeg = 0; // 꼭짓점을 진행 방향으로
+        var item = container.pathItems.add();
+        item.closed      = true;
+        item.filled      = true;
+        item.fillColor   = fillColor;
+        item.stroked     = true;
+        item.strokeColor = strokeColor;
+        item.strokeWidth = strokeW;
+        for (var i = 0; i < sides; i++) {
+            var vertexRad = (startDeg + (360 / sides) * i) * Math.PI / 180;
+            var local = [cx + radius * Math.cos(vertexRad), cy + radius * Math.sin(vertexRad)];
+            var rotated = rotatePoint(local[0], local[1], cx, cy, angleDeg);
+            var pp = item.pathPoints.add();
+            pp.anchor = rotated;
+            pp.leftDirection = rotated;
+            pp.rightDirection = rotated;
+            pp.pointType = PointType.CORNER;
+        }
+        return item;
+    }
+
     var K_BEZIER = 0.5522847;
     function drawRoundedRotatedRect(container, cx, cy, w, h, r, angleDeg, strokeW, strokeColor, fillColor) {
         var hw = w / 2, hh = h / 2;
@@ -270,116 +405,244 @@
         return item;
     }
 
-    // ── 4. 생성 버튼 실행 이벤트 ──────────────────────────────────────
-    btnOk.onClick = function () {
+    // ── 4. 옵션 읽기 · 생성 · 미리보기 ────────────────────────────────
+    function readOptions(showAlert) {
         var wVal = parseFloat(inW.text);
         var gVal = parseFloat(inG.text);
         var swVal = parseFloat(inSW.text);
         var cswVal = parseFloat(inCSW.text);
-        var hexCode = inHexColor.text;
 
         if (isNaN(wVal) || isNaN(gVal) || wVal <= 0 || gVal < 0 || isNaN(swVal) || isNaN(cswVal)) {
-            alert("올바른 숫자(0 이상)를 입력해주세요.");
-            return;
+            if (showAlert) alert("올바른 숫자(0 이상)를 입력해주세요.");
+            return null;
         }
 
         var shapeType = "circle";
         if (rRect.value) shapeType = "rect";
         if (rHex.value)  shapeType = "hex";
-        var useShading = chkShade.value;
+        if (rRandom.value) shapeType = "random";
 
-        // ── 4-1. 현재 설정 저장 ──
-        app.preferences.setStringPreference(PREF_PREFIX + "Shape", shapeType);
+        var kVal = parseFloat(fieldK.input.text);
+        if (isNaN(kVal) || kVal < 0 || kVal > 100) {
+            if (showAlert) alert("내부 컬러 K값은 0부터 100 사이로 입력해주세요.");
+            return null;
+        }
+
+        return {
+            shapeType: shapeType,
+            width: wVal,
+            gap: gVal,
+            shapeStroke: swVal,
+            connStroke: cswVal,
+            innerK: kVal,
+            hexCode: inHexColor.text,
+            useShading: chkShade.value
+        };
+    }
+
+    function saveOptions(options) {
+        app.preferences.setStringPreference(PREF_PREFIX + "Shape", options.shapeType);
         app.preferences.setStringPreference(PREF_PREFIX + "Width", inW.text);
         app.preferences.setStringPreference(PREF_PREFIX + "Gap", inG.text);
         app.preferences.setStringPreference(PREF_PREFIX + "ShapeStroke", inSW.text);
         app.preferences.setStringPreference(PREF_PREFIX + "ConnStroke", inCSW.text);
-        app.preferences.setStringPreference(PREF_PREFIX + "HexColor", hexCode);
-        app.preferences.setStringPreference(PREF_PREFIX + "Shade", useShading ? "true" : "false");
+        app.preferences.setStringPreference(PREF_PREFIX + "InnerK", fieldK.input.text);
+        app.preferences.setStringPreference(PREF_PREFIX + "InnerHex", options.hexCode);
+        app.preferences.setStringPreference(PREF_PREFIX + "Shade", options.useShading ? "true" : "false");
+    }
 
-        var MM       = 2.834645; // mm to points conversion
-        var SHAPE_W  = wVal * MM;
-        var CONN_LEN = gVal * MM;
+    // 연결선이 도형 외곽에 닿는 거리(중심 기준).
+    // side가 "front"면 진행 방향(꼭짓점), "back"이면 반대쪽.
+    // 홀수 다각형(삼각형·오각형)의 반대쪽은 변의 중심이므로 내접원 반지름을 쓴다.
+    // 랜덤 모드에서는 원이 다각형보다 커 보여 90%로 줄인다 (단일 원 모드는 그대로)
+    var RANDOM_CIRCLE_SCALE = 0.9;
+    function getUnitWidth(modeShape, unitShape, shapeWidth) {
+        if (modeShape === "random" && unitShape === "circle") {
+            return shapeWidth * RANDOM_CIRCLE_SCALE;
+        }
+        return shapeWidth;
+    }
+
+    function getAttachHalfWidth(shape, shapeWidth, side) {
+        var radius = shapeWidth / 2;
+        if (side === "back") {
+            if (shape === "tri") return radius * Math.cos(Math.PI / 3);
+            if (shape === "penta") return radius * Math.cos(Math.PI / 5);
+        }
+        return radius;
+    }
+
+    function getPathMetrics(index) {
+        if (!pathMetrics[index]) {
+            pathMetrics[index] = buildCumLen(selectedPaths[index], SAMPLES);
+        }
+        return pathMetrics[index];
+    }
+
+    // 중합체를 그려서 만든 그룹들을 돌려준다. 원본 패스는 건드리지 않는다.
+    function buildPolymers(options) {
+        var SHAPE_W  = options.width * MM;
+        var CONN_LEN = options.gap * MM;
         var UNIT     = SHAPE_W + CONN_LEN;
         var FIRST_OFFSET = SHAPE_W / 2;
-        var SW       = swVal; // 외곽선 굵기는 pt 단위
-        var CONN_SW  = cswVal; // 연결선 굵기는 pt 단위
-        
-        var layer    = doc.activeLayer;
-        var SAMPLES  = 2000;
-        
+        var SW       = options.shapeStroke; // 외곽선 굵기는 pt 단위
+        var CONN_SW  = options.connStroke;  // 연결선 굵기는 pt 단위
+
+        var layer = doc.activeLayer;
+
         // 공통 선 색상 (검은색)
         var black = new CMYKColor();
         black.cyan = 0; black.magenta = 0; black.yellow = 0; black.black = 100;
 
         // 선택된 커스텀 채우기 색상 준비
-        var customFillColor = getHexFill(hexCode);
+        var customFillColor = getInnerFill(options.innerK, options.hexCode);
 
+        var groups = [];
         var skippedCount = 0;
+        var shadeIndex = 0;
 
-        // ── 4-2. 선택된 모든 패스를 순회 ──
         for (var p = 0; p < selectedPaths.length; p++) {
             var path = selectedPaths[p];
-            
+
             var polymerGroup = layer.groupItems.add();
-            polymerGroup.name = shapeType + " 중합체";
-            
-            var result  = buildCumLen(path, SAMPLES);
-            var cum     = result.cum;
-            var total   = result.total;
-            
+            polymerGroup.name = options.shapeType + " 중합체";
+
+            var metrics = getPathMetrics(p);
+            var cum     = metrics.cum;
+            var total   = metrics.total;
+
             var n = Math.floor((total - SHAPE_W + CONN_LEN) / UNIT) + 1;
             if (n < 1) {
                 polymerGroup.remove();
                 skippedCount++;
-                continue; 
+                continue;
             }
-            
+
             for (var i = 0; i < n; i++) {
                 var centerLen = FIRST_OFFSET + UNIT * i;
                 if (centerLen + SHAPE_W/2 > total) break;
-                
+
                 var tC  = getTAtLength(cum, SAMPLES, centerLen);
                 var ptC = getPointOnPath(path, tC);
                 var ang = ptC.angle;
-                
-                // 랜덤 음영을 선택했으면 랜덤 색, 아니면 지정한 헥사 코드 색상 사용
-                var currentFill = useShading ? getRandomFill() : customFillColor;
-                
-                if (shapeType === "circle") {
-                    drawCircle(polymerGroup, ptC.x, ptC.y, SHAPE_W, SW, black, currentFill);
-                } else if (shapeType === "hex") {
+
+                // 랜덤 음영을 선택했으면 미리 뽑아둔 음영, 아니면 지정한 헥사 코드 색상 사용
+                var currentFill = options.useShading ? getShadeFill(shadeIndex) : customFillColor;
+
+                var unitShape = options.shapeType;
+                if (unitShape === "random") {
+                    unitShape = shapeSequence[shadeIndex % shapeSequence.length];
+                }
+                shadeIndex++;
+
+                var unitW = getUnitWidth(options.shapeType, unitShape, SHAPE_W);
+
+                if (unitShape === "circle") {
+                    drawCircle(polymerGroup, ptC.x, ptC.y, unitW, SW, black, currentFill);
+                } else if (unitShape === "hex") {
                     var HEX_H = SHAPE_W / 1.5;
                     drawRotatedHexagon(polymerGroup, ptC.x, ptC.y, SHAPE_W, HEX_H, ang, SW, black, currentFill);
-                } else if (shapeType === "rect") {
+                } else if (unitShape === "rect") {
                     var RECT_H = SHAPE_W * (2.0/3.0);
-                    var RECT_R = SHAPE_W * 0.11;      
+                    var RECT_R = SHAPE_W * 0.11;
                     drawRoundedRotatedRect(polymerGroup, ptC.x, ptC.y, SHAPE_W, RECT_H, RECT_R, ang, SW, black, currentFill);
+                } else if (unitShape === "tri") {
+                    drawRegularPolygon(polymerGroup, ptC.x, ptC.y, SHAPE_W, 3, ang, SW, black, currentFill);
+                } else if (unitShape === "square") {
+                    drawRegularPolygon(polymerGroup, ptC.x, ptC.y, SHAPE_W, 4, ang, SW, black, currentFill);
+                } else if (unitShape === "penta") {
+                    drawRegularPolygon(polymerGroup, ptC.x, ptC.y, SHAPE_W, 5, ang, SW, black, currentFill);
+                } else if (unitShape === "hexa") {
+                    drawRegularPolygon(polymerGroup, ptC.x, ptC.y, SHAPE_W, 6, ang, SW, black, currentFill);
                 }
-                
-                // 연결선 그리기
+
+                // 연결선 그리기: 도형마다 외곽 접점 거리가 다르므로 개별 계산
                 if (CONN_LEN > 0) {
-                    var rightVertex = rotatePoint(ptC.x + SHAPE_W/2, ptC.y, ptC.x, ptC.y, ang);
+                    var frontHalf = getAttachHalfWidth(unitShape, unitW, "front");
+                    var rightVertex = rotatePoint(ptC.x + frontHalf, ptC.y, ptC.x, ptC.y, ang);
                     var nextCenterLen = centerLen + UNIT;
-                    
+
                     if (nextCenterLen + SHAPE_W/2 <= total) {
+                        var nextShape = options.shapeType;
+                        if (nextShape === "random") {
+                            nextShape = shapeSequence[shadeIndex % shapeSequence.length];
+                        }
+                        var backHalf = getAttachHalfWidth(nextShape, getUnitWidth(options.shapeType, nextShape, SHAPE_W), "back");
+
                         var tN          = getTAtLength(cum, SAMPLES, nextCenterLen);
                         var ptN         = getPointOnPath(path, tN);
-                        var leftVertexN = rotatePoint(ptN.x - SHAPE_W/2, ptN.y, ptN.x, ptN.y, ptN.angle);
-                        
+                        var leftVertexN = rotatePoint(ptN.x - backHalf, ptN.y, ptN.x, ptN.y, ptN.angle);
+
                         drawLine(polymerGroup, rightVertex[0], rightVertex[1], leftVertexN[0], leftVertexN[1], CONN_SW, black);
                     }
                 }
             }
-            // 작업 완료된 원본 패스 삭제
-            path.remove();
-        }panelShape.spacing
 
-        if (skippedCount > 0) {
-            alert(skippedCount + "개의 패스는 길이가 너무 짧아 중합체를 생성하지 못했습니다.");
+            groups.push(polymerGroup);
         }
 
-        win.close();
+        return {groups: groups, skipped: skippedCount};
+    }
+
+    function updatePreview() {
+        clearPreview();
+        if (!previewEnabled) {
+            app.redraw();
+            return;
+        }
+
+        var options = readOptions(false);
+        if (options !== null) {
+            previewGroups = buildPolymers(options).groups;
+        }
+        app.redraw();
+    }
+
+    function clearPreview() {
+        for (var i = previewGroups.length - 1; i >= 0; i--) {
+            try { previewGroups[i].remove(); } catch (e) {}
+        }
+        previewGroups = [];
+    }
+
+    function restoreOriginals() {
+        for (var i = 0; i < selectedPaths.length; i++) {
+            try {
+                selectedPaths[i].hidden = originalHidden[i];
+                selectedPaths[i].selected = true;
+            } catch (e) {}
+        }
+    }
+
+    var confirmedOptions = null;
+    btnOk.onClick = function () {
+        confirmedOptions = readOptions(true);
+        if (confirmedOptions === null) return;
+        win.close(1);
     };
-    win.show();
+
+    // 미리보기 동안에는 원본 패스를 숨겨서 최종 결과와 같은 화면을 보여준다
+    for (var h = 0; h < selectedPaths.length; h++) {
+        originalHidden.push(selectedPaths[h].hidden);
+        try { selectedPaths[h].hidden = true; } catch (e) {}
+    }
+    doc.selection = null;
+    updatePreview();
+
+    var result = win.show();
+    clearPreview();
+
+    if (result === 1 && confirmedOptions !== null) {
+        saveOptions(confirmedOptions);
+        var built = buildPolymers(confirmedOptions);
+        for (var r = 0; r < selectedPaths.length; r++) {
+            try { selectedPaths[r].remove(); } catch (e) {}
+        }
+        if (built.skipped > 0) {
+            alert(built.skipped + "개의 패스는 길이가 너무 짧아 중합체를 생성하지 못했습니다.");
+        }
+    } else {
+        restoreOriginals();
+    }
+    app.redraw();
 }());
