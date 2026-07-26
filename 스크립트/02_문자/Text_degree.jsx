@@ -22,6 +22,7 @@
 
     var degreeChar = "˘";
     var fontName = "GSMediumB1";
+    var FONT_SIZE_PT = 8;
 
     var degreeFont;
     try {
@@ -35,18 +36,22 @@
         var story = sel.story;
         var insertIndex = sel.end;
 
-        // 삽입 위치 바로 앞 문자에서 크기/기준선 이동 값을 미리 읽어둔다 (커서만 놓은 경우도 지원)
-        var refSize = null, refBaseline = null;
+        // 삽입 위치 바로 앞 문자에서 기준선 이동 값을 미리 읽어둔다 (첨자 상태를 그대로 따르기 위함)
+        var refBaseline = null;
         if (insertIndex > 0) {
-            var refAttrs = story.characters[insertIndex - 1].characterAttributes;
-            refSize = refAttrs.size;
-            refBaseline = refAttrs.baselineShift;
+            refBaseline = story.characters[insertIndex - 1].characterAttributes.baselineShift;
         }
+
+        // 선택한 숫자에도 같은 서체와 크기를 적용해 도 기호와 어긋나지 않게 한다
+        try {
+            sel.characterAttributes.textFont = degreeFont;
+            sel.characterAttributes.size = FONT_SIZE_PT;
+        } catch (e2) {}
 
         var newChars = story.insertionPoints[insertIndex].characters.add(degreeChar);
         newChars.characterAttributes.textFont = degreeFont;
-        if (refSize !== null) {
-            newChars.characterAttributes.size = refSize;
+        newChars.characterAttributes.size = FONT_SIZE_PT;
+        if (refBaseline !== null) {
             newChars.characterAttributes.baselineShift = refBaseline;
         }
     } catch (e) {

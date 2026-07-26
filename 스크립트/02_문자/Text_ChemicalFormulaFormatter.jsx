@@ -14,8 +14,11 @@
 
 (function () {
 
+    var FONT_NAME = "GSMediumB1";
+    var FONT_SIZE_PT = 8;
+
     if (app.documents.length === 0) {
-        alert("열린 문서가 없습니다.");
+        alert("열린 문서가 없습니다.\n\n서식을 적용할 문서를 먼저 열어 주세요.");
         return;
     }
 
@@ -23,35 +26,104 @@
     var sel = doc.selection;
 
     if (!sel || sel.length === 0) {
-        alert("텍스트 프레임을 선택해 주세요.");
+        alert(buildHelpMessage("선택한 개체가 없습니다."));
         return;
     }
 
-    for (var s = 0; s < sel.length; s++) {
-        var item = sel[s];
-        if (item.typename === "TextFrame") {
-            processTextFrame(item);
-        } else if (item.typename === "GroupItem") {
-            processGroup(item);
+    var textFrames = [];
+    var outlinedCount = 0;
+    collectTextFrames(sel, textFrames);
+
+    if (textFrames.length === 0) {
+        alert(buildHelpMessage("선택한 항목에서 편집 가능한 텍스트를 찾지 못했습니다."));
+        return;
+    }
+
+    var font = getFont(FONT_NAME);
+    var processed = 0;
+
+    for (var t = 0; t < textFrames.length; t++) {
+        try {
+            processTextFrame(textFrames[t], font);
+            processed++;
+        } catch (e) {
+            alert("화학식 서식을 적용하는 중 오류가 발생했습니다.\n\n" +
+                "오류 내용: " + e + (e && e.line ? " (줄 " + e.line + ")" : "") + "\n\n" +
+                "해당 텍스트가 잠겨 있거나 숨겨져 있지 않은지 확인한 뒤 다시 실행해 주세요.");
+            return;
         }
     }
 
-    function processGroup(group) {
-        for (var i = 0; i < group.pageItems.length; i++) {
-            var item = group.pageItems[i];
-            if (item.typename === "TextFrame") {
-                processTextFrame(item);
-            } else if (item.typename === "GroupItem") {
-                processGroup(item);
+    if (font === null) {
+        alert("서식은 적용했지만 " + FONT_NAME + " 서체를 찾지 못해 크기(" + FONT_SIZE_PT + "pt)만 적용했습니다.\n\n" +
+            "해당 서체를 설치한 뒤 다시 실행하면 서체까지 적용됩니다.");
+    }
+
+    // 문자 도구로 글자를 선택한 상태에서는 doc.selection이 개체 배열이 아니라
+    // TextRange라서 selection[i]가 undefined가 된다. 그런 항목은 건너뛴다.
+    function collectTextFrames(selection, frames) {
+        if (!selection) return;
+
+        var count = 0;
+        try { count = selection.length; } catch (e) { return; }
+
+        for (var i = 0; i < count; i++) {
+            var item = null;
+            try { item = selection[i]; } catch (e2) { item = null; }
+            if (!item) continue;
+
+            var typeName = "";
+            try { typeName = String(item.typename); } catch (e3) { continue; }
+
+            if (typeName === "TextFrame") {
+                frames.push(item);
+            } else if (typeName === "GroupItem") {
+                collectTextFrames(item.pageItems, frames);
+            } else if (typeName === "CompoundPathItem" || typeName === "PathItem") {
+                outlinedCount++;
             }
         }
     }
 
-    function processTextFrame(tf) {
+    function buildHelpMessage(reason) {
+        var message = "화학식 서식을 적용하지 못했습니다.\n" +
+            "원인: " + reason + "\n\n" +
+            "이렇게 해 보세요.\n" +
+            "1. 문자 도구(T)로 글자를 편집 중이라면 Esc를 눌러 편집을 끝냅니다.\n" +
+            "2. 선택 도구(V)로 텍스트 개체 전체를 클릭해 선택합니다.\n" +
+            "3. 스크립트를 다시 실행합니다.\n\n" +
+            "참고\n" +
+            "- 문자 도구로 글자만 드래그한 상태에서는 스크립트가 텍스트를 인식하지 못합니다.\n" +
+            "- 잠긴 레이어나 숨긴 개체는 선택되지 않습니다.";
+
+        if (outlinedCount > 0) {
+            message += "\n- 선택한 항목 중 " + outlinedCount + "개는 윤곽선(아웃라인)으로 변환된 도형입니다. " +
+                "이미 글자가 아니라 도형이므로 서식을 적용할 수 없습니다.";
+        }
+
+        return message;
+    }
+
+    function getFont(fontName) {
+        try {
+            return app.textFonts.getByName(fontName);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function processTextFrame(tf, font) {
         var text = tf.contents;
         var len = text.length;
 
         if (len === 0) return;
+
+        // 첨자를 지정하기 전에 서체와 크기를 텍스트 전체에 먼저 적용한다
+        var attributes = tf.textRange.characterAttributes;
+        if (font !== null) {
+            try { attributes.textFont = font; } catch (e) {}
+        }
+        try { attributes.size = FONT_SIZE_PT; } catch (e2) {}
 
         var roles = [];
         for (var i = 0; i < len; i++) {
