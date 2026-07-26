@@ -41,6 +41,7 @@
     var shellCount = 6;
     var cutDeg = 180;
     var rotationDeg = 40;
+    var axisLineOn = true;
     var viewX = 0;
     var viewY = 0;
     var viewZ = 0;
@@ -63,6 +64,8 @@
     var shellField = addNumberField(optionPanel, "껍질 수", "개", shellCount, 1, 2, 9);
     var cutField = addNumberField(optionPanel, "절단 각도", "°", cutDeg, 5, 0, 180);
     var rotationField = addNumberField(optionPanel, "회전", "°", rotationDeg, 5, -180, 180);
+    var axisLineCheck = optionPanel.add("checkbox", undefined, "중심 축 선 표시");
+    axisLineCheck.value = axisLineOn;
 
     var viewPanel = addPanel(dlg, "구를 바라보는 시점");
     var viewXField = addNumberField(viewPanel, "X축", "°", viewX, 5, -180, 180);
@@ -83,6 +86,10 @@
         setFieldValue(viewXField, 0);
         setFieldValue(viewYField, 0);
         setFieldValue(viewZField, 0);
+        updatePreview();
+    };
+    axisLineCheck.onClick = function() {
+        axisLineOn = axisLineCheck.value;
         updatePreview();
     };
     previewCheck.onClick = function() {
@@ -176,6 +183,9 @@
                 [axis[0] * radius, axis[1] * radius],
                 [eB[0] * radius, eB[1] * radius]);
         }
+        function mergedFacePts() { // 축 선 없이 두 절단면을 한 패스로
+            return joinLoop([rimArc(eA, 0, Math.PI), rimArc(eB, Math.PI, 0)]);
+        }
 
         var isFullPlane = cutDeg > 179.99;
 
@@ -265,9 +275,11 @@
             drawBody();
             if (isFullPlane) {
                 drawFaceWithRings(fullFacePts());
-            } else {
+            } else if (axisLineOn) {
                 drawFaceWithRings(facePts(eA));
                 drawFaceWithRings(facePts(eB));
+            } else {
+                drawFaceWithRings(mergedFacePts());
             }
         } else {
             // 절단면 하나만 보임: 절단면을 먼저 그리고 표면(몸체)으로 덮어
@@ -609,7 +621,8 @@
     }
 
     function saveSettings() {
-        var parts = ["v3", shellCount, cutDeg, rotationDeg, viewX, viewY, viewZ];
+        var parts = ["v4", shellCount, cutDeg, rotationDeg, viewX, viewY, viewZ,
+            axisLineOn ? 1 : 0];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -618,7 +631,7 @@
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length < 7) return;
+        if ((p[0] !== "v3" && p[0] !== "v4") || p.length < 7) return;
 
         var shells = parseInt(p[1], 10);
         var cut = parseFloat(p[2]);
@@ -632,5 +645,6 @@
         if (vx >= -180 && vx <= 180) viewX = vx;
         if (vy >= -180 && vy <= 180) viewY = vy;
         if (vz >= -180 && vz <= 180) viewZ = vz;
+        if (p[0] === "v4" && p.length >= 8) axisLineOn = p[7] === "1";
     }
 })();
