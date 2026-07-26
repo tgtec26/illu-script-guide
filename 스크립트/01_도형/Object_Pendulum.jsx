@@ -280,7 +280,7 @@
             var labelDistance = arcRadius + 2.6 * MM;
             var labelX = pivotX - labelDistance * Math.sin(midRadians);
             var labelY = pivotY - labelDistance * Math.cos(midRadians);
-            placeCenteredText(container, "θ", labelX, labelY, color, true);
+            placeCenteredText(container, "θ", labelX, labelY, color, "HyhwpEQ");
         }
 
         function drawLengthLabel(container, actual, radians, color) {
@@ -299,7 +299,7 @@
             var offset = bulge * 0.75 + 3 * MM;
             var labelX = midX - offset * Math.cos(radians);
             var labelY = midY + offset * Math.sin(radians);
-            placeCenteredText(container, lengthLabel, labelX, labelY, color, true);
+            placeCenteredText(container, lengthLabel, labelX, labelY, color, "GSMediItaC1");
             return brace;
         }
 
@@ -342,14 +342,14 @@
     }
 
     // 중심 좌표에 글자를 놓는다. 글리프의 실제 경계를 기준으로 맞춘다.
-    function placeCenteredText(container, contents, cx, cy, color, italic) {
+    function placeCenteredText(container, contents, cx, cy, color, fontName) {
         var frame = container.textFrames.add();
         frame.contents = contents;
 
         var attributes = frame.textRange.characterAttributes;
         attributes.size = 9;
         attributes.fillColor = color;
-        var font = getFont(italic ? "GSMediItaC1" : "GSMediumB1");
+        var font = getFont(fontName);
         if (font !== null) {
             try { attributes.textFont = font; } catch (e) {}
         }
