@@ -18,7 +18,8 @@
     var GAP_MM = 1;
     var dotDiameter = DOT_DIAMETER_MM * MM_TO_PT;
     var gap = GAP_MM * MM_TO_PT;
-    var dotCounts = {top: 0, right: 0, bottom: 0, left: 0};
+    var PREF_KEY = "TextLewisDots/settings";
+    var dotCounts = readSavedDotCounts();
     var previousCoordinateSystem = app.coordinateSystem;
 
     try {
@@ -44,6 +45,7 @@
         buttons.add("button", undefined, "취소", {name: "cancel"});
 
         if (dlg.show() !== 1) return;
+        saveDotCounts();
 
         if (dotCounts.top + dotCounts.right + dotCounts.bottom + dotCounts.left === 0) {
             alert("12시, 3시, 6시, 9시 중 한 곳 이상에 점을 선택해주세요.");
@@ -69,6 +71,26 @@
         app.coordinateSystem = previousCoordinateSystem;
     }
 
+    function saveDotCounts() {
+        var parts = ["v1", dotCounts.top, dotCounts.right, dotCounts.bottom, dotCounts.left];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function readSavedDotCounts() {
+        var counts = {top: 0, right: 0, bottom: 0, left: 0};
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return counts; }
+        if (!raw) return counts;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 5) return counts;
+        var keys = ["top", "right", "bottom", "left"];
+        for (var i = 0; i < keys.length; i++) {
+            var value = parseInt(p[i + 1], 10);
+            if (value === 0 || value === 1 || value === 2) counts[keys[i]] = value;
+        }
+        return counts;
+    }
+
     function addDotCountControls(parent, label, counts, key) {
         var row = parent.add("panel", undefined, label);
         row.orientation = "row";
@@ -76,7 +98,9 @@
         var none = row.add("radiobutton", undefined, "없음");
         var one = row.add("radiobutton", undefined, "1점");
         var two = row.add("radiobutton", undefined, "2점");
-        none.value = true;
+        none.value = (counts[key] === 0);
+        one.value = (counts[key] === 1);
+        two.value = (counts[key] === 2);
         none.onClick = function() { counts[key] = 0; };
         one.onClick = function() { counts[key] = 1; };
         two.onClick = function() { counts[key] = 2; };

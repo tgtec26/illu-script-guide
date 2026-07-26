@@ -26,6 +26,8 @@
     var pendingOffset = targets[0].originalOffset;
     var isApplied = true;
 
+    var PREF_KEY = "ObjectDashShift/settings";
+
     var dlg = new Window("dialog", "파선 패턴 이동");
     dlg.alignChildren = "fill";
 
@@ -42,7 +44,7 @@
 
     var stepGroup = controlPanel.add("group");
     stepGroup.add("statictext", undefined, "이동 간격:");
-    var stepInput = stepGroup.add("edittext", undefined, "0.5");
+    var stepInput = stepGroup.add("edittext", undefined, readSavedStep());
     stepInput.characters = 8;
     stepGroup.add("statictext", undefined, "pt");
 
@@ -81,8 +83,24 @@
 
     okBtn.onClick = function() {
         applyPendingOffset();
+        saveSettings();
         dlg.close(1);
     };
+
+    function saveSettings() {
+        try { app.preferences.setStringPreference(PREF_KEY, ["v1", stepInput.text].join("|")); } catch (e) {}
+    }
+
+    function readSavedStep() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return "0.5"; }
+        if (!raw) return "0.5";
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 2) return "0.5";
+        var step = parseFloat(p[1]);
+        if (isNaN(step) || step <= 0) return "0.5";
+        return String(step);
+    }
 
     cancelBtn.onClick = function() {
         restoreOriginalOffsets();

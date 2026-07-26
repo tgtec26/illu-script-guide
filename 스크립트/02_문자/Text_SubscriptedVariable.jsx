@@ -6,6 +6,9 @@
     win.spacing = 15;
     win.margins = 20;
 
+    var PREF_KEY = "TextSubscriptedVariable/settings";
+    var saved = readSavedSettings();
+
     // --- 글꼴 및 대소문자 옵션 패널 ---
     var pnlOptions = win.add("panel", undefined, "글꼴 및 대소문자 옵션");
     pnlOptions.alignChildren = "left";
@@ -14,12 +17,14 @@
     var grpFont = pnlOptions.add("group");
     var radItalic = grpFont.add("radiobutton", undefined, "이탤릭체");
     var radRoman = grpFont.add("radiobutton", undefined, "로만체");
-    radItalic.value = true; // 기본값: 이탤릭체
+    radItalic.value = (saved.fontStyle !== "Roman"); // 기본값: 이탤릭체
+    radRoman.value = !radItalic.value;
 
     var grpCase = pnlOptions.add("group");
     var radLower = grpCase.add("radiobutton", undefined, "소문자");
     var radUpper = grpCase.add("radiobutton", undefined, "대문자");
-    radLower.value = true; // 기본값: 소문자
+    radLower.value = (saved.textCase !== "Upper"); // 기본값: 소문자
+    radUpper.value = !radLower.value;
 
     // --- 알파벳 선택 패널 ---
     var pnlAlpha = win.add("panel", undefined, "알파벳 선택(다중 선택 가능)");
@@ -248,9 +253,29 @@
         var textCase = radLower.value ? "Lower" : "Upper";
 
         // 배열 데이터를 직접 넘겨서 그리기 함수 실행
+        saveSettings(fontStyle, textCase);
         drawScriptSymbols(fontStyle, textCase, selectedAlphas, selectedNums, selectedIonNums, selectedIonSigns);
         win.close(); // 생성 후 창 닫기
     };
 
     win.show();
+
+    // 알파벳·숫자 체크박스는 매번 다르게 고르므로 저장하지 않는다. 글꼴·대소문자만 기억한다.
+    function saveSettings(fontStyle, textCase) {
+        try {
+            app.preferences.setStringPreference(PREF_KEY, ["v1", fontStyle, textCase].join("|"));
+        } catch (e) {}
+    }
+
+    function readSavedSettings() {
+        var settings = {fontStyle: "Italic", textCase: "Lower"};
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return settings; }
+        if (!raw) return settings;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 3) return settings;
+        if (p[1] === "Italic" || p[1] === "Roman") settings.fontStyle = p[1];
+        if (p[2] === "Lower" || p[2] === "Upper") settings.textCase = p[2];
+        return settings;
+    }
 })();

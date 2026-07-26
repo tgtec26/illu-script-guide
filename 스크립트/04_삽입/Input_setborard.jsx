@@ -5,7 +5,10 @@
 
 #target illustrator
 
+var PREF_KEY = "InputSetBoard/settings";
+
 function main() {
+    var saved = readSavedSettings();
     var dialog = new Window("dialog", "대지 생성기");
     dialog.orientation = "column";
     dialog.alignChildren = "fill";
@@ -22,18 +25,18 @@ function main() {
         "ppt대지 (1280px x 720px)"
     ];
     var dropdown = groupList.add("dropdownlist", undefined, presetItems);
-    dropdown.selection = 0; 
+    dropdown.selection = saved.presetIndex;
 
     var groupCount = dialog.add("group");
     groupCount.alignChildren = "left";
     groupCount.add("statictext", undefined, "대지 개수:");
-    var inputCount = groupCount.add("edittext", undefined, "1");
+    var inputCount = groupCount.add("edittext", undefined, saved.count);
     inputCount.characters = 5;
 
     var groupGap = dialog.add("group");
     groupGap.alignChildren = "left";
     groupGap.add("statictext", undefined, "대지 간격 (mm):");
-    var inputGap = groupGap.add("edittext", undefined, "20");
+    var inputGap = groupGap.add("edittext", undefined, saved.gap);
     inputGap.characters = 5;
 
     var groupBtns = dialog.add("group");
@@ -50,6 +53,8 @@ function main() {
             alert("개수는 1 이상의 숫자여야 합니다.");
             return;
         }
+
+        saveSettings(selectedIndex, inputCount.text, inputGap.text);
 
         var width, height, isPixel;
         switch (selectedIndex) {
@@ -121,3 +126,25 @@ function generateArtboards(w, h, isPixel, count, gapMM) {
 }
 
 main();
+
+function saveSettings(presetIndex, count, gap) {
+    try {
+        app.preferences.setStringPreference(PREF_KEY, ["v1", presetIndex, count, gap].join("|"));
+    } catch (e) {}
+}
+
+function readSavedSettings() {
+    var settings = {presetIndex: 0, count: "1", gap: "20"};
+    var raw = "";
+    try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return settings; }
+    if (!raw) return settings;
+    var p = raw.split("|");
+    if (p[0] !== "v1" || p.length < 4) return settings;
+    var index = parseInt(p[1], 10);
+    if (index >= 0 && index <= 2) settings.presetIndex = index;
+    var count = parseInt(p[2], 10);
+    if (!isNaN(count) && count >= 1) settings.count = String(count);
+    var gap = parseFloat(p[3]);
+    if (!isNaN(gap)) settings.gap = String(gap);
+    return settings;
+}

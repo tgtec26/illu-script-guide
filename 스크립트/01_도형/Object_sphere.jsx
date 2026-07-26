@@ -35,6 +35,9 @@
     var previewGroup = null;
     var sourceWasHidden = source.hidden;
 
+    var PREF_KEY = "ObjectSphere/settings";
+    applySavedSettings();
+
     var dlg = new Window("dialog", "오브젝트 스피어");
     dlg.orientation = "column";
     dlg.alignChildren = "fill";
@@ -174,6 +177,7 @@
             alert("회전 각도는 -180부터 +180 사이로 입력해주세요.");
             return;
         }
+        saveSettings();
         dlg.close(1);
     };
 
@@ -199,6 +203,31 @@
         source.selected = true;
     }
     app.redraw();
+
+    function saveSettings() {
+        var parts = ["v1", longitudeCount, latitudeCount, gridRotation, viewX, viewY, viewZ];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function applySavedSettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 7) return;
+        var lon = parseInt(p[1], 10);
+        var lat = parseInt(p[2], 10);
+        var rot = parseFloat(p[3]);
+        var vx = parseFloat(p[4]);
+        var vy = parseFloat(p[5]);
+        var vz = parseFloat(p[6]);
+        if (lon >= 0 && lon <= 24) longitudeCount = lon;
+        if (lat >= 0 && lat <= 11) latitudeCount = lat;
+        if (rot >= -180 && rot <= 180) gridRotation = rot;
+        if (vx >= -180 && vx <= 180) viewX = vx;
+        if (vy >= -180 && vy <= 180) viewY = vy;
+        if (vz >= -180 && vz <= 180) viewZ = vz;
+    }
 
     function addAngleControls(parent, label, value) {
         var row = parent.add("group");

@@ -81,7 +81,8 @@
     ];
 
     // ===== 다이얼로그 =====
-    var queue = [];   // 클릭한 기호들 {key, label}
+    var PREF_KEY = "ObjectCircuitSymbol/settings";
+    var queue = restoreQueue();   // 클릭한 기호들 {key, label}
     var dlg = new Window("dialog", "회로 기호 삽입");
     dlg.orientation = "column";
     dlg.alignChildren = "fill";
@@ -122,6 +123,34 @@
     btns.alignment = "right";
     btns.add("button", undefined, "취소", { name: "cancel" });
     btns.add("button", undefined, "실행", { name: "ok" });
+
+    // 기호 키 목록만 저장하고, 라벨은 카탈로그에서 다시 찾는다
+    function saveQueue() {
+        var keys = [];
+        for (var i = 0; i < queue.length; i++) keys.push(queue[i].key);
+        try {
+            app.preferences.setStringPreference(PREF_KEY, ["v1", keys.join(",")].join("|"));
+        } catch (e) {}
+    }
+
+    function restoreQueue() {
+        var restored = [];
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return restored; }
+        if (!raw) return restored;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 2) return restored;
+        var keys = p[1].split(",");
+        for (var i = 0; i < keys.length; i++) {
+            for (var j = 0; j < SYMBOLS.length; j++) {
+                if (SYMBOLS[j].key === keys[i]) {
+                    restored.push({ key: SYMBOLS[j].key, label: SYMBOLS[j].label });
+                    break;
+                }
+            }
+        }
+        return restored;
+    }
 
     function makeAddHandler(key, label) {
         return function () {
@@ -164,8 +193,11 @@
     };
     btnClear.onClick = function () { queue = []; refreshSeq(); };
 
+    refreshSeq();
+
     if (dlg.show() !== 1) return;
     if (queue.length === 0) { alert("기호를 하나 이상 선택해주세요."); return; }
+    saveQueue();
 
     // ===== 좌표계: 라인 중심 기준 (u=라인 방향, v=수직 방향) =====
     var p1 = [line.pathPoints[0].anchor[0], line.pathPoints[0].anchor[1]];

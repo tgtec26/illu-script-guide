@@ -26,6 +26,10 @@
         fontName: "GSMediumB1"
     };
 
+    // 입력 텍스트는 선택 문자열에서 가져오므로 저장하지 않는다. 서체·수치 설정만 기억한다.
+    var PREF_KEY = "TextNuclideNotation/settings";
+    applySavedSettings(defaults);
+
     var options = showDialog(defaults);
     if (!options) {
         return;
@@ -127,7 +131,7 @@
             return null;
         }
 
-        return {
+        var result = {
             text: txtInput.text,
             fontSize: readNumber(txtSize.text, values.fontSize),
             numberScale: readNumber(txtScale.text, values.numberScale),
@@ -139,6 +143,32 @@
             symbolTracking: readNumber(txtSymbolTracking.text, values.symbolTracking),
             fontName: txtFont.text || values.fontName
         };
+        saveSettings(result);
+        return result;
+    }
+
+    var NUMERIC_KEYS = ["fontSize", "numberScale", "topBaseline", "bottomBaseline",
+        "symbolBaseline", "topTracking", "bottomTracking", "symbolTracking"];
+
+    function saveSettings(values) {
+        var parts = ["v1"];
+        for (var i = 0; i < NUMERIC_KEYS.length; i++) parts.push(values[NUMERIC_KEYS[i]]);
+        parts.push(values.fontName);
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function applySavedSettings(values) {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < NUMERIC_KEYS.length + 2) return;
+        for (var i = 0; i < NUMERIC_KEYS.length; i++) {
+            var value = parseFloat(p[i + 1]);
+            if (!isNaN(value)) values[NUMERIC_KEYS[i]] = value;
+        }
+        var fontName = p[NUMERIC_KEYS.length + 1];
+        if (fontName) values.fontName = fontName;
     }
 
     function parseNuclideText(text) {

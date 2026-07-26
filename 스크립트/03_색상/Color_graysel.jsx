@@ -22,6 +22,8 @@
     win.margins = 20;
 
     // [패널 1] K값 선택
+    var PREF_KEY = "ColorGraySel/settings";
+
     var panelK = win.add("panel", undefined, "농도(K) 선택");
     panelK.orientation = "column";
     panelK.alignChildren = "left";
@@ -53,7 +55,10 @@
     }
 
     // 기본값 설정 (50K)
-    radios[4].value = true;
+    var savedK = readSavedK();
+    for (var r = 0; r < radios.length; r++) {
+        radios[r].value = (parseInt(radios[r].text, 10) === savedK);
+    }
 
     // [패널 2] 적용 대상 선택
     var panelTarget = win.add("panel", undefined, "적용 대상");
@@ -86,7 +91,26 @@
                 break; 
             }
         }
+        saveK(selectedK);
         applyKColor(selectedK, chkFill.value, chkStroke.value);
+    }
+
+    // 적용 대상(면/선)은 선택한 개체 상태에서 자동으로 정하므로 저장하지 않는다
+    function saveK(value) {
+        try {
+            app.preferences.setStringPreference(PREF_KEY, ["v1", value].join("|"));
+        } catch (e) {}
+    }
+
+    function readSavedK() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return 50; }
+        if (!raw) return 50;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 2) return 50;
+        var value = parseInt(p[1], 10);
+        if (isNaN(value) || value < 10 || value > 100 || value % 10 !== 0) return 50;
+        return value;
     }
 
     // 4. 색상 적용 함수 (수정됨: 순수 K 보정)

@@ -8,6 +8,7 @@
     var MM = 2.83464567;
     var FONT_NAME = "GSMediItaC1";
     var NUCLEUS_FONT_NAMES = ["Spoqa Han Sans Neo", "SpoqaHanSansNeo-Regular", "SpoqaHanSansNeo"];
+    var PREF_KEY = "ObjectBohrQuantumOrbit/settings";
 
     var options = showDialog();
     if (!options) {
@@ -17,6 +18,7 @@
     drawBohrQuantumOrbit(options.maxQuantumNumber, options.displayAngle);
 
     function showDialog() {
+        var saved = readSavedSettings();
         var win = new Window("dialog", "보어 양자 궤도");
         win.orientation = "column";
         win.alignChildren = ["fill", "top"];
@@ -33,12 +35,14 @@
         var q2 = quantumRadios.add("radiobutton", undefined, "2");
         var q3 = quantumRadios.add("radiobutton", undefined, "3");
         var q4 = quantumRadios.add("radiobutton", undefined, "4");
-        q4.value = true;
+        q2.value = (saved.quantumPreset === 2);
+        q3.value = (saved.quantumPreset === 3);
+        q4.value = !q2.value && !q3.value;
 
         var quantumCustomRow = quantumPanel.add("group");
         quantumCustomRow.orientation = "row";
         quantumCustomRow.add("statictext", undefined, "직접 입력");
-        var quantumInput = quantumCustomRow.add("edittext", undefined, "");
+        var quantumInput = quantumCustomRow.add("edittext", undefined, saved.quantumCustom);
         quantumInput.characters = 6;
 
         var anglePanel = win.add("panel", undefined, "표시 각도");
@@ -51,12 +55,14 @@
         var a30 = angleRadios.add("radiobutton", undefined, "30");
         var a45 = angleRadios.add("radiobutton", undefined, "45");
         var a60 = angleRadios.add("radiobutton", undefined, "60");
-        a45.value = true;
+        a30.value = (saved.anglePreset === 30);
+        a60.value = (saved.anglePreset === 60);
+        a45.value = !a30.value && !a60.value;
 
         var angleCustomRow = anglePanel.add("group");
         angleCustomRow.orientation = "row";
         angleCustomRow.add("statictext", undefined, "직접 입력");
-        var angleInput = angleCustomRow.add("edittext", undefined, "");
+        var angleInput = angleCustomRow.add("edittext", undefined, saved.angleCustom);
         angleInput.characters = 6;
 
         var buttons = win.add("group");
@@ -88,10 +94,55 @@
             return null;
         }
 
-        return {
+        var options = {
             maxQuantumNumber: maxQuantumNumber,
             displayAngle: displayAngle
         };
+        saveSettings(options);
+        return options;
+    }
+
+    // 라디오 프리셋과 직접 입력 중 마지막으로 쓴 쪽을 그대로 되살린다
+    function saveSettings(options) {
+        var quantumIsPreset = (options.maxQuantumNumber === 2 ||
+            options.maxQuantumNumber === 3 || options.maxQuantumNumber === 4);
+        var angleIsPreset = (options.displayAngle === 30 ||
+            options.displayAngle === 45 || options.displayAngle === 60);
+        var parts = [
+            "v1",
+            quantumIsPreset ? options.maxQuantumNumber : 4,
+            quantumIsPreset ? "" : options.maxQuantumNumber,
+            angleIsPreset ? options.displayAngle : 45,
+            angleIsPreset ? "" : options.displayAngle
+        ];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function readSavedSettings() {
+        var settings = {quantumPreset: 4, quantumCustom: "", anglePreset: 45, angleCustom: ""};
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return settings; }
+        if (!raw) return settings;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 5) return settings;
+
+        var quantumPreset = parseInt(p[1], 10);
+        if (quantumPreset === 2 || quantumPreset === 3 || quantumPreset === 4) {
+            settings.quantumPreset = quantumPreset;
+        }
+        var quantumCustom = parseNumber(p[2]);
+        if (quantumCustom !== null && quantumCustom >= 1) {
+            settings.quantumCustom = String(Math.round(quantumCustom));
+        }
+        var anglePreset = parseFloat(p[3]);
+        if (anglePreset === 30 || anglePreset === 45 || anglePreset === 60) {
+            settings.anglePreset = anglePreset;
+        }
+        var angleCustom = parseNumber(p[4]);
+        if (angleCustom !== null && angleCustom > 0 && angleCustom < 90) {
+            settings.angleCustom = String(angleCustom);
+        }
+        return settings;
     }
 
     function drawBohrQuantumOrbit(maxQuantumNumber, displayAngle) {

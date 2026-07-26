@@ -136,26 +136,23 @@ try {
     // -------------------------------------------------------
     // 이전 설정 불러오기 (기준 개체 / 간격)
     // -------------------------------------------------------
-    var PREF_FILE = new File(Folder.temp + "/illu_align_position12_pref.txt");
+    // 임시 폴더 파일은 재부팅 시 지워지므로 Illustrator 환경설정에 저장한다
+    var PREF_KEY = "AlignPosition12/settings";
     var pref = { ref: "big", gap: "1.0" };
     try {
-        if (PREF_FILE.exists) {
-            PREF_FILE.encoding = "UTF-8";
-            PREF_FILE.open("r");
-            var raw = PREF_FILE.read();
-            PREF_FILE.close();
+        var raw = app.preferences.getStringPreference(PREF_KEY);
+        if (raw) {
             var parts = raw.split("|");
-            if (parts[0] === "big" || parts[0] === "small") pref.ref = parts[0];
-            if (parts[1] === "0" || parts[1] === "0.5" || parts[1] === "1.0") pref.gap = parts[1];
+            if (parts[0] === "v1" && parts.length >= 3) {
+                if (parts[1] === "big" || parts[1] === "small") pref.ref = parts[1];
+                if (parts[2] === "0" || parts[2] === "0.5" || parts[2] === "1.0") pref.gap = parts[2];
+            }
         }
     } catch (e) {}
 
     function savePref(refMode, gapMode) {
         try {
-            PREF_FILE.encoding = "UTF-8";
-            PREF_FILE.open("w");
-            PREF_FILE.write(refMode + "|" + gapMode);
-            PREF_FILE.close();
+            app.preferences.setStringPreference(PREF_KEY, ["v1", refMode, gapMode].join("|"));
         } catch (e) {}
     }
 

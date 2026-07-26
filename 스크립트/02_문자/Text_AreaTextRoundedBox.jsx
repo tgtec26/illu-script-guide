@@ -4,6 +4,8 @@
         return;
     }
 
+    var PREF_KEY = "TextAreaTextRoundedBox/settings";
+
     var doc = app.activeDocument;
     var sel = doc.selection;
 
@@ -91,6 +93,7 @@
     }
 
     function showOptionsDialog() {
+        var savedTail = readSavedTail();
         var win = new Window("dialog", "말풍선 만들기");
         win.orientation = "column";
         win.alignChildren = "left";
@@ -102,7 +105,9 @@
         var tailLeft = group.add("radiobutton", undefined, "9시");
         var tailBottom = group.add("radiobutton", undefined, "6시");
         var tailRight = group.add("radiobutton", undefined, "3시");
-        tailBottom.value = true;
+        tailLeft.value = (savedTail === "left");
+        tailRight.value = (savedTail === "right");
+        tailBottom.value = !tailLeft.value && !tailRight.value;
 
         var buttons = win.add("group");
         buttons.alignment = "right";
@@ -113,9 +118,27 @@
             return null;
         }
 
-        return {
+        var options = {
             tailPosition: tailLeft.value ? "left" : (tailRight.value ? "right" : "bottom")
         };
+        saveTail(options.tailPosition);
+        return options;
+    }
+
+    function saveTail(tailPosition) {
+        try {
+            app.preferences.setStringPreference(PREF_KEY, ["v1", tailPosition].join("|"));
+        } catch (e) {}
+    }
+
+    function readSavedTail() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return "bottom"; }
+        if (!raw) return "bottom";
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 2) return "bottom";
+        if (p[1] === "left" || p[1] === "right" || p[1] === "bottom") return p[1];
+        return "bottom";
     }
 
     function copySelection(selection) {

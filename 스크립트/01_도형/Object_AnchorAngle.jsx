@@ -4,6 +4,8 @@
         return;
     }
 
+    var PREF_KEY = "ObjectAnchorAngle/settings";
+
     var doc = app.activeDocument;
     var selectedPoints = [];
     var owners = [];
@@ -67,6 +69,8 @@
         var rightPivotRadio = pivotPanel.add("radiobutton", undefined, "오른쪽");
         leftPivotRadio.value = true;
 
+        applySavedSettings();
+
         for (var i = 0; i < presetAngles.length; i++) {
             var presetButton = presetPanel.add("button", undefined, presetAngles[i] + "°");
             presetButton.onClick = makePresetHandler(presetAngles[i]);
@@ -85,6 +89,7 @@
                 return;
             }
             result = {angle: parsed, pivotSide: getPivotSide()};
+            saveSettings(result);
             dlg.close(1);
         };
         cancelButton.onClick = function() { dlg.close(0); };
@@ -92,12 +97,30 @@
         function makePresetHandler(value) {
             return function() {
                 result = {angle: value, pivotSide: getPivotSide()};
+                saveSettings(result);
                 dlg.close(1);
             };
         }
 
         function getPivotSide() {
             return rightPivotRadio.value ? "right" : "left";
+        }
+
+        function saveSettings(settings) {
+            var parts = ["v1", settings.angle, settings.pivotSide];
+            try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+        }
+
+        function applySavedSettings() {
+            var raw = "";
+            try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+            if (!raw) return;
+            var p = raw.split("|");
+            if (p[0] !== "v1" || p.length < 3) return;
+            var savedAngle = parseAngle(p[1]);
+            if (savedAngle !== null) angleInput.text = String(savedAngle);
+            rightPivotRadio.value = (p[2] === "right");
+            leftPivotRadio.value = !rightPivotRadio.value;
         }
 
         angleInput.active = true;

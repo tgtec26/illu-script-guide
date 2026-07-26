@@ -34,6 +34,9 @@
     var coilHeightMm = roundTo(sourceDiameterMm * 2, SIZE_STEP_MM);
     var maxCoilHeightMm = Math.max(SIZE_STEP_MM, roundTo(sourceDiameterMm * 8, SIZE_STEP_MM));
     var turnCount = 6;
+    // 폭·높이는 선택한 원에서 계산하므로 저장하지 않는다. 감는 횟수만 기억한다.
+    var PREF_KEY = "ObjectCoilSpring/settings";
+    applySavedSettings();
     var previewEnabled = true;
     var previewGroup = null;
     var sourceWasHidden = source.hidden;
@@ -164,10 +167,25 @@
         coilWidthMm = roundTo(validWidth, SIZE_STEP_MM);
         coilHeightMm = roundTo(validHeight, SIZE_STEP_MM);
         turnCount = Math.round(validTurns);
+        saveSettings();
         dlg.close(1);
     };
 
     cancelButton.onClick = function() { dlg.close(0); };
+
+    function saveSettings() {
+        try { app.preferences.setStringPreference(PREF_KEY, ["v1", turnCount].join("|")); } catch (e) {}
+    }
+
+    function applySavedSettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 2) return;
+        var turns = parseInt(p[1], 10);
+        if (turns >= MIN_TURNS && turns <= MAX_TURNS) turnCount = turns;
+    }
 
     source.hidden = true;
     source.selected = false;

@@ -32,6 +32,8 @@
     var heightMm = roundTo(diameterMm, HEIGHT_STEP_MM);
     var maxHeightMm = Math.max(HEIGHT_STEP_MM, roundTo(diameterMm * 5, HEIGHT_STEP_MM));
     var viewAngle = 70;
+    var viewY = 0;
+    var viewZ = 0;
     var isVertical = true;
     var divisionsEnabled = false;
     var divisionCount = 2;
@@ -46,112 +48,103 @@
     var previewGroup = null;
     var sourceWasHidden = source.hidden;
 
+    // 지름·높이는 선택한 원에서 계산하므로 저장하지 않는다. 시점·방향·분할선·컬러만 기억한다.
+    var PREF_KEY = "ObjectCylinder/settings";
+    applySavedSettings();
+
+    var LABEL_WIDTH = 58;
+    var SLIDER_WIDTH = 200;
+    var STEP_BUTTON_WIDTH = 30;
+
     var dlg = new Window("dialog", "오브젝트 실린더");
     dlg.orientation = "column";
     dlg.alignChildren = "fill";
+    dlg.spacing = 6;
+    dlg.margins = 12;
 
-    var diameterPanel = dlg.add("panel", undefined, "지름");
-    diameterPanel.orientation = "column";
-    diameterPanel.alignChildren = "fill";
-    var outerDiameterRow = diameterPanel.add("group");
-    outerDiameterRow.add("statictext", undefined, "외경");
-    outerDiameterRow.add("statictext", undefined, formatNumber(diameterMm, 2) + " mm");
-    var innerDiameterRow = diameterPanel.add("group");
-    innerDiameterRow.add("statictext", undefined, "내경(지름)");
-    var innerDiameterInput = innerDiameterRow.add("edittext", undefined, "0.00");
-    innerDiameterInput.characters = 8;
-    innerDiameterRow.add("statictext", undefined, "mm");
-    var innerDiameterSlider = diameterPanel.add(
-        "slider",
-        undefined,
-        innerDiameterMm,
+    var sizePanel = addPanel(dlg, "크기 (외경 " + formatNumber(diameterMm, 2) + "mm)");
+    var innerControls = addValueRow(
+        sizePanel,
+        "내경",
+        "mm",
+        formatNumber(innerDiameterMm, 2),
         0,
-        Math.max(DIAMETER_STEP_MM, maxInnerDiameterMm)
+        Math.max(DIAMETER_STEP_MM, maxInnerDiameterMm),
+        DIAMETER_STEP_MM
     );
-    innerDiameterSlider.preferredSize.width = 360;
-    innerDiameterSlider.stepdelta = DIAMETER_STEP_MM;
+    var innerDiameterInput = innerControls.input;
+    var innerDiameterSlider = innerControls.slider;
+    var heightControls = addValueRow(
+        sizePanel,
+        "높이",
+        "mm",
+        formatNumber(heightMm, 2),
+        0,
+        maxHeightMm,
+        HEIGHT_STEP_MM
+    );
+    var heightInput = heightControls.input;
+    var heightSlider = heightControls.slider;
 
-    var heightPanel = dlg.add("panel", undefined, "원기둥 높이");
-    heightPanel.orientation = "column";
-    heightPanel.alignChildren = "fill";
-    var heightRow = heightPanel.add("group");
-    heightRow.add("statictext", undefined, "높이");
-    var heightInput = heightRow.add("edittext", undefined, formatNumber(heightMm, 2));
-    heightInput.characters = 8;
-    heightRow.add("statictext", undefined, "mm");
-    var heightSlider = heightPanel.add("slider", undefined, heightMm, 0, maxHeightMm);
-    heightSlider.preferredSize.width = 360;
-    heightSlider.stepdelta = HEIGHT_STEP_MM;
+    var viewPanel = addPanel(dlg, "시점");
+    var xControls = addAngleRow(viewPanel, "X축", viewAngle, true);
+    var yControls = addAngleRow(viewPanel, "Y축", viewY, true);
+    var zControls = addAngleRow(viewPanel, "Z축", viewZ, true);
 
-    var viewPanel = dlg.add("panel", undefined, "바라보는 시점");
-    viewPanel.orientation = "column";
-    viewPanel.alignChildren = "fill";
-    var viewRow = viewPanel.add("group");
-    viewRow.add("statictext", undefined, "각도");
-    var viewInput = viewRow.add("edittext", undefined, String(viewAngle));
-    viewInput.characters = 8;
-    viewRow.add("statictext", undefined, "°  (-180 ~ +180)");
-    var viewSlider = viewPanel.add("slider", undefined, viewAngle, -180, 180);
-    viewSlider.preferredSize.width = 360;
+    var shapePanel = addPanel(dlg, "방향 · 분할선");
 
-    var directionPanel = dlg.add("panel", undefined, "원기둥 방향");
-    directionPanel.orientation = "row";
-    var verticalRadio = directionPanel.add("radiobutton", undefined, "상하");
-    var horizontalRadio = directionPanel.add("radiobutton", undefined, "좌우");
-    verticalRadio.value = true;
+    var directionRow = shapePanel.add("group");
+    directionRow.alignChildren = ["left", "center"];
+    var directionLabel = directionRow.add("statictext", undefined, "방향");
+    directionLabel.preferredSize.width = LABEL_WIDTH;
+    var verticalRadio = directionRow.add("radiobutton", undefined, "상하");
+    var horizontalRadio = directionRow.add("radiobutton", undefined, "좌우");
+    verticalRadio.value = isVertical;
+    horizontalRadio.value = !isVertical;
+    var divisionCheck = directionRow.add("checkbox", undefined, "분할선");
+    divisionCheck.value = divisionsEnabled;
+    var countGroup = directionRow.add("group");
+    countGroup.alignChildren = ["left", "center"];
+    var countDownButton = countGroup.add("button", undefined, "◀");
+    countDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
+    var countInput = countGroup.add("edittext", undefined, String(divisionCount));
+    countInput.characters = 4;
+    countInput.justify = "center";
+    var countUpButton = countGroup.add("button", undefined, "▶");
+    countUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
 
-    var divisionPanel = dlg.add("panel", undefined, "분할선");
-    divisionPanel.orientation = "column";
-    divisionPanel.alignChildren = "fill";
-    var divisionCheck = divisionPanel.add("checkbox", undefined, "분할선 표시");
-    divisionCheck.value = false;
+    var rotationControls = addAngleRow(shapePanel, "분할 회전", divisionRotation);
+    var rotationInput = rotationControls.input;
+    var rotationSlider = rotationControls.slider;
+    var rotationRow = rotationControls.row;
 
-    var countRow = divisionPanel.add("group");
-    countRow.add("statictext", undefined, "분할 수");
-    var countInput = countRow.add("edittext", undefined, String(divisionCount));
-    countInput.characters = 8;
-    var countSlider = divisionPanel.add("slider", undefined, divisionCount, 2, 24);
-    countSlider.preferredSize.width = 360;
-    countSlider.stepdelta = 1;
+    setDivisionControlsEnabled(divisionsEnabled);
 
-    var rotationRow = divisionPanel.add("group");
-    rotationRow.add("statictext", undefined, "회전");
-    var rotationInput = rotationRow.add("edittext", undefined, String(divisionRotation));
-    rotationInput.characters = 8;
-    rotationRow.add("statictext", undefined, "°  (-180 ~ +180)");
-    var rotationSlider = divisionPanel.add("slider", undefined, divisionRotation, -180, 180);
-    rotationSlider.preferredSize.width = 360;
-
-    setDivisionControlsEnabled(false);
-
-    var colorPanel = dlg.add("panel", undefined, "컬러");
-    colorPanel.orientation = "column";
-    colorPanel.alignChildren = "fill";
-    var faceRow = colorPanel.add("group");
-    var topFaceRadio = faceRow.add("radiobutton", undefined, "보이는면");
-    var innerFaceRadio = faceRow.add("radiobutton", undefined, "내부");
-    var outerFaceRadio = faceRow.add("radiobutton", undefined, "외부");
+    var colorPanel = addPanel(dlg, "컬러");
+    var colorRow = colorPanel.add("group");
+    colorRow.alignChildren = ["left", "center"];
+    var topFaceRadio = colorRow.add("radiobutton", undefined, "보이는면");
+    var innerFaceRadio = colorRow.add("radiobutton", undefined, "내부");
+    var outerFaceRadio = colorRow.add("radiobutton", undefined, "외부");
     topFaceRadio.value = true;
-
-    var kRow = colorPanel.add("group");
-    var kDownButton = kRow.add("button", undefined, "◀");
-    kDownButton.preferredSize.width = 40;
-    var kValueText = kRow.add("statictext", undefined, "000K");
-    kValueText.preferredSize.width = 60;
+    var kDownButton = colorRow.add("button", undefined, "◀");
+    kDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
+    var kValueText = colorRow.add("statictext", undefined, "000K");
+    kValueText.preferredSize.width = 42;
     kValueText.justify = "center";
-    var kUpButton = kRow.add("button", undefined, "▶");
-    kUpButton.preferredSize.width = 40;
+    var kUpButton = colorRow.add("button", undefined, "▶");
+    kUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
 
     setInnerFaceEnabled(false);
     updateKDisplay();
 
-    var previewCheck = dlg.add("checkbox", undefined, "미리보기");
+    var footer = dlg.add("group");
+    var previewCheck = footer.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;
-
-    var buttons = dlg.add("group");
-    buttons.alignment = "right";
-    var okButton = buttons.add("button", undefined, "확인", {name: "ok"});
-    var cancelButton = buttons.add("button", undefined, "취소", {name: "cancel"});
+    var footerSpacer = footer.add("group");
+    footerSpacer.alignment = ["fill", "center"];
+    var okButton = footer.add("button", undefined, "확인", {name: "ok"});
+    var cancelButton = footer.add("button", undefined, "취소", {name: "cancel"});
 
     innerDiameterSlider.onChanging = function() {
         innerDiameterMm = clamp(
@@ -211,29 +204,9 @@
         updatePreview();
     };
 
-    viewSlider.onChanging = function() {
-        viewAngle = Math.round(viewSlider.value);
-        viewInput.text = formatSignedAngle(viewAngle);
-        updatePreview();
-    };
-
-    viewInput.onChanging = function() {
-        var value = parseNumber(viewInput.text);
-        if (value !== null && value >= -180 && value <= 180) {
-            viewAngle = value;
-            viewSlider.value = value;
-            updatePreview();
-        }
-    };
-
-    viewInput.onChange = function() {
-        var value = parseNumber(viewInput.text);
-        if (value === null) value = viewAngle;
-        viewAngle = clamp(value, -180, 180);
-        viewSlider.value = viewAngle;
-        viewInput.text = formatSignedAngle(viewAngle);
-        updatePreview();
-    };
+    bindAngleControls(xControls, function(value) { viewAngle = value; }, function() { return viewAngle; });
+    bindAngleControls(yControls, function(value) { viewY = value; }, function() { return viewY; });
+    bindAngleControls(zControls, function(value) { viewZ = value; }, function() { return viewZ; });
 
     verticalRadio.onClick = function() {
         isVertical = true;
@@ -251,17 +224,10 @@
         updatePreview();
     };
 
-    countSlider.onChanging = function() {
-        divisionCount = Math.round(countSlider.value);
-        countInput.text = String(divisionCount);
-        updatePreview();
-    };
-
     countInput.onChanging = function() {
         var value = parseNumber(countInput.text);
         if (value !== null && value >= 2) {
             divisionCount = Math.round(value);
-            countSlider.value = clamp(divisionCount, 2, 24);
             updatePreview();
         }
     };
@@ -270,10 +236,12 @@
         var value = parseNumber(countInput.text);
         if (value === null || value < 2) value = divisionCount;
         divisionCount = Math.max(2, Math.round(value));
-        countSlider.value = clamp(divisionCount, 2, 24);
         countInput.text = String(divisionCount);
         updatePreview();
     };
+
+    countDownButton.onClick = function() { stepDivisionCount(-1); };
+    countUpButton.onClick = function() { stepDivisionCount(1); };
 
     rotationSlider.onChanging = function() {
         divisionRotation = Math.round(rotationSlider.value);
@@ -329,7 +297,9 @@
 
     okButton.onClick = function() {
         var validHeight = parseNumber(heightInput.text);
-        var validAngle = parseNumber(viewInput.text);
+        var validAngle = parseNumber(xControls.input.text);
+        var validAngleY = parseNumber(yControls.input.text);
+        var validAngleZ = parseNumber(zControls.input.text);
         var validInnerDiameter = parseNumber(innerDiameterInput.text);
         if (validInnerDiameter === null || validInnerDiameter < 0 || validInnerDiameter >= diameterMm) {
             alert("내경은 0 이상, 외경보다 작은 값으로 입력해주세요.");
@@ -339,8 +309,8 @@
             alert("높이는 0 이상의 숫자로 입력해주세요.");
             return;
         }
-        if (validAngle === null || validAngle < -180 || validAngle > 180) {
-            alert("시점은 -180부터 +180 사이로 입력해주세요.");
+        if (!isValidAngle(validAngle) || !isValidAngle(validAngleY) || !isValidAngle(validAngleZ)) {
+            alert("시점 각도는 -180부터 +180 사이로 입력해주세요.");
             return;
         }
         var validCount = parseNumber(countInput.text);
@@ -360,8 +330,11 @@
             maxInnerDiameterMm
         );
         viewAngle = validAngle;
+        viewY = validAngleY;
+        viewZ = validAngleZ;
         divisionCount = Math.max(2, Math.round(validCount));
         divisionRotation = validRotation;
+        saveSettings();
         dlg.close(1);
     };
 
@@ -378,7 +351,7 @@
 
     if (result === 1) {
         source.hidden = false;
-        var finalGroup = createCylinder(heightMm * MM_TO_PT, viewAngle, isVertical);
+        var finalGroup = buildCylinder();
         finalGroup.name = "Cylinder";
         try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         source.remove();
@@ -396,7 +369,7 @@
             app.redraw();
             return;
         }
-        previewGroup = createCylinder(heightMm * MM_TO_PT, viewAngle, isVertical);
+        previewGroup = buildCylinder();
         previewGroup.name = "Cylinder Preview";
         try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         app.redraw();
@@ -408,11 +381,179 @@
         previewGroup = null;
     }
 
+    // 원기둥 축을 3D로 회전시킨 뒤, 그 축이 만드는 두 값으로 환산해서 그린다.
+    //  - 화면과 이루는 각(캡 타원의 납작한 정도) → createCylinder의 시점 각도
+    //  - 화면상 축 방향 → 완성된 도형의 회전
+    // 원기둥은 회전 대칭이라 이 두 값이 모양을 모두 결정한다.
+    function getCylinderAxis() {
+        var rx = (90 - viewAngle) * Math.PI / 180;
+        var ry = viewY * Math.PI / 180;
+        var rz = viewZ * Math.PI / 180;
+
+        // 세운 원기둥의 축 (0, 1, 0)에 X → Y → Z 순서로 회전을 적용
+        var x = 0;
+        var y = Math.cos(rx);
+        var z = Math.sin(rx);
+
+        var nextX = (x * Math.cos(ry)) + (z * Math.sin(ry));
+        z = (-x * Math.sin(ry)) + (z * Math.cos(ry));
+        x = nextX;
+
+        nextX = (x * Math.cos(rz)) - (y * Math.sin(rz));
+        y = (x * Math.sin(rz)) + (y * Math.cos(rz));
+        x = nextX;
+
+        return {x: x, y: y, z: z};
+    }
+
+    function getViewGeometry() {
+        var axis = getCylinderAxis();
+        var planarLength = Math.sqrt((axis.x * axis.x) + (axis.y * axis.y));
+        var tilt = Math.asin(clamp(axis.z, -1, 1)) * 180 / Math.PI;
+
+        // createCylinder는 각도의 부호로 앞뒤 캡을 정하므로 축의 깊이 방향을 부호로 옮긴다
+        var angle = axis.z >= 0 ? (90 - tilt) : -(90 + tilt);
+        var rotation = 0;
+        if (planarLength > 0.000001) {
+            rotation = (Math.atan2(axis.y, axis.x) * 180 / Math.PI) - 90;
+        }
+        if (!isVertical) {
+            rotation += 90;
+        }
+
+        return {angle: angle, rotation: rotation};
+    }
+
+    function buildCylinder() {
+        var view = getViewGeometry();
+        var group = createCylinder(heightMm * MM_TO_PT, view.angle, true);
+        if (Math.abs(view.rotation) > 0.0001) {
+            // 도형 전체의 중심을 축으로 돌려야 제자리에서 회전한다.
+            // 캡(원본 원) 중심을 축으로 잡으면 몸통이 반대편으로 돌아 도형이 통째로 이동한다.
+            try {
+                group.rotate(view.rotation, true, true, true, true, Transformation.CENTER);
+            } catch (e) {}
+        }
+        return group;
+    }
+
+    function isValidAngle(value) {
+        return value !== null && value >= -180 && value <= 180;
+    }
+
+    function saveSettings() {
+        var parts = [
+            "v1", viewAngle, viewY, viewZ,
+            isVertical ? "1" : "0",
+            divisionsEnabled ? "1" : "0",
+            divisionCount, divisionRotation,
+            faceK[0], faceK[1], faceK[2]
+        ];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function applySavedSettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 11) return;
+        viewAngle = restoreNumber(p[1], viewAngle, -180, 180);
+        viewY = restoreNumber(p[2], viewY, -180, 180);
+        viewZ = restoreNumber(p[3], viewZ, -180, 180);
+        isVertical = (p[4] === "1");
+        divisionsEnabled = (p[5] === "1");
+        divisionCount = Math.round(restoreNumber(p[6], divisionCount, 2, 24));
+        divisionRotation = restoreNumber(p[7], divisionRotation, -180, 180);
+        for (var i = 0; i < 3; i++) {
+            faceK[i] = Math.round(restoreNumber(p[8 + i], faceK[i], 0, 100));
+        }
+    }
+
+    function restoreNumber(text, fallback, minimum, maximum) {
+        var value = parseFloat(text);
+        if (isNaN(value) || value < minimum || value > maximum) return fallback;
+        return value;
+    }
+
+    function addPanel(parent, title) {
+        var panel = parent.add("panel", undefined, title);
+        panel.orientation = "column";
+        panel.alignChildren = "left";
+        panel.spacing = 4;
+        panel.margins = [10, 14, 10, 8];
+        return panel;
+    }
+
+    // 라벨 · (0 버튼) · 입력칸 · 단위 · 슬라이더를 한 줄에 배치
+    function addValueRow(parent, label, unit, value, minimum, maximum, step, hasReset) {
+        var row = parent.add("group");
+        row.alignChildren = ["left", "center"];
+        var labelText = row.add("statictext", undefined, label);
+        // 0 버튼이 붙는 줄은 라벨을 줄여서 다른 줄과 폭을 맞춘다
+        labelText.preferredSize.width = hasReset ? (LABEL_WIDTH - 32) : LABEL_WIDTH;
+        var reset = null;
+        if (hasReset) {
+            reset = row.add("button", undefined, "0");
+            reset.preferredSize.width = 22;
+        }
+        var input = row.add("edittext", undefined, value);
+        input.characters = 6;
+        input.justify = "right";
+        row.add("statictext", undefined, unit);
+        var slider = row.add("slider", undefined, Number(value), minimum, maximum);
+        slider.preferredSize.width = SLIDER_WIDTH;
+        slider.stepdelta = step;
+        return {row: row, input: input, slider: slider, reset: reset};
+    }
+
+    function addAngleRow(parent, label, value, hasReset) {
+        return addValueRow(parent, label, "°", formatSignedAngle(value), -180, 180, 1, hasReset);
+    }
+
+    function bindAngleControls(controls, setter, getter) {
+        controls.slider.onChanging = function() {
+            var value = Math.round(controls.slider.value);
+            setter(value);
+            controls.input.text = formatSignedAngle(value);
+            updatePreview();
+        };
+        controls.input.onChanging = function() {
+            var value = parseNumber(controls.input.text);
+            if (value !== null && value >= -180 && value <= 180) {
+                setter(value);
+                controls.slider.value = value;
+                updatePreview();
+            }
+        };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            if (value === null) value = getter();
+            value = clamp(value, -180, 180);
+            setter(value);
+            controls.input.text = formatSignedAngle(value);
+            controls.slider.value = value;
+            updatePreview();
+        };
+        if (controls.reset) {
+            controls.reset.onClick = function() {
+                setter(0);
+                controls.input.text = formatSignedAngle(0);
+                controls.slider.value = 0;
+                updatePreview();
+            };
+        }
+    }
+
+    function stepDivisionCount(delta) {
+        divisionCount = clamp(divisionCount + delta, 2, 24);
+        countInput.text = String(divisionCount);
+        updatePreview();
+    }
+
     function setDivisionControlsEnabled(enabled) {
-        countRow.enabled = enabled;
-        countSlider.enabled = enabled;
+        countGroup.enabled = enabled;
         rotationRow.enabled = enabled;
-        rotationSlider.enabled = enabled;
     }
 
     function setInnerFaceEnabled(enabled) {

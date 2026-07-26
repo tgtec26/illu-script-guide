@@ -15,6 +15,9 @@
     win.spacing = 15;
 
     // --- 1. 양식 선택 패널 ---
+    var PREF_KEY = "MathWorksheet/settings";
+    var saved = readSavedSettings();
+
     var panelType = win.add("panel", undefined, "1. 학습지 종류 선택");
     panelType.orientation = "column";
     panelType.alignChildren = ["left", "top"];
@@ -26,7 +29,7 @@
     typeRadios.push(panelType.add("radiobutton", undefined, "2. 더하기/빼기 박스"));
     typeRadios.push(panelType.add("radiobutton", undefined, "3. 세 수 더하기 트리"));
     typeRadios.push(panelType.add("radiobutton", undefined, "4. 기본 곱하기 (가로셈)"));
-    typeRadios[0].value = true; // 기본값: 첫 번째 항목 선택
+    typeRadios[saved.sheetType - 1].value = true; // 마지막으로 만든 종류
 
     // --- 2. 수량 선택 패널 ---
     var panelQty = win.add("panel", undefined, "2. 생성할 장수 선택");
@@ -51,7 +54,7 @@
             }
         };
     }
-    qtyRadios[0].value = true;
+    qtyRadios[saved.totalPages - 1].value = true;
 
     // --- 3. 버튼 그룹 ---
     var grpBtn = win.add("group");
@@ -79,6 +82,28 @@
             totalPages = q + 1;
             break;
         }
+    }
+
+    saveSettings(sheetType, totalPages);
+
+    function saveSettings(type, pages) {
+        try {
+            app.preferences.setStringPreference(PREF_KEY, ["v1", type, pages].join("|"));
+        } catch (e) {}
+    }
+
+    function readSavedSettings() {
+        var settings = {sheetType: 1, totalPages: 1};
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return settings; }
+        if (!raw) return settings;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 3) return settings;
+        var type = parseInt(p[1], 10);
+        if (type >= 1 && type <= 4) settings.sheetType = type;
+        var pages = parseInt(p[2], 10);
+        if (pages >= 1 && pages <= 9) settings.totalPages = pages;
+        return settings;
     }
 
 

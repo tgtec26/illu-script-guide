@@ -44,6 +44,9 @@
     var TRIANGLE_SCALE = 0.85; // 삼각형은 반원 대비 살짝 작게
     var pathMetrics = buildPathMetrics(source, 200);
 
+    var PREF_KEY = "ObjectFront/settings";
+    applySavedSettings();
+
     var dlg = new Window("dialog", "오브젝트 전선");
     dlg.orientation = "column";
     dlg.alignChildren = "fill";
@@ -55,7 +58,10 @@
     var coldRadio = frontPanel.add("radiobutton", undefined, "한랭전선");
     var stationaryRadio = frontPanel.add("radiobutton", undefined, "정체전선");
     var occludedRadio = frontPanel.add("radiobutton", undefined, "폐색전선");
-    warmRadio.value = true;
+    warmRadio.value = (frontType === "warm");
+    coldRadio.value = (frontType === "cold");
+    stationaryRadio.value = (frontType === "stationary");
+    occludedRadio.value = (frontType === "occluded");
 
     var layoutPanel = dlg.add("panel", undefined, "도형 배치");
     layoutPanel.orientation = "column";
@@ -63,6 +69,7 @@
     var shapeSizeControl = addNumericControl(layoutPanel, "도형 크기", shapeSizeMm, 0.5, 20, 0.1, "mm");
     var gapControl = addNumericControl(layoutPanel, "빈 간격", gapMm, 0, 20, 0.1, "mm");
     var reversedCheck = layoutPanel.add("checkbox", undefined, "방향 반전");
+    reversedCheck.value = reversed;
 
     var colorPanel = dlg.add("panel", undefined, "컬러");
     colorPanel.orientation = "column";
@@ -71,7 +78,7 @@
     var kColorRadio = colorPanel.add("radiobutton", undefined, "K 음영");
     var kRow = colorPanel.add("group");
     var kDecreaseButton = kRow.add("button", undefined, "<");
-    var kLabel = kRow.add("statictext", undefined, "100K");
+    var kLabel = kRow.add("statictext", undefined, kValue + "K");
     var kIncreaseButton = kRow.add("button", undefined, ">");
     var kBounds = colorPanel.add("group");
     kBounds.add("statictext", undefined, "50K");
@@ -79,10 +86,12 @@
     var hexColorRadio = colorPanel.add("radiobutton", undefined, "HEX");
     var hexInput = colorPanel.add("edittext", undefined, hexValue);
     hexInput.characters = 8;
-    standardColorRadio.value = true;
-    kRow.enabled = false;
-    kBounds.enabled = false;
-    hexInput.enabled = false;
+    standardColorRadio.value = (colorMode === "standard");
+    kColorRadio.value = (colorMode === "k");
+    hexColorRadio.value = (colorMode === "hex");
+    kRow.enabled = (colorMode === "k");
+    kBounds.enabled = (colorMode === "k");
+    hexInput.enabled = (colorMode === "hex");
 
     var linePanel = dlg.add("panel", undefined, "라인");
     linePanel.orientation = "column";
@@ -154,6 +163,7 @@
 
     if (result === 1) {
         try {
+            saveSettings();
             source.hidden = false;
             var finalGroup = tryCreateWeatherFront(false, 3);
             finalGroup.name = "Weather Front";
@@ -845,6 +855,43 @@
         var x = second.x - first.x;
         var y = second.y - first.y;
         return Math.sqrt(x * x + y * y);
+    }
+
+    function saveSettings() {
+        var parts = [
+            "v1", frontType, colorMode, kValue, lastValidHex,
+            reversed ? "1" : "0",
+            shapeSizeControl.value, gapControl.value, strokeWidthControl.value
+        ];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function applySavedSettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 9) return;
+
+        if (p[1] === "warm" || p[1] === "cold" || p[1] === "stationary" || p[1] === "occluded") {
+            frontType = p[1];
+        }
+        if (p[2] === "standard" || p[2] === "k" || p[2] === "hex") colorMode = p[2];
+        kValue = restoreNumber(p[3], kValue, 50, 100);
+        if (/^[0-9A-Fa-f]{6}$/.test(p[4])) {
+            hexValue = p[4];
+            lastValidHex = p[4];
+        }
+        reversed = (p[5] === "1");
+        shapeSizeMm = restoreNumber(p[6], shapeSizeMm, 0.5, 20);
+        gapMm = restoreNumber(p[7], gapMm, 0, 20);
+        strokeWidthPt = restoreNumber(p[8], strokeWidthPt, 0.1, 10);
+    }
+
+    function restoreNumber(text, fallback, minimum, maximum) {
+        var value = parseFloat(text);
+        if (isNaN(value) || value < minimum || value > maximum) return fallback;
+        return value;
     }
 
     function addNumericControl(parent, label, value, minimum, maximum, step, unit) {

@@ -18,6 +18,9 @@
     var horizontalGap = 2 * 2.834645669; // 2mm를 pt로 변환
     var bottomMargin = 20; // 화면 하단에서 띄울 간격
 
+    var PREF_KEY = "TextNumberSequence/settings";
+    var saved = readSavedSettings();
+
     // 다이얼로그 생성
     var dialog = new Window("dialog", "연속 숫자 입력");
     dialog.orientation = "column";
@@ -29,18 +32,18 @@
 
     var startRow = inputGroup.add("group");
     startRow.add("statictext", undefined, "시작 숫자:");
-    var startInput = startRow.add("edittext", undefined, "1");
+    var startInput = startRow.add("edittext", undefined, saved.start);
     startInput.preferredSize.width = 60;
     startInput.active = true;
 
     var stepRow = inputGroup.add("group");
     stepRow.add("statictext", undefined, "간격:");
-    var stepInput = stepRow.add("edittext", undefined, "1");
+    var stepInput = stepRow.add("edittext", undefined, saved.step);
     stepInput.preferredSize.width = 60;
 
     var countRow = inputGroup.add("group");
     countRow.add("statictext", undefined, "갯수:");
-    var countInput = countRow.add("edittext", undefined, "5");
+    var countInput = countRow.add("edittext", undefined, saved.count);
     countInput.preferredSize.width = 60;
     var countDownBtn = countRow.add("button", undefined, "▼");
     countDownBtn.preferredSize = [25, 25];
@@ -74,11 +77,31 @@
             return;
         }
         confirmed = true;
+        saveSettings();
         dialog.close();
     };
     cancelBtn.onClick = function() {
         dialog.close();
     };
+
+    function saveSettings() {
+        var parts = ["v1", startInput.text, stepInput.text, String(getCount())];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function readSavedSettings() {
+        var settings = {start: "1", step: "1", count: "5"};
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return settings; }
+        if (!raw) return settings;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 4) return settings;
+        if (!isNaN(parseFloat(p[1]))) settings.start = p[1];
+        if (!isNaN(parseFloat(p[2]))) settings.step = p[2];
+        var count = parseInt(p[3], 10);
+        if (!isNaN(count) && count >= 1) settings.count = String(count);
+        return settings;
+    }
 
     dialog.show();
 

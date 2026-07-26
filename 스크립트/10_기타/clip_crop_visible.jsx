@@ -23,6 +23,7 @@
     var MODE_OUTLINE_LINES = 1;
     var MODE_RELEASE_LINES = 2;
     var MODE_CLIP_LIVE_LINES = 3;
+    var PREF_KEY = "ClipCropVisible/settings";
 
     if (app.documents.length === 0) {
         alert("열린 문서가 없습니다.");
@@ -259,7 +260,10 @@
         var optOutline = panel.add("radiobutton", undefined, "1. 선을 윤곽선화해서 함께 Crop");
         var optRelease = panel.add("radiobutton", undefined, "2. 선은 클리핑에서 빼고, 면만 Crop");
         var optClipLive = panel.add("radiobutton", undefined, "3. 사각 마스크 기준으로 선을 live 상태로 잘라내고, 면은 Crop");
-        optOutline.value = true;
+        var saved = readSavedSettings();
+        optRelease.value = (saved.mode === MODE_RELEASE_LINES);
+        optClipLive.value = (saved.mode === MODE_CLIP_LIVE_LINES);
+        optOutline.value = !optRelease.value && !optClipLive.value;
 
         var note = win.add("statictext", undefined, "3번은 사각형 클리핑 마스크와 직선 구간 중심의 라인에 맞춘 옵션입니다.", { multiline: true });
         note.preferredSize.width = 430;
@@ -270,13 +274,14 @@
         imgPanel.margins = [12, 18, 12, 12];
 
         var imgCrop = imgPanel.add("checkbox", undefined, "마스크 영역만 남기고 재래스터화 (큰 이미지 용량 축소)");
-        imgCrop.value = true;
+        imgCrop.value = saved.imageCrop;
 
         var resGroup = imgPanel.add("group");
         resGroup.orientation = "row";
         resGroup.add("statictext", undefined, "해상도(ppi):");
-        var resInput = resGroup.add("edittext", undefined, "300");
+        var resInput = resGroup.add("edittext", undefined, String(saved.imageRes));
         resInput.characters = 6;
+        resGroup.enabled = imgCrop.value;
 
         var imgNote = imgPanel.add("statictext", undefined, "이미지가 포함된 그룹은 마스크를 유지한 채 보이지 않는 픽셀만 삭제합니다.", { multiline: true });
         imgNote.preferredSize.width = 430;
@@ -310,6 +315,7 @@
                 imageCrop: imgCrop.value,
                 imageRes: res
             };
+            saveSettings(result);
             win.close();
         };
         cancel.onClick = function () {
@@ -319,6 +325,29 @@
 
         win.show();
         return result;
+    }
+
+    function saveSettings(settings) {
+        var parts = ["v1", settings.mode, settings.imageCrop ? "1" : "0", settings.imageRes];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function readSavedSettings() {
+        var settings = {mode: MODE_OUTLINE_LINES, imageCrop: true, imageRes: 300};
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return settings; }
+        if (!raw) return settings;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 4) return settings;
+        var mode = parseInt(p[1], 10);
+        if (mode === MODE_OUTLINE_LINES || mode === MODE_RELEASE_LINES ||
+                mode === MODE_CLIP_LIVE_LINES) {
+            settings.mode = mode;
+        }
+        settings.imageCrop = (p[2] === "1");
+        var res = parseFloat(p[3]);
+        if (!isNaN(res) && res >= 36 && res <= 2400) settings.imageRes = res;
+        return settings;
     }
 
     function isImageItem(item) {

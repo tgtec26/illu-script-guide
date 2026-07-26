@@ -39,6 +39,7 @@
     var lRadiusX = (lBounds[2] - lBounds[0]) / 2;
     var lRadiusY = (lBounds[1] - lBounds[3]) / 2;
 
+    var PREF_KEY = "ObjectCircularAlignment/settings";
     var mmToPt = 2.83464567;
     // 안쪽으로는 중심까지만 들어가면 충분하므로 짧은 반지름을 슬라이더 한계로 쓴다
     var maxOffsetMm = Math.max(1, Math.round(Math.min(lRadiusX, lRadiusY) / mmToPt));
@@ -107,9 +108,48 @@
         previewItems = [];
     }
 
+    // 개수는 프리셋 라디오와 직접 입력 중 마지막으로 쓴 쪽을 그대로 되살린다
+    function saveSettings(settings) {
+        var presetCounts = [2, 3, 4, 6, 8];
+        var isPreset = false;
+        for (var i = 0; i < presetCounts.length; i++) {
+            if (presetCounts[i] === settings.count) isPreset = true;
+        }
+        var parts = [
+            "v1",
+            isPreset ? settings.count : 8,
+            isPreset ? "" : settings.count,
+            settings.offsetMm,
+            settings.rotationDeg
+        ];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function readSavedSettings() {
+        var settings = {presetCount: 8, customCount: "", offsetMm: 0, rotationDeg: 0};
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return settings; }
+        if (!raw) return settings;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 5) return settings;
+
+        var preset = parseInt(p[1], 10);
+        if (preset >= 1) settings.presetCount = preset;
+        if (String(p[2]).replace(/^\s+|\s+$/g, "") !== "") {
+            var custom = Math.round(parseFloat(p[2]));
+            if (!isNaN(custom) && custom >= 1) settings.customCount = String(custom);
+        }
+        var offset = parseFloat(p[3]);
+        if (!isNaN(offset)) settings.offsetMm = offset;
+        var rotation = parseFloat(p[4]);
+        if (!isNaN(rotation) && rotation >= -180 && rotation <= 180) settings.rotationDeg = rotation;
+        return settings;
+    }
+
     function showOptionsDialog(onPreview, onClearPreview) {
         var presetCounts = [2, 3, 4, 6, 8];
         var defaultCount = 8;
+        var saved = readSavedSettings();
         var offsetStepMm = 0.05;
         var isSyncingControl = false;
         var result = null;
@@ -128,7 +168,7 @@
         var countRadios = [];
         for (var i = 0; i < presetCounts.length; i++) {
             var radio = countRow.add("radiobutton", undefined, presetCounts[i] + "개");
-            if (presetCounts[i] === defaultCount) {
+            if (presetCounts[i] === saved.presetCount) {
                 radio.value = true;
             }
             countRadios.push(radio);
@@ -136,7 +176,7 @@
 
         var countCustomRow = countPanel.add("group");
         countCustomRow.add("statictext", undefined, "직접 입력");
-        var countInput = countCustomRow.add("edittext", undefined, "");
+        var countInput = countCustomRow.add("edittext", undefined, saved.customCount);
         countInput.characters = 6;
         countCustomRow.add("statictext", undefined, "개");
 
@@ -150,13 +190,13 @@
 
         var offsetRow = offsetPanel.add("group");
         offsetRow.add("statictext", undefined, "중심 이동(mm)");
-        var offsetInput = offsetRow.add("edittext", undefined, "0.00");
+        var offsetInput = offsetRow.add("edittext", undefined, saved.offsetMm.toFixed(2));
         offsetInput.characters = 8;
 
         var offsetControl = offsetPanel.add(
             "scrollbar",
             undefined,
-            0,
+            Math.max(offsetToStep(-maxOffsetMm), Math.min(offsetToStep(maxOffsetMm), offsetToStep(saved.offsetMm))),
             offsetToStep(-maxOffsetMm),
             offsetToStep(maxOffsetMm)
         );
@@ -171,10 +211,10 @@
 
         var rotationRow = rotationPanel.add("group");
         rotationRow.add("statictext", undefined, "회전 각도(°)");
-        var rotationInput = rotationRow.add("edittext", undefined, "0");
+        var rotationInput = rotationRow.add("edittext", undefined, String(saved.rotationDeg));
         rotationInput.characters = 8;
 
-        var rotationControl = rotationPanel.add("scrollbar", undefined, 0, -180, 180);
+        var rotationControl = rotationPanel.add("scrollbar", undefined, Math.max(-180, Math.min(180, Math.round(saved.rotationDeg))), -180, 180);
         rotationControl.preferredSize.width = 360;
         rotationControl.stepdelta = 1;
         rotationControl.jumpdelta = 15;
@@ -329,6 +369,7 @@
                 offsetMm: parseFloat(formatOffset(offset)),
                 rotationDeg: rotation
             };
+            saveSettings(result);
             dialog.close();
         };
         cancelButton.onClick = function() {

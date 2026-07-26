@@ -47,6 +47,10 @@
     var previewGroup = null;
     var sourceWasHidden = source.hidden;
 
+    // 크기는 선택한 원에서 계산하므로 저장하지 않는다. 시점·분할선·컬러만 기억한다.
+    var PREF_KEY = "ObjectCone/settings";
+    applySavedSettings();
+
     var LABEL_WIDTH = 58;
     var SLIDER_WIDTH = 200;
     var STEP_BUTTON_WIDTH = 30;
@@ -102,6 +106,7 @@
     kValueText.justify = "center";
     var kUpButton = colorRow.add("button", undefined, "▶");
     kUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
+    updateKDisplay();
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -253,6 +258,7 @@
         topDiameterMm = clamp(roundTo(validTop, SIZE_STEP_MM), 0, baseDiameterMm);
         heightMm = Math.max(SIZE_STEP_MM, roundTo(validHeight, SIZE_STEP_MM));
         divisionCount = clamp(Math.round(validDivision), 0, 24);
+        saveSettings();
         dlg.close(1);
     };
 
@@ -279,6 +285,32 @@
     }
     app.redraw();
 
+    function saveSettings() {
+        var parts = ["v1", viewX, viewY, viewZ, divisionCount, faceK[0], faceK[1], faceK[2]];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function applySavedSettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 8) return;
+        viewX = restoreNumber(p[1], viewX, -180, 180);
+        viewY = restoreNumber(p[2], viewY, -180, 180);
+        viewZ = restoreNumber(p[3], viewZ, -180, 180);
+        divisionCount = Math.round(restoreNumber(p[4], divisionCount, 0, 24));
+        for (var i = 0; i < 3; i++) {
+            faceK[i] = Math.round(restoreNumber(p[5 + i], faceK[i], 0, 100));
+        }
+    }
+
+    function restoreNumber(text, fallback, minimum, maximum) {
+        var value = parseFloat(text);
+        if (isNaN(value) || value < minimum || value > maximum) return fallback;
+        return value;
+    }
+
     function addPanel(parent, title) {
         var panel = parent.add("panel", undefined, title);
         panel.orientation = "column";
@@ -289,11 +321,17 @@
     }
 
     // 라벨 · 입력칸 · 단위 · 슬라이더를 한 줄에 배치
-    function addValueRow(parent, label, unit, value, minimum, maximum, step) {
+    function addValueRow(parent, label, unit, value, minimum, maximum, step, hasReset) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         var labelText = row.add("statictext", undefined, label);
-        labelText.preferredSize.width = LABEL_WIDTH;
+        // 0 버튼이 붙는 줄은 라벨을 줄여서 다른 줄과 폭을 맞춘다
+        labelText.preferredSize.width = hasReset ? (LABEL_WIDTH - 32) : LABEL_WIDTH;
+        var reset = null;
+        if (hasReset) {
+            reset = row.add("button", undefined, "0");
+            reset.preferredSize.width = 22;
+        }
         var input = row.add("edittext", undefined, value);
         input.characters = 6;
         input.justify = "right";
@@ -301,7 +339,7 @@
         var slider = row.add("slider", undefined, Number(value), minimum, maximum);
         slider.preferredSize.width = SLIDER_WIDTH;
         slider.stepdelta = step;
-        return {input: input, slider: slider};
+        return {input: input, slider: slider, reset: reset};
     }
 
     function addSizeRow(parent, label, value, minimum, maximum) {
@@ -309,7 +347,7 @@
     }
 
     function addAngleControls(parent, label, value) {
-        return addValueRow(parent, label, "°", formatSignedAngle(value), -180, 180, 1);
+        return addValueRow(parent, label, "°", formatSignedAngle(value), -180, 180, 1, true);
     }
 
     function bindViewControls(controls, setter, getter) {
@@ -332,6 +370,14 @@
             setter(value);
             updatePreview();
         };
+        if (controls.reset) {
+            controls.reset.onClick = function() {
+                setter(0);
+                controls.input.text = formatSignedAngle(0);
+                controls.slider.value = 0;
+                updatePreview();
+            };
+        }
     }
 
     function updateKDisplay() {
