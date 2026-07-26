@@ -31,6 +31,12 @@
     // -------------------------------------------------------
     var dlg = new Window("dialog", "눈금 설정");
 
+    var shapeGroup = dlg.add("group");
+    shapeGroup.add("statictext", undefined, "형태:");
+    var axisShapeRadio = shapeGroup.add("radiobutton", undefined, "축 2개 (L자 + 화살촉)");
+    var boxShapeRadio = shapeGroup.add("radiobutton", undefined, "사각형 유지");
+    axisShapeRadio.value = true;
+
     dlg.add("statictext", undefined, "Y축(왼쪽) 눈금 갯수:");
     var yGroup = dlg.add("group");
     var yBtns = [];
@@ -93,6 +99,12 @@
     var yLegendInput = legendTextGroup.add("edittext", undefined, "거리");
     yLegendInput.characters = 8;
 
+    var legendPosGroup = legendPanel.add("group");
+    legendPosGroup.add("statictext", undefined, "범례 위치:");
+    var legendEndRadio = legendPosGroup.add("radiobutton", undefined, "끝");
+    var legendCenterRadio = legendPosGroup.add("radiobutton", undefined, "중앙");
+    legendEndRadio.value = true;
+
     var legendGapGroup = legendPanel.add("group");
     legendGapGroup.add("statictext", undefined, "숫자와 범례 간격:");
     var legendGapInput = legendGapGroup.add("edittext", undefined, "1");
@@ -105,6 +117,13 @@
     var arrowCheck = legendPanel.add("checkbox", undefined, "축 양 끝에 화살표 1 넣기");
     arrowCheck.value = true;
 
+    axisShapeRadio.onClick = updateArrowEnabled;
+    boxShapeRadio.onClick = updateArrowEnabled;
+    function updateArrowEnabled() {
+        // 사각형 유지 모드에서는 축 끝이 없어 화살표를 붙일 수 없다
+        arrowCheck.enabled = axisShapeRadio.value;
+    }
+
     var btnGroup = dlg.add("group");
     var okBtn = btnGroup.add("button", undefined, "확인", { name: "ok" });
     btnGroup.add("button", undefined, "취소", { name: "cancel" });
@@ -112,6 +131,7 @@
     var xStart = 1, xStep = 1, yStart = 1, yStep = 1;
 
     applySettings();
+    updateArrowEnabled();
 
     okBtn.onClick = function() {
         var values = [
@@ -155,7 +175,9 @@
     var yLegendText = yLegendInput.text;
     var legendGapMm = parseNumber(legendGapInput.text);
     if (legendGapMm === null) legendGapMm = 1;
-    var useArrow = arrowCheck.value;
+    var useBox = boxShapeRadio.value;
+    var useArrow = arrowCheck.value && !useBox;
+    var legendAtCenter = legendCenterRadio.value;
 
     function getSelectedCount(btns) {
         for (var i = 0; i < btns.length; i++) {
@@ -166,7 +188,7 @@
 
     function saveSettings() {
         var parts = [
-            "v4",
+            "v5",
             getSelectedCount(yBtns),
             yStartInput.text,
             yStepInput.text,
@@ -180,7 +202,9 @@
             yLegendInput.text,
             legendGapInput.text,
             zeroCheck.value ? "1" : "0",
-            arrowCheck.value ? "1" : "0"
+            arrowCheck.value ? "1" : "0",
+            boxShapeRadio.value ? "1" : "0",
+            legendCenterRadio.value ? "1" : "0"
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -190,7 +214,7 @@
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v4" || p.length < 15) return;
+        if (p[0] !== "v5" || p.length < 17) return;
         try {
             selectCount(yBtns, parseInt(p[1], 10));
             yStartInput.text = p[2];
@@ -208,6 +232,10 @@
             if (parseNumber(p[12]) !== null) legendGapInput.text = p[12];
             zeroCheck.value = (p[13] === "1");
             arrowCheck.value = (p[14] === "1");
+            boxShapeRadio.value = (p[15] === "1");
+            axisShapeRadio.value = !boxShapeRadio.value;
+            legendCenterRadio.value = (p[16] === "1");
+            legendEndRadio.value = !legendCenterRadio.value;
         } catch (e) {}
     }
 
@@ -263,15 +291,24 @@
     group.name = "AxisTickMarks";
 
     // -------------------------------------------------------
-    // X축 + Y축: 하나의 L자형 패스로 원점에서 연결
-    // 위쪽 끝 → 원점 → 오른쪽 끝
+    // 축: L자(위쪽 끝 → 원점 → 오른쪽 끝) 또는 사각형 상자
     // -------------------------------------------------------
     var axis = group.pathItems.add();
-    axis.setEntirePath([
-        [originX, topY],       // Y축 위쪽 끝
-        [originX, originY],    // 원점
-        [rightX, originY]      // X축 오른쪽 끝
-    ]);
+    if (useBox) {
+        axis.setEntirePath([
+            [originX, topY],
+            [originX, originY],
+            [rightX, originY],
+            [rightX, topY]
+        ]);
+        axis.closed = true;
+    } else {
+        axis.setEntirePath([
+            [originX, topY],       // Y축 위쪽 끝
+            [originX, originY],    // 원점
+            [rightX, originY]      // X축 오른쪽 끝
+        ]);
+    }
     axis.stroked = true;
     axis.strokeColor = blackColor;
     axis.strokeWidth = axisWeight;
@@ -280,6 +317,8 @@
     // -------------------------------------------------------
     // 눈금 간격 계산
     // -------------------------------------------------------
+    if (useBox) endMargin = 0;
+
     var xEnd = rightX - endMargin;
     var xSpacing = (xEnd - originX) / xCount;
 
@@ -408,16 +447,22 @@
         if (xLegendText !== "") {
             var xLegend = createLegendText(xLegendText, legendFont, false);
             var xb = glyphBounds(xLegend);
-            // X축 오른쪽 끝 정렬, 숫자줄 아래로 간격만큼
-            moveGlyphTo(xLegend, rightX - (xb[2] - xb[0]), xLegendBase - legendGap);
+            // 끝: X축 오른쪽 끝 정렬 / 중앙: 축 가운데 정렬. 숫자줄 아래로 간격만큼
+            var xLegendLeft = legendAtCenter
+                ? (originX + rightX) / 2 - (xb[2] - xb[0]) / 2
+                : rightX - (xb[2] - xb[0]);
+            moveGlyphTo(xLegend, xLegendLeft, xLegendBase - legendGap);
             xLegend.move(group, ElementPlacement.PLACEATEND);
         }
 
         if (yLegendText !== "") {
             var yLegend = createLegendText(yLegendText, legendFont, true);
             var yb = glyphBounds(yLegend);
-            // Y축 위 끝 정렬, 숫자열 왼쪽으로 간격만큼
-            moveGlyphTo(yLegend, yLegendBase - legendGap - (yb[2] - yb[0]), topY);
+            // 끝: Y축 위 끝 정렬 / 중앙: 축 가운데 정렬. 숫자열 왼쪽으로 간격만큼
+            var yLegendTop = legendAtCenter
+                ? (originY + topY) / 2 + (yb[1] - yb[3]) / 2
+                : topY;
+            moveGlyphTo(yLegend, yLegendBase - legendGap - (yb[2] - yb[0]), yLegendTop);
             yLegend.move(group, ElementPlacement.PLACEATEND);
         }
     }
