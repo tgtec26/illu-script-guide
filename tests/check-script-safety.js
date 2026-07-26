@@ -39,6 +39,9 @@ const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
 const weatherFront = "스크립트/01_도형/Object_front.jsx";
 const anchorAngle = "스크립트/01_도형/Object_AnchorAngle.jsx";
 const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
+const cubicLattice = "스크립트/01_도형/Object_CubicLattice.jsx";
+const graphiteCrystal = "스크립트/01_도형/Object_GraphiteCrystal.jsx";
+const diamondCrystal = "스크립트/01_도형/Object_DiamondCrystal.jsx";
 const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -1027,6 +1030,597 @@ for (const [file, mode] of visibleAlignFiles) {
       ]);
     } catch (error) {
       console.error(`${lewisDots}: dot-placement regression failed: ${error.message}`);
+      failures++;
+    }
+  }
+}
+
+{
+  if (!exists(cubicLattice)) {
+    console.error(`${cubicLattice}: cubic-lattice script is missing`);
+    failures++;
+  } else {
+    const source = read(cubicLattice);
+    const required = [
+      'new Window("dialog", "입방정계 단위세포 생성기")',
+      'var LINE_WIDTH_PT = 0.3',
+      'function setProjectionAngles(angleR, angleL, depthPercent)',
+      'setProjectionAngles(131, 109, 100)',
+      '{ key: "sc",  label: "단순 입방" }',
+      '{ key: "bcc", label: "체심 입방" }',
+      '{ key: "fcc", label: "면심 입방" }',
+      '{ key: "nacl", label: "NaCl" }',
+      '{ key: "cscl", label: "CsCl" }',
+      '{ key: "i2", label: "I2 (아이오딘)" }',
+      '{ key: "co2", label: "CO2 (드라이아이스)" }',
+      '{ key: "wire", label: "라인 + 작은 구" }',
+      '{ key: "pack", label: "밀집 구(전체 원자)" }',
+      '{ key: "cut",  label: "단위세포 절단" }',
+      'addSlider("셀 한 변", 5, 80, 20',
+      'addSlider("꼭짓점 구 지름(라인)", 0.5, 20, 3',
+      'addSlider("나머지 구 지름(라인)", 0.5, 20, 3',
+      'addSlider("꼭짓점 밝기", 40, 160, 100',
+      'addSlider("나머지 밝기", 40, 160, 100',
+      'addSlider("셀 간격", 0, 40, 8',
+      'sldCornerSphere.enabled = chkMode[0].value',
+      'sldOtherSphere.enabled = chkMode[0].value',
+      'cornerSphereMM: sldCornerSphere.value',
+      'otherSphereMM: sldOtherSphere.value',
+      'cornerBrightness: sldCornerBrightness.value',
+      'otherBrightness: sldOtherBrightness.value',
+      'var sldAngleR = addAngleSlider("오른쪽 각도", 131)',
+      'var sldAngleL = addAngleSlider("왼쪽 각도", 109)',
+      'var sldDepth = addDepthSlider()',
+      'var btnAngleIso = anglePresetRow.add("button", undefined, "Isometric (120/120)")',
+      'var btnAngleDi = anglePresetRow.add("button", undefined, "Dimetric (110/110)")',
+      'var btnAngleTri = anglePresetRow.add("button", undefined, "Trimetric (120/105)")',
+      'angleR: sldAngleR.value',
+      'angleL: sldAngleL.value',
+      'depthPercent: sldDepth.value',
+      'function configureGradients(grads, o)',
+      'var radOneCell = pnlCells.add("radiobutton", undefined, "1셀")',
+      'var radEightCells = pnlCells.add("radiobutton", undefined, "8셀 (2×2×2)")',
+      'cellSpan: radEightCells.value ? 2 : 1',
+      'var chkHiddenDashed = pnlLine.add("checkbox", undefined, "숨김선 점선 표시 (해제: 실선)")',
+      'hiddenDashed: chkHiddenDashed.value && radOneCell.value',
+      'chkHiddenDashed.enabled = chkMode[0].value && radOneCell.value',
+      '&& o.hiddenDashed) line.strokeDashes = [3, 2]',
+      'var radColor = pnlColor.add("radiobutton", undefined, "컬러")',
+      'var radGray = pnlColor.add("radiobutton", undefined, "회색 음영")',
+      'colorMode: radColor.value ? "color" : "gray"',
+      'cutCenterGray: makeRadialGradient(doc, "CutGray", kColor(0), kColor(55), 13.3)',
+      'isCorner ? [128, 128, 128] : [180, 180, 180]',
+      'function latticePoints(key)',
+      'function latticeSites(key, span)',
+      'function atomSites(key, span, atomDiameterRatio, otherDiameterRatio)',
+      'function siteRoleAtPoint(key, p)',
+      'function cellEdgeSegments(span)',
+      'function touchRatio(key)',
+      'function otherTouchRatio(key)',
+      'function screenPoint(p, edge, ox, oy)',
+      'function drawNucleusLitSphere(parent, cx, cy, dia, o, grads, isCorner, brightOtherGray)',
+      'isCorner ? grads.corner : grads.center',
+      'brightOtherGray ? grads.cutCenterGray : grads.otherWireSphere',
+      'var hx = cx - r * 0.35',
+      'var hy = cy + r * 0.35',
+      'var gradientRadius = r * 1.7',
+      'drawSphere(parent, center[0], center[1], dia, o, grads, true, isCorner, false)',
+      'function viewDepth(p)',
+      'function convexHull(points)',
+      'function cellSilhouette(edge, ox, oy, span)',
+      'function cellBounds(edge, ox, oy, span)',
+      'var d = viewDepth(p.p) - viewDepth(q.p)',
+      'function clipPolygonToCell(poly, span)',
+      'function addSphereSurface(faces, center, radius, baseColor, span)',
+      'function addCutDisks(faces, center, radius, baseColor, span)',
+      'function projectedHullFromFaces(faces, edge, ox, oy)',
+      'function drawBezierHull(parent, hull, fillColor, o, useGradient)',
+      'function drawCutCell(parent, key, o, ox, oy, edge, grads)',
+      'function drawWireCell(parent, key, o, ox, oy, edge, grads)',
+      'return a.site.moleculeOrder - b.site.moleculeOrder',
+      'return p.moleculeOrder - q.moleculeOrder',
+      'linkIodineSliders(sldCornerSphere, sldOtherSphere)',
+      'linkIodineSliders(sldCornerBrightness, sldOtherBrightness)',
+      'var startRole = siteRoleAtPoint(key, segments[e].a)',
+      'Math.min(0.49, startRadius / screenLength)',
+      'Math.min(0.49, endRadius / screenLength)',
+      'depth: (viewDepth(a) + viewDepth(b)) / 2',
+      'if (a.type !== b.type) return a.type === "line" ? -1 : 1',
+      'atomRecords.sort(function(a, b)',
+      'atomGroup.name = "CubicAtom_" + atomRecords[atomIndex].index',
+      'isCorner ? [184, 52, 55] : [132, 168, 47]',
+      'previewItems = [holder]',
+      'CubicLattice_Preview',
+    ];
+    for (const token of required) {
+      if (!source.includes(token)) {
+        console.error(`${cubicLattice}: missing cubic-lattice token: ${token}`);
+        failures++;
+      }
+    }
+    if (source.includes("이온 결정 프리셋") || source.includes("selectOnlyLattice")) {
+      console.error(`${cubicLattice}: duplicate ionic-crystal preset controls must not be present`);
+      failures++;
+    }
+
+    const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+    const activeDocLine = lineOf(source, /app\.activeDocument/);
+    if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+      console.error(`${cubicLattice}: app.documents.length guard must run before app.activeDocument`);
+      failures++;
+    }
+
+    try {
+      const arrayDeclaration = (name) => {
+        const match = source.match(new RegExp(`var ${name} = \\[[\\s\\S]*?\\];`));
+        if (!match) throw new Error(`missing array declaration: ${name}`);
+        return match[0];
+      };
+      const declarations = [
+        arrayDeclaration("CELL_CORNERS"),
+        arrayDeclaration("CELL_EDGES"),
+        arrayDeclaration("FACE_CENTERS"),
+        extractFunction(source, "latticePoints"),
+        extractFunction(source, "latticeSites"),
+        extractFunction(source, "atomSites"),
+        extractFunction(source, "siteRoleAtPoint"),
+        extractFunction(source, "cellEdgeSegments"),
+        extractFunction(source, "touchRatio"),
+        extractFunction(source, "otherTouchRatio"),
+        extractFunction(source, "setProjectionAngles"),
+        extractFunction(source, "screenPoint"),
+        extractFunction(source, "viewDepth"),
+        extractFunction(source, "convexHull"),
+        extractFunction(source, "dot3"),
+        extractFunction(source, "normalize3"),
+        extractFunction(source, "cross3"),
+        extractFunction(source, "adjustedRgb"),
+        extractFunction(source, "adjustedK"),
+        extractFunction(source, "boundaryCount"),
+        extractFunction(source, "clipPolygonAtPlane"),
+        extractFunction(source, "clipPolygonToCell"),
+      ].join("\n");
+      const helpers = new Function(
+        `var SCREEN_X = [0, 0, 0], SCREEN_Y = [0, 0, 0];\n` +
+        `var VIEW_X = 0, VIEW_Y = 0, VIEW_Z = 0;\n` +
+        `${declarations}\n` +
+        `setProjectionAngles(131, 109, 100);\n` +
+        `return {latticePoints, latticeSites, atomSites, siteRoleAtPoint, cellEdgeSegments, touchRatio, otherTouchRatio, setProjectionAngles, screenPoint, viewDepth, convexHull, adjustedRgb, adjustedK, boundaryCount, clipPolygonToCell, CELL_CORNERS, CELL_EDGES, projectionState: function () { return {SCREEN_X: SCREEN_X, SCREEN_Y: SCREEN_Y, VIEW: [VIEW_X, VIEW_Y, VIEW_Z]}; }};`
+      )();
+
+      assert.strictEqual(helpers.CELL_EDGES.length, 12, "unit cell must have 12 edges");
+      assert.strictEqual(helpers.latticePoints("sc").length, 8, "simple cubic must have 8 lattice points");
+      assert.strictEqual(helpers.latticePoints("bcc").length, 9, "body-centered cubic must add the cell center");
+      assert.strictEqual(helpers.latticePoints("fcc").length, 14, "face-centered cubic must add 6 face centers");
+      assert.strictEqual(helpers.latticePoints("cscl").length, 9, "CsCl cell must have corners and one body center");
+      assert.strictEqual(helpers.latticePoints("nacl").length, 8, "one NaCl cell must use eight alternating corners");
+      assert.strictEqual(helpers.latticePoints("i2").length, 14, "I2 molecular centers must use an FCC cell");
+      assert.strictEqual(helpers.latticePoints("co2").length, 14, "CO2 molecular centers must use an FCC cell");
+      assertClose(helpers.touchRatio("sc"), 1, "simple cubic contact diameter ratio");
+      assertClose(helpers.touchRatio("bcc"), Math.sqrt(3) / 2, "body-centered contact diameter ratio");
+      assertClose(helpers.touchRatio("fcc"), Math.sqrt(2) / 2, "face-centered contact diameter ratio");
+      assertClose(helpers.touchRatio("cscl"), Math.sqrt(3) / 2, "CsCl nearest-neighbor contact ratio");
+      assertClose(helpers.touchRatio("nacl"), 1, "NaCl corner-neighbor contact ratio");
+      assertClose(helpers.touchRatio("i2"), 0.22, "I2 atom diameter ratio");
+      assertClose(helpers.touchRatio("co2"), 0.22, "CO2 carbon diameter ratio");
+      assertClose(helpers.otherTouchRatio("co2"), 0.16, "CO2 oxygen diameter ratio");
+
+      assert.strictEqual(helpers.latticeSites("sc", 2).length, 27, "eight SC cells must share boundary sites");
+      assert.strictEqual(helpers.latticeSites("bcc", 2).length, 35, "eight BCC cells must share 27 corners");
+      assert.strictEqual(helpers.latticeSites("fcc", 2).length, 63, "eight FCC cells must deduplicate shared face sites");
+      assert.strictEqual(helpers.latticeSites("cscl", 2).length, 35, "eight CsCl cells must share corner ions");
+      assert.strictEqual(helpers.latticeSites("nacl", 2).length, 27, "eight NaCl cells must share a 3x3x3 corner grid");
+      assert.strictEqual(helpers.latticeSites("i2", 1).length, 14, "one I2 cell must have 14 FCC molecular centers");
+      assert.strictEqual(helpers.atomSites("i2", 1, 0.15).length, 28, "each I2 molecular center must expand to two atoms");
+      assert.ok(
+        helpers.atomSites("i2", 1, 0.15, 0.15).every((site) => site.role === 0),
+        "I2 corner and face-center atoms must use one visual role"
+      );
+      const carbonDioxideAtoms = helpers.atomSites("co2", 1, 0.22, 0.16);
+      assert.strictEqual(carbonDioxideAtoms.length, 42, "each CO2 molecular center must expand to three atoms");
+      assert.strictEqual(
+        carbonDioxideAtoms.filter((site) => site.role === 0).length,
+        14,
+        "each CO2 molecule must have one central carbon"
+      );
+      assert.strictEqual(
+        carbonDioxideAtoms.filter((site) => site.role === 1).length,
+        28,
+        "each CO2 molecule must have two terminal oxygens"
+      );
+      const firstCarbonDioxide = carbonDioxideAtoms.slice(0, 3);
+      assert.deepStrictEqual(
+        firstCarbonDioxide.map((site) => site.moleculeOrder),
+        [0, 1, 2],
+        "CO2 z-order must be oxygen, carbon, oxygen"
+      );
+      const carbonOxygenDistance = Math.sqrt(
+        firstCarbonDioxide[0].p.reduce(
+          (sum, value, axis) => sum + Math.pow(value - firstCarbonDioxide[1].p[axis], 2),
+          0
+        )
+      );
+      assertClose(carbonOxygenDistance, 0.0988, "CO2 oxygens must overlap tightly with carbon");
+      for (let axis = 0; axis < 3; axis++) {
+        assertClose(
+          (firstCarbonDioxide[0].p[axis] + firstCarbonDioxide[2].p[axis]) / 2,
+          firstCarbonDioxide[1].p[axis],
+          "CO2 carbon must lie midway between both oxygens"
+        );
+      }
+      const projectedCarbonDioxide = firstCarbonDioxide.map((site) => helpers.screenPoint(site.p, 1, 0, 0));
+      const projectedBondLengths = [0, 2].map((oxygenIndex) =>
+        Math.hypot(
+          projectedCarbonDioxide[oxygenIndex][0] - projectedCarbonDioxide[1][0],
+          projectedCarbonDioxide[oxygenIndex][1] - projectedCarbonDioxide[1][1]
+        )
+      );
+      assert.ok(
+        projectedBondLengths.every((length) => length > 0.05),
+        "both CO2 oxygens must remain visibly separated from carbon"
+      );
+      assertClose(
+        helpers.viewDepth(firstCarbonDioxide[0].p),
+        helpers.viewDepth(firstCarbonDioxide[1].p),
+        "CO2 molecular axis must stay in the visible screen plane"
+      );
+      assertClose(
+        helpers.viewDepth(firstCarbonDioxide[2].p),
+        helpers.viewDepth(firstCarbonDioxide[1].p),
+        "both CO2 oxygens must remain in the visible screen plane"
+      );
+      assert.strictEqual(
+        helpers.latticeSites("nacl", 1).filter((site) => site.role === 0).length,
+        4,
+        "one NaCl cell must place four ions on alternating corners"
+      );
+      assert.strictEqual(
+        helpers.latticeSites("nacl", 1).filter((site) => site.role === 1).length,
+        4,
+        "one NaCl cell must place the other four ions on alternating corners"
+      );
+      assert.strictEqual(helpers.cellEdgeSegments(1).length, 12, "one cell must draw 12 edge segments");
+      assert.strictEqual(helpers.cellEdgeSegments(2).length, 54, "eight cells must draw the complete 2x2x2 grid");
+      assert.deepStrictEqual(helpers.adjustedRgb([100, 150, 200], 100), [100, 150, 200], "100% must preserve RGB");
+      assert.deepStrictEqual(helpers.adjustedRgb([100, 150, 200], 40), [40, 60, 80], "lower brightness must darken RGB");
+      assert.deepStrictEqual(helpers.adjustedRgb([100, 150, 200], 160), [255, 255, 255], "maximum brightness must approach white");
+      assertClose(helpers.adjustedK(80, 100), 80, "100% must preserve grayscale K");
+      assertClose(helpers.adjustedK(80, 160), 0, "maximum grayscale brightness must reach K0");
+      assertClose(helpers.adjustedK(0, 40), 90, "minimum grayscale brightness must reach K90");
+      assertClose(helpers.adjustedK(15, 40), 90, "minimum flat-sphere brightness must reach K90");
+
+      const projectedCorners = helpers.CELL_CORNERS.map((p) => helpers.screenPoint(p, 1, 0, 0));
+      assert.strictEqual(
+        helpers.convexHull(projectedCorners).length,
+        6,
+        "orthographic cube silhouette must be a hexagon"
+      );
+      const origin = helpers.screenPoint([0, 0, 0], 1, 0, 0);
+      const opposite = helpers.screenPoint([1, 1, 1], 1, 0, 0);
+      assert.ok(
+        Math.hypot(opposite[0] - origin[0], opposite[1] - origin[1]) > 0.1,
+        "three-quarter view must not collapse opposite corners"
+      );
+      assert.ok(helpers.viewDepth([1, 1, 1]) > helpers.viewDepth([0, 0, 0]), "camera depth must use all three axes");
+      assert.ok(
+        helpers.projectionState().VIEW.every((value) => value > 0),
+        "valid corner angles must produce a positive three-axis camera depth"
+      );
+      helpers.setProjectionAngles(120, 120, 100);
+      const isoOrigin = helpers.screenPoint([0, 0, 0], 1, 0, 0);
+      const isoAxisLengths = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map((axis) => {
+        const projected = helpers.screenPoint(axis, 1, 0, 0);
+        return Math.hypot(projected[0] - isoOrigin[0], projected[1] - isoOrigin[1]);
+      });
+      isoAxisLengths.forEach((length) => assertClose(length, 1, "isometric axes must have equal length"));
+      helpers.setProjectionAngles(120, 120, 50);
+      const compressedOrigin = helpers.screenPoint([0, 0, 0], 1, 0, 0);
+      const compressedAxisLengths = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map((axis) => {
+        const projected = helpers.screenPoint(axis, 1, 0, 0);
+        return Math.hypot(projected[0] - compressedOrigin[0], projected[1] - compressedOrigin[1]);
+      });
+      assertClose(compressedAxisLengths[0], 1, "depth ratio must preserve the near-face width axis");
+      assertClose(compressedAxisLengths[1], 1, "depth ratio must preserve the vertical axis");
+      assertClose(compressedAxisLengths[2], 0.5, "depth ratio must change only the near-to-far axis");
+      helpers.setProjectionAngles(131, 109, 100);
+      assert.strictEqual(helpers.boundaryCount([0, 0, 0]), 3, "corner atoms must touch three cell planes");
+      assert.strictEqual(helpers.boundaryCount([0.5, 0.5, 0]), 1, "face atoms must touch one cell plane");
+      assert.strictEqual(helpers.boundaryCount([0.5, 0.5, 0.5]), 0, "body atoms must not touch a cell plane");
+      const clippedTriangle = helpers.clipPolygonToCell([
+        [-0.5, 0.5, 0.5],
+        [0.5, 0.5, 0.5],
+        [0.5, 1.5, 0.5],
+      ]);
+      assert.ok(clippedTriangle.length >= 3, "cell clipping must retain the triangle portion inside the unit cell");
+      assert.ok(
+        clippedTriangle.every((point) => point.every((value) => value >= -1e-9 && value <= 1 + 1e-9)),
+        "cell-clipped mesh vertices must stay inside the unit cell"
+      );
+      assert.deepStrictEqual(
+        helpers.convexHull([[0, 0], [2, 0], [2, 2], [0, 2], [1, 1]]),
+        [[0, 0], [2, 0], [2, 2], [0, 2]],
+        "interior points must be dropped from the silhouette"
+      );
+    } catch (error) {
+      console.error(`${cubicLattice}: executable lattice geometry regression failed: ${error.message}`);
+      failures++;
+    }
+  }
+}
+
+{
+  if (!exists(graphiteCrystal)) {
+    console.error(`${graphiteCrystal}: graphite-crystal script is missing`);
+    failures++;
+  } else {
+    const source = read(graphiteCrystal);
+    const required = [
+      'new Window("dialog", "흑연 결정 구조 생성기")',
+      'function generateHoneycombSheet(columns, rows, shiftX, shiftZ)',
+      'function buildGraphiteGeometry(columns, rows, layerCount, layerGapRatio, stacking, interlayer)',
+      'radAB = pnlStack.add("radiobutton", undefined, "AB 적층 (흑연)")',
+      'radAA = pnlStack.add("radiobutton", undefined, "AA 적층")',
+      'var chkInterlayer = pnlOptions.add("checkbox", undefined, "층간 점선")',
+      'var chkLit3D = pnlOptions.add("checkbox", undefined, "구 3D 조명 효과")',
+      'var chkOutline = pnlOptions.add("checkbox", undefined, "구 외곽선")',
+      'var sldColumns = addSlider(pnlGeometry, "가로 육각형", 1, 10, 4',
+      'var sldRows = addSlider(pnlGeometry, "세로 육각형", 1, 8, 3',
+      'var sldLayers = addSlider(pnlGeometry, "적층 수", 1, 8, 3',
+      'var sldBond = addSlider(pnlGeometry, "C-C 결합 길이", 2, 15, 6',
+      'var sldLayerGap = addSlider(pnlGeometry, "층간 거리", 3, 35, 14',
+      'var sldAtom = addSlider(pnlGeometry, "탄소 구 지름", 1, 12, 4',
+      'var sldBrightness = addSlider(pnlGeometry, "탄소 밝기", 40, 160, 100',
+      'var sldAngleR = addSlider(pnlView, "오른쪽 각도", 91, 179, 132',
+      'var sldAngleL = addSlider(pnlView, "왼쪽 각도", 91, 179, 108',
+      'var sldDepth = addSlider(pnlView, "앞·뒤 면 거리", 40, 160, 100',
+      'record.interlayer ? kColor(65) : kColor(100)',
+      'if (record.interlayer) line.strokeDashes = [3, 2]',
+      'holder.name = "GraphiteCrystal_Preview"',
+      'var PREF_KEY = "GraphiteCrystalMaker/settings"',
+      'drawGraphite(collectOptions(), app.activeDocument.activeLayer)',
+    ];
+    for (const token of required) {
+      if (!source.includes(token)) {
+        console.error(`${graphiteCrystal}: missing graphite-crystal token: ${token}`);
+        failures++;
+      }
+    }
+
+    const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+    const activeDocLine = lineOf(source, /app\.activeDocument/);
+    if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+      console.error(`${graphiteCrystal}: app.documents.length guard must run before app.activeDocument`);
+      failures++;
+    }
+
+    try {
+      const declarations = [
+        extractFunction(source, "pointKey"),
+        extractFunction(source, "generateHoneycombSheet"),
+        extractFunction(source, "buildGraphiteGeometry"),
+      ].join("\n");
+      const helpers = new Function(
+        `var SQRT3 = Math.sqrt(3);\n${declarations}\n` +
+        `return {generateHoneycombSheet, buildGraphiteGeometry};`
+      )();
+
+      const singleHexagon = helpers.generateHoneycombSheet(1, 1, 0, 0);
+      assert.strictEqual(singleHexagon.atoms.length, 6, "one graphite hexagon must have six carbon atoms");
+      assert.strictEqual(singleHexagon.bonds.length, 6, "one graphite hexagon must have six C-C bonds");
+
+      const fusedHexagons = helpers.generateHoneycombSheet(2, 1, 0, 0);
+      assert.strictEqual(fusedHexagons.atoms.length, 10, "two fused hexagons must share two carbon atoms");
+      assert.strictEqual(fusedHexagons.bonds.length, 11, "two fused hexagons must share one C-C bond");
+      const fusedKeys = new Set(fusedHexagons.atoms.map((atom) => atom.key));
+      assert.strictEqual(fusedKeys.size, fusedHexagons.atoms.length, "graphite sheet atoms must be deduplicated");
+      for (const bond of fusedHexagons.bonds) {
+        const a = fusedHexagons.atoms[bond.a];
+        const b = fusedHexagons.atoms[bond.b];
+        assertClose(Math.hypot(a.x - b.x, a.z - b.z), 1, "all in-layer C-C bonds must have unit length");
+      }
+
+      const baseSheet = helpers.generateHoneycombSheet(2, 2, 0, 0);
+      const aaGeometry = helpers.buildGraphiteGeometry(2, 2, 3, 2.4, "AA", true);
+      assert.strictEqual(
+        aaGeometry.atoms.length,
+        baseSheet.atoms.length * 3,
+        "three graphite layers must repeat the complete sheet"
+      );
+      assert.strictEqual(
+        aaGeometry.bonds.filter((bond) => bond.interlayer).length,
+        baseSheet.atoms.length * 2,
+        "AA stacking must align every atom between adjacent layers"
+      );
+      const abGeometry = helpers.buildGraphiteGeometry(2, 2, 3, 2.4, "AB", true);
+      const abInterlayerCount = abGeometry.bonds.filter((bond) => bond.interlayer).length;
+      assert.ok(abInterlayerCount > 0, "AB stacking must retain aligned interlayer sites");
+      assert.ok(
+        abInterlayerCount < baseSheet.atoms.length * 2,
+        "AB stacking must align fewer atoms than AA stacking"
+      );
+      const noInterlayer = helpers.buildGraphiteGeometry(2, 2, 3, 2.4, "AB", false);
+      assert.strictEqual(
+        noInterlayer.bonds.filter((bond) => bond.interlayer).length,
+        0,
+        "disabling interlayer lines must remove all vertical dashed bonds"
+      );
+    } catch (error) {
+      console.error(`${graphiteCrystal}: executable graphite geometry regression failed: ${error.message}`);
+      failures++;
+    }
+  }
+}
+
+{
+  if (!exists(diamondCrystal)) {
+    console.error(`${diamondCrystal}: diamond-crystal script is missing`);
+    failures++;
+  } else {
+    const source = read(diamondCrystal);
+    const required = [
+      'new Window("dialog", "다이아몬드 결정 구조 생성기")',
+      'var DIAMOND_NEIGHBOR_DISTANCE = Math.sqrt(3) / 4',
+      'function diamondSites(span)',
+      'function diamondBonds(sites)',
+      'function cellEdgeSegments(span)',
+      'var radOneCell = pnlCell.add("radiobutton", undefined, "1셀")',
+      'var radEightCells = pnlCell.add("radiobutton", undefined, "8셀 (2×2×2)")',
+      'var radPyramid = pnlCell.add("radiobutton", undefined, "피라미드 클러스터")',
+      'var chkCell = pnlDisplay.add("checkbox", undefined, "단위세포 라인")',
+      'var chkBonds = pnlDisplay.add("checkbox", undefined, "C-C 결합선")',
+      'var chkCompleteBoundary = pnlDisplay.add("checkbox", undefined, "경계 결합 완성")',
+      'var chkHiddenDashed = pnlDisplay.add("checkbox", undefined, "숨김선 점선 (해제: 실선)")',
+      'var sldCell = addSlider(pnlSize, "셀 한 변", 8, 80, 28',
+      'pyramidInfoRow.add("statictext", undefined, "3층 (고정)")',
+      'var sldAtom = addSlider(pnlSize, "탄소 구 지름", 1, 12, 4',
+      'var sldBondWidth = addSlider(pnlSize, "결합선 굵기", 0.1, 2, 0.5',
+      'var sldBrightness = addSlider(pnlSize, "탄소 밝기", 40, 160, 100',
+      'var sldAngleR = addSlider(pnlView, "오른쪽 각도", 91, 179, 131',
+      'var sldAngleL = addSlider(pnlView, "왼쪽 각도", 91, 179, 109',
+      'var sldDepth = addSlider(pnlView, "앞·뒤 면 거리", 40, 160, 100',
+      'hiddenDashed: chkHiddenDashed.value && (radOneCell.value || radPyramid.value)',
+      'function completeDiamondNetwork(span)',
+      'function diamondPyramidGeometry(levels)',
+      'holder.name = "DiamondCrystal_Preview"',
+      'var PREF_KEY = "DiamondCrystalMaker/settings"',
+      'drawDiamond(collectOptions(), app.activeDocument.activeLayer)',
+    ];
+    for (const token of required) {
+      if (!source.includes(token)) {
+        console.error(`${diamondCrystal}: missing diamond-crystal token: ${token}`);
+        failures++;
+      }
+    }
+
+    const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+    const activeDocLine = lineOf(source, /app\.activeDocument/);
+    if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+      console.error(`${diamondCrystal}: app.documents.length guard must run before app.activeDocument`);
+      failures++;
+    }
+
+    try {
+      const basisMatch = source.match(/var DIAMOND_BASIS = \[[\s\S]*?\n    \];/);
+      if (!basisMatch) throw new Error("missing diamond basis declaration");
+      const declarations = [
+        basisMatch[0],
+        extractFunction(source, "coordinateKey"),
+        extractFunction(source, "diamondSitesInBounds"),
+        extractFunction(source, "diamondSites"),
+        extractFunction(source, "diamondBonds"),
+        extractFunction(source, "completeDiamondNetwork"),
+        extractFunction(source, "diamondPyramidGeometry"),
+        extractFunction(source, "cellEdgeSegments"),
+      ].join("\n");
+      const helpers = new Function(
+        `var DIAMOND_NEIGHBOR_DISTANCE = Math.sqrt(3) / 4;\n${declarations}\n` +
+        `return {diamondSites, diamondBonds, completeDiamondNetwork, diamondPyramidGeometry, cellEdgeSegments};`
+      )();
+
+      const oneCellSites = helpers.diamondSites(1);
+      const oneCellBonds = helpers.diamondBonds(oneCellSites);
+      assert.strictEqual(oneCellSites.length, 18, "one diamond cell must include 14 FCC boundary atoms and 4 internal atoms");
+      assert.strictEqual(oneCellBonds.length, 16, "one diamond cell must contain sixteen internal nearest-neighbor bonds");
+      assert.strictEqual(
+        new Set(oneCellSites.map((site) => site.key)).size,
+        oneCellSites.length,
+        "diamond atoms shared by periodic cells must be deduplicated"
+      );
+      for (const bond of oneCellBonds) {
+        const a = oneCellSites[bond.a].p;
+        const b = oneCellSites[bond.b].p;
+        assertClose(
+          Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]),
+          Math.sqrt(3) / 4,
+          "diamond bonds must use the tetrahedral nearest-neighbor distance"
+        );
+      }
+      const internalAtoms = oneCellSites
+        .map((site, index) => ({ site, index }))
+        .filter(({ site }) => site.p.every((value) => value > 0 && value < 1));
+      assert.strictEqual(internalAtoms.length, 4, "one diamond cell must contain four internal tetrahedral atoms");
+      for (const { index } of internalAtoms) {
+        assert.strictEqual(
+          oneCellBonds.filter((bond) => bond.a === index || bond.b === index).length,
+          4,
+          "each internal diamond carbon must have four tetrahedral bonds"
+        );
+      }
+      const completedCell = helpers.completeDiamondNetwork(1);
+      const completedIndexByKey = new Map(
+        completedCell.sites.map((site, index) => [site.key, index])
+      );
+      for (const coreSite of oneCellSites) {
+        const completedIndex = completedIndexByKey.get(coreSite.key);
+        assert.notStrictEqual(completedIndex, undefined, "completed diamond network must retain every cell atom");
+        assert.strictEqual(
+          completedCell.bonds.filter(
+            (bond) => bond.a === completedIndex || bond.b === completedIndex
+          ).length,
+          4,
+          "boundary completion must give every unit-cell carbon four nearest neighbors"
+        );
+      }
+
+      const pyramid = helpers.diamondPyramidGeometry(3);
+      assert.strictEqual(pyramid.sites.length, 14, "three-layer diamond pyramid must contain 1 + 1 + 3 + 3 + 6 atoms");
+      assert.strictEqual(pyramid.bonds.length, 16, "three-layer diamond pyramid must connect all adjacent carbon rows");
+      assert.deepStrictEqual(
+        [...new Set(pyramid.sites.map((site) => site.tier))].sort(),
+        [0, 1, 2],
+        "diamond pyramid must contain exactly three atomic layers"
+      );
+      assert.deepStrictEqual(
+        [0, 1, 2, 3, 4].map(
+          (row) => pyramid.sites.filter((site) => site.row === row).length
+        ),
+        [1, 1, 3, 3, 6],
+        "diamond pyramid rows must follow the requested 1-1-3-3-6 arrangement"
+      );
+      const pyramidDegrees = pyramid.sites.map((site, index) =>
+        pyramid.bonds.filter((bond) => bond.a === index || bond.b === index).length
+      );
+      assert.strictEqual(pyramidDegrees[0], 1, "diamond pyramid apex must connect to the upper center");
+      assert.strictEqual(pyramidDegrees[1], 4, "upper-center carbon must connect to apex and three lower carbons");
+      assert.ok(
+        pyramid.sites
+          .map((site, index) => ({ site, degree: pyramidDegrees[index] }))
+          .filter(({ site }) => site.row === 2)
+          .every(({ degree }) => degree === 2),
+        "three upper lower-row carbons must bridge the two tetrahedral levels"
+      );
+      assert.ok(
+        pyramid.sites
+          .map((site, index) => ({ site, degree: pyramidDegrees[index] }))
+          .filter(({ site }) => site.row === 3)
+          .every(({ degree }) => degree === 4),
+        "three lower-center carbons must each have four bonds"
+      );
+      assert.ok(
+        pyramid.sites
+          .map((site, index) => ({ site, degree: pyramidDegrees[index] }))
+          .filter(({ site }) => site.row === 4)
+          .every(({ degree }) => degree === 1 || degree === 2),
+        "finite pyramid boundary carbons may terminate with one or two bonds"
+      );
+      for (const bond of pyramid.bonds) {
+        const a = pyramid.sites[bond.a].p;
+        const b = pyramid.sites[bond.b].p;
+        assertClose(
+          Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]),
+          Math.sqrt(3) / 4,
+          "diamond pyramid must preserve tetrahedral nearest-neighbor bonds"
+        );
+      }
+
+      const eightCellSites = helpers.diamondSites(2);
+      const eightCellBonds = helpers.diamondBonds(eightCellSites);
+      assert.strictEqual(eightCellSites.length, 95, "eight diamond cells must deduplicate shared boundary atoms");
+      assert.strictEqual(eightCellBonds.length, 128, "eight diamond cells must contain all internal nearest-neighbor bonds");
+      assert.strictEqual(helpers.cellEdgeSegments(1).length, 12, "one diamond cell must draw twelve frame edges");
+      assert.strictEqual(helpers.cellEdgeSegments(2).length, 54, "eight diamond cells must draw the complete 2x2x2 frame");
+    } catch (error) {
+      console.error(`${diamondCrystal}: executable diamond geometry regression failed: ${error.message}`);
       failures++;
     }
   }
