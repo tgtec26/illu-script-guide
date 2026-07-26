@@ -22,19 +22,19 @@ var win = new Window('dialog', scriptName + ' \u00A9 www.ladyginpro.ru');
 with (win.add('group')) {
     orientation = 'row';
 
-    var panel = add('panel', undefined, 'What to replace?');
+    var panel = add('panel', undefined, '무엇으로 바꿀까요?');
         panel.orientation = 'column';
         panel.alignChildren = ['fill', 'fill'];
         panel.margins = [20, 30, 20, 20];
 
-        var bufferRadio = panel.add('radiobutton', undefined, 'Object in buffer'),
-            currentRadio = panel.add('radiobutton', undefined, 'Top object'),
-            groupSuccessively = panel.add('radiobutton', undefined, 'All in group (successively)'),
-            randomRadio = panel.add('radiobutton', undefined, 'All in group (random)'),
+        var bufferRadio = panel.add('radiobutton', undefined, '복사한 개체'),
+            currentRadio = panel.add('radiobutton', undefined, '맨 위 개체'),
+            groupSuccessively = panel.add('radiobutton', undefined, '그룹 전체 (순서대로)'),
+            randomRadio = panel.add('radiobutton', undefined, '그룹 전체 (무작위)'),
             groupValue = panel.add('group'),
             randomValue = groupValue.add('edittext', undefined, '100'),
             randomValueUnit = groupValue.add('statictext', undefined, '%'),
-            elementsInGroupCheckbox = panel.add('checkbox', undefined, 'Replace items in a group?');
+            elementsInGroupCheckbox = panel.add('checkbox', undefined, '그룹 안의 개체까지 바꾸기');
 
         groupValue.orientation = 'row';
         groupValue.margins = 0;
@@ -46,12 +46,12 @@ with (win.add('group')) {
         panelCheckboxes.alignChildren = ['fill', 'fill'];
         panelCheckboxes.margins = 20;
 
-        var fitInSizeCheckbox = panelCheckboxes.add('checkbox', undefined, 'Fit to element size');
-            copyWHCheckbox = panelCheckboxes.add('checkbox', undefined, 'Copy Width & Height');
-            saveOriginalCheckbox = panelCheckboxes.add('checkbox', undefined, 'Save original element'),
-            copyColorsCheckbox = panelCheckboxes.add('checkbox', undefined, 'Copy colors from element'),
-            randomRotateCheckbox = panelCheckboxes.add('checkbox', undefined, 'Random element rotation'),
-            symbolByRPCheckbox = panelCheckboxes.add('checkbox', [0, 0, 100, 40], 'Align symbols by\nregistration point');
+        var fitInSizeCheckbox = panelCheckboxes.add('checkbox', undefined, '원래 개체 크기에 맞추기');
+            copyWHCheckbox = panelCheckboxes.add('checkbox', undefined, '가로·세로 크기 복사');
+            saveOriginalCheckbox = panelCheckboxes.add('checkbox', undefined, '원래 개체 남겨두기'),
+            copyColorsCheckbox = panelCheckboxes.add('checkbox', undefined, '원래 개체의 색 가져오기'),
+            randomRotateCheckbox = panelCheckboxes.add('checkbox', undefined, '개체를 무작위로 회전'),
+            symbolByRPCheckbox = panelCheckboxes.add('checkbox', [0, 0, 100, 40], '심볼을 등록점 기준으로\n정렬');
 
         bufferRadio.value = true;
         fitInSizeCheckbox.value = false;
@@ -64,12 +64,12 @@ var winButtons = win.add('group');
     winButtons.alignChildren = ['fill', 'fill'];
     winButtons.margins = [0, 0, 0, 0];
 
-    var cancel = winButtons.add('button', undefined, 'Cancel');
-    cancel.helpTip = 'Press Esc to Close';
+    var cancel = winButtons.add('button', undefined, '취소');
+    cancel.helpTip = 'Esc를 누르면 닫힙니다';
     cancel.onClick = function () { win.close(); }
 
-    var ok = winButtons.add('button', [0, 0, 100, 30], 'OK');
-    ok.helpTip = 'Press Enter to Run';
+    var ok = winButtons.add('button', [0, 0, 100, 30], '확인');
+    ok.helpTip = 'Enter를 누르면 실행됩니다';
     ok.onClick = startAction;
     ok.active = true;
 

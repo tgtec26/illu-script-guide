@@ -42,7 +42,7 @@ app.preferences.setBooleanPreference('ShowExternalJSXWarning', false); // Fix dr
 // Main function
 function main() {
   var SCRIPT = {
-        name: 'Make Numbers Sequence',
+        name: '연속 숫자 채우기',
         version: 'v0.5'
       },
       CFG = {
@@ -59,7 +59,7 @@ function main() {
 
   var tfs = getTextFrames(selection).reverse();
   if (!tfs.length) {
-    alert('Texts not found\nSelect texts and re-run script', 'Script error');
+    alert('텍스트를 찾지 못했습니다.\n\n선택 도구(V)로 숫자를 넣을 텍스트를 선택한 뒤 다시 실행해 주세요.', '스크립트 오류');
     return;
   }
 
@@ -77,7 +77,7 @@ function main() {
       wrapper.alignChildren = ['fill', 'top'];
 
   // Start number
-  var numPnl = wrapper.add('panel', undefined, 'Numbers');
+  var numPnl = wrapper.add('panel', undefined, '숫자');
       numPnl.alignChildren = 'left';
       numPnl.spacing = 15;
       numPnl.margins = [10, 15, 10, 10];
@@ -86,7 +86,7 @@ function main() {
       inpWrapper.spacing = 15;
 
   var startGrp = inpWrapper.add('group');
-  startGrp.add('statictext', undefined, 'Start:');
+  startGrp.add('statictext', undefined, '시작:');
   var startInp = startGrp.add('edittext', undefined, 1);
       startInp.preferredSize.width = 48;
   if (CFG.isMac || CFG.aiVers >= 26.4 || CFG.aiVers <= 17) {
@@ -95,13 +95,13 @@ function main() {
 
   // End number
   var endGrp = inpWrapper.add('group');
-  endGrp.add('statictext', undefined, 'End:');
+  endGrp.add('statictext', undefined, '끝:');
   var endInp = endGrp.add('edittext', undefined, 50);
       endInp.preferredSize.width = 48;
 
   // Increment
   var incGrp = inpWrapper.add('group');
-  incGrp.add('statictext', undefined, 'Increment:');
+  incGrp.add('statictext', undefined, '증가값:');
   var incInp = incGrp.add('edittext', undefined, 5);
       incInp.preferredSize.width = 48;
 
@@ -113,9 +113,9 @@ function main() {
       numOpt_1.orientation = 'column';
       numOpt_1.alignChildren = 'left';
 
-  var isUseAll = numOpt_1.add('checkbox', undefined, 'Number to last text');
-  var isShuffle = numOpt_1.add('checkbox', undefined, 'Shuffle numbers order');
-  var isRmvTf = numOpt_1.add('checkbox', undefined, 'Remove unused texts');
+  var isUseAll = numOpt_1.add('checkbox', undefined, '마지막 텍스트까지 번호 매기기');
+  var isShuffle = numOpt_1.add('checkbox', undefined, '숫자 순서 섞기');
+  var isRmvTf = numOpt_1.add('checkbox', undefined, '사용하지 않은 텍스트 삭제');
 
   // Divider
   var div = numOptWrapper.add('panel', undefined, undefined);
@@ -126,13 +126,13 @@ function main() {
       numOpt_2.orientation = 'column';
       numOpt_2.alignChildren = 'left';
 
-  var isPadZero = numOpt_2.add('checkbox', undefined, 'Add leading zeros');
-      isPadZero.helpTip = 'E.g. 01, 02, 006, 00005';
-  var isAutoZero = numOpt_2.add('radiobutton', undefined, 'Auto number of digits');
+  var isPadZero = numOpt_2.add('checkbox', undefined, '앞에 0 채우기');
+      isPadZero.helpTip = '예: 01, 02, 006, 00005';
+  var isAutoZero = numOpt_2.add('radiobutton', undefined, '자릿수 자동');
       isAutoZero.value = true;
 
   var zeroOpt = numOpt_2.add('group');
-  var isCstmZero = zeroOpt.add('radiobutton', undefined, 'Fixed, no less than:');
+  var isCstmZero = zeroOpt.add('radiobutton', undefined, '최소 자릿수 고정:');
   var zeroInp = zeroOpt.add('edittext', undefined, 3);
       zeroInp.characters = 3;
 
@@ -140,24 +140,24 @@ function main() {
       optWrapper.alignChildren = ['fill', 'top'];
 
   // Sort objects
-  var sortPnl = optWrapper.add('panel', undefined, 'Sort before numbering');
+  var sortPnl = optWrapper.add('panel', undefined, '번호를 매기기 전 정렬');
       sortPnl.alignChildren = 'left';
       sortPnl.margins = [10, 15, 10, 10];
 
-  var isOrder = sortPnl.add('radiobutton', undefined, 'By order in layers');
+  var isOrder = sortPnl.add('radiobutton', undefined, '레이어 순서대로');
       isOrder.value = true;
-  var isRows = sortPnl.add('radiobutton', undefined, 'By rows (like Z)');
-  var isCols = sortPnl.add('radiobutton', undefined, 'By columns (like \u0418)');
+  var isRows = sortPnl.add('radiobutton', undefined, '행 우선 (Z 모양)');
+  var isCols = sortPnl.add('radiobutton', undefined, '열 우선 (\u0418 모양)');
 
   // Replace
-  var rplcPnl = optWrapper.add('panel', undefined, 'Replace text to number');
+  var rplcPnl = optWrapper.add('panel', undefined, '숫자로 바꿀 범위');
       rplcPnl.alignChildren = 'left';
       rplcPnl.margins = [10, 15, 10, 10];
 
-  var isFullRplc = rplcPnl.add('radiobutton', undefined, 'Full text content');
+  var isFullRplc = rplcPnl.add('radiobutton', undefined, '텍스트 전체');
       isFullRplc.value = true;
-  var isNumRplc = rplcPnl.add('radiobutton', undefined, 'Numbers in text');
-  var isPhRplc = rplcPnl.add('radiobutton', undefined, 'Only {%n} placeholder');
+  var isNumRplc = rplcPnl.add('radiobutton', undefined, '텍스트 안의 숫자만');
+  var isPhRplc = rplcPnl.add('radiobutton', undefined, '{%n} 자리표시자만');
 
   // Buttons
   var btns = win.add('group');
@@ -167,21 +167,21 @@ function main() {
 
   var cancel, ok;
   if (CFG.isMac) {
-    cancel = btns.add('button', undefined, 'Cancel', { name: 'cancel' });
-    ok = btns.add('button', undefined, 'OK', { name: 'ok' });
+    cancel = btns.add('button', undefined, '취소', { name: 'cancel' });
+    ok = btns.add('button', undefined, '확인', { name: 'ok' });
   } else {
-    ok = btns.add('button', undefined, 'OK', { name: 'ok' });
-    cancel = btns.add('button', undefined, 'Cancel', { name: 'cancel' });
+    ok = btns.add('button', undefined, '확인', { name: 'ok' });
+    cancel = btns.add('button', undefined, '취소', { name: 'cancel' });
   }
 
-  cancel.helpTip = 'Press Esc to Close';
-  ok.helpTip = 'Press Enter to Run';
+  cancel.helpTip = 'Esc를 누르면 닫힙니다';
+  ok.helpTip = 'Enter를 누르면 실행됩니다';
 
-  btns.add('statictext', undefined, 'Preview');
+  btns.add('statictext', undefined, '미리보기');
   var prvwList = btns.add('statictext', undefined, '1\n2\n3\n4\n5\n6\n7\n8', {multiline: true});
   prvwList.preferredSize.height = 110;
 
-  var copyright = btns.add('statictext', undefined, 'Visit Github');
+  var copyright = btns.add('statictext', undefined, 'Github 방문');
 
   loadSettings(SETTINGS);
   preview();
@@ -381,27 +381,27 @@ function isCorrectEnv() {
     switch (true) {
       case /app/g.test(arg):
         if (!/illustrator/i.test(app.name)) {
-          alert('Wrong application\nRun script from Adobe Illustrator', 'Script error');
+          alert('실행 프로그램이 올바르지 않습니다.\n\nAdobe Illustrator에서 실행해 주세요.', '스크립트 오류');
           return false;
         }
         break;
       case /version/g.test(arg):
         var rqdVers = parseFloat(arg.split(':')[1]);
         if (parseFloat(app.version) < rqdVers) {
-          alert('Wrong app version\nSorry, script only works in Illustrator v.' + rqdVers + ' and later', 'Script error');
+          alert('버전이 낮습니다.\n\n이 스크립트는 Illustrator ' + rqdVers + ' 이상에서만 동작합니다.', '스크립트 오류');
           return false;
         }
         break;
       case /document/g.test(arg):
         if (!app.documents.length) {
-          alert('No documents\nOpen a document and try again', 'Script error');
+          alert('열린 문서가 없습니다.\n\n문서를 연 뒤 다시 실행해 주세요.', '스크립트 오류');
           return false;
         }
         break;
       case /selection/g.test(arg):
         var rqdLen = parseFloat(arg.split(':')[1]);
         if (app.selection.length < rqdLen || selection.typename === 'TextRange') {
-          alert('Few objects are selected\nPlease select at least ' + rqdLen + ' path(s) and try again', 'Script error');
+          alert('선택한 개체가 부족합니다.\n\n텍스트를 ' + rqdLen + '개 이상 선택한 뒤 다시 실행해 주세요.\n문자 도구(T)로 글자를 드래그한 상태에서는 인식되지 않으니, 선택 도구(V)로 텍스트 개체를 선택해 주세요.', '스크립트 오류');
           return false;
         }
         break;
