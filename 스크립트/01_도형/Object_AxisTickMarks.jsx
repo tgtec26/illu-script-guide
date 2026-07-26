@@ -1,5 +1,6 @@
 // Object_AxisTickMarks.jsx
-// 사각형 선택 → L자 축 + 눈금 + 숫자 + 축 범례(구 Graph_AxisLabel) 생성
+#include "Object_setdash_align_helper.jsxinc"
+// 사각형 선택 → L자 축(또는 상자) + 눈금 + 숫자 + 보조선 + 축 범례 생성
 // 범례는 축이 아니라 눈금 숫자의 바깥 경계를 기준으로 간격을 띄운다
 
 (function() {
@@ -25,6 +26,53 @@
         alert("PathItem(사각형)을 선택해주세요.");
         return;
     }
+
+    // 단위·스타일 상수
+    var mmToPt = 2.834645669;
+    var tickLength = 1.0 * mmToPt;
+    var tickWeight = 0.4;
+    var gridWeight = 0.3;
+    var gridDashPattern = [2, 1];
+    var axisWeight = 0.4;
+    var arrowMargin = 3.0 * mmToPt;
+
+    // 사각형 좌표 (원본은 미리보기 동안 숨겼다가 확정 시 삭제)
+    var bounds = rect.geometricBounds;
+    var leftX = bounds[0];
+    var topY = bounds[1];
+    var rightX = bounds[2];
+    var bottomY = bounds[3];
+    var originX = leftX;
+    var originY = bottomY;
+    var rectWasHidden = rect.hidden;
+
+    var blackColor = new CMYKColor();
+    blackColor.cyan = 0;
+    blackColor.magenta = 0;
+    blackColor.yellow = 0;
+    blackColor.black = 100;
+
+    var gridColor = new CMYKColor();
+    gridColor.cyan = 0;
+    gridColor.magenta = 0;
+    gridColor.yellow = 0;
+    gridColor.black = 80;
+
+    var tickFont = app.textFonts.getByName("GSMediumB1");
+    var legendFont = getFont("SpoqaHanSansNeo-Regular");
+
+    // readOptions()가 채우는 옵션 값들
+    var xCount = 5, yCount = 5;
+    var xStart = 1, xStep = 1, yStart = 1, yStep = 1;
+    var xLabelOffset = 0, yLabelOffset = 0;
+    var useLegend = true, useZero = true, useArrow = true;
+    var useBox = false, useXGrid = false, useYGrid = false;
+    var legendAtCenter = false;
+    var xLegendText = "", yLegendText = "";
+    var legendGap = 1 * mmToPt;
+
+    var previewEnabled = true;
+    var previewGroup = null;
 
     // -------------------------------------------------------
     // ScriptUI 다이얼로그
@@ -83,6 +131,11 @@
     var xOffsetOneBtn = xOffsetGroup.add("radiobutton", undefined, "1mm");
     xOffsetOneBtn.value = true;
 
+    var gridGroupRow = dlg.add("group");
+    gridGroupRow.add("statictext", undefined, "보조선:");
+    var xGridCheck = gridGroupRow.add("checkbox", undefined, "X축 보조선");
+    var yGridCheck = gridGroupRow.add("checkbox", undefined, "Y축 보조선");
+
     var legendPanel = dlg.add("panel", undefined, "축 범례");
     legendPanel.orientation = "column";
     legendPanel.alignChildren = "left";
@@ -107,8 +160,13 @@
 
     var legendGapGroup = legendPanel.add("group");
     legendGapGroup.add("statictext", undefined, "숫자와 범례 간격:");
+    var legendGapDownBtn = legendGapGroup.add("button", undefined, "◀");
+    legendGapDownBtn.preferredSize.width = 22;
     var legendGapInput = legendGapGroup.add("edittext", undefined, "1");
     legendGapInput.characters = 6;
+    legendGapInput.justify = "center";
+    var legendGapUpBtn = legendGapGroup.add("button", undefined, "▶");
+    legendGapUpBtn.preferredSize.width = 22;
     legendGapGroup.add("statictext", undefined, "mm");
 
     var zeroCheck = legendPanel.add("checkbox", undefined, "원점에 0 넣기 (대각선 2mm)");
@@ -117,23 +175,97 @@
     var arrowCheck = legendPanel.add("checkbox", undefined, "축 양 끝에 화살표 1 넣기");
     arrowCheck.value = true;
 
-    axisShapeRadio.onClick = updateArrowEnabled;
-    boxShapeRadio.onClick = updateArrowEnabled;
+    var btnGroup = dlg.add("group");
+    var previewCheck = btnGroup.add("checkbox", undefined, "미리보기");
+    previewCheck.value = true;
+    var btnSpacer = btnGroup.add("group");
+    btnSpacer.alignment = ["fill", "center"];
+    var okBtn = btnGroup.add("button", undefined, "확인", { name: "ok" });
+    btnGroup.add("button", undefined, "취소", { name: "cancel" });
+
     function updateArrowEnabled() {
         // 사각형 유지 모드에서는 축 끝이 없어 화살표를 붙일 수 없다
         arrowCheck.enabled = axisShapeRadio.value;
     }
 
-    var btnGroup = dlg.add("group");
-    var okBtn = btnGroup.add("button", undefined, "확인", { name: "ok" });
-    btnGroup.add("button", undefined, "취소", { name: "cancel" });
+    // 모든 컨트롤 변경 시 미리보기 갱신
+    function onOptionChanged() {
+        updateArrowEnabled();
+        updatePreview();
+    }
 
-    var xStart = 1, xStep = 1, yStart = 1, yStep = 1;
+    axisShapeRadio.onClick = onOptionChanged;
+    boxShapeRadio.onClick = onOptionChanged;
+    for (var rb = 0; rb < yBtns.length; rb++) {
+        yBtns[rb].onClick = updatePreview;
+        xBtns[rb].onClick = updatePreview;
+    }
+    yStartInput.onChanging = updatePreview;
+    yStepInput.onChanging = updatePreview;
+    xStartInput.onChanging = updatePreview;
+    xStepInput.onChanging = updatePreview;
+    yOffsetHalfBtn.onClick = updatePreview;
+    yOffsetOneBtn.onClick = updatePreview;
+    xOffsetHalfBtn.onClick = updatePreview;
+    xOffsetOneBtn.onClick = updatePreview;
+    xGridCheck.onClick = updatePreview;
+    yGridCheck.onClick = updatePreview;
+    legendCheck.onClick = updatePreview;
+    xLegendInput.onChanging = updatePreview;
+    yLegendInput.onChanging = updatePreview;
+    legendEndRadio.onClick = updatePreview;
+    legendCenterRadio.onClick = updatePreview;
+    legendGapInput.onChanging = updatePreview;
+    legendGapDownBtn.onClick = function() { stepLegendGap(-1); };
+    legendGapUpBtn.onClick = function() { stepLegendGap(1); };
+
+    // 버튼 한 번 = 0.1mm. 0.1 격자에 맞춰 움직인다.
+    function stepLegendGap(direction) {
+        var value = parseNumber(legendGapInput.text);
+        if (value === null) value = 1;
+        value = Math.round((value + direction * 0.1) * 10) / 10;
+        if (value < 0) value = 0;
+        legendGapInput.text = String(value);
+        updatePreview();
+    }
+    zeroCheck.onClick = updatePreview;
+    arrowCheck.onClick = updatePreview;
+    previewCheck.onClick = function() {
+        previewEnabled = previewCheck.value;
+        updatePreview();
+    };
+
+    okBtn.onClick = function() {
+        if (!readOptions(true)) return;
+        saveSettings();
+        dlg.close(1);
+    };
 
     applySettings();
     updateArrowEnabled();
 
-    okBtn.onClick = function() {
+    rect.hidden = true;
+    rect.selected = false;
+    updatePreview();
+
+    var result = dlg.show();
+    clearPreview();
+
+    if (result === 1) {
+        var finalGroup = drawAxisTicks(true);
+        rect.remove();
+        doc.selection = null;
+        finalGroup.selected = true;
+    } else {
+        rect.hidden = rectWasHidden;
+        rect.selected = true;
+    }
+    app.redraw();
+
+    // -------------------------------------------------------
+    // 옵션 읽기
+    // -------------------------------------------------------
+    function readOptions(showAlert) {
         var values = [
             parseNumber(xStartInput.text),
             parseNumber(xStepInput.text),
@@ -142,42 +274,277 @@
         ];
         for (var v = 0; v < values.length; v++) {
             if (values[v] === null) {
-                alert("시작 숫자와 간격을 숫자로 입력해주세요.");
-                return;
+                if (showAlert) alert("시작 숫자와 간격을 숫자로 입력해주세요.");
+                return false;
             }
         }
-        if (legendCheck.value && parseNumber(legendGapInput.text) === null) {
-            alert("숫자와 범례 간격을 숫자로 입력해주세요.");
-            return;
+        var gapValue = parseNumber(legendGapInput.text);
+        if (legendCheck.value && gapValue === null) {
+            if (showAlert) alert("숫자와 범례 간격을 숫자로 입력해주세요.");
+            return false;
         }
+
         xStart = values[0];
         xStep = values[1];
         yStart = values[2];
         yStep = values[3];
-        saveSettings();
-        dlg.close(1);
-    };
-
-    if (dlg.show() !== 1) return;
-
-    var xCount = 0, yCount = 0;
-    for (var a = 0; a < xBtns.length; a++) {
-        if (xBtns[a].value) { xCount = a + 2; break; }
+        xCount = getSelectedCount(xBtns);
+        yCount = getSelectedCount(yBtns);
+        yLabelOffset = (yOffsetHalfBtn.value ? 0.5 : 1.0) * mmToPt;
+        xLabelOffset = (xOffsetHalfBtn.value ? 0.5 : 1.0) * mmToPt;
+        useLegend = legendCheck.value;
+        useZero = zeroCheck.value;
+        xLegendText = xLegendInput.text;
+        yLegendText = yLegendInput.text;
+        legendGap = (gapValue === null ? 1 : gapValue) * mmToPt;
+        useBox = boxShapeRadio.value;
+        useXGrid = xGridCheck.value;
+        useYGrid = yGridCheck.value;
+        useArrow = arrowCheck.value && !useBox;
+        legendAtCenter = legendCenterRadio.value;
+        return true;
     }
-    for (var b = 0; b < yBtns.length; b++) {
-        if (yBtns[b].value) { yCount = b + 2; break; }
+
+    // -------------------------------------------------------
+    // 미리보기
+    // -------------------------------------------------------
+    function updatePreview() {
+        clearPreview();
+        if (!previewEnabled) {
+            app.redraw();
+            return;
+        }
+        if (!readOptions(false)) {
+            app.redraw();
+            return;
+        }
+        previewGroup = drawAxisTicks(false);
+        previewGroup.name = "AxisTickMarks Preview";
+        app.redraw();
     }
-    var yLabelOffsetMm = yOffsetHalfBtn.value ? 0.5 : 1.0;
-    var xLabelOffsetMm = xOffsetHalfBtn.value ? 0.5 : 1.0;
-    var useLegend = legendCheck.value;
-    var useZero = zeroCheck.value;
-    var xLegendText = xLegendInput.text;
-    var yLegendText = yLegendInput.text;
-    var legendGapMm = parseNumber(legendGapInput.text);
-    if (legendGapMm === null) legendGapMm = 1;
-    var useBox = boxShapeRadio.value;
-    var useArrow = arrowCheck.value && !useBox;
-    var legendAtCenter = legendCenterRadio.value;
+
+    function clearPreview() {
+        if (previewGroup === null) return;
+        try { previewGroup.remove(); } catch (e) {}
+        previewGroup = null;
+    }
+
+    // -------------------------------------------------------
+    // 그리기. isFinal이 아니면 느린 액션(파선 정렬, 화살표)은 생략한다.
+    // -------------------------------------------------------
+    function drawAxisTicks(isFinal) {
+        var group = doc.groupItems.add();
+        group.name = "AxisTickMarks";
+
+        var xLabelLowest = null;
+        var yLabelLeftmost = null;
+
+        // 축: L자(위쪽 끝 → 원점 → 오른쪽 끝) 또는 사각형 상자
+        var axis = group.pathItems.add();
+        if (useBox) {
+            axis.setEntirePath([
+                [originX, topY],
+                [originX, originY],
+                [rightX, originY],
+                [rightX, topY]
+            ]);
+            axis.closed = true;
+        } else {
+            axis.setEntirePath([
+                [originX, topY],
+                [originX, originY],
+                [rightX, originY]
+            ]);
+        }
+        axis.stroked = true;
+        axis.strokeColor = blackColor;
+        axis.strokeWidth = axisWeight;
+        axis.filled = false;
+
+        // 보조선: 80K 파선. 눈금 위치를 따라 반대쪽 끝까지 긋는다
+        var gridLineGroup = group.groupItems.add();
+        gridLineGroup.name = "Grid Lines";
+
+        function addGridLine(x1, y1, x2, y2) {
+            var line = gridLineGroup.pathItems.add();
+            line.setEntirePath([[x1, y1], [x2, y2]]);
+            line.filled = false;
+            line.stroked = true;
+            line.strokeColor = gridColor;
+            line.strokeWidth = gridWeight;
+            try { line.strokeDashes = gridDashPattern; } catch (e) {}
+        }
+
+        // 눈금 간격: 상자 모드는 화살표 여백이 필요 없어 모서리까지 편다
+        var endMargin = useBox ? 0 : arrowMargin;
+        var xSpacing = (rightX - endMargin - originX) / xCount;
+        var ySpacing = (topY - endMargin - originY) / yCount;
+
+        // 텍스트 아웃라인 기준 배치 함수
+        function createAlignedLabel(text, anchorX, anchorY, alignMode) {
+            var tf = doc.textFrames.add();
+            tf.contents = text;
+            tf.textRange.characterAttributes.size = 8;
+            tf.textRange.characterAttributes.textFont = tickFont;
+            tf.textRange.characterAttributes.fillColor = blackColor;
+            tf.top = anchorY;
+            tf.left = anchorX;
+
+            var gb = glyphBounds(tf);
+            var glyphTop = gb[1];
+            var glyphRight = gb[2];
+            var glyphCenterX = (gb[0] + gb[2]) / 2;
+            var glyphCenterY = (gb[1] + gb[3]) / 2;
+
+            if (alignMode === "bottom") {
+                tf.top = tf.top + (anchorY - xLabelOffset - glyphTop);
+                tf.left = tf.left + (anchorX - glyphCenterX);
+                var placedBottom = anchorY - xLabelOffset - (glyphTop - gb[3]);
+                if (xLabelLowest === null || placedBottom < xLabelLowest) xLabelLowest = placedBottom;
+            } else if (alignMode === "left") {
+                tf.left = tf.left + (anchorX - yLabelOffset - glyphRight);
+                tf.top = tf.top + (anchorY - glyphCenterY);
+                var placedLeft = anchorX - yLabelOffset - (glyphRight - gb[0]);
+                if (yLabelLeftmost === null || placedLeft < yLabelLeftmost) yLabelLeftmost = placedLeft;
+            }
+
+            tf.move(group, ElementPlacement.PLACEATEND);
+        }
+
+        function createLegendText(text, font, vertical) {
+            var tf = doc.textFrames.add();
+            tf.contents = text;
+            if (vertical) tf.orientation = TextOrientation.VERTICAL;
+            var attr = tf.textRange.characterAttributes;
+            if (font !== null) attr.textFont = font;
+            attr.size = 8;
+            attr.fillColor = blackColor;
+            return tf;
+        }
+
+        // X축 눈금
+        for (var i = 0; i <= xCount; i++) {
+            var xPos = originX + xSpacing * i;
+
+            var tick = group.pathItems.add();
+            tick.setEntirePath([[xPos, originY], [xPos, originY + tickLength]]);
+            tick.stroked = true;
+            tick.strokeColor = blackColor;
+            tick.strokeWidth = tickWeight;
+            tick.filled = false;
+
+            if (i > 0) {
+                if (useXGrid && xPos < rightX - 0.01) {
+                    addGridLine(xPos, originY, xPos, topY);
+                }
+                createAlignedLabel(formatNumber(xStart + xStep * (i - 1)), xPos, originY, "bottom");
+            }
+        }
+
+        // Y축 눈금
+        for (var j = 0; j <= yCount; j++) {
+            var yPos = originY + ySpacing * j;
+
+            var tick2 = group.pathItems.add();
+            tick2.setEntirePath([[originX, yPos], [originX + tickLength, yPos]]);
+            tick2.stroked = true;
+            tick2.strokeColor = blackColor;
+            tick2.strokeWidth = tickWeight;
+            tick2.filled = false;
+
+            if (j > 0) {
+                if (useYGrid && yPos < topY - 0.01) {
+                    addGridLine(originX, yPos, rightX, yPos);
+                }
+                createAlignedLabel(formatNumber(yStart + yStep * (j - 1)), originX, yPos, "left");
+            }
+        }
+
+        // 축 범례: 숫자 라벨의 바깥 경계에서 지정한 간격만큼 더 바깥에 배치
+        if (useLegend) {
+            var xLegendBase = (xLabelLowest === null) ? (originY - xLabelOffset) : xLabelLowest;
+            var yLegendBase = (yLabelLeftmost === null) ? (originX - yLabelOffset) : yLabelLeftmost;
+
+            if (xLegendText !== "") {
+                var xLegend = createLegendText(xLegendText, legendFont, false);
+                var xb = glyphBounds(xLegend);
+                // 끝: X축 오른쪽 끝 정렬 / 중앙: 축 가운데 정렬. 숫자줄 아래로 간격만큼
+                var xLegendLeft = legendAtCenter
+                    ? (originX + rightX) / 2 - (xb[2] - xb[0]) / 2
+                    : rightX - (xb[2] - xb[0]);
+                moveGlyphTo(xLegend, xLegendLeft, xLegendBase - legendGap);
+                xLegend.move(group, ElementPlacement.PLACEATEND);
+            }
+
+            if (yLegendText !== "") {
+                var yLegend = createLegendText(yLegendText, legendFont, true);
+                var yb = glyphBounds(yLegend);
+                // 끝: Y축 위 끝 정렬 / 중앙: 축 가운데 정렬. 숫자열 왼쪽으로 간격만큼
+                var yLegendTop = legendAtCenter
+                    ? (originY + topY) / 2 + (yb[1] - yb[3]) / 2
+                    : topY;
+                moveGlyphTo(yLegend, yLegendBase - legendGap - (yb[2] - yb[0]), yLegendTop);
+                yLegend.move(group, ElementPlacement.PLACEATEND);
+            }
+        }
+
+        // 원점 0: 원점에서 좌하단 45도 대각선 2mm (글자 중심 기준)
+        if (useZero) {
+            var zeroGap = 2 * mmToPt / Math.sqrt(2);
+            var zeroText = createLegendText("0", tickFont, false);
+            var zb = glyphBounds(zeroText);
+            moveGlyphTo(
+                zeroText,
+                originX - zeroGap - (zb[2] - zb[0]) / 2,
+                originY - zeroGap + (zb[1] - zb[3]) / 2
+            );
+            zeroText.move(group, ElementPlacement.PLACEATEND);
+        }
+
+        if (gridLineGroup.pathItems.length > 0) {
+            // 파선을 모퉁이와 패스 끝에 맞춰 정렬(스트로크 패널의 두 번째 파선 옵션).
+            // 액션을 거치는 느린 작업이라 미리보기에서는 생략한다.
+            if (isFinal) {
+                applyDashPatternToItems([gridLineGroup], gridDashPattern, false);
+            }
+            gridLineGroup.zOrder(ZOrderMethod.SENDTOBACK);
+        } else {
+            gridLineGroup.remove();
+        }
+
+        // 축 양 끝 화살표: DOM에 노출되지 않는 속성이라 액션으로 적용. 미리보기에서는 생략
+        if (isFinal && useArrow) {
+            applyAxisArrowheads(axis);
+        }
+
+        return group;
+    }
+
+    // -------------------------------------------------------
+    // 공용 헬퍼
+    // -------------------------------------------------------
+    function getFont(name) {
+        try {
+            return app.textFonts.getByName(name);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // 글리프의 보이는 경계 측정 (복제 → 윤곽선 변환 → 경계 확인 → 삭제)
+    function glyphBounds(tf) {
+        var dup = tf.duplicate();
+        var outline = dup.createOutline();
+        var gb = outline.geometricBounds; // [left, top, right, bottom]
+        outline.remove();
+        return gb;
+    }
+
+    // 글리프 경계의 (left, top)이 목표 지점에 오도록 이동
+    function moveGlyphTo(tf, targetLeft, targetTop) {
+        var gb = glyphBounds(tf);
+        tf.translate(targetLeft - gb[0], targetTop - gb[1]);
+    }
 
     function getSelectedCount(btns) {
         for (var i = 0; i < btns.length; i++) {
@@ -186,9 +553,24 @@
         return 5;
     }
 
+    function parseNumber(text) {
+        var normalized = String(text).replace(/,/g, ".").replace(/^\s+|\s+$/g, "");
+        if (normalized === "") return null;
+        var value = Number(normalized);
+        return isFinite(value) ? value : null;
+    }
+
+    function formatNumber(value) {
+        var rounded = Math.round(value * 10000) / 10000;
+        return String(rounded);
+    }
+
+    // -------------------------------------------------------
+    // 설정 저장 · 복원
+    // -------------------------------------------------------
     function saveSettings() {
         var parts = [
-            "v5",
+            "v6",
             getSelectedCount(yBtns),
             yStartInput.text,
             yStepInput.text,
@@ -204,7 +586,9 @@
             zeroCheck.value ? "1" : "0",
             arrowCheck.value ? "1" : "0",
             boxShapeRadio.value ? "1" : "0",
-            legendCenterRadio.value ? "1" : "0"
+            legendCenterRadio.value ? "1" : "0",
+            xGridCheck.value ? "1" : "0",
+            yGridCheck.value ? "1" : "0"
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -214,7 +598,7 @@
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v5" || p.length < 17) return;
+        if (p[0] !== "v6" || p.length < 19) return;
         try {
             selectCount(yBtns, parseInt(p[1], 10));
             yStartInput.text = p[2];
@@ -236,6 +620,8 @@
             axisShapeRadio.value = !boxShapeRadio.value;
             legendCenterRadio.value = (p[16] === "1");
             legendEndRadio.value = !legendCenterRadio.value;
+            xGridCheck.value = (p[17] === "1");
+            yGridCheck.value = (p[18] === "1");
         } catch (e) {}
     }
 
@@ -246,248 +632,9 @@
         }
     }
 
-    function parseNumber(text) {
-        var normalized = String(text).replace(/,/g, ".").replace(/^\s+|\s+$/g, "");
-        if (normalized === "") return null;
-        var value = Number(normalized);
-        return isFinite(value) ? value : null;
-    }
-
-    function formatNumber(value) {
-        var rounded = Math.round(value * 10000) / 10000;
-        return String(rounded);
-    }
-
-    // 단위 변환
-    var mmToPt = 2.834645669;
-    var tickLength = 1.0 * mmToPt;
-    var tickWeight = 0.4;
-    var axisWeight = 0.4;
-    var endMargin = 3.0 * mmToPt;
-    var xLabelOffset = xLabelOffsetMm * mmToPt;
-    var yLabelOffset = yLabelOffsetMm * mmToPt;
-
-    // 사각형 좌표 저장 후 삭제
-    var bounds = rect.geometricBounds;
-    var leftX = bounds[0];
-    var topY = bounds[1];
-    var rightX = bounds[2];
-    var bottomY = bounds[3];
-
-    var originX = leftX;
-    var originY = bottomY;
-
-    rect.remove();
-
-    // 색상
-    var blackColor = new CMYKColor();
-    blackColor.cyan = 0;
-    blackColor.magenta = 0;
-    blackColor.yellow = 0;
-    blackColor.black = 100;
-
-    // 그룹 생성
-    var group = doc.groupItems.add();
-    group.name = "AxisTickMarks";
-
     // -------------------------------------------------------
-    // 축: L자(위쪽 끝 → 원점 → 오른쪽 끝) 또는 사각형 상자
+    // 화살표 액션
     // -------------------------------------------------------
-    var axis = group.pathItems.add();
-    if (useBox) {
-        axis.setEntirePath([
-            [originX, topY],
-            [originX, originY],
-            [rightX, originY],
-            [rightX, topY]
-        ]);
-        axis.closed = true;
-    } else {
-        axis.setEntirePath([
-            [originX, topY],       // Y축 위쪽 끝
-            [originX, originY],    // 원점
-            [rightX, originY]      // X축 오른쪽 끝
-        ]);
-    }
-    axis.stroked = true;
-    axis.strokeColor = blackColor;
-    axis.strokeWidth = axisWeight;
-    axis.filled = false;
-
-    // -------------------------------------------------------
-    // 눈금 간격 계산
-    // -------------------------------------------------------
-    if (useBox) endMargin = 0;
-
-    var xEnd = rightX - endMargin;
-    var xSpacing = (xEnd - originX) / xCount;
-
-    var yEnd = topY - endMargin;
-    var ySpacing = (yEnd - originY) / yCount;
-
-    var tickFont = app.textFonts.getByName("GSMediumB1");
-    var legendFont = getFont("SpoqaHanSansNeo-Regular");
-    var legendGap = legendGapMm * mmToPt;
-
-    // 범례는 축이 아니라 숫자 라벨의 바깥 경계를 기준으로 배치하므로
-    // 숫자를 그리면서 X축 라벨의 가장 아래, Y축 라벨의 가장 왼쪽 값을 모아둔다
-    var xLabelLowest = null;
-    var yLabelLeftmost = null;
-
-    function getFont(name) {
-        try {
-            return app.textFonts.getByName(name);
-        } catch (e) {
-            return null;
-        }
-    }
-
-    // 텍스트 아웃라인 기준 배치 함수
-    function createAlignedLabel(text, anchorX, anchorY, alignMode) {
-        var tf = doc.textFrames.add();
-        tf.contents = text;
-        tf.textRange.characterAttributes.size = 8;
-        tf.textRange.characterAttributes.textFont = tickFont;
-        tf.textRange.characterAttributes.fillColor = blackColor;
-        tf.top = anchorY;
-        tf.left = anchorX;
-
-        var tfCopy = tf.duplicate();
-        var outlined = tfCopy.createOutline();
-        var gb = outlined.geometricBounds;
-        var glyphTop = gb[1];
-        var glyphRight = gb[2];
-        var glyphCenterX = (gb[0] + gb[2]) / 2;
-        var glyphCenterY = (gb[1] + gb[3]) / 2;
-
-        outlined.remove();
-
-        if (alignMode === "bottom") {
-            tf.top = tf.top + (anchorY - xLabelOffset - glyphTop);
-            tf.left = tf.left + (anchorX - glyphCenterX);
-            var placedBottom = anchorY - xLabelOffset - (glyphTop - gb[3]);
-            if (xLabelLowest === null || placedBottom < xLabelLowest) xLabelLowest = placedBottom;
-        }
-        else if (alignMode === "left") {
-            tf.left = tf.left + (anchorX - yLabelOffset - glyphRight);
-            tf.top = tf.top + (anchorY - glyphCenterY);
-            var placedLeft = anchorX - yLabelOffset - (glyphRight - gb[0]);
-            if (yLabelLeftmost === null || placedLeft < yLabelLeftmost) yLabelLeftmost = placedLeft;
-        }
-
-        tf.move(group, ElementPlacement.PLACEATEND);
-    }
-
-    // 글리프의 보이는 경계 측정 (복제 → 윤곽선 변환 → 경계 확인 → 삭제)
-    function glyphBounds(tf) {
-        var dup = tf.duplicate();
-        var outline = dup.createOutline();
-        var gb = outline.geometricBounds; // [left, top, right, bottom]
-        outline.remove();
-        return gb;
-    }
-
-    // 글리프 경계의 (left, top)이 목표 지점에 오도록 이동
-    function moveGlyphTo(tf, targetLeft, targetTop) {
-        var gb = glyphBounds(tf);
-        tf.translate(targetLeft - gb[0], targetTop - gb[1]);
-    }
-
-    function createLegendText(text, font, vertical) {
-        var tf = doc.textFrames.add();
-        tf.contents = text;
-        if (vertical) tf.orientation = TextOrientation.VERTICAL;
-        var attr = tf.textRange.characterAttributes;
-        if (font !== null) attr.textFont = font;
-        attr.size = 8;
-        attr.fillColor = blackColor;
-        return tf;
-    }
-
-    // X축 눈금 생성
-    for (var i = 0; i <= xCount; i++) {
-        var xPos = originX + xSpacing * i;
-
-        var tick = group.pathItems.add();
-        tick.setEntirePath([[xPos, originY], [xPos, originY + tickLength]]);
-        tick.stroked = true;
-        tick.strokeColor = blackColor;
-        tick.strokeWidth = tickWeight;
-        tick.filled = false;
-
-        if (i > 0) {
-            createAlignedLabel(formatNumber(xStart + xStep * (i - 1)), xPos, originY, "bottom");
-        }
-    }
-
-    // Y축 눈금 생성
-    for (var j = 0; j <= yCount; j++) {
-        var yPos = originY + ySpacing * j;
-
-        var tick2 = group.pathItems.add();
-        tick2.setEntirePath([[originX, yPos], [originX + tickLength, yPos]]);
-        tick2.stroked = true;
-        tick2.strokeColor = blackColor;
-        tick2.strokeWidth = tickWeight;
-        tick2.filled = false;
-
-        if (j > 0) {
-            createAlignedLabel(formatNumber(yStart + yStep * (j - 1)), originX, yPos, "left");
-        }
-    }
-
-    // -------------------------------------------------------
-    // 축 범례: 숫자 라벨의 바깥 경계에서 지정한 간격만큼 더 바깥에 배치
-    // (숫자가 없으면 축선을 기준으로 삼는다)
-    // -------------------------------------------------------
-    if (useLegend) {
-        var xLegendBase = (xLabelLowest === null) ? (originY - xLabelOffset) : xLabelLowest;
-        var yLegendBase = (yLabelLeftmost === null) ? (originX - yLabelOffset) : yLabelLeftmost;
-
-        if (xLegendText !== "") {
-            var xLegend = createLegendText(xLegendText, legendFont, false);
-            var xb = glyphBounds(xLegend);
-            // 끝: X축 오른쪽 끝 정렬 / 중앙: 축 가운데 정렬. 숫자줄 아래로 간격만큼
-            var xLegendLeft = legendAtCenter
-                ? (originX + rightX) / 2 - (xb[2] - xb[0]) / 2
-                : rightX - (xb[2] - xb[0]);
-            moveGlyphTo(xLegend, xLegendLeft, xLegendBase - legendGap);
-            xLegend.move(group, ElementPlacement.PLACEATEND);
-        }
-
-        if (yLegendText !== "") {
-            var yLegend = createLegendText(yLegendText, legendFont, true);
-            var yb = glyphBounds(yLegend);
-            // 끝: Y축 위 끝 정렬 / 중앙: 축 가운데 정렬. 숫자열 왼쪽으로 간격만큼
-            var yLegendTop = legendAtCenter
-                ? (originY + topY) / 2 + (yb[1] - yb[3]) / 2
-                : topY;
-            moveGlyphTo(yLegend, yLegendBase - legendGap - (yb[2] - yb[0]), yLegendTop);
-            yLegend.move(group, ElementPlacement.PLACEATEND);
-        }
-    }
-
-    // 원점 0: 원점에서 좌하단 45도 대각선 2mm (글자 중심 기준)
-    if (useZero) {
-        var zeroGap = 2 * mmToPt / Math.sqrt(2);
-        var zeroText = createLegendText("0", tickFont, false);
-        var zb = glyphBounds(zeroText);
-        moveGlyphTo(
-            zeroText,
-            originX - zeroGap - (zb[2] - zb[0]) / 2,
-            originY - zeroGap + (zb[1] - zb[3]) / 2
-        );
-        zeroText.move(group, ElementPlacement.PLACEATEND);
-    }
-
-    // 축 양 끝 화살표: DOM에 노출되지 않는 속성이라 액션(ai_plugin_setStroke)으로 적용한다
-    if (useArrow) {
-        applyAxisArrowheads(axis);
-    }
-
-    doc.selection = null;
-    group.selected = true;
-
     function applyAxisArrowheads(axisPath) {
         var actionSetName = "Codex_AxisTools";
         var actionName = "AxisArrowheads";
