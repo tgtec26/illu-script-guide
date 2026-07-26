@@ -83,13 +83,15 @@
     divisionRow.alignChildren = ["left", "center"];
     var divisionLabel = divisionRow.add("statictext", undefined, "분할선");
     divisionLabel.preferredSize.width = LABEL_WIDTH;
-    var divisionDownButton = divisionRow.add("button", undefined, "◀");
-    divisionDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
     var divisionInput = divisionRow.add("edittext", undefined, String(divisionCount));
     divisionInput.characters = 4;
     divisionInput.justify = "center";
+    var divisionDownButton = divisionRow.add("button", undefined, "◀");
+    divisionDownButton.preferredSize.width = 22;
+    var divisionSlider = divisionRow.add("slider", undefined, divisionCount, 0, 24);
+    divisionSlider.preferredSize.width = SLIDER_WIDTH;
     var divisionUpButton = divisionRow.add("button", undefined, "▶");
-    divisionUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
+    divisionUpButton.preferredSize.width = 22;
 
     var colorRow = extraPanel.add("group");
     colorRow.alignChildren = ["left", "center"];
@@ -197,10 +199,23 @@
         if (value === null) value = divisionCount;
         divisionCount = clamp(Math.round(value), 0, 24);
         divisionInput.text = String(divisionCount);
+        divisionSlider.value = divisionCount;
+        updatePreview();
+    };
+    divisionSlider.onChanging = function() {
+        divisionCount = clamp(Math.round(divisionSlider.value), 0, 24);
+        divisionInput.text = String(divisionCount);
         updatePreview();
     };
     divisionDownButton.onClick = function() { stepDivision(-1); };
     divisionUpButton.onClick = function() { stepDivision(1); };
+
+    function stepDivision(delta) {
+        divisionCount = clamp(divisionCount + delta, 0, 24);
+        divisionInput.text = String(divisionCount);
+        divisionSlider.value = divisionCount;
+        updatePreview();
+    }
 
     bindViewControls(xControls, function(value) { viewX = value; }, function() { return viewX; });
     bindViewControls(yControls, function(value) { viewY = value; }, function() { return viewY; });
@@ -392,11 +407,6 @@
         topSlider.value = topDiameterMm;
     }
 
-    function stepDivision(delta) {
-        divisionCount = clamp(divisionCount + delta, 0, 24);
-        divisionInput.text = String(divisionCount);
-        updatePreview();
-    }
 
     function stepK(delta) {
         faceK[activeFace] = clamp(faceK[activeFace] + delta, 0, 100);

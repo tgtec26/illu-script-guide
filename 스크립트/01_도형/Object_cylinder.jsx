@@ -105,13 +105,15 @@
     divisionCheck.value = divisionsEnabled;
     var countGroup = directionRow.add("group");
     countGroup.alignChildren = ["left", "center"];
-    var countDownButton = countGroup.add("button", undefined, "◀");
-    countDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
     var countInput = countGroup.add("edittext", undefined, String(divisionCount));
     countInput.characters = 4;
     countInput.justify = "center";
+    var countDownButton = countGroup.add("button", undefined, "◀");
+    countDownButton.preferredSize.width = 22;
+    var countSlider = countGroup.add("slider", undefined, divisionCount, 2, 24);
+    countSlider.preferredSize.width = 110;
     var countUpButton = countGroup.add("button", undefined, "▶");
-    countUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
+    countUpButton.preferredSize.width = 22;
 
     var rotationControls = addAngleRow(shapePanel, "분할 회전", divisionRotation);
     var rotationInput = rotationControls.input;
@@ -237,11 +239,24 @@
         if (value === null || value < 2) value = divisionCount;
         divisionCount = Math.max(2, Math.round(value));
         countInput.text = String(divisionCount);
+        countSlider.value = clamp(divisionCount, 2, 24);
         updatePreview();
     };
 
+    countSlider.onChanging = function() {
+        divisionCount = clamp(Math.round(countSlider.value), 2, 24);
+        countInput.text = String(divisionCount);
+        updatePreview();
+    };
     countDownButton.onClick = function() { stepDivisionCount(-1); };
     countUpButton.onClick = function() { stepDivisionCount(1); };
+
+    function stepDivisionCount(delta) {
+        divisionCount = clamp(divisionCount + delta, 2, 24);
+        countInput.text = String(divisionCount);
+        countSlider.value = divisionCount;
+        updatePreview();
+    }
 
     rotationSlider.onChanging = function() {
         divisionRotation = Math.round(rotationSlider.value);
@@ -545,11 +560,6 @@
         }
     }
 
-    function stepDivisionCount(delta) {
-        divisionCount = clamp(divisionCount + delta, 2, 24);
-        countInput.text = String(divisionCount);
-        updatePreview();
-    }
 
     function setDivisionControlsEnabled(enabled) {
         countGroup.enabled = enabled;

@@ -43,7 +43,7 @@
     applySavedSettings();
 
     var LABEL_WIDTH = 74;
-    var STEP_BUTTON_WIDTH = 26;
+    var SLIDER_WIDTH = 180;
 
     var dlg = new Window("dialog", "확장 화살표");
     dlg.orientation = "column";
@@ -207,7 +207,9 @@
         return true;
     }
 
-    // 라벨 · ◀ · 입력칸 · 단위 · ▶ 를 한 줄에 배치
+    // 라벨 · 입력칸 · 단위 · 슬라이더를 한 줄에 배치.
+    // 화살표 적용은 액션을 실행하는 무거운 작업이라 드래그 중에는 값만 바꾸고
+    // 슬라이더에서 손을 뗐을 때 미리보기를 갱신한다.
     function addNumberField(parent, labelText, unit, value, step, minimum, maximum, compact) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
@@ -215,33 +217,54 @@
             var label = row.add("statictext", undefined, labelText);
             label.preferredSize.width = compact ? 0 : LABEL_WIDTH;
         }
-        var down = row.add("button", undefined, "◀");
-        down.preferredSize.width = STEP_BUTTON_WIDTH;
         var input = row.add("edittext", undefined, formatValue(value));
         input.characters = 5;
         input.justify = "center";
-        var up = row.add("button", undefined, "▶");
-        up.preferredSize.width = STEP_BUTTON_WIDTH;
         row.add("statictext", undefined, unit);
+        var down = row.add("button", undefined, "◀");
+        down.preferredSize.width = 22;
+        var slider = row.add("slider", undefined, value, minimum, maximum);
+        slider.preferredSize.width = compact ? 110 : SLIDER_WIDTH;
 
-        var field = {row: row, input: input, step: step, minimum: minimum, maximum: maximum};
+        var up = row.add("button", undefined, "▶");
+        up.preferredSize.width = 22;
+
+        var field = {row: row, input: input, slider: slider, step: step, minimum: minimum, maximum: maximum, syncing: false};
         down.onClick = function() { stepField(field, -1); };
         up.onClick = function() { stepField(field, 1); };
-        // 드래그하듯 값이 바뀔 때마다 액션을 돌리면 느리므로 입력을 마칠 때만 갱신한다
+
+        slider.onChanging = function() {
+            if (field.syncing) return;
+            var stepped = Math.round(slider.value / field.step) * field.step;
+            input.text = formatValue(clampField(field, stepped));
+        };
+        slider.onChange = function() {
+            if (field.syncing) return;
+            updatePreview();
+        };
         input.onChange = function() {
             var parsed = parseNumber(input.text);
             if (parsed === null) parsed = field.minimum;
-            input.text = formatValue(clampField(field, parsed));
+            parsed = clampField(field, parsed);
+            input.text = formatValue(parsed);
+            field.syncing = true;
+            slider.value = parsed;
+            field.syncing = false;
             updatePreview();
         };
         return field;
     }
 
+    // 버튼 한 번 = 1단계. 세밀 조절용.
     function stepField(field, direction) {
         var value = parseNumber(field.input.text);
         if (value === null) value = field.minimum;
         value = Math.round((value + (field.step * direction)) / field.step) * field.step;
-        field.input.text = formatValue(clampField(field, value));
+        value = clampField(field, value);
+        field.input.text = formatValue(value);
+        field.syncing = true;
+        field.slider.value = value;
+        field.syncing = false;
         updatePreview();
     }
 

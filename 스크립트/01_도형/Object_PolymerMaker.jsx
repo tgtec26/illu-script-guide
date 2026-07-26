@@ -75,21 +75,10 @@
     panelSize.margins = 15;
     panelSize.spacing = 10;
 
-    // 첫 번째 줄: 단위체 가로 폭 / 단위체 선 굵기
-    var row1 = panelSize.add("group");
-    row1.orientation = "row";
-    row1.alignChildren = ["left", "center"];
-    var fieldW = addNumberField(row1, "단위체 가로 폭 (mm):", 120, savedWidth, 1, 1);
-    var fieldSW = addNumberField(row1, "단위체 선 굵기 (pt):", 110, savedShapeStroke, 0.1, 0);
-    fieldSW.group.margins = [15, 0, 0, 0];
-
-    // 두 번째 줄: 연결선 길이 / 연결선 굵기
-    var row2 = panelSize.add("group");
-    row2.orientation = "row";
-    row2.alignChildren = ["left", "center"];
-    var fieldG = addNumberField(row2, "연결선 길이 (mm):", 120, savedGap, 0.1, 0);
-    var fieldCSW = addNumberField(row2, "연결선 굵기 (pt):", 110, savedConnStroke, 0.1, 0);
-    fieldCSW.group.margins = [15, 0, 0, 0];
+    var fieldW = addNumberField(panelSize, "단위체 가로 폭 (mm):", 120, savedWidth, 1, 1, 100);
+    var fieldSW = addNumberField(panelSize, "단위체 선 굵기 (pt):", 120, savedShapeStroke, 0.1, 0, 20);
+    var fieldG = addNumberField(panelSize, "연결선 길이 (mm):", 120, savedGap, 0.1, 0, 50);
+    var fieldCSW = addNumberField(panelSize, "연결선 굵기 (pt):", 120, savedConnStroke, 0.1, 0, 20);
 
     var inW = fieldW.input;
     var inSW = fieldSW.input;
@@ -144,39 +133,61 @@
         updatePreview();
     };
 
-    // 라벨 · ◀ · 입력칸 · ▶ 를 한 줄에 배치. step 단위로 증감한다.
+    // 라벨 · 입력칸 · 슬라이더를 한 줄에 배치. 슬라이더를 끌면 step 단위로 값이 바뀐다.
     function addNumberField(parent, labelText, labelWidth, initialValue, step, minimum, maximum) {
         var group = parent.add("group");
         group.orientation = "row";
         group.alignChildren = ["left", "center"];
         var label = group.add("statictext", undefined, labelText);
         label.preferredSize.width = labelWidth;
-        var down = group.add("button", undefined, "◀");
-        down.preferredSize.width = 26;
-        var input = group.add("edittext", undefined, formatValue(parseFloat(initialValue)));
+        var initial = parseFloat(initialValue);
+        if (isNaN(initial)) initial = minimum;
+        var field = {group: group, step: step, minimum: minimum, maximum: maximum, syncing: false};
+        initial = clampField(field, initial);
+        var input = group.add("edittext", undefined, formatValue(initial));
         input.characters = 5;
         input.justify = "center";
+        var down = group.add("button", undefined, "◀");
+        down.preferredSize.width = 22;
+        var slider = group.add("slider", undefined, initial, minimum, maximum);
+        slider.preferredSize.width = 150;
         var up = group.add("button", undefined, "▶");
-        up.preferredSize.width = 26;
-
-        var field = {group: group, input: input, step: step, minimum: minimum, maximum: maximum};
+        up.preferredSize.width = 22;
+        field.input = input;
+        field.slider = slider;
         down.onClick = function () { stepField(field, -1); };
         up.onClick = function () { stepField(field, 1); };
+
+        slider.onChanging = function () {
+            if (field.syncing) return;
+            var stepped = Math.round(slider.value / field.step) * field.step;
+            input.text = formatValue(clampField(field, stepped));
+            updatePreview();
+        };
         input.onChanging = updatePreview;
         input.onChange = function () {
             var value = parseFloat(input.text);
-            if (isNaN(value)) value = minimum;
-            input.text = formatValue(clampField(field, value));
+            if (isNaN(value)) value = field.minimum;
+            value = clampField(field, value);
+            input.text = formatValue(value);
+            field.syncing = true;
+            slider.value = value;
+            field.syncing = false;
             updatePreview();
         };
         return field;
     }
 
+    // 버튼 한 번 = 1단계. 세밀 조절용.
     function stepField(field, direction) {
         var value = parseFloat(field.input.text);
         if (isNaN(value)) value = field.minimum;
         value = Math.round((value + (field.step * direction)) / field.step) * field.step;
-        field.input.text = formatValue(clampField(field, value));
+        value = clampField(field, value);
+        field.input.text = formatValue(value);
+        field.syncing = true;
+        field.slider.value = value;
+        field.syncing = false;
         updatePreview();
     }
 
