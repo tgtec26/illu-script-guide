@@ -85,12 +85,15 @@
     var boxShapeRadio = shapeGroup.add("radiobutton", undefined, "사각형 유지");
     axisShapeRadio.value = true;
 
+    // 0 = 그 축에 눈금 없음
+    var TICK_COUNT_OPTIONS = [0, 2, 3, 4, 5, 6, 7, 8];
+
     dlg.add("statictext", undefined, "Y축(왼쪽) 눈금 갯수:");
     var yGroup = dlg.add("group");
     var yBtns = [];
-    for (var m = 2; m <= 9; m++) {
-        var btn2 = yGroup.add("radiobutton", undefined, m.toString());
-        if (m === 5) btn2.value = true;
+    for (var m = 0; m < TICK_COUNT_OPTIONS.length; m++) {
+        var btn2 = yGroup.add("radiobutton", undefined, String(TICK_COUNT_OPTIONS[m]));
+        if (TICK_COUNT_OPTIONS[m] === 5) btn2.value = true;
         yBtns.push(btn2);
     }
 
@@ -111,9 +114,9 @@
     dlg.add("statictext", undefined, "X축(아래쪽) 눈금 갯수:");
     var xGroup = dlg.add("group");
     var xBtns = [];
-    for (var n = 2; n <= 9; n++) {
-        var btn = xGroup.add("radiobutton", undefined, n.toString());
-        if (n === 5) btn.value = true;
+    for (var n = 0; n < TICK_COUNT_OPTIONS.length; n++) {
+        var btn = xGroup.add("radiobutton", undefined, String(TICK_COUNT_OPTIONS[n]));
+        if (TICK_COUNT_OPTIONS[n] === 5) btn.value = true;
         xBtns.push(btn);
     }
 
@@ -377,8 +380,8 @@
 
         // 눈금 간격: 상자 모드는 화살표 여백이 필요 없어 모서리까지 편다
         var endMargin = useBox ? 0 : arrowMargin;
-        var xSpacing = (rightX - endMargin - originX) / xCount;
-        var ySpacing = (topY - endMargin - originY) / yCount;
+        var xSpacing = xCount > 0 ? (rightX - endMargin - originX) / xCount : 0;
+        var ySpacing = yCount > 0 ? (topY - endMargin - originY) / yCount : 0;
 
         // 텍스트 아웃라인 기준 배치 함수
         function createAlignedLabel(text, anchorX, anchorY, alignMode) {
@@ -422,8 +425,8 @@
             return tf;
         }
 
-        // X축 눈금
-        for (var i = 0; i <= xCount; i++) {
+        // X축 눈금 (갯수 0이면 눈금 없는 축)
+        for (var i = 0; xCount > 0 && i <= xCount; i++) {
             var xPos = originX + xSpacing * i;
 
             var tick = group.pathItems.add();
@@ -441,8 +444,8 @@
             }
         }
 
-        // Y축 눈금
-        for (var j = 0; j <= yCount; j++) {
+        // Y축 눈금 (갯수 0이면 눈금 없는 축)
+        for (var j = 0; yCount > 0 && j <= yCount; j++) {
             var yPos = originY + ySpacing * j;
 
             var tick2 = group.pathItems.add();
@@ -548,7 +551,7 @@
 
     function getSelectedCount(btns) {
         for (var i = 0; i < btns.length; i++) {
-            if (btns[i].value) return i + 2;
+            if (btns[i].value) return TICK_COUNT_OPTIONS[i];
         }
         return 5;
     }
@@ -626,9 +629,13 @@
     }
 
     function selectCount(btns, count) {
-        if (!(count >= 2 && count <= 9)) return;
         for (var i = 0; i < btns.length; i++) {
-            btns[i].value = (i + 2 === count);
+            if (TICK_COUNT_OPTIONS[i] === count) {
+                for (var j = 0; j < btns.length; j++) {
+                    btns[j].value = (j === i);
+                }
+                return;
+            }
         }
     }
 
