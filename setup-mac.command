@@ -223,19 +223,46 @@ if [ -f "$WIDTH_PROFILE_SRC" ] && [ -n "$VER" ]; then
     else
       if [ -f "$WP_FILE" ]; then
         cp "$WP_FILE" "$WP_FILE.bak"
-        # 기존에 쓰지 않은 collection 번호를 골라 프로파일을 덧붙인다
+        # 파일 구조: collection 블록들 → /Sketch → /NumberOfCollections N → /CatalogName
+        # 새 프로파일은 collection 블록 뒤(= /Sketch 앞)에 넣고, 개수 선언도 함께 올린다.
+        # 그냥 파일 끝에 붙이면 개수 선언 뒤로 밀려 Illustrator가 파일을 통째로 무시한다.
         NEXT_NUM="$(
           grep -o '/collection[0-9]\{1,\}' "$WP_FILE" \
             | grep -o '[0-9]\{1,\}' \
             | sort -n | tail -n 1
         )"
         NEXT_NUM=$(( ${NEXT_NUM:-0} + 1 ))
-        # 파일이 CR 개행이므로 덧붙이는 줄도 CR로 맞춘다
-        sed "s/{N}/$NEXT_NUM/" "$WIDTH_PROFILE_SRC" | tr '\n' '\r' >> "$WP_FILE"
-        echo "  폭 프로파일 추가 완료 -> $WP_FILE (collection$NEXT_NUM, 백업: $WP_FILE.bak)"
+        OLD_COUNT="$(tr '\r' '\n' < "$WP_FILE" | sed -n 's|^/NumberOfCollections \([0-9]\{1,\}\)$|\1|p' | head -n 1)"
+
+        if [ -z "$OLD_COUNT" ]; then
+          echo "  폭 프로파일 건너뜀 (파일 형식을 알 수 없음): $WP_FILE"
+        else
+          NEW_COUNT=$(( OLD_COUNT + 1 ))
+          TMP_WP="$WP_FILE.new"
+          SNIPPET="$WP_FILE.snippet"
+          sed "s/{N}/$NEXT_NUM/" "$WIDTH_PROFILE_SRC" | tr '\n' '\r' > "$SNIPPET"
+
+          # CR 개행을 LF로 바꿔 줄 단위로 다루고, 마지막에 다시 CR로 되돌린다
+          tr '\r' '\n' < "$WP_FILE" > "$TMP_WP.lf"
+          tr '\r' '\n' < "$SNIPPET" > "$SNIPPET.lf"
+
+          awk -v snippet="$SNIPPET.lf" -v old="$OLD_COUNT" -v new="$NEW_COUNT" '
+            /^\/Sketch \{$/ && !inserted {
+              while ((getline line < snippet) > 0) print line
+              close(snippet)
+              inserted = 1
+            }
+            $0 == "/NumberOfCollections " old { print "/NumberOfCollections " new; next }
+            { print }
+          ' "$TMP_WP.lf" | tr '\n' '\r' > "$TMP_WP"
+
+          mv "$TMP_WP" "$WP_FILE"
+          rm -f "$TMP_WP.lf" "$SNIPPET" "$SNIPPET.lf"
+          echo "  폭 프로파일 추가 완료 -> $WP_FILE (collection$NEXT_NUM, 개수 $OLD_COUNT -> $NEW_COUNT, 백업: $WP_FILE.bak)"
+        fi
       else
-        sed "s/{N}/1/" "$WIDTH_PROFILE_SRC" | tr '\n' '\r' > "$WP_FILE"
-        echo "  폭 프로파일 새로 생성 -> $WP_FILE"
+        echo "  폭 프로파일 건너뜀 (프리셋 파일이 없음): $WP_FILE"
+        echo "    일러스트레이터를 한 번 실행했다가 종료한 뒤 다시 시도하세요."
       fi
     fi
   fi

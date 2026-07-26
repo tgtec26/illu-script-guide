@@ -227,22 +227,46 @@ if (Test-Path $WidthProfileSrc) {
             if (Test-Path $WpFile) { $Existing = [IO.File]::ReadAllText($WpFile) }
             if ($Existing -like "*$Marker*") {
                 Write-Host "  폭 프로파일 이미 등록됨: 폭 속성1"
+            } elseif (-not (Test-Path $WpFile)) {
+                Write-Host "  폭 프로파일 건너뜀 (프리셋 파일이 없음): $WpFile"
+                Write-Host "    일러스트레이터를 한 번 실행했다가 종료한 뒤 다시 시도하세요."
             } else {
-                # 기존에 쓰지 않은 collection 번호를 고른다
+                # 파일 구조: collection 블록들 -> /Sketch -> /NumberOfCollections N -> /CatalogName
+                # 새 프로파일은 collection 블록 뒤(= /Sketch 앞)에 넣고 개수 선언도 함께 올린다.
+                # 그냥 파일 끝에 붙이면 개수 선언 뒤로 밀려 Illustrator가 파일을 통째로 무시한다.
                 $Next = 1
                 $Nums = [regex]::Matches($Existing, "/collection(\d+)") | ForEach-Object { [int]$_.Groups[1].Value }
                 if ($Nums.Count -gt 0) { $Next = ($Nums | Measure-Object -Maximum).Maximum + 1 }
-                # 파일이 CR 개행이므로 덧붙이는 줄도 CR로 맞춘다
-                $Snippet = [IO.File]::ReadAllText($WidthProfileSrc).Replace("{N}", "$Next")
-                $Snippet = $Snippet -replace "`r`n", "`n"
-                $Snippet = $Snippet -replace "`n", "`r"
-                if (Test-Path $WpFile) {
-                    Copy-Item -Path $WpFile -Destination "$WpFile.bak" -Force
-                    [IO.File]::WriteAllText($WpFile, $Existing + $Snippet)
-                    Write-Host "  폭 프로파일 추가 완료 -> $WpFile (collection$Next, 백업: $WpFile.bak)"
+
+                $CountMatch = [regex]::Match($Existing, "/NumberOfCollections (\d+)")
+                if (-not $CountMatch.Success) {
+                    Write-Host "  폭 프로파일 건너뜀 (파일 형식을 알 수 없음): $WpFile"
                 } else {
-                    [IO.File]::WriteAllText($WpFile, $Snippet)
-                    Write-Host "  폭 프로파일 새로 생성 -> $WpFile"
+                    $OldCount = [int]$CountMatch.Groups[1].Value
+                    $NewCount = $OldCount + 1
+
+                    # 파일이 CR 개행이므로 줄 단위로 다루려면 LF로 바꿔 처리하고 되돌린다
+                    $Snippet = [IO.File]::ReadAllText($WidthProfileSrc).Replace("{N}", "$Next")
+                    $Snippet = ($Snippet -replace "`r`n", "`n").TrimEnd("`n")
+                    $Lines = ($Existing -replace "`r`n", "`n" -replace "`r", "`n") -split "`n"
+
+                    $Out = New-Object Collections.Generic.List[string]
+                    $Inserted = $false
+                    foreach ($Line in $Lines) {
+                        if (-not $Inserted -and $Line -eq "/Sketch {") {
+                            foreach ($SnippetLine in ($Snippet -split "`n")) { $Out.Add($SnippetLine) }
+                            $Inserted = $true
+                        }
+                        if ($Line -eq "/NumberOfCollections $OldCount") {
+                            $Out.Add("/NumberOfCollections $NewCount")
+                        } else {
+                            $Out.Add($Line)
+                        }
+                    }
+
+                    Copy-Item -Path $WpFile -Destination "$WpFile.bak" -Force
+                    [IO.File]::WriteAllText($WpFile, ($Out -join "`r"))
+                    Write-Host "  폭 프로파일 추가 완료 -> $WpFile (collection$Next, 개수 $OldCount -> $NewCount, 백업: $WpFile.bak)"
                 }
             }
         }
