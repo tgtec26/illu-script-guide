@@ -111,7 +111,9 @@
     groupBtn.alignment = ["center", "top"];
     var chkPreview = groupBtn.add("checkbox", undefined, "미리보기");
     chkPreview.value = true;
-    var btnOk = groupBtn.add("button", undefined, "중합체 생성기", {name: "ok"});
+    // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    var btnOk = groupBtn.add("button", undefined, "중합체 생성기");
+    try { win.defaultElement = null; } catch (defaultError) {}
     var btnCancel = groupBtn.add("button", undefined, "취소", {name: "cancel"});
 
     rCircle.onClick = updatePreview;

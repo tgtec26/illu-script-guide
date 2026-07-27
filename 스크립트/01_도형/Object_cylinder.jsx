@@ -154,7 +154,9 @@
     previewCheck.value = true;
     var footerSpacer = footer.add("group");
     footerSpacer.alignment = ["fill", "center"];
-    var okButton = footer.add("button", undefined, "확인", {name: "ok"});
+    // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    var okButton = footer.add("button", undefined, "확인");
+    try { dlg.defaultElement = null; } catch (defaultError) {}
     var cancelButton = footer.add("button", undefined, "취소", {name: "cancel"});
 
     innerDiameterSlider.onChanging = function() {

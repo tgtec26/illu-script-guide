@@ -293,7 +293,9 @@
         var buttons = win.add("group");
         buttons.alignment = "right";
         var cancel = buttons.add("button", undefined, "취소", { name: "cancel" });
-        var ok = buttons.add("button", undefined, "실행", { name: "ok" });
+        // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+        var ok = buttons.add("button", undefined, "실행");
+        try { win.defaultElement = null; } catch (defaultError) {}
 
         var result = null;
         ok.onClick = function () {

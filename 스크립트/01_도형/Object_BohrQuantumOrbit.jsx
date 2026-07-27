@@ -68,7 +68,10 @@
         var buttons = win.add("group");
         buttons.alignment = "right";
         buttons.add("button", undefined, "취소", { name: "cancel" });
-        buttons.add("button", undefined, "확인", { name: "ok" });
+        // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+        var okButton = buttons.add("button", undefined, "확인");
+        okButton.onClick = function() { win.close(1); };
+        try { win.defaultElement = null; } catch (defaultError) {}
 
         if (win.show() !== 1) {
             return null;

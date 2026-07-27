@@ -115,7 +115,9 @@
         var buttons = dialog.add("group");
         buttons.alignment = "right";
         var btnCancel = buttons.add("button", undefined, "취소", {name: "cancel"});
-        var btnOk = buttons.add("button", undefined, "만들기", {name: "ok"});
+        // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+        var btnOk = buttons.add("button", undefined, "만들기");
+        try { dialog.defaultElement = null; } catch (defaultError) {}
 
         btnCancel.onClick = function () {
             dialog.close(0);

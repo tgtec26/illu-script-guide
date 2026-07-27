@@ -68,7 +68,9 @@
     var buttonGroup = dialog.add("group");
     buttonGroup.alignment = "center";
     var cancelBtn = buttonGroup.add("button", undefined, "취소", {name: "cancel"});
-    var okBtn = buttonGroup.add("button", undefined, "확인", {name: "ok"});
+    // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    var okBtn = buttonGroup.add("button", undefined, "확인");
+    try { dialog.defaultElement = null; } catch (defaultError) {}
 
     var confirmed = false;
     okBtn.onClick = function() {

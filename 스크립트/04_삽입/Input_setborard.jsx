@@ -41,7 +41,10 @@ function main() {
 
     var groupBtns = dialog.add("group");
     groupBtns.alignment = "center";
-    var btnOk = groupBtns.add("button", undefined, "생성", {name: "ok"});
+    // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    var btnOk = groupBtns.add("button", undefined, "생성");
+    btnOk.onClick = function() { dialog.close(1); };
+    try { dialog.defaultElement = null; } catch (defaultError) {}
     var btnCancel = groupBtns.add("button", undefined, "취소", {name: "cancel"});
 
     if (dialog.show() == 1) {

@@ -126,7 +126,9 @@ function drawIsometricBox() {
     // 버튼 그룹
     var groupBtn = win.add("group");
     groupBtn.alignment = "center";
-    var btnOk = groupBtn.add("button", undefined, "그리기", {name: "ok"});
+    // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    var btnOk = groupBtn.add("button", undefined, "그리기");
+    try { win.defaultElement = null; } catch (defaultError) {}
     var btnCancel = groupBtn.add("button", undefined, "취소", {name: "cancel"});
 
     var result = null;

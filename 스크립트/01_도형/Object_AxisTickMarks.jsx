@@ -183,7 +183,9 @@
     previewCheck.value = true;
     var btnSpacer = btnGroup.add("group");
     btnSpacer.alignment = ["fill", "center"];
-    var okBtn = btnGroup.add("button", undefined, "확인", { name: "ok" });
+    // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    var okBtn = btnGroup.add("button", undefined, "확인");
+    try { dlg.defaultElement = null; } catch (defaultError) {}
     btnGroup.add("button", undefined, "취소", { name: "cancel" });
 
     function updateArrowEnabled() {

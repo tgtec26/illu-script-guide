@@ -59,7 +59,9 @@
     var closeGroup = dlg.add("group");
     closeGroup.alignment = "center";
     var cancelBtn = closeGroup.add("button", undefined, "취소", { name: "cancel" });
-    var okBtn = closeGroup.add("button", undefined, "확인", { name: "ok" });
+    // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    var okBtn = closeGroup.add("button", undefined, "확인");
+    try { dlg.defaultElement = null; } catch (defaultError) {}
 
     updateInfo();
     applyPendingOffset();
