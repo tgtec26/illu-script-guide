@@ -281,25 +281,29 @@
             shapeSequence.push(randomShapePool[Math.floor(Math.random() * randomShapePool.length)]);
         }
     }
+    // 회색을 문서 색상 모드에 맞춰 만든다.
+    // GrayColor를 쓰면 개체 색 공간이 그레이스케일이 되어, 나중에 색상 피커로
+    // 색을 바꿀 때 회색으로 되돌아간다(견본은 정상). 그래서 쓰지 않는다.
+    function makeGray(k) {
+        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+            var cmyk = new CMYKColor();
+            cmyk.cyan = 0; cmyk.magenta = 0; cmyk.yellow = 0; cmyk.black = k;
+            return cmyk;
+        }
+        var v = Math.round(255 * (1 - k / 100));
+        var rgb = new RGBColor();
+        rgb.red = v; rgb.green = v; rgb.blue = v;
+        return rgb;
+    }
+
     function getShadeFill(index) {
-        var c = new CMYKColor();
-        c.cyan = 0; c.magenta = 0; c.yellow = 0;
-        c.black = shadeSequence[index % shadeSequence.length];
-        return c;
+        return makeGray(shadeSequence[index % shadeSequence.length]);
     }
     // 내부 색: 헥사 코드가 비어 있으면 K값, 값이 있으면 헥사 코드를 쓴다
     function getInnerFill(innerK, hexCode) {
         var hex = String(hexCode).replace(/^\s+|\s+$/g, "").replace(/^#/, "");
         if (hex !== "") return getHexFill(hex);
-
-        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
-            var cmyk = new CMYKColor();
-            cmyk.cyan = 0; cmyk.magenta = 0; cmyk.yellow = 0; cmyk.black = innerK;
-            return cmyk;
-        }
-        var gray = new GrayColor();
-        gray.gray = innerK;
-        return gray;
+        return makeGray(innerK);
     }
 
     function getHexFill(hex) {
@@ -503,9 +507,8 @@
 
         var layer = doc.activeLayer;
 
-        // 공통 선 색상 (검은색)
-        var black = new CMYKColor();
-        black.cyan = 0; black.magenta = 0; black.yellow = 0; black.black = 100;
+        // 공통 선 색상 (검은색) — 문서 색상 모드에 맞춰 만든다
+        var black = makeGray(100);
 
         // 선택된 커스텀 채우기 색상 준비
         var customFillColor = getInnerFill(options.innerK, options.hexCode);
