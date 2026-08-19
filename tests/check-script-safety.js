@@ -12,15 +12,7 @@ const alignFiles = [
 ];
 const centerAlignBig = "스크립트/05_정렬/Align_CenterB.jsx";
 const centerAlignSmall = "스크립트/05_정렬/Align_CenterS.jsx";
-const visibleAlignHelper = "스크립트/05_정렬/Align_VisibleBounds_Helper.jsxinc";
-const visibleAlignFiles = [
-  ["스크립트/05_정렬/Align_VisibleHLeft.jsx", "hLeft"],
-  ["스크립트/05_정렬/Align_VisibleHCenter.jsx", "hCenter"],
-  ["스크립트/05_정렬/Align_VisibleHRight.jsx", "hRight"],
-  ["스크립트/05_정렬/Align_VisibleVTop.jsx", "vTop"],
-  ["스크립트/05_정렬/Align_VisibleVCenter.jsx", "vCenter"],
-  ["스크립트/05_정렬/Align_VisibleVBottom.jsx", "vBottom"],
-];
+const visibleAlign = "스크립트/05_정렬/Align_VisibleBounds.jsx";
 
 const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
 const textInput = "스크립트/02_문자/Text_input.jsx";
@@ -246,44 +238,81 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 }
 
 {
-  const source = read(visibleAlignHelper);
+  const source = read(visibleAlign);
   const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
   const activeDocLine = lineOf(source, /app\.activeDocument/);
 
   if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
-    console.error(`${visibleAlignHelper}: app.documents.length guard must run before app.activeDocument`);
+    console.error(`${visibleAlign}: app.documents.length guard must run before app.activeDocument`);
     failures++;
   }
 
   const requiredTokens = [
-    "ALIGN_VISIBLE_SCRIPT_FILE",
     "tempObj.createOutline()",
     "outlined.visibleBounds",
     "function getGroupRealBounds",
     "function getClippingBounds",
     "function unionBounds",
-    "selectionBounds = unionBounds(selectionBounds, bounds)",
     "obj.translate(deltaX, deltaY)",
   ];
   for (const token of requiredTokens) {
     if (!source.includes(token)) {
-      console.error(`${visibleAlignHelper}: missing visible-bounds alignment token: ${token}`);
+      console.error(`${visibleAlign}: missing visible-bounds alignment token: ${token}`);
       failures++;
     }
   }
 
   if (!/finally\s*\{[\s\S]*tempObj\.remove\(\)/.test(source)) {
-    console.error(`${visibleAlignHelper}: temporary outlined text duplicate must be removed in finally`);
+    console.error(`${visibleAlign}: temporary outlined text duplicate must be removed in finally`);
     failures++;
   }
-}
 
-for (const [file, mode] of visibleAlignFiles) {
-  const source = read(file);
-  if (!source.includes("Align_VisibleBounds_Helper.jsxinc") ||
-      !source.includes("ALIGN_VISIBLE_SCRIPT_FILE = $.fileName") ||
-      !source.includes(`ALIGN_VISIBLE_MODE = "${mode}"`)) {
-    console.error(`${file}: must invoke visible-bounds helper with mode ${mode}`);
+  const requiredModes = ["hLeft", "hCenter", "hRight", "vTop", "vCenter", "vBottom"];
+  for (const mode of requiredModes) {
+    if (!source.includes(`mode === "${mode}"`)) {
+      console.error(`${visibleAlign}: missing align mode branch: ${mode}`);
+      failures++;
+    }
+  }
+  if (!source.includes('mode = "center"')) {
+    console.error(`${visibleAlign}: center button must set the combined horizontal+vertical mode`);
+    failures++;
+  }
+
+  const buttonRows = [
+    ['makeAlignButton(topRow, "좌", "hLeft"', "top row"],
+    ['makeAlignButton(topRow, "중", "hCenter"', "top row"],
+    ['makeAlignButton(topRow, "우", "hRight"', "top row"],
+    ['makeAlignButton(rightCol, "상", "vTop"', "right column"],
+    ['makeAlignButton(rightCol, "중", "vCenter"', "right column"],
+    ['makeAlignButton(rightCol, "하", "vBottom"', "right column"],
+  ];
+  for (const [token, where] of buttonRows) {
+    if (!source.includes(token)) {
+      console.error(`${visibleAlign}: missing ${where} button: ${token}`);
+      failures++;
+    }
+  }
+  if (!source.includes("var centerBtn = box.add(\"button\", undefined, \"중앙\")")) {
+    console.error(`${visibleAlign}: the combined center button must sit inside the box panel`);
+    failures++;
+  }
+
+  if (!source.includes('var PREF_KEY = "AlignVisibleBounds/settings"') ||
+      !source.includes('app.preferences.setStringPreference(PREF_KEY, ["v1", refMode].join("|"))')) {
+    console.error(`${visibleAlign}: reference-object choice must persist through app.preferences`);
+    failures++;
+  }
+
+  const showLine = lineOf(source, /dlg\.show\(\)\s*!==\s*1/);
+  const savePrefCallLine = lineOf(source, /^\s*savePref\(refMode\);/m);
+  if (showLine < 1 || savePrefCallLine < 1 || savePrefCallLine < showLine) {
+    console.error(`${visibleAlign}: preferences must be saved on confirm only`);
+    failures++;
+  }
+
+  if (!/refMode\s*===\s*"big"\s*\?\s*\(area\s*>\s*keyArea\)\s*:\s*\(area\s*<\s*keyArea\)/.test(source)) {
+    console.error(`${visibleAlign}: key object must follow the big/small reference radio`);
     failures++;
   }
 }
