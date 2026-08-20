@@ -39,7 +39,6 @@ if (app.documents.length > 0) {
   try {
     var currLayer = doc.activeLayer,
         boardNum = doc.artboards.getActiveArtboardIndex() + 1,
-        clearArr = [], // Array of Clipping Masks obj
         uiMargins = [10, 20, 10, 10];
 
     // Create Main Window
@@ -73,13 +72,9 @@ if (app.documents.length > 0) {
     var chkUnroup = options.add('checkbox', undefined, '전체 그룹 해제');
     chkUnroup.value = true;
     var chkClipping = options.add('checkbox', undefined, '클리핑 마스크 해제');
-    var chkRmvClipping = options.add('checkbox', undefined, '마스크 도형 삭제');
-    chkRmvClipping.enabled = false;
-
-    // Show/hide checkbox '마스크 도형 삭제'
-    chkClipping.onClick = function () {
-      chkRmvClipping.enabled = !chkRmvClipping.enabled;
-    }
+    var chkRmvEmpty = options.add('checkbox', undefined, '빈 투명 개체 삭제');
+    chkRmvEmpty.value = true;
+    chkRmvEmpty.helpTip = '면과 선이 모두 없는 빈 개체를 삭제합니다 (클리핑 마스크는 보존)';
 
     // Buttons
     var btns = win.add('group');
@@ -107,21 +102,26 @@ if (app.documents.length > 0) {
     }
 
     function okClick() {
+      var doCleanup = chkRmvEmpty.value;
+
       // Ungroup selected objects
       if (typeof (currSelRadio) !== 'undefined' && currSelRadio.value) {
         var currSel = getSelection(doc);
         for (var i = 0; i < currSel.length; i++) {
           if (currSel[i].typename === 'GroupItem') ungroup(currSel[i]);
         }
+        if (doCleanup) removeEmpty(getSelection(doc));
       }
       // Ungroup in active Layer if it contains groups
       if (typeof (currLayerRadio) !== 'undefined' && currLayerRadio.value) {
         ungroup(currLayer);
+        if (doCleanup) removeEmpty(currLayer.pageItems);
       }
       // Ungroup in active Artboard only visible & unlocked objects
       if (currBoardRadio.value) {
         doc.selectObjectsOnActiveArtboard();
         ungroup(getSelection(doc));
+        if (doCleanup) removeEmpty(getSelection(doc));
         doc.selection = null;
       }
       // Ungroup all in the current Document
@@ -133,10 +133,13 @@ if (app.documents.length > 0) {
             ungroup(docLayer);
           }
         }
-      }
-      // Remove empty clipping masks after ungroup
-      if (chkRmvClipping.value) {
-        removeMasks(clearArr);
+        if (doCleanup) {
+          for (var k = 0; k < doc.layers.length; k++) {
+            if (!doc.layers[k].locked && doc.layers[k].visible) {
+              removeEmpty(doc.layers[k].pageItems);
+            }
+          }
+        }
       }
       win.close();
     }
@@ -186,11 +189,6 @@ function ungroup(obj) {
     try {
       if (element.parent.typename !== 'Layer') {
         element.move(obj, ElementPlacement.PLACEBEFORE);
-        // Push empty paths in array 
-        if ((element.typename === 'PathItem' && !element.filled && !element.stroked) ||
-          (element.typename === 'CompoundPathItem' && !element.pathItems[0].filled && !element.pathItems[0].stroked) ||
-          (element.typename === 'TextFrame' && element.textRange.fillColor == '[NoColor]' && element.textRange.strokeColor == '[NoColor]'))
-          clearArr.push(element);
       }
       if (element.typename === 'GroupItem' || element.typename === 'Layer') {
         ungroup(element);
@@ -199,11 +197,138 @@ function ungroup(obj) {
   }
 }
 
-// Remove empty clipping masks after ungroup
-function removeMasks(arr) {
-  for (var i = 0; i < arr.length; i++) {
-    arr[i].remove();
+// Remove empty transparent objects left after ungroup. Clipping masks are preserved
+function removeEmpty(items) {
+  // Snapshot the collection, removing items invalidates a live pageItems / selection list
+  var arr = [];
+  for (var i = 0; i < items.length; i++) {
+    arr.push(items[i]);
   }
+
+  for (var j = arr.length - 1; j >= 0; j--) {
+    var item = arr[j];
+
+    // Groups may survive when '클리핑 마스크 해제' is off, so look inside them
+    if (item.typename === 'GroupItem') {
+      removeEmpty(item.pageItems);
+      continue;
+    }
+
+    if (isEmptyObject(item)) {
+      try {
+        item.remove();
+      } catch (e) { }
+    }
+  }
+}
+
+function isEmptyObject(item) {
+  // A mask shape has no fill / stroke but still crops its group
+  if (isClippingItem(item)) {
+    return false;
+  }
+
+  if (item.typename === 'CompoundPathItem') {
+    if (item.opacity === 0 || item.pathItems.length === 0) {
+      return true;
+    }
+    for (var i = 0; i < item.pathItems.length; i++) {
+      if (!isEmptyPath(item.pathItems[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  if (item.typename === 'TextFrame') {
+    return isEmptyText(item);
+  }
+
+  // Live Pathfinder / plugin items can paint without exposing filled / stroked, so skip them
+  if (item.typename !== 'PathItem') {
+    return false;
+  }
+
+  return isEmptyPath(item);
+}
+
+function isEmptyText(item) {
+  if (item.opacity === 0) {
+    return true;
+  }
+
+  // No characters, or whitespace only
+  try {
+    if (!/\S/.test(item.contents)) {
+      return true;
+    }
+  } catch (e) {
+    return false;
+  }
+
+  // Has characters but paints nothing
+  try {
+    return item.textRange.fillColor.typename === 'NoColor' &&
+      item.textRange.strokeColor.typename === 'NoColor';
+  } catch (e) {
+    return false;
+  }
+}
+
+function isEmptyPath(pathItem) {
+  if (isClippingItem(pathItem)) {
+    return false;
+  }
+
+  if (pathItem.opacity === 0) {
+    return true;
+  }
+
+  return !hasVisibleFill(pathItem) && !hasVisibleStroke(pathItem);
+}
+
+function hasVisibleFill(pathItem) {
+  if (!pathItem.filled) {
+    return false;
+  }
+
+  try {
+    return pathItem.fillColor.typename !== 'NoColor';
+  } catch (e) {
+    return false;
+  }
+}
+
+function hasVisibleStroke(pathItem) {
+  if (!pathItem.stroked) {
+    return false;
+  }
+
+  try {
+    return pathItem.strokeColor.typename !== 'NoColor' && pathItem.strokeWidth > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+function isClippingItem(item) {
+  try {
+    if (item.hasOwnProperty('clipping') && item.clipping === true) {
+      return true;
+    }
+  } catch (e) { }
+
+  if (item.typename === 'CompoundPathItem') {
+    try {
+      for (var i = 0; i < item.pathItems.length; i++) {
+        if (isClippingItem(item.pathItems[i])) {
+          return true;
+        }
+      }
+    } catch (e) { }
+  }
+
+  return false;
 }
 
 function showError(err) {
