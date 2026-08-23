@@ -47,8 +47,8 @@
         {contents: ["ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ"], fontSize: 9, fontNames: ["Batang"]},
         {contents: ["1", "2", "3", "4", "5", "6"], fontSize: 8, fontNames: ["GSMediumB1"]},
         {contents: ["①", "②", "③", "④", "⑤", "⑥"], fontSize: 8, fontNames: ["GSMediumB1"]},
-        {contents: ["t0", "t1", "t2", "t3", "t4", "t5"], fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
-        {contents: ["d1", "d2", "d3", "d4", "d5", "d6"], fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
+        {prefix: "t", fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
+        {prefix: "d", fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
         {contents: [
             String.fromCharCode(0xE0A4), String.fromCharCode(0xE0FC), String.fromCharCode(0xE0FD),
             String.fromCharCode(0xE0FE), String.fromCharCode(0xE0AD)
@@ -63,13 +63,14 @@
         {contents: [String.fromCharCode(0x02D8)], fontSize: 8, fontNames: ["GSMediumB1"], independent: true,
             labels: [String.fromCharCode(0x00B0)]}
     ];
+    var SUBSCRIPT_BUTTON_COUNT = 6;
     var selectedOption = null;
     var selectedCount = 0;
 
     // 각 행은 6개의 버튼으로 구성되며, 누른 버튼까지의 문자만 생성합니다.
     var buttonGroup = dialog.add("group");
     buttonGroup.orientation = "column";
-    buttonGroup.alignChildren = "center";
+    buttonGroup.alignChildren = "left";
     var buttonSize = [40, 25];
 
     for (var optionIndex = 0; optionIndex < textOptions.length; optionIndex++) {
@@ -78,12 +79,25 @@
         row.alignChildren = "center";
 
         var opt = textOptions[optionIndex];
+        // 아래첨자 행은 기본적으로 1부터 시작하며, 오른쪽 끝 체크박스로 0부터 시작하게 바꿉니다.
+        if (opt.prefix) {
+            opt.contents = makeSubscriptContents(opt.prefix, 1);
+        }
+
+        var rowButtons = [];
         for (var charIndex = 0; charIndex < opt.contents.length; charIndex++) {
             // 특수문자 행은 대응 표준문자(labels)를 버튼에 표시, 클릭 시 실제 문자 삽입
             var label = opt.labels ? opt.labels[charIndex] : opt.contents[charIndex];
             var btn = row.add("button", undefined, label);
             btn.preferredSize = buttonSize;
             btn.onClick = makeSelectHandler(optionIndex, charIndex + 1);
+            rowButtons.push(btn);
+        }
+
+        if (opt.prefix) {
+            var zeroCheck = row.add("checkbox", undefined, "0");
+            zeroCheck.value = false;
+            zeroCheck.onClick = makeZeroBaseHandler(opt, rowButtons, zeroCheck);
         }
     }
 
@@ -206,6 +220,23 @@
         } catch (e) {
             return "";
         }
+    }
+
+    function makeSubscriptContents(prefix, start) {
+        var contents = [];
+        for (var i = 0; i < SUBSCRIPT_BUTTON_COUNT; i++) {
+            contents.push(prefix + (start + i));
+        }
+        return contents;
+    }
+
+    function makeZeroBaseHandler(opt, buttons, checkbox) {
+        return function() {
+            opt.contents = makeSubscriptContents(opt.prefix, checkbox.value ? 0 : 1);
+            for (var i = 0; i < buttons.length; i++) {
+                buttons[i].text = opt.contents[i];
+            }
+        };
     }
 
     function makeSelectHandler(optionIndex, count) {
