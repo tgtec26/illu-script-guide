@@ -17,8 +17,7 @@ try {
 
     var doc = app.activeDocument;
     var selectedPoints = [];
-    var owners = [];
-    collectSelectedPoints(doc.selection, selectedPoints, owners);
+    collectSelectedPoints(doc.selection, selectedPoints);
 
     if (selectedPoints.length !== 2) {
         alert("직접 선택 도구로 앵커 포인트를 정확히 2개 선택해주세요.");
@@ -43,8 +42,10 @@ try {
         ? getRightAnchor(firstAnchor, secondAnchor)
         : getLeftAnchor(firstAnchor, secondAnchor);
 
+    var rotationTargets = buildRotationTargets(selectedPoints, dialogResult.rotateWholeGroup);
+
     try {
-        rotateOwners(owners, selectedPoints, pivot, rotationAngle);
+        rotateTargets(rotationTargets, pivot, rotationAngle);
         app.redraw();
     } catch (error) {
         alert("오브젝트를 회전하는 중 오류가 발생했습니다.");
@@ -78,6 +79,11 @@ try {
         var rightPivotRadio = pivotPanel.add("radiobutton", undefined, "오른쪽");
         leftPivotRadio.value = true;
 
+        // 직접 선택 도구로 그룹 안 앵커를 잡으면 선택 목록에는 그 패스만 담긴다.
+        // 체크하면 패스가 속한 가장 바깥 그룹을 통째로 돌린다.
+        var wholeGroupCheck = dlg.add("checkbox", undefined, "그룹 전체 회전");
+        wholeGroupCheck.value = true;
+
         applySavedSettings();
 
         for (var i = 0; i < presetAngles.length; i++) {
@@ -99,7 +105,7 @@ try {
                 angleInput.active = true;
                 return;
             }
-            result = {angle: parsed, pivotSide: getPivotSide()};
+            result = {angle: parsed, pivotSide: getPivotSide(), rotateWholeGroup: wholeGroupCheck.value};
             saveSettings(result);
             dlg.close(1);
         };
@@ -107,7 +113,7 @@ try {
 
         function makePresetHandler(value) {
             return function() {
-                result = {angle: value, pivotSide: getPivotSide()};
+                result = {angle: value, pivotSide: getPivotSide(), rotateWholeGroup: wholeGroupCheck.value};
                 saveSettings(result);
                 dlg.close(1);
             };
@@ -118,7 +124,7 @@ try {
         }
 
         function saveSettings(settings) {
-            var parts = ["v1", settings.angle, settings.pivotSide];
+            var parts = ["v2", settings.angle, settings.pivotSide, settings.rotateWholeGroup ? "1" : "0"];
             try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
         }
 
@@ -127,11 +133,12 @@ try {
             try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
             if (!raw) return;
             var p = raw.split("|");
-            if (p[0] !== "v1" || p.length < 3) return;
+            if (p[0] !== "v2" || p.length < 4) return;
             var savedAngle = parseAngle(p[1]);
             if (savedAngle !== null) angleInput.text = String(savedAngle);
             rightPivotRadio.value = (p[2] === "right");
             leftPivotRadio.value = !rightPivotRadio.value;
+            wholeGroupCheck.value = (p[3] !== "0");
         }
 
         angleInput.active = true;
@@ -145,21 +152,20 @@ try {
         return isFinite(value) ? value : null;
     }
 
-    function collectSelectedPoints(selection, points, ownerList) {
+    function collectSelectedPoints(selection, points) {
         if (!(selection instanceof Array)) return;
         for (var i = 0; i < selection.length; i++) {
-            collectFromItem(selection[i], selection[i], points, ownerList);
+            collectFromItem(selection[i], selection[i], points);
         }
     }
 
-    function collectFromItem(item, owner, points, ownerList) {
+    function collectFromItem(item, owner, points) {
         if (item.locked || item.hidden) return;
 
         if (item.typename === "PathItem") {
             for (var i = 0; i < item.pathPoints.length; i++) {
                 if (item.pathPoints[i].selected === PathPointSelection.ANCHORPOINT) {
                     points.push({point: item.pathPoints[i], owner: owner});
-                    addUniqueOwner(ownerList, owner);
                 }
             }
             return;
@@ -167,47 +173,63 @@ try {
 
         if (item.typename === "CompoundPathItem") {
             for (var j = 0; j < item.pathItems.length; j++) {
-                collectFromItem(item.pathItems[j], owner, points, ownerList);
+                collectFromItem(item.pathItems[j], owner, points);
             }
             return;
         }
 
         if (item.typename === "GroupItem") {
             for (var k = 0; k < item.pageItems.length; k++) {
-                collectFromItem(item.pageItems[k], owner, points, ownerList);
+                collectFromItem(item.pageItems[k], owner, points);
             }
         }
     }
 
-    function addUniqueOwner(ownersList, owner) {
-        for (var i = 0; i < ownersList.length; i++) {
-            if (ownersList[i] === owner) return;
+    // 선택한 앵커마다 실제로 돌릴 개체를 정한다. 같은 개체로 모이는 앵커가 여럿이면
+    // 한 번만 돌려야 하므로 중복을 걸러내고, 위치를 되돌릴 기준 앵커를 하나씩 들려 보낸다.
+    function buildRotationTargets(points, useWholeGroup) {
+        var targets = [];
+        for (var i = 0; i < points.length; i++) {
+            var item = useWholeGroup ? getOutermostContainer(points[i].owner) : points[i].owner;
+            if (findTarget(targets, item) === null) {
+                targets.push({item: item, marker: points[i].point});
+            }
         }
-        ownersList.push(owner);
+        return targets;
     }
 
-    function rotateOwners(owners, selectedPoints, pivot, angleDegrees) {
-        for (var i = 0; i < owners.length; i++) {
-            var owner = owners[i];
-            var marker = getOwnerMarker(owner, selectedPoints);
-            var originalMarker = copyPoint(marker.point.anchor);
+    function findTarget(targets, item) {
+        for (var i = 0; i < targets.length; i++) {
+            if (targets[i].item === item) return targets[i];
+        }
+        return null;
+    }
+
+    // 그룹이나 컴파운드 패스 안에 들어 있으면 가장 바깥 컨테이너까지 올라간다.
+    // 최상위 개체의 부모는 레이어이므로 그 앞에서 멈춘다.
+    function getOutermostContainer(item) {
+        var target = item;
+        while (target.parent &&
+            (target.parent.typename === "GroupItem" || target.parent.typename === "CompoundPathItem")) {
+            target = target.parent;
+        }
+        return target;
+    }
+
+    function rotateTargets(targets, pivot, angleDegrees) {
+        for (var i = 0; i < targets.length; i++) {
+            var target = targets[i];
+            var originalMarker = copyPoint(target.marker.anchor);
             var expectedMarker = rotatePoint(originalMarker, pivot, angleDegrees);
 
-            owner.rotate(angleDegrees, true, true, true, true, Transformation.CENTER);
+            target.item.rotate(angleDegrees, true, true, true, true, Transformation.CENTER);
 
-            var rotatedMarker = marker.point.anchor;
-            owner.translate(
+            var rotatedMarker = target.marker.anchor;
+            target.item.translate(
                 expectedMarker[0] - rotatedMarker[0],
                 expectedMarker[1] - rotatedMarker[1]
             );
         }
-    }
-
-    function getOwnerMarker(owner, points) {
-        for (var i = 0; i < points.length; i++) {
-            if (points[i].owner === owner) return points[i];
-        }
-        throw new Error("회전 기준 앵커를 찾을 수 없습니다.");
     }
 
     function getLeftAnchor(first, second) {

@@ -987,7 +987,12 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       'function getLineAngle(first, second)',
       'function getShortestRotation(currentAngle, targetAngle)',
       'function rotatePoint(point, origin, angleDegrees)',
-      'function rotateOwners(owners, selectedPoints, pivot, angleDegrees)',
+      'function rotateTargets(targets, pivot, angleDegrees)',
+      'dlg.add("checkbox", undefined, "그룹 전체 회전")',
+      'function buildRotationTargets(points, useWholeGroup)',
+      'function getOutermostContainer(item)',
+      'buildRotationTargets(selectedPoints, dialogResult.rotateWholeGroup)',
+      'var parts = ["v2", settings.angle, settings.pivotSide, settings.rotateWholeGroup ? "1" : "0"]',
     ];
     for (const token of required) {
       if (!source.includes(token)) {
@@ -1018,6 +1023,46 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       assertClose(rotated[1], 10, "rotated point y");
     } catch (error) {
       console.error(`${anchorAngle}: executable angle regression failed: ${error.message}`);
+      failures++;
+    }
+
+    try {
+      const helpers = extractWeatherFrontHelpers(source, [
+        "getOutermostContainer",
+        "findTarget",
+        "buildRotationTargets",
+      ]);
+
+      // 직접 선택 도구는 그룹 안 앵커를 잡아도 선택 목록에 그 패스만 담는다.
+      const layer = {typename: "Layer"};
+      const outerGroup = {typename: "GroupItem", parent: layer};
+      const innerGroup = {typename: "GroupItem", parent: outerGroup};
+      const pathA = {typename: "PathItem", parent: innerGroup};
+      const pathB = {typename: "PathItem", parent: outerGroup};
+      const loosePath = {typename: "PathItem", parent: layer};
+
+      assert.strictEqual(helpers.getOutermostContainer(pathA), outerGroup, "a nested path must climb to the outermost group");
+      assert.strictEqual(helpers.getOutermostContainer(loosePath), loosePath, "a top-level path must stay itself");
+      assert.strictEqual(helpers.getOutermostContainer(outerGroup), outerGroup, "a group sitting on a layer must stay itself");
+
+      const points = [
+        {point: {anchor: [0, 0]}, owner: pathA},
+        {point: {anchor: [10, 0]}, owner: pathB},
+      ];
+
+      // 두 앵커가 같은 그룹으로 모이면 그 그룹을 두 번 돌리면 안 된다.
+      const grouped = helpers.buildRotationTargets(points, true);
+      assert.strictEqual(grouped.length, 1, "anchors sharing a group must rotate that group once");
+      assert.strictEqual(grouped[0].item, outerGroup, "the shared group must be the rotation target");
+      assert.strictEqual(grouped[0].marker, points[0].point, "each target must carry an anchor to restore its position");
+
+      // 체크를 끄면 예전처럼 선택된 패스만 돈다.
+      const separate = helpers.buildRotationTargets(points, false);
+      assert.strictEqual(separate.length, 2, "without the option each selected path rotates on its own");
+      assert.strictEqual(separate[0].item, pathA, "without the option the selected path stays the target");
+      assert.strictEqual(separate[1].item, pathB, "without the option the selected path stays the target");
+    } catch (error) {
+      console.error(`${anchorAngle}: executable rotation-target regression failed: ${error.message}`);
       failures++;
     }
   }
