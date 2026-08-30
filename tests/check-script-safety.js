@@ -29,6 +29,7 @@ const cone = "스크립트/01_도형/Object_cone.jsx";
 const sphere = "스크립트/01_도형/Object_sphere.jsx";
 const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
 const weatherFront = "스크립트/01_도형/Object_front.jsx";
+const phospholipid = "스크립트/01_도형/Object_PhospholipidBilayer.jsx";
 const anchorAngle = "스크립트/01_도형/Object_AnchorAngle.jsx";
 const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
 const cubicLattice = "스크립트/01_도형/Object_CubicLattice.jsx";
@@ -89,6 +90,10 @@ function extractFunction(source, name) {
 function extractWeatherFrontHelpers(source, names) {
   const declarations = names.map((name) => extractFunction(source, name)).join("\n");
   return new Function(`${declarations}\nreturn {${names.join(",")}};`)();
+}
+
+function assertNear(actual, expected, tolerance, label) {
+  assert.ok(Math.abs(actual - expected) < tolerance, `${label}: expected ${expected}, got ${actual}`);
 }
 
 function assertClose(actual, expected, label) {
@@ -1768,6 +1773,202 @@ for (const file of updaterFiles) {
       console.error(`${findSimilar}: missing ${token}`);
       failures++;
     }
+  }
+}
+
+{
+  const source = read(phospholipid);
+  const required = [
+    'var PREF_KEY = "ObjectPhospholipidBilayer/settings"',
+    'new Window("dialog", "인지질 2중층")',
+    'footer.add("checkbox", undefined, "미리보기")',
+    'addNumberField(spacingPanel, "선과의 거리", "mm", gapMm, 0.1, 0, 20)',
+    'addNumberField(spacingPanel, "인지질 간격", "mm", spacingMm, 0.1, 0.2, 30)',
+    'function pickLineAndUnit(selection)',
+    'function getPlacementDistances(totalLength, spacing, closed, maxCount)',
+    'function unitAngleDegrees(dirX, dirY)',
+    'function offsetPolylineLengths(metrics, offset, bendDeadzone)',
+    'function getBendDeadzone(signedOffset)',
+    'label.preferredSize.width = LABEL_WIDTH',
+    'unitLabel.preferredSize.width = UNIT_WIDTH',
+    'input.preferredSize.width = INPUT_WIDTH',
+    'down.preferredSize.width = STEP_BUTTON_WIDTH',
+    'up.preferredSize.width = STEP_BUTTON_WIDTH',
+    'addNumberField(spacingPanel, "보정 시작 반지름", "mm", startRadiusMm, 1, 1, 200)',
+    'function unitTangentAt(samples, index)',
+    'function centerDistanceAt(metrics, lengths, offsetLength)',
+    'addNumberField(spacingPanel, "곡선 보정", "%", curvatureFixPercent, 5, 0, 100)',
+    'placeLayer(group, getLayerDistances(measureOffset), 1, centerOffset)',
+    'placeLayer(group, getLayerDistances(-measureOffset), -1, centerOffset)',
+    'copy.rotate(angle, true, true, true, true, Transformation.CENTER)',
+    'linePath.remove()',
+    'unitItem.remove()',
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${phospholipid}: missing bilayer control or placement token: ${token}`);
+      failures++;
+    }
+  }
+
+  const guardLine = lineOf(source, /app\.documents\.length\s*={2,3}\s*0/);
+  const activeDocLine = lineOf(source, /app\.activeDocument/);
+  if (guardLine < 1 || activeDocLine < 1 || guardLine > activeDocLine) {
+    console.error(`${phospholipid}: app.documents.length guard must run before app.activeDocument`);
+    failures++;
+  }
+
+  const showLine = lineOf(source, /var\s+result\s*=\s*dlg\.show\(\)/);
+  const savePrefCallLine = lineOf(source, /^\s*saveSettings\(\);/m);
+  if (showLine < 1 || savePrefCallLine < 1 || savePrefCallLine < showLine) {
+    console.error(`${phospholipid}: preferences must be saved on confirm only`);
+    failures++;
+  }
+
+  if (!/if\s*\(path\.closed\s*&&\s*points\.length\s*>\s*2\)/.test(source)) {
+    console.error(`${phospholipid}: closed paths must include the segment back to the first anchor`);
+    failures++;
+  }
+
+  try {
+    const helpers = extractWeatherFrontHelpers(source, [
+      "getCubicSegments",
+      "pointFromArray",
+      "cubicPoint",
+      "cubicDerivative",
+      "sampleDirection",
+      "distanceBetween",
+      "clampValue",
+      "buildPathMetrics",
+      "getFrameAtLength",
+      "getPlacementDistances",
+      "unitAngleDegrees",
+      "offsetPolylineLengths",
+      "centerDistanceAt",
+      "unitTangentAt",
+    ]);
+
+    const straightPath = {
+      closed: false,
+      pathPoints: [
+        {anchor: [0, 0], rightDirection: [10 / 3, 0]},
+        {anchor: [10, 0], leftDirection: [20 / 3, 0]},
+      ],
+    };
+    const metrics = helpers.buildPathMetrics(straightPath, 60);
+    const frame = helpers.getFrameAtLength(metrics, 5);
+    assertClose(metrics.totalLength, 10, "bilayer straight path length");
+    assertClose(frame.nx, 0, "bilayer left normal x");
+    assertClose(frame.ny, 1, "bilayer left normal y");
+
+    // 원본의 위쪽이 바깥을 향해야 하므로, 위층은 그대로 두고 아래층만 뒤집힌다.
+    assertClose(helpers.unitAngleDegrees(frame.nx, frame.ny), 0, "upper layer keeps the original heading");
+    assertClose(helpers.unitAngleDegrees(-frame.nx, -frame.ny), 180, "lower layer flips the original heading");
+    assertClose(helpers.unitAngleDegrees(1, 0), -90, "rightward normal turns the unit clockwise");
+    assertClose(helpers.unitAngleDegrees(-1, 0), 90, "leftward normal turns the unit counterclockwise");
+
+    const exact = helpers.getPlacementDistances(10, 2, false, 300);
+    assert.deepStrictEqual(exact, [0, 2, 4, 6, 8, 10], "an exact fit must reach both ends of an open path");
+
+    const leftover = helpers.getPlacementDistances(10, 3, false, 300);
+    assert.strictEqual(leftover.length, 4, "an open path must hold every whole spacing step");
+    assertClose(leftover[0], 0.5, "leftover length must be split evenly between both ends");
+    assertClose(leftover[3], 9.5, "leftover length must be split evenly between both ends");
+
+    const ring = helpers.getPlacementDistances(10, 3, true, 300);
+    assert.strictEqual(ring.length, 3, "a closed path must divide its perimeter into whole steps");
+    assertClose(ring[1], 10 / 3, "closed spacing must stretch to close the seam");
+    assertClose(ring[2], 20 / 3, "closed spacing must stretch to close the seam");
+
+    assert.strictEqual(
+      helpers.getPlacementDistances(1000, 0.1, false, 300).length,
+      300,
+      "a too-small spacing must stop at the per-layer cap"
+    );
+
+    // 직선에서는 어느 쪽으로 밀어내도 평행 곡선 길이가 같으므로 두 층의 개수도 같아야 한다.
+    const straightOuter = helpers.offsetPolylineLengths(metrics, 3, 0);
+    const straightInner = helpers.offsetPolylineLengths(metrics, -3, 0);
+    assertClose(straightOuter[straightOuter.length - 1], 10, "a straight offset curve keeps the centerline length");
+    assertClose(straightInner[straightInner.length - 1], 10, "a straight offset curve keeps the centerline length");
+
+    // 반지름 10의 사분원(왼쪽 법선이 원 중심을 향한다).
+    // 안쪽 층은 반지름 7, 바깥쪽 층은 반지름 13의 호 길이를 따라야 한다.
+    const KAPPA = 0.5522847498;
+    const arcPath = {
+      closed: false,
+      pathPoints: [
+        {anchor: [10, 0], rightDirection: [10, 10 * KAPPA]},
+        {anchor: [0, 10], leftDirection: [10 * KAPPA, 10]},
+      ],
+    };
+    const arcMetrics = helpers.buildPathMetrics(arcPath, 200);
+    const towardCenter = helpers.offsetPolylineLengths(arcMetrics, 3, 0);
+    const awayFromCenter = helpers.offsetPolylineLengths(arcMetrics, -3, 0);
+    const innerLength = towardCenter[towardCenter.length - 1];
+    const outerLength = awayFromCenter[awayFromCenter.length - 1];
+    assertNear(arcMetrics.totalLength, Math.PI * 10 / 2, 0.01, "quarter arc centerline length");
+    assertNear(innerLength, Math.PI * 7 / 2, 0.05, "inner leaflet must follow the radius 7 arc");
+    assertNear(outerLength, Math.PI * 13 / 2, 0.05, "outer leaflet must follow the radius 13 arc");
+    assert.ok(
+      helpers.getPlacementDistances(outerLength, 2, false, 300).length >
+        helpers.getPlacementDistances(innerLength, 2, false, 300).length,
+      "the outer leaflet must take more units than the inner one around a bend"
+    );
+
+    // 곡률 반지름보다 깊게 밀어내도 층이 통째로 사라지지 않아야 한다(되접힘 구간은 최소 비율로 눌린다).
+    const folded = helpers.offsetPolylineLengths(arcMetrics, 12, 0)[arcMetrics.samples.length - 1];
+    assert.ok(
+      folded > arcMetrics.totalLength * 0.14 && folded < arcMetrics.totalLength * 0.2,
+      `an offset deeper than the radius must fall back to the minimum step factor, got ${folded}`
+    );
+
+    // 데드존: 굽이 정도(offset / 곡률반지름)가 데드존 이하면 직선과 똑같이 잰다.
+    // 반지름 10 호에 offset 3이면 bend는 0.3이므로, 데드존 0.3에서 두 층 모두 중심선 길이가 된다.
+    const damped = helpers.offsetPolylineLengths(arcMetrics, 3, 0.3);
+    const dampedOuter = helpers.offsetPolylineLengths(arcMetrics, -3, 0.3);
+    assertNear(
+      damped[damped.length - 1],
+      arcMetrics.totalLength,
+      0.05,
+      "a bend inside the deadzone must measure like a straight run"
+    );
+    assertNear(
+      dampedOuter[dampedOuter.length - 1],
+      arcMetrics.totalLength,
+      0.05,
+      "a bend inside the deadzone must measure like a straight run"
+    );
+    assert.strictEqual(
+      helpers.getPlacementDistances(damped[damped.length - 1], 2, false, 300).length,
+      helpers.getPlacementDistances(dampedOuter[dampedOuter.length - 1], 2, false, 300).length,
+      "both leaflets must take the same count inside the deadzone"
+    );
+
+    // 데드존을 넘어서면 넘은 만큼만 보정된다(전부 아니면 전무가 아니다).
+    const partial = helpers.offsetPolylineLengths(arcMetrics, 3, 0.1);
+    assert.ok(
+      partial[partial.length - 1] > innerLength &&
+        partial[partial.length - 1] < arcMetrics.totalLength,
+      `past the deadzone only the excess bend may be corrected, got ${partial[partial.length - 1]}`
+    );
+
+    // 평행 곡선 위의 길이는 같은 샘플의 중심선 길이로 되돌아와야 한다.
+    assertClose(helpers.centerDistanceAt(arcMetrics, awayFromCenter, 0), 0, "offset start maps back to the path start");
+    assertClose(
+      helpers.centerDistanceAt(arcMetrics, awayFromCenter, outerLength),
+      arcMetrics.totalLength,
+      "offset end maps back to the path end"
+    );
+    assertNear(
+      helpers.centerDistanceAt(arcMetrics, awayFromCenter, outerLength / 2),
+      arcMetrics.totalLength / 2,
+      0.02,
+      "a constant-radius arc must map the halfway point back to the halfway point"
+    );
+  } catch (error) {
+    console.error(`${phospholipid}: executable bilayer placement regression failed: ${error.message}`);
+    failures++;
   }
 }
 
