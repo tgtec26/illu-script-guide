@@ -34,7 +34,7 @@ const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
 const cubicLattice = "스크립트/01_도형/Object_CubicLattice.jsx";
 const graphiteCrystal = "스크립트/01_도형/Object_GraphiteCrystal.jsx";
 const diamondCrystal = "스크립트/01_도형/Object_DiamondCrystal.jsx";
-const updaterFiles = ["script-action-update-mac.command", "script-action-update-windows.ps1", "UPDATE.md"];
+const updaterFiles = ["setup-mac.command", "setup-windows.ps1", "UPDATE.md"];
 
 function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
@@ -131,14 +131,14 @@ for (const file of alignFiles) {
 {
   const source = read(textInput);
   const optionArrays = source.match(/contents:\s*\[[^\]]+\]/g) || [];
-  const standardOptionArrays = optionArrays.slice(0, 9);
-  if (optionArrays.length !== 11 ||
-      standardOptionArrays.length !== 9 ||
+  const standardOptionArrays = optionArrays.slice(0, 7);
+  if (optionArrays.length !== 10 ||
+      standardOptionArrays.length !== 7 ||
       standardOptionArrays.some((arraySource) => {
         const items = arraySource.match(/"[^"]*"/g) || [];
         return items.length !== 6;
       })) {
-    console.error(textInput + ": nine standard text rows must provide exactly 6 items");
+    console.error(textInput + ": seven literal text rows must provide exactly 6 items");
     failures++;
   }
   if (!source.includes('var label = opt.labels ? opt.labels[charIndex] : opt.contents[charIndex]') ||
@@ -156,9 +156,13 @@ for (const file of alignFiles) {
     console.error(textInput + ": must offer circled number text inserts");
     failures++;
   }
-  if (!source.includes('{contents: ["t0", "t1", "t2", "t3", "t4", "t5"]') ||
-      source.includes('{contents: ["t1", "t2", "t3", "t4", "t5", "t6"]')) {
-    console.error(textInput + ": t-series text inserts must run from t0 through t5");
+  if (!source.includes('{prefix: "t", fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true}') ||
+      !source.includes('{prefix: "d", fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true}') ||
+      !source.includes("var SUBSCRIPT_BUTTON_COUNT = 6") ||
+      !source.includes("opt.contents = makeSubscriptContents(opt.prefix, 1)") ||
+      !source.includes("opt.contents = makeSubscriptContents(opt.prefix, checkbox.value ? 0 : 1)") ||
+      !source.includes('var zeroCheck = row.add("checkbox", undefined, "0")')) {
+    console.error(textInput + ": subscript rows must start at 1 and switch to 0 through the row checkbox");
     failures++;
   }
   if (!/contents:\s*\["Ⅰ",\s*"Ⅱ",\s*"Ⅲ",\s*"Ⅳ",\s*"Ⅴ",\s*"Ⅵ"\][\s\S]*?fontNames:\s*romanFontCandidates/.test(source) ||
@@ -320,7 +324,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 {
   const source = read(subscriptedVariable);
   if (!/var\s+radItalic\s*=\s*grpFont\.add\("radiobutton",\s*undefined,\s*"이탤릭체"\);[\s\S]*?var\s+radRoman\s*=\s*grpFont\.add\("radiobutton",\s*undefined,\s*"로만체"\);/.test(source) ||
-      !source.includes("radItalic.value = true") ||
+      !source.includes('radItalic.value = (saved.fontStyle !== "Roman")') ||
       !source.includes('var fontStyle = radItalic.value ? "Italic" : "Roman"') ||
       !source.includes("textItem.textRange.characterAttributes.size = 8")) {
     console.error(`${subscriptedVariable}: italic must be the left/default style and generated text must be 8pt`);
@@ -427,7 +431,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       "옵션",
       "전체 그룹 해제",
       "클리핑 마스크 해제",
-      "마스크 도형 삭제",
+      "빈 투명 개체 삭제",
       "취소",
       "확인",
       "문서에 그룹이 없습니다.",
@@ -511,22 +515,22 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
   const source = read(cylinder);
   const required = [
     'new Window("dialog", "오브젝트 실린더")',
-    'heightPanel.add("slider", undefined, heightMm, 0, maxHeightMm)',
+    'var heightControls = addValueRow(',
     'var HEIGHT_STEP_MM = 0.05',
     'var DIAMETER_STEP_MM = 0.05',
-    'heightSlider.stepdelta = HEIGHT_STEP_MM',
+    'slider.stepdelta = step',
     'var viewAngle = 70',
     'var divisionRotation = 90',
-    'viewPanel.add("slider", undefined, viewAngle, -180, 180)',
-    'directionPanel.add("radiobutton", undefined, "상하")',
-    'directionPanel.add("radiobutton", undefined, "좌우")',
-    'divisionPanel.add("checkbox", undefined, "분할선 표시")',
-    'divisionPanel.add("slider", undefined, divisionCount, 2, 24)',
-    'divisionPanel.add("slider", undefined, divisionRotation, -180, 180)',
+    'addAngleRow(viewPanel, "X축", viewAngle, true)',
+    'directionRow.add("radiobutton", undefined, "상하")',
+    'directionRow.add("radiobutton", undefined, "좌우")',
+    'directionRow.add("checkbox", undefined, "분할선")',
+    'countGroup.add("slider", undefined, divisionCount, 2, 24)',
+    'addAngleRow(shapePanel, "분할 회전", divisionRotation)',
     'var K_STEP = 10',
-    'faceRow.add("radiobutton", undefined, "보이는면")',
-    'faceRow.add("radiobutton", undefined, "내부")',
-    'faceRow.add("radiobutton", undefined, "외부")',
+    'colorRow.add("radiobutton", undefined, "보이는면")',
+    'colorRow.add("radiobutton", undefined, "내부")',
+    'colorRow.add("radiobutton", undefined, "외부")',
     'function makeKColor(k)',
     'cmyk.black = k',
     'gray.gray = k',
@@ -553,7 +557,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     'var handleScale = 0.5522847498',
     'visibleOnSide: sideDot > 0.0001',
     'divisionPoint.front[0]',
-    'previewGroup = createCylinder(heightMm * MM_TO_PT, viewAngle, isVertical)',
+    'var group = createCylinder(heightMm * MM_TO_PT, view.angle, true)',
     'source.hidden = sourceWasHidden',
     'source.remove()',
   ];
@@ -686,15 +690,15 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     'new Window("dialog", "오브젝트 콘")',
     'var topDiameterMm = 0',
     'var baseDiameterMm = roundTo(diameterMm, SIZE_STEP_MM)',
-    'sizePanel.add("slider", undefined, baseDiameterMm, SIZE_STEP_MM, maxBaseDiameterMm)',
-    'sizePanel.add("slider", undefined, topDiameterMm, 0, baseDiameterMm)',
-    'sizePanel.add("slider", undefined, heightMm, SIZE_STEP_MM, maxHeightMm)',
-    'divisionPanel.add("slider", undefined, divisionCount, 0, 24)',
+    'addSizeRow(sizePanel, "밑면 지름", baseDiameterMm, SIZE_STEP_MM, maxBaseDiameterMm)',
+    'addSizeRow(sizePanel, "윗면 지름", topDiameterMm, 0, baseDiameterMm)',
+    'addSizeRow(sizePanel, "높이", heightMm, SIZE_STEP_MM, maxHeightMm)',
+    'divisionRow.add("slider", undefined, divisionCount, 0, 24)',
     'addAngleControls(viewPanel, "X축", viewX)',
     'addAngleControls(viewPanel, "Y축", viewY)',
     'addAngleControls(viewPanel, "Z축", viewZ)',
-    'faceRow.add("radiobutton", undefined, "윗면")',
-    'faceRow.add("radiobutton", undefined, "옆면")',
+    'colorRow.add("radiobutton", undefined, "윗면")',
+    'colorRow.add("radiobutton", undefined, "옆면")',
     'faceK[activeFace] = clamp(faceK[activeFace] + delta, 0, 100)',
     'function makeKColor(k)',
     'function createCone()',
@@ -704,7 +708,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     'function drawVisibleDivisionSamples(group, samples, axisHeight, ringRadius)',
     'function makeRingBezierPath(group, axisHeight, ringRadius, startAngle, endAngle, closed)',
     'var segmentCount = Math.max(1, Math.ceil(Math.abs(span) / (Math.PI / 2)))',
-    'var steps = ringRadius < 0.001 ? 1 : 16',
+    'var steps = ringRadius < 0.001 ? 1 : RING_SAMPLE_COUNT',
     'function convexHull(points)',
     'var topNormal = rotatePoint(0, 1, 0)',
     'applyFill(side, faceK[FACE_SIDE])',
@@ -745,7 +749,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       'source.hidden = sourceWasHidden',
       'source.remove()',
       'item.editable === false',
-      'var pathMetrics = buildPathMetrics(source, 80)',
+      'var pathMetrics = buildPathMetrics(source, 200)',
       'function cubicPoint(p0, p1, p2, p3, t)',
       'function cubicDerivative(p0, p1, p2, p3, t)',
       'function buildPathMetrics(path, samplesPerSegment)',
@@ -753,7 +757,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       'var normalSign = reversed ? -1 : 1',
       'var unitLength = shapeSize + gap',
       'var centerDistance = shapeSize / 2 + index * unitLength',
-      'function drawSemicircle(group, frame, size, side, color)',
+      'function buildFilledPath(group, anchors, handles, color)',
       'function drawTriangle(group, frame, size, side, color)',
       'frontType === "stationary"',
       'frontType === "occluded"',
@@ -761,10 +765,10 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       'colorPanel.add("radiobutton", undefined, "K 음영")',
       'colorPanel.add("radiobutton", undefined, "HEX")',
       'var colorMode = "standard"',
-      'var kValue = 0',
+      'var kValue = 100',
       'var hexValue = "FF0000"',
       'var K_STEP = 10',
-      'kValue = clamp(kValue + delta, 0, 100)',
+      'kValue = clamp(kValue + delta, 50, 100)',
       '/^#?[0-9a-fA-F]{6}$/.test(value)',
       'var STANDARD_RED = "FF0000"',
       'var STANDARD_BLUE = "0000FF"',
@@ -777,7 +781,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       'function drawStationaryBaseline(group, boundaries, colors)',
       'stepK(-10)',
       'stepK(10)',
-      '"0K"',
+      '"50K"',
       '"100K"',
       'var previousCoordinateSystem = app.coordinateSystem',
       'app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM',
@@ -799,7 +803,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       failures++;
     }
 
-    const finalCreationLine = lineOf(source, /var\s+finalGroup\s*=\s*createWeatherFront\(false\)/);
+    const finalCreationLine = lineOf(source, /var\s+finalGroup\s*=\s*tryCreateWeatherFront\(false,\s*3\)/);
     const sourceRemovalLine = lineOf(source, /source\.remove\(\)/);
     if (finalCreationLine < 1 || sourceRemovalLine < 1 || sourceRemovalLine < finalCreationLine) {
       console.error(`${weatherFront}: source removal must follow final weather-front creation`);
@@ -808,7 +812,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 
     const coordinateCaptureLine = lineOf(source, /var\s+previousCoordinateSystem\s*=\s*app\.coordinateSystem/);
     const coordinateNormalizeLine = lineOf(source, /app\.coordinateSystem\s*=\s*CoordinateSystem\.DOCUMENTCOORDINATESYSTEM/);
-    const metricsLine = lineOf(source, /var\s+pathMetrics\s*=\s*buildPathMetrics\(source,\s*80\)/);
+    const metricsLine = lineOf(source, /var\s+pathMetrics\s*=\s*buildPathMetrics\(source,\s*200\)/);
     if (coordinateCaptureLine < 1 || coordinateNormalizeLine < coordinateCaptureLine || metricsLine < coordinateNormalizeLine) {
       console.error(`${weatherFront}: source geometry must be read after document-coordinate normalization`);
       failures++;
@@ -820,7 +824,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     }
 
     const updatePreviewBody = extractFunction(source, "updatePreview");
-    if (!/try\s*\{[\s\S]*?source\.hidden\s*=\s*true;\s*source\.selected\s*=\s*false;[\s\S]*?previewGroup\s*=\s*createWeatherFront\(true\);[\s\S]*?\}\s*catch\s*\([^)]*\)\s*\{[\s\S]*?clearPreview\(\);[\s\S]*?restoreSourceAfterPreviewFailure\(\);[\s\S]*?alert\(\s*"미리보기를 만드는 중 오류가 발생했습니다\."\s*\);[\s\S]*?app\.redraw\(\);[\s\S]*?\}/.test(updatePreviewBody)) {
+    if (!/try\s*\{[\s\S]*?source\.hidden\s*=\s*true;\s*source\.selected\s*=\s*false;[\s\S]*?previewGroup\s*=\s*tryCreateWeatherFront\(true,\s*2\);[\s\S]*?\}\s*catch\s*\([^)]*\)\s*\{[\s\S]*?clearPreview\(\);[\s\S]*?restoreSourceAfterPreviewFailure\(\);[\s\S]*?app\.redraw\(\);[\s\S]*?\}/.test(updatePreviewBody)) {
       console.error(`${weatherFront}: preview callbacks must recover DOM failures and re-hide the source before successful rebuilds`);
       failures++;
     }
@@ -839,8 +843,8 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     if (!/baseline\.stroked\s*=\s*true/.test(source) ||
         !/baseline\.filled\s*=\s*false/.test(source) ||
         !/baseline\.strokeWidth\s*=\s*strokeWidthPt/.test(source) ||
-        !/triangle\.stroked\s*=\s*false/.test(source) ||
-        !/semicircle\.stroked\s*=\s*false/.test(source)) {
+        !/shape\.stroked\s*=\s*false/.test(source) ||
+        !/shape\.filled\s*=\s*true/.test(source)) {
       console.error(`${weatherFront}: baseline must carry the stroke while symbols remain fill-only`);
       failures++;
     }
@@ -1664,91 +1668,68 @@ for (const file of updaterFiles) {
 }
 
 {
-  const source = read("script-action-update-mac.command");
-  if (!source.includes("rsync -a --delete") || !source.includes("sudo")) {
-    console.error("script-action-update-mac.command: must sync managed folders and handle app-folder permissions");
+  const source = read("setup-mac.command");
+  if (!source.includes("$.evalFile(new File(") ||
+      !source.includes(`find "$dir" -maxdepth 1 -type f -name '*.jsx' -delete`) ||
+      !source.includes("sudo chown -R")) {
+    console.error("setup-mac.command: must register scripts as stubs and handle app-folder permissions");
     failures++;
   }
   if (!source.includes('TARGET_DIR="$APP_DIR/Presets.localized/ko_KR/스크립트"')) {
-    console.error("script-action-update-mac.command: must prefer Korean localized Illustrator script folder");
+    console.error("setup-mac.command: must prefer Korean localized Illustrator script folder");
     failures++;
   }
-  if (!source.includes("FULL=0") ||
-      !source.includes("--full|-Full|-full|-f") ||
-      !source.includes('if [ "$FULL" -ne 1 ]') ||
-      !source.includes('KYS_NAME="cjh250907.kys"') ||
+  if (!source.includes('KYS_NAME="cjh250907.kys"') ||
       !source.includes('ARROW_NAME="화살표.ai"') ||
+      !source.includes('WIDTH_PROFILE_NAME="폭속성1.txt"') ||
       !source.includes('SETTINGS_BASE="$HOME/Library/Preferences/Adobe Illustrator $VER Settings"') ||
       !source.includes('"$APP_DIR/Support Files/Resources/ko_KR"') ||
       !source.includes('"$APP_DIR/Support Files/Required/Resources/ko_KR"')) {
-    console.error("script-action-update-mac.command: must support script-only mode and --full setup for shortcuts and arrows");
+    console.error("setup-mac.command: must install shortcuts, arrows and the width profile");
     failures++;
   }
 }
 
 {
-  const source = read("full-update-mac.command");
-  if (!source.includes('script-action-update-mac.command" --full')) {
-    console.error("full-update-mac.command: must launch the mac updater with --full");
-    failures++;
-  }
-}
-
-{
-  const source = read("script-action-update-windows.ps1");
-  const bytes = readBuffer("script-action-update-windows.ps1");
+  const source = read("setup-windows.ps1");
+  const bytes = readBuffer("setup-windows.ps1");
   if (!source.includes("Adobe Illustrator*") || !source.includes("Remove-Item") || !source.includes("Copy-Item")) {
-    console.error("script-action-update-windows.ps1: must find Illustrator and replace managed folders");
+    console.error("setup-windows.ps1: must find Illustrator and replace managed folders");
     failures++;
   }
   if (!source.includes("InstallLocation") || !source.includes("Microsoft\\Windows\\CurrentVersion\\Uninstall")) {
-    console.error("script-action-update-windows.ps1: must find Illustrator from Windows installed-app registry entries");
+    console.error("setup-windows.ps1: must find Illustrator from Windows installed-app registry entries");
     failures++;
   }
   if (!source.includes("Join-Path $Root \"Adobe\"")) {
-    console.error("script-action-update-windows.ps1: must search the common Program Files Adobe subfolder");
+    console.error("setup-windows.ps1: must search the common Program Files Adobe subfolder");
     failures++;
   }
   if (!source.includes("#Requires -Version 5.1")) {
-    console.error("script-action-update-windows.ps1: must explicitly support Windows PowerShell 5.1 or newer");
+    console.error("setup-windows.ps1: must explicitly support Windows PowerShell 5.1 or newer");
     failures++;
   }
   if (/Write-Host\s+"완료\.[\s\S]*?Read-Host\s+"Enter 키를 누르면 닫습니다"/.test(source)) {
-    console.error("script-action-update-windows.ps1: successful updates must close without waiting for Enter");
+    console.error("setup-windows.ps1: successful updates must close without waiting for Enter");
     failures++;
   }
   if (bytes[0] !== 0xef || bytes[1] !== 0xbb || bytes[2] !== 0xbf) {
-    console.error("script-action-update-windows.ps1: must be saved as UTF-8 with BOM for Windows PowerShell 5.1 Korean paths");
+    console.error("setup-windows.ps1: must be saved as UTF-8 with BOM for Windows PowerShell 5.1 Korean paths");
     failures++;
   }
 }
 
 {
-  const source = read("script-action-update-windows.cmd");
-  const bytes = readBuffer("script-action-update-windows.cmd");
+  const source = read("setup-windows.cmd");
+  const bytes = readBuffer("setup-windows.cmd");
   if (!source.includes("powershell.exe") ||
       !source.includes("-ExecutionPolicy Bypass") ||
-      !source.includes("-File \"%SCRIPT_DIR%script-action-update-windows.ps1\"")) {
-    console.error("script-action-update-windows.cmd: must launch the PowerShell updater by double-click");
+      !source.includes("-File \"%SCRIPT_DIR%setup-windows.ps1\"")) {
+    console.error("setup-windows.cmd: must launch the PowerShell setup by double-click");
     failures++;
   }
   if (!bytes.includes(Buffer.from("\r\n")) || bytes.includes(Buffer.from("@echo off\n"))) {
-    console.error("script-action-update-windows.cmd: must use CRLF line endings for cmd.exe");
-    failures++;
-  }
-}
-
-{
-  const source = read("full-update-windows.cmd");
-  const bytes = readBuffer("full-update-windows.cmd");
-  if (!source.includes("powershell.exe") ||
-      !source.includes("-ExecutionPolicy Bypass") ||
-      !source.includes("-File \"%SCRIPT_DIR%script-action-update-windows.ps1\" -Full")) {
-    console.error("full-update-windows.cmd: must launch the PowerShell updater with -Full");
-    failures++;
-  }
-  if (!bytes.includes(Buffer.from("\r\n")) || bytes.includes(Buffer.from("@echo off\n"))) {
-    console.error("full-update-windows.cmd: must use CRLF line endings for cmd.exe");
+    console.error("setup-windows.cmd: must use CRLF line endings for cmd.exe");
     failures++;
   }
 }
