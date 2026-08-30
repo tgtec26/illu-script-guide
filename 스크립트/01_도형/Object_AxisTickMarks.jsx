@@ -172,13 +172,15 @@ try {
 
     var legendGapGroup = legendPanel.add("group");
     legendGapGroup.add("statictext", undefined, "숫자와 범례 간격:");
+    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+    var STEP_BUTTON_WIDTH = 34;
     var legendGapDownBtn = legendGapGroup.add("button", undefined, "◀");
-    legendGapDownBtn.preferredSize.width = 22;
+    legendGapDownBtn.preferredSize.width = STEP_BUTTON_WIDTH;
     var legendGapInput = legendGapGroup.add("edittext", undefined, "1");
     legendGapInput.characters = 6;
     legendGapInput.justify = "center";
     var legendGapUpBtn = legendGapGroup.add("button", undefined, "▶");
-    legendGapUpBtn.preferredSize.width = 22;
+    legendGapUpBtn.preferredSize.width = STEP_BUTTON_WIDTH;
     legendGapGroup.add("statictext", undefined, "mm");
 
     var zeroCheck = legendPanel.add("checkbox", undefined, "원점에 0 넣기 (대각선 2mm)");

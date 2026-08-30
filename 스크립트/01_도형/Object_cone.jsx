@@ -60,9 +60,12 @@ try {
     var PREF_KEY = "ObjectCone/settings";
     applySavedSettings();
 
-    var LABEL_WIDTH = 58;
+    // 0 버튼이 붙는 줄도 라벨이 잘리지 않도록 넓힌다.
+    var LABEL_WIDTH = 70;
+    var UNIT_WIDTH = 26;        // 단위 글자 수가 달라도 뒤 요소가 어긋나지 않도록 고정
     var SLIDER_WIDTH = 200;
-    var STEP_BUTTON_WIDTH = 30;
+    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+    var STEP_BUTTON_WIDTH = 34;
 
     var dlg = new Window("dialog", "오브젝트 콘");
     dlg.orientation = "column";
@@ -96,11 +99,11 @@ try {
     divisionInput.characters = 4;
     divisionInput.justify = "center";
     var divisionDownButton = divisionRow.add("button", undefined, "◀");
-    divisionDownButton.preferredSize.width = 22;
+    divisionDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
     var divisionSlider = divisionRow.add("slider", undefined, divisionCount, 0, 24);
     divisionSlider.preferredSize.width = SLIDER_WIDTH;
     var divisionUpButton = divisionRow.add("button", undefined, "▶");
-    divisionUpButton.preferredSize.width = 22;
+    divisionUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
 
     var colorRow = extraPanel.add("group");
     colorRow.alignChildren = ["left", "center"];
@@ -352,16 +355,17 @@ try {
         row.alignChildren = ["left", "center"];
         var labelText = row.add("statictext", undefined, label);
         // 0 버튼이 붙는 줄은 라벨을 줄여서 다른 줄과 폭을 맞춘다
-        labelText.preferredSize.width = hasReset ? (LABEL_WIDTH - 32) : LABEL_WIDTH;
+        labelText.preferredSize.width = hasReset ? (LABEL_WIDTH - STEP_BUTTON_WIDTH - 10) : LABEL_WIDTH;
         var reset = null;
         if (hasReset) {
             reset = row.add("button", undefined, "0");
-            reset.preferredSize.width = 22;
+            reset.preferredSize.width = STEP_BUTTON_WIDTH;
         }
         var input = row.add("edittext", undefined, value);
         input.characters = 6;
         input.justify = "right";
-        row.add("statictext", undefined, unit);
+        var unitLabel = row.add("statictext", undefined, unit);
+        unitLabel.preferredSize.width = UNIT_WIDTH;
         var slider = row.add("slider", undefined, Number(value), minimum, maximum);
         slider.preferredSize.width = SLIDER_WIDTH;
         slider.stepdelta = step;

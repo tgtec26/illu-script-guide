@@ -1972,4 +1972,38 @@ for (const file of updaterFiles) {
   }
 }
 
+// 다이얼로그 스텝 버튼(◀ ▶ 0)은 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다.
+{
+  const scriptFiles = [];
+  const walk = (relative) => {
+    for (const entry of fs.readdirSync(path.join(root, relative), {withFileTypes: true})) {
+      const next = `${relative}/${entry.name}`;
+      if (entry.isDirectory()) walk(next);
+      else if (entry.name.endsWith(".jsx")) scriptFiles.push(next);
+    }
+  };
+  walk("스크립트");
+
+  for (const file of scriptFiles) {
+    const source = read(file);
+    if (source.includes('add("button", undefined, "◀")') && !/var\s+STEP_BUTTON_WIDTH\s*=\s*34;/.test(source)) {
+      console.error(`${file}: step buttons must size themselves from STEP_BUTTON_WIDTH = 34`);
+      failures++;
+    }
+
+    const buttonNames = new Set();
+    const declaration = /(?:var\s+)?(\w+)\s*=\s*[\w.]+\.add\("button"/g;
+    let match;
+    while ((match = declaration.exec(source)) !== null) buttonNames.add(match[1]);
+
+    const sizing = /(\w+)\.preferredSize\.width\s*=\s*(\d+)\s*;/g;
+    while ((match = sizing.exec(source)) !== null) {
+      if (!buttonNames.has(match[1])) continue;
+      if (Number(match[2]) >= 30) continue;
+      console.error(`${file}: button ${match[1]} is ${match[2]}px wide; under 30px the rounded ends meet and it renders as an ellipse`);
+      failures++;
+    }
+  }
+}
+
 process.exit(failures === 0 ? 0 : 1);

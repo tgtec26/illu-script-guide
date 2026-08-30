@@ -64,6 +64,8 @@ try {
     applySavedSettings();
 
     var LABEL_WIDTH = 66;
+    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+    var STEP_BUTTON_WIDTH = 34;
     var SLIDER_WIDTH = 150;
 
     var dlg = new Window("dialog", "세포 주기");
@@ -638,11 +640,11 @@ try {
         var unitText = row.add("statictext", undefined, unit);
         unitText.preferredSize.width = 18;
         var down = row.add("button", undefined, "◀");
-        down.preferredSize.width = 22;
+        down.preferredSize.width = STEP_BUTTON_WIDTH;
         var slider = row.add("slider", undefined, value, minimum, maximum);
         slider.preferredSize.width = SLIDER_WIDTH;
         var up = row.add("button", undefined, "▶");
-        up.preferredSize.width = 22;
+        up.preferredSize.width = STEP_BUTTON_WIDTH;
         return {
             row: row, input: input, slider: slider, down: down, up: up,
             min: minimum, max: maximum, step: step, decimals: decimals

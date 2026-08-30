@@ -61,6 +61,9 @@ try {
     applySavedSettings();
 
     var LABEL_WIDTH = 66;
+    var UNIT_WIDTH = 26;        // 단위 글자 수가 달라도 뒤 요소가 어긋나지 않도록 고정
+    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+    var STEP_BUTTON_WIDTH = 34;
     var SLIDER_WIDTH = 180;
 
     var dlg = new Window("dialog", "진자 운동");
@@ -595,14 +598,15 @@ try {
         var input = row.add("edittext", undefined, formatValue(value));
         input.characters = 5;
         input.justify = "center";
-        row.add("statictext", undefined, unit);
+        var unitLabel = row.add("statictext", undefined, unit);
+        unitLabel.preferredSize.width = UNIT_WIDTH;
         var down = row.add("button", undefined, "◀");
-        down.preferredSize.width = 22;
+        down.preferredSize.width = STEP_BUTTON_WIDTH;
         var slider = row.add("slider", undefined, value, minimum, maximum);
         slider.preferredSize.width = SLIDER_WIDTH;
 
         var up = row.add("button", undefined, "▶");
-        up.preferredSize.width = 22;
+        up.preferredSize.width = STEP_BUTTON_WIDTH;
 
         var field = {row: row, input: input, slider: slider, step: step, minimum: minimum, maximum: maximum, syncing: false};
         down.onClick = function() { stepField(field, -1); };

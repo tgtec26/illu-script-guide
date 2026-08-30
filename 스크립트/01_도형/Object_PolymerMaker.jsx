@@ -146,6 +146,8 @@ try {
 
     // 라벨 · 입력칸 · 슬라이더를 한 줄에 배치. 슬라이더를 끌면 step 단위로 값이 바뀐다.
     function addNumberField(parent, labelText, labelWidth, initialValue, step, minimum, maximum) {
+        // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+        var STEP_BUTTON_WIDTH = 34;
         var group = parent.add("group");
         group.orientation = "row";
         group.alignChildren = ["left", "center"];
@@ -159,11 +161,11 @@ try {
         input.characters = 5;
         input.justify = "center";
         var down = group.add("button", undefined, "◀");
-        down.preferredSize.width = 22;
+        down.preferredSize.width = STEP_BUTTON_WIDTH;
         var slider = group.add("slider", undefined, initial, minimum, maximum);
         slider.preferredSize.width = 150;
         var up = group.add("button", undefined, "▶");
-        up.preferredSize.width = 22;
+        up.preferredSize.width = STEP_BUTTON_WIDTH;
         field.input = input;
         field.slider = slider;
         down.onClick = function () { stepField(field, -1); };
