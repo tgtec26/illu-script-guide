@@ -52,7 +52,7 @@ const scripts = [
   { id: "center-big", category: "정렬", name: "가운데 정렬 - 큰 개체", file: "05_정렬/Align_CenterB.jsx", summary: "가장 큰 개체를 기준으로 나머지 개체의 가로·세로 중심을 맞춥니다.", tags: ["가운데", "기준"] },
   { id: "center-small", category: "정렬", name: "가운데 정렬 - 작은 개체", file: "05_정렬/Align_CenterS.jsx", summary: "가장 작은 개체를 기준으로 나머지 개체의 가로·세로 중심을 맞춥니다.", tags: ["가운데", "기준"] },
   { id: "position-12", category: "정렬", name: "12방향 위치 정렬", file: "05_정렬/Align_Position12.jsx", summary: "두 개체를 선택하고 기준 개체 주변 12개 위치로 배치합니다. 보이는 영역 기준으로 계산합니다.", tags: ["12방향", "보이는 영역"] },
-  { id: "repeat-last", category: "정렬", name: "마지막 정렬 반복", file: "05_정렬/Align_RepeatLast.jsx", summary: "마지막으로 실행한 정렬 스크립트를 다시 실행합니다. F4처럼 반복 작업에 씁니다.", tags: ["반복", "정렬"] },
+  { id: "repeat-last", category: "기타", name: "마지막 스크립트 반복", file: "10_기타/RepeatLast.jsx", summary: "마지막으로 실행한 스크립트를 다시 실행합니다. F4처럼 반복 작업에 씁니다.", tags: ["반복", "스크립트"] },
   { id: "visible-bounds", category: "정렬", name: "보이는 영역 정렬", file: "05_정렬/Align_VisibleBounds.jsx", summary: "기준 개체(큰/작은)를 고르고 가로 좌·중·우, 세로 상·중·하, 가로+세로 중앙 버튼을 눌러 보이는 경계 기준으로 정렬합니다.", tags: ["보이는 영역", "텍스트", "기준"] },
   { id: "output-600png", category: "내보내기", name: "600ppi PNG", file: "06_내보내기/Output_600png.jsx", summary: "작업물을 600ppi PNG로 내보낼 때 사용합니다.", tags: ["PNG", "내보내기"] },
   { id: "dup-anchor", category: "기타", name: "선택 앵커에 복제", file: "10_기타/Dup At Selected Anchors.jsx", summary: "선택한 앵커 위치에 개체를 복제합니다.", tags: ["앵커", "복제"] },

@@ -1,3 +1,12 @@
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 // 스크립트 이름: Object_CircularAlignment.jsx
 // 기능: 선택된 두 개체 중 작은 개체를 큰 개체의 경계선을 따라 등간격으로 복제 배치 후, 원본 작은 개체 삭제
 // 옵션: 배열 개수(2개=180도, 3개=120도 ...), 배치 지름 조절(- 안쪽 / + 바깥쪽)

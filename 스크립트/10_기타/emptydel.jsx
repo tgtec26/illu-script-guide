@@ -1,3 +1,12 @@
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 /*
   Illustrator Script: Delete Ghost Objects (Protect Clipping Masks)
   기능: 면/선이 없고 투명한 객체를 삭제하되, 클리핑 마스크는 보존합니다.

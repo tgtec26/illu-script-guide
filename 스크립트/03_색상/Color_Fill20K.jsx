@@ -1,3 +1,12 @@
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 /*
   Illustrator Script: Force Fill 20K (Pure Black Fixed)
   Description: 선택된 객체의 면(Fill)을 CMY 혼합 없는 순수 20% 회색(K=20)으로 변경합니다.

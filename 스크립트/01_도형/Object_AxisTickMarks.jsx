@@ -1,5 +1,14 @@
 // Object_AxisTickMarks.jsx
 #include "Object_setdash_align_helper.jsxinc"
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 // 사각형 선택 → L자 축(또는 상자) + 눈금 + 숫자 + 보조선 + 축 범례 생성
 // 범례는 축이 아니라 눈금 숫자의 바깥 경계를 기준으로 간격을 띄운다
 

@@ -1,3 +1,12 @@
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 /*
   setup.jsx — 새 PC 일러스트 환경 일괄 세팅 (환경설정 + 액션).
   실행: File > Scripts > setup

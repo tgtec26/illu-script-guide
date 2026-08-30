@@ -1,3 +1,12 @@
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 /*
   Illustrator Script: Create Guide Circles at Ends
   Description: 선택한 선의 양 끝점에 반지름 0.5mm 원을 생성하고 안내선으로 변경합니다.

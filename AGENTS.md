@@ -24,6 +24,21 @@ Any script with a dialog must remember the options from the last run and presele
 
 Reference implementations: `스크립트/01_도형/Object_sphere.jsx`, `스크립트/01_도형/Object_AxisTickMarks.jsx`, `스크립트/01_도형/Object_AtomModel.jsx`.
 
+## Last-Script Memo (required)
+
+Every runnable `.jsx` under `스크립트/` records its own path so `스크립트/10_기타/RepeatLast.jsx`(F4)가 그 스크립트를 다시 실행할 수 있다. 새 스크립트를 만들면 파일 맨 위(단, `#target`/`#include` 지시문 뒤)에 아래 조각을 그대로 넣는다. `RepeatLast.jsx` 자신만 예외다.
+
+```jsx
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+```
+
 ## Stroke Properties Missing From the DOM
 
 Arrowheads and dash corner alignment are not exposed on `PathItem`, but they can still be set from a script: write a temporary `.aia` action, then `app.loadAction` → `app.doScript` → `app.unloadAction`. This is verified working, not a workaround to avoid.

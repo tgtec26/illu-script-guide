@@ -201,7 +201,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 
   if (!source.includes('Folder.temp + "/illu_last_script.txt"') ||
       !source.includes("__memo.write($.fileName)")) {
-    console.error(`${file}: must record itself for Align_RepeatLast.jsx`);
+    console.error(`${file}: must record itself for RepeatLast.jsx`);
     failures++;
   }
 

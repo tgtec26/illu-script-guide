@@ -10,7 +10,7 @@
   형태와 무관하게 시각적 간격이 일정합니다. (그림자 등 효과는 무시)
 */
 
-// 마지막 실행 스크립트 기록 → Align_RepeatLast.jsx(F4)가 다시 실행
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
     __memo.encoding = "UTF-8";

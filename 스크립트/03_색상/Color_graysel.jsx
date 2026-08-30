@@ -1,3 +1,12 @@
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 /*
   Illustrator Script: Toggle Gray (Fill <-> Stroke) - Pure K Fixed
   Description: 낮은 농도에서 CMY가 섞이는 문제를 방지하기 위해 GrayColor 객체를 사용합니다.

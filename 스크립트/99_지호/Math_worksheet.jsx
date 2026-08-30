@@ -1,3 +1,12 @@
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
 // 만 5세 연산 워크시트 통합 생성 스크립트 (라디오버튼 UI & 다중 페이지 지원)
 // 1: 스파이더 연산 (v2)
 // 2: 더하기/빼기 박스 (v3)

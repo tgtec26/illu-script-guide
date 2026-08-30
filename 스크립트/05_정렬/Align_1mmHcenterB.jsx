@@ -1,6 +1,6 @@
 // [최종] 가장 큰 도형(또는 글자) 고정 + 세로 정렬
 // 클리핑 마스크 대응 및 텍스트 글리프 기준 1mm 간격 정렬
-// 마지막 실행 스크립트 기록 → Align_RepeatLast.jsx(F4)가 다시 실행
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
     __memo.encoding = "UTF-8";
