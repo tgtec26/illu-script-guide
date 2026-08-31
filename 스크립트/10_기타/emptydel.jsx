@@ -99,7 +99,24 @@ try {
         }
     }
 
+    // 해제된 마스크는 clipping === true가 남아 있으므로, 그룹이 실제로 자르는지 확인
+    function isInClippedGroup(item) {
+        try {
+            var parent = item.parent;
+            while (parent && parent.typename === "CompoundPathItem") {
+                parent = parent.parent;
+            }
+            return !!(parent && parent.typename === "GroupItem" && parent.clipped === true);
+        } catch(e) {
+            return false;
+        }
+    }
+
     function isClippingItem(item) {
+        if (!isInClippedGroup(item)) {
+            return false;
+        }
+
         try {
             if (item.hasOwnProperty("clipping") && item.clipping === true) {
                 return true;
