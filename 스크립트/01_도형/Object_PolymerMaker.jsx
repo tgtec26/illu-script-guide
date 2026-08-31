@@ -84,7 +84,7 @@ try {
     panelSize.margins = 15;
     panelSize.spacing = 10;
 
-    var fieldW = addNumberField(panelSize, "단위체 가로 폭 (mm):", 120, savedWidth, 1, 1, 100);
+    var fieldW = addNumberField(panelSize, "단위체 가로 폭 (mm):", 120, savedWidth, 0.2, 1, 100);
     var fieldSW = addNumberField(panelSize, "단위체 선 굵기 (pt):", 120, savedShapeStroke, 0.1, 0, 20);
     var fieldG = addNumberField(panelSize, "연결선 길이 (mm):", 120, savedGap, 0.1, 0, 50);
     var fieldCSW = addNumberField(panelSize, "연결선 굵기 (pt):", 120, savedConnStroke, 0.1, 0, 20);
