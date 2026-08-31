@@ -28,6 +28,7 @@ const cylinder = "스크립트/01_도형/Object_cylinder.jsx";
 const cone = "스크립트/01_도형/Object_cone.jsx";
 const sphere = "스크립트/01_도형/Object_sphere.jsx";
 const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
+const sineWave = "스크립트/01_도형/Object_SineWave.jsx";
 const weatherFront = "스크립트/01_도형/Object_front.jsx";
 const phospholipid = "스크립트/01_도형/Object_PhospholipidBilayer.jsx";
 const anchorAngle = "스크립트/01_도형/Object_AnchorAngle.jsx";
@@ -2047,6 +2048,274 @@ for (const file of updaterFiles) {
       if (Number(match[2]) >= 30) continue;
       console.error(`${file}: button ${match[1]} is ${match[2]}px wide; under 30px the rounded ends meet and it renders as an ellipse`);
       failures++;
+    }
+  }
+}
+
+
+// 사인 곡선: 고정점은 극값과 x축 교차점에만, 곡선은 기준 축(직선·원)을 따라가야 한다.
+{
+  const source = read(sineWave);
+  const required = [
+    'new Window("dialog", "사인 곡선")',
+    'var AMPLITUDE_SLIDER_MAX = 30',
+    'var WAVELENGTH_SLIDER_MAX = 30',
+    'var WIDTH_STEP = 0.1',
+    'var WIDTH_SLIDER_MAX = 2',
+    'addNumberField(wavePanel, "진폭", "mm"',
+    'addNumberField(wavePanel, "파장", "mm"',
+    'addNumberField(wavePanel, "축 이동", "mm"',
+    'addNumberField(strokePanel, "두께", "pt"',
+    'function syncSlider(field, value)',
+    'function buildAxis(item)',
+    'function effectiveWavelength()',
+    'source.hidden = true',
+    'source.hidden = sourceWasHidden',
+    'source.remove()',
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${sineWave}: missing sine wave control or drawing token: ${token}`);
+      failures++;
+    }
+  }
+
+  const MM = 2.834645669;
+  const helpers = [
+    "buildSineCurve", "effectiveWavelength", "quarterPositions", "sampleWave", "solveHandles",
+    "handleRatio", "buildAxis", "makeSegment", "segmentPoint", "segmentFrame",
+    "segmentDerivative", "segmentSecondDerivative", "clampValue",
+  ].map((name) => extractFunction(source, name)).join("\n");
+
+  const buildCurve = (pathPoints, closed, options) => new Function("pathPoints", "closed", "options", `
+    const MM = ${MM};
+    const QUARTER_TURN = Math.PI / 2;
+    const MAX_ANCHORS = 2000;
+    const ARC_SAMPLE_BUDGET = 4096;
+    const MIN_SEGMENT_SAMPLES = 24;
+    const MAX_SEGMENT_SAMPLES = 256;
+    const PointType = {CORNER: "corner", SMOOTH: "smooth"};
+    const amplitudeMm = options.amplitudeMm;
+    const wavelengthMm = options.wavelengthMm;
+    const shiftMm = options.shiftMm;
+    const strokeWidthPt = 0.3;
+    function applyStroke() {}
+    const source = {
+      pathPoints: pathPoints, closed: closed, stroked: false,
+      layer: {pathItems: {add: () => ({
+        setEntirePath(anchors) {
+          this.anchors = anchors;
+          this.pathPoints = anchors.map((anchor) => ({anchor: anchor}));
+        }
+      })}},
+      duplicate: () => ({duplicated: true})
+    };
+    ${helpers}
+    const axis = buildAxis(source);
+    return {axis: axis, path: buildSineCurve()};
+  `)(pathPoints, closed, options);
+
+  const straightPoints = (from, to) => [
+    {anchor: from, leftDirection: from, rightDirection: from},
+    {anchor: to, leftDirection: to, rightDirection: to},
+  ];
+  // 일러스트레이터 원과 같은 4점 베지어 근사(핸들 0.5523r).
+  const circlePoints = (radius) => {
+    const handle = 0.5522847498307936 * radius;
+    const anchors = [[radius, 0], [0, radius], [-radius, 0], [0, -radius]];
+    const tangents = [[0, handle], [-handle, 0], [0, -handle], [handle, 0]];
+    return anchors.map((anchor, index) => ({
+      anchor: anchor,
+      rightDirection: [anchor[0] + tangents[index][0], anchor[1] + tangents[index][1]],
+      leftDirection: [anchor[0] - tangents[index][0], anchor[1] - tangents[index][1]],
+    }));
+  };
+  const samplePath = (path, closed, steps) => {
+    const points = path.pathPoints;
+    const out = [];
+    const count = closed ? points.length : points.length - 1;
+    for (let index = 0; index < count; index++) {
+      const a = points[index];
+      const b = points[(index + 1) % points.length];
+      for (let step = 0; step <= steps; step++) {
+        const t = step / steps;
+        const u = 1 - t;
+        out.push([0, 1].map((c) =>
+          u * u * u * a.anchor[c] + 3 * u * u * t * a.rightDirection[c] +
+          3 * u * t * t * b.leftDirection[c] + t * t * t * b.anchor[c]));
+      }
+    }
+    return out;
+  };
+  // 고정점·곡선이 기준 축에서 얼마나 떨어졌는지. 축을 촘촘히 찍어 최단거리로 잰다.
+  const distanceToAxis = (point, axisSamples) => {
+    let best = Infinity;
+    for (const sample of axisSamples) {
+      const distance = Math.hypot(point[0] - sample[0], point[1] - sample[1]);
+      if (distance < best) best = distance;
+    }
+    return best;
+  };
+  const worstKink = (path, closed) => {
+    let worst = 0;
+    const points = path.pathPoints;
+    for (let index = 0; index < points.length; index++) {
+      if (!closed && (index === 0 || index === points.length - 1)) continue;
+      const point = points[index];
+      const incoming = [point.anchor[0] - point.leftDirection[0], point.anchor[1] - point.leftDirection[1]];
+      const outgoing = [point.rightDirection[0] - point.anchor[0], point.rightDirection[1] - point.anchor[1]];
+      const lengths = Math.hypot(incoming[0], incoming[1]) * Math.hypot(outgoing[0], outgoing[1]);
+      if (lengths === 0) return Infinity;
+      worst = Math.max(worst, Math.abs(incoming[0] * outgoing[1] - incoming[1] * outgoing[0]) / lengths);
+    }
+    return worst;
+  };
+
+  // ---- 직선 축: 실제 sin과 비교한다.
+  const axisLength = 100;
+  const unit = [Math.SQRT1_2, Math.SQRT1_2];
+  const normal = [-unit[1], unit[0]];
+  const origin = [10, 20];
+  const lineEnd = [origin[0] + axisLength * unit[0], origin[1] + axisLength * unit[1]];
+  const project = (point) => ({
+    along: (point[0] - origin[0]) * unit[0] + (point[1] - origin[1]) * unit[1],
+    offset: (point[0] - origin[0]) * normal[0] + (point[1] - origin[1]) * normal[1],
+  });
+
+  for (const options of [
+    {amplitudeMm: 5, wavelengthMm: 20, shiftMm: 0},
+    {amplitudeMm: 5, wavelengthMm: 20, shiftMm: 3},
+    {amplitudeMm: 8, wavelengthMm: 7, shiftMm: -2},
+  ]) {
+    const {path} = buildCurve(straightPoints(origin, lineEnd), false, options);
+    const amplitude = options.amplitudeMm * MM;
+    const wave = Math.PI * 2 / (options.wavelengthMm * MM);
+    const label = `line A${options.amplitudeMm}/W${options.wavelengthMm}/S${options.shiftMm}`;
+    const trueOffset = (along) => amplitude * Math.sin(wave * (along - options.shiftMm * MM));
+
+    const first = project(path.pathPoints[0].anchor);
+    const last = project(path.pathPoints[path.pathPoints.length - 1].anchor);
+    assertNear(first.along, 0, 0.000001, `${sineWave} ${label}: curve must start on the line start`);
+    assertNear(last.along, axisLength, 0.000001, `${sineWave} ${label}: curve must end on the line end`);
+
+    // 끝점을 뺀 모든 고정점은 극값(±진폭)이거나 x축 교차점(0)이어야 한다.
+    for (let index = 1; index < path.pathPoints.length - 1; index++) {
+      const point = project(path.pathPoints[index].anchor);
+      const distanceToExtreme = Math.min(Math.abs(Math.abs(point.offset) - amplitude), Math.abs(point.offset));
+      if (distanceToExtreme > 0.000001) {
+        console.error(`${sineWave} ${label}: anchor ${index} at offset ${point.offset} is neither an extreme nor a zero crossing`);
+        failures++;
+        break;
+      }
+      // 축 방향으로도 90도 격자 위에 있어야 한다. 호길이 표를 선형 보간하므로 0.01pt까지 봐준다.
+      const quarter = options.wavelengthMm * MM / 4;
+      const grid = Math.round((point.along - options.shiftMm * MM) / quarter) * quarter + options.shiftMm * MM;
+      if (Math.abs(point.along - grid) > 0.01) {
+        console.error(`${sineWave} ${label}: anchor ${index} sits ${point.along - grid}pt off the quarter-wave grid`);
+        failures++;
+        break;
+      }
+    }
+
+    const quarters = axisLength / (options.wavelengthMm * MM / 4);
+    if (path.pathPoints.length < Math.floor(quarters) || path.pathPoints.length > Math.ceil(quarters) + 2) {
+      console.error(`${sineWave} ${label}: ${path.pathPoints.length} anchors for ${quarters} quarter waves`);
+      failures++;
+    }
+
+    let worst = 0;
+    for (const sample of samplePath(path, false, 8)) {
+      const point = project(sample);
+      worst = Math.max(worst, Math.abs(point.offset - trueOffset(point.along)));
+    }
+    // 진폭의 0.5% 안. 90도 조각 근사의 실측 오차는 0.14%다.
+    if (worst > amplitude * 0.005) {
+      console.error(`${sineWave} ${label}: curve drifts ${worst}pt from the sine (limit ${amplitude * 0.005})`);
+      failures++;
+    }
+    if (worstKink(path, false) > 0.000001) {
+      console.error(`${sineWave} ${label}: anchors must stay smooth`);
+      failures++;
+    }
+  }
+
+  // ---- 원 축: 파형이 둘레를 따라 감기고 이음매에서 끊기지 않아야 한다.
+  for (const options of [
+    {amplitudeMm: 3, wavelengthMm: 20, shiftMm: 0},
+    {amplitudeMm: 8, wavelengthMm: 20, shiftMm: 5},
+  ]) {
+    const radius = 40;
+    const {axis, path} = buildCurve(circlePoints(radius), true, options);
+    const amplitude = options.amplitudeMm * MM;
+    const label = `circle A${options.amplitudeMm}/W${options.wavelengthMm}/S${options.shiftMm}`;
+    // 축을 점으로만 재니 표본 간격의 절반까지 오차가 생긴다. 0.03pt 간격 → 0.02pt.
+    const axisSamples = samplePath({pathPoints: circlePoints(radius)}, true, 2000);
+
+    if (!path.closed) {
+      console.error(`${sineWave} ${label}: a closed axis must produce a closed curve`);
+      failures++;
+    }
+
+    // 닫힌 축은 파장을 둘레의 약수로 맞춘다 → 고정점은 정확히 파동당 4개.
+    const waves = Math.max(1, Math.round(axis.length / (options.wavelengthMm * MM)));
+    if (path.pathPoints.length !== waves * 4) {
+      console.error(`${sineWave} ${label}: ${path.pathPoints.length} anchors for ${waves} whole waves`);
+      failures++;
+    }
+
+    // 고정점은 축 위(교차점) 아니면 축에서 진폭만큼(극값) 떨어져 있어야 하고, 둘이 번갈아 나온다.
+    let previousKind = null;
+    for (let index = 0; index < path.pathPoints.length; index++) {
+      const distance = distanceToAxis(path.pathPoints[index].anchor, axisSamples);
+      const kind = distance < 0.05 ? "crossing" : (Math.abs(distance - amplitude) < 0.05 ? "extreme" : null);
+      if (kind === null) {
+        console.error(`${sineWave} ${label}: anchor ${index} sits ${distance}pt from the axis, expected 0 or ${amplitude}`);
+        failures++;
+        break;
+      }
+      if (previousKind === kind) {
+        console.error(`${sineWave} ${label}: anchor ${index} repeats ${kind}; crossings and extremes must alternate`);
+        failures++;
+        break;
+      }
+      previousKind = kind;
+    }
+
+    // 이음매 포함 모든 고정점이 부드러워야 한다.
+    if (worstKink(path, true) > 0.000001) {
+      console.error(`${sineWave} ${label}: closed curve must stay smooth across the seam`);
+      failures++;
+    }
+
+    // 곡선 전체가 진폭 띠 안에 머물러야 한다.
+    let worst = 0;
+    for (const sample of samplePath(path, true, 8)) {
+      worst = Math.max(worst, distanceToAxis(sample, axisSamples));
+    }
+    if (worst > amplitude * 1.01 + 0.05) {
+      console.error(`${sineWave} ${label}: curve reaches ${worst}pt from the axis, past the ${amplitude}pt amplitude`);
+      failures++;
+    }
+  }
+
+  const straight = buildCurve(straightPoints(origin, lineEnd), false, {amplitudeMm: 5, wavelengthMm: 20, shiftMm: 0}).path;
+  if (straight.pathPoints[0].leftDirection[0] !== straight.pathPoints[0].anchor[0]) {
+    console.error(`${sineWave}: first point of an open curve must keep its unused handle on the anchor`);
+    failures++;
+  }
+
+  // 파장 0이나 진폭 0이면 흔들 것이 없다. 기준 패스를 그대로 복제한다.
+  for (const flat of [{amplitudeMm: 0, wavelengthMm: 20}, {amplitudeMm: 5, wavelengthMm: 0}]) {
+    const options = Object.assign({shiftMm: 0}, flat);
+    for (const axisPoints of [
+      {points: straightPoints(origin, lineEnd), closed: false},
+      {points: circlePoints(40), closed: true},
+    ]) {
+      const {path} = buildCurve(axisPoints.points, axisPoints.closed, options);
+      if (!path.duplicated) {
+        console.error(`${sineWave}: amplitude ${flat.amplitudeMm} / wavelength ${flat.wavelengthMm} must fall back to the source path`);
+        failures++;
+      }
     }
   }
 }
