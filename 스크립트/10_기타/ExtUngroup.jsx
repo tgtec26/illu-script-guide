@@ -111,26 +111,32 @@ if (app.documents.length > 0) {
     }
 
     function okClick() {
-      var doCleanup = chkRmvEmpty.value;
+      // Ungrouping moves children out next to their group, so the leftovers to clean
+      // sit in the container around each target, not in the selection.
+      var cleanupTargets = [];
 
       // Ungroup selected objects
       if (typeof (currSelRadio) !== 'undefined' && currSelRadio.value) {
         var currSel = getSelection(doc);
         for (var i = 0; i < currSel.length; i++) {
-          if (currSel[i].typename === 'GroupItem') ungroup(currSel[i]);
+          if (currSel[i].typename !== 'GroupItem') continue;
+          addUnique(cleanupTargets, currSel[i].parent);
+          ungroup(currSel[i]);
         }
-        if (doCleanup) removeEmpty(getSelection(doc));
       }
       // Ungroup in active Layer if it contains groups
       if (typeof (currLayerRadio) !== 'undefined' && currLayerRadio.value) {
         ungroup(currLayer);
-        if (doCleanup) removeEmpty(currLayer.pageItems);
+        addUnique(cleanupTargets, currLayer);
       }
       // Ungroup in active Artboard only visible & unlocked objects
       if (currBoardRadio.value) {
         doc.selectObjectsOnActiveArtboard();
-        ungroup(getSelection(doc));
-        if (doCleanup) removeEmpty(getSelection(doc));
+        var boardSel = getSelection(doc);
+        for (var b = 0; b < boardSel.length; b++) {
+          addUnique(cleanupTargets, boardSel[b].parent);
+        }
+        ungroup(boardSel);
         doc.selection = null;
       }
       // Ungroup all in the current Document
@@ -142,12 +148,18 @@ if (app.documents.length > 0) {
             ungroup(docLayer);
           }
         }
-        if (doCleanup) {
-          for (var k = 0; k < doc.layers.length; k++) {
-            if (!doc.layers[k].locked && doc.layers[k].visible) {
-              removeEmpty(doc.layers[k].pageItems);
-            }
+        for (var k = 0; k < doc.layers.length; k++) {
+          if (!doc.layers[k].locked && doc.layers[k].visible) {
+            addUnique(cleanupTargets, doc.layers[k]);
           }
+        }
+      }
+
+      if (chkRmvEmpty.value) {
+        // A released mask keeps its stale flags until the view refreshes
+        app.redraw();
+        for (var t = 0; t < cleanupTargets.length; t++) {
+          removeEmptyIn(cleanupTargets[t]);
         }
       }
       win.close();
@@ -206,6 +218,29 @@ function ungroup(obj) {
   }
 }
 
+function addUnique(arr, item) {
+  if (!item) return;
+  for (var i = 0; i < arr.length; i++) {
+    if (arr[i] === item) return;
+  }
+  arr.push(item);
+}
+
+// Clean a layer or group, descending into its sublayers
+function removeEmptyIn(container) {
+  try {
+    removeEmpty(container.pageItems);
+  } catch (e) {
+    return;
+  }
+  if (container.layers) {
+    for (var i = 0; i < container.layers.length; i++) {
+      var sub = container.layers[i];
+      if (!sub.locked && sub.visible) removeEmptyIn(sub);
+    }
+  }
+}
+
 // Remove empty transparent objects left after ungroup. Clipping masks are preserved
 function removeEmpty(items) {
   // Snapshot the collection, removing items invalidates a live pageItems / selection list
@@ -220,6 +255,12 @@ function removeEmpty(items) {
     // Groups may survive when '클리핑 마스크 해제' is off, so look inside them
     if (item.typename === 'GroupItem') {
       removeEmpty(item.pageItems);
+      // Ungrouping empties a group but leaves the shell behind
+      if (item.pageItems.length === 0) {
+        try {
+          item.remove();
+        } catch (e) { }
+      }
       continue;
     }
 
@@ -320,7 +361,24 @@ function hasVisibleStroke(pathItem) {
   }
 }
 
+// A released mask keeps clipping === true, so confirm its group still crops
+function isInClippedGroup(item) {
+  try {
+    var parent = item.parent;
+    while (parent && parent.typename === 'CompoundPathItem') {
+      parent = parent.parent;
+    }
+    return !!(parent && parent.typename === 'GroupItem' && parent.clipped === true);
+  } catch (e) {
+    return false;
+  }
+}
+
 function isClippingItem(item) {
+  if (!isInClippedGroup(item)) {
+    return false;
+  }
+
   try {
     if (item.hasOwnProperty('clipping') && item.clipping === true) {
       return true;
