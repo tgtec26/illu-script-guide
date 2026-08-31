@@ -12,6 +12,7 @@ const scripts = [
   { id: "cone", category: "도형", name: "원뿔", file: "01_도형/Object_cone.jsx", summary: "선택한 원을 기준으로 원뿔 또는 원뿔대를 만듭니다. 밑면·윗면 지름, 높이 균등 분할선, 면별 K 농도, X·Y·Z축 시점을 조절합니다.", tags: ["입체", "원뿔", "원뿔대", "분할"] },
   { id: "sphere", category: "도형", name: "구", file: "01_도형/Object_sphere.jsx", summary: "선택한 원을 기준으로 구를 만들고 경도선과 위도선을 배치합니다. 경도선 회전과 X·Y·Z축 시점 조절을 지원합니다.", tags: ["입체", "구", "위도", "경도"] },
   { id: "circle-guide", category: "도형", name: "끝점 원 안내선", file: "01_도형/Object_circleguideline.jsx", summary: "선의 양 끝점에 반지름 0.5mm 원을 만들고 안내선으로 바꿉니다.", tags: ["안내선", "끝점"] },
+  { id: "offset-guide", category: "도형", name: "오프셋 안내선", file: "01_도형/Object_OffsetGuide.jsx", summary: "선택한 도형을 오프셋만큼 키우거나 줄인 모양을 안내선으로 만듭니다. 0.1mm 단위로 조절하고 미리보기로 확인합니다.", tags: ["안내선", "오프셋"] },
   { id: "dash-shift", category: "도형", name: "파선 오프셋", file: "01_도형/Object_dashshift.jsx", summary: "파선의 시작 위치를 미세 조정합니다. 도판에서 점선이 모서리와 어긋날 때 유용합니다.", tags: ["파선", "미세조정"] },
   { id: "expand-arrow", category: "도형", name: "확장 화살표", file: "01_도형/Object_expand_arrow.jsx", summary: "선택한 패스에 지정된 선 두께, 화살표, 폭 속성을 적용합니다.", tags: ["화살표", "선"] },
   { id: "isometric", category: "도형", name: "아이소메트릭", file: "01_도형/Object_isometric.jsx", summary: "도형을 아이소메트릭 느낌으로 변형할 때 쓰는 보조 도구입니다.", tags: ["입체", "아이소"] },
