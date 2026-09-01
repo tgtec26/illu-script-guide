@@ -190,23 +190,23 @@ try {
 
     function showDepthDialog(defaultValue, defaultDirection, onPreview, onClearPreview) {
         var depthStepMm = 0.05;
+        var bigStepMm = 1;
         var minDepthMm = depthStepMm;
-        var maxSliderDepthMm = 10;
+        var maxSliderDepthMm = 50;
         var isSyncingControl = false;
-        var holdDelayMs = 400;
-        var holdIntervalMs = 90;
-        var holdMaxSteps = 400;
-        var isHolding = false;
         var dialog = new Window("dialog", "캐비넷 깊이");
         dialog.orientation = "column";
         dialog.alignChildren = "fill";
 
         var inputGroup = dialog.add("group");
         inputGroup.add("statictext", undefined, "뒤로 이동 거리(mm)");
+        var bigMinusButton = inputGroup.add("button", undefined, "-1");
         var minusButton = inputGroup.add("button", undefined, "-0.05");
         var input = inputGroup.add("edittext", undefined, String(defaultValue));
         input.characters = 8;
         var plusButton = inputGroup.add("button", undefined, "+0.05");
+        var bigPlusButton = inputGroup.add("button", undefined, "+1");
+        inputGroup.add("statictext", undefined, "키보드 ↑↓ 키를 누르고 있으면 연속 증감(Shift 는 1mm씩)");
 
         var depthControl = dialog.add(
             "scrollbar",
@@ -310,40 +310,6 @@ try {
             onPreview(value, readDirection());
         }
 
-        function stopHold() {
-            isHolding = false;
-        }
-
-        // 버튼을 누르고 있으면 반복 증감한다. $.sleep 은 대기하는 동안 보류된
-        // UI 이벤트를 처리하므로 루프 안에서도 mouseup/mouseout 이 들어와 반복을 멈춘다.
-        function attachHoldRepeat(button, delta) {
-            button.addEventListener("mousedown", function(event) {
-                if (event && event.button !== undefined && event.button !== 0) {
-                    return;
-                }
-
-                isHolding = true;
-                changeValue(delta);
-
-                var waited = 0;
-                while (isHolding && waited < holdDelayMs) {
-                    $.sleep(30);
-                    waited += 30;
-                }
-
-                var steps = 0;
-                while (isHolding && steps < holdMaxSteps) {
-                    changeValue(delta);
-                    steps++;
-                    $.sleep(holdIntervalMs);
-                }
-
-                isHolding = false;
-            });
-            button.addEventListener("mouseup", stopHold);
-            button.addEventListener("mouseout", stopHold);
-        }
-
         input.onChanging = updatePreview;
         input.onChange = function() {
             var value = readValue(false);
@@ -356,9 +322,36 @@ try {
 
             setDepthValue(stepToDepth(depthControl.value));
         };
-        attachHoldRepeat(minusButton, -depthStepMm);
-        attachHoldRepeat(plusButton, depthStepMm);
-        dialog.addEventListener("mouseup", stopHold);
+        minusButton.onClick = function() {
+            changeValue(-depthStepMm);
+        };
+        plusButton.onClick = function() {
+            changeValue(depthStepMm);
+        };
+        bigMinusButton.onClick = function() {
+            changeValue(-bigStepMm);
+        };
+        bigPlusButton.onClick = function() {
+            changeValue(bigStepMm);
+        };
+        // ScriptUI 는 스크립트가 도는 동안 이벤트를 전달하지 않아 버튼을 누르고 있는
+        // 동안 반복시킬 수 없다(누르고 있는지를 알 방법이 없다).
+        // 대신 ↑/↓ 키는 OS 키 반복이 keydown 을 계속 보내주므로 연속 증감이 된다.
+        // 입력칸이 방향키를 먼저 소비하지 않도록 창에서 캐포처 단계로 받는다.
+        dialog.addEventListener("keydown", function(event) {
+            var step = event.shiftKey ? bigStepMm : depthStepMm;
+            var delta = 0;
+            if (event.keyName === "Up") {
+                delta = step;
+            } else if (event.keyName === "Down") {
+                delta = -step;
+            } else {
+                return;
+            }
+
+            try { event.preventDefault(); } catch (preventError) {}
+            changeValue(delta);
+        }, true);
         rightRadio.onClick = updatePreview;
         leftRadio.onClick = updatePreview;
         previewCheck.onClick = updatePreview;
