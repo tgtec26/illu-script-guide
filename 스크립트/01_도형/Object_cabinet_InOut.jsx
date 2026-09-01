@@ -29,23 +29,24 @@ try {
 
     var mmToPt = 2.83464567;
     var hiddenDashPattern = [2, 1];
-    var defaultDepthMm = getSavedDepth(0.5);
+    var PREF_KEY = "ObjectCabinetInOut/settings";
+    var settings = loadSettings(0.5, 1);
     var previewItems = [];
     var hiddenGroups = [];
 
-    var depthMm = showDepthDialog(defaultDepthMm, function(valueMm) {
+    var choice = showDepthDialog(settings.depthMm, settings.direction, function(valueMm, dirX) {
         clearPreview();
-        previewItems = createCabinets(valueMm * mmToPt, false);
+        previewItems = createCabinets(valueMm * mmToPt, dirX, false);
         app.redraw();
     }, clearPreview);
 
     clearPreview();
-    if (depthMm === null) {
+    if (choice === null) {
         return;
     }
 
-    saveDepth(depthMm);
-    createCabinets(depthMm * mmToPt, true);
+    saveSettings(choice.depthMm, choice.direction);
+    createCabinets(choice.depthMm * mmToPt, choice.direction, true);
     alignHiddenDashes();
     doc.selection = null;
 
@@ -68,11 +69,11 @@ try {
         }
     }
 
-    function createCabinets(depth, makeGroup) {
+    function createCabinets(depth, dirX, makeGroup) {
         var created = [];
         hiddenGroups = [];
         for (var i = 0; i < targets.length; i++) {
-            var items = createCabinet(targets[i], depth, makeGroup);
+            var items = createCabinet(targets[i], depth, dirX, makeGroup);
             for (var j = 0; j < items.length; j++) {
                 created.push(items[j]);
             }
@@ -80,44 +81,47 @@ try {
         return created;
     }
 
-    function createCabinet(frontFace, depth, makeGroup) {
+    function createCabinet(frontFace, depth, dirX, makeGroup) {
         var bounds = frontFace.geometricBounds; // [left, top, right, bottom]
         frontFace.strokeJoin = StrokeJoin.ROUNDENDJOIN;
 
-        var rightFace = doc.pathItems.add();
-        rightFace.setEntirePath([
-            [bounds[2], bounds[1]],
-            [bounds[2] + depth, bounds[1] + depth],
-            [bounds[2] + depth, bounds[3] + depth],
-            [bounds[2], bounds[3]]
+        var dx = depth * dirX;
+        var sideX = dirX > 0 ? bounds[2] : bounds[0]; // 두께가 붙는 쪽 세로 모서리
+
+        var sideFace = doc.pathItems.add();
+        sideFace.setEntirePath([
+            [sideX, bounds[1]],
+            [sideX + dx, bounds[1] + depth],
+            [sideX + dx, bounds[3] + depth],
+            [sideX, bounds[3]]
         ]);
-        rightFace.closed = true;
-        copyStyle(frontFace, rightFace);
+        sideFace.closed = true;
+        copyStyle(frontFace, sideFace);
 
         var topFace = doc.pathItems.add();
         topFace.setEntirePath([
             [bounds[0], bounds[1]],
             [bounds[2], bounds[1]],
-            [bounds[2] + depth, bounds[1] + depth],
-            [bounds[0] + depth, bounds[1] + depth]
+            [bounds[2] + dx, bounds[1] + depth],
+            [bounds[0] + dx, bounds[1] + depth]
         ]);
         topFace.closed = true;
         copyStyle(frontFace, topFace);
 
-        rightFace.move(frontFace, ElementPlacement.PLACEBEFORE);
+        sideFace.move(frontFace, ElementPlacement.PLACEBEFORE);
         topFace.move(frontFace, ElementPlacement.PLACEBEFORE);
 
-        var hiddenGroup = makeHiddenLines(frontFace, bounds, depth);
+        var hiddenGroup = makeHiddenLines(frontFace, bounds, depth, dirX);
         hiddenGroup.zOrder(ZOrderMethod.SENDTOBACK);
 
         if (makeGroup) {
-            var cabinetGroup = groupCabinetItems(frontFace, [hiddenGroup, rightFace, topFace]);
+            var cabinetGroup = groupCabinetItems(frontFace, [hiddenGroup, sideFace, topFace]);
             // 그룹으로 옮기는 과정에서 순서가 바뀌므로, 그룹 안에서 숨은 선을 다시 맨 뒤로 보낸다
             hiddenGroup.zOrder(ZOrderMethod.SENDTOBACK);
             return [cabinetGroup];
         }
 
-        return [rightFace, topFace, hiddenGroup];
+        return [sideFace, topFace, hiddenGroup];
     }
 
     function groupCabinetItems(frontFace, createdItems) {
@@ -138,23 +142,25 @@ try {
         return cabinetGroup;
     }
 
-    function makeHiddenLines(frontFace, bounds, depth) {
-        var dx = depth;
+    function makeHiddenLines(frontFace, bounds, depth, dirX) {
+        var dx = depth * dirX;
         var dy = depth;
+        var hiddenX = dirX > 0 ? bounds[0] : bounds[2]; // 앞면에 가려지는 쪽 세로 모서리
+        var otherX = dirX > 0 ? bounds[2] : bounds[0];
         var hiddenGroup = doc.activeLayer.groupItems.add();
         hiddenGroup.name = "Hidden Lines";
 
         var backL = hiddenGroup.pathItems.add();
         backL.setEntirePath([
-            [bounds[0] + dx, bounds[1] + dy],
-            [bounds[0] + dx, bounds[3] + dy],
-            [bounds[2] + dx, bounds[3] + dy]
+            [hiddenX + dx, bounds[1] + dy],
+            [hiddenX + dx, bounds[3] + dy],
+            [otherX + dx, bounds[3] + dy]
         ]);
 
         var backDiag = hiddenGroup.pathItems.add();
         backDiag.setEntirePath([
-            [bounds[0], bounds[3]],
-            [bounds[0] + dx, bounds[3] + dy]
+            [hiddenX, bounds[3]],
+            [hiddenX + dx, bounds[3] + dy]
         ]);
 
         var k60Color = makeK60Color();
@@ -182,11 +188,15 @@ try {
         return items;
     }
 
-    function showDepthDialog(defaultValue, onPreview, onClearPreview) {
+    function showDepthDialog(defaultValue, defaultDirection, onPreview, onClearPreview) {
         var depthStepMm = 0.05;
         var minDepthMm = depthStepMm;
         var maxSliderDepthMm = 10;
         var isSyncingControl = false;
+        var holdDelayMs = 400;
+        var holdIntervalMs = 90;
+        var holdMaxSteps = 400;
+        var isHolding = false;
         var dialog = new Window("dialog", "캐비넷 깊이");
         dialog.orientation = "column";
         dialog.alignChildren = "fill";
@@ -208,6 +218,14 @@ try {
         depthControl.preferredSize.width = 360;
         depthControl.stepdelta = 1;
         depthControl.jumpdelta = 10;
+
+        var directionPanel = dialog.add("panel", undefined, "두께 방향");
+        directionPanel.orientation = "row";
+        directionPanel.alignChildren = "left";
+        var rightRadio = directionPanel.add("radiobutton", undefined, "우측 위");
+        var leftRadio = directionPanel.add("radiobutton", undefined, "좌측 위");
+        rightRadio.value = defaultDirection > 0;
+        leftRadio.value = !rightRadio.value;
 
         var previewCheck = dialog.add("checkbox", undefined, "미리보기");
         previewCheck.value = true;
@@ -273,6 +291,10 @@ try {
             setDepthValue(value + delta);
         }
 
+        function readDirection() {
+            return rightRadio.value ? 1 : -1;
+        }
+
         function updatePreview() {
             if (!previewCheck.value) {
                 onClearPreview();
@@ -285,7 +307,41 @@ try {
                 return;
             }
 
-            onPreview(value);
+            onPreview(value, readDirection());
+        }
+
+        function stopHold() {
+            isHolding = false;
+        }
+
+        // 버튼을 누르고 있으면 반복 증감한다. $.sleep 은 대기하는 동안 보류된
+        // UI 이벤트를 처리하므로 루프 안에서도 mouseup/mouseout 이 들어와 반복을 멈춘다.
+        function attachHoldRepeat(button, delta) {
+            button.addEventListener("mousedown", function(event) {
+                if (event && event.button !== undefined && event.button !== 0) {
+                    return;
+                }
+
+                isHolding = true;
+                changeValue(delta);
+
+                var waited = 0;
+                while (isHolding && waited < holdDelayMs) {
+                    $.sleep(30);
+                    waited += 30;
+                }
+
+                var steps = 0;
+                while (isHolding && steps < holdMaxSteps) {
+                    changeValue(delta);
+                    steps++;
+                    $.sleep(holdIntervalMs);
+                }
+
+                isHolding = false;
+            });
+            button.addEventListener("mouseup", stopHold);
+            button.addEventListener("mouseout", stopHold);
         }
 
         input.onChanging = updatePreview;
@@ -300,19 +356,21 @@ try {
 
             setDepthValue(stepToDepth(depthControl.value));
         };
-        minusButton.onClick = function() {
-            changeValue(-depthStepMm);
-        };
-        plusButton.onClick = function() {
-            changeValue(depthStepMm);
-        };
+        attachHoldRepeat(minusButton, -depthStepMm);
+        attachHoldRepeat(plusButton, depthStepMm);
+        dialog.addEventListener("mouseup", stopHold);
+        rightRadio.onClick = updatePreview;
+        leftRadio.onClick = updatePreview;
         previewCheck.onClick = updatePreview;
         okButton.onClick = function() {
             var value = readValue(true);
             if (value === null) {
                 return;
             }
-            result = parseFloat(formatDepth(value));
+            result = {
+                depthMm: parseFloat(formatDepth(value)),
+                direction: readDirection()
+            };
             dialog.close();
         };
         cancelButton.onClick = function() {
@@ -326,19 +384,29 @@ try {
         return result;
     }
 
-    function getSavedDepth(fallbackValue) {
+    function loadSettings(fallbackDepthMm, fallbackDirection) {
+        var loaded = {depthMm: fallbackDepthMm, direction: fallbackDirection};
         try {
-            var saved = parseFloat(app.preferences.getStringPreference("ObjectCabinetInOut_depthMm"));
-            if (!isNaN(saved) && saved > 0) {
-                return saved;
+            var parts = String(app.preferences.getStringPreference(PREF_KEY)).split("|");
+            if (parts.length !== 3 || parts[0] !== "v1") {
+                return loaded;
+            }
+
+            var depthMm = parseFloat(parts[1]);
+            if (!isNaN(depthMm) && depthMm > 0) {
+                loaded.depthMm = depthMm;
+            }
+
+            if (parts[2] === "1" || parts[2] === "-1") {
+                loaded.direction = parseFloat(parts[2]);
             }
         } catch (e) {}
-        return fallbackValue;
+        return loaded;
     }
 
-    function saveDepth(value) {
+    function saveSettings(depthMm, direction) {
         try {
-            app.preferences.setStringPreference("ObjectCabinetInOut_depthMm", String(value));
+            app.preferences.setStringPreference(PREF_KEY, ["v1", depthMm, direction].join("|"));
         } catch (e) {}
     }
 
