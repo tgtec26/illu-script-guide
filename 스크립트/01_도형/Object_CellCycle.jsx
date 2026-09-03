@@ -67,6 +67,13 @@ try {
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
     var SLIDER_WIDTH = 150;
+    // 구간 슬라이더: 경계 조절점 3개를 끌어 네 구간의 비율을 정한다 (합계 항상 100%)
+    var SECTOR_SLIDER_HEIGHT = 34;
+    var SECTOR_SLIDER_PAD = 8;         // 조절점이 양 끝에서 잘리지 않도록 비우는 폭(px)
+    var THUMB_HALF_WIDTH = 5;
+    var THUMB_GRAB_RADIUS = 12;        // 이 거리(px) 안에서 클릭하면 조절점을 잡는다
+    var MIN_SECTOR_PERCENT = 1;
+    var SECTOR_DRAG_STEP = 0.5;
 
     var dlg = new Window("dialog", "세포 주기");
     dlg.orientation = "column";
@@ -79,6 +86,25 @@ try {
     var innerControls = addValueRow(sizePanel, "내경", "mm", innerMm, 1, 199.5, 0.5, 2);
 
     var sectorPanel = addPanel(dlg, "구간 (12시부터 시계 방향)");
+    var sectorSlider = sectorPanel.add("customView");
+    sectorSlider.alignment = ["fill", "top"];
+    sectorSlider.preferredSize.height = SECTOR_SLIDER_HEIGHT;
+    sectorSlider.onDraw = drawSectorSlider;
+    var dragBoundary = -1;
+    sectorSlider.addEventListener("mousedown", function(event) {
+        dragBoundary = nearestBoundary(event.clientX);
+        if (dragBoundary < 0) return;
+        moveDraggedBoundary(event.clientX, false);
+    });
+    sectorSlider.addEventListener("mousemove", function(event) {
+        if (dragBoundary < 0) return;
+        moveDraggedBoundary(event.clientX, false);
+    });
+    sectorSlider.addEventListener("mouseup", function(event) {
+        if (dragBoundary < 0) return;
+        moveDraggedBoundary(event.clientX, true);
+        dragBoundary = -1;
+    });
     var sectorInputs = [];
     for (var s = 0; s < SECTOR_COUNT; s++) {
         var sectorRow = sectorPanel.add("group");
@@ -102,9 +128,6 @@ try {
 
         sectorInputs[s].onChange = makePercentHandler(s);
     }
-    var totalRow = sectorPanel.add("group");
-    var totalText = totalRow.add("statictext", undefined, "");
-    totalText.preferredSize.width = 260;
 
     var arrowPanel = addPanel(dlg, "내부 화살표");
     var arrowWidthControls = addValueRow(arrowPanel, "굵기", "pt", arrowWidthPt, 0.5, 30, 0.5, 1);
@@ -152,10 +175,6 @@ try {
             alert("내경은 외경보다 작아야 합니다.");
             return;
         }
-        if (getPercentTotal() <= 0) {
-            alert("구간 비율은 0보다 큰 값으로 입력해주세요.");
-            return;
-        }
         saveSettings();
         dlg.close(1);
     };
@@ -165,7 +184,6 @@ try {
     };
 
     limitInnerDiameter();
-    updateTotalText();
     updatePreview();
 
     var result = dlg.show();
@@ -186,7 +204,6 @@ try {
     // 굵기만 보여주고, 손을 뗀 순간 화살촉까지 그린다.
     function updatePreview(withArrowheads) {
         clearPreview();
-        updateTotalText();
         if (!previewEnabled) {
             app.redraw();
             return;
@@ -582,13 +599,22 @@ try {
         };
     }
 
+    // 입력칸 수정은 그 구간의 오른쪽 경계를 옮기는 것과 같다 (다음 구간에서 빼거나 더한다).
+    // 마지막 구간은 오른쪽 경계가 100%로 고정이라 왼쪽 경계를 옮긴다.
     function makePercentHandler(sectorIndex) {
         return function() {
             var value = parseNumber(sectorInputs[sectorIndex].text);
-            if (value === null || value <= 0) value = percents[sectorIndex];
-            percents[sectorIndex] = clamp(value, 0.1, 100);
-            sectorInputs[sectorIndex].text = formatNumber(percents[sectorIndex], 1);
-            updatePreview();
+            if (value !== null) {
+                var boundaries = getBoundaries();
+                if (sectorIndex < SECTOR_COUNT - 1) {
+                    var left = sectorIndex === 0 ? 0 : boundaries[sectorIndex - 1];
+                    setBoundary(sectorIndex, left + value);
+                } else {
+                    setBoundary(sectorIndex - 1, 100 - value);
+                }
+            }
+            syncSectorControls();
+            updatePreview(true);
         };
     }
 
@@ -598,13 +624,122 @@ try {
         return total;
     }
 
-    function updateTotalText() {
+    // 저장값이 100%가 아니면 비율대로 100%에 맞춘다
+    function normalizePercents() {
         var total = getPercentTotal();
-        var message = "합계 " + formatNumber(total, 1) + "%";
-        if (Math.abs(total - 100) > 0.05) {
-            message += " (100%가 아니므로 비율대로 나눕니다)";
+        if (total <= 0) return;
+        for (var i = 0; i < SECTOR_COUNT; i++) percents[i] = percents[i] * 100 / total;
+    }
+
+    // -------------------------------------------------------
+    // 구간 슬라이더 (조절점 3개)
+    // -------------------------------------------------------
+    // 경계 = 누적 비율(%). 조절점 3개의 위치이다.
+    function getBoundaries() {
+        var boundaries = [];
+        var cumulative = 0;
+        for (var i = 0; i < SECTOR_COUNT - 1; i++) {
+            cumulative += percents[i];
+            boundaries.push(cumulative);
         }
-        totalText.text = message;
+        return boundaries;
+    }
+
+    // 경계 하나를 옮긴다. 양옆 구간은 MIN_SECTOR_PERCENT 이상 남긴다.
+    function setBoundary(index, value) {
+        var boundaries = getBoundaries();
+        var lower = (index === 0 ? 0 : boundaries[index - 1]) + MIN_SECTOR_PERCENT;
+        var upper = (index === boundaries.length - 1 ? 100 : boundaries[index + 1]) - MIN_SECTOR_PERCENT;
+        if (lower > upper) return;
+        boundaries[index] = clamp(value, lower, upper);
+        var previous = 0;
+        for (var i = 0; i < SECTOR_COUNT; i++) {
+            var next = i < boundaries.length ? boundaries[i] : 100;
+            percents[i] = next - previous;
+            previous = next;
+        }
+    }
+
+    function sliderTrackRange() {
+        return [SECTOR_SLIDER_PAD, sectorSlider.size.width - SECTOR_SLIDER_PAD];
+    }
+
+    function percentToX(percent) {
+        var range = sliderTrackRange();
+        return range[0] + (range[1] - range[0]) * percent / 100;
+    }
+
+    function xToPercent(x) {
+        var range = sliderTrackRange();
+        return (x - range[0]) / (range[1] - range[0]) * 100;
+    }
+
+    function nearestBoundary(x) {
+        var boundaries = getBoundaries();
+        var best = -1;
+        var bestDistance = THUMB_GRAB_RADIUS;
+        for (var i = 0; i < boundaries.length; i++) {
+            var distance = Math.abs(percentToX(boundaries[i]) - x);
+            if (distance <= bestDistance) {
+                best = i;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
+    function moveDraggedBoundary(x, withArrowheads) {
+        setBoundary(dragBoundary, roundTo(xToPercent(x), SECTOR_DRAG_STEP));
+        syncSectorControls();
+        updatePreview(withArrowheads);
+    }
+
+    function syncSectorControls() {
+        for (var i = 0; i < SECTOR_COUNT; i++) {
+            sectorInputs[i].text = formatNumber(percents[i], 1);
+        }
+        try { sectorSlider.notify("onDraw"); } catch (e) {}
+    }
+
+    function drawSectorSlider() {
+        var g = this.graphics;
+        var width = this.size.width;
+        var height = this.size.height;
+        var range = [SECTOR_SLIDER_PAD, width - SECTOR_SLIDER_PAD];
+        var trackTop = 6;
+        var trackHeight = height - 12;
+        var sectorColors = [[0.62, 0.62, 0.62, 1], [0.42, 0.42, 0.42, 1]];
+        var textPen = g.newPen(g.PenType.SOLID_COLOR, [1, 1, 1, 1], 1);
+        var font = g.font;
+        var boundaries = getBoundaries();
+
+        var previousX = range[0];
+        for (var i = 0; i < SECTOR_COUNT; i++) {
+            var nextX = i < boundaries.length
+                ? range[0] + (range[1] - range[0]) * boundaries[i] / 100
+                : range[1];
+            g.newPath();
+            g.rectPath(previousX, trackTop, nextX - previousX, trackHeight);
+            g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, sectorColors[i % 2]));
+            var label = formatNumber(percents[i], 1);
+            var labelSize = g.measureString(label, font);
+            if (labelSize[0] + 4 < nextX - previousX) {
+                g.drawString(label, textPen,
+                    previousX + (nextX - previousX - labelSize[0]) / 2,
+                    trackTop + (trackHeight - labelSize[1]) / 2, font);
+            }
+            previousX = nextX;
+        }
+
+        var thumbBrush = g.newBrush(g.BrushType.SOLID_COLOR, [1, 1, 1, 1]);
+        var thumbPen = g.newPen(g.PenType.SOLID_COLOR, [0.15, 0.15, 0.15, 1], 1);
+        for (var k = 0; k < boundaries.length; k++) {
+            var x = range[0] + (range[1] - range[0]) * boundaries[k] / 100;
+            g.newPath();
+            g.rectPath(x - THUMB_HALF_WIDTH, 1, THUMB_HALF_WIDTH * 2, height - 2);
+            g.fillPath(thumbBrush);
+            g.strokePath(thumbPen);
+        }
     }
 
     // 내경은 외경보다 항상 작게 유지한다
@@ -723,6 +858,7 @@ try {
         for (var i = 0; i < SECTOR_COUNT; i++) {
             percents[i] = restoreNumber(p[3 + i], percents[i], 0.1, 100);
         }
+        normalizePercents();
         for (var j = 0; j < SECTOR_COUNT; j++) {
             labelIndexes[j] = Math.round(restoreNumber(p[7 + j], labelIndexes[j], 0, LABEL_CHOICES.length - 1));
         }
