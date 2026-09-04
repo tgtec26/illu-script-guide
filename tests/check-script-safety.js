@@ -31,6 +31,7 @@ const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
 const sineWave = "스크립트/01_도형/Object_SineWave.jsx";
 const weatherFront = "스크립트/01_도형/Object_front.jsx";
 const phospholipid = "스크립트/01_도형/Object_PhospholipidBilayer.jsx";
+const cellCycle = "스크립트/01_도형/Object_CellCycle.jsx";
 const anchorAngle = "스크립트/01_도형/Object_AnchorAngle.jsx";
 const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
 const cubicLattice = "스크립트/01_도형/Object_CubicLattice.jsx";
@@ -2014,6 +2015,208 @@ for (const file of updaterFiles) {
     );
   } catch (error) {
     console.error(`${phospholipid}: executable bilayer placement regression failed: ${error.message}`);
+    failures++;
+  }
+}
+
+// 세포 주기: 시작 경계, 경량 미리보기, 위치 이동, 옵션 저장의 실행 가능한 회귀 검사.
+{
+  const source = read(cellCycle);
+  try {
+    const numberConstant = (name) => {
+      const match = source.match(new RegExp(`var\\s+${name}\\s*=\\s*(\\d+)`));
+      return match ? Number(match[1]) : NaN;
+    };
+    const rowElements = [];
+    const fakeRow = {
+      add(type, _bounds, text) {
+        const element = {type, text, preferredSize: {}};
+        rowElements.push(element);
+        return element;
+      },
+    };
+    const fakeParent = {add() { return fakeRow; }};
+    const addValueRow = new Function(
+      "LABEL_WIDTH", "STEP_BUTTON_WIDTH", "SLIDER_WIDTH", "UNIT_WIDTH", "formatNumber",
+      `${extractFunction(source, "addValueRow")}; return addValueRow;`
+    )(
+      numberConstant("LABEL_WIDTH"), numberConstant("STEP_BUTTON_WIDTH"),
+      numberConstant("SLIDER_WIDTH"), numberConstant("UNIT_WIDTH"), String
+    );
+    const rowControls = addValueRow(fakeParent, "외경", "mm", 40, 5, 200, 0.5, 2);
+    const unitElement = rowElements.filter((element) => element.type === "statictext" && element.text === "mm")[0];
+    assert.strictEqual(rowControls.slider.preferredSize.width, 280, "cell cycle numeric sliders share one aligned width");
+    assert.strictEqual(unitElement.preferredSize.width, 28, "cell cycle unit column must show mm without clipping");
+
+    const startBoundaryRadians = new Function(
+      `${extractFunction(source, "startBoundaryRadians")}; return startBoundaryRadians;`
+    )();
+    assertClose(startBoundaryRadians(0), Math.PI / 2, "cell cycle zero rotation starts at twelve o'clock");
+    assertClose(startBoundaryRadians(30), Math.PI / 3, "cell cycle positive rotation moves clockwise");
+    assertClose(startBoundaryRadians(-90), Math.PI, "cell cycle negative rotation moves counterclockwise");
+
+    const rotatedBounds = new Function(`
+      var SECTOR_COUNT = 4, startAngleDeg = 30, percents = [40, 30, 20, 10];
+      function getPercentTotal() { return 100; }
+      ${extractFunction(source, "startBoundaryRadians")}
+      ${extractFunction(source, "getSectorBounds")}
+      return getSectorBounds();
+    `)();
+    const rotatedStart = Math.PI / 3;
+    assertClose(rotatedBounds[0], rotatedStart, "cell cycle rotated first boundary");
+    assertClose(rotatedBounds[1], rotatedStart - Math.PI * 0.8, "cell cycle rotated second boundary");
+    assertClose(rotatedBounds[4], rotatedStart - Math.PI * 2, "cell cycle rotated closing boundary");
+
+    const offsetDiagramCenter = new Function(
+      "MM_TO_PT",
+      `${extractFunction(source, "offsetDiagramCenter")}; return offsetDiagramCenter;`
+    )(2.83464567);
+
+    const moved = offsetDiagramCenter([100, 200], 5, -3);
+    assertClose(moved[0], 100 + 5 * 2.83464567, "cell cycle horizontal preview offset");
+    assertClose(moved[1], 200 - 3 * 2.83464567, "cell cycle vertical preview offset");
+
+    const movePreviewGroup = new Function(
+      "MM_TO_PT",
+      `${extractFunction(source, "movePreviewGroup")}; return movePreviewGroup;`
+    )(2.83464567);
+    const preview = {
+      x: 50,
+      y: 75,
+      translate(deltaX, deltaY) {
+        this.x += deltaX;
+        this.y += deltaY;
+      },
+    };
+    movePreviewGroup(preview, 2, -1, 3.5, 1);
+    assertClose(preview.x, 50 + 1.5 * 2.83464567, "cell cycle preview moves without rebuilding on X");
+    assertClose(preview.y, 75 + 2 * 2.83464567, "cell cycle preview moves without rebuilding on Y");
+
+    const previewCounters = {labels: 0, center: 0};
+    const buildDiagram = new Function("counters", `
+      var MM_TO_PT = 2.83464567;
+      var outerMm = 40, innerMm = 16, offsetXmm = 0, offsetYmm = 0;
+      var SECTOR_COUNT = 4, gapDeg = 6, arrowWidthPt = 3, LINE_WIDTH = 0.3;
+      var LABEL_CHOICES = [0, 1, 2, 3], labelIndexes = [0, 1, 2, 3];
+      var doc = {groupItems: {add: function() { return {
+        pathItems: {ellipse: function() { return {}; }}
+      }; }}};
+      function getViewCenter() { return [0, 0]; }
+      function offsetDiagramCenter(center) { return center; }
+      function makeBlackColor() { return {}; }
+      function applyOutline() {}
+      function getSectorBounds() { return [Math.PI / 2, 0, -Math.PI / 2, -Math.PI, -Math.PI * 3 / 2]; }
+      function makeLine() { return {}; }
+      function addLabelText() { counters.labels++; }
+      function addCenterText() { counters.center++; }
+      function makeArcPath() { return {}; }
+      function applyArrowheadAction() {}
+      function outlineArrows() {}
+      ${extractFunction(source, "buildDiagram")}
+      ${extractFunction(source, "drawDiagram")}
+      return buildDiagram;
+    `)(previewCounters);
+    buildDiagram(false, false, true);
+    assert.strictEqual(previewCounters.labels, 0, "lightweight cell cycle preview must omit sector text");
+    assert.strictEqual(previewCounters.center, 0, "lightweight cell cycle preview must omit center text");
+
+    buildDiagram(false, false, false);
+    assert.strictEqual(previewCounters.labels, 4, "full cell cycle preview must restore sector text");
+    assert.strictEqual(previewCounters.center, 1, "full cell cycle preview must restore center text");
+
+    const preferenceStore = {key: null, value: null};
+    const app = {preferences: {setStringPreference(key, value) {
+      preferenceStore.key = key;
+      preferenceStore.value = value;
+    }}};
+    new Function("app", `
+      var PREF_KEY = "ObjectCellCycle/settings", SECTOR_COUNT = 4;
+      var outerMm = 40, innerMm = 16, percents = [40, 30, 20, 10];
+      var labelIndexes = [0, 1, 2, 3], arrowWidthPt = 3, arrowScale = 200, gapDeg = 6;
+      var offsetXmm = 2.5, offsetYmm = -1.5, startAngleDeg = 45;
+      ${extractFunction(source, "saveSettings")}
+      saveSettings();
+    `)(app);
+    assert.strictEqual(preferenceStore.key, "ObjectCellCycle/settings", "cell cycle preferences use the script key");
+    assert.strictEqual(
+      preferenceStore.value,
+      "v3|40|16|40|30|20|10|0|1|2|3|3|200|6|2.5|-1.5|45",
+      "cell cycle preferences must persist the adjustable start boundary"
+    );
+  } catch (error) {
+    console.error(`${cellCycle}: executable preview-position regression failed: ${error.message}`);
+    failures++;
+  }
+}
+
+// 세포 주기: Illustrator가 연속 DOM 수정 중 간헐적으로 던지는 오류(Target layer cannot be
+// modified / PARM)가 미리보기를 캔버스에 고아로 남기거나 스크립트를 죽이지 않아야 한다.
+{
+  const source = read(cellCycle);
+  try {
+    // 그리다 실패하면 반쯤 만든 그룹을 지우고 오류를 다시 던진다
+    const halfBuilt = {removed: 0, remove() { this.removed++; }};
+    const buildDiagram = new Function("group", `
+      var doc = {groupItems: {add: function() { return group; }}};
+      function drawDiagram() { throw new Error("Target layer cannot be modified"); }
+      ${extractFunction(source, "buildDiagram")}
+      return buildDiagram;
+    `)(halfBuilt);
+    assert.throws(() => buildDiagram(false, false, true), /Target layer/, "cell cycle build must rethrow after cleanup");
+    assert.strictEqual(halfBuilt.removed, 1, "cell cycle build must remove the half-built group on failure");
+
+    // 미리보기 갱신은 오류를 삼키고, 같은 설정이면 다시 그리지 않는다
+    const previewLog = {builds: 0, redraws: 0, fail: false};
+    const previewApi = new Function("log", `
+      var previewEnabled = true, previewGroup = null, previewSignature = "";
+      var PREVIEW_NAME = "Cell Cycle Preview";
+      var outerMm = 40, innerMm = 16, startAngleDeg = 0, arrowWidthPt = 3, arrowScale = 200, gapDeg = 6;
+      var offsetXmm = 0, offsetYmm = 0, percents = [40, 30, 20, 10], labelIndexes = [0, 1, 2, 3];
+      var app = {redraw: function() { log.redraws++; }};
+      function buildDiagram() {
+        log.builds++;
+        if (log.fail) throw new Error("PARM");
+        return {remove: function() {}};
+      }
+      ${extractFunction(source, "updatePreview")}
+      ${extractFunction(source, "clearPreview")}
+      ${extractFunction(source, "previewSettingsKey")}
+      return {
+        update: updatePreview,
+        group: function() { return previewGroup; },
+        setOuter: function(value) { outerMm = value; }
+      };
+    `)(previewLog);
+    previewLog.fail = true;
+    assert.doesNotThrow(() => previewApi.update(false), "cell cycle preview must swallow transient build errors");
+    assert.strictEqual(previewApi.group(), null, "cell cycle preview must not keep a failed build");
+    previewLog.fail = false;
+    previewApi.update(false);
+    assert.strictEqual(previewLog.builds, 2, "cell cycle preview must rebuild after a failure");
+    previewApi.update(false);
+    assert.strictEqual(previewLog.builds, 2, "cell cycle preview must skip rebuilding for unchanged settings");
+    previewApi.update(true);
+    assert.strictEqual(previewLog.builds, 3, "cell cycle preview must redraw arrowheads on release");
+    previewApi.setOuter(50);
+    previewApi.update(true);
+    assert.strictEqual(previewLog.builds, 4, "cell cycle preview must rebuild when a setting changes");
+
+    // 이전 실행이 남긴 미리보기 그룹만 골라 지운다
+    const leftovers = [
+      {name: "Cell Cycle Preview", removed: false, remove() { this.removed = true; }},
+      {name: "Cell Cycle", removed: false, remove() { this.removed = true; }},
+      {name: "Cell Cycle Preview", removed: false, remove() { this.removed = true; }},
+    ];
+    new Function("groups", `
+      var PREVIEW_NAME = "Cell Cycle Preview";
+      var doc = {groupItems: groups};
+      ${extractFunction(source, "removeLeftoverPreviews")}
+      removeLeftoverPreviews();
+    `)(leftovers);
+    assert.deepStrictEqual(leftovers.map((g) => g.removed), [true, false, true],
+      "cell cycle must clear leftover previews from a crashed run and keep finished diagrams");
+  } catch (error) {
+    console.error(`${cellCycle}: preview crash-recovery regression failed: ${error.message}`);
     failures++;
   }
 }

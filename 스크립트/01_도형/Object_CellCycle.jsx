@@ -22,6 +22,10 @@ try {
     }
 
     var doc = app.activeDocument;
+    if (doc.activeLayer.locked || !doc.activeLayer.visible) {
+        alert("현재 레이어가 잠겨 있거나 숨겨져 있습니다.\n편집할 수 있는 레이어를 선택한 뒤 실행해주세요.");
+        return;
+    }
 
     var MM_TO_PT = 2.83464567;
     var LINE_WIDTH = 0.3;              // 외경 원·분할선·화살표 테두리 굵기(pt)
@@ -31,6 +35,8 @@ try {
     var CIRCLED_FONT_SIZE = 9;         // ㉠ ㉡ ㉢
     var SECTOR_COUNT = 4;
     var PREF_KEY = "ObjectCellCycle/settings";
+    var POSITION_LIMIT_MM = 100;
+    var PREVIEW_NAME = "Cell Cycle Preview";
 
     var SUB1 = String.fromCharCode(0x2081);
     var SUB2 = String.fromCharCode(0x2082);
@@ -58,15 +64,20 @@ try {
     var arrowWidthPt = 3;
     var arrowScale = 200;
     var gapDeg = 6;
+    var startAngleDeg = 0;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
     var previewEnabled = true;
     var previewGroup = null;
+    var previewSignature = "";        // 마지막으로 그린 미리보기의 설정. 같으면 다시 그리지 않는다
 
     applySavedSettings();
 
     var LABEL_WIDTH = 66;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 150;
+    var SLIDER_WIDTH = 280;
+    var UNIT_WIDTH = 28;
     // 구간 슬라이더: 경계 조절점 3개를 끌어 네 구간의 비율을 정한다 (합계 항상 100%)
     var SECTOR_SLIDER_HEIGHT = 34;
     var SECTOR_SLIDER_PAD = 8;         // 조절점이 양 끝에서 잘리지 않도록 비우는 폭(px)
@@ -85,7 +96,15 @@ try {
     var outerControls = addValueRow(sizePanel, "외경", "mm", outerMm, 5, 200, 0.5, 2);
     var innerControls = addValueRow(sizePanel, "내경", "mm", innerMm, 1, 199.5, 0.5, 2);
 
-    var sectorPanel = addPanel(dlg, "구간 (12시부터 시계 방향)");
+    var positionPanel = addPanel(dlg, "위치 이동");
+    var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+    var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+
+    var sectorPanel = addPanel(dlg, "구간 (시계 방향)");
+    var startAngleControls = addValueRow(sectorPanel, "시작 경계", "°", startAngleDeg, -180, 180, 1, 0);
+    var startAngleNote = sectorPanel.add("statictext", undefined, "0° = 12시, +는 시계 방향");
     var sectorSlider = sectorPanel.add("customView");
     sectorSlider.alignment = ["fill", "top"];
     sectorSlider.preferredSize.height = SECTOR_SLIDER_HEIGHT;
@@ -164,6 +183,15 @@ try {
     bindValueRow(gapControls,
         function() { return gapDeg; },
         function(value) { gapDeg = value; });
+    bindValueRow(startAngleControls,
+        function() { return startAngleDeg; },
+        function(value) { startAngleDeg = value; });
+    bindPositionRow(offsetXControls,
+        function() { return offsetXmm; },
+        function(value) { offsetXmm = value; });
+    bindPositionRow(offsetYControls,
+        function() { return offsetYmm; },
+        function(value) { offsetYmm = value; });
 
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
@@ -183,6 +211,7 @@ try {
         dlg.close(0);
     };
 
+    removeLeftoverPreviews();
     limitInnerDiameter();
     updatePreview();
 
@@ -190,7 +219,7 @@ try {
     clearPreview();
 
     if (result === 1) {
-        var finalGroup = buildDiagram(true, true);
+        var finalGroup = tryBuildDiagram(2);
         finalGroup.name = "Cell Cycle";
         doc.selection = null;
         try { finalGroup.selected = true; } catch (e) {}
@@ -202,15 +231,32 @@ try {
     // -------------------------------------------------------
     // 화살촉은 액션으로만 붙일 수 있어 느리다. 슬라이더를 끄는 동안(withArrowheads=false)은
     // 굵기만 보여주고, 손을 뗀 순간 화살촉까지 그린다.
+    // Illustrator는 연속 DOM 수정 중 간헐적으로 "Target layer cannot be modified" / PARM을
+    // 던진다. 여기서 잡지 않으면 스크립트가 통째로 죽어 미리보기가 캔버스에 남는다.
     function updatePreview(withArrowheads) {
-        clearPreview();
         if (!previewEnabled) {
+            clearPreview();
             app.redraw();
             return;
         }
-        previewGroup = buildDiagram(withArrowheads !== false, false);
-        previewGroup.name = "Cell Cycle Preview";
+        var lightweight = (withArrowheads === false);
+        var signature = previewSettingsKey(lightweight);
+        if (previewGroup !== null && signature === previewSignature) return;
+        clearPreview();
+        try {
+            previewGroup = buildDiagram(!lightweight, false, lightweight);
+            previewGroup.name = PREVIEW_NAME;
+            previewSignature = signature;
+        } catch (e) {
+            // 일시적 오류: 다음 조작에서 다시 그려지므로 경고 없이 넘어간다
+            previewGroup = null;
+        }
         app.redraw();
+    }
+
+    function previewSettingsKey(lightweight) {
+        return [lightweight ? 1 : 0, outerMm, innerMm, startAngleDeg, arrowWidthPt, arrowScale, gapDeg,
+            offsetXmm, offsetYmm, percents.join(","), labelIndexes.join(",")].join("|");
     }
 
     function clearPreview() {
@@ -219,19 +265,52 @@ try {
         previewGroup = null;
     }
 
+    // 이전 실행이 오류로 중단되며 남긴 미리보기를 정리한다 (이름이 고유해 안전)
+    function removeLeftoverPreviews() {
+        for (var i = doc.groupItems.length - 1; i >= 0; i--) {
+            try {
+                if (doc.groupItems[i].name === PREVIEW_NAME) doc.groupItems[i].remove();
+            } catch (e) {}
+        }
+    }
+
+    // 최종 생성도 같은 간헐 오류를 만날 수 있어 redraw로 상태를 정리한 뒤 한 번 더 시도한다
+    function tryBuildDiagram(attempts) {
+        var lastError = null;
+        for (var attempt = 0; attempt < attempts; attempt++) {
+            try {
+                return buildDiagram(true, true, false);
+            } catch (e) {
+                lastError = e;
+                try { $.sleep(100); app.redraw(); } catch (redrawError) {}
+            }
+        }
+        throw lastError;
+    }
+
     // -------------------------------------------------------
     // 도형 생성
     // -------------------------------------------------------
     // withArrowheads: 화살촉 액션을 적용할지, expandArrows: 면으로 확장·병합해 흰색으로 채울지
-    function buildDiagram(withArrowheads, expandArrows) {
-        var center = getViewCenter();
+    // 그리다 실패하면 반쯤 만든 그룹을 지우고 오류를 다시 던진다 (유령 조각 방지)
+    function buildDiagram(withArrowheads, expandArrows, lightweight) {
+        var group = doc.groupItems.add();
+        try {
+            drawDiagram(group, withArrowheads, expandArrows, lightweight);
+        } catch (e) {
+            try { group.remove(); } catch (removeError) {}
+            throw e;
+        }
+        return group;
+    }
+
+    function drawDiagram(group, withArrowheads, expandArrows, lightweight) {
+        var center = offsetDiagramCenter(getViewCenter(), offsetXmm, offsetYmm);
         var cx = center[0];
         var cy = center[1];
         var outerR = outerMm * MM_TO_PT / 2;
         var innerR = innerMm * MM_TO_PT / 2;
         var black = makeBlackColor();
-
-        var group = doc.groupItems.add();
 
         var outerCircle = group.pathItems.ellipse(cy + outerR, cx - outerR, outerR * 2, outerR * 2);
         applyOutline(outerCircle, black, LINE_WIDTH);
@@ -244,15 +323,17 @@ try {
             applyOutline(divisionLine, black, LINE_WIDTH);
         }
 
-        var labelRadius = (innerR + outerR) / 2;
-        for (var j = 0; j < SECTOR_COUNT; j++) {
-            var midAngle = bounds[j] + (bounds[j + 1] - bounds[j]) / 2;
-            addLabelText(group, LABEL_CHOICES[labelIndexes[j]],
-                cx + labelRadius * Math.cos(midAngle),
-                cy + labelRadius * Math.sin(midAngle));
-        }
+        if (!lightweight) {
+            var labelRadius = (innerR + outerR) / 2;
+            for (var j = 0; j < SECTOR_COUNT; j++) {
+                var midAngle = bounds[j] + (bounds[j + 1] - bounds[j]) / 2;
+                addLabelText(group, LABEL_CHOICES[labelIndexes[j]],
+                    cx + labelRadius * Math.cos(midAngle),
+                    cy + labelRadius * Math.sin(midAngle));
+            }
 
-        addCenterText(group, cx, cy);
+            addCenterText(group, cx, cy);
+        }
 
         // 화살표는 마지막에 그려 분할선 위를 덮는다
         var arcs = [];
@@ -271,20 +352,40 @@ try {
         if (expandArrows) {
             outlineArrows(group, arcs);
         }
-
-        return group;
     }
 
-    // 12시에서 시작해 시계 방향으로 도는 구간 경계 각도(라디안). 길이는 구간 수 + 1.
+    function offsetDiagramCenter(center, xMm, yMm) {
+        return [center[0] + xMm * MM_TO_PT, center[1] + yMm * MM_TO_PT];
+    }
+
+    function movePreviewGroup(group, previousXmm, previousYmm, nextXmm, nextYmm) {
+        if (group === null) return true;
+        var deltaX = (nextXmm - previousXmm) * MM_TO_PT;
+        var deltaY = (nextYmm - previousYmm) * MM_TO_PT;
+        if (deltaX === 0 && deltaY === 0) return true;
+        try {
+            group.translate(deltaX, deltaY);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // 설정된 시작 경계에서 시계 방향으로 도는 구간 경계 각도(라디안). 길이는 구간 수 + 1.
     function getSectorBounds() {
         var total = getPercentTotal();
-        var bounds = [Math.PI / 2];
+        var startBoundary = startBoundaryRadians(startAngleDeg);
+        var bounds = [startBoundary];
         var cumulative = 0;
         for (var i = 0; i < SECTOR_COUNT; i++) {
             cumulative += percents[i];
-            bounds.push(Math.PI / 2 - (cumulative / total) * Math.PI * 2);
+            bounds.push(startBoundary - (cumulative / total) * Math.PI * 2);
         }
         return bounds;
+    }
+
+    function startBoundaryRadians(angleDeg) {
+        return Math.PI / 2 - angleDeg * Math.PI / 180;
     }
 
     function makeLine(group, x1, y1, x2, y2) {
@@ -773,7 +874,7 @@ try {
         input.characters = 6;
         input.justify = "right";
         var unitText = row.add("statictext", undefined, unit);
-        unitText.preferredSize.width = 18;
+        unitText.preferredSize.width = UNIT_WIDTH;
         var down = row.add("button", undefined, "◀");
         down.preferredSize.width = STEP_BUTTON_WIDTH;
         var slider = row.add("slider", undefined, value, minimum, maximum);
@@ -803,6 +904,31 @@ try {
         };
         controls.down.onClick = function() { commit(getter() - controls.step, true); };
         controls.up.onClick = function() { commit(getter() + controls.step, true); };
+    }
+
+    // 위치 변경은 도형을 다시 만들지 않고 현재 미리보기 그룹만 이동한다.
+    function bindPositionRow(controls, getter, setter) {
+        function commit(value) {
+            value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+            var previousX = offsetXmm;
+            var previousY = offsetYmm;
+            setter(value);
+            controls.input.text = formatNumber(value, controls.decimals);
+            try { controls.slider.value = value; } catch (e) {}
+            if (!movePreviewGroup(previewGroup, previousX, previousY, offsetXmm, offsetYmm)) {
+                updatePreview(true);
+                return;
+            }
+            if (previewGroup !== null) app.redraw();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? getter() : value);
+        };
+        controls.down.onClick = function() { commit(getter() - controls.step); };
+        controls.up.onClick = function() { commit(getter() + controls.step); };
     }
 
     function parseNumber(text) {
@@ -839,10 +965,10 @@ try {
     // 옵션 저장
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1", outerMm, innerMm];
+        var parts = ["v3", outerMm, innerMm];
         for (var i = 0; i < SECTOR_COUNT; i++) parts.push(percents[i]);
         for (var j = 0; j < SECTOR_COUNT; j++) parts.push(labelIndexes[j]);
-        parts.push(arrowWidthPt, arrowScale, gapDeg);
+        parts.push(arrowWidthPt, arrowScale, gapDeg, offsetXmm, offsetYmm, startAngleDeg);
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -851,7 +977,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length < 14) return;
+        if (p[0] !== "v3" || p.length !== 17) return;
         outerMm = restoreNumber(p[1], outerMm, 5, 200);
         innerMm = restoreNumber(p[2], innerMm, 1, 199.5);
         if (innerMm >= outerMm) innerMm = Math.max(1, outerMm - 0.5);
@@ -865,6 +991,9 @@ try {
         arrowWidthPt = restoreNumber(p[11], arrowWidthPt, 0.5, 30);
         arrowScale = restoreNumber(p[12], arrowScale, 10, 800);
         gapDeg = restoreNumber(p[13], gapDeg, 0, 60);
+        offsetXmm = restoreNumber(p[14], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        offsetYmm = restoreNumber(p[15], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        startAngleDeg = restoreNumber(p[16], startAngleDeg, -180, 180);
     }
 
     function restoreNumber(text, fallback, minimum, maximum) {
