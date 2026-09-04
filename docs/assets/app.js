@@ -23,6 +23,8 @@ const scripts = [
   { id: "circuit-symbol", category: "도형", name: "회로 기호", file: "01_도형/Object_CircuitSymbol.jsx", summary: "직선을 선택하고 저항·직렬 전지·교류 전원·스위치·인덕터·축전기·전류계·전압계 기호를 클릭한 순서대로 선 위에 균등 배치합니다.", tags: ["회로", "물리", "기호"] },
   { id: "anchor-angle", category: "도형", name: "앵커 기준 각도", file: "01_도형/Object_AnchorAngle.jsx", summary: "앵커 포인트 2개를 잡아 그 선분의 각도를 지정한 값으로 맞춥니다.", tags: ["앵커", "각도"] },
   { id: "cell-cycle", category: "도형", name: "세포 주기", file: "01_도형/Object_CellCycle.jsx", summary: "세포 주기 도넛 다이어그램을 만듭니다. 외경·내경, 네 구간의 비율과 제목, 안쪽을 도는 화살표를 조절합니다.", tags: ["과학", "다이어그램"] },
+  { id: "meiosis", category: "도형", name: "감수 분열", file: "01_도형/Object_Meiosis.jsx", summary: "선택한 사각형 안에 감수 분열 과정(G1기 → 중기 1 → 중기 2 → 딸세포)을 그립니다. 세로 간격과 단계별 지름을 조절하면 화살표 각도가 따라옵니다.", tags: ["과학", "다이어그램"] },
+  { id: "homologous-chromosome", category: "도형", name: "상동 염색체", file: "01_도형/Object_HomologousChromosome.jsx", summary: "선택한 사각형에 맞춰 상동 염색체 한 쌍을 그립니다. 좌우 두께·중심절 위치와 지름·염색체 간격을 조절하고 유전자 좌를 최대 3개까지 표시합니다. 중심절 지름을 바꾸면 p암·q암이 따라 붙습니다.", tags: ["과학", "생물"] },
   { id: "cubic-lattice", category: "도형", name: "입방정계 단위세포", file: "01_도형/Object_CubicLattice.jsx", summary: "입방정계 단위세포를 1셀 또는 2×2×2로 그립니다. 격자 유형, 관찰 각도, 숨은선 표시를 조절합니다.", tags: ["과학", "결정"] },
   { id: "diamond-crystal", category: "도형", name: "다이아몬드 결정", file: "01_도형/Object_DiamondCrystal.jsx", summary: "다이아몬드 결정 구조를 1셀·8셀·피라미드 클러스터로 그리고 C-C 결합선과 숨은선을 조절합니다.", tags: ["과학", "결정"] },
   { id: "graphite-crystal", category: "도형", name: "흑연 결정", file: "01_도형/Object_GraphiteCrystal.jsx", summary: "흑연 결정 구조를 AB 또는 AA 적층으로 그리고 층간 점선과 관찰 각도를 조절합니다.", tags: ["과학", "결정"] },
