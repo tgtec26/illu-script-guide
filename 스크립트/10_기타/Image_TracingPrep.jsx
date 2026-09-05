@@ -10,7 +10,7 @@ try {
 
 
 /*
-  Image_LockRaster.jsx
+  Image_TracingPrep.jsx
   기능: PDF 트레이싱 준비를 한 번에 처리합니다.
   1단계: 문서 전체 그룹 해제 + 클리핑 마스크 해제 + 마스크 도형 삭제 (ExtUngroup 로직)
   2단계: 면/선이 없고 투명한 유령 개체 삭제 (emptydel 로직)
@@ -256,7 +256,7 @@ try {
         }
     }
 
-    // ===== 3단계 함수 (기존 Image_LockRaster 로직) =====
+    // ===== 3단계 함수 (기존 래스터 잠금 로직) =====
 
     function collectRasterImages(documentRef, result) {
         for (var i = 0; i < documentRef.pageItems.length; i++) {
