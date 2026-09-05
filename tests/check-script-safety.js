@@ -37,6 +37,7 @@ const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
 const cubicLattice = "스크립트/01_도형/Object_CubicLattice.jsx";
 const graphiteCrystal = "스크립트/01_도형/Object_GraphiteCrystal.jsx";
 const diamondCrystal = "스크립트/01_도형/Object_DiamondCrystal.jsx";
+const cabinetFiles = ["스크립트/01_도형/Object_cabinet_Out.jsx", "스크립트/01_도형/Object_cabinet_InOut.jsx"];
 const updaterFiles = ["setup-mac.command", "setup-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -2527,6 +2528,39 @@ for (const file of updaterFiles) {
       }
     }
   }
+}
+
+// 캐비넷 투영: 사선 길이(depth)를 각도로 분해해야 한다. 45° 이면 dx = dy = depth/√2, 방향 -1 이면 dx 부호만 뒤집힌다.
+for (const file of cabinetFiles) {
+  const source = read(file);
+  const required = [
+    'var settings = loadSettings(0.5, 1, 45);',
+    'angleGroup.add("statictext", undefined, "사선 각도(°)");',
+    'angleGroup.add("scrollbar", undefined, defaultAngle, minAngleDeg, maxAngleDeg)',
+    'createCabinets(choice.depthMm * mmToPt, choice.direction, choice.angleDeg, choice.cube, true);',
+    '["v2", depthMm, direction, angleDeg, cube ? 1 : 0].join("|")',
+    'var cubeCheck = dialog.add("checkbox", undefined, "정육면체',
+    'depth = (bounds[2] - bounds[0]) / 2;',
+    'onPreview(value, readDirection(), angle, cubeCheck.value);',
+    'cubeCheck.onClick();',
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${file}: missing cabinet angle token: ${token}`);
+      failures++;
+    }
+  }
+  assert.ok(!/bounds\[[13]\] \+ depth\]/.test(source), `${file}: face corners must use dy, not depth`);
+
+  const match = source.match(/function cabinetOffset\([\s\S]*?\n    \}/);
+  assert.ok(match, `${file}: missing cabinetOffset`);
+  const cabinetOffset = new Function(`${match[0]}; return cabinetOffset;`)();
+  const diag = cabinetOffset(10, 45, 1);
+  assertClose(diag.dx, 10 / Math.SQRT2, `${file} 45° dx`);
+  assertClose(diag.dy, 10 / Math.SQRT2, `${file} 45° dy`);
+  const shallow = cabinetOffset(10, 30, -1);
+  assertClose(shallow.dx, -10 * Math.cos(Math.PI / 6), `${file} 30° left dx`);
+  assertClose(shallow.dy, 5, `${file} 30° dy`);
 }
 
 process.exit(failures === 0 ? 0 : 1);
