@@ -66,21 +66,24 @@ try {
     var rectWidthPt = Math.max(1, bounds[2] - bounds[0]);
     var rectHeightPt = Math.max(1, bounds[1] - bounds[3]);
 
-    var diametersMm = [14, 14, 10, 7];
+    var diametersMm = [10, 10, 7, 5];
     var arrowGapMm = 0.5;
     var arrowScale = 100;
     var offsetXmm = 0;
     var offsetYmm = 0;
     var showSperm = true;
-    var headWidthMm = 2.5;
-    var headHeightMm = 3.5;
-    var tailLengthMm = 6;
+    var headWidthMm = 1.4;
+    var headHeightMm = 2;
+    var tailLengthMm = 5;
     var tailWidthPt = 0.7;             // 꼬리 시작 두께. 끝은 0으로 가늘어진다
     var waveAmpMm = 0.8;               // 꼬리가 좌우로 흔들리는 폭(중심선 기준 편차)
     var spermRotationDeg = 0;          // 머리 중심 기준 회전. +는 시계 반대 방향
     var previewEnabled = true;
-    var previewGroup = null;
+    var previewGroup = null;            // 세포 · 화살표 · 정자로 가는 선
     var previewSignature = "";
+    var previewSperm = [];              // 정자 몸통(꼬리 + 머리) 그룹, 딸세포마다 하나
+    var previewSpermHeads = [];         // 몸통을 그릴 때 쓴 머리 위치·모양. 옮길 때 기준이 된다
+    var previewSpermSignature = "";
     // 간격·위치는 사각형에 대한 비율로 저장한다. 사각형은 이번 그림의 비계이므로
     // mm 값을 그대로 되살리면 엉뚱한 크기로 시작하지만, 비율은 새 사각형에 비례해 따라온다.
     // null이면 저장값이 없어 사각형에서 초기값을 잡는다.
@@ -92,16 +95,16 @@ try {
     applySavedSettings();
 
     // 처음에는 맨 위 원의 위 끝과 맨 아래(정자 꼬리 끝 또는 딸세포 아래 끝)가 사각형에 닿게 줄을 나눈다
-    var startGapMm = clamp(defaultGapPt(bounds, getRadii()[0], bottomExtentPt(), showSperm ? 4 : 3) / MM_TO_PT, 1, 300);
+    var startGapMm = clamp(defaultGapPt(bounds, getRadii()[0], bottomExtentPt(), showSperm ? 4 : 3) / MM_TO_PT, 1, 10);
     var gapsMm = [startGapMm, startGapMm, startGapMm, startGapMm];
     if (gapRatios !== null) {
         for (var gi = 0; gi < gapsMm.length; gi++) {
-            gapsMm[gi] = clamp(roundTo(gapRatios[gi] * rectHeightPt / MM_TO_PT, 0.5), 1, 300);
+            gapsMm[gi] = clamp(roundTo(gapRatios[gi] * rectHeightPt / MM_TO_PT, 0.5), 1, 10);
         }
     }
-    var daughterStepMm = clamp(defaultDaughterStepPt(bounds, getRadii()) / MM_TO_PT, 0.5, 300);
+    var daughterStepMm = clamp(defaultDaughterStepPt(bounds, getRadii()) / MM_TO_PT, 0.5, 10);
     if (daughterStepRatio !== null) {
-        daughterStepMm = clamp(roundTo(daughterStepRatio * rectWidthPt / MM_TO_PT, 0.5), 0.5, 300);
+        daughterStepMm = clamp(roundTo(daughterStepRatio * rectWidthPt / MM_TO_PT, 0.5), 0.5, 10);
     }
     offsetXmm = clamp(roundTo(offsetXRatio * rectWidthPt / MM_TO_PT, 0.1), -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
     offsetYmm = clamp(roundTo(offsetYRatio * rectHeightPt / MM_TO_PT, 0.1), -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
@@ -130,9 +133,9 @@ try {
     var gapPanel = addPanel(leftColumn, "간격 · 위치 (중심 사이, mm)");
     var gapControls = [];
     for (var g = 0; g < GAP_NAMES.length; g++) {
-        gapControls.push(addValueRow(gapPanel, GAP_NAMES[g], gapsMm[g], 1, 300, 0.5, 1));
+        gapControls.push(addValueRow(gapPanel, GAP_NAMES[g], gapsMm[g], 1, 10, 0.5, 1));
     }
-    var daughterStepControls = addValueRow(gapPanel, "딸세포 사이", daughterStepMm, 0.5, 300, 0.5, 1);
+    var daughterStepControls = addValueRow(gapPanel, "딸세포 사이", daughterStepMm, 0.5, 10, 0.5, 1);
     var offsetXControls = addValueRow(gapPanel, "전체 가로 이동", offsetXmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
     var offsetYControls = addValueRow(gapPanel, "전체 세로 이동", offsetYmm,
@@ -141,21 +144,21 @@ try {
     var sizePanel = addPanel(leftColumn, "세포 지름 (mm)");
     var diameterControls = [];
     for (var i = 0; i < LEVEL_NAMES.length; i++) {
-        diameterControls.push(addValueRow(sizePanel, LEVEL_NAMES[i], diametersMm[i], 1, 100, 0.5, 1));
+        diameterControls.push(addValueRow(sizePanel, LEVEL_NAMES[i], diametersMm[i], 1, 10, 0.5, 1));
     }
 
     var arrowPanel = addPanel(rightColumn, "화살표");
-    var arrowGapControls = addValueRow(arrowPanel, "원과의 간격 mm", arrowGapMm, 0, 10, 0.1, 1);
+    var arrowGapControls = addValueRow(arrowPanel, "원과의 간격 mm", arrowGapMm, 0, 2, 0.1, 1);
     var arrowScaleControls = addValueRow(arrowPanel, "화살촉 크기 %", arrowScale, 10, 800, 5, 0);
 
     var spermPanel = addPanel(rightColumn, "정자 (mm)");
     var spermCheck = spermPanel.add("checkbox", undefined, "정자 그리기");
     spermCheck.value = showSperm;
-    var headWidthControls = addValueRow(spermPanel, "머리 폭", headWidthMm, 0.5, 20, 0.1, 1);
-    var headHeightControls = addValueRow(spermPanel, "머리 높이", headHeightMm, 0.5, 20, 0.1, 1);
-    var tailLengthControls = addValueRow(spermPanel, "꼬리 길이", tailLengthMm, 0.5, 50, 0.5, 1);
-    var tailWidthControls = addValueRow(spermPanel, "꼬리 두께 pt", tailWidthPt, 0.1, 5, 0.1, 1);
-    var waveAmpControls = addValueRow(spermPanel, "물결 폭", waveAmpMm, 0, 10, 0.1, 1);
+    var headWidthControls = addValueRow(spermPanel, "머리 폭", headWidthMm, 0.5, 2, 0.1, 1);
+    var headHeightControls = addValueRow(spermPanel, "머리 높이", headHeightMm, 0.5, 2, 0.1, 1);
+    var tailLengthControls = addValueRow(spermPanel, "꼬리 길이", tailLengthMm, 0.5, 5, 0.1, 1);
+    var tailWidthControls = addValueRow(spermPanel, "꼬리 두께 pt", tailWidthPt, 0.1, 2, 0.1, 1);
+    var waveAmpControls = addValueRow(spermPanel, "물결 폭", waveAmpMm, 0, 2, 0.1, 1);
     var rotationControls = addValueRow(spermPanel, "회전 °", spermRotationDeg, -180, 180, 1, 0);
 
     var footer = dlg.add("group");
@@ -210,7 +213,7 @@ try {
 
     spermCheck.onClick = function() {
         showSperm = spermCheck.value;
-        updatePreview(true);
+        updatePreview();
     };
 
     previewCheck.onClick = function() {
@@ -249,53 +252,107 @@ try {
     // -------------------------------------------------------
     // 미리보기
     // -------------------------------------------------------
-    // 화살촉은 액션으로만 붙일 수 있어 느리다. 슬라이더를 끄는 동안(withArrowheads=false)은
-    // 몸통만 보여주고, 손을 뗀 순간 화살촉까지 그린다.
-    function updatePreview(withArrowheads) {
+    // 화살촉은 액션으로만 붙일 수 있어 느리다. 미리보기는 몸통만 그리고 확인을 눌렀을 때 화살촉을 붙인다.
+    // 정자 몸통(점 73개 × 속성 4개)이 DOM 비용의 대부분이라 세포·화살표와 따로 둔다.
+    // 배치만 바뀌면 몸통은 새 머리 위치로 옮기기만 하고, 꼬리처럼 몸통만 바뀌면 세포·화살표는 그대로 둔다.
+    function updatePreview() {
         if (!previewEnabled) {
             clearPreview();
             app.redraw();
             return;
         }
-        var lightweight = (withArrowheads === false);
-        var signature = previewSettingsKey(lightweight);
-        if (previewGroup !== null && signature === previewSignature) return;
-        clearPreview();
+        var layoutKey = layoutSettingsKey();
+        var spermKey = spermSettingsKey();
+        if (previewGroup !== null && layoutKey === previewSignature && spermKey === previewSpermSignature) return;
         try {
-            previewGroup = buildDiagram(!lightweight);
-            previewGroup.name = PREVIEW_NAME;
-            previewSignature = signature;
+            if (previewGroup === null || layoutKey !== previewSignature) {
+                var heads = [];
+                var group = buildDiagram(false, heads);
+                removeItem(previewGroup);
+                previewGroup = group;
+                previewGroup.name = PREVIEW_NAME;
+                previewSignature = layoutKey;
+                if (spermKey === previewSpermSignature && previewSperm.length === heads.length) {
+                    moveSpermBodies(heads);
+                } else {
+                    rebuildSpermBodies(heads);
+                }
+            } else {
+                rebuildSpermBodies(previewSpermHeads);
+            }
+            previewSpermSignature = spermKey;
         } catch (e) {
             // 일시적 DOM 오류: 다음 조작에서 다시 그려지므로 경고 없이 넘어간다
-            previewGroup = null;
+            clearPreview();
         }
         app.redraw();
     }
 
-    function previewSettingsKey(lightweight) {
-        return [lightweight ? 1 : 0, gapsMm.join(","), daughterStepMm, arrowGapMm, arrowScale,
-            offsetXmm, offsetYmm, diametersMm.join(","), showSperm ? 1 : 0,
-            headWidthMm, headHeightMm, tailLengthMm, tailWidthPt, waveAmpMm, spermRotationDeg].join("|");
+    // 세포·화살표 배치에 드는 값. 머리 모양은 정자로 가는 선의 끝점을 정하므로 여기에도 든다.
+    function layoutSettingsKey() {
+        return [gapsMm.join(","), daughterStepMm, arrowGapMm, offsetXmm, offsetYmm, diametersMm.join(","),
+            showSperm ? 1 : 0, headWidthMm, headHeightMm, spermRotationDeg].join("|");
     }
 
-    // 위치 이동은 도형을 다시 만들지 않고 현재 미리보기 그룹만 옮긴다
-    function movePreviewGroup(group, previousXmm, previousYmm, nextXmm, nextYmm) {
-        if (group === null) return true;
+    // 정자 몸통 모양에 드는 값
+    function spermSettingsKey() {
+        return [showSperm ? 1 : 0, headWidthMm, headHeightMm, tailLengthMm, tailWidthPt, waveAmpMm,
+            spermRotationDeg].join("|");
+    }
+
+    function rebuildSpermBodies(heads) {
+        for (var i = 0; i < previewSperm.length; i++) removeItem(previewSperm[i]);
+        previewSperm = [];
+        previewSpermHeads = heads;
+        var black = makeBlackColor();
+        for (var s = 0; s < heads.length; s++) {
+            var body = doc.groupItems.add();
+            body.name = PREVIEW_NAME;
+            previewSperm.push(body);
+            drawSperm(body, heads[s].x, heads[s].y, heads[s].headH, heads[s].headPoints, heads[s].rotation, black);
+        }
+    }
+
+    function moveSpermBodies(heads) {
+        for (var s = 0; s < heads.length; s++) {
+            var deltaX = heads[s].x - previewSpermHeads[s].x;
+            var deltaY = heads[s].y - previewSpermHeads[s].y;
+            if (deltaX !== 0 || deltaY !== 0) previewSperm[s].translate(deltaX, deltaY);
+        }
+        previewSpermHeads = heads;
+    }
+
+    // 위치 이동은 도형을 다시 만들지 않고 현재 미리보기만 옮긴다
+    function movePreview(previousXmm, previousYmm, nextXmm, nextYmm) {
+        if (previewGroup === null) return true;
         var deltaX = (nextXmm - previousXmm) * MM_TO_PT;
         var deltaY = (nextYmm - previousYmm) * MM_TO_PT;
         if (deltaX === 0 && deltaY === 0) return true;
         try {
-            group.translate(deltaX, deltaY);
+            previewGroup.translate(deltaX, deltaY);
+            for (var s = 0; s < previewSperm.length; s++) {
+                previewSperm[s].translate(deltaX, deltaY);
+                previewSpermHeads[s].x += deltaX;
+                previewSpermHeads[s].y += deltaY;
+            }
             return true;
         } catch (e) {
+            clearPreview();
             return false;
         }
     }
 
     function clearPreview() {
-        if (previewGroup === null) return;
-        try { previewGroup.remove(); } catch (e) {}
+        removeItem(previewGroup);
         previewGroup = null;
+        for (var i = 0; i < previewSperm.length; i++) removeItem(previewSperm[i]);
+        previewSperm = [];
+        previewSpermHeads = [];
+    }
+
+    function removeItem(item) {
+        if (item === null) return;
+        try { item.remove(); } catch (e) {}
     }
 
     // 이전 실행이 오류로 중단되며 남긴 미리보기를 정리한다 (이름이 고유해 안전)
@@ -324,10 +381,11 @@ try {
     // -------------------------------------------------------
     // 도형 생성
     // -------------------------------------------------------
-    function buildDiagram(withArrowheads) {
+    // heads를 주면 정자 몸통은 그리지 않고 머리 위치·모양만 heads에 담는다 (미리보기가 따로 그린다)
+    function buildDiagram(withArrowheads, heads) {
         var group = doc.groupItems.add();
         try {
-            drawDiagram(group, withArrowheads);
+            drawDiagram(group, withArrowheads, heads);
         } catch (e) {
             try { group.remove(); } catch (removeError) {}
             throw e;
@@ -335,7 +393,7 @@ try {
         return group;
     }
 
-    function drawDiagram(group, withArrowheads) {
+    function drawDiagram(group, withArrowheads, heads) {
         var rows = layoutCells(bounds, getRadii(), toPoints(gapsMm), daughterStepMm * MM_TO_PT,
             [offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT]);
         var black = makeBlackColor();
@@ -386,7 +444,11 @@ try {
                     applyOutline(spermLine, black, ARROW_WIDTH_PT);
                     arrows.push(spermLine);
                 }
-                drawSperm(group, headX, headY, headH, headPoints, rotation, black);
+                if (heads) {
+                    heads.push({x: headX, y: headY, headH: headH, headPoints: headPoints, rotation: rotation});
+                } else {
+                    drawSperm(group, headX, headY, headH, headPoints, rotation, black);
+                }
             }
         }
 
@@ -536,9 +598,9 @@ try {
         var path = group.pathItems.add();
         path.setEntirePath(anchors);
         path.closed = closed;
+        // anchor는 setEntirePath가 이미 넣었다. 점마다 DOM 쓰기가 비싸 핸들과 종류만 더한다.
         for (var j = 0; j < points.length; j++) {
             var point = path.pathPoints[j];
-            point.anchor = points[j].anchor;
             point.leftDirection = points[j].left;
             point.rightDirection = points[j].right;
             point.pointType = points[j].corner ? PointType.CORNER : PointType.SMOOTH;
@@ -771,22 +833,21 @@ try {
     }
 
     function bindValueRow(controls, getter, setter) {
-        function commit(value, withArrowheads) {
+        function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             setter(value);
             controls.input.text = formatNumber(value, controls.decimals);
             try { controls.slider.value = value; } catch (e) {}
-            updatePreview(withArrowheads);
+            updatePreview();
         }
-        // 끄는 동안은 가벼운 미리보기, 손을 뗀 뒤(onChange)에 화살촉까지 그린다
-        controls.slider.onChanging = function() { commit(controls.slider.value, false); };
-        controls.slider.onChange = function() { commit(controls.slider.value, true); };
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
-            commit(value === null ? getter() : value, true);
+            commit(value === null ? getter() : value);
         };
-        controls.down.onClick = function() { commit(getter() - controls.step, true); };
-        controls.up.onClick = function() { commit(getter() + controls.step, true); };
+        controls.down.onClick = function() { commit(getter() - controls.step); };
+        controls.up.onClick = function() { commit(getter() + controls.step); };
     }
 
     // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다 (이동이 즉각 반응한다)
@@ -798,8 +859,8 @@ try {
             setter(value);
             controls.input.text = formatNumber(value, controls.decimals);
             try { controls.slider.value = value; } catch (e) {}
-            if (!movePreviewGroup(previewGroup, previousX, previousY, offsetXmm, offsetYmm)) {
-                updatePreview(true);
+            if (!movePreview(previousX, previousY, offsetXmm, offsetYmm)) {
+                updatePreview();
                 return;
             }
             if (previewGroup !== null) app.redraw();
@@ -868,9 +929,9 @@ try {
         var p = raw.split("|");
         if (p[0] !== "v4" || p.length !== 21) return;
         for (var i = 0; i < diametersMm.length; i++) {
-            diametersMm[i] = restoreNumber(p[1 + i], diametersMm[i], 1, 100);
+            diametersMm[i] = restoreNumber(p[1 + i], diametersMm[i], 1, 10);
         }
-        arrowGapMm = restoreNumber(p[5], arrowGapMm, 0, 10);
+        arrowGapMm = restoreNumber(p[5], arrowGapMm, 0, 2);
         arrowScale = restoreNumber(p[6], arrowScale, 10, 800);
         // 비율은 넷 모두 유효할 때만 받는다. 하나라도 깨졌으면 사각형 초기값으로 간다.
         var ratios = [];
@@ -884,11 +945,11 @@ try {
         if (!isNaN(stepRatio) && stepRatio > 0 && stepRatio <= 10) daughterStepRatio = stepRatio;
         offsetXRatio = restoreNumber(p[12], 0, -10, 10);
         offsetYRatio = restoreNumber(p[13], 0, -10, 10);
-        headWidthMm = restoreNumber(p[14], headWidthMm, 0.5, 20);
-        headHeightMm = restoreNumber(p[15], headHeightMm, 0.5, 20);
-        tailLengthMm = restoreNumber(p[16], tailLengthMm, 0.5, 50);
-        tailWidthPt = restoreNumber(p[17], tailWidthPt, 0.1, 5);
-        waveAmpMm = restoreNumber(p[18], waveAmpMm, 0, 10);
+        headWidthMm = restoreNumber(p[14], headWidthMm, 0.5, 2);
+        headHeightMm = restoreNumber(p[15], headHeightMm, 0.5, 2);
+        tailLengthMm = restoreNumber(p[16], tailLengthMm, 0.5, 5);
+        tailWidthPt = restoreNumber(p[17], tailWidthPt, 0.1, 2);
+        waveAmpMm = restoreNumber(p[18], waveAmpMm, 0, 2);
         showSperm = p[19] !== "0";
         spermRotationDeg = restoreNumber(p[20], spermRotationDeg, -180, 180);
     }

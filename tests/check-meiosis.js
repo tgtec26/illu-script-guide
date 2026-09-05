@@ -189,3 +189,28 @@ assert.strictEqual(
 }
 
 console.log("check-meiosis: ok");
+
+// 미리보기 분할: 꼬리만 바꾸면 세포·화살표는 그대로, 배치만 바꾸면 정자 몸통은 옮기기만 한다.
+// 머리 모양은 정자로 가는 선의 끝점을 정하므로 양쪽 모두 다시 그린다.
+const keySource = `${extractFunction("layoutSettingsKey")}\n${extractFunction("spermSettingsKey")}`;
+function previewKeys(state) {
+  return new Function(...Object.keys(state),
+    `${keySource}\nreturn [layoutSettingsKey(), spermSettingsKey()];`)(...Object.values(state));
+}
+const baseState = {gapsMm: [1, 2, 3, 4], daughterStepMm: 5, arrowGapMm: 1, offsetXmm: 0, offsetYmm: 0,
+  diametersMm: [4, 3, 2, 1], showSperm: true, headWidthMm: 2, headHeightMm: 3, tailLengthMm: 6,
+  tailWidthPt: 0.7, waveAmpMm: 0.8, spermRotationDeg: 0};
+const [layoutKey, spermKey] = previewKeys(baseState);
+const [layoutTail, spermTail] = previewKeys({...baseState, tailLengthMm: 7});
+assert.strictEqual(layoutTail, layoutKey, "tail length must not rebuild cells and arrows");
+assert.notStrictEqual(spermTail, spermKey, "tail length must rebuild sperm bodies");
+const [layoutGap, spermGap] = previewKeys({...baseState, gapsMm: [1, 2, 3, 5]});
+assert.notStrictEqual(layoutGap, layoutKey, "gap change must rebuild cells and arrows");
+assert.strictEqual(spermGap, spermKey, "gap change must move sperm bodies instead of redrawing them");
+const [layoutHead, spermHead] = previewKeys({...baseState, headWidthMm: 3});
+assert.notStrictEqual(layoutHead, layoutKey, "head shape moves the sperm arrow end");
+assert.notStrictEqual(spermHead, spermKey, "head shape redraws the sperm body");
+
+// setEntirePath가 이미 anchor를 넣으므로 점마다 다시 쓰지 않는다 (DOM 쓰기 1/4 절약)
+assert.ok(!/point\.anchor\s*=/.test(extractFunction("buildPathFromPoints")),
+  "buildPathFromPoints must not rewrite anchors");
