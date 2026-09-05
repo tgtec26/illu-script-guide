@@ -77,6 +77,7 @@ const scripts = [
   { id: "output-600png", category: "내보내기", name: "600ppi PNG", file: "06_내보내기/Output_600png.jsx", summary: "작업물을 600ppi PNG로 내보낼 때 사용합니다.", tags: ["PNG", "내보내기"] },
   { id: "dup-anchor", category: "기타", name: "선택 앵커에 복제", file: "10_기타/Dup At Selected Anchors.jsx", summary: "선택한 앵커 위치에 개체를 복제합니다.", tags: ["앵커", "복제"] },
   { id: "downsample", category: "기타", name: "이미지 600ppi 다운샘플", file: "10_기타/Image_Downsample600ppi.jsx", summary: "이미지 해상도를 600ppi 기준으로 정리할 때 사용합니다.", tags: ["이미지", "해상도"] },
+  { id: "lock-all-raster", category: "기타", name: "래스터 전체 잠금", file: "10_기타/Image_LockAllRaster.jsx", summary: "문서 안 포함·링크 래스터 이미지를 제자리에서 모두 잠급니다. 이동이나 삭제 없이 잠금만 처리합니다.", tags: ["이미지", "잠금"] },
   { id: "lock-raster", category: "기타", name: "트레이싱 준비", file: "10_기타/Image_TracingPrep.jsx", summary: "그룹·클리핑 마스크 해제, 투명 유령 개체 삭제 후 래스터 이미지를 전용 레이어로 모아 30% 불투명도로 잠급니다.", tags: ["이미지", "잠금"] },
   { id: "clip-crop", category: "기타", name: "클리핑 실제 자르기", file: "10_기타/clip_crop_visible.jsx", summary: "클리핑 마스크에서 가려진 부분을 실제로 삭제하고 보이는 부분만 남깁니다.", tags: ["클리핑", "자르기"] },
   { id: "embed", category: "기타", name: "이미지 포함", file: "10_기타/embed.jsx", summary: "링크 이미지를 포함하고, 불필요한 투명 클리핑 마스크를 정리합니다.", tags: ["이미지", "포함"] },
