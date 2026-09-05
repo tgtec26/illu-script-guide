@@ -404,9 +404,15 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     console.error(`${embedLinkedImages}: missing-document warning must remain visible`);
     failures++;
   }
+  if (source.includes("getDirectPageItems(parent)") ||
+      source.includes("collectNewPageItems(")) {
+    console.error(`${embedLinkedImages}: embed must not snapshot the whole layer before and after each embed; it takes tens of seconds in complex documents`);
+    failures++;
+  }
   if (!source.includes("var embeddedItems = []") ||
-      !source.includes("var beforeItems = getDirectPageItems(parent)") ||
-      !source.includes("collectNewPageItems(parent, beforeItems, embeddedItems)") ||
+      !source.includes("doc.selection = null") ||
+      !source.includes("item.selected = true") ||
+      !source.includes("collectSelectedItems(doc, wasHidden, embeddedItems)") ||
       !source.includes("releaseTransparentClipMasks(embeddedItems)") ||
       !source.includes("function releaseTransparentClipMasks(items)") ||
       !source.includes("function collectGroups(item, groups)") ||

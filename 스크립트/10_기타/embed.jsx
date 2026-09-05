@@ -42,11 +42,18 @@ if (app.documents.length > 0) {
         }
 
         try {
-            var parent = item.parent;
-            var beforeItems = getDirectPageItems(parent);
+            // 숨겨진 항목은 선택이 안 되므로 잠시 보이게 한 뒤 포함하고 원래대로 되돌립니다.
+            var wasHidden = item.hidden;
+            if (wasHidden) {
+                item.hidden = false;
+            }
 
+            // 포함 후 새 개체가 선택 상태로 남으므로 selection으로 바로 얻습니다.
+            // 레이어 전체 pageItems를 전후로 비교하던 방식은 복잡한 문서에서 수십 초 걸렸습니다.
+            doc.selection = null;
+            item.selected = true;
             item.embed();
-            collectNewPageItems(parent, beforeItems, embeddedItems);
+            collectSelectedItems(doc, wasHidden, embeddedItems);
             successCount++;
         } catch (e) {
             // 에러가 발생해도 멈추지 않고 카운트만 하고 다음으로 넘어갑니다.
@@ -64,33 +71,18 @@ if (app.documents.length > 0) {
     alert("먼저 문서를 열어주세요.");
 }
 
-function getDirectPageItems(parent) {
-    var items = [];
-    try {
-        for (var i = 0; i < parent.pageItems.length; i++) {
-            items.push(parent.pageItems[i]);
-        }
-    } catch (e) {}
-    return items;
-}
-
-function collectNewPageItems(parent, beforeItems, result) {
-    var afterItems = getDirectPageItems(parent);
-
-    for (var i = 0; i < afterItems.length; i++) {
-        if (!containsPageItem(beforeItems, afterItems[i])) {
-            result.push(afterItems[i]);
-        }
+function collectSelectedItems(doc, hidden, result) {
+    var selected = doc.selection;
+    if (!selected || !selected.length) {
+        return;
     }
-}
 
-function containsPageItem(items, target) {
-    for (var i = 0; i < items.length; i++) {
-        if (items[i] === target) {
-            return true;
+    for (var i = 0; i < selected.length; i++) {
+        if (hidden) {
+            selected[i].hidden = true;
         }
+        result.push(selected[i]);
     }
-    return false;
 }
 
 function releaseTransparentClipMasks(items) {
