@@ -33,13 +33,22 @@ try {
     var LABEL_GAP_MM = 0.5;        // 도형 아래 번호까지 간격
     var TEXT_PT = 8;
     var FONT_NAMES = ["GSMediumB1"];
+    var LEGEND_RATIO = 0.7;        // 범례 도형 크기 / 가계도 도형 크기
+    var LEGEND_ROW_GAP_MM = 1;     // 범례 도형 사이 위아래 간격
+    var LEGEND_GAP_MM = 5;         // 가계도 오른쪽 끝에서 범례 도형까지
+    var LEGEND_TEXT_GAP_MM = 1;    // 범례 도형에서 글자까지
+    var LEGEND_KOR_FONTS = ["SpoqaHanSansNeo-Regular"];
+    var LEGEND_LABEL_FONTS = ["Batang"];      // (가), (나)
+    var LEGEND_LABELS = ["정상", "(가) 발현", "(나) 발현", "(가), (나) 발현"];
     var MARK_RATIO = 0.8;          // 원문자 지름 / 도형 크기
-    var SIBLING_MAX = 3;
+    var SIBLING_MAX = 2;
+    var CHILD_MAX = 4;
+    var POSITION_LIMIT_MM = 100;
     var PREF_KEY = "ObjectPedigree/settings";
-    // v1: 크기 7개 · 형제 수 2개 · 구성원 14명 × (성별, 발현, 원문자) · 자녀 (종류, 발현, 원문자) = 55칸
+    // v6: 크기 8개 · 이동 2개 · 범례 3개 · 형제 수 2개 · 구성원 10명 × (성별, 발현, 원문자) · 자녀 수 · 자녀 4명 × (종류, 발현, 원문자) = 59칸
     // applySavedSettings()보다 먼저 값이 있어야 하므로 여기(IIFE 맨 위)에 둔다
-    var SETTINGS_TAG = "v1";
-    var SETTINGS_LENGTH = 55;
+    var SETTINGS_TAG = "v6";
+    var SETTINGS_LENGTH = 59;
     var PREVIEW_NAME = "Pedigree Preview";
 
     var PHENO_LABELS = ["정상", "(가)", "(나)", "(가)(나)"];
@@ -56,10 +65,16 @@ try {
     var sizeMm = 4.5;
     var coupleGapMm = 5;
     var siblingGapMm = 3;
-    var generationGapMm = 11;
+    var upperGapMm = 11;       // F–P1: 조부모 → 부모 세대 (도형 중심 간)
+    var lowerGapMm = 11;       // P1–P2: 부모 → 자녀 세대
     var branchPct = 50;
     var hatchCount = 5;
     var gridSize = 4;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
+    var legendOn = false;
+    var legendXmm = 0;
+    var legendYmm = 0;
     var previewEnabled = true;
 
     // gender 0 = 남(사각형), 1 = 여(원). pheno 0 정상 1 (가) 2 (나) 3 둘 다. mark 0 없음 1~3 ⓐⓑⓒ
@@ -72,13 +87,21 @@ try {
     }
     var sides = [makeSide("친가", ["삼촌", "고모"]), makeSide("외가", ["외삼촌", "이모"])];
     sides[1].parent.gender = 1;
-    var child = {kind: 0, gender: 0, pheno: 0, mark: 0};   // kind 0 = 물음표, 1 = 아들, 2 = 딸
+    // 자녀: kind 0 = 물음표, 1 = 아들, 2 = 딸
+    var childCount = 1;
+    var children = [];
+    for (var c = 0; c < CHILD_MAX; c++) children.push({kind: 0, gender: 0, pheno: 0, mark: 0});
 
     applySavedSettings();
 
     var previewGroup = null;
+    var previewLegend = null;       // previewGroup 안의 범례 그룹. 범례 이동은 이것만 옮긴다
+    var builtLegend = null;         // drawPedigree가 마지막으로 만든 범례 그룹
     var previewSignature = "";
+    var previewErrorShown = false;
     var font = findTextFont(FONT_NAMES);
+    var legendKorFont = findTextFont(LEGEND_KOR_FONTS);
+    var legendLabelFont = findTextFont(LEGEND_LABEL_FONTS);
 
     // -------------------------------------------------------
     // 다이얼로그
@@ -111,26 +134,24 @@ try {
 
     for (var s = 0; s < sides.length; s++) addSidePanel(leftColumn, sides[s]);
 
-    var childPanel = addPanel(leftColumn, "자녀");
-    var childRow = childPanel.add("group");
-    childRow.alignChildren = ["left", "center"];
-    childRow.spacing = 6;
-    childRow.add("statictext", undefined, "아버지·어머니").preferredSize.width = LABEL_WIDTH;
-    var childKind = addRadios(childRow, ["?", "아들", "딸"], child.kind, function(index) {
-        child.kind = index;
-        if (index > 0) child.gender = index - 1;
-        childPheno.group.enabled = index > 0 && child.mark === 0;
-        childMark.enabled = index > 0;
+    var childPanel = addPanel(leftColumn, "자녀 (아버지·어머니)");
+    var childCountRow = childPanel.add("group");
+    childCountRow.alignChildren = ["left", "center"];
+    childCountRow.add("statictext", undefined, "자녀 수").preferredSize.width = LABEL_WIDTH;
+    var childCountList = childCountRow.add("dropdownlist", undefined, ["1", "2", "3", "4"]);
+    childCountList.selection = childCount - 1;
+    childCountList.preferredSize.width = 56;
+    var childRows = [];
+    for (c = 0; c < CHILD_MAX; c++) childRows.push(addChildRow(childPanel, "자녀 " + (c + 1), children[c]));
+    function refreshChildRows() {
+        for (var r = 0; r < childRows.length; r++) childRows[r].enabled = r < childCount;
+    }
+    childCountList.onChange = function() {
+        childCount = childCountList.selection.index + 1;
+        refreshChildRows();
         updatePreview();
-    });
-    childKind.group.preferredSize.width = GENDER_WIDTH;
-    var childPheno = addRadios(childRow, PHENO_LABELS, child.pheno, function(index) {
-        child.pheno = index;
-        updatePreview();
-    });
-    var childMark = addMarkList(childRow, child, childPheno.group);
-    childPheno.group.enabled = child.kind > 0 && child.mark === 0;
-    childMark.enabled = child.kind > 0;
+    };
+    refreshChildRows();
 
     var sizePanel = addPanel(rightColumn, "크기");
     var sizeControls = addValueRow(sizePanel, "도형 크기", "mm", sizeMm, 4, 6, 0.2, 1);
@@ -146,11 +167,26 @@ try {
     var layoutPanel = addPanel(rightColumn, "간격");
     var coupleControls = addValueRow(layoutPanel, "부부 사이", "mm", coupleGapMm, 2, 15, 0.5, 1);
     var siblingControls = addValueRow(layoutPanel, "형제 사이", "mm", siblingGapMm, 1, 15, 0.5, 1);
-    var generationControls = addValueRow(layoutPanel, "세대 사이", "mm", generationGapMm, 8, 30, 0.5, 1);
+    var upperGapControls = addValueRow(layoutPanel, "F–P1 세대", "mm", upperGapMm, 8, 30, 0.5, 1);
+    var lowerGapControls = addValueRow(layoutPanel, "P1–P2 세대", "mm", lowerGapMm, 8, 30, 0.5, 1);
     var branchControls = addValueRow(layoutPanel, "형제 분기점", "%", branchPct, 20, 80, 5, 0);
     var branchNote = layoutPanel.add("statictext", undefined,
-        "세대 사이는 도형 중심 간 거리, 분기점은 부부선(0%)에서 자녀 위 끝(100%)까지의 위치입니다.", {multiline: true});
+        "세대 거리는 도형 중심 간 거리, 분기점은 부부선(0%)에서 자녀 위 끝(100%)까지의 위치입니다.", {multiline: true});
     branchNote.preferredSize.width = 330;
+
+    var positionPanel = addPanel(rightColumn, "위치");
+    var offsetXControls = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+    var offsetYControls = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+
+    var legendPanel = addPanel(rightColumn, "범례");
+    var legendCheck = legendPanel.add("checkbox", undefined, "가계도 오른쪽에 범례 넣기 (가계도에 있는 표현만)");
+    legendCheck.value = legendOn;
+    var legendXControls = addValueRow(legendPanel, "가로 이동", "mm", legendXmm,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+    var legendYControls = addValueRow(legendPanel, "세로 이동", "mm", legendYmm,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -166,8 +202,21 @@ try {
     bindValueRow(hatchControls, function() { return hatchCount; }, function(v) { hatchCount = v; });
     bindValueRow(coupleControls, function() { return coupleGapMm; }, function(v) { coupleGapMm = v; });
     bindValueRow(siblingControls, function() { return siblingGapMm; }, function(v) { siblingGapMm = v; });
-    bindValueRow(generationControls, function() { return generationGapMm; }, function(v) { generationGapMm = v; });
+    bindValueRow(upperGapControls, function() { return upperGapMm; }, function(v) { upperGapMm = v; });
+    bindValueRow(lowerGapControls, function() { return lowerGapMm; }, function(v) { lowerGapMm = v; });
     bindValueRow(branchControls, function() { return branchPct; }, function(v) { branchPct = v; });
+    bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true,
+        function() { return previewGroup; });
+    bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false,
+        function() { return previewGroup; });
+    bindPositionRow(legendXControls, function() { return legendXmm; }, function(v) { legendXmm = v; }, true,
+        function() { return previewLegend; });
+    bindPositionRow(legendYControls, function() { return legendYmm; }, function(v) { legendYmm = v; }, false,
+        function() { return previewLegend; });
+    legendCheck.onClick = function() {
+        legendOn = legendCheck.value;
+        updatePreview();
+    };
 
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
@@ -222,10 +271,15 @@ try {
         try {
             previewGroup = buildPedigree();
             previewGroup.name = PREVIEW_NAME;
+            previewLegend = builtLegend;
             previewSignature = signature;
         } catch (e) {
-            // 일시적 DOM 오류: 다음 조작에서 다시 그려지므로 경고 없이 넘어간다
+            // buildPedigree가 만들다 만 그룹은 스스로 지운다. 원인은 한 번만 알린다
             previewGroup = null;
+            if (!previewErrorShown) {
+                previewErrorShown = true;
+                alert("미리보기를 그리지 못했습니다.\n" + e + (e.line ? " (line " + e.line + ")" : ""));
+            }
         }
         app.redraw();
     }
@@ -235,6 +289,7 @@ try {
             try { previewGroup.remove(); } catch (e) {}
             previewGroup = null;
         }
+        previewLegend = null;
         previewSignature = "";
     }
 
@@ -251,36 +306,37 @@ try {
     // -------------------------------------------------------
     // 배치 계산 (DOM 없음 · tests/check-pedigree.js가 그대로 실행)
     // -------------------------------------------------------
-    // spec: {size, coupleGap, siblingGap, generationGap, branchPct, markRatio,
-    //        sides: [{count, grand:[남, 여], parent, siblings:[...]}, ...], child: {kind, ...}}
+    // spec: {size, coupleGap, siblingGap, upperGap, lowerGap, branchPct, markRatio,
+    //        sides: [{count, grand:[남, 여], parent, siblings:[...]}, ...],
+    //        childCount, children: [{kind, gender, pheno, mark}, ...]}   kind 0이면 도형 대신 물음표
     // 좌표는 pt, 1세대 중심 y = 0, 아래로 갈수록 음수.
     function layoutPedigree(spec) {
         var S = spec.size;
         var step = S + spec.siblingGap;
-        var G = spec.generationGap;
-        var y1 = 0, y2 = -G, y3 = -2 * G;
+        var y1 = 0, y2 = -spec.upperGap, y3 = y2 - spec.lowerGap;
         var nodes = [];
         var lines = [];
         var i;
 
         function addNode(person, x, y, gen) {
-            var half = person.mark > 0 ? S * spec.markRatio / 2 : S / 2;
-            var node = {person: person, x: x, y: y, gen: gen, half: half, number: 0};
+            var question = person.kind === 0;
+            var half = (!question && person.mark > 0) ? S * spec.markRatio / 2 : S / 2;
+            var node = {person: person, x: x, y: y, gen: gen, half: half, number: 0, question: question};
             nodes.push(node);
             return node;
         }
         function coupleLine(left, right) {
             lines.push([left.x + left.half, left.y, right.x - right.half, right.y]);
         }
-        // 부부선 가운데(dropX)에서 내려와 형제 가로선을 거쳐 각 자녀 위 끝까지
-        function descend(dropX, parentY, children) {
+        // 부부선 가운데(dropX)에서 내려와 형제 가로선을 거쳐 각 자녀 위 끝까지. gap은 이 세대 사이 거리
+        function descend(dropX, parentY, gap, children) {
             var first = children[0];
             var last = children[children.length - 1];
             if (children.length === 1 && Math.abs(first.x - dropX) < 0.0001) {
                 lines.push([dropX, parentY, dropX, first.y + first.half]);
                 return;
             }
-            var childTop = parentY - G + S / 2;
+            var childTop = parentY - gap + S / 2;
             var barY = parentY - (parentY - childTop) * spec.branchPct / 100;
             lines.push([dropX, parentY, dropX, barY]);
             lines.push([Math.min(dropX, first.x), barY, Math.max(dropX, last.x), barY]);
@@ -293,14 +349,17 @@ try {
         var mat = spec.sides[1];
 
         // 2세대: 친가 형제 → 아버지 → 어머니 → 외가 형제 (왼쪽부터)
+        // 형제열이 둘이면 조부모 부부 간격으로 벌려 할아버지·할머니 바로 아래에 하나씩 놓는다
+        var patStep = pat.count === 1 ? S + spec.coupleGap : step;
+        var matStep = mat.count === 1 ? S + spec.coupleGap : step;
         var patRow = [];
         var matRow = [];
-        for (i = 0; i < pat.count; i++) patRow.push(addNode(pat.siblings[i], i * step, y2, 2));
-        var father = addNode(pat.parent, pat.count * step, y2, 2);
+        for (i = 0; i < pat.count; i++) patRow.push(addNode(pat.siblings[i], i * patStep, y2, 2));
+        var father = addNode(pat.parent, pat.count * patStep, y2, 2);
         patRow.push(father);
         var mother = addNode(mat.parent, father.x + S + spec.coupleGap, y2, 2);
         matRow.push(mother);
-        for (i = 0; i < mat.count; i++) matRow.push(addNode(mat.siblings[i], mother.x + (i + 1) * step, y2, 2));
+        for (i = 0; i < mat.count; i++) matRow.push(addNode(mat.siblings[i], mother.x + (i + 1) * matStep, y2, 2));
 
         // 1세대: 각 형제열 중앙 위에 부부. 형제가 없으면 부모 바로 위에 놓여 수직선으로 이어진다.
         // 두 부부가 부부 간격보다 가까우면 외가 쪽(어머니 · 외가 형제 · 외조부모)을 오른쪽으로 밀어
@@ -320,27 +379,26 @@ try {
         coupleLine(patGF, patGM);
         coupleLine(matGF, matGM);
         coupleLine(father, mother);
-        descend((patGF.x + patGM.x) / 2, y1, patRow);
-        descend((matGF.x + matGM.x) / 2, y1, matRow);
+        descend((patGF.x + patGM.x) / 2, y1, spec.upperGap, patRow);
+        descend((matGF.x + matGM.x) / 2, y1, spec.upperGap, matRow);
 
-        // 3세대: 물음표이거나 자녀 한 명
+        // 3세대: 부부선 가운데 아래에 자녀들을 가운데 정렬. 둘이면 아버지·어머니 바로 아래에 하나씩
         var childX = (father.x + mother.x) / 2;
-        var question = null;
-        if (spec.child.kind === 0) {
-            lines.push([childX, y2, childX, y3 + S / 2]);
-            question = {x: childX, y: y3};
-        } else {
-            descend(childX, y2, [addNode(spec.child, childX, y3, 3)]);
+        var childStep = spec.childCount === 2 ? mother.x - father.x : step;
+        var childRow = [];
+        for (i = 0; i < spec.childCount; i++) {
+            childRow.push(addNode(spec.children[i], childX + (i - (spec.childCount - 1) / 2) * childStep, y3, 3));
         }
+        descend(childX, y2, spec.lowerGap, childRow);
 
-        // 번호: 세대 순, 같은 세대는 왼쪽부터. 원문자로 가린 사람은 건너뛴다
+        // 번호: 세대 순, 같은 세대는 왼쪽부터. 원문자로 가린 사람과 물음표는 건너뛴다
         var order = nodes.slice();
         order.sort(function(a, b) { return (a.gen - b.gen) || (a.x - b.x); });
         var number = 0;
         for (i = 0; i < order.length; i++) {
-            if (order[i].person.mark === 0) order[i].number = ++number;
+            if (!order[i].question && order[i].person.mark === 0) order[i].number = ++number;
         }
-        return {nodes: nodes, lines: lines, question: question};
+        return {nodes: nodes, lines: lines};
     }
 
     // -------------------------------------------------------
@@ -351,18 +409,31 @@ try {
             size: sizeMm * MM_TO_PT,
             coupleGap: coupleGapMm * MM_TO_PT,
             siblingGap: siblingGapMm * MM_TO_PT,
-            generationGap: generationGapMm * MM_TO_PT,
+            upperGap: upperGapMm * MM_TO_PT,
+            lowerGap: lowerGapMm * MM_TO_PT,
             branchPct: branchPct,
             markRatio: MARK_RATIO,
             sides: sides,
-            child: child
+            childCount: childCount,
+            children: children
         };
     }
 
+    // 실패하면 만들다 만 그룹을 지우고 오류를 다시 던진다
     function buildPedigree() {
+        var group = doc.activeLayer.groupItems.add();
+        try {
+            drawPedigree(group);
+        } catch (e) {
+            try { group.remove(); } catch (removeError) {}
+            throw e;
+        }
+        return group;
+    }
+
+    function drawPedigree(group) {
         var spec = currentSpec();
         var layout = layoutPedigree(spec);
-        var group = doc.activeLayer.groupItems.add();
         var black = makeColor(100);
         var i;
 
@@ -372,20 +443,103 @@ try {
         }
         for (i = 0; i < layout.nodes.length; i++) {
             var node = layout.nodes[i];
-            if (node.person.mark > 0) drawMark(group, node, spec.size);
+            if (node.question) addText(group, "?", node.x, node.y, false);
+            else if (node.person.mark > 0) drawMark(group, node, spec.size);
             else drawPerson(group, node, spec.size);
             if (node.number > 0) {
                 addText(group, String(node.number), node.x, node.y - node.half - LABEL_GAP_MM * MM_TO_PT, true);
             }
         }
-        if (layout.question !== null) addText(group, "?", layout.question.x, layout.question.y, false);
 
-        // 선택한 사각형 중앙으로 이동
-        var b = group.geometricBounds;
+        // 선택한 사각형 중앙으로 이동. 클리핑 밖까지 뻗은 사선 때문에 DOM 경계는 쓰지 않고 배치 좌표로 잰다
+        var b = layoutBounds(layout, LABEL_GAP_MM * MM_TO_PT + TEXT_PT * 0.75);
+        builtLegend = legendOn ? drawLegend(group, layout, spec.size, b) : null;
         group.translate(
-            (rectBounds[0] + rectBounds[2]) / 2 - (b[0] + b[2]) / 2,
-            (rectBounds[1] + rectBounds[3]) / 2 - (b[1] + b[3]) / 2);
-        return group;
+            (rectBounds[0] + rectBounds[2]) / 2 - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT,
+            (rectBounds[1] + rectBounds[3]) / 2 - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
+    }
+
+    // 범례 항목: 정상 → (가) → (나) → (가)(나), 각각 남자 → 여자 순. 가계도에 실제로 그려진 표현만
+    function legendEntries(nodes) {
+        var entries = [];
+        for (var pheno = 0; pheno < 4; pheno++) {
+            for (var gender = 0; gender < 2; gender++) {
+                var present = false;
+                for (var i = 0; i < nodes.length && !present; i++) {
+                    var n = nodes[i];
+                    present = !n.question && n.person.mark === 0 &&
+                        n.person.gender === gender && n.person.pheno === pheno;
+                }
+                if (present) entries.push({gender: gender, pheno: pheno});
+            }
+        }
+        return entries;
+    }
+
+    // 가계도 오른쪽 위에 맞춰 범례를 세로로 놓는다. 항목이 없으면 null
+    function drawLegend(group, layout, S, bounds) {
+        var entries = legendEntries(layout.nodes);
+        if (entries.length === 0) return null;
+        var legend = group.groupItems.add();
+        legend.name = "Legend";
+        var size = S * LEGEND_RATIO;
+        var pitch = size + LEGEND_ROW_GAP_MM * MM_TO_PT;
+        var cx = bounds[2] + LEGEND_GAP_MM * MM_TO_PT + size / 2;
+        for (var i = 0; i < entries.length; i++) {
+            var cy = bounds[1] - size / 2 - i * pitch;
+            var e = entries[i];
+            drawPerson(legend, {person: {gender: e.gender, pheno: e.pheno, mark: 0}, x: cx, y: cy}, size);
+            addLegendText(legend, LEGEND_LABELS[e.pheno] + (e.gender === 0 ? " 남자" : " 여자"),
+                cx + size / 2 + LEGEND_TEXT_GAP_MM * MM_TO_PT, cy);
+        }
+        legend.translate(legendXmm * MM_TO_PT, legendYmm * MM_TO_PT);
+        return legend;
+    }
+
+    // 범례 글자: 한글은 Spoqa, "(가)" "(나)"는 바탕. 왼쪽 끝을 x에, 글리프 세로 중심을 y에 맞춘다
+    function addLegendText(container, contents, x, y) {
+        var tf = container.textFrames.add();
+        tf.contents = contents;
+        var attr = tf.textRange.characterAttributes;
+        attr.size = TEXT_PT;
+        try { attr.textFont = legendKorFont; } catch (e) {}
+        attr.fillColor = makeColor(100);
+        attr.strokeColor = new NoColor();
+        var labels = ["(가)", "(나)"];
+        for (var l = 0; l < labels.length; l++) {
+            var at = contents.indexOf(labels[l]);
+            while (at >= 0) {
+                for (var c = at; c < at + labels[l].length; c++) {
+                    try { tf.textRange.characters[c].characterAttributes.textFont = legendLabelFont; } catch (fontError) {}
+                }
+                at = contents.indexOf(labels[l], at + labels[l].length);
+            }
+        }
+        var gb = glyphBounds(tf);
+        tf.translate(x - gb[0], y - (gb[1] + gb[3]) / 2);
+        return tf;
+    }
+
+    // 도형(물음표 자리 포함) · 선 · 번호(도형 아래 labelDepth까지)를 감싸는 [left, top, right, bottom]
+    function layoutBounds(layout, labelDepth) {
+        var left = Infinity, right = -Infinity, top = -Infinity, bottom = Infinity;
+        function include(x, y) {
+            if (x < left) left = x;
+            if (x > right) right = x;
+            if (y > top) top = y;
+            if (y < bottom) bottom = y;
+        }
+        var i;
+        for (i = 0; i < layout.nodes.length; i++) {
+            var n = layout.nodes[i];
+            include(n.x - n.half, n.y + n.half);
+            include(n.x + n.half, n.y - n.half - (n.number > 0 ? labelDepth : 0));
+        }
+        for (i = 0; i < layout.lines.length; i++) {
+            include(layout.lines[i][0], layout.lines[i][1]);
+            include(layout.lines[i][2], layout.lines[i][3]);
+        }
+        return [left, top, right, bottom];
     }
 
     function drawPerson(group, node, S) {
@@ -396,7 +550,7 @@ try {
         applyStroke(shape, OUTLINE_PT, makeColor(100));
         if (person.pheno !== 1 && person.pheno !== 2) return;
 
-        // 무늬는 도형 복제본으로 클리핑 (원 안 격자도 같은 방식)
+        // 무늬는 같은 모양의 마스크로 클리핑 (원 안 격자도 같은 방식). 마스크는 맨 나중에 넣어 맨 위에 둔다
         var clipGroup = group.groupItems.add();
         var strokeColor = makeColor(100);
         var k;
@@ -416,7 +570,7 @@ try {
                 makeLine(clipGroup, [[left, top - k * cell], [left + S, top - k * cell]], PATTERN_PT, strokeColor);
             }
         }
-        var mask = shape.duplicate(clipGroup, ElementPlacement.PLACEATBEGINNING);
+        var mask = makeShape(clipGroup, person.gender, node.x, node.y, S);
         mask.filled = false;
         mask.stroked = false;
         mask.clipping = true;
@@ -528,7 +682,7 @@ try {
         var countRow = panel.add("group");
         countRow.alignChildren = ["left", "center"];
         countRow.add("statictext", undefined, "형제 수").preferredSize.width = LABEL_WIDTH;
-        var countList = countRow.add("dropdownlist", undefined, ["0", "1", "2", "3"]);
+        var countList = countRow.add("dropdownlist", undefined, ["0", "1", "2"]);
         countList.selection = side.count;
         countList.preferredSize.width = 56;
 
@@ -550,6 +704,30 @@ try {
         };
         refreshRows();
         return {panel: panel, countList: countList, siblingRows: siblingRows};
+    }
+
+    // 자녀 한 줄: 이름 · 물음표/아들/딸 · 발현 · 원문자. 물음표면 발현·원문자를 잠근다
+    function addChildRow(panel, label, person) {
+        var row = panel.add("group");
+        row.alignChildren = ["left", "center"];
+        row.spacing = 6;
+        row.add("statictext", undefined, label).preferredSize.width = LABEL_WIDTH;
+        var kind = addRadios(row, ["?", "아들", "딸"], person.kind, function(index) {
+            person.kind = index;
+            if (index > 0) person.gender = index - 1;
+            pheno.group.enabled = index > 0 && person.mark === 0;
+            mark.enabled = index > 0;
+            updatePreview();
+        });
+        kind.group.preferredSize.width = GENDER_WIDTH;
+        var pheno = addRadios(row, PHENO_LABELS, person.pheno, function(index) {
+            person.pheno = index;
+            updatePreview();
+        });
+        var mark = addMarkList(row, person, pheno.group);
+        pheno.group.enabled = person.kind > 0 && person.mark === 0;
+        mark.enabled = person.kind > 0;
+        return row;
     }
 
     // 이름 · [성별] · 발현 · 원문자
@@ -648,6 +826,41 @@ try {
         controls.up.onClick = function() { commit(getter() + controls.step); };
     }
 
+    // 위치 변경은 도형을 다시 만들지 않고 target()이 돌려주는 미리보기 그룹만 이동한다.
+    function bindPositionRow(controls, getter, setter, isX, target) {
+        function commit(value) {
+            value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+            var delta = (value - getter()) * MM_TO_PT;
+            setter(value);
+            controls.input.text = formatNumber(value, controls.decimals);
+            try { controls.slider.value = value; } catch (e) {}
+            if (!moveItem(target(), isX ? delta : 0, isX ? 0 : delta)) {
+                updatePreview();
+                return;
+            }
+            previewSignature = settingsParts().join("|");
+            if (previewGroup !== null) app.redraw();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? getter() : value);
+        };
+        controls.down.onClick = function() { commit(getter() - controls.step); };
+        controls.up.onClick = function() { commit(getter() + controls.step); };
+    }
+
+    function moveItem(item, deltaX, deltaY) {
+        if (item === null || (deltaX === 0 && deltaY === 0)) return true;
+        try {
+            item.translate(deltaX, deltaY);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
     function parseNumber(text) {
         var value = parseFloat(String(text).replace(/[^0-9.\-]/g, ""));
         return isNaN(value) ? null : value;
@@ -691,13 +904,15 @@ try {
     }
 
     function settingsParts() {
-        var parts = [SETTINGS_TAG, sizeMm, coupleGapMm, siblingGapMm, generationGapMm, branchPct,
-            hatchCount, gridSize, sides[0].count, sides[1].count];
+        var parts = [SETTINGS_TAG, sizeMm, coupleGapMm, siblingGapMm, upperGapMm, lowerGapMm, branchPct,
+            hatchCount, gridSize, offsetXmm, offsetYmm, legendOn ? 1 : 0, legendXmm, legendYmm,
+            sides[0].count, sides[1].count];
         var members = allMembers();
         for (var i = 0; i < members.length; i++) {
             parts.push(members[i].gender, members[i].pheno, members[i].mark);
         }
-        parts.push(child.kind, child.pheno, child.mark);
+        parts.push(childCount);
+        for (i = 0; i < CHILD_MAX; i++) parts.push(children[i].kind, children[i].pheno, children[i].mark);
         return parts;
     }
 
@@ -714,14 +929,20 @@ try {
         sizeMm = restoreNumber(p[1], sizeMm, 4, 6);
         coupleGapMm = restoreNumber(p[2], coupleGapMm, 2, 15);
         siblingGapMm = restoreNumber(p[3], siblingGapMm, 1, 15);
-        generationGapMm = restoreNumber(p[4], generationGapMm, 8, 30);
-        branchPct = restoreNumber(p[5], branchPct, 20, 80);
-        hatchCount = restoreNumber(p[6], hatchCount, 1, 9);
-        gridSize = p[7] === "5" ? 5 : 4;
-        sides[0].count = restoreNumber(p[8], 0, 0, SIBLING_MAX);
-        sides[1].count = restoreNumber(p[9], 0, 0, SIBLING_MAX);
+        upperGapMm = restoreNumber(p[4], upperGapMm, 8, 30);
+        lowerGapMm = restoreNumber(p[5], lowerGapMm, 8, 30);
+        branchPct = restoreNumber(p[6], branchPct, 20, 80);
+        hatchCount = restoreNumber(p[7], hatchCount, 1, 9);
+        gridSize = p[8] === "5" ? 5 : 4;
+        offsetXmm = restoreNumber(p[9], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        offsetYmm = restoreNumber(p[10], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        legendOn = p[11] === "1";
+        legendXmm = restoreNumber(p[12], legendXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        legendYmm = restoreNumber(p[13], legendYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        sides[0].count = restoreNumber(p[14], 0, 0, SIBLING_MAX);
+        sides[1].count = restoreNumber(p[15], 0, 0, SIBLING_MAX);
         var members = allMembers();
-        var index = 10;
+        var index = 16;
         for (var i = 0; i < members.length; i++) {
             var m = members[i];
             var fixedGender = m === sides[0].grand[0] || m === sides[0].grand[1] || m === sides[0].parent ||
@@ -731,10 +952,16 @@ try {
             m.mark = restoreNumber(p[index + 2], m.mark, 0, 3);
             index += 3;
         }
-        child.kind = restoreNumber(p[index], child.kind, 0, 2);
-        child.gender = child.kind > 0 ? child.kind - 1 : 0;
-        child.pheno = restoreNumber(p[index + 1], child.pheno, 0, 3);
-        child.mark = restoreNumber(p[index + 2], child.mark, 0, 3);
+        childCount = restoreNumber(p[index], childCount, 1, CHILD_MAX);
+        index += 1;
+        for (i = 0; i < CHILD_MAX; i++) {
+            var kid = children[i];
+            kid.kind = restoreNumber(p[index], kid.kind, 0, 2);
+            kid.gender = kid.kind > 0 ? kid.kind - 1 : 0;
+            kid.pheno = restoreNumber(p[index + 1], kid.pheno, 0, 3);
+            kid.mark = restoreNumber(p[index + 2], kid.mark, 0, 3);
+            index += 3;
+        }
     }
 
     function restoreNumber(text, fallback, minimum, maximum) {
