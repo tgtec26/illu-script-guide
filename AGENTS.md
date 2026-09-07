@@ -24,6 +24,19 @@ Any script with a dialog must remember the options from the last run and presele
 
 Reference implementations: `스크립트/01_도형/Object_sphere.jsx`, `스크립트/01_도형/Object_AxisTickMarks.jsx`, `스크립트/01_도형/Object_AtomModel.jsx`.
 
+## Movable Preview (required)
+
+옵션을 조절해서 결과를 최종 결정하는 다이얼로그는 예외 없이 미리보기를 가진다. 체크박스 하나짜리 모달도 마찬가지다.
+
+- 다이얼로그를 여는 즉시 미리보기를 그리고, 옵션이 바뀔 때마다 다시 그린다. 확인을 눌러야 결과를 볼 수 있는 다이얼로그는 만들지 않는다.
+- `미리보기` 체크박스를 두어 끌 수 있게 한다. 끄면 미리보기를 지우고 원본을 원래 상태로 되돌린다.
+- **미리보기는 반드시 옮길 수 있어야 한다.** 작업 대부분이 트레이싱이라, 밑그림과 겹쳐 놓고 맞춰봐야 위치를 정할 수 있다. `위치` 패널에 `가로 이동`·`세로 이동`(mm) 행을 넣는다.
+- 위치 이동은 도형을 다시 만들지 않고 미리보기 그룹만 `translate()`로 옮긴다. 다시 만들면 느리고, 액션을 쓰는 스크립트는 눈에 띄게 끊긴다.
+- 취소하거나 창을 닫으면 미리보기를 모두 지우고 원본을 되돌린다. 확인을 누르면 미리보기가 그대로 결과가 된다.
+- 이동값도 다이얼로그 옵션이므로 Dialog Option Persistence 규칙대로 저장한다.
+
+Reference implementations: `스크립트/01_도형/Object_Pedigree.jsx`(`bindPositionRow`), `스크립트/01_도형/Object_RegionBrace.jsx`.
+
 ## Last-Script Memo (required)
 
 Every runnable `.jsx` under `스크립트/` records its own path so `스크립트/10_기타/RepeatLast.jsx`(F4)가 그 스크립트를 다시 실행할 수 있다. 새 스크립트를 만들면 파일 맨 위(단, `#target`/`#include` 지시문 뒤)에 아래 조각을 그대로 넣는다. `RepeatLast.jsx` 자신만 예외다.
