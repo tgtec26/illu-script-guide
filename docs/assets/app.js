@@ -56,6 +56,7 @@ const scripts = [
   { id: "fill-80k", category: "색상", name: "면 80K", file: "03_색상/Color_Fill80K.jsx", summary: "선택한 개체의 면을 순수 K=80 회색으로 바꿉니다.", tags: ["면", "회색"] },
   { id: "fill-90k", category: "색상", name: "면 90K", file: "03_색상/Color_Fill90K.jsx", summary: "선택한 개체의 면을 순수 K=90 회색으로 바꿉니다.", tags: ["면", "회색"] },
   { id: "k-convert", category: "색상", name: "K 변환", file: "03_색상/Color_Kconvert.jsx", summary: "색상 값을 순수 K 중심으로 정리할 때 쓰는 변환 도구입니다.", tags: ["K", "변환"] },
+  { id: "spectrum-gray", category: "색상", name: "연속 스펙트럼 (회색)", file: "03_색상/Color_SpectrumGray.jsx", summary: "선택한 가로 사각형에 380~780nm 연속 스펙트럼을 회색 음영 그라데이션으로 채웁니다. 파장별 밝기를 K 농도로만 표현하고, 전체 밝기 슬라이더와 장파장을 왼쪽에 두는 좌우 반전을 미리보기로 조절합니다.", tags: ["과학", "스펙트럼", "그라데이션"] },
   { id: "random-gray", category: "색상", name: "랜덤 회색", file: "03_색상/Color_RandomFillGray.jsx", summary: "선택 개체에 회색 농도를 무작위로 적용합니다.", tags: ["회색", "랜덤"] },
   { id: "black-fill", category: "색상", name: "검정 면", file: "03_색상/Color_black.jsx", summary: "선택한 모든 개체의 면을 K=100 검정으로 바꿉니다. 면이 없으면 새로 만듭니다.", tags: ["검정", "면"] },
   { id: "black-stroke", category: "색상", name: "검정 선", file: "03_색상/Color_blackline.jsx", summary: "선택한 모든 개체의 선을 K=100 검정으로 바꿉니다. 선이 없으면 활성화합니다.", tags: ["검정", "선"] },
