@@ -32,6 +32,8 @@ try {
 
     var MM_TO_PT = 2.83464567;
     var SIZE_STEP_MM = 0.05;
+    var POSITION_LIMIT_MM = 100;
+    var OFFSET_STEP_MM = 0.1;
     var LINE_WIDTH_PT = 0.3;
     var RING_SAMPLE_COUNT = 24;
     var centerX = (bounds[0] + bounds[2]) / 2;
@@ -54,6 +56,8 @@ try {
     var K_STEP = 10;
     var previewEnabled = true;
     var previewGroup = null;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
     var sourceWasHidden = source.hidden;
 
     // 크기는 선택한 원에서 계산하므로 저장하지 않는다. 시점·분할선·컬러만 기억한다.
@@ -121,6 +125,13 @@ try {
     var kUpButton = colorRow.add("button", undefined, "▶");
     kUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
     updateKDisplay();
+
+    var positionPanel = addPanel(dlg, "위치");
+    var offsetXControls = addOffsetRow(positionPanel, "가로 이동", offsetXmm);
+    var offsetYControls = addOffsetRow(positionPanel, "세로 이동", offsetYmm);
+    // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    bindOffsetControls(offsetXControls, true);
+    bindOffsetControls(offsetYControls, false);
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -303,6 +314,7 @@ try {
     if (result === 1) {
         source.hidden = false;
         var finalGroup = createCone();
+        moveItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         finalGroup.name = "Cone";
         try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         source.remove();
@@ -315,7 +327,8 @@ try {
     app.redraw();
 
     function saveSettings() {
-        var parts = ["v1", viewX, viewY, viewZ, divisionCount, faceK[0], faceK[1], faceK[2]];
+        var parts = ["v2", viewX, viewY, viewZ, divisionCount, faceK[0], faceK[1], faceK[2],
+            offsetXmm, offsetYmm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -324,7 +337,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length < 8) return;
+        if ((p[0] !== "v1" && p[0] !== "v2") || p.length < 8) return;
         viewX = restoreNumber(p[1], viewX, -180, 180);
         viewY = restoreNumber(p[2], viewY, -180, 180);
         viewZ = restoreNumber(p[3], viewZ, -180, 180);
@@ -332,12 +345,50 @@ try {
         for (var i = 0; i < 3; i++) {
             faceK[i] = Math.round(restoreNumber(p[5 + i], faceK[i], 0, 100));
         }
+        if (p[0] === "v2" && p.length >= 10) {
+            offsetXmm = restoreNumber(p[8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            offsetYmm = restoreNumber(p[9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        }
     }
 
     function restoreNumber(text, fallback, minimum, maximum) {
         var value = parseFloat(text);
         if (isNaN(value) || value < minimum || value > maximum) return fallback;
         return value;
+    }
+
+    // 위치 행은 다른 줄과 같은 모양(0 버튼 포함)을 쓴다
+    function addOffsetRow(parent, label, value) {
+        return addValueRow(parent, label, "mm", formatNumber(value, 1),
+            -POSITION_LIMIT_MM, POSITION_LIMIT_MM, OFFSET_STEP_MM, true);
+    }
+
+    // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    function bindOffsetControls(controls, isX) {
+        function commit(value) {
+            if (value === null || !isFinite(value)) return;
+            value = clamp(roundTo(value, OFFSET_STEP_MM), -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var delta = (value - (isX ? offsetXmm : offsetYmm)) * MM_TO_PT;
+            if (isX) offsetXmm = value;
+            else offsetYmm = value;
+            controls.input.text = formatNumber(value, 1);
+            try { controls.slider.value = value; } catch (e) {}
+            if (delta === 0 || previewGroup === null) return;
+            moveItem(previewGroup, isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? (isX ? offsetXmm : offsetYmm) : value);
+        };
+        if (controls.reset) controls.reset.onClick = function() { commit(0); };
+    }
+
+    function moveItem(item, deltaX, deltaY) {
+        if (item === null || (deltaX === 0 && deltaY === 0)) return;
+        try { item.translate(deltaX, deltaY); } catch (e) {}
     }
 
     function addPanel(parent, title) {
@@ -436,6 +487,7 @@ try {
             return;
         }
         previewGroup = createCone();
+        moveItem(previewGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         previewGroup.name = "Cone Preview";
         try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         app.redraw();

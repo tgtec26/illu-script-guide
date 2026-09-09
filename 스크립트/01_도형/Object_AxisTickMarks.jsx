@@ -80,6 +80,11 @@ try {
     var xLegendText = "", yLegendText = "";
     var legendGap = 1 * mmToPt;
 
+    var POSITION_LIMIT_MM = 100;
+    var OFFSET_STEP_MM = 0.1;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
+
     var previewEnabled = true;
     var previewGroup = null;
 
@@ -189,6 +194,12 @@ try {
     var arrowCheck = legendPanel.add("checkbox", undefined, "축 양 끝에 화살표 1 넣기");
     arrowCheck.value = true;
 
+    var positionPanel = dlg.add("panel", undefined, "위치");
+    positionPanel.orientation = "column";
+    positionPanel.alignChildren = "left";
+    var offsetXControls = addOffsetControls(positionPanel, "가로 이동", offsetXmm);
+    var offsetYControls = addOffsetControls(positionPanel, "세로 이동", offsetYmm);
+
     var btnGroup = dlg.add("group");
     var previewCheck = btnGroup.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;
@@ -246,6 +257,9 @@ try {
     }
     zeroCheck.onClick = updatePreview;
     arrowCheck.onClick = updatePreview;
+    // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    bindOffsetControls(offsetXControls, true);
+    bindOffsetControls(offsetYControls, false);
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -269,6 +283,7 @@ try {
 
     if (result === 1) {
         var finalGroup = drawAxisTicks(true);
+        moveItem(finalGroup, offsetXmm * mmToPt, offsetYmm * mmToPt);
         rect.remove();
         doc.selection = null;
         finalGroup.selected = true;
@@ -335,8 +350,73 @@ try {
             return;
         }
         previewGroup = drawAxisTicks(false);
+        moveItem(previewGroup, offsetXmm * mmToPt, offsetYmm * mmToPt);
         previewGroup.name = "AxisTickMarks Preview";
         app.redraw();
+    }
+
+    // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
+    function addOffsetControls(parent, label, value) {
+        var row = parent.add("group");
+        row.alignChildren = ["left", "center"];
+        row.add("statictext", undefined, label).preferredSize.width = 70;
+        var input = row.add("edittext", undefined, formatOffset(value));
+        input.characters = 6;
+        input.justify = "center";
+        row.add("statictext", undefined, "mm");
+        var down = row.add("button", undefined, "◀");
+        down.preferredSize.width = STEP_BUTTON_WIDTH;
+        var slider = row.add("slider", undefined, value,
+            -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        slider.preferredSize.width = 200;
+        var up = row.add("button", undefined, "▶");
+        up.preferredSize.width = STEP_BUTTON_WIDTH;
+        return {input: input, slider: slider, down: down, up: up};
+    }
+
+    // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    function bindOffsetControls(controls, isX) {
+        function current() { return isX ? offsetXmm : offsetYmm; }
+        function commit(value) {
+            if (value === null || !isFinite(value)) return;
+            value = Math.round(value / OFFSET_STEP_MM) * OFFSET_STEP_MM;
+            if (value < -POSITION_LIMIT_MM) value = -POSITION_LIMIT_MM;
+            if (value > POSITION_LIMIT_MM) value = POSITION_LIMIT_MM;
+            var delta = (value - current()) * mmToPt;
+            if (isX) offsetXmm = value;
+            else offsetYmm = value;
+            controls.input.text = formatOffset(value);
+            try { controls.slider.value = value; } catch (e) {}
+            if (delta === 0 || previewGroup === null) return;
+            moveItem(previewGroup, isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? current() : value);
+        };
+        controls.down.onClick = function() { commit(current() - OFFSET_STEP_MM); };
+        controls.up.onClick = function() { commit(current() + OFFSET_STEP_MM); };
+    }
+
+    function setOffsetValue(controls, isX, value) {
+        if (value === null || !isFinite(value)) return;
+        if (Math.abs(value) > POSITION_LIMIT_MM) return;
+        if (isX) offsetXmm = value;
+        else offsetYmm = value;
+        controls.input.text = formatOffset(value);
+        try { controls.slider.value = value; } catch (e) {}
+    }
+
+    function formatOffset(value) {
+        return String(Math.round(value * 10) / 10);
+    }
+
+    function moveItem(item, deltaX, deltaY) {
+        if (item === null || (deltaX === 0 && deltaY === 0)) return;
+        try { item.translate(deltaX, deltaY); } catch (e) {}
     }
 
     function clearPreview() {
@@ -586,7 +666,7 @@ try {
     // -------------------------------------------------------
     function saveSettings() {
         var parts = [
-            "v6",
+            "v7",
             getSelectedCount(yBtns),
             yStartInput.text,
             yStepInput.text,
@@ -604,7 +684,9 @@ try {
             boxShapeRadio.value ? "1" : "0",
             legendCenterRadio.value ? "1" : "0",
             xGridCheck.value ? "1" : "0",
-            yGridCheck.value ? "1" : "0"
+            yGridCheck.value ? "1" : "0",
+            offsetXmm,
+            offsetYmm
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -614,7 +696,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v6" || p.length < 19) return;
+        if ((p[0] !== "v6" && p[0] !== "v7") || p.length < 19) return;
         try {
             selectCount(yBtns, parseInt(p[1], 10));
             yStartInput.text = p[2];
@@ -638,6 +720,10 @@ try {
             legendEndRadio.value = !legendCenterRadio.value;
             xGridCheck.value = (p[17] === "1");
             yGridCheck.value = (p[18] === "1");
+            if (p[0] === "v7" && p.length >= 21) {
+                setOffsetValue(offsetXControls, true, parseNumber(p[19]));
+                setOffsetValue(offsetYControls, false, parseNumber(p[20]));
+            }
         } catch (e) {}
     }
 

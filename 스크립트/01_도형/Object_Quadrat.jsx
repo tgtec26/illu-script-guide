@@ -35,6 +35,10 @@ try {
     var requestedDensity = [40, 30, 30];
     var requestedFrequency = [35, 35, 30];
     var previewEnabled = true;
+    var POSITION_LIMIT_MM = 100;
+    var OFFSET_STEP_MM = 0.1;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
 
     loadSettings();
 
@@ -89,6 +93,12 @@ try {
     var info = dlg.add("statictext", undefined,
         "한 칸에는 종 A~C를 합쳐 최대 4개체를 배치합니다.");
 
+    var positionPanel = dlg.add("panel", undefined, "위치");
+    positionPanel.orientation = "column";
+    positionPanel.alignChildren = "left";
+    var offsetXControls = addOffsetControls(positionPanel, "가로 이동", offsetXmm);
+    var offsetYControls = addOffsetControls(positionPanel, "세로 이동", offsetYmm);
+
     var previewRow = dlg.add("group");
     previewRow.orientation = "row";
     previewRow.alignChildren = "center";
@@ -107,6 +117,10 @@ try {
     var solutionSignature = "";
     var previewGroup = null;
     var drawingGroup = null;
+
+    // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    bindOffsetControls(offsetXControls, true);
+    bindOffsetControls(offsetYControls, false);
 
     grid4Radio.onClick = updatePreview;
     grid5Radio.onClick = updatePreview;
@@ -163,6 +177,7 @@ try {
     var finalGroup = null;
     try {
         finalGroup = drawQuadrat(solution, gridSize, cellMeters, guideBounds);
+        moveItem(finalGroup, offsetXmm * MM, offsetYmm * MM);
         guideSquare.remove();
     } catch (drawError) {
         try { if (drawingGroup !== null) drawingGroup.remove(); } catch (cleanupError) {}
@@ -202,6 +217,7 @@ try {
         try {
             previewGroup = drawQuadrat(
                 solution, state.gridSize, state.cellMeters, guideBounds);
+            moveItem(previewGroup, offsetXmm * MM, offsetYmm * MM);
             previewGroup.name = "ObjectQuadrat_Preview";
         } catch (previewError) {
             try { if (drawingGroup !== null) drawingGroup.remove(); } catch (cleanupError) {}
@@ -212,6 +228,62 @@ try {
             }
         }
         app.redraw();
+    }
+
+    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+    var STEP_BUTTON_WIDTH = 34;
+    // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
+    function addOffsetControls(parent, label, value) {
+        var row = parent.add("group");
+        row.alignChildren = ["left", "center"];
+        row.add("statictext", undefined, label).preferredSize.width = 70;
+        var input = row.add("edittext", undefined, formatOffset(value));
+        input.characters = 6;
+        row.add("statictext", undefined, "mm");
+        var down = row.add("button", undefined, "◀");
+        down.preferredSize.width = STEP_BUTTON_WIDTH;
+        var slider = row.add("slider", undefined, value,
+            -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        slider.preferredSize.width = 200;
+        var up = row.add("button", undefined, "▶");
+        up.preferredSize.width = STEP_BUTTON_WIDTH;
+        return {input: input, slider: slider, down: down, up: up};
+    }
+
+    // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    function bindOffsetControls(controls, isX) {
+        function current() { return isX ? offsetXmm : offsetYmm; }
+        function commit(value) {
+            if (value === null || !isFinite(value)) return;
+            value = Math.round(value / OFFSET_STEP_MM) * OFFSET_STEP_MM;
+            if (value < -POSITION_LIMIT_MM) value = -POSITION_LIMIT_MM;
+            if (value > POSITION_LIMIT_MM) value = POSITION_LIMIT_MM;
+            var delta = (value - current()) * MM;
+            if (isX) offsetXmm = value;
+            else offsetYmm = value;
+            controls.input.text = formatOffset(value);
+            try { controls.slider.value = value; } catch (e) {}
+            if (delta === 0 || previewGroup === null) return;
+            moveItem(previewGroup, isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.input.onChange = function() {
+            var value = parseFloat(String(controls.input.text).replace(",", "."));
+            commit(isNaN(value) ? current() : value);
+        };
+        controls.down.onClick = function() { commit(current() - OFFSET_STEP_MM); };
+        controls.up.onClick = function() { commit(current() + OFFSET_STEP_MM); };
+    }
+
+    function formatOffset(value) {
+        return String(Math.round(value * 10) / 10);
+    }
+
+    function moveItem(item, deltaX, deltaY) {
+        if (item === null || (deltaX === 0 && deltaY === 0)) return;
+        try { item.translate(deltaX, deltaY); } catch (e) {}
     }
 
     function readDialogState(showErrors) {
@@ -848,10 +920,11 @@ try {
 
     function saveSettings() {
         var parts = [
-            "v2", gridSize, cellMeters,
+            "v3", gridSize, cellMeters,
             requestedDensity[0], requestedDensity[1], requestedDensity[2],
             requestedFrequency[0], requestedFrequency[1], requestedFrequency[2],
-            previewEnabled ? 1 : 0
+            previewEnabled ? 1 : 0,
+            offsetXmm, offsetYmm
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -861,7 +934,13 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var parts = raw.split("|");
-        if (parts.length !== 10 || parts[0] !== "v2") return;
+        if (parts[0] === "v2") {
+            if (parts.length !== 10) return;
+        } else if (parts[0] === "v3") {
+            if (parts.length !== 12) return;
+        } else {
+            return;
+        }
 
         var savedGrid = parseInt(parts[1], 10);
         var savedMeters = parseInt(parts[2], 10);
@@ -881,6 +960,12 @@ try {
         requestedDensity = density;
         requestedFrequency = frequency;
         previewEnabled = parts[9] === "1";
+        if (parts[0] === "v3") {
+            var offX = parseFloat(parts[10]);
+            var offY = parseFloat(parts[11]);
+            if (isFinite(offX) && Math.abs(offX) <= POSITION_LIMIT_MM) offsetXmm = offX;
+            if (isFinite(offY) && Math.abs(offY) <= POSITION_LIMIT_MM) offsetYmm = offY;
+        }
     }
 
     function validSavedTriplet(values) {

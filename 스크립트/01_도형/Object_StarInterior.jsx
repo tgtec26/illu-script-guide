@@ -52,6 +52,10 @@ try {
     var rotationDeg = 40;
     var axisLineOn = true;
     var contrastK = 15;
+    var MM_TO_PT = 2.834645669;
+    var POSITION_LIMIT_MM = 100;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
     var viewX = 0;
     var viewY = 0;
     var viewZ = 0;
@@ -89,6 +93,15 @@ try {
     var viewZField = addNumberField(viewPanel, "Z축", "°", viewZ, 5, -180, 180);
     var resetViewButton = viewPanel.add("button", undefined, "시점 리셋");
     resetViewButton.alignment = "right";
+
+    var positionPanel = addPanel(dlg, "위치");
+    var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+    var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+    // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    bindOffsetField(offsetXField, true);
+    bindOffsetField(offsetYField, false);
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -130,6 +143,7 @@ try {
     if (result === 1) {
         readFields(false);
         var finalGroup = drawStar();
+        moveItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         finalGroup.name = "Star Interior";
         try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
         source.remove();
@@ -479,6 +493,11 @@ try {
         return path;
     }
 
+    function moveItem(item, deltaX, deltaY) {
+        if (item === null || (deltaX === 0 && deltaY === 0)) return;
+        try { item.translate(deltaX, deltaY); } catch (e) {}
+    }
+
     function fillOnly(path, fillColor) {
         path.stroked = false;
         path.filled = true;
@@ -525,6 +544,7 @@ try {
             return;
         }
         previewGroup = drawStar();
+        moveItem(previewGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         previewGroup.name = "Star Interior Preview";
         app.redraw();
     }
@@ -540,6 +560,8 @@ try {
         var cut = parseNumber(cutField.input.text);
         var rotation = parseNumber(rotationField.input.text);
         var contrast = parseNumber(contrastField.input.text);
+        var offX = parseNumber(offsetXField.input.text);
+        var offY = parseNumber(offsetYField.input.text);
         var vx = parseNumber(viewXField.input.text);
         var vy = parseNumber(viewYField.input.text);
         var vz = parseNumber(viewZField.input.text);
@@ -556,6 +578,12 @@ try {
             if (showAlert) alert("왼쪽 대비는 0부터 50 사이로 입력해주세요.");
             return false;
         }
+        if (offX === null || offX < -POSITION_LIMIT_MM || offX > POSITION_LIMIT_MM ||
+                offY === null || offY < -POSITION_LIMIT_MM || offY > POSITION_LIMIT_MM) {
+            if (showAlert) alert("이동은 -" + POSITION_LIMIT_MM + "부터 " +
+                POSITION_LIMIT_MM + "mm 사이로 입력해주세요.");
+            return false;
+        }
         if (rotation === null || rotation < -180 || rotation > 180 ||
                 vx === null || vx < -180 || vx > 180 ||
                 vy === null || vy < -180 || vy > 180 ||
@@ -568,6 +596,8 @@ try {
         cutDeg = cut;
         rotationDeg = rotation;
         contrastK = contrast;
+        offsetXmm = offX;
+        offsetYmm = offY;
         viewX = vx;
         viewY = vy;
         viewZ = vz;
@@ -631,9 +661,9 @@ try {
             if (field.syncing) return;
             var stepped = Math.round(slider.value);
             input.text = formatValue(clampField(field, stepped));
-            updatePreview();
+            commitField(field);
         };
-        input.onChanging = updatePreview;
+        input.onChanging = function() { commitField(field); };
         input.onChange = function() {
             var parsed = parseNumber(input.text);
             if (parsed === null) parsed = field.minimum;
@@ -642,9 +672,29 @@ try {
             field.syncing = true;
             slider.value = parsed;
             field.syncing = false;
-            updatePreview();
+            commitField(field);
         };
         return field;
+    }
+
+    // 위치 필드는 도형을 다시 만들지 않고 미리보기만 옮기도록 갈아끼운다
+    function commitField(field) {
+        if (field.onCommit) field.onCommit();
+        else updatePreview();
+    }
+
+    function bindOffsetField(field, isX) {
+        field.onCommit = function() {
+            var value = parseNumber(field.input.text);
+            if (value === null) return;
+            value = clampField(field, value);
+            var delta = (value - (isX ? offsetXmm : offsetYmm)) * MM_TO_PT;
+            if (isX) offsetXmm = value;
+            else offsetYmm = value;
+            if (delta === 0 || previewGroup === null) return;
+            try { previewGroup.translate(isX ? delta : 0, isX ? 0 : delta); } catch (e) {}
+            app.redraw();
+        };
     }
 
     function setFieldValue(field, value) {
@@ -661,7 +711,7 @@ try {
         value = Math.round((value + field.step * direction) / field.step) * field.step;
         value = clampField(field, value);
         setFieldValue(field, value);
-        updatePreview();
+        commitField(field);
     }
 
     function clampField(field, value) {
@@ -682,8 +732,8 @@ try {
     }
 
     function saveSettings() {
-        var parts = ["v5", shellCount, cutDeg, rotationDeg, viewX, viewY, viewZ,
-            axisLineOn ? 1 : 0, contrastK];
+        var parts = ["v6", shellCount, cutDeg, rotationDeg, viewX, viewY, viewZ,
+            axisLineOn ? 1 : 0, contrastK, offsetXmm, offsetYmm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -692,7 +742,8 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if ((p[0] !== "v3" && p[0] !== "v4" && p[0] !== "v5") || p.length < 7) return;
+        if ((p[0] !== "v3" && p[0] !== "v4" && p[0] !== "v5" && p[0] !== "v6") ||
+                p.length < 7) return;
 
         var shells = parseInt(p[1], 10);
         var cut = parseFloat(p[2]);
@@ -707,9 +758,15 @@ try {
         if (vy >= -180 && vy <= 180) viewY = vy;
         if (vz >= -180 && vz <= 180) viewZ = vz;
         if (p[0] !== "v3" && p.length >= 8) axisLineOn = p[7] === "1";
-        if (p[0] === "v5" && p.length >= 9) {
+        if ((p[0] === "v5" || p[0] === "v6") && p.length >= 9) {
             var contrast = parseFloat(p[8]);
             if (contrast >= 0 && contrast <= 50) contrastK = contrast;
+        }
+        if (p[0] === "v6" && p.length >= 11) {
+            var offX = parseFloat(p[9]);
+            var offY = parseFloat(p[10]);
+            if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
+            if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
         }
     }
 })();

@@ -33,6 +33,10 @@ try {
     var MM_TO_PT = 2.83464567;
     var SIZE_STEP_MM = 0.05;
     var LINE_WIDTH_PT = 0.3;
+    var POSITION_LIMIT_MM = 100;
+    var OFFSET_STEP_MM = 0.1;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
     var MIN_TURNS = 5;
     var MAX_TURNS = 10;
     var centerX = (bounds[0] + bounds[2]) / 2;
@@ -87,6 +91,15 @@ try {
     var turnsSlider = turnsPanel.add("slider", undefined, turnCount, MIN_TURNS, MAX_TURNS);
     turnsSlider.preferredSize.width = 380;
     turnsSlider.stepdelta = 1;
+
+    var positionPanel = dlg.add("panel", undefined, "위치");
+    positionPanel.orientation = "column";
+    positionPanel.alignChildren = "left";
+    var offsetXControls = addOffsetControls(positionPanel, "가로 이동", offsetXmm);
+    var offsetYControls = addOffsetControls(positionPanel, "세로 이동", offsetYmm);
+    // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    bindOffsetControls(offsetXControls, true);
+    bindOffsetControls(offsetYControls, false);
 
     var previewCheck = dlg.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;
@@ -185,7 +198,10 @@ try {
     cancelButton.onClick = function() { dlg.close(0); };
 
     function saveSettings() {
-        try { app.preferences.setStringPreference(PREF_KEY, ["v1", turnCount].join("|")); } catch (e) {}
+        try {
+            app.preferences.setStringPreference(PREF_KEY,
+                ["v2", turnCount, offsetXmm, offsetYmm].join("|"));
+        } catch (e) {}
     }
 
     function applySavedSettings() {
@@ -193,9 +209,15 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length < 2) return;
+        if ((p[0] !== "v1" && p[0] !== "v2") || p.length < 2) return;
         var turns = parseInt(p[1], 10);
         if (turns >= MIN_TURNS && turns <= MAX_TURNS) turnCount = turns;
+        if (p[0] === "v2" && p.length >= 4) {
+            var offX = parseFloat(p[2]);
+            var offY = parseFloat(p[3]);
+            if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
+            if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
+        }
     }
 
     source.hidden = true;
@@ -208,6 +230,7 @@ try {
     if (result === 1) {
         source.hidden = false;
         var finalGroup = createCoilSpring();
+        moveItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         finalGroup.name = "Coil Spring";
         try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         source.remove();
@@ -226,9 +249,60 @@ try {
             return;
         }
         previewGroup = createCoilSpring();
+        moveItem(previewGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         previewGroup.name = "Coil Spring Preview";
         try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         app.redraw();
+    }
+
+    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+    var STEP_BUTTON_WIDTH = 34;
+    // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
+    function addOffsetControls(parent, label, value) {
+        var row = parent.add("group");
+        row.alignChildren = ["left", "center"];
+        row.add("statictext", undefined, label).preferredSize.width = 70;
+        var input = row.add("edittext", undefined, formatNumber(value, 1));
+        input.characters = 6;
+        row.add("statictext", undefined, "mm");
+        var down = row.add("button", undefined, "◀");
+        down.preferredSize.width = STEP_BUTTON_WIDTH;
+        var slider = row.add("slider", undefined, value,
+            -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        slider.preferredSize.width = 200;
+        var up = row.add("button", undefined, "▶");
+        up.preferredSize.width = STEP_BUTTON_WIDTH;
+        return {input: input, slider: slider, down: down, up: up};
+    }
+
+    // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    function bindOffsetControls(controls, isX) {
+        function current() { return isX ? offsetXmm : offsetYmm; }
+        function commit(value) {
+            if (value === null || !isFinite(value)) return;
+            value = clamp(roundTo(value, OFFSET_STEP_MM), -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var delta = (value - current()) * MM_TO_PT;
+            if (isX) offsetXmm = value;
+            else offsetYmm = value;
+            controls.input.text = formatNumber(value, 1);
+            try { controls.slider.value = value; } catch (e) {}
+            if (delta === 0 || previewGroup === null) return;
+            moveItem(previewGroup, isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? current() : value);
+        };
+        controls.down.onClick = function() { commit(current() - OFFSET_STEP_MM); };
+        controls.up.onClick = function() { commit(current() + OFFSET_STEP_MM); };
+    }
+
+    function moveItem(item, deltaX, deltaY) {
+        if (item === null || (deltaX === 0 && deltaY === 0)) return;
+        try { item.translate(deltaX, deltaY); } catch (e) {}
     }
 
     function clearPreview() {

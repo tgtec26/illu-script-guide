@@ -42,6 +42,11 @@ try {
     var viewZ = 0;
     var previewEnabled = true;
     var previewGroup = null;
+    var MM_TO_PT = 2.834645669;
+    var POSITION_LIMIT_MM = 100;
+    var OFFSET_STEP_MM = 0.1;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
     var sourceWasHidden = source.hidden;
 
     var PREF_KEY = "ObjectSphere/settings";
@@ -93,6 +98,12 @@ try {
     var zControls = addAngleControls(viewPanel, "Z축", viewZ);
     var resetViewButton = viewPanel.add("button", undefined, "시점 리셋");
     resetViewButton.alignment = "right";
+
+    var positionPanel = dlg.add("panel", undefined, "위치");
+    positionPanel.orientation = "column";
+    positionPanel.alignChildren = "left";
+    var offsetXControls = addOffsetControls(positionPanel, "가로 이동", offsetXmm);
+    var offsetYControls = addOffsetControls(positionPanel, "세로 이동", offsetYmm);
 
     var previewCheck = dlg.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;
@@ -163,6 +174,10 @@ try {
     bindViewControls(zControls, function(value) { viewZ = value; }, function() { return viewZ; });
     resetViewButton.onClick = resetViewControls;
 
+    // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    bindOffsetControls(offsetXControls, true);
+    bindOffsetControls(offsetYControls, false);
+
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -204,6 +219,7 @@ try {
     if (result === 1) {
         source.hidden = false;
         var finalGroup = createSphere();
+        moveItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         finalGroup.name = "Sphere";
         try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         source.remove();
@@ -216,7 +232,8 @@ try {
     app.redraw();
 
     function saveSettings() {
-        var parts = ["v1", longitudeCount, latitudeCount, gridRotation, viewX, viewY, viewZ];
+        var parts = ["v2", longitudeCount, latitudeCount, gridRotation, viewX, viewY, viewZ,
+            offsetXmm, offsetYmm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -225,7 +242,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length < 7) return;
+        if ((p[0] !== "v1" && p[0] !== "v2") || p.length < 7) return;
         var lon = parseInt(p[1], 10);
         var lat = parseInt(p[2], 10);
         var rot = parseFloat(p[3]);
@@ -238,6 +255,68 @@ try {
         if (vx >= -180 && vx <= 180) viewX = vx;
         if (vy >= -180 && vy <= 180) viewY = vy;
         if (vz >= -180 && vz <= 180) viewZ = vz;
+        if (p[0] === "v2" && p.length >= 9) {
+            var offX = parseFloat(p[7]);
+            var offY = parseFloat(p[8]);
+            if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
+            if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
+        }
+    }
+
+    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+    var STEP_BUTTON_WIDTH = 34;
+    // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
+    function addOffsetControls(parent, label, value) {
+        var row = parent.add("group");
+        row.alignChildren = ["left", "center"];
+        row.add("statictext", undefined, label).preferredSize.width = 70;
+        var input = row.add("edittext", undefined, formatOffset(value));
+        input.characters = 6;
+        row.add("statictext", undefined, "mm");
+        var down = row.add("button", undefined, "◀");
+        down.preferredSize.width = STEP_BUTTON_WIDTH;
+        var slider = row.add("slider", undefined, value,
+            -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        slider.preferredSize.width = 200;
+        var up = row.add("button", undefined, "▶");
+        up.preferredSize.width = STEP_BUTTON_WIDTH;
+        return {input: input, slider: slider, down: down, up: up};
+    }
+
+    // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    function bindOffsetControls(controls, isX) {
+        function commit(value) {
+            if (value === null || !isFinite(value)) return;
+            value = Math.round(value / OFFSET_STEP_MM) * OFFSET_STEP_MM;
+            if (value < -POSITION_LIMIT_MM) value = -POSITION_LIMIT_MM;
+            if (value > POSITION_LIMIT_MM) value = POSITION_LIMIT_MM;
+            var delta = (value - (isX ? offsetXmm : offsetYmm)) * MM_TO_PT;
+            if (isX) offsetXmm = value;
+            else offsetYmm = value;
+            controls.input.text = formatOffset(value);
+            try { controls.slider.value = value; } catch (e) {}
+            if (delta === 0 || previewGroup === null) return;
+            moveItem(previewGroup, isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        }
+        function current() { return isX ? offsetXmm : offsetYmm; }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? current() : value);
+        };
+        controls.down.onClick = function() { commit(current() - OFFSET_STEP_MM); };
+        controls.up.onClick = function() { commit(current() + OFFSET_STEP_MM); };
+    }
+
+    function formatOffset(value) {
+        return String(Math.round(value * 10) / 10);
+    }
+
+    function moveItem(item, deltaX, deltaY) {
+        if (item === null || (deltaX === 0 && deltaY === 0)) return;
+        try { item.translate(deltaX, deltaY); } catch (e) {}
     }
 
     function addAngleControls(parent, label, value) {
@@ -293,6 +372,7 @@ try {
             return;
         }
         previewGroup = createSphere();
+        moveItem(previewGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         previewGroup.name = "Sphere Preview";
         try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         app.redraw();

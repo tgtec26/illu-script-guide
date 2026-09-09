@@ -61,6 +61,9 @@ try {
     var spacingMm = 2;      // 이웃한 인지질의 중심 간 거리
     var curvatureFixPercent = 100;  // 곡선 보정: 간격을 재는 기준선을 머리 높이까지 밀어내는 비율
     var startRadiusMm = 15;         // 굽이 반지름이 이 값보다 작아질 때부터 보정한다
+    var POSITION_LIMIT_MM = 100;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
     var previewEnabled = true;
     var previewGroup = null;
     var lineWasHidden = linePath.hidden;
@@ -89,6 +92,15 @@ try {
     var radiusField = addNumberField(spacingPanel, "보정 시작 반지름", "mm", startRadiusMm, 1, 1, 200);
     var countText = spacingPanel.add("statictext", undefined, "");
     countText.preferredSize.width = LABEL_WIDTH + INPUT_WIDTH + UNIT_WIDTH + SLIDER_WIDTH + STEP_BUTTON_WIDTH * 2;
+
+    var positionPanel = addPanel(dlg, "위치");
+    var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+    var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+    // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    bindOffsetField(offsetXField, true);
+    bindOffsetField(offsetYField, false);
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -121,6 +133,7 @@ try {
     if (result === 1) {
         readFields(false);
         var finalGroup = drawBilayer();
+        moveItem(finalGroup, offsetXmm * MM, offsetYmm * MM);
         finalGroup.name = "Phospholipid Bilayer";
         try { finalGroup.move(linePath, ElementPlacement.PLACEBEFORE); } catch (e) {}
         linePath.remove();
@@ -471,6 +484,7 @@ try {
             return;
         }
         previewGroup = drawBilayer();
+        moveItem(previewGroup, offsetXmm * MM, offsetYmm * MM);
         previewGroup.name = "Phospholipid Bilayer Preview";
         app.redraw();
     }
@@ -564,9 +578,9 @@ try {
             if (field.syncing) return;
             var stepped = Math.round(slider.value / field.step) * field.step;
             input.text = formatValue(clampValue(stepped, field.minimum, field.maximum));
-            updatePreview();
+            commitField(field);
         };
-        input.onChanging = updatePreview;
+        input.onChanging = function() { commitField(field); };
         input.onChange = function() {
             var parsed = parseNumber(input.text);
             if (parsed === null) parsed = field.minimum;
@@ -575,9 +589,34 @@ try {
             field.syncing = true;
             slider.value = parsed;
             field.syncing = false;
-            updatePreview();
+            commitField(field);
         };
         return field;
+    }
+
+    // 위치 필드는 도형을 다시 만들지 않고 미리보기만 옮기도록 갈아끼운다
+    function commitField(field) {
+        if (field.onCommit) field.onCommit();
+        else updatePreview();
+    }
+
+    function bindOffsetField(field, isX) {
+        field.onCommit = function() {
+            var value = parseNumber(field.input.text);
+            if (value === null) return;
+            value = clampValue(value, field.minimum, field.maximum);
+            var delta = (value - (isX ? offsetXmm : offsetYmm)) * MM;
+            if (isX) offsetXmm = value;
+            else offsetYmm = value;
+            if (delta === 0 || previewGroup === null) return;
+            moveItem(previewGroup, isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        };
+    }
+
+    function moveItem(item, deltaX, deltaY) {
+        if (item === null || (deltaX === 0 && deltaY === 0)) return;
+        try { item.translate(deltaX, deltaY); } catch (e) {}
     }
 
     // 버튼 한 번 = 1단계. 세밀 조절용.
@@ -590,7 +629,7 @@ try {
         field.syncing = true;
         field.slider.value = value;
         field.syncing = false;
-        updatePreview();
+        commitField(field);
     }
 
     function clampValue(value, minimum, maximum) {
@@ -611,7 +650,8 @@ try {
     }
 
     function saveSettings() {
-        var parts = ["v3", gapMm, spacingMm, curvatureFixPercent, startRadiusMm];
+        var parts = ["v4", gapMm, spacingMm, curvatureFixPercent, startRadiusMm,
+            offsetXmm, offsetYmm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -620,7 +660,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length < 5) return;
+        if ((p[0] !== "v3" && p[0] !== "v4") || p.length < 5) return;
 
         var gap = parseFloat(p[1]);
         var spacing = parseFloat(p[2]);
@@ -630,5 +670,11 @@ try {
         if (spacing >= 0.2) spacingMm = clampValue(spacing, 0.2, 30);
         if (curvatureFix >= 0 && curvatureFix <= 100) curvatureFixPercent = curvatureFix;
         if (startRadius >= 1) startRadiusMm = clampValue(startRadius, 1, 200);
+        if (p[0] === "v4" && p.length >= 7) {
+            var offX = parseFloat(p[5]);
+            var offY = parseFloat(p[6]);
+            if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
+            if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
+        }
     }
 })();

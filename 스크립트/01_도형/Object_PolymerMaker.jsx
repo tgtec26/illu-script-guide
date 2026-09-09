@@ -49,6 +49,13 @@ try {
 
     var MM = 2.834645; // mm to points conversion
     var SAMPLES = 2000;
+    var savedOffsetX = app.preferences.getStringPreference(PREF_PREFIX + "OffsetX") || "0";
+    var savedOffsetY = app.preferences.getStringPreference(PREF_PREFIX + "OffsetY") || "0";
+
+    var POSITION_LIMIT_MM = 100;
+    var OFFSET_STEP_MM = 0.1;
+    var offsetXmm = restoreOffset(savedOffsetX);
+    var offsetYmm = restoreOffset(savedOffsetY);
     var previewEnabled = true;
     var previewGroups = [];
     var pathMetrics = [];      // 패스는 변하지 않으므로 길이 계산은 한 번만 하고 재사용
@@ -115,6 +122,20 @@ try {
     chkShade.value = savedShade;
     var btnShadeShuffle = groupShade.add("button", undefined, "음영 재배치");
 
+    // 위치 이동 패널
+    var panelPosition = win.add("panel", undefined, "위치");
+    panelPosition.orientation = "column";
+    panelPosition.alignChildren = ["left", "top"];
+    panelPosition.margins = 15;
+    panelPosition.spacing = 10;
+    var fieldOffsetX = addNumberField(panelPosition, "가로 이동 (mm):", 120, offsetXmm,
+        OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+    var fieldOffsetY = addNumberField(panelPosition, "세로 이동 (mm):", 120, offsetYmm,
+        OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+    // 위치는 도형을 다시 만들지 않고 미리보기만 옮긴다
+    bindOffsetField(fieldOffsetX, true);
+    bindOffsetField(fieldOffsetY, false);
+
     // 하단 버튼
     var groupBtn = win.add("group");
     groupBtn.alignment = ["center", "top"];
@@ -175,9 +196,9 @@ try {
             if (field.syncing) return;
             var stepped = Math.round(slider.value / field.step) * field.step;
             input.text = formatValue(clampField(field, stepped));
-            updatePreview();
+            commitField(field);
         };
-        input.onChanging = updatePreview;
+        input.onChanging = function () { commitField(field); };
         input.onChange = function () {
             var value = parseFloat(input.text);
             if (isNaN(value)) value = field.minimum;
@@ -186,9 +207,42 @@ try {
             field.syncing = true;
             slider.value = value;
             field.syncing = false;
-            updatePreview();
+            commitField(field);
         };
         return field;
+    }
+
+    // 위치 필드는 도형을 다시 만들지 않고 미리보기만 옮기도록 갈아끼운다
+    function commitField(field) {
+        if (field.onCommit) field.onCommit();
+        else updatePreview();
+    }
+
+    function bindOffsetField(field, isX) {
+        field.onCommit = function () {
+            var value = parseFloat(field.input.text);
+            if (isNaN(value)) return;
+            value = clampField(field, value);
+            var delta = (value - (isX ? offsetXmm : offsetYmm)) * MM;
+            if (isX) offsetXmm = value;
+            else offsetYmm = value;
+            if (delta === 0) return;
+            moveGroups(previewGroups, isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        };
+    }
+
+    function moveGroups(groups, deltaX, deltaY) {
+        if (!groups || (deltaX === 0 && deltaY === 0)) return;
+        for (var i = 0; i < groups.length; i++) {
+            try { groups[i].translate(deltaX, deltaY); } catch (e) {}
+        }
+    }
+
+    function restoreOffset(text) {
+        var value = parseFloat(text);
+        if (isNaN(value) || Math.abs(value) > 100) return 0;
+        return value;
     }
 
     // 버튼 한 번 = 1단계. 세밀 조절용.
@@ -201,7 +255,7 @@ try {
         field.syncing = true;
         field.slider.value = value;
         field.syncing = false;
-        updatePreview();
+        commitField(field);
     }
 
     function clampField(field, value) {
@@ -479,6 +533,11 @@ try {
         app.preferences.setStringPreference(PREF_PREFIX + "Shade", options.useShading ? "true" : "false");
     }
 
+    function saveOffset() {
+        app.preferences.setStringPreference(PREF_PREFIX + "OffsetX", String(offsetXmm));
+        app.preferences.setStringPreference(PREF_PREFIX + "OffsetY", String(offsetYmm));
+    }
+
     // 연결선이 도형 외곽에 닿는 거리(중심 기준).
     // side가 "front"면 진행 방향(꼭짓점), "back"이면 반대쪽.
     // 홀수 다각형(삼각형·오각형)의 반대쪽은 변의 중심이므로 내접원 반지름을 쓴다.
@@ -621,6 +680,7 @@ try {
         var options = readOptions(false);
         if (options !== null) {
             previewGroups = buildPolymers(options).groups;
+            moveGroups(previewGroups, offsetXmm * MM, offsetYmm * MM);
         }
         app.redraw();
     }
@@ -661,7 +721,9 @@ try {
 
     if (result === 1 && confirmedOptions !== null) {
         saveOptions(confirmedOptions);
+        saveOffset();
         var built = buildPolymers(confirmedOptions);
+        moveGroups(built.groups, offsetXmm * MM, offsetYmm * MM);
         for (var r = 0; r < selectedPaths.length; r++) {
             try { selectedPaths[r].remove(); } catch (e) {}
         }

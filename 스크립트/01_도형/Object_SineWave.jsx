@@ -79,6 +79,10 @@ try {
     var wavelengthMm = 20;
     var shiftMm = 0;
     var strokeWidthPt = source.stroked ? clampValue(roundToStep(source.strokeWidth, WIDTH_STEP), 0, WIDTH_MAX) : 0.3;
+    var POSITION_LIMIT_MM = 100;
+    var OFFSET_STEP_MM = 0.1;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
     var previewEnabled = true;
     var previewItem = null;
     var sourceWasHidden = source.hidden;
@@ -115,6 +119,15 @@ try {
     var widthField = addNumberField(strokePanel, "두께", "pt", strokeWidthPt, WIDTH_STEP,
         0, WIDTH_SLIDER_MAX, 0, WIDTH_MAX);
 
+    var positionPanel = addPanel(dlg, "위치");
+    var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, OFFSET_STEP_MM,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+    var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, OFFSET_STEP_MM,
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+    // 위치는 곡선을 다시 만들지 않고 미리보기만 옮긴다
+    bindOffsetField(offsetXField, true);
+    bindOffsetField(offsetYField, false);
+
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
     previewCheck.value = previewEnabled;
@@ -146,6 +159,7 @@ try {
         readFields(false);
         source.hidden = false;
         var curve = buildSineCurve();
+        moveItem(curve, offsetXmm * MM, offsetYmm * MM);
         curve.name = "Sine Wave";
         try { curve.move(source, ElementPlacement.PLACEBEFORE); } catch (moveError) {}
         source.remove();
@@ -481,6 +495,7 @@ try {
             return;
         }
         previewItem = buildSineCurve();
+        moveItem(previewItem, offsetXmm * MM, offsetYmm * MM);
         previewItem.name = "Sine Wave Preview";
         try { previewItem.move(source, ElementPlacement.PLACEBEFORE); } catch (moveError) {}
         app.redraw();
@@ -550,7 +565,8 @@ try {
     function saveSettings() {
         try {
             app.preferences.setStringPreference(PREF_KEY,
-                ["v1", amplitudeMm, wavelengthMm, shiftMm, strokeWidthPt].join("|"));
+                ["v2", amplitudeMm, wavelengthMm, shiftMm, strokeWidthPt,
+                    offsetXmm, offsetYmm].join("|"));
         } catch (e) {}
     }
 
@@ -559,7 +575,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var parts = String(raw).split("|");
-        if (parts[0] !== "v1" || parts.length < 5) return;
+        if ((parts[0] !== "v1" && parts[0] !== "v2") || parts.length < 5) return;
         var amplitude = parseNumber(parts[1]);
         var wavelength = parseNumber(parts[2]);
         var shift = parseNumber(parts[3]);
@@ -572,6 +588,12 @@ try {
         wavelengthMm = wavelength;
         shiftMm = shift;
         strokeWidthPt = width;
+        if (parts[0] === "v2" && parts.length >= 7) {
+            var offX = parseNumber(parts[5]);
+            var offY = parseNumber(parts[6]);
+            if (offX !== null && Math.abs(offX) <= POSITION_LIMIT_MM) offsetXmm = offX;
+            if (offY !== null && Math.abs(offY) <= POSITION_LIMIT_MM) offsetYmm = offY;
+        }
     }
 
     // -------------------------------------------------------
@@ -630,18 +652,43 @@ try {
             if (field.syncing) return;
             var stepped = roundToStep(slider.value, field.step);
             input.text = formatValue(clampValue(stepped, field.sliderMinimum, field.sliderMaximum));
-            updatePreview();
+            commitField(field);
         };
-        input.onChanging = updatePreview;
+        input.onChanging = function() { commitField(field); };
         input.onChange = function() {
             var parsed = parseNumber(input.text);
             if (parsed === null) parsed = field.minimum;
             parsed = clampValue(parsed, field.minimum, field.maximum);
             input.text = formatValue(parsed);
             syncSlider(field, parsed);
-            updatePreview();
+            commitField(field);
         };
         return field;
+    }
+
+    // 위치 필드는 곡선을 다시 만들지 않고 미리보기만 옮기도록 갈아끼운다
+    function commitField(field) {
+        if (field.onCommit) field.onCommit();
+        else updatePreview();
+    }
+
+    function bindOffsetField(field, isX) {
+        field.onCommit = function() {
+            var value = parseNumber(field.input.text);
+            if (value === null) return;
+            value = clampValue(value, field.minimum, field.maximum);
+            var delta = (value - (isX ? offsetXmm : offsetYmm)) * MM;
+            if (isX) offsetXmm = value;
+            else offsetYmm = value;
+            if (delta === 0 || previewItem === null) return;
+            moveItem(previewItem, isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        };
+    }
+
+    function moveItem(item, deltaX, deltaY) {
+        if (item === null || (deltaX === 0 && deltaY === 0)) return;
+        try { item.translate(deltaX, deltaY); } catch (e) {}
     }
 
     // 버튼 한 번 = 1단계. 세밀 조절용.
@@ -652,7 +699,7 @@ try {
         value = clampValue(value, field.minimum, field.maximum);
         field.input.text = formatValue(value);
         syncSlider(field, value);
-        updatePreview();
+        commitField(field);
     }
 
     // 슬라이더 범위를 넘는 값은 입력칸에만 남기고 슬라이더는 끝에 붙여 둔다.

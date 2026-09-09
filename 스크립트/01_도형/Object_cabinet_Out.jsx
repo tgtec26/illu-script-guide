@@ -27,23 +27,85 @@ try {
 
     var mmToPt = 2.83464567;
     var PREF_KEY = "ObjectCabinetOut/settings";
+    var POSITION_LIMIT_MM = 100;
+    var OFFSET_STEP_MM = 0.1;
     var settings = loadSettings(0.5, 1, 45);
+    var savedOffset = loadOffset();
+    var offsetXmm = savedOffset[0];
+    var offsetYmm = savedOffset[1];
     var previewItems = [];
+    var targetShiftXPt = 0;
+    var targetShiftYPt = 0;
+
+    // 미리보기에서는 원본 사각형까지 함께 옮겨야 최종 결과와 같은 위치가 보인다
+    shiftTargets(offsetXmm * mmToPt, offsetYmm * mmToPt);
 
     var choice = showDepthDialog(settings.depthMm, settings.direction, settings.angleDeg, settings.cube, function(valueMm, dirX, angleDeg, cube) {
         clearPreview();
         previewItems = createCabinets(valueMm * mmToPt, dirX, angleDeg, cube, false);
         app.redraw();
-    }, clearPreview);
+    }, clearPreview, offsetXmm, offsetYmm, function(nextXmm, nextYmm) {
+        // 위치는 도형을 다시 만들지 않고 미리보기만 옮긴다
+        var dx = (nextXmm - offsetXmm) * mmToPt;
+        var dy = (nextYmm - offsetYmm) * mmToPt;
+        offsetXmm = nextXmm;
+        offsetYmm = nextYmm;
+        shiftTargets(dx, dy);
+        moveItems(previewItems, dx, dy);
+        app.redraw();
+    });
 
     clearPreview();
+    restoreTargets();
     if (choice === null) {
+        app.redraw();
         return;
     }
 
     saveSettings(choice.depthMm, choice.direction, choice.angleDeg, choice.cube);
-    createCabinets(choice.depthMm * mmToPt, choice.direction, choice.angleDeg, choice.cube, true);
+    saveOffset(choice.offsetXmm, choice.offsetYmm);
+    var createdItems = createCabinets(choice.depthMm * mmToPt, choice.direction, choice.angleDeg, choice.cube, true);
+    moveItems(createdItems, choice.offsetXmm * mmToPt, choice.offsetYmm * mmToPt);
     doc.selection = null;
+
+    // 위치는 깊이 설정과 따로 기억한다(설정 문자열 형식을 건드리지 않는다)
+    function loadOffset() {
+        var loaded = [0, 0];
+        try {
+            var parts = String(app.preferences.getStringPreference("ObjectCabinetOut_offsetMm")).split("|");
+            var offX = parseFloat(parts[0]);
+            var offY = parseFloat(parts[1]);
+            if (!isNaN(offX) && Math.abs(offX) <= POSITION_LIMIT_MM) loaded[0] = offX;
+            if (!isNaN(offY) && Math.abs(offY) <= POSITION_LIMIT_MM) loaded[1] = offY;
+        } catch (e) {}
+        return loaded;
+    }
+
+    function saveOffset(offXmm, offYmm) {
+        try {
+            app.preferences.setStringPreference("ObjectCabinetOut_offsetMm",
+                [offXmm, offYmm].join("|"));
+        } catch (e) {}
+    }
+
+    function shiftTargets(deltaX, deltaY) {
+        moveItems(targets, deltaX, deltaY);
+        targetShiftXPt += deltaX;
+        targetShiftYPt += deltaY;
+    }
+
+    function restoreTargets() {
+        moveItems(targets, -targetShiftXPt, -targetShiftYPt);
+        targetShiftXPt = 0;
+        targetShiftYPt = 0;
+    }
+
+    function moveItems(items, deltaX, deltaY) {
+        if (!items || (deltaX === 0 && deltaY === 0)) return;
+        for (var i = 0; i < items.length; i++) {
+            try { items[i].translate(deltaX, deltaY); } catch (e) {}
+        }
+    }
 
     function createCabinets(depth, dirX, angleDeg, cube, makeGroup) {
         var created = [];
@@ -133,7 +195,8 @@ try {
         return items;
     }
 
-    function showDepthDialog(defaultValue, defaultDirection, defaultAngle, defaultCube, onPreview, onClearPreview) {
+    function showDepthDialog(defaultValue, defaultDirection, defaultAngle, defaultCube, onPreview, onClearPreview,
+            startXmm, startYmm, onOffsetChange) {
         var depthStepMm = 0.05;
         var bigStepMm = 1;
         var minDepthMm = depthStepMm;
@@ -190,6 +253,16 @@ try {
         rightRadio.value = defaultDirection > 0;
         leftRadio.value = !rightRadio.value;
 
+        var positionPanel = dialog.add("panel", undefined, "위치");
+        positionPanel.orientation = "column";
+        positionPanel.alignChildren = "left";
+        var offsetXmmValue = startXmm;
+        var offsetYmmValue = startYmm;
+        var offsetXControls = addOffsetControls(positionPanel, "가로 이동", offsetXmmValue);
+        var offsetYControls = addOffsetControls(positionPanel, "세로 이동", offsetYmmValue);
+        bindOffsetControls(offsetXControls, true);
+        bindOffsetControls(offsetYControls, false);
+
         var previewCheck = dialog.add("checkbox", undefined, "미리보기");
         previewCheck.value = true;
 
@@ -201,6 +274,55 @@ try {
         var cancelButton = buttons.add("button", undefined, "취소", {name: "cancel"});
 
         var result = null;
+
+        // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+        var STEP_BUTTON_WIDTH = 34;
+        // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
+        function addOffsetControls(parent, label, value) {
+            var row = parent.add("group");
+            row.alignChildren = ["left", "center"];
+            row.add("statictext", undefined, label).preferredSize.width = 70;
+            var offsetInput = row.add("edittext", undefined, formatOffset(value));
+            offsetInput.characters = 6;
+            row.add("statictext", undefined, "mm");
+            var down = row.add("button", undefined, "◀");
+            down.preferredSize.width = STEP_BUTTON_WIDTH;
+            var slider = row.add("slider", undefined, value,
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            slider.preferredSize.width = 200;
+            var up = row.add("button", undefined, "▶");
+            up.preferredSize.width = STEP_BUTTON_WIDTH;
+            return {input: offsetInput, slider: slider, down: down, up: up};
+        }
+
+        // 값이 바뀌면 도형을 다시 만들지 않고 미리보기만 옮긴다
+        function bindOffsetControls(controls, isX) {
+            function current() { return isX ? offsetXmmValue : offsetYmmValue; }
+            function commit(value) {
+                if (value === null || isNaN(value)) return;
+                value = Math.round(value / OFFSET_STEP_MM) * OFFSET_STEP_MM;
+                if (value < -POSITION_LIMIT_MM) value = -POSITION_LIMIT_MM;
+                if (value > POSITION_LIMIT_MM) value = POSITION_LIMIT_MM;
+                if (value === current()) return;
+                if (isX) offsetXmmValue = value;
+                else offsetYmmValue = value;
+                controls.input.text = formatOffset(value);
+                try { controls.slider.value = value; } catch (e) {}
+                onOffsetChange(offsetXmmValue, offsetYmmValue);
+            }
+            controls.slider.onChanging = function() { commit(controls.slider.value); };
+            controls.slider.onChange = function() { commit(controls.slider.value); };
+            controls.input.onChange = function() {
+                var value = parseFloat(String(controls.input.text).replace(",", "."));
+                commit(isNaN(value) ? current() : value);
+            };
+            controls.down.onClick = function() { commit(current() - OFFSET_STEP_MM); };
+            controls.up.onClick = function() { commit(current() + OFFSET_STEP_MM); };
+        }
+
+        function formatOffset(value) {
+            return String(Math.round(value * 10) / 10);
+        }
 
         function formatDepth(value) {
             value = Math.round(value / depthStepMm) * depthStepMm;
@@ -366,7 +488,9 @@ try {
                 depthMm: parseFloat(formatDepth(value)),
                 direction: readDirection(),
                 angleDeg: angle,
-                cube: cubeCheck.value
+                cube: cubeCheck.value,
+                offsetXmm: offsetXmmValue,
+                offsetYmm: offsetYmmValue
             };
             dialog.close();
         };

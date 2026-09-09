@@ -33,6 +33,8 @@ try {
     var MM_TO_PT = 2.83464567;
     var HEIGHT_STEP_MM = 0.05;
     var DIAMETER_STEP_MM = 0.05;
+    var POSITION_LIMIT_MM = 100;
+    var OFFSET_STEP_MM = 0.1;
     var centerX = (bounds[0] + bounds[2]) / 2;
     var centerY = (bounds[1] + bounds[3]) / 2;
     var diameterMm = diameter / MM_TO_PT;
@@ -56,6 +58,8 @@ try {
     var activeFace = FACE_TOP;
     var previewEnabled = true;
     var previewGroup = null;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
     var sourceWasHidden = source.hidden;
 
     // 외경은 선택한 원에서 오므로 저장하지 않는다. 내경·높이는 새 원 크기에 맞춰 잘라서 복원한다.
@@ -160,6 +164,13 @@ try {
 
     setInnerFaceEnabled(innerDiameterMm > 0);
     updateKDisplay();
+
+    var positionPanel = addPanel(dlg, "위치");
+    var offsetXControls = addOffsetRow(positionPanel, "가로 이동", offsetXmm);
+    var offsetYControls = addOffsetRow(positionPanel, "세로 이동", offsetYmm);
+    // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    bindOffsetControls(offsetXControls, true);
+    bindOffsetControls(offsetYControls, false);
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -415,6 +426,7 @@ try {
     if (result === 1) {
         source.hidden = false;
         var finalGroup = buildCylinder();
+        moveItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         finalGroup.name = "Cylinder";
         try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         source.remove();
@@ -433,6 +445,7 @@ try {
             return;
         }
         previewGroup = buildCylinder();
+        moveItem(previewGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         previewGroup.name = "Cylinder Preview";
         try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
         app.redraw();
@@ -506,13 +519,14 @@ try {
 
     function saveSettings() {
         var parts = [
-            "v3", viewAngle, viewY, viewZ,
+            "v4", viewAngle, viewY, viewZ,
             isVertical ? "1" : "0",
             divisionsEnabled ? "1" : "0",
             divisionCount, divisionRotation,
             faceK[0], faceK[1], faceK[2],
             encodeURIComponent(divisionRatioText),
-            innerDiameterMm, heightMm
+            innerDiameterMm, heightMm,
+            offsetXmm, offsetYmm
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -522,7 +536,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length < 14) return;
+        if ((p[0] !== "v3" && p[0] !== "v4") || p.length < 14) return;
         viewAngle = restoreNumber(p[1], viewAngle, -180, 180);
         viewY = restoreNumber(p[2], viewY, -180, 180);
         viewZ = restoreNumber(p[3], viewZ, -180, 180);
@@ -536,6 +550,10 @@ try {
         try { divisionRatioText = decodeURIComponent(p[11]); } catch (e2) {}
         innerDiameterMm = roundTo(restoreNumber(p[12], innerDiameterMm, 0, maxInnerDiameterMm), DIAMETER_STEP_MM);
         heightMm = roundTo(restoreNumber(p[13], heightMm, 0, maxHeightMm), HEIGHT_STEP_MM);
+        if (p[0] === "v4" && p.length >= 16) {
+            offsetXmm = restoreNumber(p[14], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            offsetYmm = restoreNumber(p[15], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        }
     }
 
     function restoreNumber(text, fallback, minimum, maximum) {
@@ -578,6 +596,43 @@ try {
         var up = row.add("button", undefined, "▶");
         up.preferredSize.width = STEP_BUTTON_WIDTH;
         return {row: row, input: input, slider: slider, reset: reset, down: down, up: up};
+    }
+
+    // 위치 행은 다른 줄과 같은 모양(0 버튼 포함)을 쓴다
+    function addOffsetRow(parent, label, value) {
+        return addValueRow(parent, label, "mm", formatNumber(value, 1),
+            -POSITION_LIMIT_MM, POSITION_LIMIT_MM, OFFSET_STEP_MM, true);
+    }
+
+    // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+    function bindOffsetControls(controls, isX) {
+        function current() { return isX ? offsetXmm : offsetYmm; }
+        function commit(value) {
+            if (value === null || !isFinite(value)) return;
+            value = clamp(roundTo(value, OFFSET_STEP_MM), -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var delta = (value - current()) * MM_TO_PT;
+            if (isX) offsetXmm = value;
+            else offsetYmm = value;
+            controls.input.text = formatNumber(value, 1);
+            try { controls.slider.value = value; } catch (e) {}
+            if (delta === 0 || previewGroup === null) return;
+            moveItem(previewGroup, isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? current() : value);
+        };
+        controls.down.onClick = function() { commit(current() - OFFSET_STEP_MM); };
+        controls.up.onClick = function() { commit(current() + OFFSET_STEP_MM); };
+        if (controls.reset) controls.reset.onClick = function() { commit(0); };
+    }
+
+    function moveItem(item, deltaX, deltaY) {
+        if (item === null || (deltaX === 0 && deltaY === 0)) return;
+        try { item.translate(deltaX, deltaY); } catch (e) {}
     }
 
     function addAngleRow(parent, label, value, hasReset) {
