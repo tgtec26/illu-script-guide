@@ -48,6 +48,7 @@ try {
     var vertical = false;       // 사슬·판이 자라는 방향. 켜면 세로로 길어진다.
     var oxygenMm = 4;
     var siliconMm = 1.6;
+    var gapMm = 0;              // 한 사면체 안에서 산소 사이 빈 간격. 0이면 맞닿는다.
     var oxygenK = 0;
     var siliconK = 0;
     var lit3DOxygen = false;
@@ -102,6 +103,7 @@ try {
     var sizePanel = addPanel(dlg, "크기");
     var oxygenField = addNumberField(sizePanel, "산소 지름", "mm", oxygenMm, 0.1, 0.5, 20);
     var siliconField = addNumberField(sizePanel, "규소 지름", "mm", siliconMm, 0.1, 0.2, 10);
+    var gapField = addNumberField(sizePanel, "산소 간격", "mm", gapMm, 0.1, -2, 10);
 
     var shadePanel = addPanel(dlg, "음영");
     var oxygenKField = addNumberField(shadePanel, "산소", "K", oxygenK, 10, 0, 100);
@@ -133,6 +135,7 @@ try {
             return function() {
                 mineralIndex = index;
                 fillCountList(siCount);
+                updateDirectionState();
                 updatePreview();
             };
         })(mi);
@@ -169,6 +172,7 @@ try {
     };
 
     fillCountList(siCount);
+    updateDirectionState();
     updatePreview();
 
     var result = dlg.show();
@@ -195,7 +199,7 @@ try {
         var mineral = MINERALS[mineralIndex];
         var rows = mineral.rows;
         var columns = Math.max(1, Math.round(siCount / rows));
-        var step = oxygenMm * MM_TO_PT;   // 한 사면체 안에서 산소끼리 맞닿는 거리
+        var step = (oxygenMm + gapMm) * MM_TO_PT;   // 한 사면체 안에서 산소 중심 사이 거리
         var rowHeight = step * Math.sqrt(3);
 
         var lattice = [];   // 이웃과 나눠 쓰는 밑면 산소
@@ -213,6 +217,13 @@ try {
             pushUnique(lattice, bc[0], bc[1]);
             pushUnique(lattice, ca[0], ca[1]);
             centers.push([(ab[0] + bc[0] + ca[0]) / 3, (ab[1] + bc[1] + ca[1]) / 3]);
+        }
+
+        // 감람석(사면체 하나)은 아래 산소 2개 위에 산소 1개가 얹힌 모양으로 고정한다.
+        // 아래를 향한 격자 삼각형의 변 중점이 그 배치가 된다.
+        if (isSingle()) {
+            addTetrahedron(corner(1, 0), corner(0, 1), corner(1, 1));
+            return {lattice: lattice, centers: centers};
         }
 
         // 한 줄은 위를 향한 사면체와 아래를 향한 사면체가 번갈아 붙은 지그재그다.
@@ -237,6 +248,17 @@ try {
             rotateQuarter(centers);
         }
         return {lattice: lattice, centers: centers};
+    }
+
+    function isSingle() {
+        return MINERALS[mineralIndex].rows === 1 && siCount === 1;
+    }
+
+    // 사면체 하나짜리는 자라는 방향이 없다
+    function updateDirectionState() {
+        var single = isSingle();
+        horizontalRadio.enabled = !single;
+        verticalRadio.enabled = !single;
     }
 
     // 세로로 길게: 전체를 90도 돌린다
@@ -337,11 +359,15 @@ try {
         return circle;
     }
 
-    // 흰색 → 산소 음영(K)으로 가는 방사형 그라데이션. 음영이 0이면 원자 모형 핵과 같은 60K를 쓴다.
+    // 산소 K는 전체 톤, 3D 조명은 그 위에 얹는 명암이다.
+    // 규소가 어둡게 들어가므로 산소는 밝게: 하이라이트 = K의 절반, 가장자리 = K + 10.
+    // 0K면 흰색 → 10K의 아주 연한 구슬이 된다(원자 모형 핵의 60K보다 훨씬 밝다).
     function getOxygenGradient() {
-        var deep = makeGray(oxygenK > 0 ? oxygenK : 60);
+        var highlight = makeGray(Math.round(oxygenK * 0.5));
+        var deep = makeGray(Math.min(100, oxygenK + 10));
         if (_oxygenGradient !== null) {
             try {
+                _oxygenGradient.gradientStops[0].color = highlight;
                 _oxygenGradient.gradientStops[1].color = deep;
                 return _oxygenGradient;
             } catch (e) {
@@ -354,7 +380,7 @@ try {
         while (gradient.gradientStops.length < 2) gradient.gradientStops.add();
         gradient.gradientStops[0].rampPoint = 0;
         gradient.gradientStops[0].midPoint = 13.3;
-        gradient.gradientStops[0].color = makeGray(0);
+        gradient.gradientStops[0].color = highlight;
         gradient.gradientStops[1].rampPoint = 100;
         gradient.gradientStops[1].color = deep;
         _oxygenGradient = gradient;
@@ -411,6 +437,7 @@ try {
     function readFields(showAlert) {
         var oxygen = parseNumber(oxygenField.input.text);
         var silicon = parseNumber(siliconField.input.text);
+        var gap = parseNumber(gapField.input.text);
         var oK = parseNumber(oxygenKField.input.text);
         var siK = parseNumber(siliconKField.input.text);
         var offX = parseNumber(offsetXField.input.text);
@@ -419,6 +446,10 @@ try {
         if (oxygen === null || oxygen < 0.5 || oxygen > 20 ||
                 silicon === null || silicon < 0.2 || silicon > 10) {
             if (showAlert) alert("산소와 규소 지름은 슬라이더 범위 안의 숫자로 입력해주세요.");
+            return false;
+        }
+        if (gap === null || gap < -2 || gap > 10 || oxygen + gap < 0.2) {
+            if (showAlert) alert("산소 간격은 -2부터 10mm 사이로, 산소 지름보다 작게 겹치도록 입력해주세요.");
             return false;
         }
         if (oK === null || oK < 0 || oK > 100 || siK === null || siK < 0 || siK > 100) {
@@ -434,6 +465,7 @@ try {
 
         oxygenMm = oxygen;
         siliconMm = silicon;
+        gapMm = gap;
         oxygenK = oK;
         siliconK = siK;
         lit3DOxygen = lit3DCheck.value;
@@ -574,9 +606,9 @@ try {
     // 설정 기억
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v2", mineralIndex, siCount, oxygenMm, siliconMm,
+        var parts = ["v3", mineralIndex, siCount, oxygenMm, siliconMm,
             oxygenK, siliconK, lit3DOxygen ? 1 : 0, offsetXmm, offsetYmm,
-            vertical ? 1 : 0];
+            vertical ? 1 : 0, gapMm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -585,7 +617,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length < 11) return;
+        if (p[0] !== "v3" || p.length < 12) return;
 
         var index = parseInt(p[1], 10);
         var count = parseInt(p[2], 10);
@@ -603,6 +635,8 @@ try {
         if (siK >= 0 && siK <= 100) siliconK = siK;
         lit3DOxygen = (p[7] === "1");
         vertical = (p[10] === "1");
+        var gap = parseFloat(p[11]);
+        if (gap >= -2 && gap <= 10) gapMm = gap;
         if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
         if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
     }
