@@ -14,6 +14,7 @@ try {
     - 행 높이·열 너비는 mm 슬라이더로 각각 조절합니다
     - 줄 앞 체크박스를 켜면 바로 위의 켜진 줄을 따라갑니다.
       1행만 끄고 2~5행을 켜면 2행 슬라이더가 3~5행을 함께 움직입니다(1행 = 머리글).
+    - 1행에는 K 음영을 넣을 수 있습니다(0K = 음영 없음)
     - 표는 선택한 사각형의 왼쪽 위를 기준으로 자랍니다
   사용법: 가로·세로 변이 축에 나란한 사각형 하나를 선택한 뒤 실행
 */
@@ -56,6 +57,7 @@ try {
     var rowLinked = filledArray(MAX_ROWS, true);
     var colLinked = filledArray(MAX_COLS, true);
     var strokeWidthPt = 0.3;
+    var headerK = 0;            // 1행 내부 음영. 0이면 채우지 않는다.
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
@@ -83,6 +85,7 @@ try {
     var countPanel = addPanel(dlg, "표");
     var rowCountField = addNumberField(countPanel, "행 수", "개", rowCount, 1, 1, MAX_ROWS, false);
     var colCountField = addNumberField(countPanel, "열 수", "개", colCount, 1, 1, MAX_COLS, false);
+    var headerKField = addNumberField(countPanel, "1행 음영", "K", headerK, 10, 0, 100, false);
 
     // 행·열 패널은 나란히 두어 다이얼로그가 세로로 길어지지 않게 한다
     var sizeRow = dlg.add("group");
@@ -193,7 +196,12 @@ try {
             for (var j = 0; j < colCount; j++) {
                 var width = colWidthsMm[j] * MM_TO_PT;
                 var cell = group.pathItems.rectangle(y, x, width, height);
-                cell.filled = false;
+                if (i === 0 && headerK > 0) {
+                    cell.filled = true;
+                    cell.fillColor = makeGray(headerK);
+                } else {
+                    cell.filled = false;
+                }
                 cell.stroked = true;
                 cell.strokeWidth = strokeWidthPt;
                 cell.strokeColor = black;
@@ -202,6 +210,23 @@ try {
             y -= height;
         }
         return group;
+    }
+
+    function makeGray(k) {
+        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+            var cmyk = new CMYKColor();
+            cmyk.cyan = 0;
+            cmyk.magenta = 0;
+            cmyk.yellow = 0;
+            cmyk.black = k;
+            return cmyk;
+        }
+        var value = Math.round(255 * (100 - k) / 100);
+        var rgb = new RGBColor();
+        rgb.red = value;
+        rgb.green = value;
+        rgb.blue = value;
+        return rgb;
     }
 
     function makeBlack() {
@@ -254,6 +279,7 @@ try {
         var rows = parseNumber(rowCountField.input.text);
         var cols = parseNumber(colCountField.input.text);
         var width = parseNumber(strokeField.input.text);
+        var header = parseNumber(headerKField.input.text);
         var offX = parseNumber(offsetXField.input.text);
         var offY = parseNumber(offsetYField.input.text);
 
@@ -264,6 +290,10 @@ try {
         }
         if (width === null || width < 0.1 || width > 3) {
             if (showAlert) alert("선 두께는 0.1부터 3 사이로 입력해주세요.");
+            return false;
+        }
+        if (header === null || header < 0 || header > 100) {
+            if (showAlert) alert("1행 음영은 0부터 100 사이로 입력해주세요.");
             return false;
         }
         if (offX === null || offX < -POSITION_LIMIT_MM || offX > POSITION_LIMIT_MM ||
@@ -283,6 +313,7 @@ try {
         rowCount = Math.round(rows);
         colCount = Math.round(cols);
         strokeWidthPt = width;
+        headerK = header;
         offsetXmm = offX;
         offsetYmm = offY;
         readLinkedFlags();
@@ -548,9 +579,9 @@ try {
     // 설정 기억 (행 높이·열 너비는 사각형에서 나오므로 저장하지 않는다)
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v2", rowCount, colCount,
+        var parts = ["v3", rowCount, colCount,
             flagsToText(rowLinked), flagsToText(colLinked),
-            strokeWidthPt, offsetXmm, offsetYmm];
+            strokeWidthPt, offsetXmm, offsetYmm, headerK];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -559,7 +590,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length < 8) return;
+        if (p[0] !== "v3" || p.length < 9) return;
 
         var rows = parseInt(p[1], 10);
         var cols = parseInt(p[2], 10);
@@ -573,6 +604,8 @@ try {
         if (width >= 0.1 && width <= 3) strokeWidthPt = width;
         if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
         if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
+        var header = parseFloat(p[8]);
+        if (header >= 0 && header <= 100) headerK = header;
     }
 
     function flagsToText(flags) {
