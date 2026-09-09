@@ -33,6 +33,7 @@ const scripts = [
   { id: "molecule-model", category: "도형", name: "분자 모형", file: "01_도형/Object_MoleculeModel.jsx", summary: "공유 결합 분자의 전자 껍질 모형을 만듭니다. 공유·비공유 전자쌍을 자동으로 배치합니다.", tags: ["과학", "분자"] },
   { id: "pendulum", category: "도형", name: "진자 운동", file: "01_도형/Object_Pendulum.jsx", summary: "선택한 수평선을 천장 삼아 진자 그림을 그립니다. 각도 θ, 진자 길이, 궤적, 직각 표시를 넣습니다.", tags: ["과학", "역학"] },
   { id: "polymer", category: "도형", name: "중합체 생성기", file: "01_도형/Object_PolymerMaker.jsx", summary: "선택한 패스를 따라 단위체를 배치해 중합체를 만듭니다. 단위체 모양과 색상을 조절합니다.", tags: ["과학", "중합체"] },
+  { id: "table", category: "도형", name: "표", file: "01_도형/Object_Table.jsx", summary: "선택한 사각형을 행·열로 나눈 표로 바꿉니다. 셀마다 테두리 사각형이 생겨 글자를 정렬하기 쉽습니다.", tags: ["표", "정렬"] },
   { id: "quadrat", category: "도형", name: "방형구", file: "01_도형/Object_Quadrat.jsx", summary: "선택한 정사각형을 4×4 또는 5×5 방형구로 나누고 상대 밀도·상대 빈도 목표값에 맞춰 종을 배치합니다.", tags: ["과학", "생태"] },
   { id: "region-brace", category: "도형", name: "영역 중괄호", file: "01_도형/Object_RegionBrace.jsx", summary: "선택한 직선을 영역을 묶어 가리키는 중괄호로 바꿉니다. 0.5pt로 맞추고 가운데를 잘라 두 선으로 나눈 뒤 바깥 끝에는 화살표 7번, 가운데 끝에는 화살표 6번을 붙여 그룹으로 묶습니다. 가로선은 상하 반전, 세로선은 좌우 반전을 고를 수 있고, 미리보기를 보면서 가로·세로로 옮겨 자리를 잡습니다.", tags: ["중괄호", "영역", "화살표"] },
   { id: "solenoid", category: "도형", name: "코일 감긴 도선", file: "01_도형/Object_Solenoid.jsx", summary: "선택한 사각형을 도선으로 바꾸고 나선 투영으로 코일을 감습니다. 감는 횟수에 따라 코일 간격이 달라집니다.", tags: ["과학", "전자기"] },
