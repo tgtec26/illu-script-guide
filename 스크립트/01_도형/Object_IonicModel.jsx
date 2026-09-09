@@ -118,6 +118,7 @@ try {
     var chkShowMinus = optCol1.add("checkbox", undefined, "전자 - 기호 표시");
     chkShowMinus.value = true;
     var chkShellLine = optCol1.add("checkbox", undefined, "전자 껍질 선");
+    var chkShell1Horizontal = optCol1.add("checkbox", undefined, "1껍질 전자 3시·9시");
     var chkLit3DNucleus = optCol2.add("checkbox", undefined, "핵 3D 조명 효과");
     chkLit3DNucleus.value = true;
     var chkLit3DElectron = optCol2.add("checkbox", undefined, "전자 3D 조명 효과");
@@ -151,6 +152,7 @@ try {
     var sldNucleus = addSlider("핵 지름", 0.5, 8, 6, function(v){ return v.toFixed(1) + "mm"; });
     var sldElectron = addSlider("전자 지름", 0.2, 4, 2, function(v){ return v.toFixed(1) + "mm"; });
     var sldChargeFont = addSlider("핵 전하량 글자", 1, 20, 8, function(v){ return v.toFixed(1) + "pt"; });
+    var sldIonFont = addSlider("이온 전하 글자", 1, 20, 6, function(v){ return v.toFixed(1) + "pt"; });
     var sldGap = addSlider("이온 간격", 0, 20, 8, function(v){ return v.toFixed(1) + "mm"; });
 
     // 연동 규칙(원자 모형과 동일):
@@ -168,6 +170,7 @@ try {
         scaleSlider(sldNucleus, r);
         scaleSlider(sldElectron, r);
         scaleSlider(sldChargeFont, r);
+        scaleSlider(sldIonFont, r);
         scaleSlider(sldGap, r);
         prevOverall = sldOverall.value;
         prevNucleus = sldNucleus.value;
@@ -203,6 +206,8 @@ try {
             nucMM: sldNucleus.value,
             elecMM: sldElectron.value,
             fontPt: sldChargeFont.value,
+            ionFontPt: sldIonFont.value,
+            shell1Horizontal: chkShell1Horizontal.value,
             gapMM: sldGap.value
         }, targetLayer, consumeGuide);
     }
@@ -239,6 +244,7 @@ try {
     chkNucleus.onClick = updatePreview;
     chkShowMinus.onClick = updatePreview;
     chkShellLine.onClick = updatePreview;
+    chkShell1Horizontal.onClick = updatePreview;
     chkLit3DNucleus.onClick = updatePreview;
     chkLit3DElectron.onClick = updatePreview;
     chkPreview.onClick = updatePreview;
@@ -307,7 +313,7 @@ try {
 
         var eDia = o.elecMM * MM; // 전자 지름: 절대 실측치(pt)
         var nDia = o.nucMM * MM;  // 핵 지름: 절대 실측치(pt)
-        var angles1 = [90, 270];
+        var angles1 = o.shell1Horizontal ? [0, 180] : [90, 270]; // 3시·9시 / 12시·6시
         var anglesO = [90, -90, 0, 180, -135, 45, 135, -45];
 
         var masterGroup = guide ? layer.groupItems.add() : null;
@@ -337,15 +343,14 @@ try {
                 var shellD = [shellRatio[0]*MM*scale, shellRatio[1]*MM*scale, shellRatio[2]*MM*scale];
 
                 var baseRadius = (shellsNeeded > 0) ? shellD[shellsNeeded-1]/2 : nDia/2;
-                var leftBounds = baseRadius + (4 * MM * scale);  // 대괄호 여백
-                var rightBounds = baseRadius + (7 * MM * scale); // 대괄호+전하 라벨 여백
+                var brGap = 2 * MM * scale;                     // 껍질과 대괄호 사이 여백
+                var leftBounds = baseRadius + brGap;            // 왼쪽 대괄호 바깥면까지
 
                 if (isFirst) { currentCx = startCx; isFirst = false; }
                 else {
                     var gap = (ii === 0) ? COMP_GAP : GAP;
                     currentCx = currentCx + previousRightBounds + gap + leftBounds;
                 }
-                previousRightBounds = rightBounds;
                 var cx = currentCx;
 
                 // 1. 전자 껍질 (선 옵션: 내부 투명 + 0.3pt 선 / 기본: 그라데이션 면)
@@ -404,7 +409,6 @@ try {
 
                 // 4. 이온 대괄호 및 전하량
                 var brR = baseRadius;
-                var brGap = 2 * MM * scale;
                 var brW = 2 * MM * scale;
                 var drawBracket = function(isL, center_x, center_y, brRadius) {
                     var path = compGroup.pathItems.add();
@@ -418,10 +422,15 @@ try {
                 var lbl = compGroup.textFrames.add();
                 var absC = Math.abs(ion.q);
                 lbl.contents = (absC > 1 ? absC : "") + (ion.q > 0 ? "+" : "-");
-                lbl.textRange.characterAttributes.size = 6; // 이온 전하량 글자: 6pt 고정
+                lbl.textRange.characterAttributes.size = o.ionFontPt;
                 try { lbl.textRange.characterAttributes.textFont = app.textFonts.getByName(fontName); } catch(e) {}
                 lbl.left = cx + brR + brGap + 0.5*MM*scale;
                 lbl.top = cy + brR + lbl.height * 0.7;
+
+                // 다음 이온까지의 거리는 고정 여백이 아니라 실제로 그려진 오른쪽 끝에서 잰다.
+                // 그래야 간격 0에서 전하량 글자와 다음 이온의 왼쪽 대괄호가 맞닿는다.
+                var labelRight = lbl.left + lbl.width;
+                previousRightBounds = Math.max(brR + brGap, labelRight - cx);
             }
         }
 
@@ -452,6 +461,8 @@ try {
         parts.push(sldChargeFont.value);
         parts.push(chkShellLine.value ? "1" : "0");
         parts.push(sldGap.value);
+        parts.push(sldIonFont.value);
+        parts.push(chkShell1Horizontal.value ? "1" : "0");
         return parts.join("|");
     }
     function saveSettings() {
@@ -518,6 +529,8 @@ try {
             sldChargeFont.value = parseFloat(p[10]);
             if (p.length > 11) chkShellLine.value = (p[11] === "1"); // 후반 추가 필드(없으면 기본값 유지)
             if (p.length > 12) sldGap.value = parseFloat(p[12]);
+            if (p.length > 13) sldIonFont.value = parseFloat(p[13]);
+            if (p.length > 14) chkShell1Horizontal.value = (p[14] === "1");
             syncSliderLabels();
             prevOverall = sldOverall.value;
             prevNucleus = sldNucleus.value;
@@ -558,6 +571,7 @@ try {
         scaleSlider(sldNucleus, r);
         scaleSlider(sldElectron, r);
         scaleSlider(sldChargeFont, r);
+        scaleSlider(sldIonFont, r);
         sldOverall.syncLabel();
         prevOverall = sldOverall.value;
         prevNucleus = sldNucleus.value;
