@@ -272,16 +272,16 @@ try {
         // 3. 말단 글자
         var endPt = Math.max(5, phosphateMm * MM_TO_PT * 0.55);
         if (showOH) {
-            placeText(group, map, "OH", (n - 1) * pitch + halfPitch, -lateral, endPt, engFont);
-            if (doubleStrand) placeText(group, map, "OH", -halfPitch, strand2 + lateral, endPt, engFont);
+            placeText(group, map, "OH", (n - 1) * pitch + halfPitch, -lateral, endPt);
+            if (doubleStrand) placeText(group, map, "OH", -halfPitch, strand2 + lateral, endPt);
         }
         if (showPrime) {
             var reach = phosphateMm / 2 + 1.5;
-            placeText(group, map, "5'", -halfPitch - reach, -lateral, endPt, engFont);
-            placeText(group, map, "3'", (n - 1) * pitch + halfPitch + reach, -lateral, endPt, engFont);
+            placeText(group, map, "5'", -halfPitch - reach, -lateral, endPt);
+            placeText(group, map, "3'", (n - 1) * pitch + halfPitch + reach, -lateral, endPt);
             if (doubleStrand) {
-                placeText(group, map, "3'", -halfPitch - reach, strand2 + lateral, endPt, engFont);
-                placeText(group, map, "5'", (n - 1) * pitch + halfPitch + reach, strand2 + lateral, endPt, engFont);
+                placeText(group, map, "3'", -halfPitch - reach, strand2 + lateral, endPt);
+                placeText(group, map, "5'", (n - 1) * pitch + halfPitch + reach, strand2 + lateral, endPt);
             }
         }
 
@@ -349,7 +349,7 @@ try {
 
         if (showLetters) {
             var textPt = Math.max(4, Math.min(baseThickMm, length) * MM_TO_PT * 0.7);
-            placeText(group, map, base, a, b0 + dir * (length - tip) / 2, textPt, engFont);
+            placeText(group, map, base, a, b0 + dir * (length - tip) / 2, textPt);
         }
     }
 
@@ -381,7 +381,7 @@ try {
         if (showSugarO) {
             var textPt = Math.max(4, sugarMm * MM_TO_PT * 0.42);
             // 꼭짓점 중심보다 조금 안쪽(반지름의 15%)에 둔다
-            var text = placeText(group, map, "O", a + apexDir * r * 0.85, b, textPt, engFont);
+            var text = placeText(group, map, "O", a + apexDir * r * 0.85, b, textPt);
             var gb = text.geometricBounds;
             var pad = textPt * 0.12;
             var mask = group.pathItems.rectangle(gb[1] + pad, gb[0] - pad,
@@ -398,7 +398,7 @@ try {
         var dia = phosphateMm * MM_TO_PT;
         var circle = group.pathItems.ellipse(center[1] + dia / 2, center[0] - dia / 2, dia, dia);
         stylePath(circle, phosphateK);
-        placeText(group, map, "P", a, b, Math.max(4, dia * 0.5), engFont);
+        placeText(group, map, "P", a, b, Math.max(4, dia * 0.7));
     }
 
     // from에서 to 쪽으로 ratio만큼만 긋는다 (말단 OH 글자 앞에서 멈추는 선)
@@ -427,7 +427,7 @@ try {
         var gapMm = 1;                                   // 항목 위아래 간격
         var symbolMm = Math.max(sugarMm, phosphateMm, purineLenMm, pyrimidineLenMm);
         var textPt = 8;
-        var padMm = 3;
+        var padMm = 2;                                   // 테두리와 내용 사이 여백
         var sugarHeightMm = sugarMm * 0.905;             // 꼭짓점이 위인 정오각형의 높이
 
         var legend = group.groupItems.add();
@@ -453,24 +453,19 @@ try {
                 draw: function(a) { drawBase(legend, map, "G", a, symbolMm / 2 - purineLenMm / 2, 1); }}
         ];
         var labelB = symbolMm + 3;
-        var maxLabelRight = 0;
         var cursor = 0;                                  // 다음 항목의 위 끝
         for (var i = 0; i < items.length; i++) {
             var a = cursor + items[i].height / 2;
             items[i].draw(a);
-            var text = placeText(legend, map, items[i].label, a, labelB, textPt, korFont, true);
-            var right = text.geometricBounds[2];
-            if (right > maxLabelRight) maxLabelRight = right;
+            placeText(legend, map, items[i].label, a, labelB, textPt, true);
             cursor += items[i].height + gapMm;
         }
-        var contentHeightMm = cursor - gapMm;
 
-        // 테두리
-        var boxLeft = originX - padMm * MM_TO_PT;
-        var boxTop = originY + padMm * MM_TO_PT;
-        var boxRight = maxLabelRight + padMm * MM_TO_PT;
-        var boxBottom = originY - (contentHeightMm + padMm) * MM_TO_PT;
-        var box = legend.pathItems.rectangle(boxTop, boxLeft, boxRight - boxLeft, boxTop - boxBottom);
+        // 테두리: 그려진 내용의 경계에 사방 2mm
+        var content = legend.geometricBounds; // [left, top, right, bottom]
+        var pad = padMm * MM_TO_PT;
+        var box = legend.pathItems.rectangle(content[1] + pad, content[0] - pad,
+            (content[2] - content[0]) + pad * 2, (content[1] - content[3]) + pad * 2);
         box.filled = false;
         box.stroked = true;
         box.strokeWidth = STROKE_PT;
@@ -509,13 +504,13 @@ try {
     }
 
     // 글자를 (a, b) 중심에 놓는다. alignLeft면 왼쪽 끝을 그 자리에 맞춘다.
-    function placeText(container, map, text, a, b, sizePt, font, alignLeft) {
+    function placeText(container, map, text, a, b, sizePt, alignLeft) {
         var frame = container.textFrames.add();
         frame.contents = text;
         var attrs = frame.textRange.characterAttributes;
         attrs.size = sizePt;
-        try { attrs.textFont = font; } catch (e) {}
         attrs.fillColor = makeGray(100);
+        applyFontRule(frame);
         var target = map(a, b);
         var gb = frame.geometricBounds;
         var dx = alignLeft ? (target[0] - gb[0]) : (target[0] - (gb[0] + gb[2]) / 2);
@@ -539,6 +534,21 @@ try {
         rgb.green = value;
         rgb.blue = value;
         return rgb;
+    }
+
+    // 서체 규칙(02_문자/Text_koen.jsx와 동일): 한글·공백은 Spoqa, 영문·숫자·기호는 GSMediumB1(기준선 +0.5pt)
+    function applyFontRule(frame) {
+        var chars = frame.characters;
+        for (var i = 0; i < chars.length; i++) {
+            var code = chars[i].contents.charCodeAt(0);
+            var korean = (code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E);
+            var space = (code === 32 || code === 160);
+            var attrs = chars[i].characterAttributes;
+            try {
+                attrs.textFont = (korean || space) ? korFont : engFont;
+                attrs.baselineShift = (korean || space) ? 0 : 0.5;
+            } catch (e) {}
+        }
     }
 
     function findTextFont(names) {
