@@ -51,6 +51,7 @@ try {
     var cutDeg = 180;
     var rotationDeg = 40;
     var axisLineOn = true;
+    var contrastK = 15;
     var viewX = 0;
     var viewY = 0;
     var viewZ = 0;
@@ -78,6 +79,9 @@ try {
     var rotationField = addNumberField(optionPanel, "회전", "°", rotationDeg, 5, -180, 180);
     var axisLineCheck = optionPanel.add("checkbox", undefined, "중심 축 선 표시");
     axisLineCheck.value = axisLineOn;
+    // 축 선을 감추면 두 절단면이 붙어 보이므로 왼쪽 면을 어둡게 해 대비를 준다
+    var contrastField = addNumberField(optionPanel, "왼쪽 대비", "K", contrastK, 5, 0, 50);
+    contrastField.row.enabled = !axisLineOn;
 
     var viewPanel = addPanel(dlg, "구를 바라보는 시점");
     var viewXField = addNumberField(viewPanel, "X축", "°", viewX, 5, -180, 180);
@@ -104,6 +108,7 @@ try {
     };
     axisLineCheck.onClick = function() {
         axisLineOn = axisLineCheck.value;
+        contrastField.row.enabled = !axisLineOn;
         updatePreview();
     };
     previewCheck.onClick = function() {
@@ -276,10 +281,27 @@ try {
             if (bodyPts !== null) stylePath(buildPath(group, bodyPts), black, bodyFill);
             else drawFullCircle(group, black, bodyFill);
         }
+        function shellGray(i) {
+            return (shellCount <= 1) ? 8 : 8 + (shellCount - i) / (shellCount - 1) * 36;
+        }
         function drawFaceWithRings(faceBase) { // 바깥 껍질부터 (나중에 그린 것이 위)
             for (var i = shellCount; i >= 1; i--) {
-                var k = (shellCount <= 1) ? 8 : 8 + (shellCount - i) / (shellCount - 1) * 36;
-                stylePath(buildPath(group, scalePts(faceBase, i / shellCount)), black, makeGray(k));
+                stylePath(buildPath(group, scalePts(faceBase, i / shellCount)), black, makeGray(shellGray(i)));
+            }
+        }
+        // 축 선 없이 두 절단면을 구분: 면은 선 없이 채우고, 바깥 윤곽만 따로 긋는다
+        function drawSplitFaceWithRings(outlineBase) {
+            var leftIsA = eA[0] <= eB[0];
+            var faceA = facePts(eA);
+            var faceB = facePts(eB);
+            for (var i = shellCount; i >= 1; i--) {
+                var s = i / shellCount;
+                var k = shellGray(i);
+                fillOnly(buildPath(group, scalePts(faceA, s)),
+                    makeGray(Math.min(100, k + (leftIsA ? contrastK : 0))));
+                fillOnly(buildPath(group, scalePts(faceB, s)),
+                    makeGray(Math.min(100, k + (leftIsA ? 0 : contrastK))));
+                strokeOnly(buildPath(group, scalePts(outlineBase, s)), black);
             }
         }
 
@@ -288,10 +310,13 @@ try {
         } else if (caseB) {
             drawBody();
             if (isFullPlane) {
-                drawFaceWithRings(fullFacePts());
+                if (!axisLineOn && contrastK > 0) drawSplitFaceWithRings(fullFacePts());
+                else drawFaceWithRings(fullFacePts());
             } else if (axisLineOn) {
                 drawFaceWithRings(facePts(eA));
                 drawFaceWithRings(facePts(eB));
+            } else if (contrastK > 0) {
+                drawSplitFaceWithRings(mergedFacePts());
             } else {
                 drawFaceWithRings(mergedFacePts());
             }
@@ -454,6 +479,21 @@ try {
         return path;
     }
 
+    function fillOnly(path, fillColor) {
+        path.stroked = false;
+        path.filled = true;
+        path.fillColor = fillColor;
+        return path;
+    }
+
+    function strokeOnly(path, strokeColor) {
+        path.stroked = true;
+        path.strokeColor = strokeColor;
+        path.strokeWidth = 0.4;
+        path.filled = false;
+        return path;
+    }
+
     function makeGray(k) {
         if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
             var cmyk = new CMYKColor();
@@ -499,6 +539,7 @@ try {
         var shells = parseNumber(shellField.input.text);
         var cut = parseNumber(cutField.input.text);
         var rotation = parseNumber(rotationField.input.text);
+        var contrast = parseNumber(contrastField.input.text);
         var vx = parseNumber(viewXField.input.text);
         var vy = parseNumber(viewYField.input.text);
         var vz = parseNumber(viewZField.input.text);
@@ -509,6 +550,10 @@ try {
         }
         if (cut === null || cut < 0 || cut > 180) {
             if (showAlert) alert("절단 각도는 0부터 180 사이로 입력해주세요.");
+            return false;
+        }
+        if (contrast === null || contrast < 0 || contrast > 50) {
+            if (showAlert) alert("왼쪽 대비는 0부터 50 사이로 입력해주세요.");
             return false;
         }
         if (rotation === null || rotation < -180 || rotation > 180 ||
@@ -522,6 +567,7 @@ try {
         shellCount = Math.round(shells);
         cutDeg = cut;
         rotationDeg = rotation;
+        contrastK = contrast;
         viewX = vx;
         viewY = vy;
         viewZ = vz;
@@ -636,8 +682,8 @@ try {
     }
 
     function saveSettings() {
-        var parts = ["v4", shellCount, cutDeg, rotationDeg, viewX, viewY, viewZ,
-            axisLineOn ? 1 : 0];
+        var parts = ["v5", shellCount, cutDeg, rotationDeg, viewX, viewY, viewZ,
+            axisLineOn ? 1 : 0, contrastK];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -646,7 +692,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if ((p[0] !== "v3" && p[0] !== "v4") || p.length < 7) return;
+        if ((p[0] !== "v3" && p[0] !== "v4" && p[0] !== "v5") || p.length < 7) return;
 
         var shells = parseInt(p[1], 10);
         var cut = parseFloat(p[2]);
@@ -660,6 +706,10 @@ try {
         if (vx >= -180 && vx <= 180) viewX = vx;
         if (vy >= -180 && vy <= 180) viewY = vy;
         if (vz >= -180 && vz <= 180) viewZ = vz;
-        if (p[0] === "v4" && p.length >= 8) axisLineOn = p[7] === "1";
+        if (p[0] !== "v3" && p.length >= 8) axisLineOn = p[7] === "1";
+        if (p[0] === "v5" && p.length >= 9) {
+            var contrast = parseFloat(p[8]);
+            if (contrast >= 0 && contrast <= 50) contrastK = contrast;
+        }
     }
 })();
