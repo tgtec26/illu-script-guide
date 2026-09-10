@@ -37,6 +37,15 @@ Reference implementations: `스크립트/01_도형/Object_sphere.jsx`, `스크�
 
 Reference implementations: `스크립트/01_도형/Object_Pedigree.jsx`(`bindPositionRow`), `스크립트/01_도형/Object_RegionBrace.jsx`.
 
+## Dialog Layout (required)
+
+일러스트레이터 패널처럼 **1단**으로 쌓는다. 패널을 좌우로 나란히 두지 않는다.
+
+- 창 높이는 `win.layout.layout(true)` 뒤 `win.size.height` 기준 900 이하. 넘으면 체크박스를 한 행에 2~3개씩 묶거나 설명문을 `helpTip`으로 옮겨 줄인다. 그래도 넘는 경우에만 2단 유지(현재 `Object_Pedigree.jsx` 하나).
+- 체크박스·버튼 격자(원소 기호, 정렬 위치 등)는 1단 규칙과 무관하다.
+- 슬라이더 폭은 ◀▶ 버튼 행에서 77~140px 수준(예전 값의 70%). 라벨·입력창 뒤 단위 텍스트는 유지한다.
+- 글자 크기는 줄일 수 없다. `graphics.font`를 바꿔도 이 일러 버전은 화면에 반영하지 않는다(확인됨).
+
 ## Last-Script Memo (required)
 
 Every runnable `.jsx` under `스크립트/` records its own path so `스크립트/10_기타/RepeatLast.jsx`(F4)가 그 스크립트를 다시 실행할 수 있다. 새 스크립트를 만들면 파일 맨 위(단, `#target`/`#include` 지시문 뒤)에 아래 조각을 그대로 넣는다. `RepeatLast.jsx` 자신만 예외다.
