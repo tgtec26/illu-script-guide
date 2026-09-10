@@ -108,12 +108,16 @@ try {
     // 두 줄이라 ScriptUI 라디오 그룹이 나뉜다. 하나만 켜지도록 직접 관리한다.
     var dopantRadios = [];
     var nRow = dopantPanel.add("group");
+    nRow.spacing = 2;
     nRow.add("statictext", undefined, "n형").preferredSize.width = 30;
     var pRow = dopantPanel.add("group");
+    pRow.spacing = 2;
     pRow.add("statictext", undefined, "p형").preferredSize.width = 30;
     for (var d = 0; d < DOPANTS.length; d++) {
-        var radio = (DOPANTS[d].type === "n" ? nRow : pRow).add("radiobutton", undefined, DOPANTS[d].label);
-        radio.preferredSize.width = 96;
+        // 기호만 보여 폭을 줄인다. 이름은 helpTip으로
+        var radio = (DOPANTS[d].type === "n" ? nRow : pRow).add("radiobutton", undefined, DOPANTS[d].symbol);
+        radio.helpTip = DOPANTS[d].label;
+        radio.preferredSize.width = 44;
         radio.value = (d === dopantIndex);
         radio.onClick = makeDopantHandler(d);
         dopantRadios.push(radio);
