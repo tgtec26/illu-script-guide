@@ -12,7 +12,7 @@ try {
   기능: DNA 위쪽 가닥 염기서열을 입력하면 당인산 골격(가로선) + 연결선 + 염기 글자로
         DNA 1(입력) · DNA 2(상보) · RNA(DNA 1의 T→U) 세 줄을 그립니다.
     - 가릴 서열을 입력하면 그 자리를 흰 사각 박스로 덮고 ? · ⓐⓑⓒ · ㉠㉡㉢ · ⅠⅡⅢ 중 하나를 씁니다
-    - 서열 입력은 '입력 완료'를 눌러야 반영됩니다(타이핑마다 다시 그리면 느려서)
+    - 서열 입력은 '완료'를 눌러야 반영됩니다(타이핑마다 다시 그리면 느려서)
   사용법: 그냥 실행하면 화면 중앙에 만듭니다
 */
 
@@ -56,10 +56,10 @@ try {
     seqRow.alignChildren = ["left", "center"];
     addCaption(seqRow, "DNA 1 서열");
     var seqInput = seqRow.add("edittext", undefined, options.seq);
-    seqInput.preferredSize.width = 300;
+    seqInput.preferredSize.width = 220;
     seqInput.helpTip = "위쪽 가닥. A·C·G·T만 읽습니다";
-    var seqButton = seqRow.add("button", undefined, "입력 완료");
-    seqButton.preferredSize.width = 70;
+    var seqButton = seqRow.add("button", undefined, "완료");
+    seqButton.preferredSize.width = 50;
     seqButton.onClick = function() { snapshotInputs(); updatePreview(); };
 
     var maskPanel = win.add("panel", undefined, "가릴 서열 · 박스 문자");
@@ -67,7 +67,6 @@ try {
     maskPanel.spacing = 2;
     maskPanel.margins = [8, 12, 8, 6];
     var maskInputs = [];
-    var maskRadios = [];
     var maskNames = ["DNA 1", "DNA 2", "RNA"];
     for (var m = 0; m < 3; m++) {
         var maskRow = maskPanel.add("group");
@@ -78,31 +77,17 @@ try {
         maskInput.preferredSize.width = 90;
         maskInput.helpTip = "그 줄에 보이는 대로 입력 (RNA는 U)";
         maskInputs.push(maskInput);
-        var maskButton = maskRow.add("button", undefined, "입력 완료");
-        maskButton.preferredSize.width = 70;
+        var labelList = maskRow.add("dropdownlist", undefined, LABELS);
+        labelList.selection = options.labels[m];
+        labelList.helpTip = "박스 안에 쓸 문자";
+        labelList.onChange = makeLabelHandler(m, labelList);
+        var maskButton = maskRow.add("button", undefined, "완료");
+        maskButton.preferredSize.width = 50;
         maskButton.onClick = function() { snapshotInputs(); updatePreview(); };
-        var radios = [];
-        for (var r = 0; r < LABELS.length; r++) {
-            var radio = maskRow.add("radiobutton", undefined, LABELS[r]);
-            radio.value = (options.labels[m] === r);
-            radio.onClick = makeLabelHandler(m, r);
-            radios.push(radio);
-        }
-        maskRadios.push(radios);
     }
 
     // ---- 조절 ----
-    var columns = win.add("group");
-    columns.alignChildren = ["fill", "top"];
-    columns.spacing = 4;
-    var leftColumn = columns.add("group");
-    leftColumn.orientation = "column";
-    leftColumn.alignChildren = "fill";
-    var rightColumn = columns.add("group");
-    rightColumn.orientation = "column";
-    rightColumn.alignChildren = "fill";
-
-    var linePanel = leftColumn.add("panel", undefined, "선 · 글자");
+    var linePanel = win.add("panel", undefined, "선 · 글자");
     linePanel.alignChildren = "fill";
     linePanel.spacing = 2;
     addRow(linePanel, "골격 굵기", "backboneWidth", 0.1, 5, "pt", false);
@@ -110,14 +95,14 @@ try {
     addRow(linePanel, "연결선 길이", "tickLength", 0, 20, "mm", false);
     addRow(linePanel, "글자 크기", "fontSize", 4, 30, "pt", false);
 
-    var gapPanel = rightColumn.add("panel", undefined, "간격");
+    var gapPanel = win.add("panel", undefined, "간격");
     gapPanel.alignChildren = "fill";
     gapPanel.spacing = 2;
     addRow(gapPanel, "염기 간격", "baseGap", 1, 30, "mm", false);
     addRow(gapPanel, "DNA 1–2", "strandGap", 2, 60, "mm", false);
     addRow(gapPanel, "DNA 2–RNA", "rnaGap", 2, 60, "mm", false);
 
-    var positionPanel = rightColumn.add("panel", undefined, "위치");
+    var positionPanel = win.add("panel", undefined, "위치");
     positionPanel.alignChildren = "fill";
     positionPanel.spacing = 2;
     addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", true);
@@ -134,7 +119,7 @@ try {
     try { win.defaultElement = null; } catch (defaultError) {}
     footer.add("button", undefined, "취소", {name: "cancel"});
     var status = win.add("statictext", undefined, " ");
-    status.preferredSize.width = 520;
+    status.preferredSize.width = 380;
 
     ok.onClick = function() {
         if (snapshotInputs()) previewPending = true;
@@ -168,9 +153,10 @@ try {
         return caption;
     }
 
-    function makeLabelHandler(index, label) {
+    function makeLabelHandler(index, list) {
         return function() {
-            options.labels[index] = label;
+            if (list.selection === null) return;
+            options.labels[index] = list.selection.index;
             updatePreview();
         };
     }
@@ -197,7 +183,7 @@ try {
         minus.preferredSize.width = STEP_BUTTON_WIDTH;
         minus.helpTip = String(step) + unit + " 감소";
         var slider = row.add("slider", undefined, options[key], min, max);
-        slider.preferredSize.width = 110;
+        slider.preferredSize.width = 77;
         var plus = row.add("button", undefined, "▶");
         plus.preferredSize.width = STEP_BUTTON_WIDTH;
         plus.helpTip = String(step) + unit + " 증가";
@@ -268,7 +254,7 @@ try {
     function buildPreview() {
         clearPreview();
         if (options.seq === "") {
-            status.text = "DNA 1 서열을 입력하고 '입력 완료'를 누르세요.";
+            status.text = "DNA 1 서열을 입력하고 '완료'를 누르세요.";
             return false;
         }
         previewGroup = doc.activeLayer.groupItems.add();
