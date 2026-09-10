@@ -64,6 +64,7 @@ try {
     };
     addRow(tailPanel, "붙는 위치", "tailOffset", 0, 100, "%", false);
     tailPanel.add("statictext", undefined, "0 → 100%: 가로변은 왼쪽 → 오른쪽, 세로변은 위 → 아래");
+    addRow(tailPanel, "꼬리 크기", "tailSize", 20, 400, "%", false);
     addRow(tailPanel, "휘어짐", "tailBend", 0, 100, "%", false);
     tailPanel.add("statictext", undefined, "휘어짐 0%: 곧은 꼬리 · 100%: 기존 곡선");
     var flip = tailPanel.add("checkbox", undefined, "꼬리 휘어짐 반전");
@@ -257,14 +258,14 @@ try {
 
     function readSettings() {
         var result = { paddingX: 2, paddingY: 1.5, radius: 1.5, tailPosition: "bottom",
-            tailOffset: 68, flip: false, offsetX: 0, offsetY: 0, preview: true, tailBend: 100 };
+            tailOffset: 68, flip: false, offsetX: 0, offsetY: 0, preview: true, tailBend: 100, tailSize: 100 };
         try {
             var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-            if (p[0] !== "v3" || p.length !== 11) return result;
-            var keys = ["paddingX", "paddingY", "radius", "tailOffset", "offsetX", "offsetY", "tailBend"];
-            var indices = [1, 2, 3, 5, 7, 8, 10];
-            var mins = [0, 0, 0, 0, -100, -100, 0];
-            var maxs = [50, 50, 50, 100, 100, 100, 100];
+            if (p[0] !== "v4" || p.length !== 12) return result;
+            var keys = ["paddingX", "paddingY", "radius", "tailOffset", "offsetX", "offsetY", "tailBend", "tailSize"];
+            var indices = [1, 2, 3, 5, 7, 8, 10, 11];
+            var mins = [0, 0, 0, 0, -100, -100, 0, 20];
+            var maxs = [50, 50, 50, 100, 100, 100, 100, 400];
             for (var i = 0; i < keys.length; i++) {
                 var raw = p[indices[i]];
                 var value = Number(raw);
@@ -281,9 +282,10 @@ try {
 
     function saveSettings() {
         try {
-            app.preferences.setStringPreference(PREF_KEY, ["v3", options.paddingX, options.paddingY,
+            app.preferences.setStringPreference(PREF_KEY, ["v4", options.paddingX, options.paddingY,
                 options.radius, options.tailPosition, options.tailOffset, options.flip ? 1 : 0,
-                options.offsetX, options.offsetY, options.preview ? 1 : 0, options.tailBend].join("|"));
+                options.offsetX, options.offsetY, options.preview ? 1 : 0, options.tailBend,
+                options.tailSize].join("|"));
         } catch (e) {}
     }
 
@@ -301,7 +303,8 @@ try {
         var height = bounds[1] - bounds[3] + 2 * opts.paddingY * mmToPt;
         var horizontal = opts.tailPosition === "top" || opts.tailPosition === "bottom";
         var sideLength = horizontal ? width : height;
-        var base = Math.min(1.26 * mmToPt, sideLength / 3);
+        var scale = opts.tailSize / 100;      // 꼬리 크기: 밑변과 길이를 같은 비율로
+        var base = Math.min(1.26 * mmToPt * scale, sideLength / 3);
         // 꼬리가 붙는 직선 구간을 확보하고 모서리와의 겹침을 방지한다.
         var radius = Math.min(opts.radius * mmToPt, width / 2, height / 2, (sideLength - base) / 2);
         var points = [];
@@ -324,7 +327,7 @@ try {
                 function tailMap(x, y) {
                     var u = (x - 2.25) * base / 3.49;
                     if (reverse) u = base - u;
-                    return map(center - base / 2 + u, (y - 0.15) * 2.45 * mmToPt / 6.9);
+                    return map(center - base / 2 + u, (y - 0.15) * 2.45 * mmToPt * scale / 6.9);
                 }
                 // 곧은 삼각형의 베지어 제어점에서 기존 곡선까지 보간한다.
                 var bend = opts.tailBend / 100;

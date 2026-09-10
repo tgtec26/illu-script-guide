@@ -45,7 +45,7 @@ const scripts = [
   { id: "coil-spring", category: "도형", name: "코일 스프링", file: "01_도형/Object_coilspring.jsx", summary: "선택한 원을 기준으로 코일 스프링을 만듭니다. 좌우 폭, 위아래 높이, 감는 횟수를 조절합니다.", tags: ["입체", "스프링"] },
   { id: "weather-front", category: "도형", name: "일기도 전선", file: "01_도형/Object_front.jsx", summary: "선택한 열린 패스를 온난·한랭·정체·폐색 전선으로 바꿉니다. 표준색, K 음영, HEX 색상을 지원합니다.", tags: ["과학", "일기도"] },
   { id: "phospholipid-bilayer", category: "도형", name: "인지질 2중층", file: "01_도형/Object_PhospholipidBilayer.jsx", summary: "기준선과 인지질 하나를 선택하면 선의 법선 방향으로 인지질을 위아래 두 층으로 세웁니다. 곡선에서는 바깥층 개수를 자동으로 늘려 머리 간격을 맞춥니다.", tags: ["과학", "세포막"] },
-  { id: "area-text-box", category: "문자", name: "둥근 텍스트 박스", file: "02_문자/Text_AreaTextRoundedBox.jsx", summary: "영역 문자와 둥근 박스를 함께 다룰 때 쓰는 문자 보조 도구입니다.", tags: ["텍스트박스", "문자"] },
+  { id: "area-text-box", category: "문자", name: "말풍선 만들기", file: "02_문자/Text_AreaTextRoundedBox.jsx", summary: "선택한 텍스트 둘레에 둥근 사각형 말풍선을 만듭니다. 여백·라운딩, 꼬리 방향(9·6·3·12시)·위치·크기·휘어짐, 위치 이동을 미리보기로 조절합니다.", tags: ["말풍선", "문자"] },
   { id: "text-degree", category: "문자", name: "도(°) 기호 삽입", file: "02_문자/Text_degree.jsx", summary: "텍스트 편집 중 숫자를 선택(또는 커서 위치)하고 실행하면 GSMediumB1 서체의 도(°) 기호를 뒤에 삽입합니다.", tags: ["도", "각도", "기호"] },
   { id: "chemical-formula", category: "문자", name: "화학식 서식", file: "02_문자/Text_ChemicalFormulaFormatter.jsx", summary: "선택한 텍스트에서 숫자는 아래첨자, 이온 전하는 위첨자로 자동 적용합니다.", tags: ["화학식", "첨자"] },
   { id: "make-number-seq", category: "문자", name: "숫자 시퀀스 만들기", file: "02_문자/Text_MakeNumbersSequence.jsx", summary: "연속 숫자 텍스트를 빠르게 생성합니다.", tags: ["숫자", "반복"] },
