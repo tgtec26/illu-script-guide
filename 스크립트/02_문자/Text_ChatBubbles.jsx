@@ -13,6 +13,7 @@ try {
     - 말풍선 수(2~5)를 고르면 그만큼 입력창이 열리고, 입력한 글마다 말풍선이 생깁니다
     - 글을 다 넣고 '입력 완료'를 눌러야 그리기 시작합니다(타이핑마다 다시 그리면 느려서)
     - 위에서부터 9시 꼬리(왼쪽 정렬) → 3시 꼬리(오른쪽 정렬)를 번갈아 놓습니다
+    - '같은 너비'를 켜면 모든 말풍선을 가장 넓은 것의 너비로 맞추고 왼쪽 끝을 나란히 세웁니다
     - 글자는 한글=Spoqa, 영문·숫자·기호=GSMediumB1 규칙을 글자마다 적용합니다
     - 여백·라운딩·꼬리 옵션은 Text_AreaTextRoundedBox와 같습니다. 글자 범위는 윤곽선 대신
       프레임 범위에 서체별 고정 비율을 적용해 어림합니다(윤곽선 변환을 되풀이하면 Illustrator가 불안정)
@@ -109,6 +110,10 @@ try {
     addRow(textPanel, "글자 크기", "fontSize", 4, 30, "pt", false);
     addRow(textPanel, "채팅창 너비", "chatWidth", 20, 200, "mm", false);
     addRow(textPanel, "말풍선 간격", "gap", 0, 30, "mm", false);
+    var sameWidth = textPanel.add("checkbox", undefined, "같은 너비");
+    sameWidth.value = options.sameWidth;
+    sameWidth.helpTip = "모든 말풍선을 가장 넓은 말풍선 너비로 맞추고 한 줄로 세웁니다";
+    sameWidth.onClick = function() { options.sameWidth = sameWidth.value; updatePreview(); };
 
     // ---- 오른쪽: Text_AreaTextRoundedBox와 같은 옵션 ----
     var boxPanel = rightColumn.add("panel", undefined, "사각형 · 텍스트 주변 여백");
@@ -431,18 +436,35 @@ try {
         var chatLeft = viewCenter[0] - options.chatWidth * mmToPt / 2;
         var chatRight = chatLeft + options.chatWidth * mmToPt;
         var cursorTop = viewCenter[1];
+        // 같은 너비: 가장 넓은 글자 범위에 맞춰 나머지 말풍선을 꼬리 반대쪽으로 늘리고 왼쪽에 세운다
+        var bounds = [];
+        var maxWidth = 0;
+        for (var b = 0; b < bubbles.length; b++) {
+            bounds.push(glyphBounds(bubbleParts(b).frame, bubbles[b].lines));
+            maxWidth = Math.max(maxWidth, bounds[b][2] - bounds[b][0]);
+        }
         for (var i = 0; i < bubbles.length; i++) {
             var record = bubbles[i];
             var parts = bubbleParts(i);
-            writePath(parts.path, getBubblePoints(glyphBounds(parts.frame, record.lines), record.side));
+            var gb = bounds[i];
+            if (options.sameWidth) {
+                if (record.side === "left") gb[2] = gb[0] + maxWidth;
+                else gb[0] = gb[2] - maxWidth;
+            }
+            writePath(parts.path, getBubblePoints(gb, record.side));
             var pb = parts.path.geometricBounds;
-            var dx = (record.side === "left") ? chatLeft - pb[0] : chatRight - pb[2];
+            var dx;
+            if (options.sameWidth) {
+                dx = chatLeft - (gb[0] - options.paddingX * mmToPt);   // 꼬리를 뺀 몸통 왼쪽 끝을 맞춘다
+            } else {
+                dx = (record.side === "left") ? chatLeft - pb[0] : chatRight - pb[2];
+            }
             parts.group.translate(dx, cursorTop - pb[1]);
             cursorTop -= (pb[1] - pb[3]) + options.gap * mmToPt;
         }
-        var gb = previewGroup.geometricBounds;
-        previewGroup.translate(viewCenter[0] - (gb[0] + gb[2]) / 2 + options.offsetX * mmToPt,
-            viewCenter[1] - (gb[1] + gb[3]) / 2 + options.offsetY * mmToPt);
+        var all = previewGroup.geometricBounds;
+        previewGroup.translate(viewCenter[0] - (all[0] + all[2]) / 2 + options.offsetX * mmToPt,
+            viewCenter[1] - (all[1] + all[3]) / 2 + options.offsetY * mmToPt);
     }
 
     // 점 수가 같으면 기존 앵커를 덮어쓴다 (Text_AreaTextRoundedBox와 같은 방식)
@@ -572,10 +594,10 @@ try {
     function readSettings() {
         var result = { count: 2, fontSize: 8, chatWidth: 60, gap: 2,
             paddingX: 2, paddingY: 1.5, radius: 1.5, tailOffset: 30, tailBend: 100, tailSize: 100,
-            flip: false, offsetX: 0, offsetY: 0, preview: true };
+            flip: false, offsetX: 0, offsetY: 0, preview: true, sameWidth: false };
         try {
             var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-            if (p[0] !== "v2" || p.length !== 15) return result;
+            if (p[0] !== "v3" || p.length !== 16) return result;
             var keys = ["count", "fontSize", "chatWidth", "gap", "paddingX", "paddingY", "radius",
                 "tailOffset", "tailBend", "tailSize", "offsetX", "offsetY"];
             var mins = [2, 4, 20, 0, 0, 0, 0, 0, 0, 20, -100, -100];
@@ -585,21 +607,22 @@ try {
                 var value = Number(raw);
                 if (!/\S/.test(raw) || !isFinite(value) || value < mins[i] || value > maxs[i]) return result;
             }
-            if (!/^[01]$/.test(p[13]) || !/^[01]$/.test(p[14])) return result;
+            if (!/^[01]$/.test(p[13]) || !/^[01]$/.test(p[14]) || !/^[01]$/.test(p[15])) return result;
             for (var j = 0; j < keys.length; j++) result[keys[j]] = Number(p[j + 1]);
             result.count = Math.round(result.count);
             result.flip = p[13] === "1";
             result.preview = p[14] === "1";
+            result.sameWidth = p[15] === "1";
         } catch (e) {}
         return result;
     }
 
     function saveSettings() {
         try {
-            app.preferences.setStringPreference(PREF_KEY, ["v2", options.count, options.fontSize,
+            app.preferences.setStringPreference(PREF_KEY, ["v3", options.count, options.fontSize,
                 options.chatWidth, options.gap, options.paddingX, options.paddingY, options.radius,
                 options.tailOffset, options.tailBend, options.tailSize, options.offsetX, options.offsetY,
-                options.flip ? 1 : 0, options.preview ? 1 : 0].join("|"));
+                options.flip ? 1 : 0, options.preview ? 1 : 0, options.sameWidth ? 1 : 0].join("|"));
         } catch (e) {}
     }
 })();
