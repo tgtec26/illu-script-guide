@@ -69,6 +69,7 @@ const scripts = [
   { id: "white-fill", category: "색상", name: "흰색 면", file: "03_색상/Color_white.jsx", summary: "선택한 모든 개체의 면을 흰색으로 바꿉니다.", tags: ["흰색", "면"] },
   { id: "white-stroke", category: "색상", name: "흰색 선", file: "03_색상/Color_whiteline.jsx", summary: "선택한 모든 개체의 선을 흰색으로 바꿉니다.", tags: ["흰색", "선"] },
   { id: "textbox-4mm", category: "삽입", name: "4mm 텍스트 박스", file: "04_삽입/Input_4mmtextbox.jsx", summary: "현재 화면 중앙에 8mm x 4mm 사각형을 만듭니다.", tags: ["상자", "삽입"] },
+  { id: "box-2mm", category: "삽입", name: "2mm 여백 사각형", file: "04_삽입/Input_2mmBox.jsx", summary: "선택한 개체(여러 개면 전체)의 보이는 영역에서 상하좌우 2mm 여백을 둔 0.3pt 사각형을 바로 그립니다.", tags: ["상자", "여백", "삽입"] },
   { id: "dash-cross", category: "삽입", name: "십자 파선", file: "04_삽입/Input_dashline.jsx", summary: "현재 화면 정중앙에 4mm 십자 파선을 만듭니다.", tags: ["십자", "파선"] },
   { id: "artboard", category: "삽입", name: "대지 만들기", file: "04_삽입/Input_setborard.jsx", summary: "설정에 맞는 새 문서와 대지를 생성합니다.", tags: ["대지", "문서"] },
   { id: "tick", category: "삽입", name: "중앙 십자선", file: "04_삽입/Input_tick.jsx", summary: "현재 화면 중앙에 1mm 길이의 수직/수평선을 개별 객체로 만듭니다.", tags: ["중심", "삽입"] },
