@@ -452,18 +452,21 @@ try {
     }
 
     // --- ScriptUI ---
+    var STEP_BUTTON_WIDTH = 34;   // 더 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다
     var win = new Window("dialog", "입방정계 단위세포 생성기");
     win.orientation = "column";
     win.alignChildren = ["fill", "top"];
-    win.spacing = 8;
-    win.margins = 20;
+    win.spacing = 4;
+    win.margins = 12;
 
     var pnlLattice = win.add("panel", undefined, "격자 유형 (다중 선택)");
-    pnlLattice.orientation = "row";
     pnlLattice.alignChildren = "left";
+    pnlLattice.spacing = 2;
     var chkLattice = [];
+    var latticeRow = null;
     for (var li = 0; li < LATTICES.length; li++) {
-        chkLattice[li] = pnlLattice.add("checkbox", undefined, LATTICES[li].label);
+        if (li % 4 === 0) latticeRow = pnlLattice.add("group");   // 두 줄로 나눠 폭을 줄인다
+        chkLattice[li] = latticeRow.add("checkbox", undefined, LATTICES[li].label);
         chkLattice[li].value = li < 3;
     }
 
@@ -491,7 +494,7 @@ try {
     chkLit3D.value = true;
     var chkOutline = pnlOptions.add("checkbox", undefined, "구 외곽선");
     chkOutline.value = true;
-    var chkPreview = pnlOptions.add("checkbox", undefined, "미리보기 실시간 표시");
+    var chkPreview = pnlOptions.add("checkbox", undefined, "미리보기");
     chkPreview.value = true;
 
     var pnlLine = win.add("panel", undefined, "라인 표현");
@@ -510,6 +513,24 @@ try {
     var pnlAngles = win.add("panel", undefined, "관찰 각도 (오른쪽 + 왼쪽 + 상단 = 360°)");
     pnlAngles.orientation = "column";
     pnlAngles.alignChildren = "left";
+    pnlAngles.spacing = 2;
+    // ◀▶ 버튼: 슬라이더를 step만큼 옮기고 드래그와 같은 순서로 onChanging → onChange를 부른다
+    function addStepButtons(row, slider, step) {
+        var minus = row.add("button", undefined, "◀");
+        minus.preferredSize.width = STEP_BUTTON_WIDTH;
+        var plus = row.add("button", undefined, "▶");
+        plus.preferredSize.width = STEP_BUTTON_WIDTH;
+        function nudge(delta) {
+            var next = Math.min(slider.maxvalue, Math.max(slider.minvalue, slider.value + delta));
+            if (next === slider.value) return;
+            slider.value = next;
+            if (slider.onChanging) slider.onChanging();
+            if (slider.onChange) slider.onChange();
+        }
+        minus.onClick = function() { nudge(-step); };
+        plus.onClick = function() { nudge(step); };
+        return plus;
+    }
     function addAngleSlider(labelText, initialValue) {
         var row = pnlAngles.add("group");
         row.orientation = "row";
@@ -517,6 +538,7 @@ try {
         label.preferredSize.width = 90;
         var slider = row.add("slider", undefined, initialValue, 91, 179);
         slider.preferredSize.width = 105;
+        addStepButtons(row, slider, 1);
         var valueText = row.add("statictext", undefined, Math.round(initialValue) + "°");
         valueText.preferredSize.width = 45;
         slider.syncLabel = function() {
@@ -536,6 +558,7 @@ try {
         label.preferredSize.width = 90;
         var slider = row.add("slider", undefined, 100, 40, 160);
         slider.preferredSize.width = 105;
+        addStepButtons(row, slider, 1);
         var valueText = row.add("statictext", undefined, "100%");
         valueText.preferredSize.width = 45;
         slider.syncLabel = function() {
@@ -561,9 +584,9 @@ try {
         updatePreview();
     }
     var anglePresetRow = pnlAngles.add("group");
-    var btnAngleIso = anglePresetRow.add("button", undefined, "Isometric (120/120)");
-    var btnAngleDi = anglePresetRow.add("button", undefined, "Dimetric (110/110)");
-    var btnAngleTri = anglePresetRow.add("button", undefined, "Trimetric (120/105)");
+    var btnAngleIso = anglePresetRow.add("button", undefined, "Isometric");
+    var btnAngleDi = anglePresetRow.add("button", undefined, "Dimetric");
+    var btnAngleTri = anglePresetRow.add("button", undefined, "Trimetric");
     btnAngleIso.onClick = function() { setAnglePreset(120, 120); };
     btnAngleDi.onClick = function() { setAnglePreset(110, 110); };
     btnAngleTri.onClick = function() { setAnglePreset(120, 105); };
@@ -571,14 +594,15 @@ try {
 
     var pnlSize = win.add("panel", undefined, "크기·밝기 조절");
     pnlSize.alignChildren = "left";
-    pnlSize.spacing = 6;
+    pnlSize.spacing = 2;
     var sliderSyncers = [];
-    function addSlider(labelText, minV, maxV, initV, fmt) {
+    function addSlider(labelText, minV, maxV, initV, fmt, step) {
         var g = pnlSize.add("group");
         var lab = g.add("statictext", undefined, labelText);
         lab.preferredSize.width = 135;
         var s = g.add("slider", undefined, initV, minV, maxV);
         s.preferredSize.width = 105;
+        addStepButtons(g, s, step);
         var t = g.add("statictext", undefined, fmt(initV));
         t.preferredSize.width = 55;
         s.syncLabel = function() { t.text = fmt(s.value); };
@@ -589,12 +613,12 @@ try {
     }
     function syncSliderLabels() { for (var i = 0; i < sliderSyncers.length; i++) sliderSyncers[i](); }
     // 밀집·절단 모드의 구 지름은 접촉 조건에서 자동 계산되므로 슬라이더는 라인 모드에만 쓰인다.
-    var sldCell = addSlider("셀 한 변", 5, 80, 20, function(v) { return v.toFixed(1) + "mm"; });
-    var sldCornerSphere = addSlider("꼭짓점 구 지름(라인)", 0.5, 20, 3, function(v) { return v.toFixed(1) + "mm"; });
-    var sldOtherSphere = addSlider("나머지 구 지름(라인)", 0.5, 20, 3, function(v) { return v.toFixed(1) + "mm"; });
-    var sldCornerBrightness = addSlider("꼭짓점 밝기", 40, 160, 100, function(v) { return Math.round(v) + "%"; });
-    var sldOtherBrightness = addSlider("나머지 밝기", 40, 160, 100, function(v) { return Math.round(v) + "%"; });
-    var sldGap = addSlider("셀 간격", 0, 40, 8, function(v) { return v.toFixed(1) + "mm"; });
+    var sldCell = addSlider("셀 한 변", 5, 80, 20, function(v) { return v.toFixed(1) + "mm"; }, 0.1);
+    var sldCornerSphere = addSlider("꼭짓점 구 지름(라인)", 0.5, 20, 3, function(v) { return v.toFixed(1) + "mm"; }, 0.1);
+    var sldOtherSphere = addSlider("나머지 구 지름(라인)", 0.5, 20, 3, function(v) { return v.toFixed(1) + "mm"; }, 0.1);
+    var sldCornerBrightness = addSlider("꼭짓점 밝기", 40, 160, 100, function(v) { return Math.round(v) + "%"; }, 1);
+    var sldOtherBrightness = addSlider("나머지 밝기", 40, 160, 100, function(v) { return Math.round(v) + "%"; }, 1);
+    var sldGap = addSlider("셀 간격", 0, 40, 8, function(v) { return v.toFixed(1) + "mm"; }, 0.1);
 
     function isIodineSelected() {
         for (var i = 0; i < LATTICES.length; i++) {
