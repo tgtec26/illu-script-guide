@@ -184,7 +184,7 @@ try {
         var down = group.add("button", undefined, "◀");
         down.preferredSize.width = STEP_BUTTON_WIDTH;
         var slider = group.add("slider", undefined, initial, minimum, maximum);
-        slider.preferredSize.width = 150;
+        slider.preferredSize.width = 105;
         var up = group.add("button", undefined, "▶");
         up.preferredSize.width = STEP_BUTTON_WIDTH;
         field.input = input;

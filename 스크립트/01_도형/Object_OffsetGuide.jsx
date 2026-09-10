@@ -51,7 +51,7 @@ try {
     var INPUT_WIDTH = 54;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 180;
+    var SLIDER_WIDTH = 126;
 
     var dlg = new Window("dialog", "오프셋 안내선");
     dlg.orientation = "column";

@@ -26,7 +26,7 @@ try {
     var BRIGHT_MAX = 300;
     var LABEL_WIDTH = 70;
     var INPUT_WIDTH = 50;
-    var SLIDER_WIDTH = 150;
+    var SLIDER_WIDTH = 105;
     var STEP_BUTTON_WIDTH = 34;
     // 파장별 밝기 키포인트. 미리보기가 다이얼로그를 열자마자 돌기 때문에 여기(호출보다 위)에 둬야 한다.
     // 양 끝은 거의 검정(완전 검정은 아님), 570nm(노랑) 하나만 흰색, 파랑·청록 쪽에 작은 밝은 언덕, 빨강은 천천히 어두워진다.

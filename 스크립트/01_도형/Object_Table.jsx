@@ -74,7 +74,7 @@ try {
     var UNIT_WIDTH = 26;        // 단위 글자 수가 달라도 뒤 요소가 어긋나지 않도록 고정
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 130;
+    var SLIDER_WIDTH = 91;
 
     var dlg = new Window("dialog", "표");
     dlg.orientation = "column";
@@ -87,11 +87,7 @@ try {
     var colCountField = addNumberField(countPanel, "열 수", "개", colCount, 1, 1, MAX_COLS, false);
     var headerKField = addNumberField(countPanel, "1행 음영", "K", headerK, 10, 0, 100, false);
 
-    // 행·열 패널은 나란히 두어 다이얼로그가 세로로 길어지지 않게 한다
-    var sizeRow = dlg.add("group");
-    sizeRow.alignChildren = ["fill", "top"];
-
-    var rowPanel = addPanel(sizeRow, "행 높이 (체크한 줄은 위 줄을 따라감)");
+    var rowPanel = addPanel(dlg, "행 높이 (체크한 줄은 위 줄을 따라감)");
     var rowFields = [];
     for (var r = 0; r < MAX_ROWS; r++) {
         rowFields[r] = addNumberField(rowPanel, (r + 1) + "행", "mm", rowHeightsMm[r],
@@ -100,7 +96,7 @@ try {
         bindSizeField(rowFields[r]);
     }
 
-    var colPanel = addPanel(sizeRow, "열 너비 (체크한 줄은 왼쪽 줄을 따라감)");
+    var colPanel = addPanel(dlg, "열 너비 (체크한 줄은 왼쪽 줄을 따라감)");
     var colFields = [];
     for (var c = 0; c < MAX_COLS; c++) {
         colFields[c] = addNumberField(colPanel, (c + 1) + "열", "mm", colWidthsMm[c],

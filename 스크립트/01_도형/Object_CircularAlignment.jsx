@@ -209,7 +209,7 @@ try {
             offsetToStep(-maxOffsetMm),
             offsetToStep(maxOffsetMm)
         );
-        offsetControl.preferredSize.width = 360;
+        offsetControl.preferredSize.width = 252;
         offsetControl.stepdelta = 1;
         offsetControl.jumpdelta = 10;
 
@@ -224,7 +224,7 @@ try {
         rotationInput.characters = 8;
 
         var rotationControl = rotationPanel.add("scrollbar", undefined, Math.max(-180, Math.min(180, Math.round(saved.rotationDeg))), -180, 180);
-        rotationControl.preferredSize.width = 360;
+        rotationControl.preferredSize.width = 252;
         rotationControl.stepdelta = 1;
         rotationControl.jumpdelta = 15;
 

@@ -21,7 +21,7 @@ function drawIsometricBox() {
     var maxSliderMm = 20;
     var offsetStepMm = 0.2;
     var labelWidth = 90;   // 옵션 이름 열 폭 (세로 정렬용)
-    var sliderWidth = 280; // 슬라이더 폭 (프리셋 버튼 행 오른쪽 끝에 맞춤)
+    var sliderWidth = 196; // 슬라이더 폭 (프리셋 버튼 행 오른쪽 끝에 맞춤)
     var previewGroup = null;
     var settingFile = new File(Folder.myDocuments + "/Object_isometric__settings.txt");
 

@@ -68,7 +68,7 @@ try {
     var LABEL_WIDTH = 76;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 240;
+    var SLIDER_WIDTH = 168;
     var UNIT_WIDTH = 28;
 
     var dlg = new Window("dialog", "상동 염색체");

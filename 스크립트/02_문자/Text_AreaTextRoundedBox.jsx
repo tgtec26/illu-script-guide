@@ -124,7 +124,7 @@ try {
         minus.preferredSize.width = 34;
         minus.helpTip = String(step) + unit + " 감소";
         var slider = row.add("slider", undefined, options[key], min, max);
-        slider.preferredSize.width = 180;
+        slider.preferredSize.width = 126;
         var plus = row.add("button", undefined, "+");
         plus.preferredSize.width = 34;
         plus.helpTip = String(step) + unit + " 증가";

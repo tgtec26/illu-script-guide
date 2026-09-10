@@ -68,7 +68,7 @@ try {
     widthInput.characters = 8;
     widthRow.add("statictext", undefined, "mm");
     var widthSlider = sizePanel.add("slider", undefined, coilWidthMm, SIZE_STEP_MM, maxCoilWidthMm);
-    widthSlider.preferredSize.width = 380;
+    widthSlider.preferredSize.width = 266;
     widthSlider.stepdelta = SIZE_STEP_MM;
 
     var heightRow = sizePanel.add("group");
@@ -77,7 +77,7 @@ try {
     heightInput.characters = 8;
     heightRow.add("statictext", undefined, "mm");
     var heightSlider = sizePanel.add("slider", undefined, coilHeightMm, SIZE_STEP_MM, maxCoilHeightMm);
-    heightSlider.preferredSize.width = 380;
+    heightSlider.preferredSize.width = 266;
     heightSlider.stepdelta = SIZE_STEP_MM;
 
     var turnsPanel = dlg.add("panel", undefined, "코일");
@@ -89,7 +89,7 @@ try {
     turnsInput.characters = 6;
     turnsRow.add("statictext", undefined, "회  (5 ~ 10)");
     var turnsSlider = turnsPanel.add("slider", undefined, turnCount, MIN_TURNS, MAX_TURNS);
-    turnsSlider.preferredSize.width = 380;
+    turnsSlider.preferredSize.width = 266;
     turnsSlider.stepdelta = 1;
 
     var positionPanel = dlg.add("panel", undefined, "위치");
@@ -269,7 +269,7 @@ try {
         down.preferredSize.width = STEP_BUTTON_WIDTH;
         var slider = row.add("slider", undefined, value,
             -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-        slider.preferredSize.width = 200;
+        slider.preferredSize.width = 140;
         var up = row.add("button", undefined, "▶");
         up.preferredSize.width = STEP_BUTTON_WIDTH;
         return {input: input, slider: slider, down: down, up: up};

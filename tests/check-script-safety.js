@@ -2052,7 +2052,7 @@ for (const file of updaterFiles) {
     );
     const rowControls = addValueRow(fakeParent, "외경", "mm", 40, 5, 200, 0.5, 2);
     const unitElement = rowElements.filter((element) => element.type === "statictext" && element.text === "mm")[0];
-    assert.strictEqual(rowControls.slider.preferredSize.width, 280, "cell cycle numeric sliders share one aligned width");
+    assert.strictEqual(rowControls.slider.preferredSize.width, 196, "cell cycle numeric sliders share one aligned width");
     assert.strictEqual(unitElement.preferredSize.width, 28, "cell cycle unit column must show mm without clipping");
 
     const startBoundaryRadians = new Function(

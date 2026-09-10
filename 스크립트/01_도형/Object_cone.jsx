@@ -67,7 +67,7 @@ try {
     // 0 버튼이 붙는 줄도 라벨이 잘리지 않도록 넓힌다.
     var LABEL_WIDTH = 70;
     var UNIT_WIDTH = 26;        // 단위 글자 수가 달라도 뒤 요소가 어긋나지 않도록 고정
-    var SLIDER_WIDTH = 200;
+    var SLIDER_WIDTH = 140;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
 

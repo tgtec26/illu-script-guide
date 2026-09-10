@@ -114,7 +114,7 @@ try {
     var INPUT_CHARACTERS = 5;          // "-200.0"까지는 스크롤되지만 보통 값은 다 보인다
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 100;
+    var SLIDER_WIDTH = 70;
 
     var dlg = new Window("dialog", "감수 분열");
     dlg.orientation = "column";
@@ -122,15 +122,7 @@ try {
     dlg.spacing = 6;
     dlg.margins = 12;
 
-    // 1280×800 화면에 들어가도록 두 열로 나눈다 (한 열이면 800px를 넘는다)
-    var columns = dlg.add("group");
-    columns.orientation = "row";
-    columns.alignChildren = ["fill", "top"];
-    columns.spacing = 8;
-    var leftColumn = addColumn(columns);
-    var rightColumn = addColumn(columns);
-
-    var gapPanel = addPanel(leftColumn, "간격 · 위치 (중심 사이, mm)");
+    var gapPanel = addPanel(dlg, "간격 · 위치 (중심 사이, mm)");
     var gapControls = [];
     for (var g = 0; g < GAP_NAMES.length; g++) {
         gapControls.push(addValueRow(gapPanel, GAP_NAMES[g], gapsMm[g], 1, 10, 0.5, 1));
@@ -141,17 +133,17 @@ try {
     var offsetYControls = addValueRow(gapPanel, "전체 세로 이동", offsetYmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
-    var sizePanel = addPanel(leftColumn, "세포 지름 (mm)");
+    var sizePanel = addPanel(dlg, "세포 지름 (mm)");
     var diameterControls = [];
     for (var i = 0; i < LEVEL_NAMES.length; i++) {
         diameterControls.push(addValueRow(sizePanel, LEVEL_NAMES[i], diametersMm[i], 1, 10, 0.5, 1));
     }
 
-    var arrowPanel = addPanel(rightColumn, "화살표");
+    var arrowPanel = addPanel(dlg, "화살표");
     var arrowGapControls = addValueRow(arrowPanel, "원과의 간격 mm", arrowGapMm, 0, 2, 0.1, 1);
     var arrowScaleControls = addValueRow(arrowPanel, "화살촉 크기 %", arrowScale, 10, 800, 5, 0);
 
-    var spermPanel = addPanel(rightColumn, "정자 (mm)");
+    var spermPanel = addPanel(dlg, "정자 (mm)");
     var spermCheck = spermPanel.add("checkbox", undefined, "정자 그리기");
     spermCheck.value = showSperm;
     var headWidthControls = addValueRow(spermPanel, "머리 폭", headWidthMm, 0.5, 2, 0.1, 1);
@@ -791,14 +783,6 @@ try {
 
     function makeArraySetter(values, index) {
         return function(value) { values[index] = value; };
-    }
-
-    function addColumn(parent) {
-        var column = parent.add("group");
-        column.orientation = "column";
-        column.alignChildren = ["fill", "top"];
-        column.spacing = 6;
-        return column;
     }
 
     function addPanel(parent, title) {

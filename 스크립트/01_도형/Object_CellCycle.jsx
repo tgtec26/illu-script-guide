@@ -76,7 +76,7 @@ try {
     var LABEL_WIDTH = 66;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 280;
+    var SLIDER_WIDTH = 196;
     var UNIT_WIDTH = 28;
     // 구간 슬라이더: 경계 조절점 3개를 끌어 네 구간의 비율을 정한다 (합계 항상 100%)
     var SECTOR_SLIDER_HEIGHT = 34;

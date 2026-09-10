@@ -87,7 +87,7 @@ try {
     var UNIT_WIDTH = 26;        // 단위 글자 수가 달라도 뒤 요소가 어긋나지 않도록 고정
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 120;
+    var SLIDER_WIDTH = 84;
 
     var dlg = new Window("dialog", "반도체 모형");
     dlg.orientation = "column";
@@ -95,20 +95,7 @@ try {
     dlg.spacing = 6;
     dlg.margins = 12;
 
-    var columns = dlg.add("group");
-    columns.alignChildren = ["fill", "top"];
-    columns.spacing = 8;
-    var leftColumn = columns.add("group");
-    leftColumn.orientation = "column";
-    leftColumn.alignChildren = "fill";
-    leftColumn.spacing = 6;
-    var rightColumn = columns.add("group");
-    rightColumn.orientation = "column";
-    rightColumn.alignChildren = "fill";
-    rightColumn.spacing = 6;
-
-    // ---- 왼쪽: 구조 · 표시 · 음영 ----
-    var structurePanel = addPanel(leftColumn, "구조");
+    var structurePanel = addPanel(dlg, "구조");
     var kindRow = structurePanel.add("group");
     var pureRadio = kindRow.add("radiobutton", undefined, "규소만");
     var dopedRadio = kindRow.add("radiobutton", undefined, "불순물 추가");
@@ -117,7 +104,7 @@ try {
     var rowRadios = addRadioRow(structurePanel, "행", GRID_SIZES, rows);
     var colRadios = addRadioRow(structurePanel, "열", GRID_SIZES, cols);
 
-    var dopantPanel = addPanel(leftColumn, "불순물");
+    var dopantPanel = addPanel(dlg, "불순물");
     // 두 줄이라 ScriptUI 라디오 그룹이 나뉜다. 하나만 켜지도록 직접 관리한다.
     var dopantRadios = [];
     var nRow = dopantPanel.add("group");
@@ -132,34 +119,36 @@ try {
         dopantRadios.push(radio);
     }
 
-    var showPanel = addPanel(leftColumn, "표시");
-    var minusCheck = showPanel.add("checkbox", undefined, "전자 − 기호");
+    var showPanel = addPanel(dlg, "표시");
+    var showRow1 = showPanel.add("group");
+    var minusCheck = showRow1.add("checkbox", undefined, "전자 − 기호");
     minusCheck.value = showMinus;
-    var symbolCheck = showPanel.add("checkbox", undefined, "핵 원소 기호");
+    var symbolCheck = showRow1.add("checkbox", undefined, "핵 원소 기호");
     symbolCheck.value = showSymbol;
-    var calloutCheck = showPanel.add("checkbox", undefined, "정공·자유 전자 지시선과 이름");
+    var showRow2 = showPanel.add("group");
+    var calloutCheck = showRow2.add("checkbox", undefined, "정공·자유 전자 지시선과 이름");
     calloutCheck.value = showCallout;
-    var surroundCheck = showPanel.add("checkbox", undefined, "주변 궤도 일부 표시");
+    var surroundCheck = showRow2.add("checkbox", undefined, "주변 궤도 일부 표시");
     surroundCheck.value = showSurround;
 
-    var shadePanel = addPanel(leftColumn, "음영");
+    var shadePanel = addPanel(dlg, "음영");
     var siliconKField = addNumberField(shadePanel, "규소 핵", "K", siliconK, 10, 0, 100);
     var dopantKField = addNumberField(shadePanel, "불순물 핵", "K", dopantK, 10, 0, 100);
     var electronKField = addNumberField(shadePanel, "전자", "K", electronK, 10, 0, 100);
-    var litNucleusCheck = shadePanel.add("checkbox", undefined, "핵 3D 조명 효과");
+    var litRow = shadePanel.add("group");
+    var litNucleusCheck = litRow.add("checkbox", undefined, "핵 3D 조명 효과");
     litNucleusCheck.value = lit3DNucleus;
-    var litElectronCheck = shadePanel.add("checkbox", undefined, "전자 3D 조명 효과");
+    var litElectronCheck = litRow.add("checkbox", undefined, "전자 3D 조명 효과");
     litElectronCheck.value = lit3DElectron;
 
-    // ---- 오른쪽: 크기 · 위치 ----
-    var sizePanel = addPanel(rightColumn, "크기");
+    var sizePanel = addPanel(dlg, "크기");
     var siliconField = addNumberField(sizePanel, "규소 핵 지름", "mm", siliconMm, 0.1, 0.5, 20);
     var dopantField = addNumberField(sizePanel, "불순물 핵 지름", "mm", dopantMm, 0.1, 0.5, 20);
     var electronField = addNumberField(sizePanel, "전자 지름", "mm", electronMm, 0.1, 0.2, 6);
     var distanceField = addNumberField(sizePanel, "핵·전자 거리", "mm", distanceMm, 0.1, 1, 30);
     var surroundField = addNumberField(sizePanel, "주변 궤도 폭", "mm", surroundMm, 0.1, 0, 10);
 
-    var positionPanel = addPanel(rightColumn, "위치");
+    var positionPanel = addPanel(dlg, "위치");
     var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
     var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1,

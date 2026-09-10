@@ -110,7 +110,7 @@ try {
     var GENDER_WIDTH = 118;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 150;
+    var SLIDER_WIDTH = 105;
     var UNIT_WIDTH = 24;
 
     var dlg = new Window("dialog", "가계도");

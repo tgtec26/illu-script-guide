@@ -110,7 +110,7 @@ try {
         var minus = row.add("button", undefined, "−");
         minus.preferredSize.width = 34;
         var slider = row.add("slider", undefined, options[field.key], field.min, field.max);
-        slider.preferredSize.width = 180;
+        slider.preferredSize.width = 126;
         var plus = row.add("button", undefined, "+");
         plus.preferredSize.width = 34;
         var input = row.add("edittext", undefined, String(options[field.key]));

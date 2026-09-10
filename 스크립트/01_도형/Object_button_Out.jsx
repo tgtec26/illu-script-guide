@@ -209,7 +209,7 @@ try {
             depthToStep(minDepthMm),
             depthToStep(maxSliderDepthMm)
         );
-        depthControl.preferredSize.width = 360;
+        depthControl.preferredSize.width = 252;
         depthControl.stepdelta = 1;
         depthControl.jumpdelta = 10;
 
@@ -249,7 +249,7 @@ try {
             down.preferredSize.width = STEP_BUTTON_WIDTH;
             var slider = row.add("slider", undefined, value,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-            slider.preferredSize.width = 200;
+            slider.preferredSize.width = 140;
             var up = row.add("button", undefined, "▶");
             up.preferredSize.width = STEP_BUTTON_WIDTH;
             return {input: offsetInput, slider: slider, down: down, up: up};

@@ -26,7 +26,7 @@ try {
     var POSITION_LIMIT_MM = 30;
     var LABEL_WIDTH = 70;
     var INPUT_WIDTH = 50;
-    var SLIDER_WIDTH = 150;
+    var SLIDER_WIDTH = 105;
     var STEP_BUTTON_WIDTH = 34;
 
     var doc = app.activeDocument;

@@ -940,7 +940,7 @@ try {
         down.preferredSize.width = STEP_BUTTON_WIDTH;
         var slider = row.add("slider", undefined, value,
             -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-        slider.preferredSize.width = 200;
+        slider.preferredSize.width = 140;
         var up = row.add("button", undefined, "▶");
         up.preferredSize.width = STEP_BUTTON_WIDTH;
         return {input: input, slider: slider, down: down, up: up};
@@ -987,7 +987,7 @@ try {
         input.characters = 6;
         row.add("statictext", undefined, unit);
         var slider = parent.add("slider", undefined, value, minimum, maximum);
-        slider.preferredSize.width = 260;
+        slider.preferredSize.width = 182;
         slider.stepdelta = step;
         return {
             input: input,

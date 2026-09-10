@@ -166,7 +166,7 @@ try {
         var lab = g.add("statictext", undefined, labelText);
         lab.preferredSize.width = 70;
         var s = g.add("slider", undefined, initV, minV, maxV);
-        s.preferredSize.width = 150;
+        s.preferredSize.width = 105;
         var t = g.add("statictext", undefined, fmt(initV));
         t.preferredSize.width = 55;
         s.syncLabel = function() { t.text = fmt(s.value); };

@@ -11,7 +11,7 @@ try {
   Text_ChatBubbles.jsx
   기능: 여러 사람이 주고받는 채팅 말풍선을 한 번에 만듭니다.
     - 말풍선 수(2~5)를 고르면 그만큼 입력창이 열리고, 입력한 글마다 말풍선이 생깁니다
-    - 글을 다 넣고 '입력 완료'를 눌러야 그리기 시작합니다(타이핑마다 다시 그리면 느려서)
+    - 글을 다 넣고 '완료'를 눌러야 그리기 시작합니다(타이핑마다 다시 그리면 느려서)
     - 위에서부터 9시 꼬리(왼쪽 정렬) → 3시 꼬리(오른쪽 정렬)를 번갈아 놓습니다
     - '같은 너비'를 켜면 모든 말풍선을 가장 넓은 것의 너비로 맞추고 왼쪽 끝을 나란히 세웁니다
     - 글자는 한글=Spoqa, 영문·숫자·기호=GSMediumB1 규칙을 글자마다 적용합니다
@@ -50,7 +50,7 @@ try {
     var lastPreviewTime = 0;
     var PREVIEW_INTERVAL_MS = 40;
     var committed = false;
-    var texts = [];             // '입력 완료'를 누른 시점의 대화. 미리보기는 이것으로 그린다
+    var texts = [];             // '완료'를 누른 시점의 대화. 미리보기는 이것으로 그린다
     var bubbles = [];           // 말풍선 기록 {side}. 부품은 bubbleParts(i)로 순서에서 다시 찾는다
     var rebuildPending = false; // 글·수·글자 크기가 바뀌면 글자부터 다시 만든다
 
@@ -58,18 +58,9 @@ try {
 
     var win = new Window("dialog", "채팅 말풍선 만들기");
     win.alignChildren = "fill";
-    var columns = win.add("group");
-    columns.alignChildren = ["fill", "top"];
-    columns.spacing = 8;
-    var leftColumn = columns.add("group");
-    leftColumn.orientation = "column";
-    leftColumn.alignChildren = "fill";
-    var rightColumn = columns.add("group");
-    rightColumn.orientation = "column";
-    rightColumn.alignChildren = "fill";
+    win.spacing = 4;
 
-    // ---- 왼쪽: 말풍선 수 · 대화 · 글자 ----
-    var countPanel = leftColumn.add("panel", undefined, "말풍선 수");
+    var countPanel = win.add("panel", undefined, "말풍선 수");
     countPanel.orientation = "row";
     var countRadios = [];
     for (var c = 2; c <= MAX_BUBBLES; c++) {
@@ -79,12 +70,13 @@ try {
         countRadios.push(countRadio);
     }
 
-    var chatPanel = leftColumn.add("panel", undefined, "대화 (위에서부터 · 홀수 번째 9시, 짝수 번째 3시 꼬리)");
+    var chatPanel = win.add("panel", undefined, "대화 (위에서부터 · 홀수 번째 9시, 짝수 번째 3시 꼬리)");
     chatPanel.orientation = "row";
     chatPanel.alignChildren = ["left", "center"];
     var inputColumn = chatPanel.add("group");
     inputColumn.orientation = "column";
     inputColumn.alignChildren = "fill";
+    inputColumn.spacing = 2;
     var inputs = [];
     for (var t = 0; t < MAX_BUBBLES; t++) {
         var inputRow = inputColumn.add("group");
@@ -93,11 +85,11 @@ try {
         caption.preferredSize.width = 16;
         // 여러 줄 입력: 엔터로 줄을 바꾼다. 타이핑 중에는 그리지 않는다
         var input = inputRow.add("edittext", undefined, "", {multiline: true});
-        input.preferredSize = [250, 40];
+        input.preferredSize = [250, 32];
         inputs.push(input);
     }
-    var doneButton = chatPanel.add("button", undefined, "입력 완료");
-    doneButton.preferredSize = [70, 40];
+    var doneButton = chatPanel.add("button", undefined, "완료");
+    doneButton.preferredSize = [50, 32];
     doneButton.helpTip = "입력한 대화로 말풍선을 그립니다";
     doneButton.onClick = function() {
         snapshotTexts();
@@ -105,8 +97,9 @@ try {
         updatePreview();
     };
 
-    var textPanel = leftColumn.add("panel", undefined, "글자 · 배치");
+    var textPanel = win.add("panel", undefined, "글자 · 배치");
     textPanel.alignChildren = "fill";
+    textPanel.spacing = 2;
     addRow(textPanel, "글자 크기", "fontSize", 4, 30, "pt", false);
     addRow(textPanel, "채팅창 너비", "chatWidth", 20, 200, "mm", false);
     addRow(textPanel, "말풍선 간격", "gap", 0, 30, "mm", false);
@@ -115,27 +108,27 @@ try {
     sameWidth.helpTip = "모든 말풍선을 가장 넓은 말풍선 너비로 맞추고 한 줄로 세웁니다";
     sameWidth.onClick = function() { options.sameWidth = sameWidth.value; updatePreview(); };
 
-    // ---- 오른쪽: Text_AreaTextRoundedBox와 같은 옵션 ----
-    var boxPanel = rightColumn.add("panel", undefined, "사각형 · 텍스트 주변 여백");
+    // ---- Text_AreaTextRoundedBox와 같은 옵션 ----
+    var boxPanel = win.add("panel", undefined, "사각형 · 텍스트 주변 여백");
     boxPanel.alignChildren = "fill";
+    boxPanel.spacing = 2;
     addRow(boxPanel, "좌우 여백", "paddingX", 0, 50, "mm", false);
     addRow(boxPanel, "상하 여백", "paddingY", 0, 50, "mm", false);
     addRow(boxPanel, "코너 라운딩", "radius", 0, 50, "mm", false);
-    var tailPanel = rightColumn.add("panel", undefined, "꼬리");
+    var tailPanel = win.add("panel", undefined, "꼬리");
     tailPanel.alignChildren = "fill";
-    addRow(tailPanel, "붙는 위치", "tailOffset", 0, 100, "%", false);
-    tailPanel.add("statictext", undefined, "0 → 100%: 위 → 아래");
+    tailPanel.spacing = 2;
+    addRow(tailPanel, "붙는 위치", "tailOffset", 0, 100, "%", false).helpTip = "0 → 100%: 위 → 아래";
     addRow(tailPanel, "꼬리 크기", "tailSize", 20, 400, "%", false);
-    addRow(tailPanel, "휘어짐", "tailBend", 0, 100, "%", false);
-    tailPanel.add("statictext", undefined, "휘어짐 0%: 곧은 꼬리 · 100%: 곡선");
+    addRow(tailPanel, "휘어짐", "tailBend", 0, 100, "%", false).helpTip = "0%: 곧은 꼬리 · 100%: 곡선";
     var flip = tailPanel.add("checkbox", undefined, "꼬리 휘어짐 반전");
     flip.value = options.flip;
     flip.onClick = function() { options.flip = flip.value; updatePreview(); };
-    var positionPanel = rightColumn.add("panel", undefined, "위치");
+    var positionPanel = win.add("panel", undefined, "위치");
     positionPanel.alignChildren = "fill";
-    addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", true);
-    addRow(positionPanel, "세로 이동", "offsetY", -100, 100, "mm", true);
-    positionPanel.add("statictext", undefined, "양수: 오른쪽 / 위쪽");
+    positionPanel.spacing = 2;
+    addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", true).helpTip = "양수: 오른쪽";
+    addRow(positionPanel, "세로 이동", "offsetY", -100, 100, "mm", true).helpTip = "양수: 위쪽";
 
     var footer = win.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -148,10 +141,10 @@ try {
     try { win.defaultElement = null; } catch (defaultError) {}
     footer.add("button", undefined, "취소", {name: "cancel"});
     var status = win.add("statictext", undefined, " ");
-    status.preferredSize.width = 600;
+    status.preferredSize.width = 400;
 
     ok.onClick = function() {
-        // '입력 완료'를 안 눌렀거나 그 뒤에 고쳤으면 지금 입력값으로 다시 그린다
+        // '완료'를 안 눌렀거나 그 뒤에 고쳤으면 지금 입력값으로 다시 그린다
         if (snapshotTexts()) {
             previewPending = true;
             rebuildPending = true;
@@ -214,6 +207,7 @@ try {
         return false;
     }
 
+    // 설명은 라벨의 helpTip에 둔다. 라벨을 돌려준다
     function addRow(panel, label, key, min, max, unit, positionOnly) {
         var row = panel.add("group");
         var caption = row.add("statictext", undefined, label);
@@ -223,7 +217,7 @@ try {
         minus.preferredSize.width = 34;
         minus.helpTip = String(step) + unit + " 감소";
         var slider = row.add("slider", undefined, options[key], min, max);
-        slider.preferredSize.width = 150;
+        slider.preferredSize.width = 105;
         var plus = row.add("button", undefined, "+");
         plus.preferredSize.width = 34;
         plus.helpTip = String(step) + unit + " 증가";
@@ -266,6 +260,7 @@ try {
             if (!/\S/.test(input.text)) { input.text = String(options[key]); return; }
             apply(Number(input.text));
         };
+        return caption;
     }
 
     // -------------------------------------------------------

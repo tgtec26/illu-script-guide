@@ -73,7 +73,7 @@ try {
     var UNIT_WIDTH = 26;        // 단위 글자 수가 달라도 뒤 요소가 어긋나지 않도록 고정
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 120;
+    var SLIDER_WIDTH = 84;
 
     var dlg = new Window("dialog", "DNA 평면 모형");
     dlg.orientation = "column";
@@ -81,40 +81,31 @@ try {
     dlg.spacing = 6;
     dlg.margins = 12;
 
-    var columns = dlg.add("group");
-    columns.alignChildren = ["fill", "top"];
-    columns.spacing = 8;
-    var leftColumn = columns.add("group");
-    leftColumn.orientation = "column";
-    leftColumn.alignChildren = "fill";
-    leftColumn.spacing = 6;
-    var rightColumn = columns.add("group");
-    rightColumn.orientation = "column";
-    rightColumn.alignChildren = "fill";
-    rightColumn.spacing = 6;
-
-    // ---- 왼쪽: 구조 · 염기서열 · 표시 · 음영 ----
-    var structurePanel = addPanel(leftColumn, "구조");
-    var strandRow = structurePanel.add("group");
+    var structurePanel = addPanel(dlg, "구조");
+    var structureRow = structurePanel.add("group");
+    structureRow.spacing = 16;
+    var strandRow = structureRow.add("group");
     var singleRadio = strandRow.add("radiobutton", undefined, "1가닥");
     var doubleRadio = strandRow.add("radiobutton", undefined, "2가닥");
     singleRadio.value = !doubleStrand;
     doubleRadio.value = doubleStrand;
-    var directionRow = structurePanel.add("group");
+    var directionRow = structureRow.add("group");
     var horizontalRadio = directionRow.add("radiobutton", undefined, "가로");
     var verticalRadio = directionRow.add("radiobutton", undefined, "세로");
     horizontalRadio.value = !vertical;
     verticalRadio.value = vertical;
 
-    var sequencePanel = addPanel(leftColumn, "염기서열 (5′ → 3′)");
-    var sequenceInput = sequencePanel.add("edittext", undefined, sequence);
-    sequenceInput.characters = 28;
-    var sequenceNote = sequencePanel.add("statictext", undefined, "A·T·G·C만, 최대 " + MAX_BASES + "개");
+    var sequencePanel = addPanel(dlg, "염기서열 (5′ → 3′)");
+    var sequenceRow = sequencePanel.add("group");
+    var sequenceInput = sequenceRow.add("edittext", undefined, sequence);
+    sequenceInput.characters = 22;
+    var sequenceNote = sequenceRow.add("statictext", undefined, "A·T·G·C만, 최대 " + MAX_BASES + "개");
 
-    var showPanel = addPanel(leftColumn, "표시");
-    var sugarOCheck = showPanel.add("checkbox", undefined, "당의 산소(O)");
+    var showPanel = addPanel(dlg, "표시");
+    var showRow1 = showPanel.add("group");
+    var sugarOCheck = showRow1.add("checkbox", undefined, "당의 산소(O)");
     sugarOCheck.value = showSugarO;
-    var lettersCheck = showPanel.add("checkbox", undefined, "염기 글자");
+    var lettersCheck = showRow1.add("checkbox", undefined, "염기 글자");
     lettersCheck.value = showLetters;
     var jointRow = showPanel.add("group");
     jointRow.add("statictext", undefined, "접합부");
@@ -122,21 +113,21 @@ try {
     var atRoundRadio = jointRow.add("radiobutton", undefined, "A·T 둥글게 / G·C 뾰족");
     atSharpRadio.value = atSharp;
     atRoundRadio.value = !atSharp;
-    var ohCheck = showPanel.add("checkbox", undefined, "말단 OH");
+    var showRow2 = showPanel.add("group");
+    var ohCheck = showRow2.add("checkbox", undefined, "말단 OH");
     ohCheck.value = showOH;
-    var primeCheck = showPanel.add("checkbox", undefined, "5′ · 3′ 표시");
+    var primeCheck = showRow2.add("checkbox", undefined, "5′ · 3′ 표시");
     primeCheck.value = showPrime;
-    var legendCheck = showPanel.add("checkbox", undefined, "범례 (그림 오른쪽)");
+    var legendCheck = showRow2.add("checkbox", undefined, "범례 (그림 오른쪽)");
     legendCheck.value = showLegend;
 
-    var shadePanel = addPanel(leftColumn, "음영");
+    var shadePanel = addPanel(dlg, "음영");
     var phosphateKField = addNumberField(shadePanel, "인산", "K", phosphateK, 10, 0, 100);
     var sugarKField = addNumberField(shadePanel, "당", "K", sugarK, 10, 0, 100);
     var purineKField = addNumberField(shadePanel, "A·G", "K", purineK, 10, 0, 100);
     var pyrimidineKField = addNumberField(shadePanel, "T·C", "K", pyrimidineK, 10, 0, 100);
 
-    // ---- 오른쪽: 크기 · 위치 ----
-    var sizePanel = addPanel(rightColumn, "크기");
+    var sizePanel = addPanel(dlg, "크기");
     var purineLenField = addNumberField(sizePanel, "A·G 길이", "mm", purineLenMm, 0.1, 1, 30);
     var pyrimidineLenField = addNumberField(sizePanel, "T·C 길이", "mm", pyrimidineLenMm, 0.1, 1, 30);
     var baseThickField = addNumberField(sizePanel, "염기 두께", "mm", baseThickMm, 0.1, 0.5, 15);
@@ -146,7 +137,7 @@ try {
     var linkField = addNumberField(sizePanel, "당·염기 간격", "mm", linkMm, 0.1, 0, 15);
     var strandGapField = addNumberField(sizePanel, "두 가닥 간격", "mm", strandGapMm, 0.1, -5, 20);
 
-    var positionPanel = addPanel(rightColumn, "위치");
+    var positionPanel = addPanel(dlg, "위치");
     var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
     var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1,

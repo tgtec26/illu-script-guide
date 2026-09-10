@@ -421,12 +421,8 @@ try {
     var radGray = pnlColor.add("radiobutton", undefined, "회색 음영");
     radGray.value = true;
 
-    var pnlAdjust = win.add("group");
-    pnlAdjust.orientation = "row";
-    pnlAdjust.alignChildren = ["fill", "top"];
-    pnlAdjust.spacing = 10;
 
-    var pnlGeometry = pnlAdjust.add("panel", undefined, "격자·크기 조절");
+    var pnlGeometry = win.add("panel", undefined, "격자·크기 조절");
     pnlGeometry.orientation = "column";
     pnlGeometry.alignChildren = "left";
     pnlGeometry.spacing = 6;
@@ -438,7 +434,7 @@ try {
         var label = row.add("statictext", undefined, labelText);
         label.preferredSize.width = 112;
         var slider = row.add("slider", undefined, initialValue, minValue, maxValue);
-        slider.preferredSize.width = 142;
+        slider.preferredSize.width = 100;
         var valueText = row.add("statictext", undefined, formatValue(initialValue));
         valueText.preferredSize.width = 52;
         slider.syncLabel = function() { valueText.text = formatValue(slider.value); };
@@ -460,7 +456,7 @@ try {
     var sldAtom = addSlider(pnlGeometry, "탄소 구 지름", 1, 12, 4, mmFormat);
     var sldBrightness = addSlider(pnlGeometry, "탄소 밝기", 40, 160, 100, percentFormat);
 
-    var pnlView = pnlAdjust.add("panel", undefined, "관찰 각도");
+    var pnlView = win.add("panel", undefined, "관찰 각도");
     pnlView.orientation = "column";
     pnlView.alignChildren = "left";
     pnlView.spacing = 6;

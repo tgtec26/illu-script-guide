@@ -602,10 +602,6 @@ try {
     var radGray = pnlColor.add("radiobutton", undefined, "회색 음영");
     radGray.value = true;
 
-    var pnlAdjust = win.add("group");
-    pnlAdjust.orientation = "row";
-    pnlAdjust.alignChildren = ["fill", "top"];
-    pnlAdjust.spacing = 10;
     var sliderSyncers = [];
 
     function addSlider(parent, labelText, minValue, maxValue, initialValue, formatter) {
@@ -614,7 +610,7 @@ try {
         var label = row.add("statictext", undefined, labelText);
         label.preferredSize.width = 112;
         var slider = row.add("slider", undefined, initialValue, minValue, maxValue);
-        slider.preferredSize.width = 142;
+        slider.preferredSize.width = 100;
         var valueText = row.add("statictext", undefined, formatter(initialValue));
         valueText.preferredSize.width = 52;
         slider.syncLabel = function() { valueText.text = formatter(slider.value); };
@@ -627,7 +623,7 @@ try {
     function mmFormat(value) { return value.toFixed(1) + "mm"; }
     function percentFormat(value) { return Math.round(value) + "%"; }
 
-    var pnlSize = pnlAdjust.add("panel", undefined, "크기·밝기 조절");
+    var pnlSize = win.add("panel", undefined, "크기·밝기 조절");
     pnlSize.orientation = "column";
     pnlSize.alignChildren = "left";
     pnlSize.spacing = 6;
@@ -642,7 +638,7 @@ try {
     });
     var sldBrightness = addSlider(pnlSize, "탄소 밝기", 40, 160, 100, percentFormat);
 
-    var pnlView = pnlAdjust.add("panel", undefined, "관찰 각도");
+    var pnlView = win.add("panel", undefined, "관찰 각도");
     pnlView.orientation = "column";
     pnlView.alignChildren = "left";
     pnlView.spacing = 6;

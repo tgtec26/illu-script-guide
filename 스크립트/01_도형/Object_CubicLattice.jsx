@@ -507,12 +507,7 @@ try {
     var radGray = pnlColor.add("radiobutton", undefined, "회색 음영");
     radColor.value = true;
 
-    var pnlAdjustments = win.add("group");
-    pnlAdjustments.orientation = "row";
-    pnlAdjustments.alignChildren = ["fill", "top"];
-    pnlAdjustments.spacing = 10;
-
-    var pnlAngles = pnlAdjustments.add("panel", undefined, "관찰 각도 (오른쪽 + 왼쪽 + 상단 = 360°)");
+    var pnlAngles = win.add("panel", undefined, "관찰 각도 (오른쪽 + 왼쪽 + 상단 = 360°)");
     pnlAngles.orientation = "column";
     pnlAngles.alignChildren = "left";
     function addAngleSlider(labelText, initialValue) {
@@ -521,7 +516,7 @@ try {
         var label = row.add("statictext", undefined, labelText);
         label.preferredSize.width = 90;
         var slider = row.add("slider", undefined, initialValue, 91, 179);
-        slider.preferredSize.width = 150;
+        slider.preferredSize.width = 105;
         var valueText = row.add("statictext", undefined, Math.round(initialValue) + "°");
         valueText.preferredSize.width = 45;
         slider.syncLabel = function() {
@@ -540,7 +535,7 @@ try {
         var label = row.add("statictext", undefined, "앞·뒤 면 거리");
         label.preferredSize.width = 90;
         var slider = row.add("slider", undefined, 100, 40, 160);
-        slider.preferredSize.width = 150;
+        slider.preferredSize.width = 105;
         var valueText = row.add("statictext", undefined, "100%");
         valueText.preferredSize.width = 45;
         slider.syncLabel = function() {
@@ -574,7 +569,7 @@ try {
     btnAngleTri.onClick = function() { setAnglePreset(120, 105); };
     updateTopAngleText();
 
-    var pnlSize = pnlAdjustments.add("panel", undefined, "크기·밝기 조절");
+    var pnlSize = win.add("panel", undefined, "크기·밝기 조절");
     pnlSize.alignChildren = "left";
     pnlSize.spacing = 6;
     var sliderSyncers = [];
@@ -583,7 +578,7 @@ try {
         var lab = g.add("statictext", undefined, labelText);
         lab.preferredSize.width = 135;
         var s = g.add("slider", undefined, initV, minV, maxV);
-        s.preferredSize.width = 150;
+        s.preferredSize.width = 105;
         var t = g.add("statictext", undefined, fmt(initV));
         t.preferredSize.width = 55;
         s.syncLabel = function() { t.text = fmt(s.value); };

@@ -66,7 +66,7 @@ try {
     longitudeInput.characters = 6;
     longitudeRow.add("statictext", undefined, "개  (0 = 없음, 1 = 2등분, 2 = 4등분)");
     var longitudeSlider = gridPanel.add("slider", undefined, longitudeCount, 0, 24);
-    longitudeSlider.preferredSize.width = 380;
+    longitudeSlider.preferredSize.width = 266;
     longitudeSlider.stepdelta = 1;
 
     var latitudeRow = gridPanel.add("group");
@@ -75,7 +75,7 @@ try {
     latitudeInput.characters = 6;
     latitudeRow.add("statictext", undefined, "개  (0 = 없음, 1 ~ 11)");
     var latitudeSlider = gridPanel.add("slider", undefined, latitudeCount, 0, 11);
-    latitudeSlider.preferredSize.width = 380;
+    latitudeSlider.preferredSize.width = 266;
     latitudeSlider.stepdelta = 1;
     gridPanel.add("statictext", undefined,
         "순서: 적도 → 북15° → 남15° → 북30° → 남30° → 북45°");
@@ -88,7 +88,7 @@ try {
     rotationInput.characters = 7;
     rotationRow.add("statictext", undefined, "°  (-180 ~ +180)");
     var rotationSlider = gridPanel.add("slider", undefined, gridRotation, -180, 180);
-    rotationSlider.preferredSize.width = 380;
+    rotationSlider.preferredSize.width = 266;
 
     var viewPanel = dlg.add("panel", undefined, "구를 바라보는 시점");
     viewPanel.orientation = "column";
@@ -277,7 +277,7 @@ try {
         down.preferredSize.width = STEP_BUTTON_WIDTH;
         var slider = row.add("slider", undefined, value,
             -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-        slider.preferredSize.width = 200;
+        slider.preferredSize.width = 140;
         var up = row.add("button", undefined, "▶");
         up.preferredSize.width = STEP_BUTTON_WIDTH;
         return {input: input, slider: slider, down: down, up: up};
@@ -326,7 +326,7 @@ try {
         input.characters = 7;
         row.add("statictext", undefined, "°  (-180 ~ +180)");
         var slider = parent.add("slider", undefined, value, -180, 180);
-        slider.preferredSize.width = 380;
+        slider.preferredSize.width = 266;
         return {input: input, slider: slider};
     }
 

@@ -88,7 +88,7 @@ try {
             angleToStep(minAngle),
             angleToStep(maxAngle)
         );
-        control.scrollbar.preferredSize.width = 320;
+        control.scrollbar.preferredSize.width = 224;
         control.scrollbar.stepdelta = 1;
         control.scrollbar.jumpdelta = 15;
         control.isSyncing = false;
