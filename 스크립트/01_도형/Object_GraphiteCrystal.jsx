@@ -389,6 +389,7 @@ try {
     }
 
     // --- ScriptUI ---
+    var STEP_BUTTON_WIDTH = 34;   // 더 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다
     var win = new Window("dialog", "흑연 결정 구조 생성기");
     win.orientation = "column";
     win.alignChildren = ["fill", "top"];
@@ -403,16 +404,19 @@ try {
     radAB.value = true;
 
     var pnlOptions = win.add("panel", undefined, "표현 옵션");
-    pnlOptions.orientation = "row";
     pnlOptions.alignChildren = "left";
-    pnlOptions.spacing = 16;
-    var chkInterlayer = pnlOptions.add("checkbox", undefined, "층간 점선");
+    pnlOptions.spacing = 2;
+    var optionRow1 = pnlOptions.add("group");   // 두 줄로 나눠 폭을 줄인다
+    optionRow1.spacing = 16;
+    var chkInterlayer = optionRow1.add("checkbox", undefined, "층간 점선");
     chkInterlayer.value = true;
-    var chkLit3D = pnlOptions.add("checkbox", undefined, "구 3D 조명 효과");
+    var chkLit3D = optionRow1.add("checkbox", undefined, "구 3D 조명 효과");
     chkLit3D.value = true;
-    var chkOutline = pnlOptions.add("checkbox", undefined, "구 외곽선");
+    var optionRow2 = pnlOptions.add("group");
+    optionRow2.spacing = 16;
+    var chkOutline = optionRow2.add("checkbox", undefined, "구 외곽선");
     chkOutline.value = true;
-    var chkPreview = pnlOptions.add("checkbox", undefined, "미리보기 실시간 표시");
+    var chkPreview = optionRow2.add("checkbox", undefined, "미리보기");
     chkPreview.value = true;
 
     var pnlColor = win.add("panel", undefined, "색상 표현");
@@ -425,16 +429,34 @@ try {
     var pnlGeometry = win.add("panel", undefined, "격자·크기 조절");
     pnlGeometry.orientation = "column";
     pnlGeometry.alignChildren = "left";
-    pnlGeometry.spacing = 6;
+    pnlGeometry.spacing = 2;
     var sliderSyncers = [];
 
-    function addSlider(parent, labelText, minValue, maxValue, initialValue, formatValue) {
+    // ◀▶ 버튼: 슬라이더를 step만큼 옮기고 드래그와 같은 순서로 onChanging → onChange를 부른다
+    function addStepButtons(row, slider, step) {
+        var minus = row.add("button", undefined, "◀");
+        minus.preferredSize.width = STEP_BUTTON_WIDTH;
+        var plus = row.add("button", undefined, "▶");
+        plus.preferredSize.width = STEP_BUTTON_WIDTH;
+        function nudge(delta) {
+            var next = Math.min(slider.maxvalue, Math.max(slider.minvalue, slider.value + delta));
+            if (next === slider.value) return;
+            slider.value = next;
+            if (slider.onChanging) slider.onChanging();
+            if (slider.onChange) slider.onChange();
+        }
+        minus.onClick = function() { nudge(-step); };
+        plus.onClick = function() { nudge(step); };
+    }
+
+    function addSlider(parent, labelText, minValue, maxValue, initialValue, formatValue, step) {
         var row = parent.add("group");
         row.orientation = "row";
         var label = row.add("statictext", undefined, labelText);
         label.preferredSize.width = 112;
         var slider = row.add("slider", undefined, initialValue, minValue, maxValue);
         slider.preferredSize.width = 100;
+        addStepButtons(row, slider, step);
         var valueText = row.add("statictext", undefined, formatValue(initialValue));
         valueText.preferredSize.width = 52;
         slider.syncLabel = function() { valueText.text = formatValue(slider.value); };
@@ -448,25 +470,25 @@ try {
     function mmFormat(value) { return value.toFixed(1) + "mm"; }
     function percentFormat(value) { return Math.round(value) + "%"; }
 
-    var sldColumns = addSlider(pnlGeometry, "가로 육각형", 1, 10, 4, integerFormat);
-    var sldRows = addSlider(pnlGeometry, "세로 육각형", 1, 8, 3, integerFormat);
-    var sldLayers = addSlider(pnlGeometry, "적층 수", 1, 8, 3, integerFormat);
-    var sldBond = addSlider(pnlGeometry, "C-C 결합 길이", 2, 15, 6, mmFormat);
-    var sldLayerGap = addSlider(pnlGeometry, "층간 거리", 3, 35, 14, mmFormat);
-    var sldAtom = addSlider(pnlGeometry, "탄소 구 지름", 1, 12, 4, mmFormat);
-    var sldBrightness = addSlider(pnlGeometry, "탄소 밝기", 40, 160, 100, percentFormat);
+    var sldColumns = addSlider(pnlGeometry, "가로 육각형", 1, 10, 4, integerFormat, 1);
+    var sldRows = addSlider(pnlGeometry, "세로 육각형", 1, 8, 3, integerFormat, 1);
+    var sldLayers = addSlider(pnlGeometry, "적층 수", 1, 8, 3, integerFormat, 1);
+    var sldBond = addSlider(pnlGeometry, "C-C 결합 길이", 2, 15, 6, mmFormat, 0.1);
+    var sldLayerGap = addSlider(pnlGeometry, "층간 거리", 3, 35, 14, mmFormat, 0.1);
+    var sldAtom = addSlider(pnlGeometry, "탄소 구 지름", 1, 12, 4, mmFormat, 0.1);
+    var sldBrightness = addSlider(pnlGeometry, "탄소 밝기", 40, 160, 100, percentFormat, 1);
 
     var pnlView = win.add("panel", undefined, "관찰 각도");
     pnlView.orientation = "column";
     pnlView.alignChildren = "left";
-    pnlView.spacing = 6;
+    pnlView.spacing = 2;
     var sldAngleR = addSlider(pnlView, "오른쪽 각도", 91, 179, 132, function(v) {
         return Math.round(v) + "°";
-    });
+    }, 1);
     var sldAngleL = addSlider(pnlView, "왼쪽 각도", 91, 179, 108, function(v) {
         return Math.round(v) + "°";
-    });
-    var sldDepth = addSlider(pnlView, "앞·뒤 면 거리", 40, 160, 100, percentFormat);
+    }, 1);
+    var sldDepth = addSlider(pnlView, "앞·뒤 면 거리", 40, 160, 100, percentFormat, 1);
     var topAngleRow = pnlView.add("group");
     topAngleRow.add("statictext", undefined, "상단 각도(자동):");
     var txtTopAngle = topAngleRow.add("statictext", undefined, "120°");
