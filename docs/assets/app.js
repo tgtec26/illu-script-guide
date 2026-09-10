@@ -40,6 +40,7 @@ const scripts = [
   { id: "solenoid", category: "도형", name: "코일 감긴 도선", file: "01_도형/Object_Solenoid.jsx", summary: "선택한 사각형을 도선으로 바꾸고 나선 투영으로 코일을 감습니다. 감는 횟수에 따라 코일 간격이 달라집니다.", tags: ["과학", "전자기"] },
   { id: "silicate-structure", category: "도형", name: "규산염 결합 구조", file: "01_도형/Object_SilicateStructure.jsx", summary: "감람석·휘석·각섬석·흑운모의 SiO₄ 사면체 배열을 그립니다. Si 수와 원자 크기, K 음영, 산소 3D 조명을 조절합니다.", tags: ["과학", "광물"] },
   { id: "dna-flat", category: "도형", name: "DNA 평면 모형", file: "01_도형/Object_DnaFlat.jsx", summary: "염기서열을 입력하면 인산·당·염기 사다리 모양의 DNA 평면 모형을 그립니다. 1·2가닥, 가로·세로, 염기 모양·크기·음영, 범례를 조절합니다.", tags: ["과학", "생명"] },
+  { id: "dna-rna-sequence", category: "도형", name: "DNA · RNA 염기 서열", file: "01_도형/Object_DnaRnaSequence.jsx", summary: "DNA 위쪽 가닥 서열을 입력하면 골격선·연결선·염기 글자로 DNA 1·2와 RNA 세 줄을 그립니다. 가릴 서열을 지정해 ?·ⓐ·㉠·Ⅰ 박스로 덮고, 선 굵기·연결선 길이·염기 간격·줄 간격을 미리보기로 조절합니다.", tags: ["과학", "생명", "유전"] },
   { id: "semiconductor", category: "도형", name: "반도체 모형", file: "01_도형/Object_Semiconductor.jsx", summary: "규소 원자를 3·4·5 행·열로 늘어놓은 공유 결합 모형을 그립니다. 5족·3족 불순물을 넣으면 자유 전자나 정공이 생기고, 핵·전자 크기·거리·음영·3D 조명과 지시선을 조절합니다.", tags: ["과학", "반도체"] },
   { id: "star-interior", category: "도형", name: "별 내부 구조", file: "01_도형/Object_StarInterior.jsx", summary: "선택한 원을 별의 내부 구조 절개도로 바꿉니다. 절단 각도와 회전, 시점을 조절합니다.", tags: ["과학", "천문"] },
   { id: "coil-spring", category: "도형", name: "코일 스프링", file: "01_도형/Object_coilspring.jsx", summary: "선택한 원을 기준으로 코일 스프링을 만듭니다. 좌우 폭, 위아래 높이, 감는 횟수를 조절합니다.", tags: ["입체", "스프링"] },

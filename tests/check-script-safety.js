@@ -2563,4 +2563,35 @@ for (const file of cabinetFiles) {
   assertClose(shallow.dy, 5, `${file} 30° dy`);
 }
 
+// DNA·RNA 염기 서열: 상보·전사·입력 정리와 설정 문자열 검증
+{
+  const file = "스크립트/01_도형/Object_DnaRnaSequence.jsx";
+  const source = read(file);
+  const required = [
+    'new Window("dialog", "DNA · RNA 염기 서열")',
+    'var PREF_KEY = "ObjectDnaRnaSequence/settings";',
+    'illu_last_script.txt',
+    'addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", true);',
+    'addRow(positionPanel, "세로 이동", "offsetY", -100, 100, "mm", true);',
+    'footer.add("checkbox", undefined, "미리보기")',
+    'if (!committed) clearPreview();',
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${file}: missing token: ${token}`);
+      failures++;
+    }
+  }
+  const pure = ["complement", "transcribe", "cleanSequence"].map((name) => extractFunction(source, name)).join("\n");
+  const fns = new Function(`${pure}; return {complement, transcribe, cleanSequence};`)();
+  assert.strictEqual(fns.complement("GGAGCACTT"), "CCTCGTGAA", `${file} complement`);
+  assert.strictEqual(fns.transcribe("GGAGCACTT"), "GGAGCACUU", `${file} transcribe`);
+  assert.strictEqual(fns.cleanSequence(" gga cu-t ", false), "GGACT", `${file} clean DNA drops U`);
+  assert.strictEqual(fns.cleanSequence(" gga cu-t ", true), "GGACUT", `${file} clean RNA keeps U`);
+  assert.ok(source.includes('p[0] !== "v1" || p.length !== 18'), `${file}: settings string must be v1 with 18 fields`);
+  assert.strictEqual((source.match(/join\("\|"\)/g) || []).length, 1, `${file}: one saveSettings join`);
+  const saveArgs = source.match(/\["v1",([\s\S]*?)\]\.join\("\|"\)/)[1].split(",").length;
+  assert.strictEqual(saveArgs, 17, `${file}: saveSettings writes 17 fields after the tag`);
+}
+
 process.exit(failures === 0 ? 0 : 1);
