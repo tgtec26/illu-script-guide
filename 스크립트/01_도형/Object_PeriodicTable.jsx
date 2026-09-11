@@ -57,6 +57,7 @@ try {
     var options = readSettings();
     var previewGroup = null;
     var bevelGradients = {};    // 종류×부위별 그라데이션. 문서에 한 번만 만들고 음영이 바뀌면 색만 고친다
+    var tintedK = {};           // 종류별로 마지막에 칠한 음영 K
     var cells = [];             // 미리보기의 셀 목록
     var cellIndex = {};         // 셀 key → previewGroup.groupItems 위치 (syncCells가 채운다)
     var cellGeomKeys = {};      // 셀 key → 마지막으로 그린 자리·모양. 같으면 경로를 다시 쓰지 않는다
@@ -447,12 +448,15 @@ try {
     // -------------------------------------------------------
     // 그리기
     // -------------------------------------------------------
-    // 셀 하나 = 그룹. 경사면 4분면 → 윗면 → 테두리 → 대각선 → 글자 순으로 만들어 나중 것이 위에 온다.
+    // 셀 하나 = 그룹. 모양 그룹(경사면 4분면 → 윗면 → 테두리) → 대각선 → 글자 순으로 만들어 나중 것이 위에 온다.
+    // 모양은 하위 그룹에 따로 두어, 같은 모양의 셀끼리 그룹째 복제해 쓴다 (layoutCells).
     // 부품은 이름으로 찾고 좌표는 layoutCells가 쓴다. 경사면·테두리는 syncCellParts가 옵션에 맞춰 넣고 뺀다.
     function makeCell(container, cell) {
         var g = container.groupItems.add();
         g.name = cell.key;
-        namedPath(g, "face");
+        var shape = g.groupItems.add();
+        shape.name = "shape";
+        namedPath(shape, "face");
         if (cell.kind === "corner") {
             namedPath(g, "diagonal");
             makeLabel(g, "족", "groupLabel", options.fontSize * CORNER_LABEL_SCALE);
@@ -521,12 +525,14 @@ try {
         }
         var radius = options.radius * mmToPt;
         var bevel = options.depth * mmToPt;
-        var headFill = makeGray(doc, options.headK);
-        var bodyFill = makeGray(doc, options.bodyK);
+        var fills = { head: makeGray(doc, options.headK), body: makeGray(doc, options.bodyK) };
         if (options.raised) {
             tintBevelGradients("head", options.headK);
             tintBevelGradients("body", options.bodyK);
         }
+        // 같은 모양(종류·크기·옵션)의 셀은 처음 하나만 경로를 그리고 나머지는 모양 그룹을 복제한다.
+        // 경로 쓰기가 셀당 DOM 호출 수십 번인데 복제는 세 번이라, 표 전체 갱신이 몇 배 빨라진다
+        var prototypes = {};
         for (var i = 0; i < cells.length; i++) {
             var cell = cells[i];
             var g = previewGroup.groupItems[cellIndex[cell.key]];
@@ -534,52 +540,23 @@ try {
             var kind = cell.kind === "body" ? "body" : "head";
             // 윗면: 튀어나옴이면 경사 폭만큼 들인다. 글자 자리도 이 안쪽 기준
             var rect = options.raised ? insetRect(outer, bevel) : outer;
-            // 모양이 그대로인 셀은 경로를 다시 쓰지 않는다 (경로 쓰기가 미리보기 시간의 대부분).
+            // 모양이 그대로인 셀은 경로를 다시 쓰지 않는다.
             // 크기·모양은 같고 자리만 바뀐 셀은 그룹째 옮긴다 (간격·1행 높이·1열 너비 조절이 이 경우)
-            var shapeKey = [outer.width, outer.height, radius, bevel, options.raised,
+            var shapeKey = [kind, outer.width, outer.height, radius, bevel, options.raised,
                 options.border, options.strokeW, options.raised ? "" : options.headK + "/" + options.bodyK].join("|");
             var last = cellGeomKeys[cell.key];
             var changed = !last || last.shape !== shapeKey;
             if (!changed && (last.left !== outer.left || last.top !== outer.top)) {
                 g.translate(outer.left - last.left, outer.top - last.top);   // 글자도 함께 옮겨진다
-                cellGeomKeys[cell.key] = { shape: shapeKey, left: outer.left, top: outer.top };
             }
             if (changed) {
-                var face = findNamed(g.pathItems, "face");
-                syncCellParts(g, face);
-                face = findNamed(g.pathItems, "face");
-                if (options.raised) {
-                    // 경사면: 분면마다 두 경사면을 잇는 대각 그라데이션. 축은 분면의 대각선 방향
-                    var angle = Math.atan2(outer.height, outer.width) * 180 / Math.PI;
-                    for (var q = 0; q < QUADRANTS.length; q++) {
-                        var quadrant = replaceGradientPath(g, findNamed(g.pathItems, QUADRANTS[q].name));
-                        writePath(quadrant, quadrantPoints(outer, radius, QUADRANTS[q].name));
-                        quadrant.stroked = false;
-                        applyGradientFill(quadrant, kind + QUADRANTS[q].name, QUADRANTS[q].sign * angle);
-                    }
-                    var border = findNamed(g.pathItems, "border");
-                    if (border !== null) {
-                        writePath(border, roundedRectPoints(outer.left, outer.top, outer.width, outer.height, radius));
-                        border.filled = false;
-                        border.stroked = true;
-                        border.strokeWidth = options.strokeW;
-                        border.strokeColor = lineColor;
-                    }
-                    // 윗면 라운딩은 바깥과 비율로 연동. 왼쪽 위가 어둡고 오른쪽 아래가 밝다
-                    face = replaceGradientPath(g, findNamed(g.pathItems, "face"));
-                    writePath(face, roundedRectPoints(rect.left, rect.top, rect.width, rect.height,
-                        radius * INNER_RADIUS_RATIO));
-                    face.stroked = false;
-                    applyGradientFill(face, kind + "face", -Math.atan2(rect.height, rect.width) * 180 / Math.PI);
+                var proto = prototypes[shapeKey];
+                if (proto) {
+                    g.groupItems[0].remove();
+                    proto.shape.duplicate(g, ElementPlacement.PLACEATEND)   // 글자·대각선 아래
+                        .translate(outer.left - proto.left, outer.top - proto.top);
                 } else {
-                    writePath(face, roundedRectPoints(rect.left, rect.top, rect.width, rect.height, radius));
-                    face.filled = true;
-                    face.fillColor = kind === "body" ? bodyFill : headFill;
-                    face.stroked = options.border;
-                    if (face.stroked) {
-                        face.strokeWidth = options.strokeW;
-                        face.strokeColor = lineColor;
-                    }
+                    drawShape(g.groupItems[0], outer, rect, radius, bevel, kind, fills);
                 }
                 if (cell.kind === "corner") {
                     var diagonal = findNamed(g.pathItems, "diagonal");
@@ -591,18 +568,69 @@ try {
                     diagonal.strokeColor = lineColor;
                     diagonal.strokeCap = StrokeCap.BUTTENDCAP;
                 }
-                cellGeomKeys[cell.key] = { shape: shapeKey, left: outer.left, top: outer.top };
             }
-            if (cell.kind === "corner") {
-                centerText(findNamed(g.textFrames, "groupLabel"), options.fontSize * CORNER_LABEL_SCALE,
-                    rect.left + rect.width * 0.7, rect.top - rect.height * 0.27);
-                centerText(findNamed(g.textFrames, "periodLabel"), options.fontSize * CORNER_LABEL_SCALE,
-                    rect.left + rect.width * 0.3, rect.top - rect.height * 0.73);
-            } else if (cell.kind === "head") {
-                centerText(findNamed(g.textFrames, "label"), options.fontSize,
-                    rect.left + rect.width / 2, rect.top - rect.height / 2);
+            if (!prototypes[shapeKey]) {
+                prototypes[shapeKey] = { shape: g.groupItems[0], left: outer.left, top: outer.top };
+            }
+            // 글자는 모양이나 크기가 바뀐 셀만 다시 맞춘다 (자리만 바뀐 셀은 위에서 함께 옮겨졌다)
+            if (changed || last.font !== options.fontSize) {
+                if (cell.kind === "corner") {
+                    centerText(findNamed(g.textFrames, "groupLabel"), options.fontSize * CORNER_LABEL_SCALE,
+                        rect.left + rect.width * 0.7, rect.top - rect.height * 0.27);
+                    centerText(findNamed(g.textFrames, "periodLabel"), options.fontSize * CORNER_LABEL_SCALE,
+                        rect.left + rect.width * 0.3, rect.top - rect.height * 0.73);
+                } else if (cell.kind === "head") {
+                    centerText(findNamed(g.textFrames, "label"), options.fontSize,
+                        rect.left + rect.width / 2, rect.top - rect.height / 2);
+                }
+            }
+            cellGeomKeys[cell.key] = { shape: shapeKey, left: outer.left, top: outer.top, font: options.fontSize };
+        }
+    }
+
+    // 모양 그룹에 경사면·윗면·테두리 경로를 쓴다. 둥근 사각형은 점을 하나씩 쓰지 않고 roundedRectangle로 한 번에 만든다
+    function drawShape(shape, outer, rect, radius, bevel, kind, fills) {
+        var parts = mapParts(shape);
+        if (syncCellParts(shape, parts)) parts = mapParts(shape);
+        var face;
+        if (options.raised) {
+            // 경사면: 분면마다 두 경사면을 잇는 대각 그라데이션. 축은 분면의 대각선 방향
+            var angle = Math.atan2(outer.height, outer.width) * 180 / Math.PI;
+            for (var q = 0; q < QUADRANTS.length; q++) {
+                var quadrant = replacePath(shape, findNamed(shape.pathItems, QUADRANTS[q].name), null);
+                writePath(quadrant, quadrantPoints(outer, radius, QUADRANTS[q].name));
+                quadrant.stroked = false;
+                applyGradientFill(quadrant, kind + QUADRANTS[q].name, QUADRANTS[q].sign * angle);
+            }
+            if (parts.border) {
+                var border = replacePath(shape, findNamed(shape.pathItems, "border"), outer, radius);
+                border.filled = false;
+                border.stroked = true;
+                border.strokeWidth = options.strokeW;
+                border.strokeColor = lineColor;
+            }
+            // 윗면 라운딩은 바깥과 비율로 연동. 왼쪽 위가 어둡고 오른쪽 아래가 밝다
+            face = replacePath(shape, findNamed(shape.pathItems, "face"), rect, radius * INNER_RADIUS_RATIO);
+            face.stroked = false;
+            applyGradientFill(face, kind + "face", -Math.atan2(rect.height, rect.width) * 180 / Math.PI);
+        } else {
+            face = replacePath(shape, parts.face, rect, radius);
+            face.filled = true;
+            face.fillColor = fills[kind];
+            face.stroked = options.border;
+            if (face.stroked) {
+                face.strokeWidth = options.strokeW;
+                face.strokeColor = lineColor;
             }
         }
+    }
+
+    // 그룹의 경로를 이름 → 경로로 한 번에 읽는다 (이름마다 훑으면 DOM 호출이 몇 배)
+    function mapParts(group) {
+        var map = {};
+        var items = group.pathItems;
+        for (var i = 0; i < items.length; i++) map[items[i].name] = items[i];
+        return map;
     }
 
     // 글자 크기를 맞춘 뒤 프레임 범위의 가운데를 목표점으로 옮긴다
@@ -615,23 +643,30 @@ try {
         if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) frame.translate(dx, dy);
     }
 
-    // 튀어나옴·테두리 옵션에 맞춰 경사면 4분면과 테두리 경로를 넣거나 뺀다 (글자는 건드리지 않는다)
-    function syncCellParts(g, face) {
+    // 튀어나옴·테두리 옵션에 맞춰 경사면 4분면과 테두리 경로를 넣거나 뺀다 (글자는 건드리지 않는다).
+    // 넣거나 뺀 것이 있으면 true (부품 참조를 다시 읽어야 한다)
+    function syncCellParts(g, parts) {
         var wantBorder = options.raised && options.border;
+        var touched = false;
         for (var q = 0; q < QUADRANTS.length; q++) {
-            var quadrant = findNamed(g.pathItems, QUADRANTS[q].name);
-            if (options.raised && quadrant === null) {
-                namedPath(g, QUADRANTS[q].name).move(face, ElementPlacement.PLACEAFTER);   // 윗면 아래
-            } else if (!options.raised && quadrant !== null) {
+            var quadrant = parts[QUADRANTS[q].name];
+            if (options.raised && !quadrant) {
+                namedPath(g, QUADRANTS[q].name).move(findNamed(g.pathItems, "face"), ElementPlacement.PLACEAFTER);   // 윗면 아래
+                touched = true;
+            } else if (!options.raised && quadrant) {
                 quadrant.remove();
+                touched = true;
             }
         }
-        var border = findNamed(g.pathItems, "border");
-        if (wantBorder && border === null) {
-            namedPath(g, "border").move(face, ElementPlacement.PLACEBEFORE);   // 윗면 위, 글자 아래
-        } else if (!wantBorder && border !== null) {
+        var border = parts.border;
+        if (wantBorder && !border) {
+            namedPath(g, "border").move(findNamed(g.pathItems, "face"), ElementPlacement.PLACEBEFORE);   // 윗면 위, 글자 아래
+            touched = true;
+        } else if (!wantBorder && border) {
             border.remove();
+            touched = true;
         }
+        return touched;
     }
 
     // 둥근 사각형의 한 분면. 바깥 모서리 하나만 둥글고 나머지는 직각이다.
@@ -690,6 +725,9 @@ try {
     }
 
     function tintBevelGradients(kind, k) {
+        // 색을 다시 쓰면 같은 값이라도 그라데이션을 쓰는 셀이 전부 다시 그려져 redraw가 느려진다
+        if (tintedK[kind] === k) return;
+        tintedK[kind] = k;
         var i;
         for (i = 0; i < QUADRANTS.length; i++) {
             var gradient = getGradient(kind + QUADRANTS[i].name);
@@ -710,29 +748,37 @@ try {
     }
 
     // 기존 PathItem은 fillColor/matrix를 다시 지정해도 채우기 회전 상태가 남을 수 있다.
-    // 모양 변경 때 음영 경로만 교체한다. 같은 z순서·이름을 유지하고 글자 프레임은 재사용한다.
-    function replaceGradientPath(group, previous) {
+    // 모양 변경 때 경로를 새로 만들어 바꿔 끼운다. 같은 z순서·이름을 유지하고 글자 프레임은 재사용한다.
+    // rect를 주면 그 자리에 둥근 사각형(radius)으로 만들고, 없으면 빈 경로를 만든다
+    function replacePath(group, previous, rect, radius) {
         var name = previous.name;
-        var fresh = namedPath(group, name);
+        var fresh = rect ? roundedRectPath(group, rect, radius) : group.pathItems.add();
+        fresh.name = name;
         fresh.move(previous, ElementPlacement.PLACEBEFORE);
         previous.remove();
         return findNamed(group.pathItems, name);
     }
 
-    // 스크립트에서는 GradientColor의 각도가 무시되므로(프로젝트 공통), 새 경로의 채우기만
-    // rotate로 한 번 돌려 축을 angle 방향(시계 반대, 0 = 왼→오른)으로 만든다.
+    // 둥근 사각형을 DOM 호출 한 번으로 만든다 (점 8개를 따로 쓰면 30번이 넘는다). radius 0이면 직사각형
+    function roundedRectPath(group, rect, radius) {
+        var r = Math.min(radius, rect.width / 2, rect.height / 2);
+        if (r <= 0) return group.pathItems.rectangle(rect.top, rect.left, rect.width, rect.height);
+        return group.pathItems.roundedRectangle(rect.top, rect.left, rect.width, rect.height, r, r);
+    }
+
+    // 스크립트에서는 GradientColor의 각도·matrix가 무시되고(프로젝트 공통) 새 채우기에는 일러스트레이터가
+    // 마지막으로 쓴 그라데이션 각도가 붙는다(확인됨: 그라데이션 패널·이전 rotate에 따라 실행마다 달라진다).
+    // 그래서 붙은 각도를 읽어 그만큼 뺀 뒤 rotate로 축을 angle 방향(시계 반대, 0 = 왼→오른)으로 만든다.
     // 도형을 돌렸다 되돌리는 방식은 맞닿은 분면 사이에 실금이 생겨(확인됨) 쓰지 않는다.
     function applyGradientFill(path, key, angle) {
         var bounds = path.geometricBounds;
         var gradientColor = new GradientColor();
         gradientColor.gradient = getGradient(key);
-        // 경로 재작성 뒤에도 기본 채우기 좌표에 의존하지 않고 같은 축에서 시작한다.
-        gradientColor.matrix = app.getIdentityMatrix();
         gradientColor.origin = [bounds[0], (bounds[1] + bounds[3]) / 2];
         gradientColor.length = bounds[2] - bounds[0];
         path.filled = true;
         path.fillColor = gradientColor;
-        path.rotate(angle, false, false, true, false, Transformation.CENTER);
+        path.rotate(angle - path.fillColor.angle, false, false, true, false, Transformation.CENTER);
     }
 
     // 고정점은 setEntirePath로 한 번에 쓰고(직선·모서리로 초기화됨), 손잡이가 있는 점만 따로 고친다.
@@ -767,7 +813,7 @@ try {
     }
 
     // 대각선과 실제 윗면의 왼쪽 위 베지어 곡선이 만나는 점을 찾는다.
-    // roundedRectPoints와 같은 반지름 제한·손잡이를 써서 큰 라운딩에서도 패스에 닿는다.
+    // roundedRectangle과 같은 반지름 제한·손잡이(0.55r, 여기선 0.5523r)를 써서 큰 라운딩에서도 패스에 닿는다.
     function diagonalPoints(rect, radius) {
         var r = Math.max(0, Math.min(radius, rect.width / 2, rect.height / 2));
         var x = 0;
@@ -787,27 +833,6 @@ try {
         }
         return [corner(rect.left + x, rect.top - y),
             corner(rect.left + rect.width - x, rect.top - rect.height + y)];
-    }
-
-    // 둥근 사각형 점 목록 (시계 방향, 왼쪽 위 모서리부터). radius 0이면 네 꼭짓점만
-    function roundedRectPoints(left, top, width, height, radius) {
-        var right = left + width;
-        var bottom = top - height;
-        var r = Math.min(radius, width / 2, height / 2);
-        if (r <= 0) {
-            return [corner(left, top), corner(right, top), corner(right, bottom), corner(left, bottom)];
-        }
-        var k = r * 0.5523;   // 4분원 베지어 손잡이 길이
-        return [
-            { anchor: [left, top - r], left: [left, top - r], right: [left, top - r + k] },
-            { anchor: [left + r, top], left: [left + r - k, top], right: [left + r, top] },
-            { anchor: [right - r, top], left: [right - r, top], right: [right - r + k, top] },
-            { anchor: [right, top - r], left: [right, top - r + k], right: [right, top - r] },
-            { anchor: [right, bottom + r], left: [right, bottom + r], right: [right, bottom + r - k] },
-            { anchor: [right - r, bottom], left: [right - r + k, bottom], right: [right - r, bottom] },
-            { anchor: [left + r, bottom], left: [left + r, bottom], right: [left + r - k, bottom] },
-            { anchor: [left, bottom + r], left: [left, bottom + r - k], right: [left, bottom + r] }
-        ];
     }
 
     function corner(x, y) {

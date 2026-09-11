@@ -2622,9 +2622,9 @@ for (const file of cabinetFiles) {
       failures++;
     }
   }
-  const pure = ["parseGroups", "contains", "cellExists", "buildCellList", "roundedRectPoints", "corner", "quadrantPoints"]
+  const pure = ["parseGroups", "contains", "cellExists", "buildCellList", "corner", "quadrantPoints"]
     .map((name) => extractFunction(source, name)).join("\n");
-  const fns = new Function(`${pure}; return {parseGroups, cellExists, buildCellList, roundedRectPoints, quadrantPoints};`)();
+  const fns = new Function(`${pure}; return {parseGroups, cellExists, buildCellList, quadrantPoints};`)();
   const diagonalFns = new Function(extractFunction(source, 'corner') + '\n' +
     extractFunction(source, 'diagonalPoints') + '\n' + extractFunction(source, 'insetRect') +
     '; return {diagonalPoints, insetRect};')();
@@ -2659,32 +2659,51 @@ for (const file of cabinetFiles) {
     var cellGeomKeys = {}, cellIndex = {}, previewPending = false;
     var STEP_BUTTON_WIDTH = 34, CORNER_LABEL_SCALE = 0.9;
     var doc = {}, lineColor = {}, status = {}, app = {redraw: function() {}};
-    var StrokeCap = {BUTTENDCAP: 0};
+    var StrokeCap = {BUTTENDCAP: 0}, ElementPlacement = {PLACEATEND: 'end'};
     function makeGray() { return {}; }
-    function syncCellParts() {}
+    function tintBevelGradients() {}
     function centerText() {}
     function findNamed(items, name) { return items[name]; }
     function writePath(path, points) { path.points = points.map(function(p) { return p.anchor.slice(); }); }
     function clearPreview() { throw new Error('unexpected preview failure'); }
+    var drawn = 0, duplicated = 0;
+    function movePoints(paths, dx, dy) {
+      for (var key in paths) (paths[key].points || []).forEach(function(p) { p[0] += dx; p[1] += dy; });
+    }
+    function makeShape() {
+      return {pathItems: {face: {}}, parent: null,
+        translate: function(dx, dy) { movePoints(this.pathItems, dx, dy); },
+        remove: function() { this.parent.groupItems = []; },
+        duplicate: function(target, place) {
+          if (place !== 'end' || target.groupItems.length) throw new Error('shape must be the only, bottom-most subgroup');
+          duplicated++;
+          var copy = makeShape();
+          copy.pathItems.face.points = this.pathItems.face.points.map(function(p) { return p.slice(); });
+          copy.parent = target; target.groupItems.push(copy);
+          return copy;
+        }};
+    }
+    // 실제 drawShape 대신 윗면 첫 점만 기록한다. 같은 모양의 셀은 복제·이동으로 이 자리에 와야 한다
+    function drawShape(shape, outer, rect) { drawn++; shape.pathItems.face.points = [[rect.left, rect.top]]; }
     var previewGroup = {groupItems: [], translate: function(dx, dy) {
       this.groupItems.forEach(function(g) { g.translate(dx, dy); });
     }};
     cells.forEach(function(cell, i) {
       cellIndex[cell.key] = i;
-      previewGroup.groupItems.push({pathItems: {face: {}, diagonal: {}}, textFrames: {},
+      var g = {groupItems: [], pathItems: {diagonal: {}}, textFrames: {},
         translate: function(dx, dy) {
-          for (var key in this.pathItems) {
-            var points = this.pathItems[key].points || [];
-            points.forEach(function(p) { p[0] += dx; p[1] += dy; });
-          }
-        }});
+          movePoints(this.pathItems, dx, dy);
+          this.groupItems.forEach(function(s) { s.translate(dx, dy); });
+        }};
+      var shape = makeShape(); shape.parent = g; g.groupItems.push(shape);
+      previewGroup.groupItems.push(g);
     });
     function control(type, ignored, value) {
       return {type: type, text: value, value: value, preferredSize: {}, children: [],
         add: function(t, b, v) { var child = control(t, b, v); this.children.push(child); return child; }};
     }
     function updatePreview() { layoutCells(); }
-    ${['addRow', 'layoutCells', 'cellRect', 'insetRect', 'roundedRectPoints', 'corner', 'diagonalPoints']
+    ${['addRow', 'layoutCells', 'cellRect', 'insetRect', 'corner', 'diagonalPoints']
       .map(name => extractFunction(source, name)).join('\n')}
     layoutCells();
     return {
@@ -2695,10 +2714,11 @@ for (const file of cabinetFiles) {
         input.text = String(value);
         input.onChange();
       },
+      counts: function() { var c = {drawn: drawn, duplicated: duplicated}; drawn = 0; duplicated = 0; return c; },
       check: function() {
         return cells.map(function(cell, i) {
           var rect = cellRect(cell);
-          return {key: cell.key, actual: previewGroup.groupItems[i].pathItems.face.points[0],
+          return {key: cell.key, actual: previewGroup.groupItems[i].groupItems[0].pathItems.face.points[0],
             expected: [rect.left, rect.top]};
         });
       }
@@ -2712,23 +2732,30 @@ for (const file of cabinetFiles) {
     {key: 'p1', row: 1, col: 0, kind: 'head'},
     {key: 'p1g1', row: 1, col: 1, kind: 'body'},
   ]);
-  for (const [key, value] of [['offsetX', 7], ['offsetY', -3], ['cellW', 6.5],
-    ['cellH', 5.5], ['headRowH', 7.5], ['headColW', 13], ['gap', 0],
-    ['offsetY', 12], ['headRowH', 9], ['offsetX', -4], ['fontSize', 12],
-    ['cellW', 15], ['offsetX', 0], ['offsetY', 0], ['gap', 1]]) {
+  // 처음엔 네 셀이 같은 15×12 모양이라 종류(머리글·본문)별로 하나만 그리고 나머지는 복제한다
+  assert.deepStrictEqual(preview.counts(), {drawn: 2, duplicated: 2}, `${file}: same-shape cells share one drawing`);
+  for (const [key, value, drawn] of [['offsetX', 7, 0], ['offsetY', -3, 0], ['cellW', 6.5, 2],
+    ['cellH', 5.5, 2], ['headRowH', 7.5, 2], ['headColW', 13, 2], ['gap', 0, 0],
+    ['offsetY', 12, 0], ['headRowH', 9, 2], ['offsetX', -4, 0], ['fontSize', 12, 0],
+    ['cellW', 15, 2], ['offsetX', 0, 0], ['offsetY', 0, 0], ['gap', 1, 0]]) {
     preview.set(key, value, key === 'offsetX' || key === 'offsetY');
     for (const cell of preview.check()) {
       for (let axis = 0; axis < 2; axis++) assert.ok(
         Math.abs(cell.actual[axis] - cell.expected[axis]) < 1e-8,
         `${file}: ${key}=${value} displaced ${cell.key} on axis ${axis}`);
     }
+    assert.strictEqual(preview.counts().drawn, drawn, `${file}: ${key}=${value} draws one prototype per distinct shape`);
   }
-  // Illustrator가 fillColor 재지정 뒤에도 경로의 채우기 회전을 보존하는 경우를 모사한다.
-  // 라운딩 변경마다 새 음영 경로를 써야 회전이 누적되지 않고 z순서도 유지된다.
+  // Illustrator는 GradientColor의 각도·matrix를 무시하고 새 채우기에 마지막 그라데이션 각도를 붙인다.
+  // 붙은 각도를 읽어 뺀 만큼만 돌려야 실행마다 같은 결과가 나오고, 라운딩 변경마다 새 음영 경로를
+  // 써야 회전이 누적되지 않고 z순서도 유지된다.
   const stack = [];
-  function makeGradientPath(group, name) {
+  let ambientAngle = 0;
+  function makeGradientPath(name) {
     const path = {
       name, rotation: 0, geometricBounds: [0, 10, 20, 0],
+      set fillColor(value) { this.rotation = ambientAngle; },
+      get fillColor() { return {angle: this.rotation}; },
       move(previous) {
         stack.splice(stack.indexOf(this), 1);
         stack.splice(stack.indexOf(previous), 0, this);
@@ -2742,28 +2769,32 @@ for (const file of cabinetFiles) {
     stack.push(path);
     return path;
   }
-  const shading = new Function('namedPath', 'ElementPlacement', 'app', 'GradientColor', 'getGradient', 'Transformation', 'findNamed',
-    extractFunction(source, 'replaceGradientPath') + '\n' + extractFunction(source, 'applyGradientFill') +
-    '; return {replaceGradientPath, applyGradientFill};')(
-    makeGradientPath, {PLACEBEFORE: 'before'}, {getIdentityMatrix: () => ({})}, function() {}, key => key, {CENTER: 'center'},
+  const shading = new Function('ElementPlacement', 'GradientColor', 'getGradient', 'Transformation', 'findNamed',
+    extractFunction(source, 'replacePath') + '\n' + extractFunction(source, 'applyGradientFill') +
+    '; return {replacePath, applyGradientFill};')(
+    {PLACEBEFORE: 'before'}, function() {}, key => key, {CENTER: 'center'},
     (items, name) => items.find(item => item.name === name));
-  let shaded = makeGradientPath(null, 'face');
+  const stackAdd = () => makeGradientPath('');
+  const group = {pathItems: new Proxy(stack, {get: (target, key) => key === 'add' ? stackAdd : target[key]})};
+  let shaded = makeGradientPath('face');
   const label = {name: 'label'};
   stack.unshift(label);
-  shading.applyGradientFill(shaded, 'headface', -40);
-  shading.applyGradientFill(shaded, 'headface', -40);
-  assert.strictEqual(shaded.rotation, -80, `${file}: reproduce retained fill rotation`);
+  for (ambientAngle of [0, -137, 45]) {
+    shading.applyGradientFill(shaded, 'headface', -40);
+    assert.strictEqual(shaded.rotation, -40, `${file}: fill angle must not depend on Illustrator's last gradient angle (${ambientAngle})`);
+  }
   for (const radius of [0.5, 0.7, 3.3, 0, 5, 0.5]) {
     const previous = shaded;
-    shaded = shading.replaceGradientPath({pathItems: stack}, previous);
+    shaded = shading.replacePath(group, previous, null);
     shading.applyGradientFill(shaded, 'headface', -40);
     assert.notStrictEqual(shaded, previous, `${file}: radius ${radius} gets a fresh path`);
     assert.strictEqual(shaded.rotation, -40, `${file}: radius ${radius} must not accumulate rotation`);
     assert.deepStrictEqual(stack, [label, shaded], `${file}: keep label, stacking order and path count`);
     assert.strictEqual(shaded.name, 'face');
   }
-  assert.ok(source.includes('var quadrant = replaceGradientPath(g, findNamed(g.pathItems, QUADRANTS[q].name));'));
-  assert.ok(source.includes('face = replaceGradientPath(g, findNamed(g.pathItems, "face"));'));
+  assert.ok(source.includes('var quadrant = replacePath(shape, findNamed(shape.pathItems, QUADRANTS[q].name), null);'));
+  assert.ok(source.includes('face = replacePath(shape, findNamed(shape.pathItems, "face"), rect, radius * INNER_RADIUS_RATIO);'));
+  assert.ok(source.includes('path.rotate(angle - path.fillColor.angle, false, false, true, false, Transformation.CENTER);'));
   let geometryAttempts = 0;
   let settlements = 0;
   let alwaysFail = false;
@@ -2823,12 +2854,18 @@ for (const file of cabinetFiles) {
   assert.strictEqual(list[0].kind, "corner", `${file} corner first`);
   assert.deepStrictEqual(list.filter((c) => c.kind === "head").map((c) => c.text), ["1", "2", "13", "18", "1", "2"], `${file} header labels`);
   assert.deepStrictEqual(list.filter((c) => c.kind === "body").map((c) => [c.row, c.col]), [[1, 1], [1, 4], [2, 1], [2, 2], [2, 3], [2, 4]], `${file} body cells skip period-1 gaps`);
-  assert.strictEqual(fns.roundedRectPoints(0, 10, 20, 10, 0).length, 4, `${file} square corners`);
-  const rounded = fns.roundedRectPoints(0, 10, 20, 10, 2);
-  assert.strictEqual(rounded.length, 8, `${file} rounded corners`);
-  assert.deepStrictEqual(rounded[0].anchor, [0, 8], `${file} first anchor below top-left`);
-  assert.deepStrictEqual(rounded[4].anchor, [20, 2], `${file} bottom-right arc start`);
-  assert.deepStrictEqual(fns.roundedRectPoints(0, 10, 4, 10, 5)[1].anchor, [2, 10], `${file} radius clamps to half width`);
+  // 둥근 사각형은 DOM 호출 한 번(roundedRectangle)으로 만들고, 반지름은 셀의 절반을 넘지 않는다
+  const rectCalls = [];
+  const roundedRectPath = new Function(extractFunction(source, 'roundedRectPath') + '; return roundedRectPath;')();
+  const rectGroup = {pathItems: {
+    rectangle: (...args) => rectCalls.push(['rectangle', ...args]),
+    roundedRectangle: (...args) => rectCalls.push(['roundedRectangle', ...args]),
+  }};
+  roundedRectPath(rectGroup, {left: 0, top: 10, width: 20, height: 10}, 0);
+  roundedRectPath(rectGroup, {left: 0, top: 10, width: 20, height: 10}, 2);
+  roundedRectPath(rectGroup, {left: 0, top: 10, width: 20, height: 10}, 50);
+  assert.deepStrictEqual(rectCalls, [['rectangle', 10, 0, 20, 10], ['roundedRectangle', 10, 0, 20, 10, 2, 2],
+    ['roundedRectangle', 10, 0, 20, 10, 5, 5]], `${file} rounded rect via one DOM call, radius clamped`);
   assert.ok(source.includes('p[0] !== "v1" || p.length !== 19'), `${file}: settings string must be v1 with 19 fields`);
   const saveArgs = source.match(/\["v1", options\.groups, flags,([\s\S]*?)\]\.join\("\|"\)/)[1].split(",").length;
   assert.strictEqual(saveArgs, 16, `${file}: saveSettings writes 16 fields after groups and flags`);
