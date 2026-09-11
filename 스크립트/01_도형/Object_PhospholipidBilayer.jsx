@@ -17,6 +17,7 @@ try {
       바깥층 인지질이 몇 개 더 들어가고 안쪽층 머리가 겹치지 않습니다.
       "보정 시작 반지름"보다 완만한 굽이는 직선과 똑같이 배치합니다.
     - 곡선과 닫힌 패스도 지원합니다. 닫힌 패스는 간격을 둘레에 맞춰 균등 분배합니다.
+    - 인지질 간격은 이웃과의 빈틈입니다. 0이면 원본 폭만큼 떨어져 딱 붙습니다.
   사용법: 기준선 하나와 인지질 하나를 함께 선택한 뒤 실행.
          둘 중 더 긴 쪽을 기준선으로 봅니다.
 */
@@ -50,6 +51,7 @@ try {
 
     var unitBounds = unitItem.visibleBounds; // [left, top, right, bottom]
     var unitHeight = unitBounds[1] - unitBounds[3];
+    var unitWidth = unitBounds[2] - unitBounds[0];
     var unitCenterX = (unitBounds[0] + unitBounds[2]) / 2;
     var unitCenterY = (unitBounds[1] + unitBounds[3]) / 2;
     if (unitHeight <= 0) {
@@ -58,7 +60,7 @@ try {
     }
 
     var gapMm = 0.2;        // 선과 인지질 꼬리 끝 사이 거리
-    var spacingMm = 2;      // 이웃한 인지질의 중심 간 거리
+    var spacingMm = 0;      // 이웃한 인지질 사이 빈틈(0 = 딱 붙음). 중심 간 거리 = 빈틈 + 원본 폭
     var curvatureFixPercent = 100;  // 곡선 보정: 간격을 재는 기준선을 머리 높이까지 밀어내는 비율
     var startRadiusMm = 15;         // 굽이 반지름이 이 값보다 작아질 때부터 보정한다
     var POSITION_LIMIT_MM = 100;
@@ -87,7 +89,8 @@ try {
 
     var spacingPanel = addPanel(dlg, "배치");
     var gapField = addNumberField(spacingPanel, "선과의 거리", "mm", gapMm, 0.1, 0, 20);
-    var spacingField = addNumberField(spacingPanel, "인지질 간격", "mm", spacingMm, 0.1, 0.2, 30);
+    var spacingField = addNumberField(spacingPanel, "인지질 간격", "mm", spacingMm, 0.1, 0, 30);
+    spacingField.input.helpTip = "이웃과의 빈틈. 0이면 딱 붙습니다";
     var curvatureField = addNumberField(spacingPanel, "곡선 보정", "%", curvatureFixPercent, 5, 0, 100);
     var radiusField = addNumberField(spacingPanel, "보정 시작 반지름", "mm", startRadiusMm, 1, 1, 200);
     var countText = spacingPanel.add("statictext", undefined, "");
@@ -177,7 +180,7 @@ try {
     function getLayerDistances(signedOffset) {
         var lengths = offsetPolylineLengths(pathMetrics, signedOffset, getBendDeadzone(signedOffset));
         var total = lengths[lengths.length - 1];
-        var positions = getPlacementDistances(total, spacingMm * MM, linePath.closed, MAX_PER_LAYER);
+        var positions = getPlacementDistances(total, spacingMm * MM + unitWidth, linePath.closed, MAX_PER_LAYER);
         var distances = [];
         for (var index = 0; index < positions.length; index++) {
             distances.push(centerDistanceAt(pathMetrics, lengths, positions[index]));
@@ -516,8 +519,8 @@ try {
             if (showAlert) alert("선과의 거리는 0 이상의 숫자로 입력해주세요.");
             return false;
         }
-        if (spacing === null || spacing < 0.2) {
-            if (showAlert) alert("인지질 간격은 0.2mm 이상의 숫자로 입력해주세요.");
+        if (spacing === null || spacing < 0) {
+            if (showAlert) alert("인지질 간격은 0 이상의 숫자로 입력해주세요.");
             return false;
         }
 
@@ -650,7 +653,7 @@ try {
     }
 
     function saveSettings() {
-        var parts = ["v4", gapMm, spacingMm, curvatureFixPercent, startRadiusMm,
+        var parts = ["v5", gapMm, spacingMm, curvatureFixPercent, startRadiusMm,
             offsetXmm, offsetYmm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -660,21 +663,20 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if ((p[0] !== "v3" && p[0] !== "v4") || p.length < 5) return;
+        // v4 이전의 간격은 중심 간 거리라 뜻이 다르다. 버리고 기본값을 쓴다.
+        if (p[0] !== "v5" || p.length < 7) return;
 
         var gap = parseFloat(p[1]);
         var spacing = parseFloat(p[2]);
         var curvatureFix = parseFloat(p[3]);
         var startRadius = parseFloat(p[4]);
         if (gap >= 0) gapMm = clampValue(gap, 0, 20);
-        if (spacing >= 0.2) spacingMm = clampValue(spacing, 0.2, 30);
+        if (spacing >= 0) spacingMm = clampValue(spacing, 0, 30);
         if (curvatureFix >= 0 && curvatureFix <= 100) curvatureFixPercent = curvatureFix;
         if (startRadius >= 1) startRadiusMm = clampValue(startRadius, 1, 200);
-        if (p[0] === "v4" && p.length >= 7) {
-            var offX = parseFloat(p[5]);
-            var offY = parseFloat(p[6]);
-            if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
-            if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
-        }
+        var offX = parseFloat(p[5]);
+        var offY = parseFloat(p[6]);
+        if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
+        if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
     }
 })();

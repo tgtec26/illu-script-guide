@@ -1837,7 +1837,7 @@ for (const file of updaterFiles) {
     'new Window("dialog", "인지질 2중층")',
     'footer.add("checkbox", undefined, "미리보기")',
     'addNumberField(spacingPanel, "선과의 거리", "mm", gapMm, 0.1, 0, 20)',
-    'addNumberField(spacingPanel, "인지질 간격", "mm", spacingMm, 0.1, 0.2, 30)',
+    'addNumberField(spacingPanel, "인지질 간격", "mm", spacingMm, 0.1, 0, 30)',
     'function pickLineAndUnit(selection)',
     'function getPlacementDistances(totalLength, spacing, closed, maxCount)',
     'function unitAngleDegrees(dirX, dirY)',
