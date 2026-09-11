@@ -56,7 +56,7 @@ try {
     var committed = false;
     var texts = [];             // '완료'를 누른 시점의 대화. 미리보기는 이것으로 그린다
     var bubbles = [];           // 말풍선 기록 {side}. 부품은 bubbleParts(i)로 순서에서 다시 찾는다
-    var previewFixedWidth = false;  // 미리보기가 영역 텍스트(같은 너비)로 만들어졌는지. 모드가 바뀌면 다시 만든다
+    var previewLayoutKey = "";  // 미리보기를 만든 모드·너비·글자 크기. 영역 텍스트는 상자만 바꾸면 화면이 안 바뀌어 다시 만든다
     var rebuildPending = false; // 글·수·글자 크기가 바뀌면 글자부터 다시 만든다
 
     removeLeftoverGroups();     // 이전 실행이 비정상 종료하며 남긴 미리보기 그룹 정리
@@ -330,13 +330,13 @@ try {
         for (var attempt = 0; attempt < 2; attempt++) {
             try {
                 if (previewGroup !== null && bubbles.length === entries.length &&
-                        previewFixedWidth === options.sameWidth) {
+                        previewLayoutKey === layoutKey()) {
                     refillBubbles(entries);
                 } else {
                     clearPreview();
                     previewGroup = doc.activeLayer.groupItems.add();
                     previewGroup.name = PREVIEW_NAME;
-                    previewFixedWidth = options.sameWidth;
+                    previewLayoutKey = layoutKey();
                     for (var j = 0; j < entries.length; j++) {
                         var made = makeBubble(previewGroup, entries[j].text);
                         bubbles.push({ side: entries[j].side, lines: lineCount(made.textFrames[0], entries[j].text) });
@@ -355,12 +355,16 @@ try {
         return false;
     }
 
+    // 포인트 텍스트는 글자 크기만 바뀌어도 그 자리에서 고쳐 쓰면 되지만, 영역 텍스트는 상자 너비·글자 크기를
+    // 바꿔도 화면이 다시 그려지지 않아 새로 만들어야 한다
+    function layoutKey() {
+        return options.sameWidth ? "area|" + options.bubbleWidth + "|" + options.fontSize : "point";
+    }
+
     // 있는 글자에 내용·크기만 다시 쓴다
     function refillBubbles(entries) {
         for (var i = 0; i < entries.length; i++) {
             var frame = bubbleParts(i).frame;
-            // 상자 너비만 바꾸면 화면이 다시 그려지지 않는다. 너비를 먼저 맞추고 내용을 다시 써서 재배치를 일으킨다
-            setAreaWidth(frame);
             frame.contents = entries[i].text;
             frame.textRange.characterAttributes.size = options.fontSize;
             frame.textRange.characterAttributes.fillColor = lineColor;
@@ -381,12 +385,7 @@ try {
         try { return frame.kind === TextType.AREATEXT; } catch (e) { return false; }
     }
 
-    // 영역 텍스트 상자를 '말풍선 너비'로 맞추고, 줄바꿈된 줄 수만큼 높이를 잡는다
-    function setAreaWidth(frame) {
-        if (!isAreaFrame(frame)) return;
-        frame.textPath.width = options.bubbleWidth * mmToPt;
-    }
-
+    // 영역 텍스트 상자 높이를 줄바꿈된 줄 수만큼 잡는다 (너비는 만들 때 정해진다)
     function fitAreaHeight(frame) {
         if (!isAreaFrame(frame)) return;
         var lines = Math.max(1, frame.lines.length);
