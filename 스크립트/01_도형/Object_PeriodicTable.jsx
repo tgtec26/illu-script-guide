@@ -945,7 +945,24 @@ try {
     }
     previewGroup.name = "PeriodicTable";
     saveSettings();
+    flattenShapes();
     doc.selection = null;
     previewGroup.selected = true;
     app.redraw();
+
+    // 미리보기 복제용 모양 하위 그룹은 결과물에 필요 없다. 경로를 셀 그룹으로 꺼내고 빈 그룹을 지운다.
+    // 맨 아래 경로부터 모양 그룹 바로 아래로 옮기면 z순서가 그대로다.
+    // (executeMenuCommand("ungroup")은 셀 그룹 쪽이 풀리는 경우가 있어 쓰지 않는다)
+    function flattenShapes() {
+        try {
+            var cellGroups = previewGroup.groupItems;
+            for (var i = 0; i < cellGroups.length; i++) {
+                var shape = cellGroups[i].groupItems[0];
+                while (shape.pathItems.length > 0) {
+                    shape.pathItems[shape.pathItems.length - 1].move(shape, ElementPlacement.PLACEAFTER);
+                }
+                shape.remove();
+            }
+        } catch (e) {}
+    }
 })();
