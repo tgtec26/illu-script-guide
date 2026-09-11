@@ -1038,6 +1038,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     try {
       const helpers = extractWeatherFrontHelpers(source, [
         "getOutermostContainer",
+        "isIsolated",
         "findTarget",
         "buildRotationTargets",
       ]);
@@ -1053,6 +1054,14 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       assert.strictEqual(helpers.getOutermostContainer(pathA), outerGroup, "a nested path must climb to the outermost group");
       assert.strictEqual(helpers.getOutermostContainer(loosePath), loosePath, "a top-level path must stay itself");
       assert.strictEqual(helpers.getOutermostContainer(outerGroup), outerGroup, "a group sitting on a layer must stay itself");
+
+      // 격리 모드로 들어간 그룹은 작업 공간이므로 그 안쪽에서 멈춘다.
+      const isolatedClip = {typename: "GroupItem", parent: layer, isIsolated: true};
+      const isolatedInner = {typename: "GroupItem", parent: isolatedClip};
+      const isolatedPath = {typename: "PathItem", parent: isolatedInner};
+      const directPath = {typename: "PathItem", parent: isolatedClip};
+      assert.strictEqual(helpers.getOutermostContainer(isolatedPath), isolatedInner, "inside isolation the climb stops below the isolated group");
+      assert.strictEqual(helpers.getOutermostContainer(directPath), directPath, "a path directly inside the isolated group rotates alone");
 
       const points = [
         {point: {anchor: [0, 0]}, owner: pathA},
