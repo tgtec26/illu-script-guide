@@ -95,6 +95,14 @@ app.doScript("도형 합치기", "최종훈");  // Pathfinder Unite (ai_plugin_p
 ```
 
 - `expandStyle` (Object > Expand Appearance) is the one exception: the menu command works, so keep using it.
+- `executeMenuCommand("ungroup")` is unreliable on nested groups: with the inner groups selected it worked on a 3-cell test but dissolved the *outer* cell groups on the real periodic table. Ungroup by script instead — move each path out bottom-most first so stacking order is kept, then remove the empty group (`flattenShapes` in `스크립트/01_도형/Object_PeriodicTable.jsx`):
+
+```javascript
+while (shape.pathItems.length > 0) {
+    shape.pathItems[shape.pathItems.length - 1].move(shape, ElementPlacement.PLACEAFTER);
+}
+shape.remove();
+```
 - Wrap each call in `try/catch` and tell the user to re-run setup if the action set is missing.
 - Do the whole chain one object at a time. Expanding several objects together leaves the selection as a flat list of all the pieces, and the later merge then has nothing meaningful to work on.
 - Other useful actions in the same set: `선 두께 0.3`, `0.3 화살촉 넣기`, `글자깨고흰라인`, `화살표 확장`, `검은 선 흰색으로`. Decode `cjhaction_260624.aia` (UTF-8 hex) to see the full list.
