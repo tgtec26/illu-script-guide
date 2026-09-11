@@ -102,6 +102,31 @@ app.doScript("도형 합치기", "최종훈");  // Pathfinder Unite (ai_plugin_p
 
 When a step-by-step diagnosis is needed, put the stage limit constant at the **top** of the IIFE, not next to the function it guards — a `var` declared after the dialog code runs too late to take effect, and the resulting tests silently exercise the full pipeline.
 
+## Gradient Angle Must Be Read Back, Not Set
+
+`GradientColor.angle` and `GradientColor.matrix` are ignored when a script assigns a fill (verified on Illustrator 2026: angle 0/30/-45/90 and rotation matrices all render the same). Illustrator stamps its last-used gradient angle (Gradient panel state, a previous `rotate()`, etc.) onto every new fill, so `path.rotate(angle, ...)` alone gives a different result on every run.
+
+Read the stamped angle back and rotate only by the difference:
+
+```javascript
+path.fillColor = gradientColor;
+path.rotate(angle - path.fillColor.angle, false, false, true, false, Transformation.CENTER);
+```
+
+- Rotating the whole shape and rotating it back leaves hairlines between adjoining faces; rotate the fill only.
+- Assigning `gradientStops[i].color` re-renders every object using that gradient on the next `app.redraw()`, even with the same value. Write stop colors only when they change.
+- Reference implementation: `스크립트/01_도형/Object_PeriodicTable.jsx` (`applyGradientFill`, `tintBevelGradients`).
+
+## Preview Performance
+
+One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient paths costs ~50 ms, so a preview that rewrites every path on each slider tick lags. Measured on Object_PeriodicTable: 150-280 ms per tick before, ~60 ms after.
+
+- Draw one prototype per distinct shape and `duplicate(target, ElementPlacement.PLACEATEND).translate(dx, dy)` the rest (3 calls per copy). Keeping the shape in its own subgroup lets text frames stay while the shape is swapped.
+- Use `pathItems.roundedRectangle()` / `rectangle()` instead of writing anchors and handles point by point (1 call vs 30+).
+- Read a group's parts into a name → item map in one pass instead of scanning by name for each part. Re-read after `add`/`move`/`remove`; references can go stale.
+- Skip work when the value did not change (gradient tint, text size, path geometry). Cache the last drawn key per object.
+- Benchmark in Illustrator, not by guessing: copy the script, replace `win.show()` with an option sweep timed by `new Date().getTime()` (not `$.hiresTimer`), run it with `osascript -e 'tell application id "com.adobe.illustrator" to do javascript (POSIX file "...")'`, and compare `doc.exportFile(PNG24)` output between runs. A modal alert in Illustrator blocks every AppleEvent until dismissed.
+
 ## Escalation
 
 Ask before expanding scope, changing unrelated files, using multiple agents, or starting a formal design workflow.
