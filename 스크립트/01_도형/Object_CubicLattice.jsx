@@ -514,61 +514,52 @@ try {
     pnlAngles.orientation = "column";
     pnlAngles.alignChildren = "left";
     pnlAngles.spacing = 2;
-    // ◀▶ 버튼: 슬라이더를 step만큼 옮기고 드래그와 같은 순서로 onChanging → onChange를 부른다
-    function addStepButtons(row, slider, step) {
+    // 숫자 조절 행: 라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위
+    // ◀▶와 입력창은 드래그와 같은 순서로 onChanging → onChange를 부른다(뒤에 바꿔 단 핸들러도 그대로 탄다)
+    function addSliderRow(parent, labelText, labelWidth, minV, maxV, initV, unit, step) {
+        var row = parent.add("group");
+        row.spacing = 3;
+        var label = row.add("statictext", undefined, labelText);
+        label.preferredSize.width = labelWidth;
         var minus = row.add("button", undefined, "◀");
         minus.preferredSize.width = STEP_BUTTON_WIDTH;
+        var slider = row.add("slider", undefined, initV, minV, maxV);
+        slider.preferredSize.width = 105;
         var plus = row.add("button", undefined, "▶");
         plus.preferredSize.width = STEP_BUTTON_WIDTH;
-        function nudge(delta) {
-            var next = Math.min(slider.maxvalue, Math.max(slider.minvalue, slider.value + delta));
-            if (next === slider.value) return;
-            slider.value = next;
-            if (slider.onChanging) slider.onChanging();
-            if (slider.onChange) slider.onChange();
-        }
-        minus.onClick = function() { nudge(-step); };
-        plus.onClick = function() { nudge(step); };
-        return plus;
-    }
-    function addAngleSlider(labelText, initialValue) {
-        var row = pnlAngles.add("group");
-        row.orientation = "row";
-        var label = row.add("statictext", undefined, labelText);
-        label.preferredSize.width = 90;
-        var slider = row.add("slider", undefined, initialValue, 91, 179);
-        slider.preferredSize.width = 105;
-        addStepButtons(row, slider, 1);
-        var valueText = row.add("statictext", undefined, Math.round(initialValue) + "°");
-        valueText.preferredSize.width = 45;
-        slider.syncLabel = function() {
-            valueText.text = Math.round(slider.value) + "°";
-            updateTopAngleText();
-        };
+        var input = row.add("edittext", undefined, "");
+        input.characters = 5;
+        row.add("statictext", undefined, unit);
+        var decimals = step < 1 ? 1 : 0;
+        slider.syncLabel = function() { input.text = slider.value.toFixed(decimals); };
+        slider.syncLabel();
         slider.onChanging = function() { slider.syncLabel(); };
         slider.onChange = function() { slider.syncLabel(); updatePreview(); };
+        function setValue(value) {
+            value = Math.min(maxV, Math.max(minV, Math.round(value / step) * step));
+            if (value === slider.value) { slider.syncLabel(); return; }
+            slider.value = value;
+            slider.onChanging();
+            slider.onChange();
+        }
+        minus.onClick = function() { setValue(slider.value - step); };
+        plus.onClick = function() { setValue(slider.value + step); };
+        input.onChange = function() {
+            var typed = Number(input.text);
+            if (!isFinite(typed) || !/\S/.test(input.text)) { slider.syncLabel(); return; }
+            setValue(typed);
+        };
+        return slider;
+    }
+    function addAngleSlider(labelText, initialValue) {
+        var slider = addSliderRow(pnlAngles, labelText, 90, 91, 179, initialValue, "°", 1);
+        var syncValue = slider.syncLabel;
+        slider.syncLabel = function() { syncValue(); updateTopAngleText(); };
         return slider;
     }
     var sldAngleR = addAngleSlider("오른쪽 각도", 131);
     var sldAngleL = addAngleSlider("왼쪽 각도", 109);
-    function addDepthSlider() {
-        var row = pnlAngles.add("group");
-        row.orientation = "row";
-        var label = row.add("statictext", undefined, "앞·뒤 면 거리");
-        label.preferredSize.width = 90;
-        var slider = row.add("slider", undefined, 100, 40, 160);
-        slider.preferredSize.width = 105;
-        addStepButtons(row, slider, 1);
-        var valueText = row.add("statictext", undefined, "100%");
-        valueText.preferredSize.width = 45;
-        slider.syncLabel = function() {
-            valueText.text = Math.round(slider.value) + "%";
-        };
-        slider.onChanging = function() { slider.syncLabel(); };
-        slider.onChange = function() { slider.syncLabel(); updatePreview(); };
-        return slider;
-    }
-    var sldDepth = addDepthSlider();
+    var sldDepth = addSliderRow(pnlAngles, "앞·뒤 면 거리", 90, 40, 160, 100, "%", 1);
     var angleInfoRow = pnlAngles.add("group");
     angleInfoRow.add("statictext", undefined, "상단 각도(자동):");
     var txtTopAngle = angleInfoRow.add("statictext", undefined, "120°");
@@ -596,29 +587,19 @@ try {
     pnlSize.alignChildren = "left";
     pnlSize.spacing = 2;
     var sliderSyncers = [];
-    function addSlider(labelText, minV, maxV, initV, fmt, step) {
-        var g = pnlSize.add("group");
-        var lab = g.add("statictext", undefined, labelText);
-        lab.preferredSize.width = 135;
-        var s = g.add("slider", undefined, initV, minV, maxV);
-        s.preferredSize.width = 105;
-        addStepButtons(g, s, step);
-        var t = g.add("statictext", undefined, fmt(initV));
-        t.preferredSize.width = 55;
-        s.syncLabel = function() { t.text = fmt(s.value); };
-        s.onChanging = function() { s.syncLabel(); };
-        s.onChange = function() { s.syncLabel(); updatePreview(); };
+    function addSlider(labelText, minV, maxV, initV, unit, step) {
+        var s = addSliderRow(pnlSize, labelText, 135, minV, maxV, initV, unit, step);
         sliderSyncers.push(s.syncLabel);
         return s;
     }
     function syncSliderLabels() { for (var i = 0; i < sliderSyncers.length; i++) sliderSyncers[i](); }
     // 밀집·절단 모드의 구 지름은 접촉 조건에서 자동 계산되므로 슬라이더는 라인 모드에만 쓰인다.
-    var sldCell = addSlider("셀 한 변", 5, 80, 20, function(v) { return v.toFixed(1) + "mm"; }, 0.1);
-    var sldCornerSphere = addSlider("꼭짓점 구 지름(라인)", 0.5, 20, 3, function(v) { return v.toFixed(1) + "mm"; }, 0.1);
-    var sldOtherSphere = addSlider("나머지 구 지름(라인)", 0.5, 20, 3, function(v) { return v.toFixed(1) + "mm"; }, 0.1);
-    var sldCornerBrightness = addSlider("꼭짓점 밝기", 40, 160, 100, function(v) { return Math.round(v) + "%"; }, 1);
-    var sldOtherBrightness = addSlider("나머지 밝기", 40, 160, 100, function(v) { return Math.round(v) + "%"; }, 1);
-    var sldGap = addSlider("셀 간격", 0, 40, 8, function(v) { return v.toFixed(1) + "mm"; }, 0.1);
+    var sldCell = addSlider("셀 한 변", 5, 80, 20, "mm", 0.1);
+    var sldCornerSphere = addSlider("꼭짓점 구 지름(라인)", 0.5, 20, 3, "mm", 0.1);
+    var sldOtherSphere = addSlider("나머지 구 지름(라인)", 0.5, 20, 3, "mm", 0.1);
+    var sldCornerBrightness = addSlider("꼭짓점 밝기", 40, 160, 100, "%", 1);
+    var sldOtherBrightness = addSlider("나머지 밝기", 40, 160, 100, "%", 1);
+    var sldGap = addSlider("셀 간격", 0, 40, 8, "mm", 0.1);
 
     function isIodineSelected() {
         for (var i = 0; i < LATTICES.length; i++) {
@@ -666,6 +647,8 @@ try {
     sldCell.onChange = function() { sldCell.syncLabel(); updatePreview(); };
 
     var btnGenerate = win.add("button", undefined, "입방정계 생성하기", {name: "ok"});
+    // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    try { win.defaultElement = null; } catch (defaultError) {}
     btnGenerate.preferredSize.height = 40;
 
     function getSelectedLattices() {

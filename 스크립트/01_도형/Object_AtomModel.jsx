@@ -58,6 +58,7 @@ try {
     }
 
     // 2. ScriptUI 창 구성
+    var STEP_BUTTON_WIDTH = 34;   // 더 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다
     var win = new Window("dialog", "원자 모형 생성기");
     win.orientation = "column";
     win.alignChildren = ["fill", "top"];
@@ -125,30 +126,54 @@ try {
     // --- 크기 조절 슬라이더 ---
     var pnlSize = win.add("panel", undefined, "크기 조절");
     pnlSize.alignChildren = "left";
-    pnlSize.spacing = 6;
+    pnlSize.spacing = 2;
     var sliderSyncers = []; // 값 변경(복원 등) 후 라벨 텍스트를 다시 맞추는 함수 목록
-    function addSlider(labelText, minV, maxV, initV, fmt) {
+    function addSlider(labelText, minV, maxV, initV, unit, step) {
+        // 숫자 조절 행: 라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위
         var g = pnlSize.add("group");
+        g.spacing = 3;
         var lab = g.add("statictext", undefined, labelText);
-        lab.preferredSize.width = 70;
+        lab.preferredSize.width = 90;
+        var minus = g.add("button", undefined, "◀");
+        minus.preferredSize.width = STEP_BUTTON_WIDTH;
         var s = g.add("slider", undefined, initV, minV, maxV);
         s.preferredSize.width = 105;
-        var t = g.add("statictext", undefined, fmt(initV));
-        t.preferredSize.width = 55;
-        s.syncLabel = function() { t.text = fmt(s.value); };
+        var plus = g.add("button", undefined, "▶");
+        plus.preferredSize.width = STEP_BUTTON_WIDTH;
+        var input = g.add("edittext", undefined, "");
+        input.characters = 5;
+        g.add("statictext", undefined, unit);
+        var decimals = step < 1 ? 1 : 0;
+        s.syncLabel = function() { input.text = s.value.toFixed(decimals); };
+        s.syncLabel();
         // 드래그 중엔 라벨만(가벼움), 놓을 때(onChange) 무거운 미리보기 재드로우 → MRAP 부하 감소
         s.onChanging = function() { s.syncLabel(); };
         s.onChange = function() { s.syncLabel(); updatePreview(); };
+        // ◀▶와 입력창은 드래그와 같은 순서로 onChanging → onChange를 부른다
+        function setValue(value) {
+            value = Math.min(maxV, Math.max(minV, Math.round(value / step) * step));
+            if (value === s.value) { s.syncLabel(); return; }
+            s.value = value;
+            s.onChanging();
+            s.onChange();
+        }
+        minus.onClick = function() { setValue(s.value - step); };
+        plus.onClick = function() { setValue(s.value + step); };
+        input.onChange = function() {
+            var typed = Number(input.text);
+            if (!isFinite(typed) || !/\S/.test(input.text)) { s.syncLabel(); return; }
+            setValue(typed);
+        };
         sliderSyncers.push(s.syncLabel);
         return s;
     }
     function syncSliderLabels() { for (var i = 0; i < sliderSyncers.length; i++) sliderSyncers[i](); }
     // 모든 크기는 실제 적용값(화면 실측치). 기준 = 1번 껍질 지름(mm).
     // 껍질 수가 달라도 껍질 지름이 같아 여러 모형 간 통일감 유지(1:2:3 등간격).
-    var sldOverall = addSlider("1껍질 지름", 2, 16, 13, function(v){ return v.toFixed(1) + "mm"; });
-    var sldNucleus = addSlider("핵 지름", 0.5, 8, 6, function(v){ return v.toFixed(1) + "mm"; });
-    var sldElectron = addSlider("전자 지름", 0.2, 4, 2, function(v){ return v.toFixed(1) + "mm"; });
-    var sldChargeFont = addSlider("핵 전하량 글자", 1, 20, 8, function(v){ return v.toFixed(1) + "pt"; });
+    var sldOverall = addSlider("1껍질 지름", 2, 16, 13, "mm", 0.1);
+    var sldNucleus = addSlider("핵 지름", 0.5, 8, 6, "mm", 0.1);
+    var sldElectron = addSlider("전자 지름", 0.2, 4, 2, "mm", 0.1);
+    var sldChargeFont = addSlider("핵 전하량 글자", 1, 20, 8, "pt", 0.1);
 
     // 연동 규칙:
     //  전체 크기 변경 → 핵 지름·전자 지름·핵 전하량 글자가 같은 비율로 함께 조정(전체 비례).
@@ -181,6 +206,8 @@ try {
 
 
     var btnGenerate = win.add("button", undefined, "원자 모형 생성하기", {name: "ok"});
+    // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    try { win.defaultElement = null; } catch (defaultError) {}
     btnGenerate.preferredSize.height = 40;
 
     // --- 현재 UI 값 읽기 / 그리기 호출 ---

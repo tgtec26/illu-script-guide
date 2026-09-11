@@ -59,6 +59,7 @@ try {
     var lastPreviewTime = 0;
     var committed = false;
 
+    var STEP_BUTTON_WIDTH = 34;   // 더 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다
     var win = new Window("dialog", "수평으로 던진 물체의 포물선");
     win.alignChildren = "fill";
     var shapePanel = win.add("panel", undefined, "수평 던지기");
@@ -107,12 +108,12 @@ try {
     function addRow(panel, field, positionOnly) {
         var row = panel.add("group");
         row.add("statictext", undefined, field.label).preferredSize.width = 75;
-        var minus = row.add("button", undefined, "−");
-        minus.preferredSize.width = 34;
+        var minus = row.add("button", undefined, "◀");
+        minus.preferredSize.width = STEP_BUTTON_WIDTH;
         var slider = row.add("slider", undefined, options[field.key], field.min, field.max);
         slider.preferredSize.width = 126;
-        var plus = row.add("button", undefined, "+");
-        plus.preferredSize.width = 34;
+        var plus = row.add("button", undefined, "▶");
+        plus.preferredSize.width = STEP_BUTTON_WIDTH;
         var input = row.add("edittext", undefined, String(options[field.key]));
         input.characters = 6;
         row.add("statictext", undefined, field.unit);

@@ -609,69 +609,66 @@ try {
 
     var sliderSyncers = [];
 
-    // ◀▶ 버튼: 슬라이더를 step만큼 옮기고 드래그와 같은 순서로 onChanging → onChange를 부른다
-    function addStepButtons(row, slider, step) {
-        var minus = row.add("button", undefined, "◀");
-        minus.preferredSize.width = STEP_BUTTON_WIDTH;
-        var plus = row.add("button", undefined, "▶");
-        plus.preferredSize.width = STEP_BUTTON_WIDTH;
-        function nudge(delta) {
-            var next = Math.min(slider.maxvalue, Math.max(slider.minvalue, slider.value + delta));
-            if (next === slider.value) return;
-            slider.value = next;
-            if (slider.onChanging) slider.onChanging();
-            if (slider.onChange) slider.onChange();
-        }
-        minus.onClick = function() { nudge(-step); };
-        plus.onClick = function() { nudge(step); };
-    }
-
-    function addSlider(parent, labelText, minValue, maxValue, initialValue, formatter, step) {
+    // 숫자 조절 행: 라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위
+    // ◀▶와 입력창은 드래그와 같은 순서로 onChanging → onChange를 부른다(뒤에 바꿔 단 핸들러도 그대로 탄다)
+    function addSlider(parent, labelText, minValue, maxValue, initialValue, unit, step) {
         var row = parent.add("group");
-        row.orientation = "row";
+        row.spacing = 3;
         var label = row.add("statictext", undefined, labelText);
         label.preferredSize.width = 112;
+        var minus = row.add("button", undefined, "◀");
+        minus.preferredSize.width = STEP_BUTTON_WIDTH;
         var slider = row.add("slider", undefined, initialValue, minValue, maxValue);
         slider.preferredSize.width = 100;
-        addStepButtons(row, slider, step);
-        var valueText = row.add("statictext", undefined, formatter(initialValue));
-        valueText.preferredSize.width = 52;
-        slider.syncLabel = function() { valueText.text = formatter(slider.value); };
+        var plus = row.add("button", undefined, "▶");
+        plus.preferredSize.width = STEP_BUTTON_WIDTH;
+        var input = row.add("edittext", undefined, "");
+        input.characters = 5;
+        row.add("statictext", undefined, unit);
+        var decimals = step < 1 ? 1 : 0;
+        slider.syncLabel = function() { input.text = slider.value.toFixed(decimals); };
+        slider.syncLabel();
         slider.onChanging = function() { slider.syncLabel(); };
         slider.onChange = function() { slider.syncLabel(); updatePreview(); };
+        function setValue(value) {
+            value = Math.min(maxValue, Math.max(minValue, Math.round(value / step) * step));
+            if (value === slider.value) { slider.syncLabel(); return; }
+            slider.value = value;
+            slider.onChanging();
+            slider.onChange();
+        }
+        minus.onClick = function() { setValue(slider.value - step); };
+        plus.onClick = function() { setValue(slider.value + step); };
+        input.onChange = function() {
+            var typed = Number(input.text);
+            if (!isFinite(typed) || !/\S/.test(input.text)) { slider.syncLabel(); return; }
+            setValue(typed);
+        };
         sliderSyncers.push(slider.syncLabel);
         return slider;
     }
 
-    function mmFormat(value) { return value.toFixed(1) + "mm"; }
-    function percentFormat(value) { return Math.round(value) + "%"; }
 
     var pnlSize = win.add("panel", undefined, "크기·밝기 조절");
     pnlSize.orientation = "column";
     pnlSize.alignChildren = "left";
     pnlSize.spacing = 2;
-    var sldCell = addSlider(pnlSize, "셀 한 변", 8, 80, 28, mmFormat, 0.1);
+    var sldCell = addSlider(pnlSize, "셀 한 변", 8, 80, 28, "mm", 0.1);
     var pyramidInfoRow = pnlSize.add("group");
     var pyramidInfoLabel = pyramidInfoRow.add("statictext", undefined, "피라미드 층");
     pyramidInfoLabel.preferredSize.width = 112;
     pyramidInfoRow.add("statictext", undefined, "3층 (고정)");
-    var sldAtom = addSlider(pnlSize, "탄소 구 지름", 1, 12, 4, mmFormat, 0.1);
-    var sldBondWidth = addSlider(pnlSize, "결합선 굵기", 0.1, 2, 0.5, function(v) {
-        return v.toFixed(1) + "pt";
-    }, 0.1);
-    var sldBrightness = addSlider(pnlSize, "탄소 밝기", 40, 160, 100, percentFormat, 1);
+    var sldAtom = addSlider(pnlSize, "탄소 구 지름", 1, 12, 4, "mm", 0.1);
+    var sldBondWidth = addSlider(pnlSize, "결합선 굵기", 0.1, 2, 0.5, "pt", 0.1);
+    var sldBrightness = addSlider(pnlSize, "탄소 밝기", 40, 160, 100, "%", 1);
 
     var pnlView = win.add("panel", undefined, "관찰 각도");
     pnlView.orientation = "column";
     pnlView.alignChildren = "left";
     pnlView.spacing = 2;
-    var sldAngleR = addSlider(pnlView, "오른쪽 각도", 91, 179, 131, function(v) {
-        return Math.round(v) + "°";
-    }, 1);
-    var sldAngleL = addSlider(pnlView, "왼쪽 각도", 91, 179, 109, function(v) {
-        return Math.round(v) + "°";
-    }, 1);
-    var sldDepth = addSlider(pnlView, "앞·뒤 면 거리", 40, 160, 100, percentFormat, 1);
+    var sldAngleR = addSlider(pnlView, "오른쪽 각도", 91, 179, 131, "°", 1);
+    var sldAngleL = addSlider(pnlView, "왼쪽 각도", 91, 179, 109, "°", 1);
+    var sldDepth = addSlider(pnlView, "앞·뒤 면 거리", 40, 160, 100, "%", 1);
     var topAngleRow = pnlView.add("group");
     topAngleRow.add("statictext", undefined, "상단 각도(자동):");
     var txtTopAngle = topAngleRow.add("statictext", undefined, "120°");
@@ -707,6 +704,8 @@ try {
     updateTopAngleText();
 
     var btnGenerate = win.add("button", undefined, "다이아몬드 결정 구조 생성하기", { name: "ok" });
+    // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    try { win.defaultElement = null; } catch (defaultError) {}
     btnGenerate.preferredSize.height = 40;
 
     function syncEnabled() {

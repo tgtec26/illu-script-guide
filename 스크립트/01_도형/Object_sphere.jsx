@@ -42,6 +42,8 @@ try {
     var viewZ = 0;
     var previewEnabled = true;
     var previewGroup = null;
+    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+    var STEP_BUTTON_WIDTH = 34;   // 다이얼로그를 만들기 전에 있어야 한다
     var MM_TO_PT = 2.834645669;
     var POSITION_LIMIT_MM = 100;
     var OFFSET_STEP_MM = 0.1;
@@ -65,7 +67,7 @@ try {
     var longitudeInput = longitudeRow.add("edittext", undefined, String(longitudeCount));
     longitudeInput.characters = 6;
     longitudeRow.add("statictext", undefined, "개  (0 = 없음, 1 = 2등분, 2 = 4등분)");
-    var longitudeSlider = gridPanel.add("slider", undefined, longitudeCount, 0, 24);
+    var longitudeSlider = addSliderWithSteps(gridPanel, longitudeCount, 0, 24, 1);
     longitudeSlider.preferredSize.width = 266;
     longitudeSlider.stepdelta = 1;
 
@@ -74,7 +76,7 @@ try {
     var latitudeInput = latitudeRow.add("edittext", undefined, String(latitudeCount));
     latitudeInput.characters = 6;
     latitudeRow.add("statictext", undefined, "개  (0 = 없음, 1 ~ 11)");
-    var latitudeSlider = gridPanel.add("slider", undefined, latitudeCount, 0, 11);
+    var latitudeSlider = addSliderWithSteps(gridPanel, latitudeCount, 0, 11, 1);
     latitudeSlider.preferredSize.width = 266;
     latitudeSlider.stepdelta = 1;
     gridPanel.add("statictext", undefined,
@@ -87,7 +89,7 @@ try {
     var rotationInput = rotationRow.add("edittext", undefined, formatSignedAngle(gridRotation));
     rotationInput.characters = 7;
     rotationRow.add("statictext", undefined, "°  (-180 ~ +180)");
-    var rotationSlider = gridPanel.add("slider", undefined, gridRotation, -180, 180);
+    var rotationSlider = addSliderWithSteps(gridPanel, gridRotation, -180, 180, 1);
     rotationSlider.preferredSize.width = 266;
 
     var viewPanel = dlg.add("panel", undefined, "구를 바라보는 시점");
@@ -263,8 +265,28 @@ try {
         }
     }
 
-    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-    var STEP_BUTTON_WIDTH = 34;
+    // 슬라이더 양옆 ◀▶: step만큼 옮기고 드래그와 같은 onChanging 핸들러를 부른다
+    function addSliderWithSteps(parent, value, minimum, maximum, step) {
+        var row = parent.add("group");
+        row.spacing = 3;
+        row.alignChildren = ["left", "center"];
+        var minus = row.add("button", undefined, "◀");
+        minus.preferredSize.width = STEP_BUTTON_WIDTH;
+        var slider = row.add("slider", undefined, value, minimum, maximum);
+        var plus = row.add("button", undefined, "▶");
+        plus.preferredSize.width = STEP_BUTTON_WIDTH;
+        function nudge(delta) {
+            var next = Math.min(maximum, Math.max(minimum, Math.round((slider.value + delta) / step) * step));
+            if (next === slider.value) return;
+            slider.value = next;
+            if (slider.onChanging) slider.onChanging();
+            if (slider.onChange) slider.onChange();
+        }
+        minus.onClick = function() { nudge(-step); };
+        plus.onClick = function() { nudge(step); };
+        return slider;
+    }
+
     // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
     function addOffsetControls(parent, label, value) {
         var row = parent.add("group");
@@ -325,7 +347,7 @@ try {
         var input = row.add("edittext", undefined, formatSignedAngle(value));
         input.characters = 7;
         row.add("statictext", undefined, "°  (-180 ~ +180)");
-        var slider = parent.add("slider", undefined, value, -180, 180);
+        var slider = addSliderWithSteps(parent, value, -180, 180, 1);
         slider.preferredSize.width = 266;
         return {input: input, slider: slider};
     }

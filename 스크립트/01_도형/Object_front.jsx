@@ -33,6 +33,8 @@ try {
     var previousCoordinateSystem = app.coordinateSystem;
     try {
     app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM;
+    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+    var STEP_BUTTON_WIDTH = 34;   // 다이얼로그를 만들기 전에 있어야 한다
     var MM_TO_PT = 2.83464567;
     var shapeSizeMm = 2;
     var gapMm = 2;
@@ -926,8 +928,28 @@ try {
         return value;
     }
 
-    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-    var STEP_BUTTON_WIDTH = 34;
+    // 슬라이더 양옆 ◀▶: step만큼 옮기고 드래그와 같은 onChanging 핸들러를 부른다
+    function addSliderWithSteps(parent, value, minimum, maximum, step) {
+        var row = parent.add("group");
+        row.spacing = 3;
+        row.alignChildren = ["left", "center"];
+        var minus = row.add("button", undefined, "◀");
+        minus.preferredSize.width = STEP_BUTTON_WIDTH;
+        var slider = row.add("slider", undefined, value, minimum, maximum);
+        var plus = row.add("button", undefined, "▶");
+        plus.preferredSize.width = STEP_BUTTON_WIDTH;
+        function nudge(delta) {
+            var next = Math.min(maximum, Math.max(minimum, Math.round((slider.value + delta) / step) * step));
+            if (next === slider.value) return;
+            slider.value = next;
+            if (slider.onChanging) slider.onChanging();
+            if (slider.onChange) slider.onChange();
+        }
+        minus.onClick = function() { nudge(-step); };
+        plus.onClick = function() { nudge(step); };
+        return slider;
+    }
+
     // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
     function addOffsetControls(parent, label, value) {
         var row = parent.add("group");
@@ -986,7 +1008,7 @@ try {
         var input = row.add("edittext", undefined, formatNumber(value));
         input.characters = 6;
         row.add("statictext", undefined, unit);
-        var slider = parent.add("slider", undefined, value, minimum, maximum);
+        var slider = addSliderWithSteps(parent, value, minimum, maximum, step);
         slider.preferredSize.width = 182;
         slider.stepdelta = step;
         return {

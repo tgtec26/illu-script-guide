@@ -42,6 +42,7 @@ try {
         return;
     }
 
+    var STEP_BUTTON_WIDTH = 34;   // 더 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다
     var win = new Window("dialog", "말풍선 만들기");
     win.alignChildren = "fill";
     var boxPanel = win.add("panel", undefined, "사각형 · 텍스트 주변 여백");
@@ -120,13 +121,13 @@ try {
         var caption = row.add("statictext", undefined, label);
         caption.preferredSize.width = 85;
         var step = unit === "mm" ? 0.1 : 1;
-        var minus = row.add("button", undefined, "−");
-        minus.preferredSize.width = 34;
+        var minus = row.add("button", undefined, "◀");
+        minus.preferredSize.width = STEP_BUTTON_WIDTH;
         minus.helpTip = String(step) + unit + " 감소";
         var slider = row.add("slider", undefined, options[key], min, max);
         slider.preferredSize.width = 126;
-        var plus = row.add("button", undefined, "+");
-        plus.preferredSize.width = 34;
+        var plus = row.add("button", undefined, "▶");
+        plus.preferredSize.width = STEP_BUTTON_WIDTH;
         plus.helpTip = String(step) + unit + " 증가";
         var input = row.add("edittext", undefined, String(options[key]));
         input.characters = 6;

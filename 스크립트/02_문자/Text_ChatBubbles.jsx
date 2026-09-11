@@ -56,6 +56,7 @@ try {
 
     removeLeftoverGroups();     // 이전 실행이 비정상 종료하며 남긴 미리보기 그룹 정리
 
+    var STEP_BUTTON_WIDTH = 34;   // 더 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다
     var win = new Window("dialog", "채팅 말풍선 만들기");
     win.alignChildren = "fill";
     win.spacing = 4;
@@ -213,13 +214,13 @@ try {
         var caption = row.add("statictext", undefined, label);
         caption.preferredSize.width = 85;
         var step = unit === "mm" ? 0.1 : (unit === "pt" ? 0.5 : 1);
-        var minus = row.add("button", undefined, "−");
-        minus.preferredSize.width = 34;
+        var minus = row.add("button", undefined, "◀");
+        minus.preferredSize.width = STEP_BUTTON_WIDTH;
         minus.helpTip = String(step) + unit + " 감소";
         var slider = row.add("slider", undefined, options[key], min, max);
         slider.preferredSize.width = 105;
-        var plus = row.add("button", undefined, "+");
-        plus.preferredSize.width = 34;
+        var plus = row.add("button", undefined, "▶");
+        plus.preferredSize.width = STEP_BUTTON_WIDTH;
         plus.helpTip = String(step) + unit + " 증가";
         var input = row.add("edittext", undefined, String(options[key]));
         input.characters = 6;
