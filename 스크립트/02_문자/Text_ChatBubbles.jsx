@@ -112,7 +112,7 @@ try {
     var sameWidth = textPanel.add("checkbox", undefined, "같은 너비");
     sameWidth.value = options.sameWidth;
     sameWidth.helpTip = "모든 말풍선을 아래 '말풍선 너비'로 맞추고 글을 그 안에서 줄바꿈합니다";
-    var bubbleWidthRow = addRow(textPanel, "말풍선 너비", "bubbleWidth", 10, 150, "mm", false).parent;
+    var bubbleWidthRow = addRow(textPanel, "말풍선 너비", "bubbleWidth", 10, 100, "mm", false).parent;
     bubbleWidthRow.enabled = options.sameWidth;
     sameWidth.onClick = function() {
         options.sameWidth = sameWidth.value;
@@ -643,7 +643,7 @@ try {
             var keys = ["count", "fontSize", "chatWidth", "gap", "paddingX", "paddingY", "radius",
                 "tailOffset", "tailBend", "tailSize", "offsetX", "offsetY", "bubbleWidth"];
             var mins = [2, 4, 20, 0, 0, 0, 0, 0, 0, 20, -100, -100, 10];
-            var maxs = [MAX_BUBBLES, 30, 200, 30, 50, 50, 50, 100, 100, 400, 100, 100, 150];
+            var maxs = [MAX_BUBBLES, 30, 200, 30, 50, 50, 50, 100, 100, 400, 100, 100, 100];
             for (var i = 0; i < keys.length; i++) {
                 var raw = p[i + 1];
                 var value = Number(raw);
