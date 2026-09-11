@@ -207,13 +207,19 @@ try {
 
     // 그룹이나 컴파운드 패스 안에 들어 있으면 가장 바깥 컨테이너까지 올라간다.
     // 최상위 개체의 부모는 레이어이므로 그 앞에서 멈춘다.
+    // 격리 모드 안에서 편집 중이면 격리된 그룹은 편집 대상이 아니라 작업 공간이므로 그 앞에서 멈춘다.
     function getOutermostContainer(item) {
         var target = item;
         while (target.parent &&
-            (target.parent.typename === "GroupItem" || target.parent.typename === "CompoundPathItem")) {
+            (target.parent.typename === "GroupItem" || target.parent.typename === "CompoundPathItem") &&
+            !isIsolated(target.parent)) {
             target = target.parent;
         }
         return target;
+    }
+
+    function isIsolated(item) {
+        try { return item.typename === "GroupItem" && item.isIsolated === true; } catch (e) { return false; }
     }
 
     function rotateTargets(targets, pivot, angleDegrees) {
