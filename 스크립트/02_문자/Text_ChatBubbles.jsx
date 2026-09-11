@@ -13,7 +13,8 @@ try {
     - 말풍선 수(2~5)를 고르면 그만큼 입력창이 열리고, 입력한 글마다 말풍선이 생깁니다
     - 글을 다 넣고 '완료'를 눌러야 그리기 시작합니다(타이핑마다 다시 그리면 느려서)
     - 위에서부터 9시 꼬리(왼쪽 정렬) → 3시 꼬리(오른쪽 정렬)를 번갈아 놓습니다
-    - '같은 너비'를 켜면 모든 말풍선을 가장 넓은 것의 너비로 맞추고 왼쪽 끝을 나란히 세웁니다
+    - '같은 너비'를 켜면 모든 말풍선을 가장 넓은 것의 너비로 맞추고 왼쪽 끝을 나란히 세웁니다.
+      이때는 빈 입력칸도 빈 말풍선으로 만듭니다
     - 글자는 한글=Spoqa, 영문·숫자·기호=GSMediumB1 규칙을 글자마다 적용합니다
     - 여백·라운딩·꼬리 옵션은 Text_AreaTextRoundedBox와 같습니다. 글자 범위는 윤곽선 대신
       프레임 범위에 서체별 고정 비율을 적용해 어림합니다(윤곽선 변환을 되풀이하면 Illustrator가 불안정)
@@ -305,7 +306,10 @@ try {
         var entries = [];
         for (var i = 0; i < options.count; i++) {
             var text = texts[i] || "";
-            if (!/\S/.test(text)) continue;
+            if (!/\S/.test(text)) {
+                if (!options.sameWidth) continue;
+                text = " ";   // 같은 너비: 빈 칸도 빈 말풍선으로 (공백 하나면 프레임 높이가 한 줄로 잡힌다)
+            }
             entries.push({ text: text, side: (i % 2 === 0) ? "left" : "right" });
         }
         if (entries.length === 0) {
