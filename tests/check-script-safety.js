@@ -2603,4 +2603,235 @@ for (const file of cabinetFiles) {
   assert.strictEqual(saveArgs, 17, `${file}: saveSettings writes 17 fields after the tag`);
 }
 
+{
+  const file = "스크립트/01_도형/Object_PeriodicTable.jsx";
+  const source = read(file);
+  const required = [
+    'new Window("dialog", "주기율표")',
+    'var PREF_KEY = "ObjectPeriodicTable/settings";',
+    'illu_last_script.txt',
+    'addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", 0.1, true);',
+    'addRow(positionPanel, "세로 이동", "offsetY", -100, 100, "mm", 0.1, true);',
+    'footer.add("checkbox", undefined, "미리보기")',
+    'try { win.defaultElement = null; } catch (e) {}',
+    'var g = previewGroup.groupItems[cellIndex[cell.key]];',
+  ];
+  for (const token of required) {
+    if (!source.includes(token)) {
+      console.error(`${file}: missing token: ${token}`);
+      failures++;
+    }
+  }
+  const pure = ["parseGroups", "contains", "cellExists", "buildCellList", "roundedRectPoints", "corner", "quadrantPoints"]
+    .map((name) => extractFunction(source, name)).join("\n");
+  const fns = new Function(`${pure}; return {parseGroups, cellExists, buildCellList, roundedRectPoints, quadrantPoints};`)();
+  const diagonalFns = new Function(extractFunction(source, 'corner') + '\n' +
+    extractFunction(source, 'diagonalPoints') + '\n' + extractFunction(source, 'insetRect') +
+    '; return {diagonalPoints, insetRect};')();
+  for (const width of [5, 15, 30]) for (const height of [5, 12, 30]) {
+    const outer = {left: -37, top: 83, width, height};
+    for (const raised of [false, true]) for (const radius of [0, 0.5, 3.3, 5, 50]) {
+      const rect = raised ? diagonalFns.insetRect(outer, 1.2) : outer;
+      const effective = raised ? radius * 1.11 : radius;
+      const points = diagonalFns.diagonalPoints(rect, effective);
+      const x = points[0].anchor[0] - rect.left;
+      const y = rect.top - points[0].anchor[1];
+      assert.ok(Math.abs(y * rect.width - x * rect.height) < 1e-7, 'divider must stay on the original diagonal');
+      assert.ok(Math.abs(points[0].anchor[0] + points[1].anchor[0] - (2 * rect.left + rect.width)) < 1e-9);
+      assert.ok(Math.abs(points[0].anchor[1] + points[1].anchor[1] - (2 * rect.top - rect.height)) < 1e-9);
+      if (!radius) {
+        assert.deepStrictEqual(points[0].anchor, [rect.left, rect.top]);
+      } else {
+        // 원과의 차이는 실제 그리기에 쓰는 4분원 베지어의 근사 오차 이내다.
+        const r = Math.min(effective, rect.width / 2, rect.height / 2);
+        assert.ok(Math.abs(Math.hypot(x - r, y - r) - r) < r * 0.0003, 'endpoint must meet rounded boundary');
+        assert.ok(x > 0 && y > 0 && x <= r && y <= r);
+      }
+    }
+  }
+  assert.ok(source.includes('diagonal.strokeWidth = 0.3;'));
+  assert.ok(source.includes('diagonal.strokeColor = lineColor;'));
+  assert.ok(source.includes('diagonal.strokeCap = StrokeCap.BUTTENDCAP;'));
+  const quadRect = { left: 0, top: 10, width: 20, height: 10 };
+  // 실제 옵션 이벤트 → 그룹 이동 → 일부 셀 크기 변경 순서로 위치 캐시를 검증한다.
+  const previewHarness = new Function('options', 'cells', `
+    var mmToPt = 2.83464567, originX = -50, originY = 100;
+    var cellGeomKeys = {}, cellIndex = {}, previewPending = false;
+    var STEP_BUTTON_WIDTH = 34, CORNER_LABEL_SCALE = 0.9;
+    var doc = {}, lineColor = {}, status = {}, app = {redraw: function() {}};
+    var StrokeCap = {BUTTENDCAP: 0};
+    function makeGray() { return {}; }
+    function syncCellParts() {}
+    function centerText() {}
+    function findNamed(items, name) { return items[name]; }
+    function writePath(path, points) { path.points = points.map(function(p) { return p.anchor.slice(); }); }
+    function clearPreview() { throw new Error('unexpected preview failure'); }
+    var previewGroup = {groupItems: [], translate: function(dx, dy) {
+      this.groupItems.forEach(function(g) { g.translate(dx, dy); });
+    }};
+    cells.forEach(function(cell, i) {
+      cellIndex[cell.key] = i;
+      previewGroup.groupItems.push({pathItems: {face: {}, diagonal: {}}, textFrames: {},
+        translate: function(dx, dy) {
+          for (var key in this.pathItems) {
+            var points = this.pathItems[key].points || [];
+            points.forEach(function(p) { p[0] += dx; p[1] += dy; });
+          }
+        }});
+    });
+    function control(type, ignored, value) {
+      return {type: type, text: value, value: value, preferredSize: {}, children: [],
+        add: function(t, b, v) { var child = control(t, b, v); this.children.push(child); return child; }};
+    }
+    function updatePreview() { layoutCells(); }
+    ${['addRow', 'layoutCells', 'cellRect', 'insetRect', 'roundedRectPoints', 'corner', 'diagonalPoints']
+      .map(name => extractFunction(source, name)).join('\n')}
+    layoutCells();
+    return {
+      set: function(key, value, positionOnly) {
+        var panel = control('panel');
+        addRow(panel, key, key, -100, 100, 'mm', 0.1, positionOnly);
+        var input = panel.children[0].children[4];
+        input.text = String(value);
+        input.onChange();
+      },
+      check: function() {
+        return cells.map(function(cell, i) {
+          var rect = cellRect(cell);
+          return {key: cell.key, actual: previewGroup.groupItems[i].pathItems.face.points[0],
+            expected: [rect.left, rect.top]};
+        });
+      }
+    };
+  `);
+  const preview = previewHarness({cellW: 15, cellH: 12, headColW: 15, headRowH: 12,
+    gap: 1, radius: 0, depth: 1.2, raised: false, border: true, strokeW: 0.3,
+    headK: 20, bodyK: 10, offsetX: 0, offsetY: 0, fontSize: 10}, [
+    {key: 'corner', row: 0, col: 0, kind: 'corner'},
+    {key: 'g1', row: 0, col: 1, kind: 'head'},
+    {key: 'p1', row: 1, col: 0, kind: 'head'},
+    {key: 'p1g1', row: 1, col: 1, kind: 'body'},
+  ]);
+  for (const [key, value] of [['offsetX', 7], ['offsetY', -3], ['cellW', 6.5],
+    ['cellH', 5.5], ['headRowH', 7.5], ['headColW', 13], ['gap', 0],
+    ['offsetY', 12], ['headRowH', 9], ['offsetX', -4], ['fontSize', 12],
+    ['cellW', 15], ['offsetX', 0], ['offsetY', 0], ['gap', 1]]) {
+    preview.set(key, value, key === 'offsetX' || key === 'offsetY');
+    for (const cell of preview.check()) {
+      for (let axis = 0; axis < 2; axis++) assert.ok(
+        Math.abs(cell.actual[axis] - cell.expected[axis]) < 1e-8,
+        `${file}: ${key}=${value} displaced ${cell.key} on axis ${axis}`);
+    }
+  }
+  // Illustrator가 fillColor 재지정 뒤에도 경로의 채우기 회전을 보존하는 경우를 모사한다.
+  // 라운딩 변경마다 새 음영 경로를 써야 회전이 누적되지 않고 z순서도 유지된다.
+  const stack = [];
+  function makeGradientPath(group, name) {
+    const path = {
+      name, rotation: 0, geometricBounds: [0, 10, 20, 0],
+      move(previous) {
+        stack.splice(stack.indexOf(this), 1);
+        stack.splice(stack.indexOf(previous), 0, this);
+      },
+      remove() { stack.splice(stack.indexOf(this), 1); },
+      rotate(angle, positions, patterns, gradients, strokes) {
+        assert.deepStrictEqual([positions, patterns, gradients, strokes], [false, false, true, false]);
+        this.rotation += angle;
+      },
+    };
+    stack.push(path);
+    return path;
+  }
+  const shading = new Function('namedPath', 'ElementPlacement', 'app', 'GradientColor', 'getGradient', 'Transformation', 'findNamed',
+    extractFunction(source, 'replaceGradientPath') + '\n' + extractFunction(source, 'applyGradientFill') +
+    '; return {replaceGradientPath, applyGradientFill};')(
+    makeGradientPath, {PLACEBEFORE: 'before'}, {getIdentityMatrix: () => ({})}, function() {}, key => key, {CENTER: 'center'},
+    (items, name) => items.find(item => item.name === name));
+  let shaded = makeGradientPath(null, 'face');
+  const label = {name: 'label'};
+  stack.unshift(label);
+  shading.applyGradientFill(shaded, 'headface', -40);
+  shading.applyGradientFill(shaded, 'headface', -40);
+  assert.strictEqual(shaded.rotation, -80, `${file}: reproduce retained fill rotation`);
+  for (const radius of [0.5, 0.7, 3.3, 0, 5, 0.5]) {
+    const previous = shaded;
+    shaded = shading.replaceGradientPath({pathItems: stack}, previous);
+    shading.applyGradientFill(shaded, 'headface', -40);
+    assert.notStrictEqual(shaded, previous, `${file}: radius ${radius} gets a fresh path`);
+    assert.strictEqual(shaded.rotation, -40, `${file}: radius ${radius} must not accumulate rotation`);
+    assert.deepStrictEqual(stack, [label, shaded], `${file}: keep label, stacking order and path count`);
+    assert.strictEqual(shaded.name, 'face');
+  }
+  assert.ok(source.includes('var quadrant = replaceGradientPath(g, findNamed(g.pathItems, QUADRANTS[q].name));'));
+  assert.ok(source.includes('face = replaceGradientPath(g, findNamed(g.pathItems, "face"));'));
+  let geometryAttempts = 0;
+  let settlements = 0;
+  let alwaysFail = false;
+  const transientError = new Error('Target layer cannot be modified');
+  const retryWrite = new Function('writePathGeometry', 'settlePreview',
+    extractFunction(source, 'writePath') + '; return writePath;')(() => {
+      geometryAttempts++;
+      if (alwaysFail || geometryAttempts === 1) throw transientError;
+    }, () => { settlements++; });
+  retryWrite({}, [], false);
+  assert.strictEqual(geometryAttempts, 2, 'transient path failure retries once');
+  assert.strictEqual(settlements, 1, 'refresh before retry');
+  geometryAttempts = 0;
+  settlements = 0;
+  alwaysFail = true;
+  assert.throws(() => retryWrite({}, []), error => error === transientError);
+  assert.strictEqual(geometryAttempts, 2, 'persistent error must not loop');
+  assert.strictEqual(settlements, 1);
+  // 사용자 PARM 오류가 난 이름 대입은 필요 없다. Illustrator 기본 이름을 유지한다.
+  let gradientAdds = 0;
+  const gradientCache = {};
+  const gradientFactory = new Function('doc', 'bevelGradients', 'GradientType',
+    extractFunction(source, 'getGradient') + '; return getGradient;')({gradients: {add() {
+      gradientAdds++;
+      const stops = [{rampPoint: 0}, {rampPoint: 100}];
+      stops.add = function() { this.push({rampPoint: 50}); };
+      return {gradientStops: stops, set name(value) { throw new Error("PARM: gradient.name"); }};
+    }}}, gradientCache, {LINEAR: 'linear'});
+  const bevelGradient = gradientFactory('headtl');
+  assert.deepStrictEqual(Array.from(bevelGradient.gradientStops, stop => stop.rampPoint), [0, 40, 60, 100]);
+  assert.strictEqual(gradientFactory('headtl'), bevelGradient, 'reuse the gradient without renaming');
+  const faceGradient = gradientFactory('headface');
+  assert.deepStrictEqual(Array.from(faceGradient.gradientStops, stop => stop.rampPoint), [0, 100]);
+  assert.strictEqual(gradientAdds, 2);
+  for (const name of ["tl", "tr", "bl", "br"]) {
+    assert.strictEqual(fns.quadrantPoints(quadRect, 0, name).length, 4, `${file} square quadrant ${name}`);
+    assert.strictEqual(fns.quadrantPoints(quadRect, 2, name).length, 5, `${file} rounded quadrant ${name}`);
+  }
+  const tl = fns.quadrantPoints(quadRect, 2, "tl");
+  assert.deepStrictEqual(tl[0].anchor, [10.3, 10], `${file} tl starts past top center (seam overlap)`);
+  assert.deepStrictEqual(tl[1].anchor, [2, 10], `${file} tl arc start on top edge`);
+  assert.deepStrictEqual(tl[2].anchor, [0, 8], `${file} tl arc end on left edge`);
+  assert.deepStrictEqual(tl[4].anchor, [10.3, 4.7], `${file} tl ends past cell center (seam overlap)`);
+  const br = fns.quadrantPoints(quadRect, 2, "br");
+  assert.deepStrictEqual(br[2].anchor, [20, 2], `${file} br arc start on right edge`);
+  assert.deepStrictEqual(br[3].anchor, [18, 0], `${file} br arc end on bottom edge`);
+  assert.deepStrictEqual(fns.parseGroups("1, 2, 13~17"), [1, 2, 13, 14, 15, 16, 17], `${file} tilde range`);
+  assert.deepStrictEqual(fns.parseGroups("17-13,2,1,1"), [1, 2, 13, 14, 15, 16, 17], `${file} reversed dash range, dedupe, sort`);
+  assert.strictEqual(fns.parseGroups("0, 5"), null, `${file} group below 1`);
+  assert.strictEqual(fns.parseGroups("17~19"), null, `${file} group above 18`);
+  assert.strictEqual(fns.parseGroups("1, a"), null, `${file} non-numeric`);
+  assert.strictEqual(fns.parseGroups(" , "), null, `${file} empty`);
+  assert.deepStrictEqual([1, 2, 13, 17, 18].map((g) => fns.cellExists(1, g)), [true, false, false, false, true], `${file} period 1`);
+  assert.deepStrictEqual([2, 3, 12, 13].map((g) => fns.cellExists(3, g)), [true, false, false, true], `${file} period 3`);
+  assert.ok(fns.cellExists(4, 7) && fns.cellExists(5, 12), `${file} periods 4-5 are full`);
+  const list = fns.buildCellList([1, 2, 13, 18], [1, 2]);
+  assert.strictEqual(list[0].kind, "corner", `${file} corner first`);
+  assert.deepStrictEqual(list.filter((c) => c.kind === "head").map((c) => c.text), ["1", "2", "13", "18", "1", "2"], `${file} header labels`);
+  assert.deepStrictEqual(list.filter((c) => c.kind === "body").map((c) => [c.row, c.col]), [[1, 1], [1, 4], [2, 1], [2, 2], [2, 3], [2, 4]], `${file} body cells skip period-1 gaps`);
+  assert.strictEqual(fns.roundedRectPoints(0, 10, 20, 10, 0).length, 4, `${file} square corners`);
+  const rounded = fns.roundedRectPoints(0, 10, 20, 10, 2);
+  assert.strictEqual(rounded.length, 8, `${file} rounded corners`);
+  assert.deepStrictEqual(rounded[0].anchor, [0, 8], `${file} first anchor below top-left`);
+  assert.deepStrictEqual(rounded[4].anchor, [20, 2], `${file} bottom-right arc start`);
+  assert.deepStrictEqual(fns.roundedRectPoints(0, 10, 4, 10, 5)[1].anchor, [2, 10], `${file} radius clamps to half width`);
+  assert.ok(source.includes('p[0] !== "v1" || p.length !== 19'), `${file}: settings string must be v1 with 19 fields`);
+  const saveArgs = source.match(/\["v1", options\.groups, flags,([\s\S]*?)\]\.join\("\|"\)/)[1].split(",").length;
+  assert.strictEqual(saveArgs, 16, `${file}: saveSettings writes 16 fields after groups and flags`);
+}
+
 process.exit(failures === 0 ? 0 : 1);
