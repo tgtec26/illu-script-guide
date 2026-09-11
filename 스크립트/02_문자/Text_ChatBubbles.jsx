@@ -359,11 +359,13 @@ try {
     function refillBubbles(entries) {
         for (var i = 0; i < entries.length; i++) {
             var frame = bubbleParts(i).frame;
+            // 상자 너비만 바꾸면 화면이 다시 그려지지 않는다. 너비를 먼저 맞추고 내용을 다시 써서 재배치를 일으킨다
+            setAreaWidth(frame);
             frame.contents = entries[i].text;
             frame.textRange.characterAttributes.size = options.fontSize;
             frame.textRange.characterAttributes.fillColor = lineColor;
             applyFontRule(frame);
-            fitAreaFrame(frame);
+            fitAreaHeight(frame);
             bubbles[i].side = entries[i].side;
             bubbles[i].lines = lineCount(frame, entries[i].text);
         }
@@ -380,9 +382,13 @@ try {
     }
 
     // 영역 텍스트 상자를 '말풍선 너비'로 맞추고, 줄바꿈된 줄 수만큼 높이를 잡는다
-    function fitAreaFrame(frame) {
+    function setAreaWidth(frame) {
         if (!isAreaFrame(frame)) return;
         frame.textPath.width = options.bubbleWidth * mmToPt;
+    }
+
+    function fitAreaHeight(frame) {
+        if (!isAreaFrame(frame)) return;
         var lines = Math.max(1, frame.lines.length);
         frame.textPath.height = (lines * LINE_LEADING + AREA_HEIGHT_SLACK) * options.fontSize;
     }
@@ -443,7 +449,7 @@ try {
         frame.textRange.characterAttributes.size = options.fontSize;
         frame.textRange.characterAttributes.fillColor = lineColor;
         applyFontRule(frame);
-        fitAreaFrame(frame);
+        fitAreaHeight(frame);
         return frame;
     }
 
