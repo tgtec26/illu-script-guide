@@ -117,6 +117,7 @@ try {
     sameWidth.onClick = function() {
         options.sameWidth = sameWidth.value;
         bubbleWidthRow.enabled = sameWidth.value;
+        rebuildPending = true;   // 포인트 ↔ 영역 텍스트 전환
         updatePreview();
     };
 
@@ -260,7 +261,8 @@ try {
                     app.redraw();
                 } catch (e) { clearPreview(); status.text = "이동 오류: " + e; }
             } else {
-                if (key === "fontSize") rebuildPending = true;   // 글자 크기는 글자부터 다시
+                // 글자 크기·말풍선 너비는 글자부터 다시 (영역 텍스트 상자는 고쳐도 화면이 안 바뀐다)
+                if (key === "fontSize" || key === "bubbleWidth") rebuildPending = true;
                 updatePreview(dragging);
             }
         }
