@@ -47,8 +47,12 @@ assert.ok(Math.abs(tri[0][1] - (20 + h / 2)) < 1e-9 && tri[0][0] === 10, "apex a
 assert.ok(Math.abs(tri[1][0] - tri[2][0] - 4) < 1e-9, "base is size wide");
 assert.ok(Math.abs((tri[0][1] + tri[1][1]) / 2 - 20) < 1e-9, "bbox vertically centred on anchor");
 
-// 설정 문자열은 v1 + 5필드
-assert.ok(source.includes('p[0] !== "v1" || p.length !== 6'), "settings string must be v1 with 5 fields");
+// 꺾은선 두께 0.5~2pt(0.1)
+assert.deepStrictEqual(fns.rangeValues(0.5, 2, 0.1).slice(0, 3), [0.5, 0.6, 0.7]);
+assert.ok(source.includes('LINE_VALUES = rangeValues(0.5, 2, 0.1)'), "line width slider is 0.5-2pt");
+
+// 설정 문자열은 v2 + 6필드
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 7'), "settings string must be v2 with 6 fields");
 assert.ok(source.includes("Folder.temp + \"/illu_last_script.txt\""), "RepeatLast memo header present");
 
 console.log("check-graph-markers: ok");

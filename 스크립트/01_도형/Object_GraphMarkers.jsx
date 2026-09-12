@@ -15,6 +15,7 @@ try {
     - 모양: 원 · 사각형 · 삼각형(위쪽 꼭짓점) 중 라디오버튼으로 선택
     - 크기 0.5~2mm(0.1 단위), 채움 K 0~100(10 단위)
     - 테두리 0pt(없음) 또는 0.3~1pt(0.1 단위), 선은 100K
+    - 꺾은선 자체의 두께 0.5~2pt(0.1 단위)
     - 미리보기로 조절하고 확인을 누르면 마커 그룹(GraphMarkers)이 그래프와 한 그룹(Graph)으로 묶입니다
   사용법: 꺾은선(패스 또는 패스가 든 그룹)을 선택한 뒤 실행
 */
@@ -34,6 +35,7 @@ try {
     var SIZE_VALUES = rangeValues(0.5, 2, 0.1);      // mm
     var FILL_VALUES = rangeValues(0, 100, 10);       // K
     var STROKE_VALUES = [0].concat(rangeValues(0.3, 1, 0.1)); // pt, 0이면 선 없음
+    var LINE_VALUES = rangeValues(0.5, 2, 0.1);      // pt, 꺾은선 두께
 
     var doc = app.activeDocument;
     var paths = [];
@@ -44,6 +46,9 @@ try {
         alert("꺾은선 그래프(패스)를 선택해주세요.");
         return;
     }
+
+    var originalWidths = [];
+    for (var w = 0; w < paths.length; w++) originalWidths.push(paths[w].strokeWidth);
 
     var options = readSettings();
     var previewGroup = null;
@@ -71,6 +76,11 @@ try {
     addRow(markerPanel, "채움 (K)", "fillK", FILL_VALUES, "%").helpTip = "10 단위";
     addRow(markerPanel, "선 두께", "stroke", STROKE_VALUES, "pt").helpTip = "0이면 선 없음, 선은 100K";
 
+    var linePanel = win.add("panel", undefined, "꺾은선");
+    linePanel.alignChildren = "fill";
+    linePanel.spacing = 2;
+    addRow(linePanel, "선 두께", "lineWidth", LINE_VALUES, "pt");
+
     var footer = win.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
     previewCheck.value = options.preview;
@@ -88,6 +98,7 @@ try {
         if (previewGroup === null || previewPending) {
             if (!buildPreview()) return;
         }
+        setLineWidths(options.lineWidth);
         committed = true;
         previewGroup.name = "GraphMarkers";
         saveSettings();
@@ -118,7 +129,10 @@ try {
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     try { win.show(); }
     finally {
-        if (!committed) clearPreview();
+        if (!committed) {
+            clearPreview();
+            setLineWidths(null);
+        }
         app.redraw();
     }
 
@@ -153,6 +167,11 @@ try {
                 return;
             }
             options[key] = value;
+            if (key === "lineWidth") {
+                // 마커는 그대로 두고 꺾은선 두께만 바꾼다
+                if (options.preview) { setLineWidths(value); app.redraw(); }
+                return;
+            }
             updatePreview(dragging);
         }
         minus.onClick = function() { apply(nearestIndex(values, options[key]) - 1); };
@@ -174,8 +193,13 @@ try {
         previewPending = true;
         if (dragging === true && new Date().getTime() - lastPreviewTime < PREVIEW_INTERVAL_MS) return;
         try {
-            if (!options.preview) clearPreview();
-            else if (!buildPreview()) return;
+            if (!options.preview) {
+                clearPreview();
+                setLineWidths(null);
+            } else {
+                if (!buildPreview()) return;
+                setLineWidths(options.lineWidth);
+            }
             previewPending = false;
             app.redraw();
             lastPreviewTime = new Date().getTime();
@@ -231,6 +255,16 @@ try {
     function trianglePoints(x, y, size) {
         var height = size * Math.sqrt(3) / 2;
         return [[x, y + height / 2], [x + size / 2, y - height / 2], [x - size / 2, y - height / 2]];
+    }
+
+    // null이면 스크립트 실행 전 두께로 되돌린다
+    function setLineWidths(width) {
+        for (var i = 0; i < paths.length; i++) {
+            try {
+                paths[i].stroked = true;
+                paths[i].strokeWidth = (width === null) ? originalWidths[i] : width;
+            } catch (e) {}
+        }
     }
 
     function clearPreview() {
@@ -297,16 +331,18 @@ try {
     // 설정 기억
     // -------------------------------------------------------
     function readSettings() {
-        var result = { shape: 0, size: 1, fillK: 100, stroke: 0, preview: true };
+        var result = { shape: 0, size: 1, fillK: 100, stroke: 0, lineWidth: 1, preview: true };
         try {
             var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-            if (p[0] !== "v1" || p.length !== 6) return result;
+            if (p[0] !== "v2" || p.length !== 7) return result;
             var shape = Number(p[1]), size = Number(p[2]), fillK = Number(p[3]), stroke = Number(p[4]);
+            var lineWidth = Number(p[5]);
             if (shape >= 0 && shape < SHAPES.length && shape === Math.round(shape)) result.shape = shape;
             if (hasValue(SIZE_VALUES, size)) result.size = size;
             if (hasValue(FILL_VALUES, fillK)) result.fillK = fillK;
             if (hasValue(STROKE_VALUES, stroke)) result.stroke = stroke;
-            result.preview = (p[5] !== "0");
+            if (hasValue(LINE_VALUES, lineWidth)) result.lineWidth = lineWidth;
+            result.preview = (p[6] !== "0");
         } catch (e) {}
         return result;
     }
@@ -318,7 +354,7 @@ try {
     function saveSettings() {
         try {
             app.preferences.setStringPreference(PREF_KEY,
-                ["v1", options.shape, options.size, options.fillK, options.stroke, options.preview ? 1 : 0].join("|"));
+                ["v2", options.shape, options.size, options.fillK, options.stroke, options.lineWidth, options.preview ? 1 : 0].join("|"));
         } catch (e) {}
     }
 })();
