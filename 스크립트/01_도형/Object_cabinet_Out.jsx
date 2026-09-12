@@ -38,6 +38,13 @@ try {
     var previewItems = [];
     var targetShiftXPt = 0;
     var targetShiftYPt = 0;
+    var SIZE_MIN_MM = 0.5;
+    var SIZE_MAX_MM = 100;    // 슬라이더 범위. 입력창으로는 더 큰 값도 된다
+    var SIZE_STEP_MM = 0.1;
+
+    // 사각형 크기는 다이얼로그에서 바꿀 수 있다. 취소하면 원래 앵커로 되돌린다
+    var originalAnchors = snapshotAnchors(targets);
+    var startSize = readSizeMm(targets[0]);
 
     // 미리보기에서는 원본 사각형까지 함께 옮겨야 최종 결과와 같은 위치가 보인다
     shiftTargets(offsetXmm * mmToPt, offsetYmm * mmToPt);
@@ -55,11 +62,15 @@ try {
         shiftTargets(dx, dy);
         moveItems(previewItems, dx, dy);
         app.redraw();
+    }, startSize.w, startSize.h, function(wMm, hMm) {
+        // 원본 사각형을 중심 기준으로 다시 그린다. 미리보기는 호출한 쪽에서 다시 만든다
+        resizeTargets(wMm * mmToPt, hMm * mmToPt);
     });
 
     clearPreview();
     restoreTargets();
     if (choice === null) {
+        restoreAnchors(targets, originalAnchors);
         app.redraw();
         return;
     }
@@ -100,6 +111,58 @@ try {
         moveItems(targets, -targetShiftXPt, -targetShiftYPt);
         targetShiftXPt = 0;
         targetShiftYPt = 0;
+    }
+
+    function snapshotAnchors(items) {
+        var all = [];
+        for (var i = 0; i < items.length; i++) {
+            var points = [];
+            for (var j = 0; j < items[i].pathPoints.length; j++) {
+                var a = items[i].pathPoints[j].anchor;
+                points.push([a[0], a[1]]);
+            }
+            all.push(points);
+        }
+        return all;
+    }
+
+    function restoreAnchors(items, snapshot) {
+        for (var i = 0; i < items.length; i++) {
+            for (var j = 0; j < snapshot[i].length; j++) {
+                try { setAnchor(items[i].pathPoints[j], snapshot[i][j]); } catch (e) {}
+            }
+        }
+    }
+
+    function setAnchor(point, xy) {
+        point.anchor = xy;
+        point.leftDirection = xy;
+        point.rightDirection = xy;
+    }
+
+    function readSizeMm(item) {
+        var b = item.geometricBounds;
+        return {
+            w: Math.round((b[2] - b[0]) / mmToPt * 10) / 10,
+            h: Math.round((b[1] - b[3]) / mmToPt * 10) / 10
+        };
+    }
+
+    // 각 사각형을 중심 고정으로 너비·높이에 맞춘다. 중심 왼쪽 점은 왼쪽 변, 오른쪽 점은 오른쪽 변으로
+    function resizeTargets(widthPt, heightPt) {
+        for (var i = 0; i < targets.length; i++) {
+            var b = targets[i].geometricBounds;
+            var cx = (b[0] + b[2]) / 2;
+            var cy = (b[1] + b[3]) / 2;
+            var points = targets[i].pathPoints;
+            for (var j = 0; j < points.length; j++) {
+                var a = points[j].anchor;
+                setAnchor(points[j], [
+                    a[0] <= cx ? cx - widthPt / 2 : cx + widthPt / 2,
+                    a[1] <= cy ? cy - heightPt / 2 : cy + heightPt / 2
+                ]);
+            }
+        }
     }
 
     function moveItems(items, deltaX, deltaY) {
@@ -198,7 +261,7 @@ try {
     }
 
     function showDepthDialog(defaultValue, defaultDirection, defaultAngle, defaultCube, onPreview, onClearPreview,
-            startXmm, startYmm, onOffsetChange) {
+            startXmm, startYmm, onOffsetChange, startWmm, startHmm, onSizeChange) {
         var depthStepMm = 0.05;
         var bigStepMm = 1;
         var minDepthMm = depthStepMm;
@@ -209,6 +272,17 @@ try {
         var dialog = new Window("dialog", "캐비넷 깊이");
         dialog.orientation = "column";
         dialog.alignChildren = "fill";
+
+        // 사각형 크기: 선택한 사각형 자체의 너비·높이 (중심 고정)
+        var sizePanel = dialog.add("panel", undefined, "사각형 크기");
+        sizePanel.orientation = "column";
+        sizePanel.alignChildren = "left";
+        var widthMmValue = startWmm;
+        var heightMmValue = startHmm;
+        var widthControls = addMmRow(sizePanel, "너비", widthMmValue, SIZE_MIN_MM, SIZE_MAX_MM);
+        var heightControls = addMmRow(sizePanel, "높이", heightMmValue, SIZE_MIN_MM, SIZE_MAX_MM);
+        bindSizeControls(widthControls, true);
+        bindSizeControls(heightControls, false);
 
         var inputGroup = dialog.add("group");
         inputGroup.add("statictext", undefined, "뒤로 이동 거리(mm)");
@@ -278,19 +352,44 @@ try {
         var result = null;
 
         // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-        // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
-        function addOffsetControls(parent, label, value) {
+        // mm 행: 라벨(단위) | 입력칸 | 스크롤바
+        function addMmRow(parent, label, value, minMm, maxMm) {
             var row = parent.add("group");
             row.alignChildren = ["left", "center"];
             row.add("statictext", undefined, label + " (mm):").preferredSize.width = 70;
-            var offsetInput = row.add("edittext", undefined, formatOffset(value));
-            offsetInput.characters = 6;
-            var slider = row.add("scrollbar", undefined, value,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var mmInput = row.add("edittext", undefined, formatOffset(value));
+            mmInput.characters = 6;
+            var slider = row.add("scrollbar", undefined, Math.max(minMm, Math.min(maxMm, value)), minMm, maxMm);
             slider.stepdelta = OFFSET_STEP_MM;
             slider.jumpdelta = OFFSET_STEP_MM * 10;
             slider.preferredSize.width = 196;
-            return {input: offsetInput, slider: slider};
+            return {input: mmInput, slider: slider};
+        }
+
+        function addOffsetControls(parent, label, value) {
+            return addMmRow(parent, label, value, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        }
+
+        // 크기가 바뀌면 원본 사각형을 다시 그리고 미리보기를 새로 만든다
+        function bindSizeControls(controls, isWidth) {
+            function current() { return isWidth ? widthMmValue : heightMmValue; }
+            function commit(value) {
+                if (value === null || isNaN(value)) return;
+                value = Math.max(SIZE_STEP_MM, Math.round(value / SIZE_STEP_MM) * SIZE_STEP_MM);
+                if (value === current()) return;
+                // 정육면체면 앞면이 정사각형이어야 하므로 너비·높이를 같이 움직인다
+                if (cubeCheck.value) setSizeValues(value, value);
+                else if (isWidth) setSizeValues(value, heightMmValue);
+                else setSizeValues(widthMmValue, value);
+                onSizeChange(widthMmValue, heightMmValue);
+                updatePreview();
+            }
+            controls.slider.onChanging = function() { commit(controls.slider.value); };
+            controls.slider.onChange = function() { commit(controls.slider.value); };
+            controls.input.onChange = function() {
+                var value = parseFloat(String(controls.input.text).replace(",", "."));
+                commit(isNaN(value) ? current() : value);
+            };
         }
 
         // 값이 바뀌면 도형을 다시 만들지 않고 미리보기만 옮긴다
@@ -314,6 +413,15 @@ try {
                 var value = parseFloat(String(controls.input.text).replace(",", "."));
                 commit(isNaN(value) ? current() : value);
             };
+        }
+
+        function setSizeValues(wMm, hMm) {
+            widthMmValue = wMm;
+            heightMmValue = hMm;
+            widthControls.input.text = formatOffset(wMm);
+            heightControls.input.text = formatOffset(hMm);
+            try { widthControls.slider.value = Math.max(SIZE_MIN_MM, Math.min(SIZE_MAX_MM, wMm)); } catch (e) {}
+            try { heightControls.slider.value = Math.max(SIZE_MIN_MM, Math.min(SIZE_MAX_MM, hMm)); } catch (e2) {}
         }
 
         function formatOffset(value) {
@@ -465,6 +573,12 @@ try {
             depthControl.enabled = manual;
             for (var i = 0; i < stepButtons.length; i++) {
                 stepButtons[i].enabled = manual;
+            }
+            // 정육면체: 앞면이 정사각형이 되도록 너비·높이를 평균값으로 맞춘다
+            if (cubeCheck.value && widthMmValue !== heightMmValue) {
+                var side = Math.round((widthMmValue + heightMmValue) / 2 / SIZE_STEP_MM) * SIZE_STEP_MM;
+                setSizeValues(side, side);
+                onSizeChange(side, side);
             }
             updatePreview();
         };
