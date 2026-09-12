@@ -26,6 +26,7 @@ function makeDoc(failAfterFaces) {
     documentColorSpace: "RGB",
     views: [{ centerPoint: [0, 0] }],
     groups: [],
+    faces: [],
     groupItems: {
       add() {
         const group = { removed: false, name: "", remove() { this.removed = true; } };
@@ -37,7 +38,10 @@ function makeDoc(failAfterFaces) {
       add() {
         if (faces >= failAfterFaces) throw new Error("PARM");
         faces++;
-        return { setEntirePath() {}, move() {}, remove() {} };
+        const face = { pathPoints: [], move() {}, remove() {},
+          setEntirePath(points) { face.pathPoints = points.map((anchor) => ({ anchor, leftDirection: anchor, rightDirection: anchor })); } };
+        doc.faces.push(face);
+        return face;
       },
     },
   };
@@ -56,7 +60,8 @@ const globals = {
 const createIsometricBox = new Function(
   ...Object.keys(globals),
   'var PREVIEW_GROUP_NAME = "Isometric_Preview";\n' +
-  [extractFunction("createIsometricBox"), extractFunction("makeFace"), extractFunction("makeColor")].join("\n") +
+  [extractFunction("createIsometricBox"), extractFunction("makeFace"), extractFunction("makeColor"),
+    extractFunction("arcPoints"), extractFunction("anchorsOf"), extractFunction("applyHandles")].join("\n") +
   "; return createIsometricBox;"
 )(...Object.values(globals));
 
@@ -70,6 +75,26 @@ const badDoc = makeDoc(1);
 assert.throws(() => createIsometricBox(badDoc, 5, 5, 5, 120, 120, 0, 0, 0, 0, 100, 0, 1, 0, 100, false), /PARM/);
 assert.strictEqual(badDoc.groups.length, 1);
 assert.strictEqual(badDoc.groups[0].removed, true, "failed box must remove its half-built group");
+
+// 원(타원 기둥): 층마다 옆면 띠 하나 + 윗면 타원. 곡선 면은 핸들이 앵커와 다르다
+const roundDoc = makeDoc(Infinity);
+createIsometricBox(roundDoc, 10, 6, 4, 120, 120, 0, 0, 0, 0, 100, 0, 3, 0, 100, false, true);
+assert.strictEqual(roundDoc.faces.length, 4, "3 layers + top");
+const topFace = roundDoc.faces[3];
+assert.strictEqual(topFace.pathPoints.length, 4, "top ellipse is four bezier arcs");
+assert.ok(topFace.pathPoints.every((p) => p.leftDirection !== p.anchor && p.rightDirection !== p.anchor), "top ellipse points all curved");
+const band = roundDoc.faces[0];
+assert.strictEqual(band.pathPoints.length, 6, "side band = half arc (3 pts) down + half arc (3 pts) up");
+assert.strictEqual(band.pathPoints[0].leftDirection, band.pathPoints[0].anchor, "arc ends join with straight edges");
+assert.strictEqual(band.pathPoints[2].rightDirection, band.pathPoints[2].anchor);
+// 위 호는 아래 호를 층 높이만큼 올린 것
+const layerH = 4 * 2.834645 / 3;
+for (let i = 0; i < 3; i++) {
+  const lo = band.pathPoints[i].anchor, hi = band.pathPoints[5 - i].anchor;
+  assert.ok(Math.abs(hi[0] - lo[0]) < 1e-9 && Math.abs(hi[1] - lo[1] - layerH) < 1e-9, "upper arc is the lower arc lifted by the layer height");
+}
+const yMid = band.pathPoints[1].anchor[1], yEnds = (band.pathPoints[0].anchor[1] + band.pathPoints[2].anchor[1]) / 2;
+assert.ok(yMid < yEnds, "visible side band is the front (lower) arc");
 
 // clearPreview는 참조가 죽었어도 이름으로 남은 미리보기 그룹을 지운다
 const clearSource = extractFunction("clearPreview");

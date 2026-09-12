@@ -15,7 +15,7 @@ const scripts = [
   { id: "offset-guide", category: "도형", name: "오프셋 안내선", file: "01_도형/Object_OffsetGuide.jsx", summary: "선택한 도형을 오프셋만큼 키우거나 줄인 모양을 안내선으로 만듭니다. 0.1mm 단위로 조절하고 미리보기로 확인합니다.", tags: ["안내선", "오프셋"] },
   { id: "dash-shift", category: "도형", name: "파선 오프셋", file: "01_도형/Object_dashshift.jsx", summary: "파선의 시작 위치를 미세 조정합니다. 도판에서 점선이 모서리와 어긋날 때 유용합니다.", tags: ["파선", "미세조정"] },
   { id: "expand-arrow", category: "도형", name: "확장 화살표", file: "01_도형/Object_expand_arrow.jsx", summary: "선택한 패스에 지정된 선 두께, 화살표, 폭 속성을 적용합니다.", tags: ["화살표", "선"] },
-  { id: "isometric", category: "도형", name: "아이소메트릭", file: "01_도형/Object_isometric.jsx", summary: "도형을 아이소메트릭 느낌으로 변형할 때 쓰는 보조 도구입니다.", tags: ["입체", "아이소"] },
+  { id: "isometric", category: "도형", name: "아이소메트릭", file: "01_도형/Object_isometric.jsx", summary: "가로·세로·높이와 코너 각도를 정해 등각 투상 상자 또는 원기둥(타원 기둥)을 만듭니다. 높이 분할, 위치 이동을 미리보기로 조절하고, 상자는 압축(휨) 옵션도 있습니다.", tags: ["입체", "아이소", "원기둥"] },
   { id: "rotate3d", category: "도형", name: "3D 회전", file: "01_도형/Object_rotate3d.jsx", summary: "선택 개체를 3D 회전 스타일로 변형할 때 사용합니다.", tags: ["3D", "회전"] },
   { id: "dash-2-1", category: "도형", name: "점선 2-1", file: "01_도형/Object_setdash2-1.jsx", summary: "선택한 개체의 선을 2pt 점선, 1pt 간격으로 바꿉니다.", tags: ["파선", "선"] },
   { id: "dash-3-1", category: "도형", name: "점선 3-1", file: "01_도형/Object_setdash3-1.jsx", summary: "선택한 개체의 선을 3pt 점선, 1pt 간격으로 바꿉니다.", tags: ["파선", "선"] },

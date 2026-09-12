@@ -48,6 +48,19 @@ function drawIsometricBox() {
     win.orientation = "column";
     win.alignChildren = ["fill", "top"];
 
+    // 모양: 사각형(상자) / 타원(가로·세로 지름) / 정원(가로가 지름, 세로 무시). 원은 압축 패널을 쓰지 않는다
+    var kindRow = win.add("group");
+    kindRow.orientation = "row";
+    kindRow.alignChildren = ["left", "center"];
+    kindRow.add("statictext", undefined, "모양:");
+    var boxRadio = kindRow.add("radiobutton", undefined, "사각형");
+    var ellipseRadio = kindRow.add("radiobutton", undefined, "타원");
+    var circleRadio = kindRow.add("radiobutton", undefined, "정원");
+    boxRadio.value = true;
+    boxRadio.onClick = function() { updateKindState(); updatePreview(); };
+    ellipseRadio.onClick = function() { updateKindState(); updatePreview(); };
+    circleRadio.onClick = function() { updateKindState(); updatePreview(); };
+
     // 입력 패널
     var panel = win.add("panel", undefined, "크기 입력 (mm)");
     panel.orientation = "column";
@@ -163,6 +176,8 @@ function drawIsometricBox() {
         result.layers = readLayersInput();
         result.shape = readShapeInput();
         result.cut = readCutInput();
+        result.round = readRoundInput();
+        result.kind = readKindInput();
         saveSettings(result);
         win.close(1);
     };
@@ -173,6 +188,7 @@ function drawIsometricBox() {
 
     previewCheck.onClick = updatePreview;
     loadSettings();
+    updateKindState();
     updateTopAngle();
     updatePreview();
 
@@ -197,7 +213,7 @@ function drawIsometricBox() {
         var finalOk = false, lastFinalError = null;
         for (var fa = 0; fa < 3 && !finalOk; fa++) {
             try {
-                createIsometricBox(doc, result.w, result.d, result.h, result.angleR, result.angleL, result.offX, result.offY, originX, originY, result.compress, result.lift, result.layers, result.shape, result.cut, true);
+                createIsometricBox(doc, result.w, effectiveDepth(result), result.h, result.angleR, result.angleL, result.offX, result.offY, originX, originY, result.compress, result.lift, result.layers, result.shape, result.cut, true, result.round);
                 finalOk = true;
             } catch (eFinal) {
                 lastFinalError = eFinal;
@@ -286,6 +302,29 @@ function drawIsometricBox() {
         return (shapeList.selection && shapeList.selection.index === 1) ? 1 : 0;
     }
 
+    // 0 = 사각형, 1 = 타원, 2 = 정원
+    function readKindInput() {
+        if (circleRadio.value) return 2;
+        if (ellipseRadio.value) return 1;
+        return 0;
+    }
+
+    function readRoundInput() {
+        return readKindInput() !== 0;
+    }
+
+    // 정원은 가로를 지름으로 쓰므로 세로 입력을 무시한다
+    function effectiveDepth(size) {
+        return readKindInput() === 2 ? size.w : size.d;
+    }
+
+    function updateKindState() {
+        var kind = readKindInput();
+        compressPanel.enabled = (kind === 0);
+        depthControl.input.enabled = (kind !== 2);
+        depthControl.scrollbar.enabled = (kind !== 2);
+    }
+
     function readCutInput() {
         var pct = parseSize(inputCut.text);
         if (isNaN(pct)) {
@@ -356,7 +395,7 @@ function drawIsometricBox() {
     function saveSettings(values) {
         try {
             settingFile.open("w");
-            settingFile.write([values.w, values.d, values.h, values.angleR, values.angleL, values.offX, values.offY, values.compress, values.lift, values.layers, values.shape, values.cut].join("@"));
+            settingFile.write([values.w, values.d, values.h, values.angleR, values.angleL, values.offX, values.offY, values.compress, values.lift, values.layers, values.shape, values.cut, values.kind].join("@"));
             settingFile.close();
         } catch (e) {}
     }
@@ -435,6 +474,13 @@ function drawIsometricBox() {
                     inputCut.text = String(cutVal);
                     syncCompressScrollbar(cutControl, cutVal);
                 }
+            }
+
+            if (parts.length >= 13) {
+                var kind = parseInt(parts[12], 10);
+                boxRadio.value = !(kind === 1 || kind === 2);
+                ellipseRadio.value = (kind === 1);
+                circleRadio.value = (kind === 2);
             }
         } catch (e) {
             try { settingFile.close(); } catch (e2) {}
@@ -630,7 +676,7 @@ function drawIsometricBox() {
             }
 
             var offsets = readOffsetInputs();
-            previewGroup = createIsometricBox(doc, size.w, size.d, size.h, angles.angleR, angles.angleL, offsets.offX, offsets.offY, originX, originY, readCompressInput(), readLiftInput(), readLayersInput(), readShapeInput(), readCutInput(), false);
+            previewGroup = createIsometricBox(doc, size.w, effectiveDepth(size), size.h, angles.angleR, angles.angleL, offsets.offX, offsets.offY, originX, originY, readCompressInput(), readLiftInput(), readLayersInput(), readShapeInput(), readCutInput(), false, readRoundInput());
             app.redraw();
         } catch (ePreview) {
             // Illustrator가 바쁠 때 간헐적으로 DOM 오류를 던진다.
@@ -661,7 +707,7 @@ function drawIsometricBox() {
 
 var PREVIEW_GROUP_NAME = "Isometric_Preview";
 
-function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY_mm, originX, originY, compressPct, liftPct, layerCount, shapeType, cutPct, selectResult) {
+function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY_mm, originX, originY, compressPct, liftPct, layerCount, shapeType, cutPct, selectResult, roundShape) {
     // mm 단위를 pt 단위로 변환
     var mm2pt = 2.834645;
     var W = w_mm * mm2pt;
@@ -707,16 +753,40 @@ function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY
         return Math.max(10, 100 - (layers - 1 - idx) * 15);
     }
 
-    // faceDefs: {pts: 좌표 배열, white: 면 명도(%)} 목록
+    // faceDefs: {pts: 좌표 배열, white: 면 명도(%)} 목록. pts 항목이 {anchor, left, right}면 곡선 면
     var faceDefs = [];
     var li, hLo, hHi, lw;
 
-    if (compress >= 99.5) {
-        // 평평한 상자. (u: 폭 0~W, z: 깊이 0~D, h: 두께 0~H) → 2D 투영 좌표
-        var projectFlat = function (u, z, h) {
-            return [startX + u * cos30 - z * cosL, startY + u * sin30 + z * sinL + h];
-        };
+    // 평평한 상자·기둥. (u: 폭 0~W, z: 깊이 0~D, h: 두께 0~H) → 2D 투영 좌표
+    var projectFlat = function (u, z, h) {
+        return [startX + u * cos30 - z * cosL, startY + u * sin30 + z * sinL + h];
+    };
 
+    if (roundShape) {
+        // 타원 기둥: 바닥면의 타원 (u, z) = (W/2·(1+cos t), D/2·(1+sin t)) 을 투영한다.
+        // 투영이 아핀이라 단위원 베지어의 제어점을 그대로 옮기면 정확한 타원이 된다.
+        var ellipsePoint = function (x, y, h) {
+            return projectFlat(W / 2 * (1 + x), D / 2 * (1 + y), h);
+        };
+        // 옆면 실루엣은 투영 x가 극값인 t (dx/dt = 0). 두 해 중 아래쪽(앞) 호가 보인다
+        var tSil = Math.atan2(-D * cosL, W * cos30);
+        var midY = function (ta) { return ellipsePoint(Math.cos(ta + Math.PI / 2), Math.sin(ta + Math.PI / 2), 0)[1]; };
+        var tFront = (midY(tSil) <= midY(tSil + Math.PI)) ? tSil : tSil + Math.PI;
+
+        for (li = 0; li < layers; li++) {
+            hLo = H * li / layers;
+            hHi = H * (li + 1) / layers;
+            // 앞쪽 호를 아래(hLo)에서 왼→오, 위(hHi)에서 오→왼으로 돌아 닫는다
+            var lower = arcPoints(ellipsePoint, tFront, tFront + Math.PI, hLo);
+            var upper = arcPoints(ellipsePoint, tFront + Math.PI, tFront, hHi);
+            faceDefs.push({white: layerWhite(li), pts: lower.concat(upper)});
+        }
+        // 윗면 타원: 한 바퀴 호의 마지막 점은 첫 점과 같으니 들어오는 핸들만 넘기고 버린다
+        var top = arcPoints(ellipsePoint, 0, 2 * Math.PI, H);
+        top[0].left = top[top.length - 1].left;
+        top.pop();
+        faceDefs.push({white: 100, pts: top});
+    } else if (compress >= 99.5) {
         for (li = 0; li < layers; li++) {
             hLo = H * li / layers;
             hHi = H * (li + 1) / layers;
@@ -1038,8 +1108,8 @@ function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY
     var group = doc.groupItems.add();
     // 미리보기는 고정 이름을 붙여 참조가 죽어도 이름으로 찾아 지울 수 있게 한다
     group.name = selectResult
-        ? "Isometric Box (" + w_mm + "x" + d_mm + "x" + h_mm + "mm"
-            + (compress >= 99.5 ? "" : ", compress " + compress + "%")
+        ? (roundShape ? "Isometric Cylinder (" : "Isometric Box (") + w_mm + "x" + d_mm + "x" + h_mm + "mm"
+            + (compress >= 99.5 || roundShape ? "" : ", compress " + compress + "%")
             + (layers > 1 ? ", " + layers + " layers" : "") + ")"
         : PREVIEW_GROUP_NAME;
 
@@ -1048,7 +1118,8 @@ function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY
 
     try {
         for (var di = 0; di < faceDefs.length; di++) {
-            var face = makeFace(doc, group, faceDefs[di].pts);
+            var face = makeFace(doc, group, anchorsOf(faceDefs[di].pts));
+            applyHandles(face, faceDefs[di].pts);
             face.filled = true;
             face.fillColor = makeColor(doc, faceDefs[di].white);
             face.stroked = true;
@@ -1068,6 +1139,42 @@ function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY
     }
 
     return group;
+}
+
+// 단위원의 ta→tb 호를 90° 이하 조각으로 나눈 베지어 점 목록 [{anchor, left, right}].
+// map(x, y, h)가 단위원 좌표를 2D 투영 좌표로 옮긴다. 양 끝 핸들은 앵커에 붙인다(직선 이음).
+function arcPoints(map, ta, tb, h) {
+    var span = tb - ta;
+    var pieces = Math.max(1, Math.ceil(Math.abs(span) / (Math.PI / 2) - 1e-9));
+    var step = span / pieces;
+    var k = 4 / 3 * Math.tan(step / 4);
+    var pts = [];
+    for (var i = 0; i <= pieces; i++) {
+        var t = ta + step * i;
+        var c = Math.cos(t), sn = Math.sin(t);
+        var anchor = map(c, sn, h);
+        pts.push({
+            anchor: anchor,
+            left: (i === 0) ? anchor : map(c + k * sn, sn - k * c, h),
+            right: (i === pieces) ? anchor : map(c - k * sn, sn + k * c, h)
+        });
+    }
+    return pts;
+}
+
+function anchorsOf(pts) {
+    var anchors = [];
+    for (var i = 0; i < pts.length; i++) anchors.push(pts[i].anchor ? pts[i].anchor : pts[i]);
+    return anchors;
+}
+
+function applyHandles(face, pts) {
+    if (!pts.length || !pts[0].anchor) return;
+    for (var i = 0; i < pts.length; i++) {
+        var pp = face.pathPoints[i];
+        pp.leftDirection = pts[i].left;
+        pp.rightDirection = pts[i].right;
+    }
 }
 
 function makeFace(doc, group, points) {
