@@ -103,6 +103,7 @@ try {
             caption.preferredSize.width = 14;
             var input = inputRow.add("edittext", undefined, "");
             input.preferredSize.width = 100;
+            input.addEventListener("keydown", makeTabHandler(index));
             inputs.push(input);
         }
     }
@@ -207,6 +208,20 @@ try {
             updateInputState();
             rebuildPending = true;
             updatePreview();
+        };
+    }
+
+    // 탭이 다른 요소로 새지 않도록 켜진 다음(shift: 이전) 입력창으로 직접 옮긴다
+    function makeTabHandler(index) {
+        return function(event) {
+            if (event.keyName !== "Tab") return;
+            var step = event.shiftKey ? -1 : 1;
+            for (var i = index + step; i >= 0 && i < inputs.length; i += step) {
+                if (!inputs[i].enabled) continue;
+                inputs[i].active = true;
+                try { event.preventDefault(); } catch (e) {}
+                return;
+            }
         };
     }
 
