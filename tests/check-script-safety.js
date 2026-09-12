@@ -2255,6 +2255,15 @@ for (const file of updaterFiles) {
       console.error(`${file}: step buttons must size themselves from STEP_BUTTON_WIDTH = 34`);
       failures++;
     }
+    // 입력창이 있는 다이얼로그는 탭이 입력창끼리만 오가도록 00_세팅/ui_tab_helper.jsxinc를 읽고 bindTabOrder를 부른다
+    if (source.includes('add("edittext"')) {
+      const loadsHelper = source.includes('/00_세팅/ui_tab_helper.jsxinc');
+      const binds = /if \(typeof bindTabOrder === "function"\) bindTabOrder\(\w+\);/.test(source);
+      if (!loadsHelper || !binds) {
+        console.error(`${file}: dialogs with edittext must load ui_tab_helper.jsxinc and call bindTabOrder(win) before show()`);
+        failures++;
+      }
+    }
 
     const buttonNames = new Set();
     const declaration = /(?:var\s+)?(\w+)\s*=\s*[\w.]+\.add\("button"/g;

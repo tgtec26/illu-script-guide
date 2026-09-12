@@ -1,5 +1,7 @@
 #include "Object_setdash_align_helper.jsxinc"
 
+// 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -40,7 +42,6 @@ try {
     var bounds = source.geometricBounds; // [left, top, right, bottom]
 
     var options = readSettings();
-    var inputs = [];   // 탭 순서: 입력창끼리만 오간다 (기본 순서는 다음 행의 ◀ 버튼으로 간다)
     var win = new Window("dialog", "점선 분할선");
     win.alignChildren = "fill";
     win.spacing = 4;
@@ -70,6 +71,7 @@ try {
         }
     };
 
+    if (typeof bindTabOrder === "function") bindTabOrder(win);
     win.show();
 
     // 숫자 조절 행: 라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위
@@ -85,8 +87,6 @@ try {
         plus.preferredSize.width = STEP_BUTTON_WIDTH;
         var input = row.add("edittext", undefined, String(options[key]));
         input.characters = 4;
-        input.addEventListener("keydown", makeTabHandler(inputs.length));
-        inputs.push(input);
         row.add("statictext", undefined, unit);
         function apply(value) {
             value = Math.round(value / step) * step;
@@ -103,17 +103,6 @@ try {
         slider.onChanging = function() { apply(slider.value); };
         slider.onChange = function() { apply(slider.value); };
         input.onChange = function() { apply(Number(input.text)); };
-    }
-
-    // 탭이 ◀ 버튼으로 새지 않도록 다음(shift: 이전) 입력창으로 직접 옮긴다
-    function makeTabHandler(index) {
-        return function(event) {
-            if (event.keyName !== "Tab") return;
-            var next = index + (event.shiftKey ? -1 : 1);
-            if (next < 0 || next >= inputs.length) return;
-            inputs[next].active = true;
-            try { event.preventDefault(); } catch (e) {}
-        };
     }
 
     // 사각형 안에 (행-1)개의 가로 점선, (열-1)개의 세로 점선을 등간격으로 넣고 그룹으로 묶는다

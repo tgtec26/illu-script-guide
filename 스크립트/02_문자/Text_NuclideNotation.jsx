@@ -1,4 +1,6 @@
 #target Illustrator
+// 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -138,6 +140,7 @@ try {
 
         txtInput.active = true;
 
+        if (typeof bindTabOrder === "function") bindTabOrder(dialog);
         if (dialog.show() !== 1) {
             return null;
         }

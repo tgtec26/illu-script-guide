@@ -45,6 +45,12 @@ Reference implementations: `스크립트/01_도형/Object_Pedigree.jsx`(`bindPos
 - 체크박스·버튼 격자(원소 기호, 정렬 위치 등)는 1단 규칙과 무관하다.
 - 숫자 조절 행은 예외 없이 `라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위` 순서다. ◀▶는 슬라이더 **양옆**에 두고(오른쪽에 몰아 두지 않는다), 값은 입력창에 직접 타이핑할 수 있어야 한다. 라벨은 `◀ ▶`로 통일하고 `+ −`는 쓰지 않는다. 슬라이더 폭은 77~140px 수준.
 - 입력창에서 엔터를 쳐도 실행되지 않도록 `win.defaultElement = null`로 기본 버튼을 없앤다.
+- 탭 순서는 생성 순서라 입력창 다음이 다음 행의 ◀ 버튼으로 간다. 입력창이 있는 다이얼로그는 파일 맨 위(메모 조각 앞)에 아래 로더를 넣고, `win.show()` 직전에 `if (typeof bindTabOrder === "function") bindTabOrder(win);`를 부른다. 헬퍼(`스크립트/00_세팅/ui_tab_helper.jsxinc`)가 창 안의 모든 edittext를 모아 탭·Shift+탭이 켜진 입력창끼리만 오가게 한다. 스크립트마다 탭 핸들러를 따로 만들지 않는다.
+
+```jsx
+// 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+```
 - 글자 크기는 줄일 수 없다. `graphics.font`를 바꿔도 이 일러 버전은 화면에 반영하지 않는다(확인됨).
 
 ## Last-Script Memo (required)

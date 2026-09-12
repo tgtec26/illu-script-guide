@@ -1,5 +1,7 @@
 #include "Object_expand_arrow_helper.jsxinc"
 
+// 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -103,7 +105,6 @@ try {
             caption.preferredSize.width = 14;
             var input = inputRow.add("edittext", undefined, "");
             input.preferredSize.width = 100;
-            input.addEventListener("keydown", makeTabHandler(index));
             inputs.push(input);
         }
     }
@@ -193,6 +194,7 @@ try {
     updateInputState();
     updateSizeRows();
     win.onShow = function() { updatePreview(); };
+    if (typeof bindTabOrder === "function") bindTabOrder(win);
     try { win.show(); }
     finally {
         if (!committed) clearPreview();
@@ -208,20 +210,6 @@ try {
             updateInputState();
             rebuildPending = true;
             updatePreview();
-        };
-    }
-
-    // 탭이 다른 요소로 새지 않도록 켜진 다음(shift: 이전) 입력창으로 직접 옮긴다
-    function makeTabHandler(index) {
-        return function(event) {
-            if (event.keyName !== "Tab") return;
-            var step = event.shiftKey ? -1 : 1;
-            for (var i = index + step; i >= 0 && i < inputs.length; i += step) {
-                if (!inputs[i].enabled) continue;
-                inputs[i].active = true;
-                try { event.preventDefault(); } catch (e) {}
-                return;
-            }
         };
     }
 
