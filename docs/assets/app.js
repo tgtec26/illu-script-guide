@@ -35,6 +35,7 @@ const scripts = [
   { id: "polymer", category: "도형", name: "중합체 생성기", file: "01_도형/Object_PolymerMaker.jsx", summary: "선택한 패스를 따라 단위체를 배치해 중합체를 만듭니다. 단위체 모양과 색상을 조절합니다.", tags: ["과학", "중합체"] },
   { id: "dashed-grid", category: "도형", name: "점선 분할선", file: "01_도형/Object_DashedGrid.jsx", summary: "선택한 사각형을 행·열 수만큼 나누는 점선(0.3pt, 2pt 선·1pt 간격)을 넣습니다. 2행 2열이면 가운데 가로·세로 점선 하나씩으로 4칸이 됩니다. 슬라이더로 수를 정한 뒤 완료를 누르면 그립니다.", tags: ["점선", "분할", "표"] },
   { id: "graph-markers", category: "도형", name: "그래프 마커", file: "01_도형/Object_GraphMarkers.jsx", summary: "선택한 꺾은선 그래프의 모든 고정점에 원·사각형·삼각형 마커를 넣습니다. 크기(0.5~2mm), 채움(K 10 단위), 테두리(0 또는 0.3~1pt, 100K)를 미리보기로 조절합니다.", tags: ["그래프", "마커", "과학"] },
+  { id: "split-stroke-fill", category: "도형", name: "선·면 분리", file: "01_도형/Object_SplitStrokeFill.jsx", summary: "선과 면이 모두 있는 도형을 면 오브젝트(아래)와 선 오브젝트(위)로 나눕니다. 패스·복합 패스·그룹 안의 도형에 적용되고, 선만 또는 면만 있는 도형은 건너뜁니다.", tags: ["선", "면", "분리"] },
   { id: "table", category: "도형", name: "표", file: "01_도형/Object_Table.jsx", summary: "선택한 사각형을 행·열로 나눈 표로 바꿉니다. 셀마다 테두리 사각형이 생겨 글자를 정렬하기 쉽습니다.", tags: ["표", "정렬"] },
   { id: "periodic-table", category: "도형", name: "주기율표", file: "01_도형/Object_PeriodicTable.jsx", summary: "족(1, 2, 13~18처럼 입력)과 주기(체크박스)를 골라 빈 주기율표 틀을 만듭니다. 실제 주기율표 모양대로 없는 칸은 비우고, 셀 크기·간격·라운딩·1행 높이·1열 너비·키캡 돌출·테두리·음영·숫자 크기를 미리보기로 조절합니다.", tags: ["과학", "화학", "표"] },
   { id: "quadrat", category: "도형", name: "방형구", file: "01_도형/Object_Quadrat.jsx", summary: "선택한 정사각형을 4×4 또는 5×5 방형구로 나누고 상대 밀도·상대 빈도 목표값에 맞춰 종을 배치합니다.", tags: ["과학", "생태"] },
