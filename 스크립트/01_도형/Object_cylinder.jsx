@@ -53,6 +53,7 @@ try {
     var divisionRotation = 90;
     var divisionRatioText = "";
     var K_STEP = 10;
+    var RESET_BUTTON_WIDTH = 34;
     var FACE_TOP = 0;
     var FACE_INNER = 1;
     var FACE_OUTER = 2;
@@ -70,10 +71,8 @@ try {
 
     // 0 버튼이 붙는 줄도 라벨이 잘리지 않도록 넓힌다.
     var LABEL_WIDTH = 70;
-    var UNIT_WIDTH = 26;        // 단위 글자 수가 달라도 뒤 요소가 어긋나지 않도록 고정
-    var SLIDER_WIDTH = 119;
+    var SLIDER_WIDTH = 196;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-    var STEP_BUTTON_WIDTH = 34;
 
     var dlg = new Window("dialog", "오브젝트 실린더");
     dlg.orientation = "column";
@@ -127,12 +126,10 @@ try {
     var countInput = countGroup.add("edittext", undefined, String(divisionCount));
     countInput.characters = 4;
     countInput.justify = "center";
-    var countDownButton = countGroup.add("button", undefined, "◀");
-    countDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
-    var countSlider = countGroup.add("slider", undefined, divisionCount, 2, 24);
+    var countSlider = countGroup.add("scrollbar", undefined, divisionCount, 2, 24);
+    countSlider.stepdelta = 1;
+    countSlider.jumpdelta = 1 * 10;
     countSlider.preferredSize.width = 77;
-    var countUpButton = countGroup.add("button", undefined, "▶");
-    countUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
 
     var rotationControls = addAngleRow(shapePanel, "분할 회전", divisionRotation);
     var rotationInput = rotationControls.input;
@@ -156,13 +153,14 @@ try {
     var innerFaceRadio = colorRow.add("radiobutton", undefined, "내부");
     var outerFaceRadio = colorRow.add("radiobutton", undefined, "외부");
     topFaceRadio.value = true;
-    var kDownButton = colorRow.add("button", undefined, "◀");
-    kDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
     var kValueText = colorRow.add("statictext", undefined, "000K");
     kValueText.preferredSize.width = 42;
     kValueText.justify = "center";
-    var kUpButton = colorRow.add("button", undefined, "▶");
-    kUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
+    var kSlider = colorRow.add("scrollbar", undefined, faceK[activeFace], 0, 100);
+    kSlider.preferredSize.width = 120;
+    kSlider.stepdelta = K_STEP;
+    kSlider.jumpdelta = K_STEP;
+    kSlider.onChanging = function() { setK(Math.round(kSlider.value / K_STEP) * K_STEP); };
 
     setInnerFaceEnabled(innerDiameterMm > 0);
     updateKDisplay();
@@ -205,17 +203,6 @@ try {
         }
     };
 
-    innerControls.down.onClick = function() { stepInnerDiameter(-1); };
-    innerControls.up.onClick = function() { stepInnerDiameter(1); };
-
-    // 버튼 한 번 = 0.1mm
-    function stepInnerDiameter(direction) {
-        innerDiameterMm = clamp(roundTo(innerDiameterMm + direction * 0.1, 0.1), 0, maxInnerDiameterMm);
-        innerDiameterInput.text = formatNumber(innerDiameterMm, 2);
-        innerDiameterSlider.value = innerDiameterMm;
-        setInnerFaceEnabled(innerDiameterMm > 0);
-        updatePreview();
-    }
 
     innerDiameterInput.onChange = function() {
         var value = parseNumber(innerDiameterInput.text);
@@ -233,16 +220,6 @@ try {
         updatePreview();
     };
 
-    heightControls.down.onClick = function() { stepHeight(-1); };
-    heightControls.up.onClick = function() { stepHeight(1); };
-
-    // 버튼 한 번 = 0.1mm
-    function stepHeight(direction) {
-        heightMm = clamp(roundTo(heightMm + direction * 0.1, 0.1), 0, maxHeightMm);
-        heightInput.text = formatNumber(heightMm, 2);
-        heightSlider.value = heightMm;
-        updatePreview();
-    }
 
     heightInput.onChanging = function() {
         var value = parseNumber(heightInput.text);
@@ -308,15 +285,6 @@ try {
         countInput.text = String(divisionCount);
         updatePreview();
     };
-    countDownButton.onClick = function() { stepDivisionCount(-1); };
-    countUpButton.onClick = function() { stepDivisionCount(1); };
-
-    function stepDivisionCount(delta) {
-        divisionCount = clamp(divisionCount + delta, 2, 24);
-        countInput.text = String(divisionCount);
-        countSlider.value = divisionCount;
-        updatePreview();
-    }
 
     rotationSlider.onChanging = function() {
         divisionRotation = Math.round(rotationSlider.value);
@@ -357,13 +325,7 @@ try {
         updateKDisplay();
     };
 
-    kDownButton.onClick = function() {
-        stepK(-K_STEP);
-    };
 
-    kUpButton.onClick = function() {
-        stepK(K_STEP);
-    };
 
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
@@ -578,27 +540,22 @@ try {
     function addValueRow(parent, label, unit, value, minimum, maximum, step, hasReset) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
-        var labelText = row.add("statictext", undefined, label);
+        var labelText = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
         // 0 버튼이 붙는 줄은 라벨을 줄여서 다른 줄과 폭을 맞춘다
-        labelText.preferredSize.width = hasReset ? (LABEL_WIDTH - STEP_BUTTON_WIDTH - 10) : LABEL_WIDTH;
+        labelText.preferredSize.width = hasReset ? (LABEL_WIDTH - RESET_BUTTON_WIDTH - 10) : LABEL_WIDTH;
         var reset = null;
         if (hasReset) {
             reset = row.add("button", undefined, "0");
-            reset.preferredSize.width = STEP_BUTTON_WIDTH;
+            reset.preferredSize.width = RESET_BUTTON_WIDTH;
         }
         var input = row.add("edittext", undefined, value);
         input.characters = 6;
         input.justify = "right";
-        var unitLabel = row.add("statictext", undefined, unit);
-        unitLabel.preferredSize.width = UNIT_WIDTH;
-        var down = row.add("button", undefined, "◀");
-        down.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = row.add("slider", undefined, Number(value), minimum, maximum);
+        var slider = row.add("scrollbar", undefined, Number(value), minimum, maximum);
+        slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
         slider.stepdelta = step;
-        var up = row.add("button", undefined, "▶");
-        up.preferredSize.width = STEP_BUTTON_WIDTH;
-        return {row: row, input: input, slider: slider, reset: reset, down: down, up: up};
+        return {row: row, input: input, slider: slider, reset: reset};
     }
 
     // 위치 행은 다른 줄과 같은 모양(0 버튼 포함)을 쓴다
@@ -628,8 +585,6 @@ try {
             var value = parseNumber(controls.input.text);
             commit(value === null ? current() : value);
         };
-        controls.down.onClick = function() { commit(current() - OFFSET_STEP_MM); };
-        controls.up.onClick = function() { commit(current() + OFFSET_STEP_MM); };
         if (controls.reset) controls.reset.onClick = function() { commit(0); };
     }
 
@@ -675,16 +630,6 @@ try {
             };
         }
 
-        // 버튼 한 번 = 5도. 5도 격자에 맞춰 움직인다.
-        function stepAngle(direction) {
-            var value = clamp(Math.round((getter() + direction * 5) / 5) * 5, -180, 180);
-            setter(value);
-            controls.input.text = formatSignedAngle(value);
-            controls.slider.value = value;
-            updatePreview();
-        }
-        controls.down.onClick = function() { stepAngle(-1); };
-        controls.up.onClick = function() { stepAngle(1); };
     }
 
 
@@ -704,10 +649,13 @@ try {
 
     function updateKDisplay() {
         kValueText.text = faceK[activeFace] + "K";
+        kSlider.value = faceK[activeFace];
     }
 
-    function stepK(delta) {
-        faceK[activeFace] = clamp(faceK[activeFace] + delta, 0, 100);
+    function setK(value) {
+        value = clamp(value, 0, 100);
+        if (value === faceK[activeFace]) return;
+        faceK[activeFace] = value;
         updateKDisplay();
         updatePreview();
     }

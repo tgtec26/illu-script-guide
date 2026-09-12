@@ -454,7 +454,6 @@ try {
     }
 
     // --- ScriptUI ---
-    var STEP_BUTTON_WIDTH = 34;   // 더 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다
     var win = new Window("dialog", "입방정계 단위세포 생성기");
     win.orientation = "column";
     win.alignChildren = ["fill", "top"];
@@ -516,22 +515,19 @@ try {
     pnlAngles.orientation = "column";
     pnlAngles.alignChildren = "left";
     pnlAngles.spacing = 2;
-    // 숫자 조절 행: 라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위
-    // ◀▶와 입력창은 드래그와 같은 순서로 onChanging → onChange를 부른다(뒤에 바꿔 단 핸들러도 그대로 탄다)
+    // 숫자 조절 행: 라벨(단위) | 입력창 | 스크롤바(‹ › 내장)
+    // 입력창은 드래그와 같은 순서로 onChanging → onChange를 부른다(뒤에 바꿔 단 핸들러도 그대로 탄다)
     function addSliderRow(parent, labelText, labelWidth, minV, maxV, initV, unit, step) {
         var row = parent.add("group");
         row.spacing = 3;
-        var label = row.add("statictext", undefined, labelText);
+        var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
         label.preferredSize.width = labelWidth;
-        var minus = row.add("button", undefined, "◀");
-        minus.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = row.add("slider", undefined, initV, minV, maxV);
-        slider.preferredSize.width = 105;
-        var plus = row.add("button", undefined, "▶");
-        plus.preferredSize.width = STEP_BUTTON_WIDTH;
         var input = row.add("edittext", undefined, "");
         input.characters = 5;
-        row.add("statictext", undefined, unit);
+        var slider = row.add("scrollbar", undefined, initV, minV, maxV);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
+        slider.preferredSize.width = 196;
         var decimals = step < 1 ? 1 : 0;
         slider.syncLabel = function() { input.text = slider.value.toFixed(decimals); };
         slider.syncLabel();
@@ -544,8 +540,6 @@ try {
             slider.onChanging();
             slider.onChange();
         }
-        minus.onClick = function() { setValue(slider.value - step); };
-        plus.onClick = function() { setValue(slider.value + step); };
         input.onChange = function() {
             var typed = Number(input.text);
             if (!isFinite(typed) || !/\S/.test(input.text)) { slider.syncLabel(); return; }

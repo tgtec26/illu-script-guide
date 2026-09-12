@@ -539,7 +539,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     'directionRow.add("radiobutton", undefined, "상하")',
     'directionRow.add("radiobutton", undefined, "좌우")',
     'directionRow.add("checkbox", undefined, "분할선")',
-    'countGroup.add("slider", undefined, divisionCount, 2, 24)',
+    'countGroup.add("scrollbar", undefined, divisionCount, 2, 24)',
     'addAngleRow(shapePanel, "분할 회전", divisionRotation)',
     'var K_STEP = 10',
     'colorRow.add("radiobutton", undefined, "보이는면")',
@@ -548,7 +548,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     'function makeKColor(k)',
     'cmyk.black = k',
     'gray.gray = k',
-    'faceK[activeFace] = clamp(faceK[activeFace] + delta, 0, 100)',
+    'faceK[activeFace] = value',
     'var projectedLength = cylinderHeight * Math.abs(Math.sin(radians))',
     'var capScale = Math.abs(Math.cos(radians))',
     'var rearIsSecond = angleDegrees >= 0',
@@ -587,11 +587,11 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
   const source = read(sphere);
   const required = [
     'new Window("dialog", "오브젝트 스피어")',
-    'addSliderWithSteps(gridPanel, longitudeCount, 0, 24, 1)',
-    'addSliderWithSteps(gridPanel, latitudeCount, 0, 11, 1)',
+    'addSliderWithSteps(longitudeRow, longitudeCount, 0, 24, 1)',
+    'addSliderWithSteps(latitudeRow, latitudeCount, 0, 11, 1)',
     'var LINE_WIDTH_PT = 0.3',
     'to.strokeWidth = LINE_WIDTH_PT',
-    'addSliderWithSteps(gridPanel, gridRotation, -180, 180, 1)',
+    'addSliderWithSteps(rotationRow, gridRotation, -180, 180, 1)',
     'addAngleControls(viewPanel, "X축", viewX)',
     'addAngleControls(viewPanel, "Y축", viewY)',
     'addAngleControls(viewPanel, "Z축", viewZ)',
@@ -659,12 +659,12 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     'path.strokeWidth = LINE_WIDTH_PT',
     'var MIN_TURNS = 5',
     'var MAX_TURNS = 10',
-    'widthRow.add("statictext", undefined, "좌우 폭")',
-    'heightRow.add("statictext", undefined, "위아래 높이")',
-    'turnsRow.add("statictext", undefined, "감는 횟수")',
-    'addSliderWithSteps(sizePanel, coilWidthMm, SIZE_STEP_MM, maxCoilWidthMm, SIZE_STEP_MM)',
-    'addSliderWithSteps(sizePanel, coilHeightMm, SIZE_STEP_MM, maxCoilHeightMm, SIZE_STEP_MM)',
-    'addSliderWithSteps(turnsPanel, turnCount, MIN_TURNS, MAX_TURNS, 1)',
+    'widthRow.add("statictext", undefined, "좌우 폭 (mm):")',
+    'heightRow.add("statictext", undefined, "위아래 높이 (mm):")',
+    'turnsRow.add("statictext", undefined, "감는 횟수 (회):")',
+    'addSliderWithSteps(widthRow, coilWidthMm, SIZE_STEP_MM, maxCoilWidthMm, SIZE_STEP_MM)',
+    'addSliderWithSteps(heightRow, coilHeightMm, SIZE_STEP_MM, maxCoilHeightMm, SIZE_STEP_MM)',
+    'addSliderWithSteps(turnsRow, turnCount, MIN_TURNS, MAX_TURNS, 1)',
     'function createCoilSpring()',
     'function drawCoilSpringPath(group, radiusX, radiusY, topY, startY, endY, bottomY)',
     'anchors.push([centerX, topY])',
@@ -707,13 +707,13 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     'addSizeRow(sizePanel, "밑면 지름", baseDiameterMm, SIZE_STEP_MM, maxBaseDiameterMm)',
     'addSizeRow(sizePanel, "윗면 지름", topDiameterMm, 0, baseDiameterMm)',
     'addSizeRow(sizePanel, "높이", heightMm, SIZE_STEP_MM, maxHeightMm)',
-    'divisionRow.add("slider", undefined, divisionCount, 0, 24)',
+    'divisionRow.add("scrollbar", undefined, divisionCount, 0, 24)',
     'addAngleControls(viewPanel, "X축", viewX)',
     'addAngleControls(viewPanel, "Y축", viewY)',
     'addAngleControls(viewPanel, "Z축", viewZ)',
     'colorRow.add("radiobutton", undefined, "윗면")',
     'colorRow.add("radiobutton", undefined, "옆면")',
-    'faceK[activeFace] = clamp(faceK[activeFace] + delta, 0, 100)',
+    'faceK[activeFace] = value',
     'function makeKColor(k)',
     'function createCone()',
     'function updateTopDiameterLimit()',
@@ -782,7 +782,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       'var kValue = 100',
       'var hexValue = "FF0000"',
       'var K_STEP = 10',
-      'kValue = clamp(kValue + delta, 50, 100)',
+      'value = clamp(value, 50, 100)',
       '/^#?[0-9a-fA-F]{6}$/.test(value)',
       'var STANDARD_RED = "FF0000"',
       'var STANDARD_BLUE = "0000FF"',
@@ -793,10 +793,8 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       'function splitCubic(cubic, t)',
       'function extractCubicRange(cubic, startT, endT)',
       'function drawStationaryBaseline(group, boundaries, colors)',
-      'stepK(-10)',
-      'stepK(10)',
-      '"50K"',
-      '"100K"',
+      'addSliderWithSteps(kRow, kValue, 50, 100, K_STEP)',
+      'setK(Math.round(kSlider.value / K_STEP) * K_STEP)',
       'var previousCoordinateSystem = app.coordinateSystem',
       'app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM',
       'app.coordinateSystem = previousCoordinateSystem',
@@ -1853,10 +1851,8 @@ for (const file of updaterFiles) {
     'function offsetPolylineLengths(metrics, offset, bendDeadzone)',
     'function getBendDeadzone(signedOffset)',
     'label.preferredSize.width = LABEL_WIDTH',
-    'unitLabel.preferredSize.width = UNIT_WIDTH',
     'input.preferredSize.width = INPUT_WIDTH',
-    'down.preferredSize.width = STEP_BUTTON_WIDTH',
-    'up.preferredSize.width = STEP_BUTTON_WIDTH',
+    'slider.stepdelta = step',
     'addNumberField(spacingPanel, "보정 시작 반지름", "mm", startRadiusMm, 1, 1, 200)',
     'function unitTangentAt(samples, index)',
     'function centerDistanceAt(metrics, lengths, offsetLength)',
@@ -2060,9 +2056,12 @@ for (const file of updaterFiles) {
       numberConstant("SLIDER_WIDTH"), numberConstant("UNIT_WIDTH"), String
     );
     const rowControls = addValueRow(fakeParent, "외경", "mm", 40, 5, 200, 0.5, 2);
-    const unitElement = rowElements.filter((element) => element.type === "statictext" && element.text === "mm")[0];
+    const labelElement = rowElements.filter((element) => element.type === "statictext")[0];
     assert.strictEqual(rowControls.slider.preferredSize.width, 196, "cell cycle numeric sliders share one aligned width");
-    assert.strictEqual(unitElement.preferredSize.width, 28, "cell cycle unit column must show mm without clipping");
+    assert.strictEqual(rowControls.slider.type, "scrollbar", "cell cycle numeric rows use a scrollbar with built-in arrows");
+    assert.strictEqual(rowControls.slider.stepdelta, 0.5, "scrollbar arrows move one step");
+    assert.strictEqual(labelElement.text, "외경 (mm):", "unit is folded into the label");
+    assert.deepStrictEqual(rowElements.map((e) => e.type), ["statictext", "edittext", "scrollbar"], "row order is label | input | scrollbar");
 
     const startBoundaryRadians = new Function(
       `${extractFunction(source, "startBoundaryRadians")}; return startBoundaryRadians;`
@@ -2719,7 +2718,7 @@ for (const file of cabinetFiles) {
       set: function(key, value, positionOnly) {
         var panel = control('panel');
         addRow(panel, key, key, -100, 100, 'mm', 0.1, positionOnly);
-        var input = panel.children[0].children[4];
+        var input = panel.children[0].children[1];
         input.text = String(value);
         input.onChange();
       },

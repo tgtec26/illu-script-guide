@@ -178,17 +178,15 @@ try {
     legendEndRadio.value = true;
 
     var legendGapGroup = legendPanel.add("group");
-    legendGapGroup.add("statictext", undefined, "숫자와 범례 간격:");
-    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-    var STEP_BUTTON_WIDTH = 34;
-    var legendGapDownBtn = legendGapGroup.add("button", undefined, "◀");
-    legendGapDownBtn.preferredSize.width = STEP_BUTTON_WIDTH;
+    legendGapGroup.alignChildren = ["left", "center"];
+    legendGapGroup.add("statictext", undefined, "숫자와 범례 간격 (mm):");
     var legendGapInput = legendGapGroup.add("edittext", undefined, "1");
     legendGapInput.characters = 6;
     legendGapInput.justify = "center";
-    var legendGapUpBtn = legendGapGroup.add("button", undefined, "▶");
-    legendGapUpBtn.preferredSize.width = STEP_BUTTON_WIDTH;
-    legendGapGroup.add("statictext", undefined, "mm");
+    var legendGapSlider = legendGapGroup.add("scrollbar", undefined, 1, 0, 10);
+    legendGapSlider.preferredSize.width = 196;
+    legendGapSlider.stepdelta = 0.1;
+    legendGapSlider.jumpdelta = 1;
 
     var zeroCheck = legendPanel.add("checkbox", undefined, "원점에 0 넣기 (대각선 2mm)");
     zeroCheck.value = true;
@@ -245,18 +243,15 @@ try {
     legendEndRadio.onClick = updatePreview;
     legendCenterRadio.onClick = updatePreview;
     legendGapInput.onChanging = updatePreview;
-    legendGapDownBtn.onClick = function() { stepLegendGap(-1); };
-    legendGapUpBtn.onClick = function() { stepLegendGap(1); };
-
-    // 버튼 한 번 = 0.1mm. 0.1 격자에 맞춰 움직인다.
-    function stepLegendGap(direction) {
-        var value = parseNumber(legendGapInput.text);
-        if (value === null) value = 1;
-        value = Math.round((value + direction * 0.1) * 10) / 10;
-        if (value < 0) value = 0;
-        legendGapInput.text = String(value);
+    // 스크롤바는 0.1 격자에 맞춰 움직이고, 입력창 값은 스크롤바에 되돌려 준다
+    legendGapSlider.onChanging = function() {
+        legendGapInput.text = String(Math.round(legendGapSlider.value * 10) / 10);
         updatePreview();
-    }
+    };
+    legendGapInput.onChange = function() {
+        var value = parseNumber(legendGapInput.text);
+        if (value !== null) legendGapSlider.value = Math.max(0, Math.min(10, value));
+    };
     zeroCheck.onClick = updatePreview;
     arrowCheck.onClick = updatePreview;
     // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -362,19 +357,16 @@ try {
     function addOffsetControls(parent, label, value) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
-        row.add("statictext", undefined, label).preferredSize.width = 70;
+        row.add("statictext", undefined, label + " (mm):").preferredSize.width = 70;
         var input = row.add("edittext", undefined, formatOffset(value));
         input.characters = 6;
         input.justify = "center";
-        row.add("statictext", undefined, "mm");
-        var down = row.add("button", undefined, "◀");
-        down.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = row.add("slider", undefined, value,
+        var slider = row.add("scrollbar", undefined, value,
             -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-        slider.preferredSize.width = 140;
-        var up = row.add("button", undefined, "▶");
-        up.preferredSize.width = STEP_BUTTON_WIDTH;
-        return {input: input, slider: slider, down: down, up: up};
+        slider.stepdelta = OFFSET_STEP_MM;
+        slider.jumpdelta = OFFSET_STEP_MM * 10;
+        slider.preferredSize.width = 196;
+        return {input: input, slider: slider};
     }
 
     // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -400,8 +392,6 @@ try {
             var value = parseNumber(controls.input.text);
             commit(value === null ? current() : value);
         };
-        controls.down.onClick = function() { commit(current() - OFFSET_STEP_MM); };
-        controls.up.onClick = function() { commit(current() + OFFSET_STEP_MM); };
     }
 
     function setOffsetValue(controls, isX, value) {
@@ -714,7 +704,7 @@ try {
             legendCheck.value = (p[9] === "1");
             xLegendInput.text = p[10];
             yLegendInput.text = p[11];
-            if (parseNumber(p[12]) !== null) legendGapInput.text = p[12];
+            if (parseNumber(p[12]) !== null) { legendGapInput.text = p[12]; legendGapInput.onChange(); }
             zeroCheck.value = (p[13] === "1");
             arrowCheck.value = (p[14] === "1");
             boxShapeRadio.value = (p[15] === "1");

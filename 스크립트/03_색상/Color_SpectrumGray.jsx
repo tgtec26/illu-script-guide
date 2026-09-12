@@ -28,8 +28,7 @@ try {
     var BRIGHT_MAX = 300;
     var LABEL_WIDTH = 70;
     var INPUT_WIDTH = 50;
-    var SLIDER_WIDTH = 105;
-    var STEP_BUTTON_WIDTH = 34;
+    var SLIDER_WIDTH = 196;
     // 파장별 밝기 키포인트. 미리보기가 다이얼로그를 열자마자 돌기 때문에 여기(호출보다 위)에 둬야 한다.
     // 양 끝은 거의 검정(완전 검정은 아님), 570nm(노랑) 하나만 흰색, 파랑·청록 쪽에 작은 밝은 언덕, 빨강은 천천히 어두워진다.
     var GRAY_KEYS = [
@@ -249,18 +248,15 @@ try {
     function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
-        row.add("statictext", undefined, label).preferredSize.width = LABEL_WIDTH;
+        row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":")).preferredSize.width = LABEL_WIDTH;
         var input = row.add("edittext", undefined, formatNumber(value, decimals));
         input.preferredSize.width = INPUT_WIDTH;
-        row.add("statictext", undefined, unit);
-        var down = row.add("button", undefined, "◀");
-        down.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = row.add("slider", undefined, value, minimum, maximum);
+        var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        var up = row.add("button", undefined, "▶");
-        up.preferredSize.width = STEP_BUTTON_WIDTH;
         return {
-            input: input, slider: slider, down: down, up: up,
+            input: input, slider: slider,
             min: minimum, max: maximum, step: step, decimals: decimals
         };
     }
@@ -286,8 +282,6 @@ try {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
         };
-        controls.down.onClick = function() { commit(getter() - controls.step); };
-        controls.up.onClick = function() { commit(getter() + controls.step); };
     }
 
     function parseNumber(text) {

@@ -56,6 +56,7 @@ try {
     var faceK = [0, 0, 0];
     var activeFace = FACE_TOP;
     var K_STEP = 10;
+    var RESET_BUTTON_WIDTH = 34;
     var previewEnabled = true;
     var previewGroup = null;
     var offsetXmm = 0;
@@ -68,10 +69,8 @@ try {
 
     // 0 버튼이 붙는 줄도 라벨이 잘리지 않도록 넓힌다.
     var LABEL_WIDTH = 70;
-    var UNIT_WIDTH = 26;        // 단위 글자 수가 달라도 뒤 요소가 어긋나지 않도록 고정
-    var SLIDER_WIDTH = 140;
+    var SLIDER_WIDTH = 196;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-    var STEP_BUTTON_WIDTH = 34;
 
     var dlg = new Window("dialog", "오브젝트 콘");
     dlg.orientation = "column";
@@ -104,12 +103,10 @@ try {
     var divisionInput = divisionRow.add("edittext", undefined, String(divisionCount));
     divisionInput.characters = 4;
     divisionInput.justify = "center";
-    var divisionDownButton = divisionRow.add("button", undefined, "◀");
-    divisionDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
-    var divisionSlider = divisionRow.add("slider", undefined, divisionCount, 0, 24);
+    var divisionSlider = divisionRow.add("scrollbar", undefined, divisionCount, 0, 24);
+    divisionSlider.stepdelta = 1;
+    divisionSlider.jumpdelta = 1 * 10;
     divisionSlider.preferredSize.width = SLIDER_WIDTH;
-    var divisionUpButton = divisionRow.add("button", undefined, "▶");
-    divisionUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
 
     var colorRow = extraPanel.add("group");
     colorRow.alignChildren = ["left", "center"];
@@ -119,13 +116,14 @@ try {
     var sideFaceRadio = colorRow.add("radiobutton", undefined, "옆면");
     var bottomFaceRadio = colorRow.add("radiobutton", undefined, "아랫면");
     topFaceRadio.value = true;
-    var kDownButton = colorRow.add("button", undefined, "◀");
-    kDownButton.preferredSize.width = STEP_BUTTON_WIDTH;
     var kValueText = colorRow.add("statictext", undefined, "0K");
     kValueText.preferredSize.width = 42;
     kValueText.justify = "center";
-    var kUpButton = colorRow.add("button", undefined, "▶");
-    kUpButton.preferredSize.width = STEP_BUTTON_WIDTH;
+    var kSlider = colorRow.add("scrollbar", undefined, faceK[activeFace], 0, 100);
+    kSlider.preferredSize.width = 120;
+    kSlider.stepdelta = K_STEP;
+    kSlider.jumpdelta = K_STEP;
+    kSlider.onChanging = function() { setK(Math.round(kSlider.value / K_STEP) * K_STEP); };
     updateKDisplay();
 
     var positionPanel = addPanel(dlg, "위치");
@@ -234,15 +232,6 @@ try {
         divisionInput.text = String(divisionCount);
         updatePreview();
     };
-    divisionDownButton.onClick = function() { stepDivision(-1); };
-    divisionUpButton.onClick = function() { stepDivision(1); };
-
-    function stepDivision(delta) {
-        divisionCount = clamp(divisionCount + delta, 0, 24);
-        divisionInput.text = String(divisionCount);
-        divisionSlider.value = divisionCount;
-        updatePreview();
-    }
 
     bindViewControls(xControls, function(value) { viewX = value; }, function() { return viewX; });
     bindViewControls(yControls, function(value) { viewY = value; }, function() { return viewY; });
@@ -260,8 +249,6 @@ try {
         activeFace = FACE_BOTTOM;
         updateKDisplay();
     };
-    kDownButton.onClick = function() { stepK(-K_STEP); };
-    kUpButton.onClick = function() { stepK(K_STEP); };
 
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
@@ -407,20 +394,19 @@ try {
     function addValueRow(parent, label, unit, value, minimum, maximum, step, hasReset) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
-        var labelText = row.add("statictext", undefined, label);
+        var labelText = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
         // 0 버튼이 붙는 줄은 라벨을 줄여서 다른 줄과 폭을 맞춘다
-        labelText.preferredSize.width = hasReset ? (LABEL_WIDTH - STEP_BUTTON_WIDTH - 10) : LABEL_WIDTH;
+        labelText.preferredSize.width = hasReset ? (LABEL_WIDTH - RESET_BUTTON_WIDTH - 10) : LABEL_WIDTH;
         var reset = null;
         if (hasReset) {
             reset = row.add("button", undefined, "0");
-            reset.preferredSize.width = STEP_BUTTON_WIDTH;
+            reset.preferredSize.width = RESET_BUTTON_WIDTH;
         }
         var input = row.add("edittext", undefined, value);
         input.characters = 6;
         input.justify = "right";
-        var unitLabel = row.add("statictext", undefined, unit);
-        unitLabel.preferredSize.width = UNIT_WIDTH;
-        var slider = row.add("slider", undefined, Number(value), minimum, maximum);
+        var slider = row.add("scrollbar", undefined, Number(value), minimum, maximum);
+        slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
         slider.stepdelta = step;
         return {input: input, slider: slider, reset: reset};
@@ -466,6 +452,7 @@ try {
 
     function updateKDisplay() {
         kValueText.text = faceK[activeFace] + "K";
+        kSlider.value = faceK[activeFace];
     }
 
     function updateTopDiameterLimit() {
@@ -477,8 +464,10 @@ try {
     }
 
 
-    function stepK(delta) {
-        faceK[activeFace] = clamp(faceK[activeFace] + delta, 0, 100);
+    function setK(value) {
+        value = clamp(value, 0, 100);
+        if (value === faceK[activeFace]) return;
+        faceK[activeFace] = value;
         updateKDisplay();
         updatePreview();
     }

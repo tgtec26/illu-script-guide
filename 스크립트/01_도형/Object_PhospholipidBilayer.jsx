@@ -77,11 +77,9 @@ try {
 
     // 가장 긴 라벨("보정 시작 반지름")이 잘리지 않는 너비.
     var LABEL_WIDTH = 108;
-    var UNIT_WIDTH = 26;        // mm와 % 폭이 달라 뒤 요소가 어긋나지 않도록 고정
     var INPUT_WIDTH = 54;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-    var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 126;
+    var SLIDER_WIDTH = 196;
 
     var dlg = new Window("dialog", "인지질 2중층");
     dlg.orientation = "column";
@@ -96,7 +94,7 @@ try {
     var curvatureField = addNumberField(spacingPanel, "곡선 보정", "%", curvatureFixPercent, 5, 0, 100);
     var radiusField = addNumberField(spacingPanel, "보정 시작 반지름", "mm", startRadiusMm, 1, 1, 200);
     var countText = spacingPanel.add("statictext", undefined, "");
-    countText.preferredSize.width = LABEL_WIDTH + INPUT_WIDTH + UNIT_WIDTH + SLIDER_WIDTH + STEP_BUTTON_WIDTH * 2;
+    countText.preferredSize.width = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
@@ -562,23 +560,17 @@ try {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         row.spacing = 6;
-        var label = row.add("statictext", undefined, labelText);
+        var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
         label.preferredSize.width = LABEL_WIDTH;
         var input = row.add("edittext", undefined, formatValue(value));
         input.preferredSize.width = INPUT_WIDTH;
         input.justify = "center";
-        var unitLabel = row.add("statictext", undefined, unit);
-        unitLabel.preferredSize.width = UNIT_WIDTH;
-        var down = row.add("button", undefined, "◀");
-        down.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = row.add("slider", undefined, value, minimum, maximum);
+        var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        var up = row.add("button", undefined, "▶");
-        up.preferredSize.width = STEP_BUTTON_WIDTH;
 
         var field = {row: row, input: input, slider: slider, step: step, minimum: minimum, maximum: maximum, syncing: false};
-        down.onClick = function() { stepField(field, -1); };
-        up.onClick = function() { stepField(field, 1); };
 
         slider.onChanging = function() {
             if (field.syncing) return;
@@ -623,19 +615,6 @@ try {
     function moveItem(item, deltaX, deltaY) {
         if (item === null || (deltaX === 0 && deltaY === 0)) return;
         try { item.translate(deltaX, deltaY); } catch (e) {}
-    }
-
-    // 버튼 한 번 = 1단계. 세밀 조절용.
-    function stepField(field, direction) {
-        var value = parseNumber(field.input.text);
-        if (value === null) value = field.minimum;
-        value = Math.round((value + (field.step * direction)) / field.step) * field.step;
-        value = clampValue(value, field.minimum, field.maximum);
-        field.input.text = formatValue(value);
-        field.syncing = true;
-        field.slider.value = value;
-        field.syncing = false;
-        commitField(field);
     }
 
     function clampValue(value, minimum, maximum) {

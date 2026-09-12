@@ -31,7 +31,6 @@ try {
     var DASH_PATTERN = [2, 1];
     var MIN_COUNT = 1;
     var MAX_COUNT = 50;
-    var STEP_BUTTON_WIDTH = 34;   // 더 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다
 
     var doc = app.activeDocument;
     var source = getSelectedRectangle(doc.selection);
@@ -74,20 +73,17 @@ try {
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     win.show();
 
-    // 숫자 조절 행: 라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위
+    // 숫자 조절 행: 라벨(단위) | 입력창 | 스크롤바(‹ › 내장)
     function addRow(parent, label, key, min, max, step, unit) {
         var row = parent.add("group");
-        var caption = row.add("statictext", undefined, label);
+        var caption = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
         caption.preferredSize.width = 50;
-        var minus = row.add("button", undefined, "◀");
-        minus.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = row.add("slider", undefined, options[key], min, max);
-        slider.preferredSize.width = 120;
-        var plus = row.add("button", undefined, "▶");
-        plus.preferredSize.width = STEP_BUTTON_WIDTH;
         var input = row.add("edittext", undefined, String(options[key]));
         input.characters = 4;
-        row.add("statictext", undefined, unit);
+        var slider = row.add("scrollbar", undefined, options[key], min, max);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
+        slider.preferredSize.width = 196;
         function apply(value) {
             value = Math.round(value / step) * step;
             if (!isFinite(value) || value < min || value > max) {
@@ -98,8 +94,6 @@ try {
             slider.value = value;
             input.text = String(value);
         }
-        minus.onClick = function() { apply(options[key] - step); };
-        plus.onClick = function() { apply(options[key] + step); };
         slider.onChanging = function() { apply(slider.value); };
         slider.onChange = function() { apply(slider.value); };
         input.onChange = function() { apply(Number(input.text)); };

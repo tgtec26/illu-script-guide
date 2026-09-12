@@ -60,7 +60,6 @@ try {
     }
 
     // 2. ScriptUI 창 구성
-    var STEP_BUTTON_WIDTH = 34;   // 더 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다
     var win = new Window("dialog", "원자 모형 생성기");
     win.orientation = "column";
     win.alignChildren = ["fill", "top"];
@@ -131,27 +130,24 @@ try {
     pnlSize.spacing = 2;
     var sliderSyncers = []; // 값 변경(복원 등) 후 라벨 텍스트를 다시 맞추는 함수 목록
     function addSlider(labelText, minV, maxV, initV, unit, step) {
-        // 숫자 조절 행: 라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위
+        // 숫자 조절 행: 라벨(단위) | 입력창 | 스크롤바(‹ › 내장)
         var g = pnlSize.add("group");
         g.spacing = 3;
-        var lab = g.add("statictext", undefined, labelText);
+        var lab = g.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
         lab.preferredSize.width = 90;
-        var minus = g.add("button", undefined, "◀");
-        minus.preferredSize.width = STEP_BUTTON_WIDTH;
-        var s = g.add("slider", undefined, initV, minV, maxV);
-        s.preferredSize.width = 105;
-        var plus = g.add("button", undefined, "▶");
-        plus.preferredSize.width = STEP_BUTTON_WIDTH;
         var input = g.add("edittext", undefined, "");
         input.characters = 5;
-        g.add("statictext", undefined, unit);
+        var s = g.add("scrollbar", undefined, initV, minV, maxV);
+        s.stepdelta = step;
+        s.jumpdelta = step * 10;
+        s.preferredSize.width = 196;
         var decimals = step < 1 ? 1 : 0;
         s.syncLabel = function() { input.text = s.value.toFixed(decimals); };
         s.syncLabel();
         // 드래그 중엔 라벨만(가벼움), 놓을 때(onChange) 무거운 미리보기 재드로우 → MRAP 부하 감소
         s.onChanging = function() { s.syncLabel(); };
         s.onChange = function() { s.syncLabel(); updatePreview(); };
-        // ◀▶와 입력창은 드래그와 같은 순서로 onChanging → onChange를 부른다
+        // 입력창은 드래그와 같은 순서로 onChanging → onChange를 부른다
         function setValue(value) {
             value = Math.min(maxV, Math.max(minV, Math.round(value / step) * step));
             if (value === s.value) { s.syncLabel(); return; }
@@ -159,8 +155,6 @@ try {
             s.onChanging();
             s.onChange();
         }
-        minus.onClick = function() { setValue(s.value - step); };
-        plus.onClick = function() { setValue(s.value + step); };
         input.onChange = function() {
             var typed = Number(input.text);
             if (!isFinite(typed) || !/\S/.test(input.text)) { s.syncLabel(); return; }

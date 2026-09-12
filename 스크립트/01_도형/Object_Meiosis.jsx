@@ -115,8 +115,7 @@ try {
     var LABEL_WIDTH = 92;
     var INPUT_CHARACTERS = 5;          // "-200.0"까지는 스크롤되지만 보통 값은 다 보인다
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-    var STEP_BUTTON_WIDTH = 34;
-    var SLIDER_WIDTH = 70;
+    var SLIDER_WIDTH = 196;
 
     var dlg = new Window("dialog", "감수 분열");
     dlg.orientation = "column";
@@ -797,24 +796,22 @@ try {
         return panel;
     }
 
-    // 라벨 · 입력칸 · ◀ · 슬라이더 · ▶ 를 한 줄에 배치
+    // 라벨 · 입력칸 · 스크롤바 를 한 줄에 배치
     function addValueRow(parent, label, value, minimum, maximum, step, decimals) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         row.spacing = 4;
-        var labelText = row.add("statictext", undefined, label);
+        var labelText = row.add("statictext", undefined, label + ":");
         labelText.preferredSize.width = LABEL_WIDTH;
         var input = row.add("edittext", undefined, formatNumber(value, decimals));
         input.characters = INPUT_CHARACTERS;
         input.justify = "right";
-        var down = row.add("button", undefined, "◀");
-        down.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = row.add("slider", undefined, value, minimum, maximum);
+        var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        var up = row.add("button", undefined, "▶");
-        up.preferredSize.width = STEP_BUTTON_WIDTH;
         return {
-            row: row, input: input, slider: slider, down: down, up: up,
+            row: row, input: input, slider: slider,
             min: minimum, max: maximum, step: step, decimals: decimals
         };
     }
@@ -833,8 +830,6 @@ try {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
         };
-        controls.down.onClick = function() { commit(getter() - controls.step); };
-        controls.up.onClick = function() { commit(getter() + controls.step); };
     }
 
     // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다 (이동이 즉각 반응한다)
@@ -858,8 +853,6 @@ try {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
         };
-        controls.down.onClick = function() { commit(getter() - controls.step); };
-        controls.up.onClick = function() { commit(getter() + controls.step); };
     }
 
     function parseNumber(text) {

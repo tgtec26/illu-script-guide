@@ -78,7 +78,8 @@ try {
 
     removeLeftoverGroups();
 
-    var STEP_BUTTON_WIDTH = 34;
+    var LABEL_WIDTH = 130;   // Object_isometric.jsx와 같은 행 구성. "박스·화살표 간격 (mm):"이 잘리지 않는 폭
+    var SLIDER_WIDTH = 196;
     var win = new Window("dialog", "단계 흐름도 만들기");
     win.alignChildren = "fill";
     win.spacing = 4;
@@ -154,7 +155,7 @@ try {
     addRow(arrowPanel, "길이", "arrowLength", 1, 5, "mm", false);
     addRow(arrowPanel, "두께", "arrowWidth", 0.3, 4, "pt", false);
     addRow(arrowPanel, "화살촉 크기", "arrowScale", 10, 100, "%", false);
-    addRow(arrowPanel, "색 (K)", "arrowK", 0, 100, "%", false).helpTip = "10 단위";
+    addRow(arrowPanel, "색 (K)", "arrowK", 0, 100, "", false).helpTip = "10 단위";
     addRow(arrowPanel, "박스·화살표 간격", "gap", 0, 3, "mm", false);
 
     var positionPanel = win.add("panel", undefined, "위치");
@@ -251,23 +252,18 @@ try {
         return changed;
     }
 
-    // 숫자 조절 행: 라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위. 라벨을 돌려준다
+    // 숫자 조절 행: 라벨(단위) | 입력창 | 스크롤바(‹ › 내장). 스크롤바는 step 단위 정수로 움직인다. 라벨을 돌려준다
     function addRow(panel, label, key, min, max, unit, positionOnly) {
         var row = panel.add("group");
-        var caption = row.add("statictext", undefined, label);
-        caption.preferredSize.width = 95;
+        var caption = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
+        caption.preferredSize.width = LABEL_WIDTH;
         var step = (key === "arrowK") ? 10 : (unit === "mm" ? 0.1 : (unit === "pt" ? 0.5 : 1));
-        var minus = row.add("button", undefined, "◀");
-        minus.preferredSize.width = STEP_BUTTON_WIDTH;
-        minus.helpTip = String(step) + unit + " 감소";
-        var slider = row.add("slider", undefined, options[key], min, max);
-        slider.preferredSize.width = 105;
-        var plus = row.add("button", undefined, "▶");
-        plus.preferredSize.width = STEP_BUTTON_WIDTH;
-        plus.helpTip = String(step) + unit + " 증가";
         var input = row.add("edittext", undefined, String(options[key]));
         input.characters = 6;
-        row.add("statictext", undefined, unit);
+        var slider = row.add("scrollbar", undefined, Math.round(options[key] / step), Math.ceil(min / step), Math.floor(max / step));
+        slider.preferredSize.width = SLIDER_WIDTH;
+        slider.stepdelta = 1;
+        slider.jumpdelta = 10;
         function apply(value, dragging) {
             value = (key === "arrowK") ? Math.round(value / 10) * 10 : Math.round(value * 100) / 100;
             if (!isFinite(value) || value < min || value > max) {
@@ -276,7 +272,7 @@ try {
             }
             var previous = options[key];
             options[key] = value;
-            slider.value = value;
+            slider.value = Math.round(value / step);
             input.text = String(value);
             if (value === previous) {
                 if (!dragging && previewPending) updatePreview();
@@ -297,10 +293,8 @@ try {
                 updatePreview(dragging);
             }
         }
-        minus.onClick = function() { apply(Math.max(min, options[key] - step)); };
-        plus.onClick = function() { apply(Math.min(max, options[key] + step)); };
-        slider.onChanging = function() { apply(slider.value, true); };
-        slider.onChange = function() { apply(slider.value); };
+        slider.onChanging = function() { apply(slider.value * step, true); };
+        slider.onChange = function() { apply(slider.value * step); };
         input.onChange = function() {
             if (!/\S/.test(input.text)) { input.text = String(options[key]); return; }
             apply(Number(input.text));

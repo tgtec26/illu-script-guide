@@ -36,7 +36,6 @@ try {
     try {
     app.coordinateSystem = CoordinateSystem.DOCUMENTCOORDINATESYSTEM;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-    var STEP_BUTTON_WIDTH = 34;   // 다이얼로그를 만들기 전에 있어야 한다
     var MM_TO_PT = 2.83464567;
     var shapeSizeMm = 2;
     var gapMm = 2;
@@ -94,12 +93,11 @@ try {
     var standardColorRadio = colorPanel.add("radiobutton", undefined, "표준색");
     var kColorRadio = colorPanel.add("radiobutton", undefined, "K 음영");
     var kRow = colorPanel.add("group");
-    var kDecreaseButton = kRow.add("button", undefined, "<");
+    kRow.alignChildren = ["left", "center"];
     var kLabel = kRow.add("statictext", undefined, kValue + "K");
-    var kIncreaseButton = kRow.add("button", undefined, ">");
-    var kBounds = colorPanel.add("group");
-    kBounds.add("statictext", undefined, "50K");
-    kBounds.add("statictext", undefined, "100K");
+    kLabel.preferredSize.width = 42;
+    kLabel.helpTip = "50K ~ 100K, 10 단위";
+    var kSlider = addSliderWithSteps(kRow, kValue, 50, 100, K_STEP);
     var hexColorRadio = colorPanel.add("radiobutton", undefined, "HEX");
     var hexInput = colorPanel.add("edittext", undefined, hexValue);
     hexInput.characters = 8;
@@ -107,7 +105,6 @@ try {
     kColorRadio.value = (colorMode === "k");
     hexColorRadio.value = (colorMode === "hex");
     kRow.enabled = (colorMode === "k");
-    kBounds.enabled = (colorMode === "k");
     hexInput.enabled = (colorMode === "hex");
 
     var linePanel = dlg.add("panel", undefined, "라인");
@@ -143,8 +140,7 @@ try {
     standardColorRadio.onClick = function() { setColorMode("standard"); };
     kColorRadio.onClick = function() { setColorMode("k"); };
     hexColorRadio.onClick = function() { setColorMode("hex"); };
-    kDecreaseButton.onClick = function() { stepK(-10); };
-    kIncreaseButton.onClick = function() { stepK(10); };
+    kSlider.onChanging = function() { setK(Math.round(kSlider.value / K_STEP) * K_STEP); };
     hexInput.onChange = function() {
         var value = hexInput.text;
         if (!/^#?[0-9a-fA-F]{6}$/.test(value)) {
@@ -174,14 +170,14 @@ try {
     function setColorMode(mode) {
         colorMode = mode;
         kRow.enabled = mode === "k";
-        kBounds.enabled = mode === "k";
         hexInput.enabled = mode === "hex";
         updatePreview();
     }
 
-    function stepK(delta) {
-        delta = delta < 0 ? -K_STEP : K_STEP;
-        kValue = clamp(kValue + delta, 50, 100);
+    function setK(value) {
+        value = clamp(value, 50, 100);
+        if (value === kValue) return;
+        kValue = value;
         kLabel.text = kValue + "K";
         updatePreview();
     }
@@ -931,25 +927,12 @@ try {
         return value;
     }
 
-    // 슬라이더 양옆 ◀▶: step만큼 옮기고 드래그와 같은 onChanging 핸들러를 부른다
-    function addSliderWithSteps(parent, value, minimum, maximum, step) {
-        var row = parent.add("group");
-        row.spacing = 3;
-        row.alignChildren = ["left", "center"];
-        var minus = row.add("button", undefined, "◀");
-        minus.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = row.add("slider", undefined, value, minimum, maximum);
-        var plus = row.add("button", undefined, "▶");
-        plus.preferredSize.width = STEP_BUTTON_WIDTH;
-        function nudge(delta) {
-            var next = Math.min(maximum, Math.max(minimum, Math.round((slider.value + delta) / step) * step));
-            if (next === slider.value) return;
-            slider.value = next;
-            if (slider.onChanging) slider.onChanging();
-            if (slider.onChange) slider.onChange();
-        }
-        minus.onClick = function() { nudge(-step); };
-        plus.onClick = function() { nudge(step); };
+    // step 단위로 움직이는 스크롤바(‹ › 내장)
+    function addSliderWithSteps(row, value, minimum, maximum, step) {
+        var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
+        slider.preferredSize.width = 196;
         return slider;
     }
 
@@ -957,18 +940,15 @@ try {
     function addOffsetControls(parent, label, value) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
-        row.add("statictext", undefined, label).preferredSize.width = 70;
+        row.add("statictext", undefined, label + " (mm):").preferredSize.width = 70;
         var input = row.add("edittext", undefined, formatOffset(value));
         input.characters = 6;
-        row.add("statictext", undefined, "mm");
-        var down = row.add("button", undefined, "◀");
-        down.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = row.add("slider", undefined, value,
+        var slider = row.add("scrollbar", undefined, value,
             -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-        slider.preferredSize.width = 140;
-        var up = row.add("button", undefined, "▶");
-        up.preferredSize.width = STEP_BUTTON_WIDTH;
-        return {input: input, slider: slider, down: down, up: up};
+        slider.stepdelta = OFFSET_STEP_MM;
+        slider.jumpdelta = OFFSET_STEP_MM * 10;
+        slider.preferredSize.width = 196;
+        return {input: input, slider: slider};
     }
 
     // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -992,8 +972,6 @@ try {
             var value = parseNumber(controls.input.text);
             commit(value === null ? current() : value);
         };
-        controls.down.onClick = function() { commit(current() - OFFSET_STEP_MM); };
-        controls.up.onClick = function() { commit(current() + OFFSET_STEP_MM); };
     }
 
     function formatOffset(value) {
@@ -1007,13 +985,11 @@ try {
 
     function addNumericControl(parent, label, value, minimum, maximum, step, unit) {
         var row = parent.add("group");
-        row.add("statictext", undefined, label);
+        row.alignChildren = ["left", "center"];
+        row.add("statictext", undefined, label + " (" + unit + "):").preferredSize.width = 90;
         var input = row.add("edittext", undefined, formatNumber(value));
         input.characters = 6;
-        row.add("statictext", undefined, unit);
-        var slider = addSliderWithSteps(parent, value, minimum, maximum, step);
-        slider.preferredSize.width = 182;
-        slider.stepdelta = step;
+        var slider = addSliderWithSteps(row, value, minimum, maximum, step);
         return {
             input: input,
             slider: slider,

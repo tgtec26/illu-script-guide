@@ -170,7 +170,6 @@ try {
     // 라벨 · 입력칸 · 슬라이더를 한 줄에 배치. 슬라이더를 끌면 step 단위로 값이 바뀐다.
     function addNumberField(parent, labelText, labelWidth, initialValue, step, minimum, maximum) {
         // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-        var STEP_BUTTON_WIDTH = 34;
         var group = parent.add("group");
         group.orientation = "row";
         group.alignChildren = ["left", "center"];
@@ -183,16 +182,12 @@ try {
         var input = group.add("edittext", undefined, formatValue(initial));
         input.characters = 5;
         input.justify = "center";
-        var down = group.add("button", undefined, "◀");
-        down.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = group.add("slider", undefined, initial, minimum, maximum);
-        slider.preferredSize.width = 105;
-        var up = group.add("button", undefined, "▶");
-        up.preferredSize.width = STEP_BUTTON_WIDTH;
+        var slider = group.add("scrollbar", undefined, initial, minimum, maximum);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
+        slider.preferredSize.width = 196;
         field.input = input;
         field.slider = slider;
-        down.onClick = function () { stepField(field, -1); };
-        up.onClick = function () { stepField(field, 1); };
 
         slider.onChanging = function () {
             if (field.syncing) return;
@@ -245,19 +240,6 @@ try {
         var value = parseFloat(text);
         if (isNaN(value) || Math.abs(value) > 100) return 0;
         return value;
-    }
-
-    // 버튼 한 번 = 1단계. 세밀 조절용.
-    function stepField(field, direction) {
-        var value = parseFloat(field.input.text);
-        if (isNaN(value)) value = field.minimum;
-        value = Math.round((value + (field.step * direction)) / field.step) * field.step;
-        value = clampField(field, value);
-        field.input.text = formatValue(value);
-        field.syncing = true;
-        field.slider.value = value;
-        field.syncing = false;
-        commitField(field);
     }
 
     function clampField(field, value) {

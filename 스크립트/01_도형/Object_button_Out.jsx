@@ -238,23 +238,19 @@ try {
         var result = null;
 
         // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-        var STEP_BUTTON_WIDTH = 34;
         // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
         function addOffsetControls(parent, label, value) {
             var row = parent.add("group");
             row.alignChildren = ["left", "center"];
-            row.add("statictext", undefined, label).preferredSize.width = 70;
+            row.add("statictext", undefined, label + " (mm):").preferredSize.width = 70;
             var offsetInput = row.add("edittext", undefined, formatOffset(value));
             offsetInput.characters = 6;
-            row.add("statictext", undefined, "mm");
-            var down = row.add("button", undefined, "◀");
-            down.preferredSize.width = STEP_BUTTON_WIDTH;
-            var slider = row.add("slider", undefined, value,
+            var slider = row.add("scrollbar", undefined, value,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-            slider.preferredSize.width = 140;
-            var up = row.add("button", undefined, "▶");
-            up.preferredSize.width = STEP_BUTTON_WIDTH;
-            return {input: offsetInput, slider: slider, down: down, up: up};
+            slider.stepdelta = OFFSET_STEP_MM;
+            slider.jumpdelta = OFFSET_STEP_MM * 10;
+            slider.preferredSize.width = 196;
+            return {input: offsetInput, slider: slider};
         }
 
         // 값이 바뀌면 도형을 다시 만들지 않고 미리보기만 옮긴다
@@ -278,8 +274,6 @@ try {
                 var value = parseFloat(String(controls.input.text).replace(",", "."));
                 commit(isNaN(value) ? current() : value);
             };
-            controls.down.onClick = function() { commit(current() - OFFSET_STEP_MM); };
-            controls.up.onClick = function() { commit(current() + OFFSET_STEP_MM); };
         }
 
         function formatOffset(value) {

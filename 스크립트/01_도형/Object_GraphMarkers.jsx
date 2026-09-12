@@ -29,7 +29,8 @@ try {
     var PREF_KEY = "ObjectGraphMarkers/settings";
     var PREVIEW_NAME = "GraphMarkers_Preview";
     var PREVIEW_INTERVAL_MS = 80;
-    var STEP_BUTTON_WIDTH = 34;
+    var LABEL_WIDTH = 90;    // Object_isometric.jsx와 같은 행 구성
+    var SLIDER_WIDTH = 196;
     var mmToPt = 72 / 25.4;
     var SHAPES = ["원", "사각형", "삼각형"];
     var SIZE_VALUES = rangeValues(0.5, 2, 0.1);      // mm
@@ -73,7 +74,7 @@ try {
     markerPanel.alignChildren = "fill";
     markerPanel.spacing = 2;
     addRow(markerPanel, "크기", "size", SIZE_VALUES, "mm");
-    addRow(markerPanel, "채움 (K)", "fillK", FILL_VALUES, "%").helpTip = "10 단위";
+    addRow(markerPanel, "채움 (K)", "fillK", FILL_VALUES, "").helpTip = "10 단위";
     addRow(markerPanel, "선 두께", "stroke", STROKE_VALUES, "pt").helpTip = "0이면 선 없음, 선은 100K";
 
     var linePanel = win.add("panel", undefined, "꺾은선");
@@ -143,20 +144,17 @@ try {
         };
     }
 
-    // 숫자 조절 행: 라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위. 슬라이더는 values의 인덱스를 움직인다
+    // 숫자 조절 행: 라벨(단위) | 입력창 | 스크롤바(‹ › 내장). 스크롤바는 values의 인덱스를 움직인다
     function addRow(panel, label, key, values, unit) {
         var row = panel.add("group");
-        var caption = row.add("statictext", undefined, label);
-        caption.preferredSize.width = 60;
-        var minus = row.add("button", undefined, "◀");
-        minus.preferredSize.width = STEP_BUTTON_WIDTH;
-        var slider = row.add("slider", undefined, nearestIndex(values, options[key]), 0, values.length - 1);
-        slider.preferredSize.width = 120;
-        var plus = row.add("button", undefined, "▶");
-        plus.preferredSize.width = STEP_BUTTON_WIDTH;
+        var caption = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
+        caption.preferredSize.width = LABEL_WIDTH;
         var input = row.add("edittext", undefined, String(options[key]));
-        input.characters = 5;
-        row.add("statictext", undefined, unit);
+        input.characters = 6;
+        var slider = row.add("scrollbar", undefined, nearestIndex(values, options[key]), 0, values.length - 1);
+        slider.preferredSize.width = SLIDER_WIDTH;
+        slider.stepdelta = 1;
+        slider.jumpdelta = 1;
         function apply(index, dragging) {
             index = Math.max(0, Math.min(values.length - 1, Math.round(index)));
             var value = values[index];
@@ -174,8 +172,6 @@ try {
             }
             updatePreview(dragging);
         }
-        minus.onClick = function() { apply(nearestIndex(values, options[key]) - 1); };
-        plus.onClick = function() { apply(nearestIndex(values, options[key]) + 1); };
         slider.onChanging = function() { apply(slider.value, true); };
         slider.onChange = function() { apply(slider.value); };
         input.onChange = function() {

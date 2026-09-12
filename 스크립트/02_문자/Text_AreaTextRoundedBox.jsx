@@ -44,7 +44,6 @@ try {
         return;
     }
 
-    var STEP_BUTTON_WIDTH = 34;   // 더 좁히면 macOS 둥근 모서리가 맞붙어 타원처럼 보인다
     var win = new Window("dialog", "말풍선 만들기");
     win.alignChildren = "fill";
     var boxPanel = win.add("panel", undefined, "사각형 · 텍스트 주변 여백");
@@ -121,20 +120,15 @@ try {
 
     function addRow(panel, label, key, min, max, unit, positionOnly) {
         var row = panel.add("group");
-        var caption = row.add("statictext", undefined, label);
+        var caption = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
         caption.preferredSize.width = 85;
         var step = unit === "mm" ? 0.1 : 1;
-        var minus = row.add("button", undefined, "◀");
-        minus.preferredSize.width = STEP_BUTTON_WIDTH;
-        minus.helpTip = String(step) + unit + " 감소";
-        var slider = row.add("slider", undefined, options[key], min, max);
-        slider.preferredSize.width = 126;
-        var plus = row.add("button", undefined, "▶");
-        plus.preferredSize.width = STEP_BUTTON_WIDTH;
-        plus.helpTip = String(step) + unit + " 증가";
         var input = row.add("edittext", undefined, String(options[key]));
         input.characters = 6;
-        row.add("statictext", undefined, unit);
+        var slider = row.add("scrollbar", undefined, options[key], min, max);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
+        slider.preferredSize.width = 196;
         function apply(value, dragging) {
             value = Math.round(value * 100) / 100;
             if (!isFinite(value) || value < min || value > max) {
@@ -159,8 +153,6 @@ try {
                 } catch (e) { clearPreview(); status.text = "이동 오류: " + e; }
             } else updatePreview(dragging);
         }
-        minus.onClick = function() { apply(Math.max(min, options[key] - step)); };
-        plus.onClick = function() { apply(Math.min(max, options[key] + step)); };
         slider.onChanging = function() { apply(slider.value, true); };
         slider.onChange = function() { apply(slider.value); };
         input.onChange = function() {

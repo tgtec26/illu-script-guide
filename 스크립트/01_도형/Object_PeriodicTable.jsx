@@ -47,7 +47,6 @@ try {
         { name: "br", sign: 1, from: "bottom", to: "right" }
     ];
     var INNER_RADIUS_RATIO = 1.11;  // 윗면 라운딩 = 바깥 라운딩 × 1.11 (참고 SVG 1.29/1.16)
-    var STEP_BUTTON_WIDTH = 34;
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
 
@@ -182,22 +181,17 @@ try {
         return panel;
     }
 
-    // 숫자 조절 행: 라벨 | ◀ | 슬라이더 | ▶ | 입력창 | 단위
+    // 숫자 조절 행: 라벨(단위) | 입력창 | 스크롤바(‹ › 내장)
     function addRow(panel, label, key, min, max, unit, step, positionOnly) {
         var row = panel.add("group");
-        var caption = row.add("statictext", undefined, label);
+        var caption = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
         caption.preferredSize.width = 85;
-        var minus = row.add("button", undefined, "◀");
-        minus.preferredSize.width = STEP_BUTTON_WIDTH;
-        minus.helpTip = String(step) + unit + " 감소";
-        var slider = row.add("slider", undefined, options[key], min, max);
-        slider.preferredSize.width = 105;
-        var plus = row.add("button", undefined, "▶");
-        plus.preferredSize.width = STEP_BUTTON_WIDTH;
-        plus.helpTip = String(step) + unit + " 증가";
         var input = row.add("edittext", undefined, String(options[key]));
         input.characters = 6;
-        row.add("statictext", undefined, unit);
+        var slider = row.add("scrollbar", undefined, options[key], min, max);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
+        slider.preferredSize.width = 196;
         function apply(value, dragging) {
             value = Math.round(value * 100) / 100;
             if (!isFinite(value) || value < min || value > max) {
@@ -236,8 +230,6 @@ try {
                 updatePreview(dragging);
             }
         }
-        minus.onClick = function() { apply(Math.max(min, options[key] - step)); };
-        plus.onClick = function() { apply(Math.min(max, options[key] + step)); };
         slider.onChanging = function() { apply(Math.round(slider.value / step) * step, true); };
         slider.onChange = function() { apply(Math.round(slider.value / step) * step); };
         input.onChange = function() {
