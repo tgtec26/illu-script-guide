@@ -21,6 +21,7 @@ function drawIsometricBox() {
     var sizeStepMm = 0.05;
     var minSliderMm = sizeStepMm;
     var maxSliderMm = 20;
+    var maxWidthMm = 50;   // 가로만 더 길게
     var offsetStepMm = 0.2;
     var labelWidth = 90;   // 옵션 이름 열 폭 (세로 정렬용)
     var sliderWidth = 196; // 슬라이더 폭 (프리셋 버튼 행 오른쪽 끝에 맞춤)
@@ -53,7 +54,7 @@ function drawIsometricBox() {
     panel.alignChildren = ["fill", "top"];
     panel.margins = 20;
 
-    var widthControl = addSizeControl(panel, "가로 (Width):", "5");
+    var widthControl = addSizeControl(panel, "가로 (Width):", "5", maxWidthMm);
     var depthControl = addSizeControl(panel, "세로 (Depth):", "5");
     var heightControl = addSizeControl(panel, "높이 (Height):", "5");
     var inputW = widthControl.input;
@@ -526,7 +527,8 @@ function drawIsometricBox() {
         return {angleR: angleR, angleL: angleL, angleT: angleT};
     }
 
-    function addSizeControl(parent, label, defaultValue) {
+    function addSizeControl(parent, label, defaultValue, maxMm) {
+        maxMm = maxMm || maxSliderMm;
         var control = {};
         var row = parent.add("group");
         row.orientation = "row";
@@ -541,8 +543,9 @@ function drawIsometricBox() {
             undefined,
             valueToStep(parseSize(defaultValue)),
             valueToStep(minSliderMm),
-            valueToStep(maxSliderMm)
+            valueToStep(maxMm)
         );
+        control.maxMm = maxMm;
         control.scrollbar.preferredSize.width = sliderWidth;
         control.scrollbar.stepdelta = 1;
         control.scrollbar.jumpdelta = 10;
@@ -592,7 +595,7 @@ function drawIsometricBox() {
         }
 
         var step = valueToStep(value);
-        step = Math.max(valueToStep(minSliderMm), Math.min(valueToStep(maxSliderMm), step));
+        step = Math.max(valueToStep(minSliderMm), Math.min(valueToStep(control.maxMm), step));
         control.isSyncing = true;
         control.scrollbar.value = step;
         control.isSyncing = false;
@@ -638,16 +641,25 @@ function drawIsometricBox() {
     }
 
     function clearPreview() {
-        if (previewGroup === null) {
-            return;
+        if (previewGroup !== null) {
+            try { previewGroup.remove(); } catch (e) {
+                try { app.redraw(); previewGroup.remove(); } catch (e2) {}
+            }
+            previewGroup = null;
         }
-
+        // 생성 도중 예외로 참조를 못 받았거나 지우기에 실패한 미리보기 그룹을 이름으로 찾아 지운다
         try {
-            previewGroup.remove();
-        } catch (e) {}
-        previewGroup = null;
+            var groups = doc.groupItems;
+            for (var gi = groups.length - 1; gi >= 0; gi--) {
+                if (groups[gi].name === PREVIEW_GROUP_NAME) {
+                    try { groups[gi].remove(); } catch (e3) {}
+                }
+            }
+        } catch (e4) {}
     }
 }
+
+var PREVIEW_GROUP_NAME = "Isometric_Preview";
 
 function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY_mm, originX, originY, compressPct, liftPct, layerCount, shapeType, cutPct, selectResult) {
     // mm 단위를 pt 단위로 변환
@@ -1024,21 +1036,30 @@ function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY
 
     // 그룹 생성
     var group = doc.groupItems.add();
-    group.name = "Isometric Box (" + w_mm + "x" + d_mm + "x" + h_mm + "mm"
-        + (compress >= 99.5 ? "" : ", compress " + compress + "%")
-        + (layers > 1 ? ", " + layers + " layers" : "") + ")";
+    // 미리보기는 고정 이름을 붙여 참조가 죽어도 이름으로 찾아 지울 수 있게 한다
+    group.name = selectResult
+        ? "Isometric Box (" + w_mm + "x" + d_mm + "x" + h_mm + "mm"
+            + (compress >= 99.5 ? "" : ", compress " + compress + "%")
+            + (layers > 1 ? ", " + layers + " layers" : "") + ")"
+        : PREVIEW_GROUP_NAME;
 
     // 선과 면 스타일 지정
     var colorBlack = makeColor(doc, 0);
 
-    for (var di = 0; di < faceDefs.length; di++) {
-        var face = makeFace(doc, group, faceDefs[di].pts);
-        face.filled = true;
-        face.fillColor = makeColor(doc, faceDefs[di].white);
-        face.stroked = true;
-        face.strokeColor = colorBlack;
-        face.strokeWidth = 0.3;
-        face.strokeJoin = StrokeJoin.ROUNDENDJOIN; // 모서리가 깔끔하게 맞물리도록 둥근 조인 사용
+    try {
+        for (var di = 0; di < faceDefs.length; di++) {
+            var face = makeFace(doc, group, faceDefs[di].pts);
+            face.filled = true;
+            face.fillColor = makeColor(doc, faceDefs[di].white);
+            face.stroked = true;
+            face.strokeColor = colorBlack;
+            face.strokeWidth = 0.3;
+            face.strokeJoin = StrokeJoin.ROUNDENDJOIN; // 모서리가 깔끔하게 맞물리도록 둥근 조인 사용
+        }
+    } catch (eBuild) {
+        // 면을 만들다 실패하면 반쯤 만든 그룹이 문서에 남지 않도록 지운다
+        try { group.remove(); } catch (eRemove) {}
+        throw eBuild;
     }
 
     if (selectResult) {
