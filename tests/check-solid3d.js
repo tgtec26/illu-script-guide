@@ -15,6 +15,7 @@ function loadEngine(state) {
   const defaults = {
     shapeIndex: 0, widthMm: 20, depthMm: 20, heightMm: 20, sideCount: 6, baseRotation: 0, topRatio: 50,
     rotY: 45, rotX: 35.3, rotZ: 0, perspectiveOn: false, perspectiveMm: 300, hiddenMode: 1,
+    fillMode: 0, brightness: 70, contrast: 40, lightAzimuth: -35, lightElevation: 50,
     originX: 0, originY: 0,
   };
   const s = Object.assign({}, defaults, state);
@@ -22,6 +23,7 @@ function loadEngine(state) {
     var MM_TO_PT = 2.834645669, LINE_WIDTH_PT = 0.3, HIDDEN_DASH = [2, 1];
     var CURVE_SAMPLES = 144, MAX_ARC_SPAN = Math.PI / 4, FACING_EPSILON = 1e-9;
     var HIDDEN_NONE = 0, HIDDEN_DASHED = 1, HIDDEN_SOLID = 2;
+    var FILL_NONE = 0, FILL_FLAT = 1, FILL_LIT = 2;
     var SHAPES = [
       {id: "box"}, {id: "tetra", regular: true}, {id: "octa", regular: true}, {id: "dodeca", regular: true}, {id: "icosa", regular: true},
       {id: "prism", sides: true}, {id: "pyramid", sides: true}, {id: "frustum", sides: true, taper: true},
@@ -31,7 +33,10 @@ function loadEngine(state) {
     var paths = [];
     var doc = { groupItems: { add() { return makeGroup(); } }, documentColorSpace: "CMYK" };
     function makeGroup() {
-      var group = { removed: false, pathItems: { add() { var p = makePath(); paths.push(p); return p; } }, remove() { this.removed = true; } };
+      var group = { removed: false, name: "", groups: [],
+        pathItems: { add() { var p = makePath(); p.group = group; paths.push(p); return p; } },
+        groupItems: { add() { var g = makeGroup(); group.groups.push(g); return g; } },
+        remove() { this.removed = true; } };
       return group;
     }
     function makePath() {
@@ -42,9 +47,9 @@ function loadEngine(state) {
   `;
   const api = new Function("app", "PointType", "StrokeCap", "StrokeJoin", "DocumentColorSpace", "CMYKColor", "RGBColor",
     prelude + body + `
-    return { buildModel, beginView, collectParts, createSolid, projectModel, facingModel, splitCurve, findSilhouettes,
+    return { buildModel, beginView, collectParts, collectFills, createSolid, projectModel, facingModel, splitCurve, findSilhouettes,
       makeCurvePath, paths, setState(next) { ${Object.keys(s).map((k) => `if ("${k}" in next) ${k} = next.${k};`).join(" ")} } };`
-  )({ redraw() {} }, { SMOOTH: "smooth" }, { BUTTENDCAP: 1 }, { MITERENDJOIN: 1 }, { CMYK: "CMYK" }, function () {}, function () {});
+  )({ redraw() {} }, { SMOOTH: "smooth", CORNER: "corner" }, { BUTTENDCAP: 1 }, { MITERENDJOIN: 1 }, { CMYK: "CMYK" }, function () {}, function () {});
   return api;
 }
 
@@ -229,29 +234,135 @@ for (const id of Object.keys(topology)) {
   const applySaved = source.slice(source.indexOf("function applySavedSettings("), source.indexOf("// ---- 그리기"));
   const run = (raw) => {
     const prelude = `
-      var SIZE_STEP_MM = 0.1, MAX_SIZE_MM = 200, POSITION_LIMIT_MM = 100, HIDDEN_NONE = 0, HIDDEN_SOLID = 2;
+      var SIZE_STEP_MM = 0.1, MAX_SIZE_MM = 200, POSITION_LIMIT_MM = 100, HIDDEN_NONE = 0, HIDDEN_SOLID = 2, FILL_NONE = 0, FILL_LIT = 2;
       var SHAPES = new Array(11);
       var shapeIndex = 0, widthMm = 20, depthMm = 20, heightMm = 20, linkWidthDepth = true, sideCount = 6, baseRotation = 0, topRatio = 50;
       var rotY = 45, rotX = 35.3, rotZ = 0, perspectiveOn = false, perspectiveMm = 300, hiddenMode = 1, offsetXmm = 0, offsetYmm = 0;
+      var fillMode = 2, brightness = 70, contrast = 40, lightAzimuth = -35, lightElevation = 50;
       var PREF_KEY = "k";
       var app = { preferences: { getStringPreference() { return ${JSON.stringify(raw)}; } } };
       function parseNumber(text) { var n = String(text).replace(/,/g, ".").replace(/\\s/g, ""); if (n === "" || n === "+" || n === "-") return null; var v = Number(n); return isNaN(v) ? null : v; }
     `;
-    return new Function(prelude + applySaved + "\napplySavedSettings(); return {shapeIndex, widthMm, sideCount, rotX, perspectiveOn, hiddenMode, offsetYmm, linkWidthDepth};")();
+    return new Function(prelude + applySaved + "\napplySavedSettings(); return {shapeIndex, widthMm, sideCount, rotX, perspectiveOn, hiddenMode, offsetYmm, linkWidthDepth, fillMode, brightness, lightAzimuth};")();
   };
-  const restored = run(["v1", 8, 30, 30, 12.5, 0, 5, 45, 70, 30, 20, 5, 1, 400, 2, 3, -4].join("|"));
-  assert.deepStrictEqual(restored, { shapeIndex: 8, widthMm: 30, sideCount: 5, rotX: 20, perspectiveOn: true, hiddenMode: 2, offsetYmm: -4, linkWidthDepth: false });
-  const badVersion = run(["v0", 8, 30, 30, 12.5, 0, 5, 45, 70, 30, 20, 5, 1, 400, 2, 3, -4].join("|"));
-  assert.strictEqual(badVersion.shapeIndex, 0, "unknown version falls back to defaults");
-  const outOfRange = run(["v1", 99, 999, 30, 12.5, 1, 2, 45, 70, 30, 20, 5, 0, 400, 7, 3, -4].join("|"));
+  const restored = run(["v2", 8, 30, 30, 12.5, 0, 5, 45, 70, 30, 20, 5, 1, 400, 2, 3, -4, 1, 55, 20, 30, 60].join("|"));
+  assert.deepStrictEqual(restored, { shapeIndex: 8, widthMm: 30, sideCount: 5, rotX: 20, perspectiveOn: true, hiddenMode: 2, offsetYmm: -4, linkWidthDepth: false, fillMode: 1, brightness: 55, lightAzimuth: 30 });
+  const badVersion = run(["v1", 8, 30, 30, 12.5, 0, 5, 45, 70, 30, 20, 5, 1, 400, 2, 3, -4].join("|"));
+  assert.strictEqual(badVersion.shapeIndex, 0, "old version string falls back to defaults");
+  const outOfRange = run(["v2", 99, 999, 30, 12.5, 1, 2, 45, 70, 30, 20, 5, 0, 400, 7, 3, -4, 9, 150, 20, 200, 60].join("|"));
   assert.strictEqual(outOfRange.shapeIndex, 0, "bad shape index ignored");
   assert.strictEqual(outOfRange.widthMm, 20, "bad width ignored");
   assert.strictEqual(outOfRange.sideCount, 6, "bad side count ignored");
   assert.strictEqual(outOfRange.hiddenMode, 1, "bad hidden mode ignored");
+  assert.strictEqual(outOfRange.fillMode, 2, "bad fill mode ignored");
+  assert.strictEqual(outOfRange.brightness, 70, "bad brightness ignored");
+  assert.strictEqual(outOfRange.lightAzimuth, -35, "bad light azimuth ignored");
   const shortString = run("v1|1|2");
   assert.strictEqual(shortString.shapeIndex, 0, "short string ignored");
-  const saveFields = source.match(/var parts = \["v1"[^\]]*\]/)[0].split(",").length;
-  assert.strictEqual(saveFields, 17, "save/restore field count matches");
+  const saveFields = source.match(/var parts = \["v2"[^\]]*\]/)[0].split(",").length;
+  assert.strictEqual(saveFields, 22, "save/restore field count matches");
+}
+
+// 11. 면 음영: 등각 정육면체는 윗면 < 왼쪽 앞면 < 오른쪽 옆면 순으로 K가 커진다 (왼쪽 위 광원)
+{
+  const engine = loadEngine({ shapeIndex: shapeIndexOf("box"), rotY: 45, rotX: 35.3, fillMode: 2 });
+  const model = engine.buildModel();
+  engine.beginView(model);
+  const fills = engine.collectFills(model);
+  assert.strictEqual(fills.length, 3, "three lit faces on an isometric cube");
+  const byNormal = (nx, ny, nz) => fills.find((f) => {
+    const face = model.faces.find((mf) => mf.points === f.points);
+    return Math.abs(face.normal[0] - nx) < 1e-9 && Math.abs(face.normal[1] - ny) < 1e-9 && Math.abs(face.normal[2] - nz) < 1e-9;
+  });
+  const top = byNormal(0, 1, 0), front = byNormal(0, 0, 1), left = byNormal(-1, 0, 0);
+  assert.ok(top && front && left, "top, front and left faces are filled");
+  // rotY=45로 돌리면 -X면이 화면 왼쪽 앞, +Z면이 오른쪽 앞에 온다
+  assert.ok(top.k < left.k && left.k < front.k, `K order top(${top.k}) < left-front(${left.k}) < right-side(${front.k})`);
+  assert.ok(top.k >= 0 && front.k <= 100, "K within range");
+
+  // 밝기를 올리면 K가 내려가고, 대비 0이면 모두 같은 K
+  engine.setState({ brightness: 90 });
+  const brighter = engine.collectFills(model);
+  assert.ok(brighter.every((f, i) => f.k < fills[i].k), "brightness lowers K");
+  engine.setState({ brightness: 70, contrast: 0 });
+  const flatByContrast = engine.collectFills(model);
+  assert.ok(flatByContrast.every((f) => f.k === 30), "zero contrast gives mid K everywhere");
+  // 단일 음영도 같은 값
+  engine.setState({ contrast: 40, fillMode: 1 });
+  assert.ok(engine.collectFills(model).every((f) => f.k === 30), "flat mode uses mid K");
+  // 광원을 오른쪽으로 옮기면 좌우가 뒤집힌다
+  engine.setState({ fillMode: 2, lightAzimuth: 35 });
+  const rightLit = engine.collectFills(model);
+  const rTop = rightLit.find((f) => f.points === top.points), rLeft = rightLit.find((f) => f.points === left.points), rFront = rightLit.find((f) => f.points === front.points);
+  assert.ok(rTop.k < rFront.k && rFront.k < rLeft.k, "right light flips the side order");
+}
+
+// 12. 면 그룹 구조: 면 → 선 순서로 하위 그룹이 만들어지고, 면 패스는 선 없이 채워진다
+{
+  const engine = loadEngine({ shapeIndex: shapeIndexOf("box"), fillMode: 2, hiddenMode: 1 });
+  const group = engine.createSolid();
+  assert.strictEqual(group.groups.length, 2, "면·선 subgroups");
+  assert.strictEqual(group.groups[0].name, "면");
+  assert.strictEqual(group.groups[1].name, "선");
+  const fillPaths = engine.paths.filter((p) => p.group === group.groups[0]);
+  const linePaths = engine.paths.filter((p) => p.group === group.groups[1]);
+  assert.strictEqual(fillPaths.length, 3, "3 filled faces");
+  assert.strictEqual(linePaths.length, 12, "12 edges");
+  for (const p of fillPaths) {
+    assert.strictEqual(p.filled, true);
+    assert.strictEqual(p.stroked, false);
+    assert.strictEqual(p.closed, true);
+    assert.strictEqual(p.pathPoints.length, 4);
+  }
+  const noFill = loadEngine({ shapeIndex: shapeIndexOf("box"), fillMode: 0 });
+  const plain = noFill.createSolid();
+  assert.strictEqual(plain.groups.length, 1, "no fill → only 선 subgroup");
+}
+
+// 13. 곡면 채우기: 위에서 본 원기둥은 옆면 윤곽 + 윗면 뚜껑, 원뿔은 밑면 호 + 꼭짓점 윤곽
+{
+  const engine = loadEngine({ shapeIndex: shapeIndexOf("cylinder"), rotY: 0, rotX: 30, fillMode: 2, heightMm: 30 });
+  const model = engine.buildModel();
+  engine.beginView(model);
+  const fills = engine.collectFills(model);
+  assert.deepStrictEqual(fills.map((f) => f.kind), ["outline", "cap"], "cylinder from above: lateral + top cap");
+  assert.ok(fills[1].k < fills[0].k, "top cap brighter than lateral");
+  engine.createSolid();
+  const outline = engine.paths.find((p) => p.filled && p.pathPoints.length > 8);
+  assert.ok(outline, "lateral outline path");
+  // 윤곽은 아래 반원 호(5 앵커) + 위 반원 호(5 앵커), 이음점은 합쳐져 총 10개
+  assert.strictEqual(outline.pathPoints.length, 10, "outline anchor count");
+  const corners = outline.pathPoints.filter((pt) => pt.pointType === "corner");
+  assert.strictEqual(corners.length, 4, "four corner points where arcs meet silhouettes");
+  // 위아래 호의 끝점 X는 ±반지름 (실루엣 위치)
+  const r = 10 * 2.834645669;
+  for (const pt of corners) assert.ok(Math.abs(Math.abs(pt.anchor[0]) - r) < 1e-6, "corner at silhouette x");
+
+  const cone = loadEngine({ shapeIndex: shapeIndexOf("cone"), rotY: 0, rotX: 25, fillMode: 2, heightMm: 30 });
+  const coneModel = cone.buildModel();
+  cone.beginView(coneModel);
+  const coneFills = cone.collectFills(coneModel);
+  assert.deepStrictEqual(coneFills.map((f) => f.kind), ["outline"], "cone from above: lateral only (base hidden)");
+  cone.createSolid();
+  const coneOutline = cone.paths.find((p) => p.filled);
+  // 위에서 본 원뿔은 옆면이 반원보다 넓게 보이므로 호가 5구간(6 앵커) + 꼭짓점
+  assert.strictEqual(coneOutline.pathPoints.length, 7, "cone outline: 6 arc anchors + apex");
+  const apexes = coneOutline.pathPoints.filter((pt) => Math.abs(pt.anchor[0]) < 1e-6 && pt.anchor[1] > 0);
+  assert.strictEqual(apexes.length, 1, "apex appears once");
+  assert.strictEqual(apexes[0].pointType, "corner", "apex is a corner point");
+  assert.strictEqual(coneOutline.pathPoints.filter((pt) => pt.pointType === "corner").length, 3, "apex + two arc ends are corners");
+
+  const below = loadEngine({ shapeIndex: shapeIndexOf("cone"), rotY: 0, rotX: -90, fillMode: 2 });
+  const belowModel = below.buildModel();
+  below.beginView(belowModel);
+  assert.deepStrictEqual(below.collectFills(belowModel).map((f) => f.kind), ["cap"], "cone from straight below: base cap only");
+
+  const above = loadEngine({ shapeIndex: shapeIndexOf("cone"), rotY: 0, rotX: 90, fillMode: 2 });
+  const aboveModel = above.buildModel();
+  above.beginView(aboveModel);
+  const aboveFills = above.collectFills(aboveModel);
+  assert.deepStrictEqual(aboveFills.map((f) => f.kind), ["outline"], "cone from straight above: whole lateral");
+  assert.strictEqual(aboveFills[0].span.whole, true);
 }
 
 // 10. 필수 규칙: 메모 조각, 탭 헬퍼, 기본 버튼 제거, 미리보기 체크박스, 위치 이동 행
