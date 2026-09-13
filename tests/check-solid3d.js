@@ -365,6 +365,21 @@ for (const id of Object.keys(topology)) {
   assert.strictEqual(aboveFills[0].span.whole, true);
 }
 
+// 14. 커스텀 프리셋 문자열 파싱: 빈 칸·손상·범위 밖은 null, 정상은 복원
+{
+  const parsePart = source.slice(source.indexOf("function parseCustomPreset("), source.indexOf("// 위치는 도형을 다시 만들지 않고"));
+  const restorePart = source.slice(source.indexOf("function restoreNumber("), source.indexOf("// ---- 그리기"));
+  const parse = new Function(`
+    function parseNumber(text) { var n = String(text).replace(/,/g, ".").replace(/\\s/g, ""); if (n === "" || n === "+" || n === "-") return null; var v = Number(n); return isNaN(v) ? null : v; }
+    ${restorePart} ${parsePart} return parseCustomPreset;`)();
+  assert.deepStrictEqual(parse("45,35.3,0,1,300"), { y: 45, x: 35.3, z: 0, perspective: true, distance: 300 });
+  assert.strictEqual(parse(""), null, "empty slot");
+  assert.strictEqual(parse("1,2"), null, "short slot");
+  assert.strictEqual(parse("400,0,0,0,300"), null, "angle out of range");
+  assert.strictEqual(parse("0,0,0,0,10"), null, "distance out of range");
+  assert.ok(source.includes('PRESET_KEY = "ObjectSolid3D/presets"'), "presets use their own preference key");
+}
+
 // 10. 필수 규칙: 메모 조각, 탭 헬퍼, 기본 버튼 제거, 미리보기 체크박스, 위치 이동 행
 assert.ok(source.includes("illu_last_script.txt"), "last-script memo");
 assert.ok(source.includes("ui_tab_helper.jsxinc"), "tab helper loader");
