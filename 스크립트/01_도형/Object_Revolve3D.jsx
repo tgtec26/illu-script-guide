@@ -39,17 +39,28 @@ try {
     var RAY_LIFT = 1e-4;            // 열린 껍질에서 광선을 쏘기 전에 점을 바깥 법선 쪽으로 띄우는 비율 (× 모델 반지름)
     var PROBE_STEP = 1e-4;          // 모서리 점이 속으로 들어가는지 볼 때 시선 쪽으로 내딛는 비율 (× 모델 반지름)
     var MIN_SPAN_PT = 1.5;          // 이보다 짧은 보임/숨음 구간은 이웃에 합친다 (실루엣 첨점 근처의 떨림 제거)
+    var FACING_EPSILON = 1e-9;      // 이보다 작은 면 방향값은 옆에서 본 것(앞뒤 없음)으로 본다
+    var FILL_OVERLAP_PT = 0.15;     // 이웃 띠끼리 이만큼 겹쳐 채워 안티에일리어싱 실금을 없앤다. 선 두께(0.3) 절반 아래라 선 밑에 숨는다
     var LOCAL_FACETS = 3;           // 실루엣 점의 광선이 매끄럽게 이어진 이웃 조각 몇 개까지는 자기 곡면으로 보고 무시하는가
 
     var HIDDEN_NONE = 0;
     var HIDDEN_DASHED = 1;
     var HIDDEN_SOLID = 2;
 
+    var FILL_NONE = 0;
+    var FILL_FLAT = 1;
+    var FILL_LIT = 2;
+
     var rotX = 35.3;    // 위아래 기울기
     var rotZ = 0;       // 화면 회전
     var perspectiveOn = false;
     var perspectiveMm = 300;
     var hiddenMode = HIDDEN_DASHED;
+    var fillMode = FILL_LIT;
+    var brightness = 70;       // 100 - K 중간값
+    var contrast = 40;         // 가장 밝은 면과 가장 어두운 면의 K 차이
+    var lightAzimuth = -35;    // 광원 방위 (°). 음수 = 왼쪽
+    var lightElevation = 50;   // 광원 높이 (°). 90 = 바로 위
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
@@ -167,7 +178,7 @@ try {
             updatePreview();
         });
 
-    var linePanel = win.add("panel", undefined, "선");
+    var linePanel = win.add("panel", undefined, "선과 면");
     linePanel.orientation = "column";
     linePanel.alignChildren = "fill";
     var hiddenRow = linePanel.add("group");
@@ -176,6 +187,35 @@ try {
     var hiddenList = hiddenRow.add("dropdownlist", undefined, ["표시 안 함", "파선", "실선"]);
     hiddenList.selection = hiddenMode;
     hiddenList.preferredSize.width = SLIDER_WIDTH + 60;
+
+    var fillRow = linePanel.add("group");
+    fillRow.alignChildren = ["left", "center"];
+    var fillCaption = fillRow.add("statictext", undefined, "면 채우기:");
+    fillCaption.preferredSize.width = LABEL_WIDTH;
+    fillCaption.helpTip = "광원 자동: 화면 기준 광원으로 단면 조각마다 K값을 정한다. 곡면은 조각 수만큼 단계가 진다";
+    var fillList = fillRow.add("dropdownlist", undefined, ["없음", "단일 음영", "광원 자동"]);
+    fillList.selection = fillMode;
+    fillList.preferredSize.width = SLIDER_WIDTH + 60;
+    var brightnessControl = addNumberRow(linePanel, "밝기 (%)", brightness, 0, 100, 1, 0,
+        "면 K값의 중간. 100이면 K0(흰색), 0이면 K100", function(value) {
+            brightness = value;
+            updatePreview();
+        });
+    var contrastControl = addNumberRow(linePanel, "대비 (%)", contrast, 0, 100, 1, 0,
+        "밝은 면과 어두운 면의 K 차이", function(value) {
+            contrast = value;
+            updatePreview();
+        });
+    var lightAzimuthControl = addNumberRow(linePanel, "광원 방위 (°)", lightAzimuth, -90, 90, 1, 0,
+        "화면 기준 광원 좌우 위치. 음수 = 왼쪽, 0 = 정면", function(value) {
+            lightAzimuth = value;
+            updatePreview();
+        });
+    var lightElevationControl = addNumberRow(linePanel, "광원 높이 (°)", lightElevation, 0, 90, 1, 0,
+        "화면 기준 광원 높이. 90 = 바로 위", function(value) {
+            lightElevation = value;
+            updatePreview();
+        });
 
     var positionPanel = win.add("panel", undefined, "위치");
     positionPanel.orientation = "column";
@@ -207,6 +247,11 @@ try {
         hiddenMode = hiddenList.selection ? hiddenList.selection.index : HIDDEN_NONE;
         updatePreview();
     };
+    fillList.onChange = function() {
+        fillMode = fillList.selection ? fillList.selection.index : FILL_NONE;
+        syncFillRows();
+        updatePreview();
+    };
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -230,6 +275,7 @@ try {
     };
     cancelButton.onClick = function() { win.close(0); };
 
+    syncFillRows();
     perspectiveControl.row.enabled = perspectiveOn;
     updatePreview();
 
@@ -321,6 +367,13 @@ try {
         input.onChange = function() { commit(input.text); };
         control.set = function(newValue, silent) { commit(newValue, silent); };
         return control;
+    }
+
+    function syncFillRows() {
+        brightnessControl.row.enabled = fillMode !== FILL_NONE;
+        contrastControl.row.enabled = fillMode === FILL_LIT;
+        lightAzimuthControl.row.enabled = fillMode === FILL_LIT;
+        lightElevationControl.row.enabled = fillMode === FILL_LIT;
     }
 
     function setView(x, z) {
@@ -442,7 +495,8 @@ try {
     }
 
     function saveSettings() {
-        var parts = ["v1", rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode, offsetXmm, offsetYmm];
+        var parts = ["v2", rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode, offsetXmm, offsetYmm,
+            fillMode, brightness, contrast, lightAzimuth, lightElevation];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (saveError) {}
     }
 
@@ -451,7 +505,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (readError) { return; }
         if (!raw) return;
         var p = String(raw).split("|");
-        if (p[0] !== "v1" || p.length !== 8) return;
+        if (p[0] !== "v2" || p.length !== 13) return;
         rotX = restoreNumber(p[1], rotX, -180, 180);
         rotZ = restoreNumber(p[2], rotZ, -180, 180);
         perspectiveOn = p[3] === "1";
@@ -459,6 +513,11 @@ try {
         hiddenMode = restoreInteger(p[5], hiddenMode, HIDDEN_NONE, HIDDEN_SOLID);
         offsetXmm = restoreNumber(p[6], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
         offsetYmm = restoreNumber(p[7], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        fillMode = restoreInteger(p[8], fillMode, FILL_NONE, FILL_LIT);
+        brightness = restoreNumber(p[9], brightness, 0, 100);
+        contrast = restoreNumber(p[10], contrast, 0, 100);
+        lightAzimuth = restoreNumber(p[11], lightAzimuth, -90, 90);
+        lightElevation = restoreNumber(p[12], lightElevation, 0, 90);
     }
 
     function restoreNumber(text, fallback, minimum, maximum) {
@@ -573,9 +632,16 @@ try {
             return null;
         }
         try {
-            // 숨은선을 먼저 깔고 보이는 선을 위에 얹는다
-            if (hiddenMode !== HIDDEN_NONE) drawParts(group, parts.hidden, hiddenMode === HIDDEN_DASHED);
-            drawParts(group, parts.visible, false);
+            // 쌓는 순서: 면 → 숨은선 → 보이는 선. 숨은선이 면에 가려지지 않는다
+            if (fillMode !== FILL_NONE) {
+                var fillGroup = group.groupItems.add();
+                fillGroup.name = "면";
+                drawFills(fillGroup, collectFills(model));
+            }
+            var lineGroup = group.groupItems.add();
+            lineGroup.name = "선";
+            if (hiddenMode !== HIDDEN_NONE) drawParts(lineGroup, parts.hidden, hiddenMode === HIDDEN_DASHED);
+            drawParts(lineGroup, parts.visible, false);
         } catch (drawError) {
             try { group.remove(); } catch (cleanupError) {}
             return null;
@@ -1496,6 +1562,252 @@ try {
         var before = projectModel(curve.pointAt(u - h));
         var after = projectModel(curve.pointAt(u + h));
         return [(after[0] - before[0]) / (2 * h), (after[1] - before[1]) / (2 * h)];
+    }
+
+    // ---- 면 음영 -------------------------------------------------------------
+    // 광원은 화면(보는 사람) 기준으로 고정된다. 물체를 돌리면 빛을 받는 면이 바뀐다.
+    // 면 = 단면 조각을 돌린 띠. 띠마다 앞을 보는 구간(실루엣 사이)만 윤곽으로 채우고, 먼 띠부터 그려 가까운 띠가 덮게 한다.
+    // 띠 하나는 앞뒤로 얇아 무게중심 깊이로 정렬해도 대개 맞다. 스치는 각도에서 어긋날 수 있다
+
+    function lightVector() {
+        var az = lightAzimuth * Math.PI / 180;
+        var el = lightElevation * Math.PI / 180;
+        return [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)];
+    }
+
+    // 뷰 좌표 법선 → 0(어두움)~1(밝음). 반쪽 램버트라 빛을 등진 면도 서로 구분된다
+    function shadeOfViewNormal(viewNormal) {
+        return 0.5 + 0.5 * dot(viewNormal, lightVector());
+    }
+
+    function kFromShade(shade) {
+        var midK = 100 - brightness;
+        if (fillMode === FILL_FLAT) return Math.round(clamp(midK, 0, 100));
+        return Math.round(clamp(midK - (shade - 0.5) * contrast, 0, 100));
+    }
+
+    // 채울 띠 목록 (먼 것부터): {kind: "outline"|"ring", ..., k, depth}
+    function collectFills(model) {
+        var fills = [];
+        for (var i = 0; i < model.segments.length; i++) {
+            var seg = model.segments[i];
+            var portions = facingPortions(model, seg);
+            for (var k = 0; k < portions.length; k++) {
+                var fill = makeBandFill(model, seg, portions[k]);
+                if (fill !== null) fills.push(fill);
+            }
+        }
+        fills.sort(function(a, b) { return a.depth - b.depth; });
+        return fills;
+    }
+
+    // 띠에서 한쪽 면이 보는 사람을 향하는 t 구간. {t0, t1, full, side}. side = +1 바깥면, -1 안쪽면(열린 껍질만)
+    function facingPortions(model, seg) {
+        var portions = [];
+        var dy = seg.y1 - seg.y0;
+        var roots = Math.abs(dy) < 1e-9 ? [] : silhouetteRoots(seg);
+        var facing;
+        if (roots.length < 2) {
+            var p0 = segmentPoint(seg, 0, 0.5);
+            facing = facingModel(p0, outwardNormal(model, seg, 0, p0));
+            if (Math.abs(facing) <= FACING_EPSILON) return portions;
+            if (facing > 0) portions.push({t0: 0, t1: 2 * Math.PI, full: true, side: 1});
+            else if (!profileClosed) portions.push({t0: 0, t1: 2 * Math.PI, full: true, side: -1});
+            return portions;
+        }
+        var tA = Math.min(roots[0], roots[1]);
+        var tB = Math.max(roots[0], roots[1]);
+        var pm = segmentPoint(seg, (tA + tB) / 2, 0.5);
+        facing = facingModel(pm, outwardNormal(model, seg, (tA + tB) / 2, pm));
+        var inside = {t0: tA, t1: tB, full: false};
+        var outside = {t0: tB, t1: tA + 2 * Math.PI, full: false};
+        var front = facing >= 0 ? inside : outside;
+        var back = facing >= 0 ? outside : inside;
+        front.side = 1;
+        back.side = -1;
+        portions.push(front);
+        if (!profileClosed) portions.push(back);
+        return portions;
+    }
+
+    function makeBandFill(model, seg, portion) {
+        var samples = 8;
+        var shadeSum = 0;
+        var depthSum = 0;
+        var i;
+        for (i = 0; i < samples; i++) {
+            var t = portion.t0 + (portion.t1 - portion.t0) * (i + 0.5) / samples;
+            var p = segmentPoint(seg, t, 0.5);
+            var n = scale(outwardNormal(model, seg, t, p), portion.side);
+            shadeSum += shadeOfViewNormal(toView(n));
+            depthSum += toView(segmentPoint(seg, t, 0))[2] + toView(segmentPoint(seg, t, 1))[2];
+        }
+        var fill = {k: kFromShade(shadeSum / samples), depth: depthSum / (2 * samples)};
+        var hasBottom = seg.r0 > AXIS_EPSILON;
+        var hasTop = seg.r1 > AXIS_EPSILON;
+        // 띠를 양끝(s)과 양옆(t)으로 조금 늘려 이웃 띠와 겹치게 한다. 꼭짓점 쪽은 늘리지 않는다
+        var bandLength = Math.sqrt((seg.r1 - seg.r0) * (seg.r1 - seg.r0) + (seg.y1 - seg.y0) * (seg.y1 - seg.y0));
+        var extend = Math.min(FILL_OVERLAP_PT, 0.1 * bandLength) / bandLength;
+        var s0 = hasBottom ? -extend : 0;
+        var s1 = hasTop ? 1 + extend : 1;
+        var rBottom = seg.r0 + (seg.r1 - seg.r0) * s0;
+        var rTop = seg.r0 + (seg.r1 - seg.r0) * s1;
+        var bottom = ringCurve(rBottom, seg.y0 + (seg.y1 - seg.y0) * s0);
+        var top = ringCurve(rTop, seg.y0 + (seg.y1 - seg.y0) * s1);
+        if (portion.full) {
+            // 온 바퀴: 고리(두 테두리 사이) 또는 원판(한쪽이 꼭짓점)
+            fill.kind = "ring";
+            fill.outer = hasBottom ? bottom : top;
+            fill.inner = (hasBottom && hasTop) ? top : null;
+            return fill;
+        }
+        var span = portion.t1 - portion.t0;
+        var dtBottom = hasBottom ? Math.min(FILL_OVERLAP_PT / rBottom, (2 * Math.PI - span) / 2) : 0;
+        var dtTop = hasTop ? Math.min(FILL_OVERLAP_PT / rTop, (2 * Math.PI - span) / 2) : 0;
+        // 아래 테두리 호 → 모선 → 위 테두리 호(역방향) → 모선. 꼭짓점 쪽 호는 점 하나라 뺀다
+        var segments = [];
+        if (hasBottom) segments.push({kind: "arc", curve: bottom, t0: portion.t0 - dtBottom, t1: portion.t1 + dtBottom});
+        segments.push({kind: "line", a: segmentPoint(seg, portion.t1 + dtBottom, s0), b: segmentPoint(seg, portion.t1 + dtTop, s1)});
+        if (hasTop) segments.push({kind: "arc", curve: top, t0: portion.t1 + dtTop, t1: portion.t0 - dtTop});
+        segments.push({kind: "line", a: segmentPoint(seg, portion.t0 - dtTop, s1), b: segmentPoint(seg, portion.t0 - dtBottom, s0)});
+        fill.kind = "outline";
+        fill.segments = segments;
+        return fill;
+    }
+
+    function ringCurve(r, y) {
+        return {pointAt: function(t) { return ringPoint(r, y, t); }};
+    }
+
+    function drawFills(group, fills) {
+        for (var i = 0; i < fills.length; i++) {
+            var fill = fills[i];
+            if (fill.kind === "ring") {
+                drawRing(group, fill.outer, fill.inner, fill.k);
+            } else {
+                applyFill(makeOutlinePath(group, fill.segments), fill.k);
+            }
+        }
+    }
+
+    // 고리: 복합 패스에 두 원을 넣고 짝수-홀수 규칙으로 구멍을 낸다. 안쪽 원이 없으면 원판
+    function drawRing(group, outerCurve, innerCurve, k) {
+        if (innerCurve === null) {
+            applyFill(makeCurvePath(group, outerCurve, 0, 2 * Math.PI, true), k);
+            return;
+        }
+        var compound = null;
+        try { compound = group.compoundPathItems.add(); } catch (compoundError) { compound = null; }
+        if (compound === null) {
+            applyFill(makeCurvePath(group, outerCurve, 0, 2 * Math.PI, true), k);
+            return;
+        }
+        var outerPath = makeCurvePath(compound, outerCurve, 0, 2 * Math.PI, true);
+        var innerPath = makeCurvePath(compound, innerCurve, 0, 2 * Math.PI, true);
+        applyFill(outerPath, k);
+        applyFill(innerPath, k);
+        try { outerPath.evenodd = true; } catch (evenOddError) {}
+        try { innerPath.evenodd = true; } catch (evenOddError2) {}
+    }
+
+    // 호와 직선을 이어 붙인 닫힌 패스. 이음점은 앞 구간의 왼손잡이·뒤 구간의 오른손잡이를 합친다
+    function makeOutlinePath(group, segments) {
+        var nodes = [];
+        var i;
+        var k;
+        for (i = 0; i < segments.length; i++) {
+            var seg = segments[i];
+            var pieces = [];
+            if (seg.kind === "line") {
+                var a = projectModel(seg.a);
+                var b = projectModel(seg.b);
+                pieces.push({anchor: a, left: a, right: a});
+                pieces.push({anchor: b, left: b, right: b});
+            } else {
+                var total = seg.t1 - seg.t0;
+                var count = arcSegmentCount(total);
+                var delta = total / count;
+                var handleFactor = 4 / 3 * Math.tan(delta / 4);
+                for (k = 0; k <= count; k++) {
+                    var t = seg.t0 + delta * k;
+                    var anchor = projectModel(seg.curve.pointAt(t));
+                    var tangent = screenTangent(seg.curve, t);
+                    pieces.push({
+                        anchor: anchor,
+                        left: k === 0 ? anchor : [anchor[0] - tangent[0] * handleFactor, anchor[1] - tangent[1] * handleFactor],
+                        right: k === count ? anchor : [anchor[0] + tangent[0] * handleFactor, anchor[1] + tangent[1] * handleFactor]
+                    });
+                }
+            }
+            for (k = 0; k < pieces.length; k++) {
+                var last = nodes.length > 0 ? nodes[nodes.length - 1] : null;
+                if (last !== null && k === 0 && samePoint(last.anchor, pieces[k].anchor)) {
+                    last.right = pieces[k].right;
+                } else {
+                    nodes.push(pieces[k]);
+                }
+            }
+        }
+        // 닫힌 고리: 끝점이 시작점과 같으면 합친다
+        if (nodes.length > 1 && samePoint(nodes[0].anchor, nodes[nodes.length - 1].anchor)) {
+            nodes[0].left = nodes[nodes.length - 1].left;
+            nodes.pop();
+        }
+        var anchors = [];
+        for (i = 0; i < nodes.length; i++) anchors.push(nodes[i].anchor);
+        var path = group.pathItems.add();
+        path.setEntirePath(anchors);
+        path.closed = true;
+        for (i = 0; i < nodes.length; i++) {
+            var point = path.pathPoints[i];
+            point.leftDirection = nodes[i].left;
+            point.rightDirection = nodes[i].right;
+            point.pointType = isCornerNode(nodes[i]) ? PointType.CORNER : PointType.SMOOTH;
+        }
+        return path;
+    }
+
+    // 한쪽 핸들이 없거나 두 핸들이 일직선이 아니면 모서리점이다
+    function isCornerNode(node) {
+        var lx = node.left[0] - node.anchor[0];
+        var ly = node.left[1] - node.anchor[1];
+        var rx = node.right[0] - node.anchor[0];
+        var ry = node.right[1] - node.anchor[1];
+        var leftLen = Math.sqrt(lx * lx + ly * ly);
+        var rightLen = Math.sqrt(rx * rx + ry * ry);
+        if (leftLen < 1e-6 || rightLen < 1e-6) return true;
+        // 반대 방향으로 나란하면 sin ≈ 0, cos ≈ -1
+        var sine = (lx * ry - ly * rx) / (leftLen * rightLen);
+        var cosine = (lx * rx + ly * ry) / (leftLen * rightLen);
+        return Math.abs(sine) > 0.01 || cosine > 0;
+    }
+
+    function samePoint(a, b) {
+        return Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6;
+    }
+
+    function applyFill(path, k) {
+        path.stroked = false;
+        path.filled = true;
+        try { path.fillColor = makeKColor(k); } catch (fillError) {}
+    }
+
+    function makeKColor(k) {
+        var color;
+        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+            color = new CMYKColor();
+            color.cyan = 0;
+            color.magenta = 0;
+            color.yellow = 0;
+            color.black = k;
+        } else {
+            color = new RGBColor();
+            var gray = Math.round(255 * (1 - k / 100));
+            color.red = gray;
+            color.green = gray;
+            color.blue = gray;
+        }
+        return color;
     }
 
     // ---- 벡터·숫자 도우미 ---------------------------------------------------

@@ -14,21 +14,25 @@ function loadEngine(state) {
   const body = source.slice(start, end);
   const defaults = {
     rotX: 35.3, rotZ: 0, perspectiveOn: false, perspectiveMm: 300, hiddenMode: 1,
+    fillMode: 0, brightness: 70, contrast: 40, lightAzimuth: -35, lightElevation: 50,
     originX: 0, originY: 0, axisAngle: Math.PI / 2, profilePoints: [], profileClosed: true,
   };
   const s = Object.assign({}, defaults, state);
   const prelude = `
     var MM_TO_PT = 2.834645669, LINE_WIDTH_PT = 0.3, HIDDEN_DASH = [2, 1];
     var CURVE_PIECES = 12, CORNER_COS = Math.cos(2 * Math.PI / 180), CURVE_SAMPLES = 144;
-    var MAX_ARC_SPAN = Math.PI / 4, SMALL_ARC = 0.5, AXIS_EPSILON = 0.01, RAY_LIFT = 1e-4, PROBE_STEP = 1e-4, MIN_SPAN_PT = 1.5, LOCAL_FACETS = 3;
+    var MAX_ARC_SPAN = Math.PI / 4, SMALL_ARC = 0.5, AXIS_EPSILON = 0.01, RAY_LIFT = 1e-4, PROBE_STEP = 1e-4, MIN_SPAN_PT = 1.5, LOCAL_FACETS = 3, FACING_EPSILON = 1e-9, FILL_OVERLAP_PT = 0.15;
+    var FILL_NONE = 0, FILL_FLAT = 1, FILL_LIT = 2;
     var HIDDEN_NONE = 0, HIDDEN_DASHED = 1, HIDDEN_SOLID = 2;
     ${Object.keys(s).map((k) => `var ${k} = ${JSON.stringify(s[k])};`).join("\n")}
     var viewMatrix = null, eyeZ = 0, strokeColor = null;
     var paths = [];
     var doc = { groupItems: { add() { return makeGroup(); } }, documentColorSpace: "CMYK" };
     function makeGroup() {
-      var group = { removed: false, name: "",
+      var group = { removed: false, name: "", groups: [],
         pathItems: { add() { var p = makePath(); p.group = group; paths.push(p); return p; } },
+        groupItems: { add() { var g = makeGroup(); group.groups.push(g); return g; } },
+        compoundPathItems: { add() { var c = makeGroup(); c.compound = true; group.groups.push(c); return c; } },
         remove() { this.removed = true; } };
       return group;
     }
@@ -41,7 +45,7 @@ function loadEngine(state) {
   const api = new Function("app", "PointType", "StrokeCap", "StrokeJoin", "DocumentColorSpace", "CMYKColor", "RGBColor",
     prelude + body + `
     return { flattenProfile, buildModel, beginView, collectParts, createSolid, projectModel, occluded, silhouetteRoots,
-      findSilhouettes, locallyHidden, jointNormal, outwardNormal, viewDirectionAt, probeInside, chainCurve, splitCurve, mergeShortSpans, spanScreenLength, insideProfile, paths, setState(next) { ${Object.keys(s).map((k) => `if ("${k}" in next) ${k} = next.${k};`).join(" ")} } };`
+      findSilhouettes, locallyHidden, jointNormal, outwardNormal, viewDirectionAt, probeInside, chainCurve, splitCurve, mergeShortSpans, spanScreenLength, insideProfile, collectFills, paths, setState(next) { ${Object.keys(s).map((k) => `if ("${k}" in next) ${k} = next.${k};`).join(" ")} } };`
   )({ redraw() {} }, { SMOOTH: "smooth", CORNER: "corner" }, { BUTTENDCAP: 1 }, { MITERENDJOIN: 1 }, { CMYK: "CMYK" }, function () {}, function () {});
   return api;
 }
@@ -288,6 +292,64 @@ function circleAnchors(cx, cy, R) {
   engine.beginView(model);
   const top = engine.projectModel([0, 15, 0]);
   assert.ok(near(top[0], 15 * Math.cos(angle)) && near(top[1], 15 * Math.sin(angle)), `axis direction kept: ${top}`);
+}
+
+// 10. 면 채우기: 원기둥은 윗면 원판 + 옆면 띠, 먼 것부터. 단일 음영이면 K가 모두 같다
+{
+  const engine = loadEngine({ rotX: 30, fillMode: 2 });
+  const rect = engine.flattenProfile([corner(0, -15), corner(20, -15), corner(20, 15), corner(0, 15)], true);
+  engine.setState({ profilePoints: rect.points });
+  const model = engine.buildModel();
+  engine.beginView(model);
+  const fills = engine.collectFills(model);
+  assert.strictEqual(fills.length, 2, "top disc and the front half of the wall");
+  const ring = fills.filter((f) => f.kind === "ring")[0];
+  const wall = fills.filter((f) => f.kind === "outline")[0];
+  assert.ok(ring && ring.inner === null, "top disc is a plain disc");
+  assert.ok(near(ring.outer.pointAt(0)[1], 15, 0.2), "disc sits at the top");
+  assert.strictEqual(wall.segments.length, 4, "arc, generator, arc, generator");
+  for (let i = 1; i < fills.length; i++) assert.ok(fills[i - 1].depth <= fills[i].depth, "sorted far to near");
+  assert.ok(ring.k < wall.k, "top lit from above is lighter than the wall");
+  engine.setState({ fillMode: 1 });
+  const flat = engine.collectFills(model);
+  assert.ok(flat.every((f) => f.k === 30), "flat mode: K = 100 - brightness");
+  const group = engine.createSolid();
+  assert.ok(group !== null);
+  assert.strictEqual(group.groups.length, 2, "면 group + 선 group");
+  assert.ok(engine.paths.filter((p) => p.filled).length === 2);
+  assert.ok(engine.paths.filter((p) => p.filled).every((p) => !p.stroked));
+}
+
+// 11. 빨대·도넛·열린 껍질 채우기
+{
+  const engine = loadEngine({ rotX: 30, fillMode: 2 });
+  const tube = engine.flattenProfile([corner(10, -15), corner(20, -15), corner(20, 15), corner(10, 15)], true);
+  engine.setState({ profilePoints: tube.points });
+  let model = engine.buildModel();
+  engine.beginView(model);
+  let fills = engine.collectFills(model);
+  const annulus = fills.filter((f) => f.kind === "ring" && f.inner !== null);
+  assert.strictEqual(annulus.length, 1, "top annulus");
+  assert.strictEqual(fills.filter((f) => f.kind === "outline").length, 2, "outer wall front + inner wall far side");
+  const innerWall = fills.filter((f) => f.kind === "outline").sort((a, b) => a.depth - b.depth)[0];
+  assert.ok(innerWall.depth < annulus[0].depth, "inner far wall is drawn before the annulus");
+
+  const torus = engine.flattenProfile(circleAnchors(25, 0, 10), true);
+  engine.setState({ profilePoints: torus.points, rotX: 35.3 });
+  model = engine.buildModel();
+  engine.beginView(model);
+  fills = engine.collectFills(model);
+  assert.ok(fills.length > 20 && fills.length < 48, `only front-facing bands are filled, got ${fills.length}`);
+  assert.ok(fills.every((f) => f.k >= 0 && f.k <= 100));
+  const ks = fills.map((f) => f.k);
+  assert.ok(Math.max(...ks) - Math.min(...ks) >= 20, "lit torus spans a range of tones");
+
+  const shell = engine.flattenProfile([corner(5, 20), corner(20, -20)], false);
+  engine.setState({ profilePoints: shell.points, profileClosed: false, rotX: 20 });
+  model = engine.buildModel();
+  engine.beginView(model);
+  fills = engine.collectFills(model);
+  assert.strictEqual(fills.length, 2, "open cone shell: outside front half + inside back half");
 }
 
 console.log("check-revolve3d: ok");
