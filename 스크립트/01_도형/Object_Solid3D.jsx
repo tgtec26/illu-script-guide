@@ -56,7 +56,8 @@ try {
         {id: "frustum", label: "각뿔대", sides: true, taper: true},
         {id: "cylinder", label: "원기둥"},
         {id: "cone", label: "원뿔"},
-        {id: "conefrustum", label: "원뿔대", taper: true}
+        {id: "conefrustum", label: "원뿔대", taper: true},
+        {id: "tube", label: "빨대 (속 빈 원기둥)", taper: true, tube: true}
     ];
 
     var shapeIndex = 0;
@@ -394,7 +395,7 @@ try {
             reset.helpTip = "0으로 초기화";
         }
 
-        var control = {row: row, input: input, slider: slider, reset: reset, value: value};
+        var control = {row: row, caption: caption, input: input, slider: slider, reset: reset, value: value};
 
         function commit(raw, silent) {
             var parsed = parseNumber(raw);
@@ -426,6 +427,8 @@ try {
         sidesControl.row.enabled = shape.sides === true;
         baseRotationControl.row.enabled = shape.sides === true;
         topRatioControl.row.enabled = shape.taper === true;
+        // 빨대는 같은 행으로 뚫린 내경을 정한다
+        topRatioControl.caption.text = shape.tube === true ? "내경 비율 (%):" : "윗면 비율 (%):";
         // 정다면체는 가로 하나로 크기를 정한다
         depthControl.row.enabled = shape.regular !== true;
         heightControl.row.enabled = shape.regular !== true;
@@ -667,6 +670,23 @@ try {
         return out;
     }
 
+    // 회전 행렬은 직교 행렬이라 전치가 역행렬이다
+    function toModel(v) {
+        var m = viewMatrix;
+        return [
+            m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2],
+            m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2],
+            m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2]
+        ];
+    }
+
+    // 모델 좌표의 점에서 눈을 향하는 단위 벡터
+    function viewDirectionAt(point) {
+        if (!perspectiveOn) return toModel([0, 0, 1]);
+        var vp = toView(point);
+        return normalize(toModel([-vp[0], -vp[1], eyeZ - vp[2]]));
+    }
+
     function toView(p) {
         var m = viewMatrix;
         return [
@@ -728,6 +748,11 @@ try {
             var silhouettes = findSilhouettes(model.round);
             for (i = 0; i < silhouettes.length; i++) {
                 parts.visible.push({kind: "line", a: silhouettes[i].a, b: silhouettes[i].b});
+                // 빨대 안쪽 벽의 모선은 벽에 가려 늘 숨은선이다 (같은 t에서 안쪽 반지름으로)
+                if (model.tube) {
+                    parts.hidden.push({kind: "line", a: model.tube.innerPoint(silhouettes[i].t, 0),
+                        b: model.tube.innerPoint(silhouettes[i].t, 1)});
+                }
             }
         }
 
@@ -825,12 +850,85 @@ try {
             }
             fills.push({kind: "outline", round: round, span: lateral, k: kFromShade(shadeSum / shadeSamples)});
         }
+        if (model.tube) {
+            collectTubeFills(model, fills);
+            return;
+        }
         // 뚜껑: 앞을 보는 것만
         for (i = 0; i < model.curves.length; i++) {
             var cap = model.curves[i].refsAt(0)[0];
             if (facingModel(cap.p, cap.n) <= FACING_EPSILON) continue;
             fills.push({kind: "cap", curve: model.curves[i], k: kFromShade(shadeOfViewNormal(toView(cap.n)))});
         }
+    }
+
+    // 빨대: 보는 쪽 끝은 고리(바깥 원 - 안쪽 원), 구멍 안은 먼 안쪽 벽만 채우고 관통해 보이는 부분은 비운다
+    function collectTubeFills(model, fills) {
+        var tube = model.tube;
+        var round = model.round;
+        var nearEnd = -1;
+        var i;
+        if (facingModel([0, tube.yTop, 0], [0, 1, 0]) > FACING_EPSILON) nearEnd = 1;
+        else if (facingModel([0, tube.yBottom, 0], [0, -1, 0]) > FACING_EPSILON) nearEnd = 0;
+        if (nearEnd < 0) return;
+        var farEnd = 1 - nearEnd;
+        var capNormal = nearEnd === 1 ? [0, 1, 0] : [0, -1, 0];
+        // curves: [0] 바깥 아래, [1] 바깥 위, [2] 안쪽 아래, [3] 안쪽 위
+        var nearOuter = model.curves[nearEnd];
+        var nearInner = model.curves[2 + nearEnd];
+        var farInner = model.curves[2 + farEnd];
+        fills.push({kind: "annulus", outer: nearOuter, inner: nearInner, k: kFromShade(shadeOfViewNormal(toView(capNormal)))});
+
+        // 안쪽 벽 톤: 바깥 법선이 뒤를 보는 띠(= 안쪽 벽이 보이는 띠)에서 안쪽 법선(-n)으로 평균
+        var shadeSum = 0;
+        var shadeCount = 0;
+        for (i = 0; i < 48; i++) {
+            var t = 2 * Math.PI * (i + 0.5) / 48;
+            var n = round.normalAt(t, 0.5);
+            if (facingModel(round.pointAt(t, 0.5), n) >= 0) continue;
+            shadeSum += shadeOfViewNormal(toView(scale(n, -1)));
+            shadeCount++;
+        }
+        if (shadeCount === 0) return;
+        var wallK = kFromShade(shadeSum / shadeCount);
+
+        // 가까운 안쪽 테두리 중 먼 구멍과 겹치는 호(렌즈 경계)를 찾는다
+        var lensCurve = {
+            pointAt: nearInner.pointAt,
+            visibilityAt: function(u) { return tube.ratio - exitRadius(tube, nearInner.pointAt(u), farEnd, -1) + 1e-9; },
+            tMin: 0,
+            tMax: 2 * Math.PI,
+            closed: true
+        };
+        var nearSpans = splitCurve(lensCurve);
+        var farSpans = splitCurve(farInner);
+        var wallSpan = null;
+        var lensSpan = null;
+        for (i = 0; i < nearSpans.length; i++) {
+            if (!nearSpans[i].visible) wallSpan = nearSpans[i];
+        }
+        for (i = 0; i < farSpans.length; i++) {
+            if (farSpans[i].visible) lensSpan = farSpans[i];
+        }
+        if (wallSpan === null) return;                       // 축 방향으로 보면 구멍이 그대로 뚫려 보인다
+        if (wallSpan.closed || lensSpan === null || lensSpan.closed) {
+            // 먼 구멍이 전혀 안 보인다: 안쪽 원 전체가 벽
+            fills.push({kind: "cap", curve: nearInner, k: wallK});
+            return;
+        }
+        var nearEndPoint = projectModel(nearInner.pointAt(wallSpan.t1));
+        var farStart = projectModel(farInner.pointAt(lensSpan.t0));
+        var farEndPoint = projectModel(farInner.pointAt(lensSpan.t1));
+        var farForward = distance2(farEndPoint, nearEndPoint) > distance2(farStart, nearEndPoint);
+        fills.push({kind: "segments", k: wallK, segments: [
+            {kind: "arc", curve: nearInner, t0: wallSpan.t0, t1: wallSpan.t1},
+            farForward ? {kind: "arc", curve: farInner, t0: lensSpan.t0, t1: lensSpan.t1}
+                : {kind: "arc", curve: farInner, t0: lensSpan.t1, t1: lensSpan.t0}
+        ]});
+    }
+
+    function distance2(a, b) {
+        return (a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]);
     }
 
     function drawFills(group, fills) {
@@ -845,6 +943,11 @@ try {
                 path.closed = true;
             } else if (fill.kind === "cap") {
                 path = makeCurvePath(group, fill.curve, fill.curve.tMin, fill.curve.tMax, true);
+            } else if (fill.kind === "annulus") {
+                drawAnnulus(group, fill.outer, fill.inner, fill.k);
+                continue;
+            } else if (fill.kind === "segments") {
+                path = makeOutlinePath(group, fill.segments);
             } else {
                 path = makeLateralOutline(group, fill.round, fill.span);
             }
@@ -927,10 +1030,40 @@ try {
             var point = path.pathPoints[i];
             point.leftDirection = nodes[i].left;
             point.rightDirection = nodes[i].right;
-            point.pointType = samePoint(nodes[i].left, nodes[i].anchor) || samePoint(nodes[i].right, nodes[i].anchor)
-                ? PointType.CORNER : PointType.SMOOTH;
+            point.pointType = isCornerNode(nodes[i]) ? PointType.CORNER : PointType.SMOOTH;
         }
         return path;
+    }
+
+    // 고리: 복합 패스에 바깥 원과 안쪽 원을 넣고 짝수-홀수 규칙으로 구멍을 낸다
+    function drawAnnulus(group, outerCurve, innerCurve, k) {
+        var compound = null;
+        try { compound = group.compoundPathItems.add(); } catch (compoundError) { compound = null; }
+        if (compound === null) {
+            applyFill(makeCurvePath(group, outerCurve, 0, 2 * Math.PI, true), k);
+            return;
+        }
+        var outerPath = makeCurvePath(compound, outerCurve, 0, 2 * Math.PI, true);
+        var innerPath = makeCurvePath(compound, innerCurve, 0, 2 * Math.PI, true);
+        applyFill(outerPath, k);
+        applyFill(innerPath, k);
+        try { outerPath.evenodd = true; } catch (evenOddError) {}
+        try { innerPath.evenodd = true; } catch (evenOddError2) {}
+    }
+
+    // 한쪽 핸들이 없거나 두 핸들이 일직선이 아니면 모서리점이다 (호와 호가 만나는 렌즈 꼭짓점 등)
+    function isCornerNode(node) {
+        var lx = node.left[0] - node.anchor[0];
+        var ly = node.left[1] - node.anchor[1];
+        var rx = node.right[0] - node.anchor[0];
+        var ry = node.right[1] - node.anchor[1];
+        var leftLen = Math.sqrt(lx * lx + ly * ly);
+        var rightLen = Math.sqrt(rx * rx + ry * ry);
+        if (leftLen < 1e-6 || rightLen < 1e-6) return true;
+        // 반대 방향으로 나란하면 sin ≈ 0, cos ≈ -1
+        var sine = (lx * ry - ly * rx) / (leftLen * rightLen);
+        var cosine = (lx * rx + ly * ry) / (leftLen * rightLen);
+        return Math.abs(sine) > 0.01 || cosine > 0;
     }
 
     function samePoint(a, b) {
@@ -1027,6 +1160,7 @@ try {
     }
 
     function curveFacing(curve, t) {
+        if (curve.visibilityAt) return curve.visibilityAt(t);
         return refsFacing(curve.refsAt(t));
     }
 
@@ -1053,6 +1187,10 @@ try {
         }
         values[samples] = values[0]; // 2π = 0, 부동소수점 오차로 부호가 갈리지 않게
         var lines = [];
+        // 축 방향에서 보면 옆면 전체가 시선과 직각(값이 ±1e-17로 흔들림)이라 실루엣이 없다
+        var maxAbs = 0;
+        for (i = 0; i <= samples; i++) maxAbs = Math.max(maxAbs, Math.abs(values[i]));
+        if (maxAbs < 1e-9) return lines;
         for (i = 0; i < samples; i++) {
             if ((values[i] >= 0) === (values[i + 1] >= 0)) continue;
             var tA = 2 * Math.PI * i / samples;
@@ -1130,6 +1268,9 @@ try {
         var halfW = Math.max(0.01, widthMm * MM_TO_PT / 2);
         var halfD = Math.max(0.01, depthMm * MM_TO_PT / 2);
         var height = Math.max(0.01, heightMm * MM_TO_PT);
+        if (kind === "tube") {
+            return buildTubeModel(halfW, halfD, height);
+        }
         if (kind === "cylinder" || kind === "cone" || kind === "conefrustum") {
             return buildRoundModel(kind, halfW, halfD, height);
         }
@@ -1452,6 +1593,51 @@ try {
         }
         var radius = Math.sqrt(Math.max(halfW, halfD) * Math.max(halfW, halfD) + height * height / 4);
         return {faces: [], edges: [], curves: curves, round: {pointAt: pointAt, normalAt: normalAt}, radius: radius};
+    }
+
+    // 빨대: 바깥은 원기둥 그대로, 안쪽 테두리 두 개를 더한다. 내경 비율은 윗면 비율 행을 쓴다
+    function buildTubeModel(halfW, halfD, height) {
+        var model = buildRoundModel("cylinder", halfW, halfD, height);
+        var ratio = clamp(topRatio, 1, 99) / 100;
+        var tube = {ratio: ratio, halfW: halfW, halfD: halfD, yBottom: -height / 2, yTop: height / 2, height: height};
+        tube.innerPoint = function(t, s) {
+            return [halfW * ratio * Math.cos(t), tube.yBottom + height * s, halfD * ratio * Math.sin(t)];
+        };
+        model.curves.push(makeInnerRim(tube, 0));
+        model.curves.push(makeInnerRim(tube, 1));
+        model.tube = tube;
+        return model;
+    }
+
+    // 안쪽 테두리: 그 끝의 뚜껑이 앞을 보면 전부 보이고, 아니면 시선이 반대쪽 구멍으로 빠져나가는 점만 보인다
+    function makeInnerRim(tube, end) {
+        var capCenter = [0, end === 0 ? tube.yBottom : tube.yTop, 0];
+        var capNormal = [0, end === 0 ? -1 : 1, 0];
+        return {
+            pointAt: function(t) { return tube.innerPoint(t, end); },
+            visibilityAt: function(t) {
+                var capFacing = facingModel(capCenter, capNormal);
+                if (capFacing > FACING_EPSILON) return capFacing;
+                // 두 구멍이 겹쳐 보이는 축 방향에서는 값이 0 근처라 보이는 쪽으로 기운다
+                return tube.ratio - exitRadius(tube, tube.innerPoint(t, end), 1 - end, 1) + 1e-9;
+            },
+            tMin: 0,
+            tMax: 2 * Math.PI,
+            closed: true
+        };
+    }
+
+    // point에서 시선 방향(direction +1: 눈 쪽, -1: 반대쪽)으로 나아가 targetEnd 끝면에 닿았을 때의
+    // 정규화 반지름(바깥 반지름 = 1). 내경 비율보다 작으면 구멍을 지난다. 닿지 못하면 아주 큰 값
+    function exitRadius(tube, point, targetEnd, direction) {
+        var v = scale(viewDirectionAt(point), direction);
+        var targetY = targetEnd === 0 ? tube.yBottom : tube.yTop;
+        if (Math.abs(v[1]) < 1e-9) return 1e9;
+        var sRay = (targetY - point[1]) / v[1];
+        if (sRay < 0) return 1e9;
+        var x = (point[0] + v[0] * sRay) / tube.halfW;
+        var z = (point[2] + v[2] * sRay) / tube.halfD;
+        return Math.sqrt(x * x + z * z);
     }
 
     // 테두리 원: 뚜껑 면(고정 법선)과 옆면(t마다 다른 법선) 둘 중 하나라도 앞을 보면 보인다
