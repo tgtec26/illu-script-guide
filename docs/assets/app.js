@@ -17,6 +17,7 @@ const scripts = [
   { id: "expand-arrow", category: "도형", name: "확장 화살표", file: "01_도형/Object_expand_arrow.jsx", summary: "선택한 패스에 지정된 선 두께, 화살표, 폭 속성을 적용합니다.", tags: ["화살표", "선"] },
   { id: "isometric", category: "도형", name: "아이소메트릭", file: "01_도형/Object_isometric.jsx", summary: "가로·세로·높이와 코너 각도를 정해 등각 투상 상자 또는 원기둥(타원 기둥)을 만듭니다. 높이 분할, 위치 이동을 미리보기로 조절하고, 상자는 압축(휨) 옵션도 있습니다.", tags: ["입체", "아이소", "원기둥"] },
   { id: "rotate3d", category: "도형", name: "3D 회전", file: "01_도형/Object_rotate3d.jsx", summary: "선택 개체를 3D 회전 스타일로 변형할 때 사용합니다.", tags: ["3D", "회전"] },
+  { id: "solid3d", category: "도형", name: "입체 도형 (3D → 2D 라인)", file: "01_도형/Object_Solid3D.jsx", summary: "직육면체·정사면체·정팔면체·정십이면체·정이십면체·각기둥·각뿔·각뿔대·원기둥·원뿔·원뿔대를 만들고 가로 회전·위아래 기울기·화면 회전으로 원하는 시점을 잡아 2D 라인 드로잉으로 남깁니다. 숨은선은 파선·실선·생략 중 고르고, 평행 투영과 원근을 지원합니다. 면 채우기는 없음·단일 음영·광원 자동(화면 기준 광원으로 면마다 K값 산출, 밝기·대비·광원 방위·높이 조절) 중 고릅니다.", tags: ["입체", "3D", "숨은선", "음영", "정다면체", "원기둥", "원뿔"] },
   { id: "dash-2-1", category: "도형", name: "점선 2-1", file: "01_도형/Object_setdash2-1.jsx", summary: "선택한 개체의 선을 2pt 점선, 1pt 간격으로 바꿉니다.", tags: ["파선", "선"] },
   { id: "dash-3-1", category: "도형", name: "점선 3-1", file: "01_도형/Object_setdash3-1.jsx", summary: "선택한 개체의 선을 3pt 점선, 1pt 간격으로 바꿉니다.", tags: ["파선", "선"] },
   { id: "chain-line", category: "도형", name: "1점 쇄선", file: "01_도형/Object_setdash4-1-1-1.jsx", summary: "긴선 4pt, 간격 1pt, 짧은선 1pt, 간격 1pt의 1점 쇄선을 적용합니다.", tags: ["쇄선", "선"] },
