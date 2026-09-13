@@ -27,7 +27,7 @@ function loadEngine(state) {
     var SHAPES = [
       {id: "box"}, {id: "tetra", regular: true}, {id: "octa", regular: true}, {id: "dodeca", regular: true}, {id: "icosa", regular: true},
       {id: "prism", sides: true}, {id: "pyramid", sides: true}, {id: "frustum", sides: true, taper: true},
-      {id: "cylinder"}, {id: "cone"}, {id: "conefrustum", taper: true}];
+      {id: "cylinder"}, {id: "cone"}, {id: "conefrustum", taper: true}, {id: "tube", taper: true, tube: true}];
     ${Object.keys(s).map((k) => `var ${k} = ${JSON.stringify(s[k])};`).join("\n")}
     var viewMatrix = null, eyeZ = 0, strokeColor = null;
     var paths = [];
@@ -36,6 +36,7 @@ function loadEngine(state) {
       var group = { removed: false, name: "", groups: [],
         pathItems: { add() { var p = makePath(); p.group = group; paths.push(p); return p; } },
         groupItems: { add() { var g = makeGroup(); group.groups.push(g); return g; } },
+        compoundPathItems: { add() { var c = makeGroup(); c.compound = true; group.groups.push(c); return c; } },
         remove() { this.removed = true; } };
       return group;
     }
@@ -54,7 +55,7 @@ function loadEngine(state) {
 }
 
 function shapeIndexOf(id) {
-  return ["box", "tetra", "octa", "dodeca", "icosa", "prism", "pyramid", "frustum", "cylinder", "cone", "conefrustum"].indexOf(id);
+  return ["box", "tetra", "octa", "dodeca", "icosa", "prism", "pyramid", "frustum", "cylinder", "cone", "conefrustum", "tube"].indexOf(id);
 }
 
 // 1. 다면체 위상: 꼭짓점·면·모서리 수와 모든 모서리가 면 2개를 가지는지
@@ -378,6 +379,73 @@ for (const id of Object.keys(topology)) {
   assert.strictEqual(parse("400,0,0,0,300"), null, "angle out of range");
   assert.strictEqual(parse("0,0,0,0,10"), null, "distance out of range");
   assert.ok(source.includes('PRESET_KEY = "ObjectSolid3D/presets"'), "presets use their own preference key");
+}
+
+// 15. 빨대: 안쪽 테두리 가시성, 안쪽 모선 숨은선, 고리·안쪽 벽 채우기
+{
+  // 짧고 넓은 빨대를 위에서 보면 먼(아래) 안쪽 테두리 일부가 구멍으로 보인다
+  const short = loadEngine({ shapeIndex: shapeIndexOf("tube"), rotY: 0, rotX: 60, heightMm: 10, topRatio: 80, fillMode: 2 });
+  const m1 = short.buildModel();
+  assert.strictEqual(m1.curves.length, 4, "outer 2 + inner 2 rims");
+  short.beginView(m1);
+  const innerTop = short.splitCurve(m1.curves[3]);
+  assert.strictEqual(innerTop.length, 1, "inner top rim whole");
+  assert.strictEqual(innerTop[0].visible, true, "inner top rim visible from above");
+  const innerBottom = short.splitCurve(m1.curves[2]);
+  assert.strictEqual(innerBottom.length, 2, "inner bottom rim split: crescent + hidden");
+  const crescent = innerBottom.find((sp) => sp.visible);
+  assert.ok(crescent && crescent.t1 - crescent.t0 < Math.PI, "visible crescent is less than half the rim");
+  // 보이는 초승달의 중간점은 뒤쪽(-Z)에 있다
+  const mid = m1.curves[2].pointAt((crescent.t0 + crescent.t1) / 2);
+  assert.ok(mid[2] < 0, "crescent lies on the far side");
+  const parts = short.collectParts(m1);
+  const hiddenLines = parts.hidden.filter((p) => p.kind === "line");
+  assert.strictEqual(hiddenLines.length, 2, "two hidden inner silhouette lines");
+  for (const line of hiddenLines) assert.ok(Math.abs(Math.abs(line.a[0]) - 8 * 2.834645669) < 1e-6, "inner silhouette at ±inner radius");
+  const fills = short.collectFills(m1);
+  assert.deepStrictEqual(fills.map((f) => f.kind), ["outline", "annulus", "segments"], "lateral + ring + inner-wall region");
+  short.createSolid();
+  const fillGroup = short.paths[0].group;
+  const compound = fillGroup.groups.find((g) => g.compound);
+  assert.ok(compound, "annulus drawn as a compound path");
+  const ringPaths = short.paths.filter((p) => p.group === compound);
+  assert.strictEqual(ringPaths.length, 2, "ring = outer + inner ellipse");
+  assert.ok(ringPaths.every((p) => p.evenodd === true && p.filled && !p.stroked), "ring uses even-odd fill");
+  const cornerCount = (p) => p.pathPoints.filter((pt) => pt.pointType === "corner").length;
+  const wall = short.paths.find((p) => p.filled && p.group === fillGroup && cornerCount(p) === 2);
+  assert.ok(wall, "inner wall region path with exactly two corner joins (near arc ↔ far crescent)");
+  const lateral = short.paths.find((p) => p.filled && p.group === fillGroup && cornerCount(p) === 4);
+  assert.ok(lateral, "lateral outline still has four corners");
+
+  // 길고 좁은 빨대: 아래 안쪽 테두리는 전부 숨고, 안쪽 원 전체가 벽
+  const tall = loadEngine({ shapeIndex: shapeIndexOf("tube"), rotY: 0, rotX: 20, heightMm: 60, topRatio: 60, fillMode: 2 });
+  const m2 = tall.buildModel();
+  tall.beginView(m2);
+  const tallBottom = tall.splitCurve(m2.curves[2]);
+  assert.strictEqual(tallBottom.length, 1);
+  assert.strictEqual(tallBottom[0].visible, false, "far inner rim fully hidden in a tall tube");
+  assert.deepStrictEqual(tall.collectFills(m2).map((f) => f.kind), ["outline", "annulus", "cap"], "whole inner ellipse filled as wall");
+
+  // 축 방향으로 내려다보면 구멍이 그대로 뚫려 보인다: 벽 채우기 없음
+  const axis = loadEngine({ shapeIndex: shapeIndexOf("tube"), rotY: 0, rotX: 90, heightMm: 30, topRatio: 60, fillMode: 2 });
+  const m3 = axis.buildModel();
+  axis.beginView(m3);
+  assert.deepStrictEqual(axis.collectFills(m3).map((f) => f.kind), ["annulus"], "straight down: ring only");
+
+  // 옆에서 보면 안쪽 테두리는 모두 숨은선
+  const side = loadEngine({ shapeIndex: shapeIndexOf("tube"), rotY: 0, rotX: 0, heightMm: 30, topRatio: 60 });
+  const m4 = side.buildModel();
+  side.beginView(m4);
+  assert.strictEqual(side.splitCurve(m4.curves[2])[0].visible, false, "side view: inner bottom rim hidden");
+  assert.strictEqual(side.splitCurve(m4.curves[3])[0].visible, false, "side view: inner top rim hidden");
+
+  // 아래에서 올려다보면 대칭: 아래 안쪽 테두리 전부 보이고 위 안쪽 테두리에 초승달
+  const below = loadEngine({ shapeIndex: shapeIndexOf("tube"), rotY: 0, rotX: -60, heightMm: 10, topRatio: 80, fillMode: 2 });
+  const m5 = below.buildModel();
+  below.beginView(m5);
+  assert.strictEqual(below.splitCurve(m5.curves[2])[0].visible, true, "from below: inner bottom rim whole");
+  assert.strictEqual(below.splitCurve(m5.curves[3]).length, 2, "from below: inner top rim split");
+  assert.deepStrictEqual(below.collectFills(m5).map((f) => f.kind), ["outline", "annulus", "segments"]);
 }
 
 // 10. 필수 규칙: 메모 조각, 탭 헬퍼, 기본 버튼 제거, 미리보기 체크박스, 위치 이동 행
