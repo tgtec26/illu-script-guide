@@ -25,6 +25,8 @@ try {
     var HIDDEN_DASH = [2, 1];
     var LABEL_WIDTH = 96;
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
+    var CUSTOM_PRESET_COUNT = 4;
     var SIZE_STEP_MM = 0.1;
     var MAX_SIZE_MM = 200;
     var ANGLE_STEP = 0.1;
@@ -81,6 +83,10 @@ try {
     var previewEnabled = true;
 
     var previewGroup = null;
+    // 커스텀 시점 프리셋 4개: {y, x, z, perspective, distance}. 설정과 별도 키에 저장해 설정 버전이 바뀌어도 남는다
+    var PRESET_KEY = "ObjectSolid3D/presets";
+    var customPresets = [];
+    var presetSaveMode = false;
     var originX = 0;
     var originY = 0;
     var viewMatrix = null;
@@ -131,7 +137,7 @@ try {
             updatePreview();
         });
     var baseRotationControl = addNumberRow(shapePanel, "밑면 회전 (°)", baseRotation, 0, 360, 1, 0,
-        "밑면 다각형을 제자리에서 돌린다", function(value) {
+        "밑면 다각형만 제자리에서 돌린다 (도형의 모양). 시점 프리셋을 눌러도 유지된다", function(value) {
             baseRotation = value;
             updatePreview();
         });
@@ -174,20 +180,20 @@ try {
     viewPanel.orientation = "column";
     viewPanel.alignChildren = "fill";
     var rotYControl = addNumberRow(viewPanel, "가로 회전 (°)", rotY, -180, 180, ANGLE_STEP, 1,
-        "+면 앞면이 오른쪽으로 돌아간다", function(value) {
+        "물체를 세로축 둘레로 돌린다. +면 앞면이 오른쪽으로 돌아간다", function(value) {
             rotY = value;
             updatePreview();
-        });
+        }, true);
     var rotXControl = addNumberRow(viewPanel, "위아래 기울기 (°)", rotX, -180, 180, ANGLE_STEP, 1,
         "+면 위에서 내려다본다", function(value) {
             rotX = value;
             updatePreview();
-        });
+        }, true);
     var rotZControl = addNumberRow(viewPanel, "화면 회전 (°)", rotZ, -180, 180, ANGLE_STEP, 1,
         "화면을 보는 채로 그림을 돌린다", function(value) {
             rotZ = value;
             updatePreview();
-        });
+        }, true);
 
     var presetRow = viewPanel.add("group");
     presetRow.alignChildren = ["left", "center"];
@@ -196,6 +202,20 @@ try {
     var isoButton = presetRow.add("button", undefined, "등각");
     var sideButton = presetRow.add("button", undefined, "측면");
     var topButton = presetRow.add("button", undefined, "윗면");
+
+    var customRow = viewPanel.add("group");
+    customRow.alignChildren = ["left", "center"];
+    var customCaption = customRow.add("statictext", undefined, "커스텀:");
+    customCaption.preferredSize.width = LABEL_WIDTH;
+    customCaption.helpTip = "저장을 누른 뒤 번호를 누르면 지금 시점(회전·기울기·화면 회전·원근)이 그 번호에 저장된다";
+    var customButtons = [];
+    for (var presetIndex = 0; presetIndex < CUSTOM_PRESET_COUNT; presetIndex++) {
+        var customButton = customRow.add("button", undefined, String(presetIndex + 1));
+        customButton.preferredSize.width = RESET_BUTTON_WIDTH + 6;
+        customButtons.push(customButton);
+    }
+    var presetSaveButton = customRow.add("button", undefined, "저장");
+    presetSaveButton.helpTip = "누른 뒤 1~4 번호를 누르면 지금 시점이 저장된다. 다시 누르면 취소";
 
     var perspectiveCheck = viewPanel.add("checkbox", undefined, "원근 적용 (끄면 평행 투영 = 등각 도면)");
     perspectiveCheck.value = perspectiveOn;
@@ -301,6 +321,15 @@ try {
     isoButton.onClick = function() { setView(45, 35.3, 0); };
     sideButton.onClick = function() { setView(90, 0, 0); };
     topButton.onClick = function() { setView(0, 90, 0); };
+    rotYControl.reset.onClick = function() { rotYControl.set(0); };
+    rotXControl.reset.onClick = function() { rotXControl.set(0); };
+    rotZControl.reset.onClick = function() { rotZControl.set(0); };
+    presetSaveButton.onClick = function() { setPresetSaveMode(!presetSaveMode); };
+    for (presetIndex = 0; presetIndex < CUSTOM_PRESET_COUNT; presetIndex++) {
+        customButtons[presetIndex].onClick = makeCustomPresetHandler(presetIndex);
+    }
+    loadCustomPresets();
+    refreshCustomButtons();
 
     okButton.onClick = function() {
         saveSettings();
@@ -344,7 +373,7 @@ try {
     }
 
     // 숫자 조절 행: 라벨 (단위): | 입력창 | 스크롤바
-    function addNumberRow(parent, labelText, value, minimum, maximum, step, decimals, tip, onCommit) {
+    function addNumberRow(parent, labelText, value, minimum, maximum, step, decimals, tip, onCommit, hasReset) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         var caption = row.add("statictext", undefined, labelText + ":");
@@ -357,8 +386,15 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        // 슬라이더 오른쪽의 0 버튼. 값을 0으로 되돌린다
+        var reset = null;
+        if (hasReset) {
+            reset = row.add("button", undefined, "0");
+            reset.preferredSize.width = RESET_BUTTON_WIDTH;
+            reset.helpTip = "0으로 초기화";
+        }
 
-        var control = {row: row, input: input, slider: slider, value: value};
+        var control = {row: row, input: input, slider: slider, reset: reset, value: value};
 
         function commit(raw, silent) {
             var parsed = parseNumber(raw);
@@ -404,6 +440,7 @@ try {
     }
 
     function setView(y, x, z) {
+        if (presetSaveMode) setPresetSaveMode(false);
         rotY = y;
         rotX = x;
         rotZ = z;
@@ -411,6 +448,81 @@ try {
         rotXControl.set(x, true);
         rotZControl.set(z, true);
         updatePreview();
+    }
+
+    function applyPerspective(on, distanceMm) {
+        perspectiveOn = on;
+        perspectiveMm = distanceMm;
+        perspectiveCheck.value = on;
+        perspectiveControl.set(distanceMm, true);
+        perspectiveControl.row.enabled = on;
+    }
+
+    function makeCustomPresetHandler(index) {
+        return function() {
+            if (presetSaveMode) {
+                customPresets[index] = {y: rotY, x: rotX, z: rotZ, perspective: perspectiveOn, distance: perspectiveMm};
+                saveCustomPresets();
+                setPresetSaveMode(false);
+                refreshCustomButtons();
+                return;
+            }
+            var preset = customPresets[index];
+            if (!preset) return;
+            applyPerspective(preset.perspective, preset.distance);
+            setView(preset.y, preset.x, preset.z);
+        };
+    }
+
+    function setPresetSaveMode(on) {
+        presetSaveMode = on;
+        presetSaveButton.text = on ? "번호 클릭" : "저장";
+        refreshCustomButtons();
+    }
+
+    // 저장된 번호는 툴팁에 각도를 보여주고, 빈 번호는 흐리게 둔다
+    function refreshCustomButtons() {
+        for (var i = 0; i < CUSTOM_PRESET_COUNT; i++) {
+            var preset = customPresets[i];
+            customButtons[i].enabled = presetSaveMode || !!preset;
+            customButtons[i].helpTip = preset
+                ? "가로 " + formatValue(preset.y, 1) + "° / 기울기 " + formatValue(preset.x, 1) + "° / 화면 " +
+                    formatValue(preset.z, 1) + "°" + (preset.perspective ? " / 원근 " + preset.distance + "mm" : "")
+                : "비어 있음. 저장을 누른 뒤 이 번호를 누르면 저장";
+        }
+    }
+
+    function saveCustomPresets() {
+        var parts = ["v1"];
+        for (var i = 0; i < CUSTOM_PRESET_COUNT; i++) {
+            var preset = customPresets[i];
+            parts.push(preset ? [preset.y, preset.x, preset.z, preset.perspective ? 1 : 0, preset.distance].join(",") : "");
+        }
+        try { app.preferences.setStringPreference(PRESET_KEY, parts.join("|")); } catch (saveError) {}
+    }
+
+    function loadCustomPresets() {
+        customPresets = [];
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PRESET_KEY); } catch (readError) { return; }
+        if (!raw) return;
+        var parts = String(raw).split("|");
+        if (parts[0] !== "v1" || parts.length !== CUSTOM_PRESET_COUNT + 1) return;
+        for (var i = 0; i < CUSTOM_PRESET_COUNT; i++) {
+            customPresets[i] = parseCustomPreset(parts[i + 1]);
+        }
+    }
+
+    function parseCustomPreset(text) {
+        if (!text) return null;
+        var f = String(text).split(",");
+        if (f.length !== 5) return null;
+        var y = restoreNumber(f[0], null, -180, 180);
+        var x = restoreNumber(f[1], null, -180, 180);
+        var z = restoreNumber(f[2], null, -180, 180);
+        var distance = restoreNumber(f[4], null, 50, 2000);
+        if (y === null || x === null || z === null || distance === null) return null;
+        return {y: y, x: x, z: z, perspective: f[3] === "1", distance: distance};
     }
 
     // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
