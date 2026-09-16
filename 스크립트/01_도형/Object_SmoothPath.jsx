@@ -257,7 +257,6 @@ try {
             minClosedPoints: MIN_CLOSED_POINTS
         };
     }
-    }
 
     // 강도는 눈금이 고르게 느껴지도록 제곱으로 편다. 낮은 쪽에서 미세하게 조절된다.
     function toleranceFor(strength) {
