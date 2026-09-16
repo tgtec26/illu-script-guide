@@ -67,7 +67,7 @@ const scripts = [
   { id: "subscript-variable", category: "문자", name: "첨자 변수", file: "02_문자/Text_SubscriptedVariable.jsx", summary: "변수 문자와 아래첨자, 이온 위첨자를 조합해 과학 표기용 텍스트를 만듭니다.", tags: ["변수", "첨자"] },
   { id: "text-check", category: "문자", name: "폰트 이름 확인", file: "02_문자/Text_check.jsx", summary: "스크립트에서 사용할 수 있는 폰트 이름을 확인할 때 씁니다.", tags: ["폰트", "확인"] },
   { id: "text-input", category: "문자", name: "문자 입력 패널", file: "02_문자/Text_input.jsx", summary: "자주 쓰는 특수문자와 기호를 현재 화면 하단 중앙에 넣습니다.", tags: ["기호", "입력"] },
-  { id: "ko-en", category: "문자", name: "한영 텍스트", file: "02_문자/Text_koen.jsx", summary: "한글과 영문 텍스트 크기나 스타일을 빠르게 맞출 때 쓰는 보조 스크립트입니다.", tags: ["한글", "영문"] },
+  { id: "ko-en", category: "문자", name: "한영 텍스트", file: "02_문자/Text_koen.jsx", summary: "한글과 영문 텍스트 크기나 스타일을 빠르게 맞출 때 쓰는 보조 스크립트입니다. 글자마다 한글은 Spoqa, 영문·숫자·기호는 GSMediumB1(기준선 +0.5pt) 8pt로 맞추고, (가)·(나)처럼 괄호 안 한글 한 글자 기호는 바탕체 10pt로 둡니다.", tags: ["한글", "영문", "바탕"] },
   { id: "lewis-dots", category: "문자", name: "루이스 전자점식", file: "02_문자/Text_LewisDots.jsx", summary: "선택한 원소 기호 텍스트 둘레에 루이스 전자점을 배치합니다. 방향마다 없음·1점·2점을 고릅니다.", tags: ["과학", "화학"] },
   { id: "fill-20k", category: "색상", name: "면 20K", file: "03_색상/Color_Fill20K.jsx", summary: "선택한 개체의 면을 CMY가 섞이지 않은 순수 K=20 회색으로 바꿉니다.", tags: ["면", "회색"] },
   { id: "fill-30k", category: "색상", name: "면 30K", file: "03_색상/Color_Fill30K.jsx", summary: "선택한 개체의 면을 순수 K=30 회색으로 바꿉니다.", tags: ["면", "회색"] },

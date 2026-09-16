@@ -12,15 +12,43 @@ try {
     var korFontName = "SpoqaHanSansNeo-Regular";
     var engFontName = "GSMediumB1";
     var fontSize = 8; // 설정하고자 하는 글자 크기
+    // "(가)", "(나)"처럼 괄호 안에 한글 한 글자인 항목 기호는 바탕체 10pt (Text_input.jsx와 같은 규칙)
+    var labelFontName = "Batang";
+    var labelFontSize = 10;
+
+    // 괄호 안 한글 한 글자 기호에 속하는 글자 위치를 표시한다. 괄호까지 포함해 세 글자
+    function findLabelChars(chars) {
+        var text = "";
+        for (var i = 0; i < chars.length; i++) text += chars[i].contents;
+        var marked = {};
+        for (var at = 0; at + 2 < text.length; at++) {
+            var inner = text.charCodeAt(at + 1);
+            if (text.charAt(at) === "(" && text.charAt(at + 2) === ")" && inner >= 0xAC00 && inner <= 0xD7A3) {
+                marked[at] = marked[at + 1] = marked[at + 2] = true;
+            }
+        }
+        return marked;
+    }
 
     function applyToChars(chars) {
         var korFont = textFonts.getByName(korFontName);
         var engFont = textFonts.getByName(engFontName);
+        var labelChars = findLabelChars(chars);
+        var labelFont = null;
 
         for (var i = 0; i < chars.length; i++) {
             var currentChar = chars[i];
             var charStr = currentChar.contents;
             var charCode = charStr.charCodeAt(0);
+
+            if (labelChars[i]) {
+                // 바탕체는 항목 기호가 있을 때만 찾는다. 없으면 서체가 없어도 스크립트가 멈추지 않는다
+                if (labelFont === null) labelFont = textFonts.getByName(labelFontName);
+                currentChar.characterAttributes.size = labelFontSize;
+                currentChar.characterAttributes.textFont = labelFont;
+                currentChar.characterAttributes.baselineShift = 0;
+                continue;
+            }
 
             // 판별 조건: 한글 유니코드 범위 OR 공백 문자(" ")
             var isKorean = (charCode >= 0xAC00 && charCode <= 0xD7A3) ||
