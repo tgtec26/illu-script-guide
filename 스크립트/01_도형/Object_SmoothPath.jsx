@@ -18,9 +18,13 @@ try {
     - 앵커 줄이기: 모양을 유지하면서 필요 없는 앵커를 없앱니다(RDP 단순화).
     - 곡선 다듬기: 꺾인 곳(미분 불가능한 점)과 곡률이 튀는 곳을 펴서 부드러운 곡선으로 만듭니다(Taubin 평활).
     - 모서리 유지 각도보다 급하게 꺾인 점은 모서리로 남기고, 나머지는 핸들을 이어 붙여 매끄럽게 만듭니다.
-  사용법: 패스(그룹·복합 패스 포함)를 선택한 뒤 실행. 값을 미리보기로 보며 맞추고 확인.
+  사용법: 패스(그룹·복합 패스 포함)를 선택한 뒤 실행. 탭을 골라 확인.
+    - 앵커 제거 탭: 수천 패스·수만 앵커를 다루므로 미리보기 없이 확인 때 한 번에 적용한다.
+      시작할 때 좌표도 읽지 않아 다이얼로그가 바로 뜬다.
+    - 부드럽게 탭: 앵커 줄이기·곡선 다듬기. 값을 미리보기로 보며 맞춘다.
+  확인은 열려 있는 탭의 작업만 적용한다.
 
-  미리보기는 선택한 패스를 그 자리에서 바꾼다. 취소하거나 미리보기를 끄면 원래 좌표로 되돌리고,
+  부드럽게 탭의 미리보기는 선택한 패스를 그 자리에서 바꾼다. 취소하거나 미리보기를 끄면 원래 좌표로 되돌리고,
   확인을 누르면 화면에 보이던 미리보기가 그대로 결과가 된다. 위치 이동 행은 두지 않는다.
   원본을 제자리에서 고치는 스크립트라 미리보기를 옮기면 그림이 밀려난다.
 */
@@ -47,19 +51,16 @@ try {
         return;
     }
 
-    var snapshots = [];
+    // 좌표 읽기는 비싸다(수천 패스·수만 앵커). 부드럽게 탭이 미리보기를 켤 때만 읽는다.
+    var snapshots = null;
     var sourceAnchorCount = 0;
-    for (var s = 0; s < targets.length; s++) {
-        var data = readPathData(targets[s]);
-        snapshots.push(data);
-        sourceAnchorCount += data.points.length;
-    }
 
-    var removeMm = 0;
+    var removeMm = 0.05;
     var simplifyStrength = 40;
     var smoothStrength = 40;
     var cornerAngle = 75;
     var previewEnabled = true;
+    var activeTab = 0;             // 0: 앵커 제거, 1: 부드럽게
     var applied = false;
 
     applySavedSettings();
@@ -68,40 +69,71 @@ try {
     var INPUT_WIDTH = 54;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var HINT_WIDTH = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
 
-    var dlg = new Window("dialog", "곡선 부드럽게 정리");
+    var dlg = new Window("dialog", "패스 정리");
     dlg.orientation = "column";
     dlg.alignChildren = "fill";
     dlg.spacing = 6;
     dlg.margins = 12;
 
-    var removePanel = addPanel(dlg, "앵커 제거 (형태 유지)");
-    var removeField = addNumberField(removePanel, "허용 오차", "mm", removeMm, 0.01, 0, MAX_REMOVE_MM);
-    var removeHint = removePanel.add("statictext", undefined, "원본 핸들을 그대로 두고, 빼도 이 오차 안에 맞는 앵커만 지웁니다. 0이면 끔.");
-    removeHint.preferredSize.width = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
+    var tabs = dlg.add("tabbedpanel");
+    tabs.alignChildren = "fill";
 
-    var simplifyPanel = addPanel(dlg, "앵커 줄이기");
+    // --- 탭 1: 앵커 제거 (미리보기 없음) ---
+    var removeTab = tabs.add("tab", undefined, "앵커 제거");
+    removeTab.orientation = "column";
+    removeTab.alignChildren = "left";
+    removeTab.spacing = 6;
+    removeTab.margins = [10, 12, 10, 10];
+    var removeField = addNumberField(removeTab, "허용 오차", "mm", removeMm, 0.01, 0, MAX_REMOVE_MM);
+    var removeHint = removeTab.add("statictext", undefined,
+        "원본 핸들을 그대로 두고, 빼도 이 오차 안에 맞는 앵커만 지웁니다.\n" +
+        "수만 개 앵커를 다루므로 미리보기 없이 확인을 누를 때 한 번에 적용합니다.\n" +
+        "결과가 마음에 안 들면 실행 취소(Ctrl+Z) 뒤 값을 바꿔 다시 실행하세요.", {multiline: true});
+    removeHint.preferredSize.width = HINT_WIDTH;
+    var removeInfo = removeTab.add("statictext", undefined, "패스 " + targets.length + "개 선택됨");
+    removeInfo.preferredSize.width = HINT_WIDTH;
+
+    // --- 탭 2: 부드럽게 (미리보기) ---
+    var smoothTab = tabs.add("tab", undefined, "부드럽게");
+    smoothTab.orientation = "column";
+    smoothTab.alignChildren = "fill";
+    smoothTab.spacing = 6;
+    smoothTab.margins = [10, 12, 10, 10];
+
+    var simplifyPanel = addPanel(smoothTab, "앵커 줄이기");
     var simplifyField = addNumberField(simplifyPanel, "정리 강도", "0~100", simplifyStrength, 1, 0, 100);
 
-    var smoothPanel = addPanel(dlg, "곡선 다듬기");
+    var smoothPanel = addPanel(smoothTab, "곡선 다듬기");
     var smoothField = addNumberField(smoothPanel, "부드럽기 강도", "0~100", smoothStrength, 1, 0, 100);
     var cornerField = addNumberField(smoothPanel, "모서리 유지 각도", "°", cornerAngle, 5, 0, 180);
     var cornerHint = smoothPanel.add("statictext", undefined, "이 각도보다 급하게 꺾인 점은 모서리로 남깁니다. 0이면 모두 부드럽게.");
-    cornerHint.preferredSize.width = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
+    cornerHint.preferredSize.width = HINT_WIDTH;
 
-    var infoText = dlg.add("statictext", undefined, "");
-    infoText.preferredSize.width = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
+    var infoText = smoothTab.add("statictext", undefined, "");
+    infoText.preferredSize.width = HINT_WIDTH;
+
+    var previewRow = smoothTab.add("group");
+    var previewCheck = previewRow.add("checkbox", undefined, "미리보기");
+    previewCheck.value = previewEnabled;
 
     var footer = dlg.add("group");
-    var previewCheck = footer.add("checkbox", undefined, "미리보기");
-    previewCheck.value = previewEnabled;
-    var footerSpacer = footer.add("group");
-    footerSpacer.alignment = ["fill", "center"];
+    footer.alignment = "right";
     // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
     var okButton = footer.add("button", undefined, "확인");
     try { dlg.defaultElement = null; } catch (defaultError) {}
     var cancelButton = footer.add("button", undefined, "취소", {name: "cancel"});
 
+    tabs.onChange = function() {
+        activeTab = (tabs.selection === smoothTab) ? 1 : 0;
+        if (activeTab === 1) {
+            updatePreview();
+        } else {
+            restoreAll();
+            app.redraw();
+        }
+    };
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -113,13 +145,19 @@ try {
     cancelButton.onClick = function() { dlg.close(0); };
 
     doc.selection = null;
-    updatePreview();
+    tabs.selection = activeTab;
+    if (activeTab === 1) updatePreview();
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
     var result = dlg.show();
 
     if (result === 1) {
-        applyGeometry();
+        if (activeTab === 0) {
+            restoreAll();
+            runRemoveAnchors();
+        } else {
+            applyGeometry();
+        }
         saveSettings();
     } else {
         restoreAll();
@@ -128,15 +166,53 @@ try {
     app.redraw();
 
     // -------------------------------------------------------
-    // 미리보기 / 적용
+    // 앵커 제거 (한 번에 적용)
     // -------------------------------------------------------
+    // 패스 하나씩 읽고→계산하고→쓴다. 좌표를 모아 두지 않으므로 메모리도 시간도 절반이다.
+    function runRemoveAnchors() {
+        if (removeMm <= 0) return;
+        var started = new Date().getTime();
+        var before = 0;
+        var after = 0;
+        var tolerance = removeMm * MM;
+        for (var i = 0; i < targets.length; i++) {
+            var data = readPathData(targets[i]);
+            before += data.points.length;
+            var minPoints = data.closed ? MIN_CLOSED_POINTS : MIN_OPEN_POINTS;
+            var next = removeAnchors(data, tolerance, minPoints);
+            if (next !== data) {
+                try { writePathData(targets[i], next); } catch (writeError) { next = data; }
+            }
+            after += next.points.length;
+        }
+        var seconds = Math.round((new Date().getTime() - started) / 100) / 10;
+        alert("앵커 제거 완료\n\n패스 " + targets.length + "개 · 앵커 " + before + " → " + after +
+            "\n허용 오차 " + removeMm + "mm · " + seconds + "초");
+    }
+
+    // -------------------------------------------------------
+    // 미리보기 / 적용 (부드럽게 탭)
+    // -------------------------------------------------------
+    function ensureSnapshots() {
+        if (snapshots !== null) return;
+        snapshots = [];
+        sourceAnchorCount = 0;
+        for (var s = 0; s < targets.length; s++) {
+            var data = readPathData(targets[s]);
+            snapshots.push(data);
+            sourceAnchorCount += data.points.length;
+        }
+    }
+
     function updatePreview() {
+        if (activeTab !== 1) return;
         readFields();
         var resultCount;
         if (previewEnabled) {
             resultCount = applyGeometry();
         } else {
             restoreAll();
+            ensureSnapshots();
             resultCount = sourceAnchorCount;
         }
         updateInfoText(resultCount);
@@ -146,6 +222,7 @@ try {
     // 계산은 언제나 원본 좌표(snapshots)에서 새로 한다. 화면에 있는 미리보기 결과를
     // 다시 입력으로 쓰면 슬라이더를 움직일수록 정리가 겹쳐 걸려 모양이 녹아내린다.
     function applyGeometry() {
+        ensureSnapshots();
         var count = 0;
         for (var i = 0; i < targets.length; i++) {
             var next = processPathData(snapshots[i], buildOptions());
@@ -171,7 +248,7 @@ try {
 
     function buildOptions() {
         return {
-            removeTolerance: removeMm * MM,
+            removeTolerance: 0,
             tolerance: toleranceFor(simplifyStrength),
             sampleStep: SAMPLE_STEP_MM * MM,
             smoothStrength: smoothStrength,
@@ -179,6 +256,7 @@ try {
             minOpenPoints: MIN_OPEN_POINTS,
             minClosedPoints: MIN_CLOSED_POINTS
         };
+    }
     }
 
     // 강도는 눈금이 고르게 느껴지도록 제곱으로 편다. 낮은 쪽에서 미세하게 조절된다.
@@ -788,7 +866,7 @@ try {
     }
 
     function saveSettings() {
-        var parts = ["v2", simplifyStrength, smoothStrength, cornerAngle, previewEnabled ? "1" : "0", removeMm];
+        var parts = ["v3", simplifyStrength, smoothStrength, cornerAngle, previewEnabled ? "1" : "0", removeMm, activeTab];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -797,7 +875,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if ((p[0] !== "v1" && p[0] !== "v2") || p.length < 5) return;
+        if ((p[0] !== "v1" && p[0] !== "v2" && p[0] !== "v3") || p.length < 5) return;
 
         var savedSimplify = parseFloat(p[1]);
         var savedSmooth = parseFloat(p[2]);
@@ -806,9 +884,10 @@ try {
         if (!isNaN(savedSmooth)) smoothStrength = clampValue(savedSmooth, 0, 100);
         if (!isNaN(savedCorner)) cornerAngle = clampValue(savedCorner, 0, 180);
         previewEnabled = (p[4] !== "0");
-        if (p[0] === "v2" && p.length >= 6) {
+        if (p.length >= 6) {
             var savedRemove = parseFloat(p[5]);
             if (!isNaN(savedRemove)) removeMm = clampValue(savedRemove, 0, MAX_REMOVE_MM);
         }
+        if (p.length >= 7) activeTab = (p[6] === "1") ? 1 : 0;
     }
 })();
