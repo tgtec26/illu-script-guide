@@ -36,8 +36,12 @@ try {
     var DEPTH_MAX_MM = 300;
     var CURVE_PIECES = 12;          // 베지어 한 구간을 펴는 조각 수
     var CORNER_COS = Math.cos(2 * Math.PI / 180); // 접선이 2° 넘게 꺾이면 모서리
-    var CURVE_SAMPLES = 144;        // 테두리 곡선 가시성 판정 샘플 수
+    var CURVE_SAMPLES_PER_SEG = 12; // 테두리 곡선 가시성 판정 샘플 수 (베지어 한 구간당)
+    var CURVE_SAMPLES_MIN = 96;
+    var CURVE_SAMPLES_MAX = 480;
     var RULING_SAMPLES = 48;        // 모선(세로 능선) 가시성 판정 샘플 수
+    var CROSSING_STEPS = 12;        // 보임/숨음 경계를 좁히는 이분법 횟수. 샘플 간격의 1/4096이라 화면 0.01pt 안이다
+    var LIVE_INTERVAL_MS = 60;      // 슬라이더를 끄는 동안 미리보기를 다시 그리는 최소 간격
     var RAY_LIFT = 1e-4;            // 열린 띠에서 광선을 쏘기 전에 점을 바깥 법선 쪽으로 띄우는 비율 (× 모델 반지름)
     var PROBE_STEP = 1e-4;          // 모서리 점이 속으로 들어가는지 볼 때 시선 쪽으로 내딛는 비율 (× 모델 반지름)
     var MIN_SPAN_PT = 1.5;          // 이보다 짧은 보임/숨음 구간은 이웃에 합친다 (실루엣 근처의 떨림 제거)
@@ -70,6 +74,8 @@ try {
     var previewEnabled = true;
 
     var previewGroup = null;
+    var lastLiveRender = 0;     // 슬라이더를 끄는 동안 마지막으로 미리보기를 그린 시각
+    var setPointType = false;   // 확정 출력만 앵커 종류(모서리/매끄러움)를 넣는다. 미리보기는 생략해 DOM 호출을 줄인다
     // 커스텀 시점 프리셋 4개: {y, x, z, perspective, distance}. 설정과 별도 키에 저장해 설정 버전이 바뀌어도 남는다
     var PRESET_KEY = "ObjectExtrude3D/presets";
     var customPresets = [];
@@ -81,6 +87,9 @@ try {
     var viewMatrix = null;
     var eyeZ = 0;
     var strokeColor = makeStrokeColor();
+    var documentIsCmyk = false;
+    try { documentIsCmyk = doc.documentColorSpace === DocumentColorSpace.CMYK; } catch (colorSpaceError) {}
+    var kColorCache = {};       // K값별 채움색. 면마다 새로 만들지 않는다
 
     // ---- 선택 읽기 ------------------------------------------------------------
     // 패스 하나 이상(복합 패스·그룹 안쪽도 받는다). 확인하면 원본은 지운다
@@ -116,28 +125,28 @@ try {
     solidPanel.orientation = "column";
     solidPanel.alignChildren = "fill";
     var depthControl = addNumberRow(solidPanel, "깊이 (mm)", depthMm, DEPTH_MIN_MM, DEPTH_MAX_MM, 0.5, 1,
-        "패스를 앞뒤로 미는 거리. 원본 자리는 가운데", function(value) {
+        "패스를 앞뒤로 미는 거리. 원본 자리는 가운데", function(value, live) {
             depthMm = value;
-            updatePreview();
+            updatePreview(live);
         });
 
     var viewPanel = win.add("panel", undefined, "시점");
     viewPanel.orientation = "column";
     viewPanel.alignChildren = "fill";
     var rotYControl = addNumberRow(viewPanel, "가로 회전 (°)", rotY, -180, 180, ANGLE_STEP, 1,
-        "세로축을 중심으로 돌린다 (턴테이블)", function(value) {
+        "세로축을 중심으로 돌린다 (턴테이블)", function(value, live) {
             rotY = value;
-            updatePreview();
+            updatePreview(live);
         }, true);
     var rotXControl = addNumberRow(viewPanel, "위아래 기울기 (°)", rotX, -180, 180, ANGLE_STEP, 1,
-        "앞뒤로 눕힌다. +면 위에서 내려다본다", function(value) {
+        "앞뒤로 눕힌다. +면 위에서 내려다본다", function(value, live) {
             rotX = value;
-            updatePreview();
+            updatePreview(live);
         }, true);
     var rotZControl = addNumberRow(viewPanel, "화면 회전 (°)", rotZ, -180, 180, ANGLE_STEP, 1,
-        "화면을 보는 채로 그림을 돌린다", function(value) {
+        "화면을 보는 채로 그림을 돌린다", function(value, live) {
             rotZ = value;
-            updatePreview();
+            updatePreview(live);
         }, true);
 
     var presetRow = viewPanel.add("group");
@@ -165,9 +174,9 @@ try {
     var perspectiveCheck = viewPanel.add("checkbox", undefined, "원근 적용 (끄면 평행 투영 = 등각 도면)");
     perspectiveCheck.value = perspectiveOn;
     var perspectiveControl = addNumberRow(viewPanel, "시점 거리 (mm)", perspectiveMm, 50, 2000, 10, 0,
-        "가까울수록 원근이 강해진다", function(value) {
+        "가까울수록 원근이 강해진다", function(value, live) {
             perspectiveMm = value;
-            updatePreview();
+            updatePreview(live);
         });
 
     var linePanel = win.add("panel", undefined, "선과 면");
@@ -189,24 +198,24 @@ try {
     fillList.selection = fillMode;
     fillList.preferredSize.width = SLIDER_WIDTH + 60;
     var brightnessControl = addNumberRow(linePanel, "밝기 (%)", brightness, 0, 100, 1, 0,
-        "면 K값의 중간. 100이면 K0(흰색), 0이면 K100", function(value) {
+        "면 K값의 중간. 100이면 K0(흰색), 0이면 K100", function(value, live) {
             brightness = value;
-            updatePreview();
+            if (!live) updatePreview();
         });
     var contrastControl = addNumberRow(linePanel, "대비 (%)", contrast, 0, 100, 1, 0,
-        "밝은 면과 어두운 면의 K 차이", function(value) {
+        "밝은 면과 어두운 면의 K 차이", function(value, live) {
             contrast = value;
-            updatePreview();
+            if (!live) updatePreview();
         });
     var lightAzimuthControl = addNumberRow(linePanel, "광원 방위 (°)", lightAzimuth, -90, 90, 1, 0,
-        "화면 기준 광원 좌우 위치. 음수 = 왼쪽, 0 = 정면", function(value) {
+        "화면 기준 광원 좌우 위치. 음수 = 왼쪽, 0 = 정면", function(value, live) {
             lightAzimuth = value;
-            updatePreview();
+            if (!live) updatePreview();
         });
     var lightElevationControl = addNumberRow(linePanel, "광원 높이 (°)", lightElevation, 0, 90, 1, 0,
-        "화면 기준 광원 높이. 90 = 바로 위", function(value) {
+        "화면 기준 광원 높이. 90 = 바로 위", function(value, live) {
             lightElevation = value;
-            updatePreview();
+            if (!live) updatePreview();
         });
 
     var positionPanel = win.add("panel", undefined, "위치");
@@ -278,7 +287,7 @@ try {
     clearPreview();
 
     if (result === 1) {
-        var finalGroup = createSolid();
+        var finalGroup = createSolid(false, true);
         if (finalGroup !== null) {
             translateItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
             finalGroup.name = "Extrude3D";
@@ -337,17 +346,18 @@ try {
 
         var control = {row: row, caption: caption, input: input, slider: slider, reset: reset, value: value};
 
-        function commit(raw, silent) {
+        // live: 슬라이더를 끄는 중. 손을 떼면(onChange) live 없이 한 번 더 온다
+        function commit(raw, silent, live) {
             var parsed = parseNumber(raw);
             if (parsed === null) parsed = control.value;
             parsed = clamp(roundTo(parsed, step), minimum, maximum);
             control.value = parsed;
             input.text = formatValue(parsed, decimals);
             try { slider.value = parsed; } catch (sliderError) {}
-            if (!silent) onCommit(parsed);
+            if (!silent) onCommit(parsed, !!live);
         }
 
-        slider.onChanging = function() { commit(slider.value); };
+        slider.onChanging = function() { commit(slider.value, false, true); };
         slider.onChange = function() { commit(slider.value); };
         // 타이핑 중에는 입력창 글자를 건드리지 않는다. 범위 안 값일 때만 즉시 반영한다
         input.onChanging = function() {
@@ -471,18 +481,22 @@ try {
         try { item.translate(deltaX, deltaY); } catch (translateError) {}
     }
 
-    function updatePreview() {
+    // live: 슬라이더를 끄는 동안. 숨은선 판정과 면 없이 와이어프레임만 그리고, 직전 그리기에서 얼마 안 지났으면 건너뛴다.
+    // 손을 떼면 live 없이 다시 불려 완전히 그린다
+    function updatePreview(live) {
+        if (live && new Date().getTime() - lastLiveRender < LIVE_INTERVAL_MS) return;
         clearPreview();
         if (!previewEnabled) {
             app.redraw();
             return;
         }
-        previewGroup = createSolid();
+        previewGroup = createSolid(live, false);
         if (previewGroup !== null) {
             translateItem(previewGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
             previewGroup.name = "Extrude3D Preview";
         }
         app.redraw();
+        if (live) lastLiveRender = new Date().getTime();
     }
 
     function clearPreview() {
@@ -1027,21 +1041,33 @@ try {
     function contourCurve(model, contour, capSign) {
         var z = capSign * model.halfDepth;
         var capNormal = [0, 0, capSign];
+        // 샘플 자리의 단면 점과 바깥 방향은 시점·깊이와 무관하다. 테두리에 한 번만 계산해 두고 회전마다 다시 쓴다
+        if (!contour.sampleGeometry) contour.sampleGeometry = {front: [], back: []};
+        var cache = contour.sampleGeometry[capSign > 0 ? "front" : "back"];
+        function geometryAt(u, sampleIndex) {
+            var geo = sampleIndex === undefined ? null : cache[sampleIndex];
+            if (geo) return geo;
+            var xy = pointAtU(contour, u);
+            var side = jointNormalAtU(contour, u);
+            // 뚜껑과 옆면이 만나는 모서리라 바깥 방향은 두 법선의 가운데
+            geo = {x: xy[0], y: xy[1], n: model.closed ? normalize(add(side, capNormal)) : side};
+            if (sampleIndex !== undefined) cache[sampleIndex] = geo;
+            return geo;
+        }
         return {
             kind: "curve",
             contour: contour,
             tMin: 0,
             tMax: contour.segCount,
             closed: contour.closed,
-            samples: CURVE_SAMPLES,
+            samples: clamp(contour.segCount * CURVE_SAMPLES_PER_SEG, CURVE_SAMPLES_MIN, CURVE_SAMPLES_MAX),
             pointAt: function(u) { return modelPoint(contour, u, z); },
-            visibilityAt: function(u) {
-                var p = modelPoint(contour, u, z);
-                var side = jointNormalAtU(contour, u);
-                // 뚜껑과 옆면이 만나는 모서리라 바깥 방향은 두 법선의 가운데
-                var n = model.closed ? normalize(add(side, capNormal)) : side;
-                if (model.closed && probeInside(model, p, n)) return -1;
-                return occluded(model, p, n) ? -1 : 1;
+            // sampleIndex: splitCurve의 고른 샘플 번호. 있으면 캐시를 쓴다
+            visibilityAt: function(u, sampleIndex) {
+                var geo = geometryAt(u, sampleIndex);
+                var p = [geo.x, geo.y, z];
+                if (model.closed && probeInside(model, p, geo.n)) return -1;
+                return occluded(model, p, geo.n) ? -1 : 1;
             }
         };
     }
@@ -1146,11 +1172,13 @@ try {
 
     // ---- 그리기 ---------------------------------------------------------------
 
-    function createSolid() {
+    // light: 숨은선 판정과 면 없이 모든 선을 실선으로 (슬라이더를 끄는 동안). finalOutput: 확정 출력(앵커 종류까지 넣는다)
+    function createSolid(light, finalOutput) {
         var model = buildModel();
         beginView(model);
+        setPointType = !!finalOutput;
 
-        var parts = collectParts(model);
+        var parts = collectParts(model, light);
         var group;
         try {
             group = doc.groupItems.add();
@@ -1159,7 +1187,7 @@ try {
         }
         try {
             // 쌓는 순서: 면 → 숨은선 → 보이는 선. 숨은선이 면에 가려지지 않는다
-            if (fillMode !== FILL_NONE) {
+            if (fillMode !== FILL_NONE && !light) {
                 var fillGroup = group.groupItems.add();
                 fillGroup.name = "면";
                 drawFills(fillGroup, collectFills(model));
@@ -1175,8 +1203,8 @@ try {
         return group;
     }
 
-    // 그릴 곡선을 모아 보임/숨음 구간으로 자른다
-    function collectParts(model) {
+    // 그릴 곡선을 모아 보임/숨음 구간으로 자른다. light면 자르지 않고 통째로 보이는 것으로 둔다
+    function collectParts(model, light) {
         var parts = {visible: [], hidden: []};
         var curves = [];
         var i;
@@ -1190,7 +1218,9 @@ try {
 
         for (i = 0; i < curves.length; i++) {
             var curve = curves[i];
-            var spans = mergeShortSpans(curve, splitCurve(curve));
+            var spans = light
+                ? [{t0: curve.tMin, t1: curve.tMax, visible: true, closed: curve.closed}]
+                : mergeShortSpans(curve, splitCurve(curve));
             for (s = 0; s < spans.length; s++) {
                 (spans[s].visible ? parts.visible : parts.hidden).push({
                     kind: curve.kind, curve: curve, t0: spans[s].t0, t1: spans[s].t1, closed: spans[s].closed
@@ -1202,13 +1232,13 @@ try {
 
     // 곡선 위 각 점의 "보이는 정도"를 샘플링해 부호가 바뀌는 곳에서 자른다
     function splitCurve(curve) {
-        var sampleCount = curve.samples || CURVE_SAMPLES;
+        var sampleCount = curve.samples;
         var tMin = curve.tMin;
         var span = curve.tMax - curve.tMin;
         var values = [];
         var i;
         for (i = 0; i <= sampleCount; i++) {
-            values.push(curve.visibilityAt(tMin + span * i / sampleCount));
+            values.push(curve.visibilityAt(tMin + span * i / sampleCount, i));
         }
         // 닫힌 곡선은 마지막 샘플을 첫 샘플과 비교한다
         if (curve.closed) values[sampleCount] = values[0];
@@ -1247,7 +1277,7 @@ try {
 
     function refineCrossing(curve, tA, tB) {
         var visibleAtA = curve.visibilityAt(tA) >= 0;
-        for (var i = 0; i < 30; i++) {
+        for (var i = 0; i < CROSSING_STEPS; i++) {
             var tM = (tA + tB) / 2;
             if ((curve.visibilityAt(tM) >= 0) === visibleAtA) tA = tM;
             else tB = tM;
@@ -1373,11 +1403,6 @@ try {
         var path = group.pathItems.add();
         path.setEntirePath([a, b]);
         path.closed = false;
-        for (var i = 0; i < path.pathPoints.length; i++) {
-            path.pathPoints[i].leftDirection = i === 0 ? a : b;
-            path.pathPoints[i].rightDirection = i === 0 ? a : b;
-            path.pathPoints[i].pointType = PointType.CORNER;
-        }
         return path;
     }
 
@@ -1402,17 +1427,25 @@ try {
             var duNext = (i + 1 < n) ? breaks[i + 1] - u : (closed ? breaks[0] + period - u : 0);
             var left = anchor;
             var right = anchor;
-            if (duPrev !== 0) {
+            if (duPrev !== 0 && !straightSegmentAt(curve, u, -1)) {
                 var back = screenTangentAt(curve, u, -1);
                 left = [anchor[0] - back[0] * duPrev / 3, anchor[1] - back[1] * duPrev / 3];
             }
-            if (duNext !== 0) {
+            if (duNext !== 0 && !straightSegmentAt(curve, u, 1)) {
                 var ahead = screenTangentAt(curve, u, 1);
                 right = [anchor[0] + ahead[0] * duNext / 3, anchor[1] + ahead[1] * duNext / 3];
             }
             nodes.push({anchor: anchor, left: left, right: right, corner: isCornerAtU(curve, u)});
         }
         return nodes;
+    }
+
+    // u에서 direction 쪽 베지어 구간이 직선(핸들이 앵커에 붙음)인가. 투영해도 직선이라 핸들이 필요 없다
+    function straightSegmentAt(curve, u, direction) {
+        var contour = curve.contour;
+        if (!contour) return false;
+        var ctrl = segControls(contour, splitU(contour, u + direction * 1e-6).seg);
+        return samePoint2(ctrl[0], ctrl[1]) && samePoint2(ctrl[2], ctrl[3]);
     }
 
     // 한쪽 방향으로만 본 화면 접선 (모서리 앵커에서는 양쪽 접선이 다르다)
@@ -1443,11 +1476,17 @@ try {
         var path = group.pathItems.add();
         path.setEntirePath(anchors);
         path.closed = !!closed;
+        var points = path.pathPoints;
         for (i = 0; i < nodes.length; i++) {
-            var point = path.pathPoints[i];
-            point.leftDirection = nodes[i].left;
-            point.rightDirection = nodes[i].right;
-            point.pointType = (nodes[i].corner || isCornerNode(nodes[i])) ? PointType.CORNER : PointType.SMOOTH;
+            var node = nodes[i];
+            // setEntirePath는 핸들이 앵커에 붙은 모서리점을 만든다. 그대로인 핸들은 다시 넣지 않는다 (DOM 호출 절감)
+            var leftMoved = !samePoint(node.left, node.anchor);
+            var rightMoved = !samePoint(node.right, node.anchor);
+            if (!leftMoved && !rightMoved && !setPointType) continue;
+            var point = points[i];
+            if (leftMoved) point.leftDirection = node.left;
+            if (rightMoved) point.rightDirection = node.right;
+            if (setPointType) point.pointType = (node.corner || isCornerNode(node)) ? PointType.CORNER : PointType.SMOOTH;
         }
         return path;
     }
@@ -1651,8 +1690,9 @@ try {
     }
 
     function makeKColor(k) {
+        if (kColorCache[k]) return kColorCache[k];
         var color;
-        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+        if (documentIsCmyk) {
             color = new CMYKColor();
             color.cyan = 0;
             color.magenta = 0;
@@ -1665,6 +1705,7 @@ try {
             color.green = gray;
             color.blue = gray;
         }
+        kColorCache[k] = color;
         return color;
     }
 

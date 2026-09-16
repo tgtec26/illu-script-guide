@@ -20,13 +20,14 @@ function loadEngine(state) {
   const s = Object.assign({}, defaults, state);
   const prelude = `
     var MM_TO_PT = 2.834645669, LINE_WIDTH_PT = 0.3, HIDDEN_DASH = [2, 1];
-    var CURVE_PIECES = 12, CORNER_COS = Math.cos(2 * Math.PI / 180), CURVE_SAMPLES = 144, RULING_SAMPLES = 96;
+    var CURVE_PIECES = 12, CORNER_COS = Math.cos(2 * Math.PI / 180), CURVE_SAMPLES_PER_SEG = 12, CURVE_SAMPLES_MIN = 96, CURVE_SAMPLES_MAX = 480, RULING_SAMPLES = 96, CROSSING_STEPS = 12;
     var CAP_DEPTH_BIAS = 1e9, RAY_LIFT = 1e-4, PROBE_STEP = 1e-4, MIN_SPAN_PT = 1.5;
     var FACING_EPSILON = 1e-9, FILL_OVERLAP_PT = 0.15;
     var FILL_NONE = 0, FILL_FLAT = 1, FILL_LIT = 2;
     var HIDDEN_NONE = 0, HIDDEN_DASHED = 1, HIDDEN_SOLID = 2;
     ${Object.keys(s).map((k) => `var ${k} = ${JSON.stringify(s[k])};`).join("\n")}
     var viewMatrix = null, eyeZ = 0, strokeColor = null;
+    var setPointType = false, documentIsCmyk = true, kColorCache = {};
     var paths = [];
     var doc = { groupItems: { add() { return makeGroup(); } }, documentColorSpace: "CMYK" };
     function makeGroup() {
@@ -282,6 +283,44 @@ function prepare(engine, items) {
   const rulings = engine.collectRulings(model);
   assert.strictEqual(rulings.length, 3, "양끝 2개 + 꺾인 곳 1개");
   assert.ok(rulings.every((r) => r.corner));
+}
+
+// 13. 경량 모드(슬라이더를 끄는 동안): 숨은선 판정 없이 모든 선이 보이는 실선, 면 없음
+{
+  const engine = loadEngine({ rotY: 45, rotX: 35.3, depthMm: 20, fillMode: 2, hiddenMode: 1 });
+  prepare(engine, [rectPath(0, 0, 40, 40)]);
+  const model = engine.buildModel();
+  engine.beginView(model);
+  const light = engine.collectParts(model, true);
+  assert.strictEqual(light.hidden.length, 0, "경량 모드는 숨은선을 가르지 않는다");
+  assert.strictEqual(light.visible.length, 2 + 4, "뚜껑 테두리 2 + 모서리 능선 4가 통째로");
+  assert.ok(light.visible.every((p) => p.kind === "line" || (p.t0 === 0 && p.t1 === 4 && p.closed)), "뚜껑 테두리는 한 바퀴 통째");
+  const group = engine.createSolid(true, false);
+  assert.ok(group !== null && !group.removed);
+  assert.ok(engine.paths.every((p) => p.stroked && !p.filled), "경량 모드에는 면이 없다");
+  assert.ok(engine.paths.every((p) => !p.strokeDashes || p.strokeDashes.length === 0), "경량 모드에는 파선이 없다");
+}
+
+// 14. DOM 호출 절감: 직선 구간은 핸들을 두지 않고, 미리보기는 앵커 종류를 넣지 않는다. 확정 출력은 넣는다
+{
+  const engine = loadEngine({ rotY: 45, rotX: 35.3, depthMm: 20, fillMode: 2, hiddenMode: 1 });
+  prepare(engine, [rectPath(0, 0, 40, 40)]);
+  engine.createSolid(false, false);
+  const previewPoints = engine.paths.flatMap((p) => p.pathPoints);
+  assert.ok(previewPoints.length > 0);
+  assert.ok(previewPoints.every((pt) => pt.leftDirection === pt.anchor && pt.rightDirection === pt.anchor), "상자는 곡선이 없어 핸들을 하나도 넣지 않는다");
+  assert.ok(previewPoints.every((pt) => pt.pointType === null), "미리보기는 앵커 종류를 넣지 않는다");
+  engine.paths.length = 0;
+  engine.createSolid(false, true);
+  // 모선(2점 직선)은 setEntirePath가 만든 모서리점 그대로 둔다. 앵커 종류는 테두리·면 패스에만 넣는다
+  const finalCurvePoints = engine.paths.filter((p) => p.pathPoints.length > 2).flatMap((p) => p.pathPoints);
+  assert.ok(finalCurvePoints.length > 0 && finalCurvePoints.every((pt) => pt.pointType === "corner"), "확정 출력은 앵커 종류를 넣는다");
+
+  // 원기둥: 곡선 구간은 핸들이 들어간다
+  const round = loadEngine({ rotY: 20, rotX: 15, depthMm: 20, fillMode: 0 });
+  prepare(round, [circlePath(0, 0, 30)]);
+  round.createSolid(false, false);
+  assert.ok(round.paths.some((p) => p.pathPoints.some((pt) => pt.leftDirection !== pt.anchor)), "곡선 테두리는 핸들이 있다");
 }
 
 console.log("check-extrude3d: 통과");
