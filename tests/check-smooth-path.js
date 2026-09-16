@@ -24,6 +24,7 @@ const helperNames = [
   "processPathData", "samplePathPoints", "bezierPoint", "simplifyPoints", "rdpMark",
   "relaxedSample", "pointSegmentDistance", "turnDeviation", "markCorners", "neighborAt", "cornerWindow", "smoothPoints",
   "relax", "buildBezier", "normalize", "distance", "pushUnique",
+  "removeAnchors", "mergeSegments", "sampleSegment", "fitHandles", "tangentAt", "isZeroHandle", "chordParams",
 ];
 const helperSource = helperNames.map(extractFunction).join("\n");
 const api = new Function(`${helperSource}\nreturn {${helperNames.join(", ")}};`)();
@@ -65,7 +66,40 @@ const options = (over) => Object.assign({
   cornerAngle: 75,
   minOpenPoints: 2,
   minClosedPoints: 4,
+  removeTolerance: 0,
 }, over || {});
+
+// 핸들이 있는 점. left/right는 앵커 기준 상대 좌표로 받는다
+function smoothPoint(x, y, lx, ly, rx, ry) {
+  return { anchor: [x, y], left: [x + lx, y + ly], right: [x + rx, y + ry], corner: false };
+}
+
+// 핸들이 제대로 붙은 원(정확한 베지어 근사). segments개 구간으로 나눈다
+function bezierCircle(segments, radius) {
+  const points = [];
+  const k = (4 / 3) * Math.tan(Math.PI / (2 * segments)) * radius;
+  for (let i = 0; i < segments; i++) {
+    const a = (2 * Math.PI * i) / segments;
+    const tx = -Math.sin(a);
+    const ty = Math.cos(a);
+    points.push(smoothPoint(Math.cos(a) * radius, Math.sin(a) * radius, -tx * k, -ty * k, tx * k, ty * k));
+  }
+  return { closed: true, points };
+}
+
+function radiusError(data, radius) {
+  let worst = 0;
+  const count = data.closed ? data.points.length : data.points.length - 1;
+  for (let i = 0; i < count; i++) {
+    const a = data.points[i];
+    const b = data.points[(i + 1) % data.points.length];
+    for (let k = 0; k <= 20; k++) {
+      const p = api.bezierPoint(a.anchor, a.right, b.left, b.anchor, k / 20);
+      worst = Math.max(worst, Math.abs(Math.hypot(p[0], p[1]) - radius));
+    }
+  }
+  return worst;
+}
 
 // 1. 두 강도가 모두 0이면 원본을 건드리지 않는다
 {
@@ -251,6 +285,85 @@ const options = (over) => Object.assign({
 
   const rounded = api.processPathData(elbow, options({ tolerance: 0.5, smoothStrength: 80, cornerAngle: 0 }));
   for (const point of rounded.points) assert.strictEqual(point.corner, false, "임계 0이면 모서리 없이 둥글게");
+}
+
+// 10. 앵커 제거(형태 유지): 직선 위 중간점은 사라지고, 직선은 직선으로 남는다
+{
+  const line = { closed: false, points: [corner(0, 0), corner(30, 0), corner(60, 0.05), corner(100, 0)] };
+  const result = api.removeAnchors(line, 0.1, 2);
+  assert.strictEqual(result.points.length, 2, "직선 위 중간점 제거");
+  assert.deepStrictEqual(result.points[0].right, [0, 0], "직선은 핸들 없이 남는다");
+  assert.deepStrictEqual(result.points[1].left, [100, 0], "직선 끝 핸들도 없다");
+
+  const bent = { closed: false, points: [corner(0, 0), corner(50, 5), corner(100, 0)] };
+  assert.strictEqual(api.removeAnchors(bent, 0.1, 2).points.length, 3, "허용 오차보다 큰 꺾임은 남는다");
+  assert.strictEqual(api.removeAnchors(bent, 6, 2).points.length, 2, "허용 오차 안이면 지운다");
+}
+
+// 11. 앵커 제거: 핸들 있는 원은 앵커가 절반 이하로 줄고 곡선은 원 위에 남는다
+{
+  const circle = bezierCircle(32, 50);
+  const result = api.removeAnchors(circle, 0.1, 4);
+  assert.strictEqual(result.closed, true, "닫힘 유지");
+  assert.ok(result.points.length <= 16, `앵커 32 → ${result.points.length}`);
+  assert.ok(result.points.length >= 4, "닫힌 패스 최소 4점");
+  assert.ok(radiusError(result, 50) < 0.15, `원에서 벗어난 정도 ${radiusError(result, 50)}`);
+
+  // 남은 점의 접선 방향은 원본 그대로(원의 접선)
+  for (const point of result.points) {
+    const dot = (point.right[0] - point.anchor[0]) * point.anchor[0] + (point.right[1] - point.anchor[1]) * point.anchor[1];
+    near(dot, 0, 1e-6, "핸들은 반지름과 수직");
+  }
+
+  // 허용 오차 0이면 아무것도 지우지 않는다
+  assert.strictEqual(api.removeAnchors(circle, 0, 4).points.length, 32, "허용 오차 0");
+}
+
+// 12. 앵커 제거: 모서리는 작은 허용 오차에서 남는다. 열린 패스 양 끝은 항상 남는다
+{
+  const square = { closed: true, points: [corner(0, 0), corner(100, 0), corner(100, 100), corner(0, 100)] };
+  assert.strictEqual(api.removeAnchors(square, 0.5, 4).points.length, 4, "사각형 꼭짓점 유지");
+
+  const open = { closed: false, points: [corner(0, 0), corner(50, 0), corner(100, 0)] };
+  const kept = api.removeAnchors(open, 1, 2);
+  assert.deepStrictEqual(kept.points[0].anchor, [0, 0], "시작점 유지");
+  assert.deepStrictEqual(kept.points[kept.points.length - 1].anchor, [100, 0], "끝점 유지");
+}
+
+// 13. 앵커 제거는 원본 기준으로 오차를 잰다 — 연쇄 제거로 오차가 쌓이지 않는다
+{
+  const arc = [];
+  for (let i = 0; i <= 60; i++) {
+    const a = (i / 60) * Math.PI;
+    arc.push(corner(Math.cos(a) * 50, Math.sin(a) * 50));   // 핸들 없는 촘촘한 반원
+  }
+  const result = api.removeAnchors({ closed: false, points: arc }, 0.3, 2);
+  assert.ok(result.points.length < 20, `반원 앵커 61 → ${result.points.length}`);
+  // 원본 앵커 하나하나가 결과 곡선에서 허용 오차 안에 있다
+  let worst = 0;
+  for (const source of arc) {
+    let best = Infinity;
+    for (let i = 0; i < result.points.length - 1; i++) {
+      const a = result.points[i];
+      const b = result.points[i + 1];
+      for (let k = 0; k <= 40; k++) {
+        const p = api.bezierPoint(a.anchor, a.right, b.left, b.anchor, k / 40);
+        best = Math.min(best, api.distance(p, source.anchor));
+      }
+    }
+    worst = Math.max(worst, best);
+  }
+  assert.ok(worst <= 0.35, `원본 앵커와 결과 곡선의 거리 ${worst}`);
+}
+
+// 14. 전체 흐름: 앵커 제거만 켜면 나머지 단계 없이 원본 핸들 구조가 유지된다
+{
+  const circle = bezierCircle(32, 50);
+  const result = api.processPathData(circle, options({ tolerance: 0, smoothStrength: 0, removeTolerance: 0.1 }));
+  assert.ok(result.points.length < 32, "앵커가 줄었다");
+  assert.ok(radiusError(result, 50) < 0.15, "곡선은 원 위에 남는다");
+  const untouched = api.processPathData(circle, options({ tolerance: 0, smoothStrength: 0, removeTolerance: 0 }));
+  assert.strictEqual(untouched, circle, "모두 0이면 원본 그대로");
 }
 
 console.log("check-smooth-path: ok");

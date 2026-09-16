@@ -11,11 +11,14 @@ try {
 
 /*
   Object_SmoothPath.jsx
-  기능: 연필 도구로 그린 패스를 정리합니다. 두 가지를 따로 조절합니다.
+  기능: 연필 도구로 그린 패스를 정리합니다. 세 가지를 따로 조절합니다.
+    - 앵커 제거(형태 유지): 원본 핸들·접선을 그대로 둔 채, 빼도 옆 두 구간이 베지어 하나로
+      허용 오차 안에 맞는 앵커만 지웁니다(VectorFirstAid의 Super Smart Remove와 같은 방식).
+      이미지 트레이스처럼 핸들이 제대로 붙은 복잡한 그림에 맞습니다.
     - 앵커 줄이기: 모양을 유지하면서 필요 없는 앵커를 없앱니다(RDP 단순화).
     - 곡선 다듬기: 꺾인 곳(미분 불가능한 점)과 곡률이 튀는 곳을 펴서 부드러운 곡선으로 만듭니다(Taubin 평활).
     - 모서리 유지 각도보다 급하게 꺾인 점은 모서리로 남기고, 나머지는 핸들을 이어 붙여 매끄럽게 만듭니다.
-  사용법: 패스(그룹·복합 패스 포함)를 선택한 뒤 실행. 두 강도를 미리보기로 보며 맞추고 확인.
+  사용법: 패스(그룹·복합 패스 포함)를 선택한 뒤 실행. 값을 미리보기로 보며 맞추고 확인.
 
   미리보기는 선택한 패스를 그 자리에서 바꾼다. 취소하거나 미리보기를 끄면 원래 좌표로 되돌리고,
   확인을 누르면 화면에 보이던 미리보기가 그대로 결과가 된다. 위치 이동 행은 두지 않는다.
@@ -31,6 +34,7 @@ try {
     var PREF_KEY = "ObjectSmoothPath/settings";
     var MM = 2.834645669;
     var MAX_TOLERANCE_MM = 2;      // 정리 강도 100일 때의 허용 오차
+    var MAX_REMOVE_MM = 0.5;       // 앵커 제거 허용 오차 슬라이더 최대
     var SAMPLE_STEP_MM = 0.25;     // 곡선을 점으로 잘게 나눌 간격
     var MIN_OPEN_POINTS = 2;
     var MIN_CLOSED_POINTS = 4;
@@ -51,6 +55,7 @@ try {
         sourceAnchorCount += data.points.length;
     }
 
+    var removeMm = 0;
     var simplifyStrength = 40;
     var smoothStrength = 40;
     var cornerAngle = 75;
@@ -69,6 +74,11 @@ try {
     dlg.alignChildren = "fill";
     dlg.spacing = 6;
     dlg.margins = 12;
+
+    var removePanel = addPanel(dlg, "앵커 제거 (형태 유지)");
+    var removeField = addNumberField(removePanel, "허용 오차", "mm", removeMm, 0.01, 0, MAX_REMOVE_MM);
+    var removeHint = removePanel.add("statictext", undefined, "원본 핸들을 그대로 두고, 빼도 이 오차 안에 맞는 앵커만 지웁니다. 0이면 끔.");
+    removeHint.preferredSize.width = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
 
     var simplifyPanel = addPanel(dlg, "앵커 줄이기");
     var simplifyField = addNumberField(simplifyPanel, "정리 강도", "0~100", simplifyStrength, 1, 0, 100);
@@ -161,6 +171,7 @@ try {
 
     function buildOptions() {
         return {
+            removeTolerance: removeMm * MM,
             tolerance: toleranceFor(simplifyStrength),
             sampleStep: SAMPLE_STEP_MM * MM,
             smoothStrength: smoothStrength,
@@ -179,19 +190,21 @@ try {
     function updateInfoText(resultCount) {
         var tolMm = Math.round(toleranceFor(simplifyStrength) / MM * 100) / 100;
         infoText.text = "패스 " + targets.length + "개 · 앵커 " + sourceAnchorCount + " → " + resultCount +
-            " · 허용 오차 " + tolMm + "mm";
+            " · 줄이기 허용 오차 " + tolMm + "mm";
     }
 
     // -------------------------------------------------------
     // 계산 (순수 함수 — tests/check-smooth-path.js가 이 함수들만 떼어 검증한다)
     // -------------------------------------------------------
-    // 단순화 → 평활 → 한 번 더 단순화 → 핸들 다시 붙이기.
-    // 두 강도가 모두 0이면 원본을 그대로 돌려준다.
+    // 앵커 제거 → 단순화 → 평활 → 한 번 더 단순화 → 핸들 다시 붙이기.
+    // 모두 0이면 원본을 그대로 돌려준다.
     function processPathData(data, options) {
-        if (options.tolerance <= 0 && options.smoothStrength <= 0) return data;
-
-        var minPoints = data.closed ? options.minClosedPoints : options.minOpenPoints;
         if (data.points.length < 2) return data;
+        var minPoints = data.closed ? options.minClosedPoints : options.minOpenPoints;
+        if (options.removeTolerance > 0) {
+            data = removeAnchors(data, options.removeTolerance, minPoints);
+        }
+        if (options.tolerance <= 0 && options.smoothStrength <= 0) return data;
 
         var polyline;
         if (options.tolerance > 0) {
@@ -217,6 +230,163 @@ try {
             corners = markCorners(polyline, data.closed, options.cornerAngle, window);
         }
         return {closed: data.closed, points: buildBezier(polyline, data.closed, corners)};
+    }
+
+
+    // -------------------------------------------------------
+    // 앵커 제거 (형태 유지)
+    // -------------------------------------------------------
+    // 앵커 하나를 빼고 양옆 두 구간을 베지어 하나로 다시 맞춘다. 남는 앵커의 핸들 방향은
+    // 원본 그대로 두고 길이만 다시 재므로 곡선의 흐름이 바뀌지 않는다.
+    // 오차는 언제나 원본 곡선의 샘플점과 비교한다. 이미 합쳐진 구간을 기준으로 재면
+    // 제거가 이어질수록 오차가 쌓여 허용치를 넘어선다.
+    function removeAnchors(data, tolerance, minPoints) {
+        if (tolerance <= 0 || data.points.length < 3) return data;
+        var nodes = [];
+        var count = data.closed ? data.points.length : data.points.length - 1;
+        for (var i = 0; i < data.points.length; i++) {
+            var point = data.points[i];
+            var node = {
+                anchor: [point.anchor[0], point.anchor[1]],
+                left: [point.left[0], point.left[1]],
+                right: [point.right[0], point.right[1]],
+                corner: point.corner ? true : false,
+                samples: null
+            };
+            if (i < count) node.samples = sampleSegment(point, data.points[(i + 1) % data.points.length], 8);
+            nodes.push(node);
+        }
+
+        var removedAny = true;
+        while (removedAny && nodes.length > minPoints) {
+            removedAny = false;
+            var index = data.closed ? 0 : 1;
+            while (index < (data.closed ? nodes.length : nodes.length - 1) && nodes.length > minPoints) {
+                var prev = nodes[(index - 1 + nodes.length) % nodes.length];
+                var mid = nodes[index];
+                var next = nodes[(index + 1) % nodes.length];
+                if (prev === next) break;
+                var merged = mergeSegments(prev, mid, next);
+                if (merged.error <= tolerance) {
+                    prev.right = merged.right;
+                    next.left = merged.left;
+                    prev.samples = prev.samples.concat(mid.samples.slice(1));
+                    nodes.splice(index, 1);
+                    removedAny = true;
+                } else {
+                    index++;
+                }
+            }
+        }
+
+        var points = [];
+        for (var k = 0; k < nodes.length; k++) {
+            points.push({anchor: nodes[k].anchor, left: nodes[k].left, right: nodes[k].right, corner: nodes[k].corner});
+        }
+        return {closed: data.closed, points: points};
+    }
+
+    function sampleSegment(from, to, pieces) {
+        var result = [];
+        for (var k = 0; k <= pieces; k++) {
+            result.push(bezierPoint(from.anchor, from.right, to.left, to.anchor, k / pieces));
+        }
+        return result;
+    }
+
+    // prev → next를 베지어 하나로 맞춘 뒤, prev.samples + mid.samples(원본 점)와의 최대 거리를 돌려준다.
+    function mergeSegments(prev, mid, next) {
+        var samples = prev.samples.concat(mid.samples.slice(1));
+        var p0 = prev.anchor;
+        var p3 = next.anchor;
+        var straight = isZeroHandle(prev.right, p0) && isZeroHandle(mid.left, mid.anchor) &&
+            isZeroHandle(mid.right, mid.anchor) && isZeroHandle(next.left, p3);
+        if (straight) {
+            var worstLine = 0;
+            for (var i = 0; i < samples.length; i++) {
+                var dl = pointSegmentDistance(samples[i], p0, p3);
+                if (dl > worstLine) worstLine = dl;
+            }
+            return {right: [p0[0], p0[1]], left: [p3[0], p3[1]], error: worstLine};
+        }
+
+        var t0 = tangentAt(prev.right, p0, samples[1]);
+        var t1 = tangentAt(next.left, p3, samples[samples.length - 2]);
+        var params = chordParams(samples);
+        var handles = fitHandles(samples, params, p0, p3, t0, t1);
+        var c1 = handles[0];
+        var c2 = handles[1];
+        var worst = 0;
+        for (var j = 0; j < samples.length; j++) {
+            var d = distance(samples[j], bezierPoint(p0, c1, c2, p3, params[j]));
+            if (d > worst) worst = d;
+        }
+        return {right: c1, left: c2, error: worst};
+    }
+
+    function isZeroHandle(handle, anchor) {
+        return Math.abs(handle[0] - anchor[0]) < 0.0001 && Math.abs(handle[1] - anchor[1]) < 0.0001;
+    }
+
+    // 핸들 방향. 핸들이 없으면(직선 구간) 곡선이 실제로 나아가는 쪽을 쓴다.
+    function tangentAt(handle, anchor, fallbackPoint) {
+        var direction = normalize([handle[0] - anchor[0], handle[1] - anchor[1]]);
+        if (direction[0] === 0 && direction[1] === 0) {
+            direction = normalize([fallbackPoint[0] - anchor[0], fallbackPoint[1] - anchor[1]]);
+        }
+        return direction;
+    }
+
+    function chordParams(samples) {
+        var params = [0];
+        var total = 0;
+        for (var i = 1; i < samples.length; i++) {
+            total += distance(samples[i - 1], samples[i]);
+            params.push(total);
+        }
+        if (total === 0) return params;
+        for (var j = 0; j < params.length; j++) params[j] /= total;
+        return params;
+    }
+
+    // 양 끝 접선 방향이 정해진 베지어의 핸들 길이(α, β)를 최소제곱으로 푼다(Schneider 1990).
+    // 풀이가 불안정하거나 핸들이 뒤로 접히면 현의 1/3 길이로 둔다.
+    function fitHandles(samples, params, p0, p3, t0, t1) {
+        var c11 = 0, c12 = 0, c22 = 0, x1 = 0, x2 = 0;
+        for (var i = 0; i < samples.length; i++) {
+            var t = params[i];
+            var u = 1 - t;
+            var b1 = 3 * u * u * t;
+            var b2 = 3 * u * t * t;
+            var a1 = [t0[0] * b1, t0[1] * b1];
+            var a2 = [t1[0] * b2, t1[1] * b2];
+            var base = [
+                (u * u * u + b1) * p0[0] + (b2 + t * t * t) * p3[0],
+                (u * u * u + b1) * p0[1] + (b2 + t * t * t) * p3[1]
+            ];
+            var rx = samples[i][0] - base[0];
+            var ry = samples[i][1] - base[1];
+            c11 += a1[0] * a1[0] + a1[1] * a1[1];
+            c12 += a1[0] * a2[0] + a1[1] * a2[1];
+            c22 += a2[0] * a2[0] + a2[1] * a2[1];
+            x1 += a1[0] * rx + a1[1] * ry;
+            x2 += a2[0] * rx + a2[1] * ry;
+        }
+        var det = c11 * c22 - c12 * c12;
+        var alpha, beta;
+        if (Math.abs(det) > 1e-12) {
+            alpha = (x1 * c22 - x2 * c12) / det;
+            beta = (c11 * x2 - c12 * x1) / det;
+        }
+        var chord = distance(p0, p3);
+        if (!(alpha > 0) || !(beta > 0) || alpha > chord * 2 || beta > chord * 2) {
+            alpha = chord / 3;
+            beta = chord / 3;
+        }
+        return [
+            [p0[0] + t0[0] * alpha, p0[1] + t0[1] * alpha],
+            [p3[0] + t1[0] * beta, p3[1] + t1[1] * beta]
+        ];
     }
 
     // 모서리인지 보는 거리. 샘플 간격·허용 오차보다 넉넉해야 떨림에 속지 않고,
@@ -538,6 +708,7 @@ try {
     // 입력
     // -------------------------------------------------------
     function readFields() {
+        removeMm = fieldValue(removeField, removeMm);
         simplifyStrength = fieldValue(simplifyField, simplifyStrength);
         smoothStrength = fieldValue(smoothField, smoothStrength);
         cornerAngle = fieldValue(cornerField, cornerAngle);
@@ -617,7 +788,7 @@ try {
     }
 
     function saveSettings() {
-        var parts = ["v1", simplifyStrength, smoothStrength, cornerAngle, previewEnabled ? "1" : "0"];
+        var parts = ["v2", simplifyStrength, smoothStrength, cornerAngle, previewEnabled ? "1" : "0", removeMm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -626,7 +797,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length < 5) return;
+        if ((p[0] !== "v1" && p[0] !== "v2") || p.length < 5) return;
 
         var savedSimplify = parseFloat(p[1]);
         var savedSmooth = parseFloat(p[2]);
@@ -635,5 +806,9 @@ try {
         if (!isNaN(savedSmooth)) smoothStrength = clampValue(savedSmooth, 0, 100);
         if (!isNaN(savedCorner)) cornerAngle = clampValue(savedCorner, 0, 180);
         previewEnabled = (p[4] !== "0");
+        if (p[0] === "v2" && p.length >= 6) {
+            var savedRemove = parseFloat(p[5]);
+            if (!isNaN(savedRemove)) removeMm = clampValue(savedRemove, 0, MAX_REMOVE_MM);
+        }
     }
 })();
