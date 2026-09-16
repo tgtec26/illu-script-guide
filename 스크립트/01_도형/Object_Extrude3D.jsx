@@ -71,6 +71,7 @@ try {
     var lightElevation = 50;   // 광원 높이 (°). 90 = 바로 위
     var offsetXmm = 0;
     var offsetYmm = 0;
+    var mergeFaces = false;    // 단일 음영일 때 보이는 선을 면의 획으로 붙인다 (셰이프 빌더로 합친 구조)
     var previewEnabled = true;
 
     var previewGroup = null;
@@ -197,6 +198,10 @@ try {
     var fillList = fillRow.add("dropdownlist", undefined, ["없음", "단일 음영", "광원 자동"]);
     fillList.selection = fillMode;
     fillList.preferredSize.width = SLIDER_WIDTH + 60;
+    var mergeCheck = linePanel.add("checkbox", undefined, "면에 선 합치기 (단일 음영)");
+    mergeCheck.value = mergeFaces;
+    mergeCheck.helpTip = "보이는 선을 따로 두지 않고 면마다 획으로 붙인다 (셰이프 빌더로 합친 것과 같은 구조). 숨은선은 그대로 따로 둔다. " +
+        "오목한 도형은 앞면이 뒷면을 덮는 순서에 기대므로 선이 어긋날 수 있다";
     var brightnessControl = addNumberRow(linePanel, "밝기 (%)", brightness, 0, 100, 1, 0,
         "면 K값의 중간. 100이면 K0(흰색), 0이면 K100", function(value, live) {
             brightness = value;
@@ -251,6 +256,10 @@ try {
     fillList.onChange = function() {
         fillMode = fillList.selection ? fillList.selection.index : FILL_NONE;
         syncFillRows();
+        updatePreview();
+    };
+    mergeCheck.onClick = function() {
+        mergeFaces = mergeCheck.value;
         updatePreview();
     };
     previewCheck.onClick = function() {
@@ -373,6 +382,7 @@ try {
     }
 
     function syncFillRows() {
+        mergeCheck.enabled = fillMode === FILL_FLAT;
         brightnessControl.row.enabled = fillMode !== FILL_NONE;
         contrastControl.row.enabled = fillMode === FILL_LIT;
         lightAzimuthControl.row.enabled = fillMode === FILL_LIT;
@@ -506,8 +516,8 @@ try {
     }
 
     function saveSettings() {
-        var parts = ["v1", depthMm, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
-            offsetXmm, offsetYmm, fillMode, brightness, contrast, lightAzimuth, lightElevation];
+        var parts = ["v2", depthMm, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
+            offsetXmm, offsetYmm, fillMode, brightness, contrast, lightAzimuth, lightElevation, mergeFaces ? 1 : 0];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (saveError) {}
     }
 
@@ -516,7 +526,8 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (readError) { return; }
         if (!raw) return;
         var p = String(raw).split("|");
-        if (p[0] !== "v1" || p.length !== 15) return;
+        // v1은 면에 선 합치기 항목이 없다
+        if (!((p[0] === "v1" && p.length === 15) || (p[0] === "v2" && p.length === 16))) return;
         depthMm = restoreNumber(p[1], depthMm, DEPTH_MIN_MM, DEPTH_MAX_MM);
         rotY = restoreNumber(p[2], rotY, -180, 180);
         rotX = restoreNumber(p[3], rotX, -180, 180);
@@ -531,7 +542,9 @@ try {
         contrast = restoreNumber(p[12], contrast, 0, 100);
         lightAzimuth = restoreNumber(p[13], lightAzimuth, -90, 90);
         lightElevation = restoreNumber(p[14], lightElevation, 0, 90);
+        if (p.length > 15) mergeFaces = p[15] === "1";
     }
+
 
     function restoreNumber(text, fallback, minimum, maximum) {
         var value = parseNumber(text);
@@ -1186,16 +1199,21 @@ try {
             return null;
         }
         try {
-            // 쌓는 순서: 면 → 숨은선 → 보이는 선. 숨은선이 면에 가려지지 않는다
+            // 쌓는 순서: 면 → 숨은선 → 보이는 선. 숨은선이 면에 가려지지 않는다.
+            // 면에 선을 합치면 보이는 선은 면의 획이 대신하므로 선 그룹에는 숨은선만 남는다
+            var merged = facesMerged() && !light;
             if (fillMode !== FILL_NONE && !light) {
                 var fillGroup = group.groupItems.add();
                 fillGroup.name = "면";
                 drawFills(fillGroup, collectFills(model));
             }
-            var lineGroup = group.groupItems.add();
-            lineGroup.name = "선";
-            if (hiddenMode !== HIDDEN_NONE) drawParts(lineGroup, parts.hidden, hiddenMode === HIDDEN_DASHED);
-            drawParts(lineGroup, parts.visible, false);
+            var drawHidden = hiddenMode !== HIDDEN_NONE && parts.hidden.length > 0;
+            if (!merged || drawHidden) {
+                var lineGroup = group.groupItems.add();
+                lineGroup.name = "선";
+                if (drawHidden) drawParts(lineGroup, parts.hidden, hiddenMode === HIDDEN_DASHED);
+                if (!merged) drawParts(lineGroup, parts.visible, false);
+            }
         } catch (drawError) {
             try { group.remove(); } catch (cleanupError) {}
             return null;
@@ -1357,6 +1375,10 @@ try {
 
     function applyStroke(path, dashed) {
         path.filled = false;
+        applyStrokeStyle(path, dashed);
+    }
+
+    function applyStrokeStyle(path, dashed) {
         path.stroked = true;
         path.strokeWidth = LINE_WIDTH_PT;
         try { path.strokeColor = strokeColor; } catch (colorError) {}
@@ -1577,7 +1599,9 @@ try {
     function collectFills(model) {
         var fills = [];
         var h = model.halfDepth;
-        var zPad = model.closed ? Math.min(FILL_OVERLAP_PT, 0.2 * h) : 0;
+        // 면에 선을 합치면 획이 이음새를 덮으므로 겹침 여유를 두지 않는다. 그래야 획이 실제 모서리에 놓인다
+        var overlap = facesMerged() ? 0 : FILL_OVERLAP_PT;
+        var zPad = model.closed ? Math.min(overlap, 0.2 * h) : 0;
         var c;
         var i;
         for (c = 0; c < model.contours.length; c++) {
@@ -1605,11 +1629,12 @@ try {
                 var screenLength = Math.sqrt(distance2(projectModel(modelPoint(contour, u0, 0)),
                     projectModel(modelPoint(contour, u1, 0))));
                 var du = screenLength > 1e-6
-                    ? Math.min(FILL_OVERLAP_PT / screenLength, 0.25) * (u1 - u0)
+                    ? Math.min(overlap / screenLength, 0.25) * (u1 - u0)
                     : 0;
                 edges[i] = {
                     u0: u0 - ((!contour.closed && i === 0) ? 0 : du),
                     u1: u1 + ((!contour.closed && i === edgeCount - 1) ? 0 : du),
+                    cut: pts[i].corner,   // 모서리 앵커에서 시작하는 조각. 여기서 면이 갈린다
                     side: side,
                     k: kFromShade(shadeOfViewNormal(toView(scale(normal, side))))
                 };
@@ -1647,22 +1672,22 @@ try {
         return fills;
     }
 
-    // 이웃한 조각 띠를 같은 쪽·같은 K끼리 잇는다. 닫힌 테두리는 마지막 조각과 첫 조각도 이웃이라 그 자리에서 이어지면
-    // 한 바퀴를 넘겨 u를 이어 붙인다 (닫힌 테두리의 u는 한 바퀴마다 접힌다)
+    // 이웃한 조각 띠를 같은 쪽·같은 K끼리 잇는다. 모서리 앵커(세로 능선이 그어지는 자리)에서는 잇지 않아 상자는 옆면마다 한 장이다.
+    // 닫힌 테두리는 마지막 조각과 첫 조각도 이웃이라 그 자리에서 이어지면 한 바퀴를 넘겨 u를 이어 붙인다 (닫힌 테두리의 u는 한 바퀴마다 접힌다)
     function mergeFillRuns(contour, edges) {
         var runs = [];
         var run = null;
         var i;
         for (i = 0; i < edges.length; i++) {
             var edge = edges[i];
-            if (edge && run && run.side === edge.side && run.k === edge.k) {
+            if (edge && run && !edge.cut && run.side === edge.side && run.k === edge.k) {
                 run.u1 = edge.u1;
                 continue;
             }
             run = edge ? {u0: edge.u0, u1: edge.u1, side: edge.side, k: edge.k} : null;
             if (run) runs.push(run);
         }
-        if (contour.closed && runs.length > 1 && edges[0] && edges[edges.length - 1]) {
+        if (contour.closed && runs.length > 1 && edges[0] && !edges[0].cut && edges[edges.length - 1]) {
             var head = runs[0];
             var tail = runs[runs.length - 1];
             if (head.side === tail.side && head.k === tail.k) {
@@ -1692,7 +1717,7 @@ try {
             {kind: "curve", curve: high, t0: fill.u1, t1: fill.u0},
             {kind: "line", a: modelPoint(contour, fill.u0, fill.zHigh), b: modelPoint(contour, fill.u0, fill.zLow)}
         ]);
-        applyFill(path, fill.k);
+        finishFace(path, fill.k);
     }
 
     // 뚜껑: 닫힌 테두리가 여럿이면 복합 패스에 넣고 짝수-홀수 규칙으로 구멍을 낸다
@@ -1704,7 +1729,7 @@ try {
         }
         if (closedContours.length === 0) return;
         if (closedContours.length === 1) {
-            applyFill(makeCurvePath(group, zCurve(closedContours[0], fill.z), 0, closedContours[0].segCount, true), fill.k);
+            finishFace(makeCurvePath(group, zCurve(closedContours[0], fill.z), 0, closedContours[0].segCount, true), fill.k);
             return;
         }
         var compound = null;
@@ -1712,18 +1737,25 @@ try {
         var target = compound === null ? group : compound;
         for (i = 0; i < closedContours.length; i++) {
             var path = makeCurvePath(target, zCurve(closedContours[i], fill.z), 0, closedContours[i].segCount, true);
-            applyFill(path, fill.k);
+            finishFace(path, fill.k);
             if (path !== null) {
                 try { path.evenodd = true; } catch (evenOddError) {}
             }
         }
     }
 
-    function applyFill(path, k) {
+    // 면에 선 합치기가 실제로 켜지는 조건: 단일 음영일 때만. 광원 자동은 띠마다 획이 생겨 그라데이션 사이에 줄이 그어진다
+    function facesMerged() {
+        return mergeFaces && fillMode === FILL_FLAT;
+    }
+
+    // 면 마무리: 채우고, 면에 선을 합치는 중이면 획도 붙인다
+    function finishFace(path, k) {
         if (path === null) return;
-        path.stroked = false;
         path.filled = true;
         try { path.fillColor = makeKColor(k); } catch (fillError) {}
+        if (facesMerged()) applyStrokeStyle(path, false);
+        else path.stroked = false;
     }
 
     function makeKColor(k) {

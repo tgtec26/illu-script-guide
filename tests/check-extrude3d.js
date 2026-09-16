@@ -15,7 +15,7 @@ function loadEngine(state) {
   const defaults = {
     depthMm: 20, rotY: 0, rotX: 0, rotZ: 0, perspectiveOn: false, perspectiveMm: 300, hiddenMode: 1,
     fillMode: 0, brightness: 70, contrast: 40, lightAzimuth: -35, lightElevation: 50,
-    originX: 0, originY: 0, contours: [], solidClosed: true,
+    originX: 0, originY: 0, contours: [], solidClosed: true, mergeFaces: false,
   };
   const s = Object.assign({}, defaults, state);
   const prelude = `
@@ -255,7 +255,7 @@ function prepare(engine, items) {
   engine.setState({ fillMode: 1 });
   const flat = engine.collectFills(model);
   assert.strictEqual(new Set(flat.map((f) => f.k)).size, 1);
-  assert.strictEqual(flat.filter((f) => f.kind === "band").length, 1, "같은 K인 이웃 옆면은 한 장으로 합친다");
+  assert.strictEqual(flat.filter((f) => f.kind === "band").length, 2, "상자는 K가 같아도 모서리에서 면이 갈린다");
 }
 
 // 10b. 곡면 채우기: 광원 자동은 조각마다 K가 갈려 여러 장, 단일 음영은 보이는 옆면이 통째로 한 장
@@ -347,6 +347,37 @@ function prepare(engine, items) {
   prepare(round, [circlePath(0, 0, 30)]);
   round.createSolid(false, false);
   assert.ok(round.paths.some((p) => p.pathPoints.some((pt) => pt.leftDirection !== pt.anchor)), "곡선 테두리는 핸들이 있다");
+}
+
+// 15. 면에 선 합치기: 단일 음영이면 면마다 채움+획, 보이는 선은 따로 두지 않고 숨은선만 남긴다. 광원 자동에서는 무시
+{
+  const engine = loadEngine({ rotY: 20, rotX: 15, depthMm: 20, fillMode: 1, hiddenMode: 1, mergeFaces: true });
+  prepare(engine, [circlePath(0, 0, 30)]);
+  const model = engine.buildModel();
+  engine.beginView(model);
+  const fills = engine.collectFills(model);
+  const band = fills.find((f) => f.kind === "band");
+  assert.ok(Math.abs(band.zLow + 20 * 2.834645669 / 2) < 1e-9, "합칠 때는 뚜껑 밖으로 겹침 여유를 두지 않는다");
+  assert.ok(engine.createSolid(false, false) !== null);
+  const faces = engine.paths.filter((p) => p.filled);
+  assert.strictEqual(faces.length, 2, "옆면 1 + 뚜껑 1");
+  assert.ok(faces.every((p) => p.stroked && p.strokeDashes && p.strokeDashes.length === 0), "면마다 실선 획");
+  const lines = engine.paths.filter((p) => !p.filled);
+  assert.ok(lines.length > 0 && lines.every((p) => p.strokeDashes && p.strokeDashes.length === 2), "선 그룹에는 숨은선(파선)만 남는다");
+
+  // 상자: 옆면이 모서리에서 갈려 2장, 각각 획이 있어 사이 세로 능선이 그어진다
+  const box = loadEngine({ rotY: 30, rotX: 20, depthMm: 20, fillMode: 1, hiddenMode: 0, mergeFaces: true });
+  prepare(box, [rectPath(0, 0, 40, 40)]);
+  assert.ok(box.createSolid(false, false) !== null);
+  assert.strictEqual(box.paths.filter((p) => p.filled).length, 3, "옆면 2 + 뚜껑 1");
+  assert.strictEqual(box.paths.filter((p) => !p.filled).length, 0, "숨은선 없음이면 선 패스가 하나도 없다");
+
+  // 광원 자동은 합치지 않는다: 면은 획 없이, 보이는 선은 따로
+  const lit = loadEngine({ rotY: 20, rotX: 15, depthMm: 20, fillMode: 2, hiddenMode: 1, mergeFaces: true });
+  prepare(lit, [circlePath(0, 0, 30)]);
+  assert.ok(lit.createSolid(false, false) !== null);
+  assert.ok(lit.paths.filter((p) => p.filled).every((p) => !p.stroked), "광원 자동 면에는 획이 없다");
+  assert.ok(lit.paths.some((p) => !p.filled && p.stroked && p.strokeDashes.length === 0), "보이는 실선이 따로 있다");
 }
 
 console.log("check-extrude3d: 통과");
