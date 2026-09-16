@@ -1,11 +1,13 @@
 // 아트보드마다 구름 하나씩 그린 .ai(PDF 호환)에서 뽑은 패스(ai-extract.js 결과)를 스크립트 라이브러리(.jsxinc)로 만든다.
-// 사용: node pages-lib.js <extract.json> <out.jsxinc> [sheet.svg]
-// 역할은 색으로 정한다: 채움 K0 = 구름, K20 = 그림자 1, K40 = 그림자 2, 채움 K100(윤곽선을 면으로 만든 링) = 외곽선(바깥 고리를 0.3pt 획으로),
+// 사용: node pages-lib.js <extract.json>... <out.jsxinc> [sheet.svg]   (파일 여러 개면 순서대로 이어 붙이고 번호는 계속 센다)
+// 역할은 색으로 정한다: 채움 K0 = 구름, K20 = 그림자 1, K40 = 그림자 2, 채움 K100(윤곽선을 면으로 만든 링, 고리 2개) = 외곽선(바깥 고리를 0.3pt 획으로),
+// 채움 K100인데 고리가 하나(열린 선을 면으로 만든 것 — 가운데 선을 되살릴 수 없다) = 검은 면(ink) 그대로,
 // 획 K100 = 선(도판 규격에 맞춰 0.3pt로 통일). 그 밖의 색은 버린다. 그리는 순서는 원본 그대로.
 const fs = require("fs");
-const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-const outInc = process.argv[3];
-const outSvg = process.argv[4];
+const args = process.argv.slice(2);
+const inputs = args.filter((a) => a.endsWith(".json"));
+const outInc = args.find((a) => a.endsWith(".jsxinc"));
+const outSvg = args.find((a) => a.endsWith(".svg"));
 const ROUND = 4;
 const OUTLINE_PT = 0.3;
 
@@ -60,7 +62,12 @@ function polygonArea(anchors) {
 }
 
 const pages = {};
-for (const p of data.paths) (pages[p.page] = pages[p.page] || []).push(p);
+let pageBase = 0;
+for (const file of inputs) {
+  const data = JSON.parse(fs.readFileSync(file, "utf8"));
+  for (const p of data.paths) (pages[pageBase + p.page] = pages[pageBase + p.page] || []).push(p);
+  pageBase += Math.max(...data.paths.map((p) => p.page)) + 1;
+}
 const library = [];
 const dropped = [];
 for (const key of Object.keys(pages).map(Number).sort((a, b) => a - b)) {
@@ -70,7 +77,9 @@ for (const key of Object.keys(pages).map(Number).sort((a, b) => a - b)) {
     if (role === null) { dropped.push(`page ${key + 1}: ${p.fill ? "fill " + JSON.stringify(p.fill.raw) : "stroke " + JSON.stringify(p.stroke.raw)}`); continue; }
     let subpaths = p.subpaths.map(toAnchors).filter((s) => s && s.anchors.length >= 2);
     if (subpaths.length === 0) continue;
-    if (role === "outline") {
+    if (role === "outline" && subpaths.length === 1) {
+      items.push({ role: "ink", kind: "fill", subpaths });
+    } else if (role === "outline") {
       // 링(바깥 고리 + 안쪽 고리) 중 넓이가 큰 바깥 고리만 0.3pt 획으로
       subpaths.sort((a, b) => Math.abs(polygonArea(b.anchors)) - Math.abs(polygonArea(a.anchors)));
       subpaths = [subpaths[0]];
@@ -103,7 +112,7 @@ for (const key of Object.keys(pages).map(Number).sort((a, b) => a - b)) {
 let inc = `// Object_Cloud_library.jsxinc\r\n// 구름 라이브러리. Object_Cloud.jsx가 #include로 읽는다.\r\n`;
 inc += `// 사용자가 일러스트레이터에서 아트보드마다 하나씩 그린 구름을 tools/cloud-library(ai-extract.js → pages-lib.js)로 뽑은 것.\r\n`;
 inc += `// 구름마다 {name, aspect, items}. 좌표는 높이 1 기준(x 0~aspect, y 0~1, 위가 +). items는 그리는 순서(뒤→앞).\r\n`;
-inc += `// item = {role: cloud|shadow1|shadow2|outline|line, kind: fill|stroke, width(pt, 획만), subpaths: [{closed, anchors: [[x, y, 왼쪽 핸들 x, y, 오른쪽 핸들 x, y], ...]}]}\r\n`;
+inc += `// item = {role: cloud|shadow1|shadow2|outline|ink|line, kind: fill|stroke, width(pt, 획만), subpaths: [{closed, anchors: [[x, y, 왼쪽 핸들 x, y, 오른쪽 핸들 x, y], ...]}]}\r\n`;
 inc += `var CLOUD_LIBRARY = [\r\n`;
 inc += library.map((e) => `    {name: ${JSON.stringify(e.name)}, aspect: ${e.aspect}, items: [\r\n` +
   e.items.map((it) => `        {role: ${JSON.stringify(it.role)}, kind: ${JSON.stringify(it.kind)}, width: ${it.width === undefined ? 0 : it.width}, subpaths: ${JSON.stringify(it.subpaths)}}`).join(",\r\n") +
@@ -135,7 +144,7 @@ if (outSvg) {
         }
         if (sp.closed) d += "Z ";
       }
-      const k = { cloud: 0, shadow1: 20, shadow2: 40 }[it.role];
+      const k = { cloud: 0, shadow1: 20, shadow2: 40, ink: 100 }[it.role];
       if (it.kind === "fill") { const g = Math.round(255 * (1 - k / 100)); svg += `<path d="${d}" fill="rgb(${g},${g},${g})"/>`; }
       else svg += `<path d="${d}" fill="none" stroke="#000" stroke-width="${(it.width * s / 60).toFixed(2)}" stroke-linecap="round"/>`;
     }

@@ -1,6 +1,6 @@
 /*
   Illustrator Script: Cloud Library (3 tones)
-  Description: 사용자가 일러스트레이터에서 그린 구름 9종(구름 K0 · 그림자 1 K20 · 그림자 2 K40 · 외곽선 0.3pt)을 3×3 버튼으로 골라
+  Description: 사용자가 일러스트레이터에서 그린 구름 10종(구름 K0 · 그림자 1 K20 · 그림자 2 K40 · 외곽선 0.3pt)을 5×2 번호 버튼으로 골라
                선택한 사각형 안에 그린다. 모양은 원본 그대로이고 크기와 세 면의 K값(10 단위), 선 표시만 조절한다.
                외곽선은 크기를 바꿔도 0.3pt를 지킨다.
   사용법: 구름이 들어갈 사각형 하나를 선택한 뒤 실행. 확인하면 원본 사각형은 지워진다.
@@ -55,7 +55,7 @@ try {
     var PREF_KEY = "ObjectCloud/settings";
     var PREVIEW_NAME = "Cloud Preview";
     var K_LIMIT = [0, 100];
-    var ROLE_NAMES = {cloud: "구름", shadow1: "그림자 1", shadow2: "그림자 2", outline: "외곽선", line: "선"};
+    var ROLE_NAMES = {cloud: "구름", shadow1: "그림자 1", shadow2: "그림자 2", outline: "외곽선", ink: "선(면)", line: "선"};
 
     // ---- 옵션 (저장) ----
     var cloudIndex = 0;
@@ -83,17 +83,19 @@ try {
     var shapePanel = dlg.add("panel", undefined, "모양");
     shapePanel.orientation = "column";
     shapePanel.alignChildren = "fill";
-    // 구름 고르기: 3열 격자의 라디오 버튼. 줄이 다르면 자동 배타가 안 되므로 직접 하나만 켠다
-    var GRID_COLUMNS = 3;
+    // 구름 고르기: 5×2 격자의 라디오 버튼(번호만 표시, 10칸 고정 — 라이브러리에 없는 칸은 비활성).
+    // 줄이 다르면 자동 배타가 안 되므로 직접 하나만 켠다
+    var GRID_COLUMNS = 5, GRID_SLOTS = 10;
     var cloudRadios = [];
-    for (var gridIndex = 0; gridIndex < library.length; gridIndex++) {
+    for (var gridIndex = 0; gridIndex < GRID_SLOTS; gridIndex++) {
         if (gridIndex % GRID_COLUMNS === 0) {
             var gridRow = shapePanel.add("group");
             gridRow.alignChildren = ["left", "center"];
         }
-        var radio = gridRow.add("radiobutton", undefined, "구름 " + library[gridIndex].name);
-        radio.preferredSize.width = 96;
+        var radio = gridRow.add("radiobutton", undefined, String(gridIndex + 1));
+        radio.preferredSize.width = 48;
         radio.value = gridIndex === cloudIndex;
+        radio.enabled = gridIndex < library.length;
         radio.onClick = makeCloudPicker(gridIndex);
         cloudRadios.push(radio);
     }
@@ -307,7 +309,7 @@ try {
         for (var i = 0; i < cloud.items.length; i++) {
             var item = cloud.items[i];
             if (item.role === "outline" && outlineWidth > 0) continue;   // 구름 면의 획으로 대신한다
-            if (item.kind === "stroke" && !linesOn) continue;
+            if ((item.kind === "stroke" || item.role === "ink") && !linesOn) continue;   // ink: 면으로 된 K100 선
             var shape = drawShape(group, item.subpaths, fit);
             if (shape === null) continue;
             var paths = pathsOf(shape);
@@ -328,15 +330,16 @@ try {
         return group;
     }
 
-    // 흰 구름 면과 외곽선이 둘 다 있으면 외곽선 두께, 아니면 0 (합치지 않는다)
+    // 흰 구름 면 하나 + 외곽선 하나면(면이 곧 실루엣) 외곽선 두께, 아니면 0 (합치지 않고 외곽선 링을 그대로 그린다).
+    // 흰 면이 여럿이면 안쪽 하이라이트 조각이므로 획을 주면 원본에 없는 선이 생긴다
     function mergedOutlineWidth(cloud) {
-        var hasCloud = false;
+        var clouds = 0, outlines = 0;
         var width = 0;
         for (var i = 0; i < cloud.items.length; i++) {
-            if (cloud.items[i].role === "cloud") hasCloud = true;
-            if (cloud.items[i].role === "outline") width = cloud.items[i].width;
+            if (cloud.items[i].role === "cloud") clouds++;
+            if (cloud.items[i].role === "outline") { outlines++; width = cloud.items[i].width; }
         }
-        return hasCloud ? width : 0;
+        return clouds === 1 && outlines === 1 ? width : 0;
     }
 
     function kForRole(role) {

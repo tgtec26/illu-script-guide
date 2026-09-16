@@ -24,12 +24,12 @@ function extractFunction(name) {
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
 
-// 1. 라이브러리: 사용자 구름 9개. 역할은 cloud/shadow1/shadow2/outline/line, 좌표는 높이 1 기준 상자 안
+// 1. 라이브러리: 사용자 구름 10개. 역할은 cloud/shadow1/shadow2/outline/line, 좌표는 높이 1 기준 상자 안
 {
   const library = new Function(`${librarySource}\nreturn CLOUD_LIBRARY;`)();
-  assert.strictEqual(library.length, 9, "구름 9개");
-  assert.strictEqual(new Set(library.map((c) => c.name)).size, 9, "이름 유일");
-  const roles = new Set(["cloud", "shadow1", "shadow2", "outline", "line"]);
+  assert.strictEqual(library.length, 10, "구름 10개");
+  assert.deepStrictEqual(library.map((c) => c.name), ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"], "이름은 번호");
+  const roles = new Set(["cloud", "shadow1", "shadow2", "outline", "ink", "line"]);
   for (const cloud of library) {
     assert.ok(cloud.aspect > 0.5 && cloud.aspect < 5, `${cloud.name}: aspect ${cloud.aspect}`);
     assert.ok(cloud.items.length >= 3, `${cloud.name}: 항목 3개 이상`);
@@ -62,8 +62,13 @@ const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: 
     near(maxY - minY, 1, 0.01, `${cloud.name}: 높이 1`);
     near(maxX - minX, cloud.aspect, 0.01, `${cloud.name}: 폭 = aspect`);
   }
-  // 채움 구름이 있는 것은 8개 (9번 적란운은 선으로만 그렸다)
-  assert.strictEqual(library.filter((c) => c.items.some((it) => it.role === "cloud")).length, 8);
+  // 채움 구름이 있는 것은 9개 (9번 적란운은 선으로만 그렸다)
+  assert.strictEqual(library.filter((c) => c.items.some((it) => it.role === "cloud")).length, 9);
+  // 10번: 열린 선을 면으로 만든 K100은 ink(면)로 남기고 외곽선(획)으로 바꾸지 않는다 — 획으로 바꾸면 양쪽 가장자리가 이중선이 된다
+  const ten = library[9];
+  assert.strictEqual(ten.items.filter((it) => it.role === "ink").length, 6);
+  assert.strictEqual(ten.items.filter((it) => it.role === "outline").length, 0);
+  for (const it of ten.items) if (it.role === "ink") assert.strictEqual(it.kind, "fill");
 }
 
 // 2. 스크립트: 라이브러리를 읽고 항목을 원본 순서대로 역할별 K로 칠한다. 메뉴 명령(패스파인더)은 쓰지 않는다
@@ -71,7 +76,6 @@ const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: 
   for (const token of [
     '#include "Object_Cloud_library.jsxinc"',
     'typeof CLOUD_LIBRARY === "undefined"',
-    'if (item.kind === "stroke" && !linesOn) continue;',
     'if (item.kind === "stroke") applyStroke(paths[p], item.width);',
     'else applyFill(paths[p], kForRole(item.role));',
     'if (item.role === "outline" && outlineWidth > 0) continue;',
@@ -81,6 +85,10 @@ const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: 
     'if (role === "shadow1") return shadow1K;',
     'if (role === "shadow2") return shadow2K;',
     "var K_STEP = 10;",
+    "var GRID_COLUMNS = 5, GRID_SLOTS = 10;",                          // 5×2 번호 버튼, 10칸 고정
+    'radio.enabled = gridIndex < library.length;',
+    'if ((item.kind === "stroke" || item.role === "ink") && !linesOn) continue;',   // 면으로 된 K100 선도 선 토글을 따른다
+    "return clouds === 1 && outlines === 1 ? width : 0;",              // 흰 면이 여럿이면 획을 주지 않고 외곽선 링을 그린다
   ]) {
     assert.ok(source.includes(token), `missing: ${token}`);
   }
