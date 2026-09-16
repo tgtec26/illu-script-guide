@@ -41,7 +41,7 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var MIN_TURNS = 5;
-    var MAX_TURNS = 10;
+    var MAX_TURNS = 30;
     var centerX = (bounds[0] + bounds[2]) / 2;
     var centerY = (bounds[1] + bounds[3]) / 2;
     var sourceDiameterMm = sourceWidth / MM_TO_PT;
@@ -86,7 +86,7 @@ try {
     turnsRow.alignChildren = ["left", "center"];
     var turnsLabel = turnsRow.add("statictext", undefined, "감는 횟수 (회):");
     turnsLabel.preferredSize.width = 90;
-    turnsLabel.helpTip = "5 ~ 10";
+    turnsLabel.helpTip = "5 ~ 30";
     var turnsInput = turnsRow.add("edittext", undefined, String(turnCount));
     turnsInput.characters = 6;
     var turnsSlider = addSliderWithSteps(turnsRow, turnCount, MIN_TURNS, MAX_TURNS, 1);
@@ -184,7 +184,7 @@ try {
             return;
         }
         if (validTurns === null || validTurns < MIN_TURNS || validTurns > MAX_TURNS) {
-            alert("코일 감는 횟수는 5부터 10 사이의 정수로 입력해주세요.");
+            alert("코일 감는 횟수는 5부터 30 사이의 정수로 입력해주세요.");
             return;
         }
         coilWidthMm = roundTo(validWidth, SIZE_STEP_MM);

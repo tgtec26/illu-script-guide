@@ -658,7 +658,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     'var LINE_WIDTH_PT = 0.3',
     'path.strokeWidth = LINE_WIDTH_PT',
     'var MIN_TURNS = 5',
-    'var MAX_TURNS = 10',
+    'var MAX_TURNS = 30',
     'widthRow.add("statictext", undefined, "좌우 폭 (mm):")',
     'heightRow.add("statictext", undefined, "위아래 높이 (mm):")',
     'turnsRow.add("statictext", undefined, "감는 횟수 (회):")',
