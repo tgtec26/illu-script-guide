@@ -24,7 +24,7 @@ const helperNames = [
   "processPathData", "samplePathPoints", "bezierPoint", "simplifyPoints", "rdpMark",
   "relaxedSample", "pointSegmentDistance", "turnDeviation", "markCorners", "neighborAt", "cornerWindow", "smoothPoints",
   "relax", "buildBezier", "normalize", "distance", "pushUnique",
-  "removeAnchors", "mergeSegments", "sampleSegment", "fitHandles", "tangentAt", "isZeroHandle", "chordParams",
+  "removeAnchors", "mergeSegments", "sampleSegment", "fitHandles", "tangentAt", "isZeroHandle", "chordParams", "suggestTolerance",
 ];
 const helperSource = helperNames.map(extractFunction).join("\n");
 const api = new Function(`${helperSource}\nreturn {${helperNames.join(", ")}};`)();
@@ -364,6 +364,19 @@ function radiusError(data, radius) {
   assert.ok(radiusError(result, 50) < 0.15, "곡선은 원 위에 남는다");
   const untouched = api.processPathData(circle, options({ tolerance: 0, smoothStrength: 0, removeTolerance: 0 }));
   assert.strictEqual(untouched, circle, "모두 0이면 원본 그대로");
+}
+
+// 15. 추천 허용 오차: 앵커 수가 급격히 줄다가 완만해지는 무릎점을 고른다
+{
+  const tolerances = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5];
+  // 0.05까지 급격히 줄고 그 뒤로는 거의 안 줄어드는 곡선
+  const counts = [30000, 20000, 6000, 5200, 4900, 4700, 4500, 4300];
+  assert.strictEqual(api.suggestTolerance(tolerances, counts), 0.05, "무릎점");
+  // 전혀 안 줄면 가장 작은 값
+  assert.strictEqual(api.suggestTolerance(tolerances, counts.map(() => 100)), 0.01, "변화 없음");
+  // 고르게 줄면(직선) 무릎이 없으므로 가장 보수적인 최소값
+  const linear = tolerances.map((t) => 30000 - t * 50000);
+  assert.strictEqual(api.suggestTolerance(tolerances, linear), 0.01, "직선이면 최소값");
 }
 
 console.log("check-smooth-path: ok");

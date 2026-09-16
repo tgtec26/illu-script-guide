@@ -92,8 +92,43 @@ try {
         "수만 개 앵커를 다루므로 미리보기 없이 확인을 누를 때 한 번에 적용합니다.\n" +
         "결과가 마음에 안 들면 실행 취소(Ctrl+Z) 뒤 값을 바꿔 다시 실행하세요.", {multiline: true});
     removeHint.preferredSize.width = HINT_WIDTH;
-    var removeInfo = removeTab.add("statictext", undefined, "패스 " + targets.length + "개 선택됨");
-    removeInfo.preferredSize.width = HINT_WIDTH;
+    var analyzeRow = removeTab.add("group");
+    analyzeRow.alignChildren = ["left", "center"];
+    var analyzeButton = analyzeRow.add("button", undefined, "분석");
+    var removeInfo = analyzeRow.add("statictext", undefined, "패스 " + targets.length + "개 선택됨");
+    removeInfo.preferredSize.width = HINT_WIDTH - 80;
+    // 분석 결과: 허용 오차별 남는 앵커 수. 행을 고르면 그 값이 슬라이더에 들어간다.
+    var analyzeList = removeTab.add("listbox", undefined, [], {numberOfColumns: 3, showHeaders: true,
+        columnTitles: ["허용 오차", "남는 앵커", "감소"], columnWidths: [90, 110, HINT_WIDTH - 220]});
+    analyzeList.preferredSize = [HINT_WIDTH, 150];
+    var analyzeResults = [];       // [{tolerance, count}]
+
+    analyzeButton.onClick = function() {
+        removeInfo.text = "계산 중...";
+        dlg.update();
+        analyzeResults = analyzeTolerances();
+        var counts = [];
+        var tolerances = [];
+        for (var r = 0; r < analyzeResults.length; r++) {
+            tolerances.push(analyzeResults[r].tolerance);
+            counts.push(analyzeResults[r].count);
+        }
+        var suggested = suggestTolerance(tolerances, counts);
+        analyzeList.removeAll();
+        for (var q = 0; q < analyzeResults.length; q++) {
+            var entry = analyzeResults[q];
+            var percent = sourceAnchorCount > 0 ? Math.round((1 - entry.count / sourceAnchorCount) * 100) : 0;
+            var item = analyzeList.add("item", (entry.tolerance === suggested ? "★ " : "") + entry.tolerance + " mm");
+            item.subItems[0].text = String(entry.count);
+            item.subItems[1].text = "-" + percent + "%";
+        }
+        removeInfo.text = "앵커 " + sourceAnchorCount + "개 · ★ 추천 " + suggested + "mm (이 뒤로는 잘 안 줄어듦)";
+        setRemoveValue(suggested);
+    };
+    analyzeList.onChange = function() {
+        if (!analyzeList.selection) return;
+        setRemoveValue(analyzeResults[analyzeList.selection.index].tolerance);
+    };
 
     // --- 탭 2: 부드럽게 (미리보기) ---
     var smoothTab = tabs.add("tab", undefined, "부드럽게");
@@ -168,7 +203,7 @@ try {
     // -------------------------------------------------------
     // 앵커 제거 (한 번에 적용)
     // -------------------------------------------------------
-    // 패스 하나씩 읽고→계산하고→쓴다. 좌표를 모아 두지 않으므로 메모리도 시간도 절반이다.
+    // 패스 하나씩 읽고→계산하고→쓴다. 분석으로 이미 읽어 둔 좌표가 있으면 다시 읽지 않는다.
     function runRemoveAnchors() {
         if (removeMm <= 0) return;
         var started = new Date().getTime();
@@ -176,7 +211,7 @@ try {
         var after = 0;
         var tolerance = removeMm * MM;
         for (var i = 0; i < targets.length; i++) {
-            var data = readPathData(targets[i]);
+            var data = snapshots !== null ? snapshots[i] : readPathData(targets[i]);
             before += data.points.length;
             var minPoints = data.closed ? MIN_CLOSED_POINTS : MIN_OPEN_POINTS;
             var next = removeAnchors(data, tolerance, minPoints);
@@ -188,6 +223,55 @@ try {
         var seconds = Math.round((new Date().getTime() - started) / 100) / 10;
         alert("앵커 제거 완료\n\n패스 " + targets.length + "개 · 앵커 " + before + " → " + after +
             "\n허용 오차 " + removeMm + "mm · " + seconds + "초");
+    }
+
+    // 허용 오차 사다리마다 남는 앵커 수를 센다. 쓰기는 하지 않으므로 적용보다 훨씬 빠르다.
+    var ANALYZE_LADDER_MM = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5];
+    function analyzeTolerances() {
+        ensureSnapshots();
+        var results = [];
+        for (var t = 0; t < ANALYZE_LADDER_MM.length; t++) {
+            var tolerance = ANALYZE_LADDER_MM[t] * MM;
+            var count = 0;
+            for (var i = 0; i < snapshots.length; i++) {
+                var data = snapshots[i];
+                var minPoints = data.closed ? MIN_CLOSED_POINTS : MIN_OPEN_POINTS;
+                count += removeAnchors(data, tolerance, minPoints).points.length;
+            }
+            results.push({tolerance: ANALYZE_LADDER_MM[t], count: count});
+        }
+        return results;
+    }
+
+    // 허용 오차를 키울수록 앵커가 줄지만 어느 지점부터는 형태만 잃고 앵커는 잘 안 준다.
+    // 그 무릎점을 고른다: (오차, 앵커 수)를 0~1로 정규화해 양 끝을 이은 직선에서 가장 멀리 떨어진 점.
+    function suggestTolerance(tolerances, counts) {
+        var n = tolerances.length;
+        if (n === 0) return 0;
+        var first = counts[0];
+        var last = counts[n - 1];
+        if (first === last) return tolerances[0];
+        var tolSpan = tolerances[n - 1] - tolerances[0];
+        var best = 0;
+        var bestIndex = 0;
+        for (var i = 0; i < n; i++) {
+            var x = (tolerances[i] - tolerances[0]) / tolSpan;
+            var y = (counts[i] - last) / (first - last);      // 1에서 0으로 내려간다
+            var gap = (1 - x) - y;                              // 직선 y = 1 - x 아래로 처진 정도
+            if (gap > best) {
+                best = gap;
+                bestIndex = i;
+            }
+        }
+        return tolerances[bestIndex];
+    }
+
+    function setRemoveValue(value) {
+        removeMm = value;
+        removeField.input.text = formatValue(value);
+        removeField.syncing = true;
+        removeField.slider.value = value;
+        removeField.syncing = false;
     }
 
     // -------------------------------------------------------
