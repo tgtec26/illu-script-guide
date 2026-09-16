@@ -1572,7 +1572,8 @@ try {
         };
     }
 
-    // 채울 면 목록 (먼 것부터)
+    // 채울 면 목록 (먼 것부터). 펴낸 조각마다 옆면 띠를 재고, 이웃한 띠가 같은 쪽·같은 K면 한 장으로 합친다.
+    // 단일 음영은 K가 다 같아 보이는 옆면이 통째로 한 장이 되고, 광원 자동은 K가 갈리는 곳마다 나뉘어 그라데이션이 된다
     function collectFills(model) {
         var fills = [];
         var h = model.halfDepth;
@@ -1584,7 +1585,9 @@ try {
             var pts = contour.points;
             var count = pts.length;
             var edgeCount = contour.closed ? count : count - 1;
+            var edges = [];   // 조각마다 보이는 띠 또는 null
             for (i = 0; i < edgeCount; i++) {
+                edges.push(null);
                 var u0 = pts[i].u;
                 var u1 = (i + 1 === count) ? contour.segCount : pts[i + 1].u;
                 var midU = (u0 + u1) / 2;
@@ -1604,17 +1607,25 @@ try {
                 var du = screenLength > 1e-6
                     ? Math.min(FILL_OVERLAP_PT / screenLength, 0.25) * (u1 - u0)
                     : 0;
-                var duStart = (!contour.closed && i === 0) ? 0 : du;
-                var duEnd = (!contour.closed && i === edgeCount - 1) ? 0 : du;
+                edges[i] = {
+                    u0: u0 - ((!contour.closed && i === 0) ? 0 : du),
+                    u1: u1 + ((!contour.closed && i === edgeCount - 1) ? 0 : du),
+                    side: side,
+                    k: kFromShade(shadeOfViewNormal(toView(scale(normal, side))))
+                };
+            }
+            var runs = mergeFillRuns(contour, edges);
+            for (i = 0; i < runs.length; i++) {
+                var runMidU = (runs[i].u0 + runs[i].u1) / 2;
                 fills.push({
                     kind: "band",
                     contour: contour,
-                    u0: u0 - duStart,
-                    u1: u1 + duEnd,
+                    u0: runs[i].u0,
+                    u1: runs[i].u1,
                     zLow: -h - zPad,
                     zHigh: h + zPad,
-                    k: kFromShade(shadeOfViewNormal(toView(scale(normal, side)))),
-                    depth: (toView(modelPoint(contour, midU, -h))[2] + toView(modelPoint(contour, midU, h))[2]) / 2
+                    k: runs[i].k,
+                    depth: (toView(modelPoint(contour, runMidU, -h))[2] + toView(modelPoint(contour, runMidU, h))[2]) / 2
                 });
             }
         }
@@ -1634,6 +1645,32 @@ try {
         }
         fills.sort(function(a, b) { return a.depth - b.depth; });
         return fills;
+    }
+
+    // 이웃한 조각 띠를 같은 쪽·같은 K끼리 잇는다. 닫힌 테두리는 마지막 조각과 첫 조각도 이웃이라 그 자리에서 이어지면
+    // 한 바퀴를 넘겨 u를 이어 붙인다 (닫힌 테두리의 u는 한 바퀴마다 접힌다)
+    function mergeFillRuns(contour, edges) {
+        var runs = [];
+        var run = null;
+        var i;
+        for (i = 0; i < edges.length; i++) {
+            var edge = edges[i];
+            if (edge && run && run.side === edge.side && run.k === edge.k) {
+                run.u1 = edge.u1;
+                continue;
+            }
+            run = edge ? {u0: edge.u0, u1: edge.u1, side: edge.side, k: edge.k} : null;
+            if (run) runs.push(run);
+        }
+        if (contour.closed && runs.length > 1 && edges[0] && edges[edges.length - 1]) {
+            var head = runs[0];
+            var tail = runs[runs.length - 1];
+            if (head.side === tail.side && head.k === tail.k) {
+                tail.u1 = head.u1 + contour.segCount;
+                runs.shift();
+            }
+        }
+        return runs;
     }
 
     function drawFills(group, fills) {

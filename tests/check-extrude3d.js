@@ -255,6 +255,32 @@ function prepare(engine, items) {
   engine.setState({ fillMode: 1 });
   const flat = engine.collectFills(model);
   assert.strictEqual(new Set(flat.map((f) => f.k)).size, 1);
+  assert.strictEqual(flat.filter((f) => f.kind === "band").length, 1, "같은 K인 이웃 옆면은 한 장으로 합친다");
+}
+
+// 10b. 곡면 채우기: 광원 자동은 조각마다 K가 갈려 여러 장, 단일 음영은 보이는 옆면이 통째로 한 장
+{
+  for (const rotY of [20, 200]) {   // 200°는 보이는 반쪽이 u=0(첫 앵커)을 걸쳐 한 바퀴를 넘겨 이어야 한다
+    const engine = loadEngine({ rotY, rotX: 15, depthMm: 20, fillMode: 2 });
+    prepare(engine, [circlePath(0, 0, 30)]);
+    const model = engine.buildModel();
+    engine.beginView(model);
+    const lit = engine.collectFills(model).filter((f) => f.kind === "band");
+    assert.ok(lit.length > 4, "광원 자동: 원기둥 옆면은 여러 장 (" + lit.length + ")");
+    assert.ok(new Set(lit.map((f) => f.k)).size > 1);
+    for (let i = 1; i < lit.length; i++) assert.notStrictEqual(lit[i].k, lit[i - 1].k, "이웃 띠와 K가 같으면 이미 합쳐졌어야 한다");
+
+    engine.setState({ fillMode: 1 });
+    const flat = engine.collectFills(model).filter((f) => f.kind === "band");
+    assert.strictEqual(flat.length, 1, "단일 음영: 원기둥 옆면은 한 장 (rotY " + rotY + ")");
+    const span = flat[0].u1 - flat[0].u0;
+    assert.ok(span > 1.5 && span < 2.5, "보이는 옆면은 반 바퀴 남짓 (" + span + ")");
+    const group = engine.createSolid(false, false);
+    assert.ok(group !== null);
+    const fillPaths = engine.paths.filter((p) => p.filled && !p.stroked);
+    assert.strictEqual(fillPaths.length, 2, "면 패스는 옆면 1 + 뚜껑 1");
+    assert.ok(fillPaths.every((p) => p.closed && p.pathPoints.length >= 4));
+  }
 }
 
 // 11. 통째로 그리기: 그룹이 만들어지고 패스가 남는다. 숨은선은 파선
