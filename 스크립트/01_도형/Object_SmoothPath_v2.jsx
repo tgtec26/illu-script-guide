@@ -10,7 +10,7 @@ try {
 } catch (e) {}
 
 /*
-  Object_SmoothPath.jsx
+  Object_SmoothPath_v2.jsx
   기능: 연필 도구로 그린 패스를 정리합니다. 세 가지를 따로 조절합니다.
     - 앵커 제거(형태 유지): 원본 핸들·접선을 그대로 둔 채, 빼도 옆 두 구간이 베지어 하나로
       허용 오차 안에 맞는 앵커만 지웁니다(VectorFirstAid의 Super Smart Remove와 같은 방식).
@@ -36,6 +36,18 @@ try {
     }
 
     var PREF_KEY = "ObjectSmoothPath/settings";
+    // 분석이 어디서 멈추는지 보기 위한 로그. 미리보기 없이 수만 앵커를 다루므로 진행 기록을 남긴다.
+    var LOG_FILE = new File(Folder.temp + "/illu_smoothpath_log.txt");
+    var logStart = new Date().getTime();
+    function log(message) {
+        try {
+            LOG_FILE.encoding = "UTF-8";
+            if (LOG_FILE.open("a")) {
+                LOG_FILE.writeln((new Date().getTime() - logStart) + "ms  " + message);
+                LOG_FILE.close();
+            }
+        } catch (e) {}
+    }
     var MM = 2.834645669;
     var MAX_TOLERANCE_MM = 2;      // 정리 강도 100일 때의 허용 오차
     var MAX_REMOVE_MM = 0.5;       // 앵커 제거 허용 오차 슬라이더 최대
@@ -71,7 +83,7 @@ try {
     var SLIDER_WIDTH = 196;
     var HINT_WIDTH = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
 
-    var dlg = new Window("dialog", "패스 정리");
+    var dlg = new Window("dialog", "패스 정리 v2");
     dlg.orientation = "column";
     dlg.alignChildren = "fill";
     dlg.spacing = 6;
@@ -104,6 +116,8 @@ try {
     var analyzeResults = [];       // [{tolerance, count}]
 
     analyzeButton.onClick = function() {
+        try { LOG_FILE.remove(); } catch (e) {}
+        log("analyze start: " + targets.length + " paths");
         removeInfo.text = "읽는 중...";
         dlg.update();
         var readStart = new Date().getTime();
@@ -111,6 +125,7 @@ try {
         var computeStart = new Date().getTime();
         analyzeResults = analyzeTolerances();
         var computeEnd = new Date().getTime();
+        log("compute done");
         var counts = [];
         var tolerances = [];
         for (var r = 0; r < analyzeResults.length; r++) {
@@ -243,12 +258,14 @@ try {
     function analyzeTolerances() {
         ensureSnapshots();
         var computeStart = new Date().getTime();
+        log("read done: " + sourceAnchorCount + " anchors");
         var counts = [];
         for (var t = 0; t < ANALYZE_LADDER_MM.length; t++) counts.push(0);
         // 패스마다 노드를 한 번 만들고 오차를 작은 것부터 이어서 돌린다. 8단계가 1단계 값이다.
         for (var i = 0; i < snapshots.length; i++) {
             var data = snapshots[i];
             var minPoints = data.closed ? MIN_CLOSED_POINTS : MIN_OPEN_POINTS;
+            if (i < 5 || i % 20 === 19) log("compute " + (i + 1) + "/" + snapshots.length + " (" + data.points.length + " pts)");
             var list = buildRemoveNodes(data, 4);
             for (var k = 0; k < ANALYZE_LADDER_MM.length; k++) {
                 sweepRemove(list, ANALYZE_LADDER_MM[k] * MM, minPoints);
@@ -307,6 +324,7 @@ try {
         sourceAnchorCount = 0;
         for (var s = 0; s < targets.length; s++) {
             var pointCount = targets[s].pathPoints.length;
+            if (s % 20 === 19 || s >= targets.length - 5) log("read " + (s + 1) + "/" + targets.length + " (" + pointCount + " pts)");
             if (s % 20 === 19 || pointCount > 1000) {
                 removeInfo.text = "읽는 중... " + (s + 1) + " / " + targets.length +
                     (pointCount > 1000 ? " (앵커 " + pointCount + "개짜리 패스)" : "");
