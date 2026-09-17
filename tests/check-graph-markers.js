@@ -3,8 +3,13 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_GraphMarkers.jsx");
-const source = fs.readFileSync(scriptPath, "utf8");
+// 그래프 마커 탭은 Object_GraphTools.jsx 안의 makeGraphMarkersEngine에 원래 코드 그대로 들어 있다
+const scriptPath = path.join(root, "스크립트", "01_도형", "Object_GraphTools.jsx");
+const wholeSource = fs.readFileSync(scriptPath, "utf8");
+const engineStart = wholeSource.indexOf("function makeGraphMarkersEngine(");
+const engineEnd = wholeSource.indexOf("    // ==== ", engineStart);
+assert.ok(engineStart > 0, "graph markers engine not found");
+const source = wholeSource.slice(engineStart, engineEnd > 0 ? engineEnd : wholeSource.length);
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -53,6 +58,6 @@ assert.ok(source.includes('LINE_VALUES = rangeValues(0.5, 2, 0.1)'), "line width
 
 // 설정 문자열은 v2 + 6필드
 assert.ok(source.includes('p[0] !== "v2" || p.length !== 7'), "settings string must be v2 with 6 fields");
-assert.ok(source.includes("Folder.temp + \"/illu_last_script.txt\""), "RepeatLast memo header present");
+assert.ok(wholeSource.includes("Folder.temp + \"/illu_last_script.txt\""), "RepeatLast memo header present");
 
 console.log("check-graph-markers: ok");
