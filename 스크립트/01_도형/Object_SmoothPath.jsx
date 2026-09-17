@@ -179,7 +179,9 @@ try {
     };
     cancelButton.onClick = function() { dlg.close(0); };
 
-    doc.selection = null;
+    // 선택 해제·복원은 패스 수에 비례해 느리다(수백 개면 수십 초). 미리보기가 실제로
+    // 켜질 때만 해제하고, 끝날 때 한 번에 되돌린다. 앵커 제거 탭은 선택을 건드리지 않는다.
+    var selectionCleared = false;
     tabs.selection = activeTab;
     if (activeTab === 1) updatePreview();
 
@@ -199,6 +201,12 @@ try {
     }
     restoreSelection();
     app.redraw();
+
+    function clearSelection() {
+        if (selectionCleared) return;
+        doc.selection = null;
+        selectionCleared = true;
+    }
 
     // -------------------------------------------------------
     // 앵커 제거 (한 번에 적용)
@@ -293,6 +301,7 @@ try {
         readFields();
         var resultCount;
         if (previewEnabled) {
+            clearSelection();
             resultCount = applyGeometry();
         } else {
             restoreAll();
@@ -858,10 +867,15 @@ try {
         }
     }
 
+    // 배열을 한 번에 넣는 쪽이 항목마다 selected를 켜는 것보다 훨씬 빠르다.
     function restoreSelection() {
-        doc.selection = null;
-        for (var i = 0; i < targets.length; i++) {
-            try { targets[i].selected = true; } catch (e) {}
+        if (!selectionCleared) return;
+        try {
+            doc.selection = targets;
+        } catch (bulkError) {
+            for (var i = 0; i < targets.length; i++) {
+                try { targets[i].selected = true; } catch (e) {}
+            }
         }
     }
 
