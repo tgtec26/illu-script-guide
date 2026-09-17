@@ -372,11 +372,12 @@ function radiusError(data, radius) {
   // 0.05까지 급격히 줄고 그 뒤로는 거의 안 줄어드는 곡선
   const counts = [30000, 20000, 6000, 5200, 4900, 4700, 4500, 4300];
   assert.strictEqual(api.suggestTolerance(tolerances, counts), 0.05, "무릎점");
-  // 전혀 안 줄면 가장 작은 값
-  assert.strictEqual(api.suggestTolerance(tolerances, counts.map(() => 100)), 0.01, "변화 없음");
-  // 고르게 줄면(직선) 무릎이 없으므로 가장 보수적인 최소값
+  // 거의 안 줄면(10% 미만) 추천 없음
+  assert.strictEqual(api.suggestTolerance(tolerances, counts.map(() => 100)), null, "변화 없음");
+  assert.strictEqual(api.suggestTolerance(tolerances, [5189, 5189, 5187, 5176, 5121, 4940, 4800, 4700]), null, "이미 정리된 패스");
+  // 고르게 줄면(직선) 무릎이 없으므로 추천 없음
   const linear = tolerances.map((t) => 30000 - t * 50000);
-  assert.strictEqual(api.suggestTolerance(tolerances, linear), 0.01, "직선이면 최소값");
+  assert.strictEqual(api.suggestTolerance(tolerances, linear), null, "직선이면 추천 없음");
 }
 
 console.log("check-smooth-path: ok");

@@ -150,13 +150,14 @@ try {
         for (var q = 0; q < analyzeResults.length; q++) {
             var entry = analyzeResults[q];
             var percent = sourceAnchorCount > 0 ? Math.round((1 - entry.count / sourceAnchorCount) * 100) : 0;
-            var item = analyzeList.add("item", (entry.tolerance === suggested ? "★ " : "") + entry.tolerance + " mm");
+            var item = analyzeList.add("item", (suggested !== null && entry.tolerance === suggested ? "★ " : "") + entry.tolerance + " mm");
             item.subItems[0].text = String(entry.count);
             item.subItems[1].text = "-" + percent + "%";
         }
-        removeInfo.text = "앵커 " + sourceAnchorCount + "개 · ★ 추천 " + suggested + "mm" +
+        removeInfo.text = "앵커 " + sourceAnchorCount + "개 · " +
+            (suggested !== null ? "★ 추천 " + suggested + "mm" : "추천 없음 (뚜렷한 무릎점 없음, 표를 보고 고르세요)") +
             " · 읽기 " + Math.round((computeStart - readStart) / 1000) + "초 · 계산 " + Math.round((computeEnd - computeStart) / 1000) + "초";
-        setRemoveValue(suggested);
+        if (suggested !== null) setRemoveValue(suggested);
     }
     analyzeList.onChange = function() {
         if (!analyzeList.selection) return;
@@ -298,12 +299,14 @@ try {
 
     // 허용 오차를 키울수록 앵커가 줄지만 어느 지점부터는 형태만 잃고 앵커는 잘 안 준다.
     // 그 무릎점을 고른다: (오차, 앵커 수)를 0~1로 정규화해 양 끝을 이은 직선에서 가장 멀리 떨어진 점.
+    // 급감 뒤 완만해지는 무릎이 없거나(이미 정리된 패스처럼 평평하다가 큰 오차에서만 줄면)
+    // 최대 감소가 10% 미만이면 null — 추천할 근거가 없다.
     function suggestTolerance(tolerances, counts) {
         var n = tolerances.length;
-        if (n === 0) return 0;
+        if (n === 0) return null;
         var first = counts[0];
         var last = counts[n - 1];
-        if (first === last) return tolerances[0];
+        if (first <= 0 || (first - last) / first < 0.1) return null;
         var tolSpan = tolerances[n - 1] - tolerances[0];
         var best = 0;
         var bestIndex = 0;
@@ -316,7 +319,7 @@ try {
                 bestIndex = i;
             }
         }
-        return tolerances[bestIndex];
+        return best > 0 ? tolerances[bestIndex] : null;
     }
 
     function setRemoveValue(value) {
