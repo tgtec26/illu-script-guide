@@ -110,8 +110,8 @@ try {
     var analyzeRow = removeTab.add("group");
     analyzeRow.alignChildren = ["left", "center"];
     var analyzeButton = analyzeRow.add("button", undefined, "분석");
-    var removeInfo = analyzeRow.add("statictext", undefined, "패스 " + targets.length + "개 선택됨");
-    removeInfo.preferredSize.width = HINT_WIDTH - 80;
+    var removeInfo = removeTab.add("statictext", undefined, "패스 " + targets.length + "개 선택됨");
+    removeInfo.preferredSize.width = HINT_WIDTH;
     // 분석 결과: 허용 오차별 남는 앵커 수. 행을 고르면 그 값이 슬라이더에 들어간다.
     var analyzeList = removeTab.add("listbox", undefined, [], {numberOfColumns: 3, showHeaders: true,
         columnTitles: ["허용 오차", "남는 앵커", "감소"], columnWidths: [90, 110, HINT_WIDTH - 220]});
