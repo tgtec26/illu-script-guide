@@ -104,9 +104,13 @@ try {
     var analyzeResults = [];       // [{tolerance, count}]
 
     analyzeButton.onClick = function() {
-        removeInfo.text = "계산 중...";
+        removeInfo.text = "읽는 중...";
         dlg.update();
+        var readStart = new Date().getTime();
+        ensureSnapshots();
+        var computeStart = new Date().getTime();
         analyzeResults = analyzeTolerances();
+        var computeEnd = new Date().getTime();
         var counts = [];
         var tolerances = [];
         for (var r = 0; r < analyzeResults.length; r++) {
@@ -122,7 +126,8 @@ try {
             item.subItems[0].text = String(entry.count);
             item.subItems[1].text = "-" + percent + "%";
         }
-        removeInfo.text = "앵커 " + sourceAnchorCount + "개 · ★ 추천 " + suggested + "mm (이 뒤로는 잘 안 줄어듦)";
+        removeInfo.text = "앵커 " + sourceAnchorCount + "개 · ★ 추천 " + suggested + "mm" +
+            " · 읽기 " + Math.round((computeStart - readStart) / 1000) + "초 · 계산 " + Math.round((computeEnd - computeStart) / 1000) + "초";
         setRemoveValue(suggested);
     };
     analyzeList.onChange = function() {
@@ -237,16 +242,25 @@ try {
     var ANALYZE_LADDER_MM = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5];
     function analyzeTolerances() {
         ensureSnapshots();
-        var results = [];
-        for (var t = 0; t < ANALYZE_LADDER_MM.length; t++) {
-            var tolerance = ANALYZE_LADDER_MM[t] * MM;
-            var count = 0;
-            for (var i = 0; i < snapshots.length; i++) {
-                var data = snapshots[i];
-                var minPoints = data.closed ? MIN_CLOSED_POINTS : MIN_OPEN_POINTS;
-                count += removeAnchors(data, tolerance, minPoints).points.length;
+        var counts = [];
+        for (var t = 0; t < ANALYZE_LADDER_MM.length; t++) counts.push(0);
+        // 패스마다 노드를 한 번 만들고 오차를 작은 것부터 이어서 돌린다. 8단계가 1단계 값이다.
+        for (var i = 0; i < snapshots.length; i++) {
+            var data = snapshots[i];
+            var minPoints = data.closed ? MIN_CLOSED_POINTS : MIN_OPEN_POINTS;
+            var nodes = buildRemoveNodes(data, 6);
+            for (var k = 0; k < ANALYZE_LADDER_MM.length; k++) {
+                sweepRemove(nodes, data.closed, ANALYZE_LADDER_MM[k] * MM, minPoints);
+                counts[k] += nodes.length;
             }
-            results.push({tolerance: ANALYZE_LADDER_MM[t], count: count});
+            if (i % 50 === 49) {
+                removeInfo.text = "계산 중... " + (i + 1) + " / " + snapshots.length;
+                dlg.update();
+            }
+        }
+        var results = [];
+        for (var r = 0; r < ANALYZE_LADDER_MM.length; r++) {
+            results.push({tolerance: ANALYZE_LADDER_MM[r], count: counts[r]});
         }
         return results;
     }
@@ -293,6 +307,10 @@ try {
             var data = readPathData(targets[s]);
             snapshots.push(data);
             sourceAnchorCount += data.points.length;
+            if (s % 50 === 49) {
+                removeInfo.text = "읽는 중... " + (s + 1) + " / " + targets.length;
+                dlg.update();
+            }
         }
     }
 
@@ -412,6 +430,13 @@ try {
     // 제거가 이어질수록 오차가 쌓여 허용치를 넘어선다.
     function removeAnchors(data, tolerance, minPoints) {
         if (tolerance <= 0 || data.points.length < 3) return data;
+        var nodes = buildRemoveNodes(data, 6);
+        sweepRemove(nodes, data.closed, tolerance, minPoints);
+        return nodesToData(nodes, data.closed);
+    }
+
+    // 원본 구간마다 샘플점을 붙인 작업 노드. 여러 허용 오차를 이어서 돌릴 때 재사용한다.
+    function buildRemoveNodes(data, pieces) {
         var nodes = [];
         var count = data.closed ? data.points.length : data.points.length - 1;
         for (var i = 0; i < data.points.length; i++) {
@@ -421,39 +446,56 @@ try {
                 left: [point.left[0], point.left[1]],
                 right: [point.right[0], point.right[1]],
                 corner: point.corner ? true : false,
-                samples: null
+                samples: null,
+                error: null          // 마지막 검사 오차. 이웃이 바뀌면 null로 되돌린다
             };
-            if (i < count) node.samples = sampleSegment(point, data.points[(i + 1) % data.points.length], 8);
+            if (i < count) node.samples = sampleSegment(point, data.points[(i + 1) % data.points.length], pieces);
             nodes.push(node);
         }
+        return nodes;
+    }
 
+    // nodes를 제자리에서 줄인다. 낮은 오차로 돌린 결과에 더 큰 오차를 이어 돌려도
+    // 오차는 여전히 원본 샘플 기준이므로 처음부터 돌린 것과 같은 자격의 결과다.
+    function sweepRemove(nodes, closed, tolerance, minPoints) {
+        if (tolerance <= 0) return;
         var removedAny = true;
         while (removedAny && nodes.length > minPoints) {
             removedAny = false;
-            var index = data.closed ? 0 : 1;
-            while (index < (data.closed ? nodes.length : nodes.length - 1) && nodes.length > minPoints) {
+            var index = closed ? 0 : 1;
+            while (index < (closed ? nodes.length : nodes.length - 1) && nodes.length > minPoints) {
                 var prev = nodes[(index - 1 + nodes.length) % nodes.length];
                 var mid = nodes[index];
                 var next = nodes[(index + 1) % nodes.length];
                 if (prev === next) break;
+                // 지난 검사에서 이미 허용치를 넘긴 점은 이웃이 바뀌지 않는 한 결과가 같다.
+                if (mid.error !== null && mid.error > tolerance) {
+                    index++;
+                    continue;
+                }
                 var merged = mergeSegments(prev, mid, next);
                 if (merged.error <= tolerance) {
                     prev.right = merged.right;
                     next.left = merged.left;
                     prev.samples = prev.samples.concat(mid.samples.slice(1));
+                    prev.error = null;
+                    next.error = null;
                     nodes.splice(index, 1);
                     removedAny = true;
                 } else {
+                    mid.error = merged.error;
                     index++;
                 }
             }
         }
+    }
 
+    function nodesToData(nodes, closed) {
         var points = [];
         for (var k = 0; k < nodes.length; k++) {
             points.push({anchor: nodes[k].anchor, left: nodes[k].left, right: nodes[k].right, corner: nodes[k].corner});
         }
-        return {closed: data.closed, points: points};
+        return {closed: closed, points: points};
     }
 
     function sampleSegment(from, to, pieces) {
@@ -466,29 +508,46 @@ try {
 
     // prev → next를 베지어 하나로 맞춘 뒤, prev.samples + mid.samples(원본 점)와의 최대 거리를 돌려준다.
     function mergeSegments(prev, mid, next) {
-        var samples = prev.samples.concat(mid.samples.slice(1));
+        var a = prev.samples;
+        var b = mid.samples;             // b[0]은 a의 마지막 점과 같으므로 건너뛴다
+        var total = a.length + b.length - 1;
         var p0 = prev.anchor;
         var p3 = next.anchor;
         var straight = isZeroHandle(prev.right, p0) && isZeroHandle(mid.left, mid.anchor) &&
             isZeroHandle(mid.right, mid.anchor) && isZeroHandle(next.left, p3);
+        var i, sample, d;
         if (straight) {
             var worstLine = 0;
-            for (var i = 0; i < samples.length; i++) {
-                var dl = pointSegmentDistance(samples[i], p0, p3);
-                if (dl > worstLine) worstLine = dl;
+            for (i = 0; i < total; i++) {
+                sample = i < a.length ? a[i] : b[i - a.length + 1];
+                d = pointSegmentDistance(sample, p0, p3);
+                if (d > worstLine) worstLine = d;
             }
             return {right: [p0[0], p0[1]], left: [p3[0], p3[1]], error: worstLine};
         }
 
-        var t0 = tangentAt(prev.right, p0, samples[1]);
-        var t1 = tangentAt(next.left, p3, samples[samples.length - 2]);
-        var params = chordParams(samples);
-        var handles = fitHandles(samples, params, p0, p3, t0, t1);
+        // 현 길이 누적으로 매개변수 t를 만든다
+        var params = [0];
+        var length = 0;
+        var last = a[0];
+        for (i = 1; i < total; i++) {
+            sample = i < a.length ? a[i] : b[i - a.length + 1];
+            length += distance(last, sample);
+            params.push(length);
+            last = sample;
+        }
+        if (length > 0) {
+            for (i = 0; i < total; i++) params[i] /= length;
+        }
+        var t0 = tangentAt(prev.right, p0, a[1]);
+        var t1 = tangentAt(next.left, p3, b[b.length - 2]);
+        var handles = fitHandles(a, b, params, p0, p3, t0, t1);
         var c1 = handles[0];
         var c2 = handles[1];
         var worst = 0;
-        for (var j = 0; j < samples.length; j++) {
-            var d = distance(samples[j], bezierPoint(p0, c1, c2, p3, params[j]));
+        for (i = 0; i < total; i++) {
+            sample = i < a.length ? a[i] : b[i - a.length + 1];
+            d = distance(sample, bezierPoint(p0, c1, c2, p3, params[i]));
             if (d > worst) worst = d;
         }
         return {right: c1, left: c2, error: worst};
@@ -507,23 +566,13 @@ try {
         return direction;
     }
 
-    function chordParams(samples) {
-        var params = [0];
-        var total = 0;
-        for (var i = 1; i < samples.length; i++) {
-            total += distance(samples[i - 1], samples[i]);
-            params.push(total);
-        }
-        if (total === 0) return params;
-        for (var j = 0; j < params.length; j++) params[j] /= total;
-        return params;
-    }
-
     // 양 끝 접선 방향이 정해진 베지어의 핸들 길이(α, β)를 최소제곱으로 푼다(Schneider 1990).
     // 풀이가 불안정하거나 핸들이 뒤로 접히면 현의 1/3 길이로 둔다.
-    function fitHandles(samples, params, p0, p3, t0, t1) {
+    function fitHandles(a, b, params, p0, p3, t0, t1) {
         var c11 = 0, c12 = 0, c22 = 0, x1 = 0, x2 = 0;
-        for (var i = 0; i < samples.length; i++) {
+        var total = a.length + b.length - 1;
+        for (var i = 0; i < total; i++) {
+            var sample = i < a.length ? a[i] : b[i - a.length + 1];
             var t = params[i];
             var u = 1 - t;
             var b1 = 3 * u * u * t;
@@ -534,8 +583,8 @@ try {
                 (u * u * u + b1) * p0[0] + (b2 + t * t * t) * p3[0],
                 (u * u * u + b1) * p0[1] + (b2 + t * t * t) * p3[1]
             ];
-            var rx = samples[i][0] - base[0];
-            var ry = samples[i][1] - base[1];
+            var rx = sample[0] - base[0];
+            var ry = sample[1] - base[1];
             c11 += a1[0] * a1[0] + a1[1] * a1[1];
             c12 += a1[0] * a2[0] + a1[1] * a2[1];
             c22 += a2[0] * a2[0] + a2[1] * a2[1];
@@ -829,18 +878,32 @@ try {
         }
     }
 
+    // 앵커당 DOM 호출이 곧 시간이다. pointType은 읽지 않고 핸들 기하로 판정한다
+    // (핸들이 없거나 좌우가 일직선이 아니면 모서리).
     function readPathData(path) {
         var points = [];
-        for (var i = 0; i < path.pathPoints.length; i++) {
-            var pp = path.pathPoints[i];
+        var pathPoints = path.pathPoints;
+        var count = pathPoints.length;
+        for (var i = 0; i < count; i++) {
+            var pp = pathPoints[i];
+            var anchor = pp.anchor;
+            var left = pp.leftDirection;
+            var right = pp.rightDirection;
             points.push({
-                anchor: [pp.anchor[0], pp.anchor[1]],
-                left: [pp.leftDirection[0], pp.leftDirection[1]],
-                right: [pp.rightDirection[0], pp.rightDirection[1]],
-                corner: pp.pointType === PointType.CORNER
+                anchor: [anchor[0], anchor[1]],
+                left: [left[0], left[1]],
+                right: [right[0], right[1]],
+                corner: isCornerGeometry(anchor, left, right)
             });
         }
         return {closed: path.closed, points: points};
+    }
+
+    function isCornerGeometry(anchor, left, right) {
+        var l = normalize([left[0] - anchor[0], left[1] - anchor[1]]);
+        var r = normalize([right[0] - anchor[0], right[1] - anchor[1]]);
+        if ((l[0] === 0 && l[1] === 0) || (r[0] === 0 && r[1] === 0)) return true;
+        return (l[0] * r[0] + l[1] * r[1]) > -0.999;
     }
 
     // setEntirePath는 앵커만 넣으므로 핸들은 한 점씩 따로 쓴다. 점 개수가 바뀌는 경우까지

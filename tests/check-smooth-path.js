@@ -24,7 +24,7 @@ const helperNames = [
   "processPathData", "samplePathPoints", "bezierPoint", "simplifyPoints", "rdpMark",
   "relaxedSample", "pointSegmentDistance", "turnDeviation", "markCorners", "neighborAt", "cornerWindow", "smoothPoints",
   "relax", "buildBezier", "normalize", "distance", "pushUnique",
-  "removeAnchors", "mergeSegments", "sampleSegment", "fitHandles", "tangentAt", "isZeroHandle", "chordParams", "suggestTolerance",
+  "removeAnchors", "mergeSegments", "sampleSegment", "fitHandles", "tangentAt", "isZeroHandle", "suggestTolerance", "buildRemoveNodes", "sweepRemove", "nodesToData",
 ];
 const helperSource = helperNames.map(extractFunction).join("\n");
 const api = new Function(`${helperSource}\nreturn {${helperNames.join(", ")}};`)();
