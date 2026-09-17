@@ -752,7 +752,7 @@ try {
             var grad = doc.gradients.add();
             grad.name = name + "_" + (new Date().getTime());
             grad.type = GradientType.RADIAL;
-            while (grad.gradientStops.length < 2) grad.gradientStops.add();
+            for (var stopIndex = grad.gradientStops.length; stopIndex < 2; stopIndex++) grad.gradientStops.add();
             grad.gradientStops[0].rampPoint = 0;
             grad.gradientStops[0].midPoint = midPoint ? midPoint : 28;
             grad.gradientStops[0].color = lightColor;
@@ -1953,7 +1953,7 @@ try {
             var gradient = documentRef.gradients.add();
             gradient.name = "DiamondCarbon_" + (new Date().getTime());
             gradient.type = GradientType.RADIAL;
-            while (gradient.gradientStops.length < 2) gradient.gradientStops.add();
+            for (var stopIndex = gradient.gradientStops.length; stopIndex < 2; stopIndex++) gradient.gradientStops.add();
             gradient.gradientStops[0].rampPoint = 0;
             gradient.gradientStops[0].midPoint = 13.3;
             gradient.gradientStops[1].rampPoint = 100;
@@ -2488,7 +2488,7 @@ try {
             var gradient = doc.gradients.add();
             gradient.name = name + "_" + (new Date().getTime());
             gradient.type = GradientType.RADIAL;
-            while (gradient.gradientStops.length < 2) gradient.gradientStops.add();
+            for (var stopIndex = gradient.gradientStops.length; stopIndex < 2; stopIndex++) gradient.gradientStops.add();
             gradient.gradientStops[0].rampPoint = 0;
             gradient.gradientStops[0].midPoint = 13.3;
             gradient.gradientStops[1].rampPoint = 100;

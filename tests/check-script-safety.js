@@ -2582,10 +2582,11 @@ for (const file of cabinetFiles) {
 
 // DNA·RNA 염기 서열: 상보·전사·입력 정리와 설정 문자열 검증
 {
-  const file = "스크립트/01_도형/Object_DnaRnaSequence.jsx";
+  // 염기 서열 탭은 Object_DnaModel.jsx 안의 makeSequenceEngine에 원래 코드 그대로 들어 있다
+  const file = "스크립트/01_도형/Object_DnaModel.jsx";
   const source = read(file);
   const required = [
-    'new Window("dialog", "DNA · RNA 염기 서열")',
+    'label: "염기 서열"',
     'var PREF_KEY = "ObjectDnaRnaSequence/settings";',
     'illu_last_script.txt',
     'addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", true);',
@@ -2599,15 +2600,17 @@ for (const file of cabinetFiles) {
       failures++;
     }
   }
-  const pure = ["complement", "transcribe", "cleanSequence"].map((name) => extractFunction(source, name)).join("\n");
+  // 평면 모형 탭에도 complement가 있어 염기 서열 엔진 구간에서만 뽑는다
+  const sequenceSource = source.slice(source.indexOf("function makeSequenceEngine("));
+  const pure = ["complement", "transcribe", "cleanSequence"].map((name) => extractFunction(sequenceSource, name)).join("\n");
   const fns = new Function(`${pure}; return {complement, transcribe, cleanSequence};`)();
   assert.strictEqual(fns.complement("GGAGCACTT"), "CCTCGTGAA", `${file} complement`);
   assert.strictEqual(fns.transcribe("GGAGCACTT"), "GGAGCACUU", `${file} transcribe`);
   assert.strictEqual(fns.cleanSequence(" gga cu-t ", false), "GGACT", `${file} clean DNA drops U`);
   assert.strictEqual(fns.cleanSequence(" gga cu-t ", true), "GGACUT", `${file} clean RNA keeps U`);
-  assert.ok(source.includes('p[0] !== "v1" || p.length !== 18'), `${file}: settings string must be v1 with 18 fields`);
-  assert.strictEqual((source.match(/join\("\|"\)/g) || []).length, 1, `${file}: one saveSettings join`);
-  const saveArgs = source.match(/\["v1",([\s\S]*?)\]\.join\("\|"\)/)[1].split(",").length;
+  assert.ok(sequenceSource.includes('p[0] !== "v1" || p.length !== 18'), `${file}: settings string must be v1 with 18 fields`);
+  assert.strictEqual((sequenceSource.match(/join\("\|"\)/g) || []).length, 1, `${file}: one saveSettings join`);
+  const saveArgs = sequenceSource.match(/\["v1",([\s\S]*?)\]\.join\("\|"\)/)[1].split(",").length;
   assert.strictEqual(saveArgs, 17, `${file}: saveSettings writes 17 fields after the tag`);
 }
 

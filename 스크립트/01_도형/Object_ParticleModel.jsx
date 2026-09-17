@@ -32,7 +32,7 @@ try {
             var grad = doc.gradients.add();
             grad.name = baseName + "_" + (new Date().getTime());
             grad.type = GradientType.RADIAL;
-            while (grad.gradientStops.length < stops.length) grad.gradientStops.add();
+            for (var stopIndex = grad.gradientStops.length; stopIndex < stops.length; stopIndex++) grad.gradientStops.add();
             for (var i = 0; i < stops.length; i++) {
                 grad.gradientStops[i].rampPoint = stops[i].pos;
                 grad.gradientStops[i].color = stops[i].color;
