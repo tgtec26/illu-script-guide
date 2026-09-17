@@ -721,7 +721,11 @@ try {
         var corners = markCorners(points, closed, options.cornerAngle, window);
         var fixed = [];
         for (var i = 0; i < points.length; i++) fixed.push(corners[i] || !selected[i]);
-        var relaxed = smoothPoints(points, closed, fixed, options.smoothStrength);
+        // 커널 반경: 강도 0→1mm, 100→5mm. 급한 굴곡의 반경보다 커야 눈에 띄게 펴진다.
+        var radius = (1 + 4 * options.smoothStrength / 100) * 2.834645669;
+        var span = Math.max(1, Math.round(radius / options.sampleStep));
+        var weights = featherWeights(fixed, closed, span);
+        var relaxed = relaxRegion(points, closed, fixed, options.smoothStrength, span, weights);
 
         // 어느 원본 앵커를 교체할지. 열린 패스의 양 끝은 절대 교체하지 않는다.
         var n = data.points.length;
@@ -795,6 +799,42 @@ try {
             }
         }
         return {closed: closed, points: result};
+    }
+
+    // 구간 평활은 되밀기(Taubin μ) 없이 편다. Taubin은 크기를 지키느라 커널 규모의 굴곡을
+    // 일부러 남기지만, 여기는 고정 경계가 있어 쪼그라들 걱정이 없고 굴곡을 펴는 게 목적이다.
+    function relaxRegion(points, closed, fixed, strength, span, weights) {
+        var ratio = strength / 100;
+        if (ratio <= 0 || points.length < 3) return points;
+        var iterations = Math.max(1, Math.round(ratio * 12));
+        var current = [];
+        for (var i = 0; i < points.length; i++) current.push([points[i][0], points[i][1]]);
+        for (var pass = 0; pass < iterations; pass++) {
+            current = relax(current, closed, fixed, 0.5, span, weights);
+        }
+        return current;
+    }
+
+    // 고정점에서 span칸 안쪽까지는 이동량을 거리에 비례해 줄인다(0 → 1).
+    function featherWeights(fixed, closed, span) {
+        var n = fixed.length;
+        var dist = [];
+        var big = n + 1;
+        for (var i = 0; i < n; i++) dist.push(fixed[i] ? 0 : big);
+        var passes = closed ? 2 : 1;
+        for (var pass = 0; pass < passes; pass++) {
+            for (var f = 0; f < n; f++) {
+                var pf = f === 0 ? (closed ? dist[n - 1] : big) : dist[f - 1];
+                if (pf + 1 < dist[f]) dist[f] = pf + 1;
+            }
+            for (var b = n - 1; b >= 0; b--) {
+                var nb = b === n - 1 ? (closed ? dist[0] : big) : dist[b + 1];
+                if (nb + 1 < dist[b]) dist[b] = nb + 1;
+            }
+        }
+        var weights = [];
+        for (var w = 0; w < n; w++) weights.push(fixed[w] ? 0 : Math.min(1, dist[w] / span));
+        return weights;
     }
 
     // 경계 앵커의 안쪽 핸들. 바깥 핸들이 있으면 그 연장선 방향(매끄럽게 이어짐), 없으면 새 곡선이 준 핸들.
@@ -1034,7 +1074,10 @@ try {
 
     // Taubin 평활(λ 펴기 → μ 되돌리기). 라플라시안만 반복하면 세포막이 쪼그라들지만,
     // 음수 계수로 한 번 되밀면 크기를 지키면서 곡률이 튀는 곳만 눌린다.
-    function smoothPoints(points, closed, corners, strength) {
+    // span: 평균을 낼 이웃까지의 칸 수(기본 1). 촘촘한 샘플에서는 옆 칸만 보면 곡선이
+    // 직선처럼 보여 점이 거의 안 움직이므로, 급한 곳만 다듬기는 실제 거리(mm)만큼 넓혀 본다.
+    // weights: 점별 이동 비율(0~1). 고정 구간 경계에서 서서히 줄여 이음새가 꺾이지 않게 한다.
+    function smoothPoints(points, closed, corners, strength, span, weights) {
         var ratio = strength / 100;
         if (ratio <= 0 || points.length < 3) return points;
         var lambda = 0.5 * Math.min(1, ratio * 2);
@@ -1044,25 +1087,43 @@ try {
         var current = [];
         for (var i = 0; i < points.length; i++) current.push([points[i][0], points[i][1]]);
         for (var pass = 0; pass < iterations; pass++) {
-            current = relax(current, closed, corners, lambda);
-            current = relax(current, closed, corners, mu);
+            current = relax(current, closed, corners, lambda, span, weights);
+            current = relax(current, closed, corners, mu, span, weights);
         }
         return current;
     }
 
-    function relax(points, closed, corners, factor) {
+    function relax(points, closed, corners, factor, span, weights) {
         var result = [];
-        for (var i = 0; i < points.length; i++) {
-            var fixed = corners[i] || (!closed && (i === 0 || i === points.length - 1));
+        var n = points.length;
+        var step = span > 1 ? Math.floor(span) : 1;
+        if (closed && step > Math.floor((n - 1) / 2)) step = Math.floor((n - 1) / 2);
+        for (var i = 0; i < n; i++) {
+            var fixed = corners[i] || (!closed && (i === 0 || i === n - 1));
             if (fixed) {
                 result.push([points[i][0], points[i][1]]);
                 continue;
             }
-            var prev = points[(i - 1 + points.length) % points.length];
-            var next = points[(i + 1) % points.length];
-            var mx = (prev[0] + next[0]) / 2 - points[i][0];
-            var my = (prev[1] + next[1]) / 2 - points[i][1];
-            result.push([points[i][0] + factor * mx, points[i][1] + factor * my]);
+            // step > 1이면 ±step 창 안의 모든 점을 평균한다. 양 끝 두 점만 보면
+            // 이웃 인덱스끼리 결합이 끊겨 지그재그(앨리어싱)가 생긴다.
+            var sx = 0, sy = 0, cnt = 0;
+            for (var o = -step; o <= step; o++) {
+                if (o === 0) continue;
+                var j = i + o;
+                if (closed) j = (j + n) % n;
+                else if (j < 0 || j > n - 1) continue;
+                sx += points[j][0];
+                sy += points[j][1];
+                cnt++;
+            }
+            if (cnt === 0) {
+                result.push([points[i][0], points[i][1]]);
+                continue;
+            }
+            var mx = sx / cnt - points[i][0];
+            var my = sy / cnt - points[i][1];
+            var weight = weights ? weights[i] : 1;
+            result.push([points[i][0] + factor * weight * mx, points[i][1] + factor * weight * my]);
         }
         return result;
     }

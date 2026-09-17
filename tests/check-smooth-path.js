@@ -25,7 +25,7 @@ const helperNames = [
   "relaxedSample", "pointSegmentDistance", "turnDeviation", "markCorners", "neighborAt", "cornerWindow", "smoothPoints",
   "relax", "buildBezier", "normalize", "distance", "pushUnique",
   "removeAnchors", "mergeSegments", "sampleSegment", "fitHandles", "tangentAt", "isZeroHandle", "suggestTolerance", "buildRemoveNodes", "sweepRemove", "nodesToData",
-  "smoothSharpRegions", "samplePathIndexed", "selectSharpSamples", "boundaryHandle", "collectSamples",
+  "smoothSharpRegions", "samplePathIndexed", "selectSharpSamples", "boundaryHandle", "collectSamples", "featherWeights", "relaxRegion",
 ];
 const helperSource = helperNames.map(extractFunction).join("\n");
 const api = new Function(`${helperSource}\nreturn {${helperNames.join(", ")}};`)();
@@ -435,6 +435,29 @@ function radiusError(data, radius) {
 
   // 강도 0이면 원본 그대로
   assert.strictEqual(api.smoothSharpRegions(circle, options({ sharpOnly: true, smoothStrength: 0 })), circle, "강도 0");
+}
+
+// 16-1. 급한 곳만 다듬기: 촘촘한 샘플(0.25mm)에서도 완만한 굴곡이 실제로 펴진다
+{
+  // 큰 원(반지름 60mm) 위에 반지름 4mm짜리 급한 만곡 하나 — 사용자 도형과 같은 규모
+  const pts = [];
+  const R = 60 * MM;
+  for (let i = 0; i < 24; i++) {
+    const a = (2 * Math.PI * i) / 24;
+    pts.push(smoothPoint(Math.cos(a) * R, Math.sin(a) * R, Math.sin(a) * 15, -Math.cos(a) * 15, -Math.sin(a) * 15, Math.cos(a) * 15));
+  }
+  const dent = pts[0];
+  dent.anchor = [R - 10 * MM, 0];
+  dent.left = [R - 10 * MM, -4 * MM];
+  dent.right = [R - 10 * MM, 4 * MM];
+  const shape = { closed: true, points: pts };
+  const before = peakTurn(shape, [R - 14 * MM, -12 * MM], [R, 12 * MM]);
+  const result = api.smoothSharpRegions(shape, options({ sharpOnly: true, sharpPercent: 10, smoothStrength: 60, cornerAngle: 0 }));
+  const after = peakTurn(result, [R - 14 * MM, -12 * MM], [R, 12 * MM]);
+  assert.ok(after < before * 0.6, `실제 규모 굴곡 완화 ${before.toFixed(2)}° → ${after.toFixed(2)}°`);
+  // 굴곡에서 먼 앵커는 그대로
+  const far = pts[12];
+  assert.ok(result.points.some((p) => p.anchor[0] === far.anchor[0] && p.anchor[1] === far.anchor[1]), "반대편 앵커 유지");
 }
 
 // 17. 급한 곳만 다듬기: 열린 패스의 양 끝 앵커는 절대 바뀌지 않는다
