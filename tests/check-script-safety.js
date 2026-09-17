@@ -34,9 +34,9 @@ const phospholipid = "스크립트/01_도형/Object_PhospholipidBilayer.jsx";
 const cellCycle = "스크립트/01_도형/Object_CellCycle.jsx";
 const anchorAngle = "스크립트/01_도형/Object_AnchorAngle.jsx";
 const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
-const cubicLattice = "스크립트/01_도형/Object_CubicLattice.jsx";
-const graphiteCrystal = "스크립트/01_도형/Object_GraphiteCrystal.jsx";
-const diamondCrystal = "스크립트/01_도형/Object_DiamondCrystal.jsx";
+const cubicLattice = "스크립트/01_도형/Object_CrystalStructure.jsx";
+const graphiteCrystal = "스크립트/01_도형/Object_CrystalStructure.jsx";
+const diamondCrystal = "스크립트/01_도형/Object_CrystalStructure.jsx";
 const cabinetFiles = ["스크립트/01_도형/Object_cabinet_Out.jsx", "스크립트/01_도형/Object_cabinet_InOut.jsx"];
 const updaterFiles = ["setup-mac.command", "setup-windows.ps1", "UPDATE.md"];
 
@@ -1141,7 +1141,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
   } else {
     const source = read(cubicLattice);
     const required = [
-      'new Window("dialog", "입방정계 단위세포 생성기")',
+      'new Window("dialog", "결정 구조 생성기")',
       'var LINE_WIDTH_PT = 0.3',
       'function setProjectionAngles(angleR, angleL, depthPercent)',
       'setProjectionAngles(131, 109, 100)',
@@ -1155,12 +1155,12 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       '{ key: "wire", label: "라인 + 작은 구" }',
       '{ key: "pack", label: "밀집 구(전체 원자)" }',
       '{ key: "cut",  label: "단위세포 절단" }',
-      'addSlider("셀 한 변", 5, 80, 20',
-      'addSlider("꼭짓점 구 지름(라인)", 0.5, 20, 3',
-      'addSlider("나머지 구 지름(라인)", 0.5, 20, 3',
-      'addSlider("꼭짓점 밝기", 40, 160, 100',
-      'addSlider("나머지 밝기", 40, 160, 100',
-      'addSlider("셀 간격", 0, 40, 8',
+      'addSliderRow(pnlSize, "셀 한 변", 135, 5, 80, 20',
+      'addSliderRow(pnlSize, "꼭짓점 구 지름(라인)", 135, 0.5, 20, 3',
+      'addSliderRow(pnlSize, "나머지 구 지름(라인)", 135, 0.5, 20, 3',
+      'addSliderRow(pnlSize, "꼭짓점 밝기", 135, 40, 160, 100',
+      'addSliderRow(pnlSize, "나머지 밝기", 135, 40, 160, 100',
+      'addSliderRow(pnlSize, "셀 간격", 135, 0, 40, 8',
       'sldCornerSphere.enabled = chkMode[0].value',
       'sldOtherSphere.enabled = chkMode[0].value',
       'cornerSphereMM: sldCornerSphere.value',
@@ -1170,23 +1170,23 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       'var sldAngleR = addAngleSlider("오른쪽 각도", 131)',
       'var sldAngleL = addAngleSlider("왼쪽 각도", 109)',
       'var sldDepth = addSliderRow(pnlAngles, "앞·뒤 면 거리", 90, 40, 160, 100, "%", 1)',
-      'var btnAngleIso = anglePresetRow.add("button", undefined, "Isometric")',
-      'var btnAngleDi = anglePresetRow.add("button", undefined, "Dimetric")',
-      'var btnAngleTri = anglePresetRow.add("button", undefined, "Trimetric")',
+      '["Isometric", 120, 120, 100]',
+      '["Dimetric", 110, 110, null]',
+      '["Trimetric", 120, 105, null]',
       'angleR: sldAngleR.value',
       'angleL: sldAngleL.value',
       'depthPercent: sldDepth.value',
       'function configureGradients(grads, o)',
-      'var radOneCell = pnlCells.add("radiobutton", undefined, "1셀")',
-      'var radEightCells = pnlCells.add("radiobutton", undefined, "8셀 (2×2×2)")',
+      'radOneCell = cellRow.add("radiobutton", undefined, "1셀")',
+      'radEightCells = cellRow.add("radiobutton", undefined, "8셀 (2×2×2)")',
       'cellSpan: radEightCells.value ? 2 : 1',
-      'var chkHiddenDashed = pnlLine.add("checkbox", undefined, "숨김선 점선 표시 (해제: 실선)")',
+      'chkHiddenDashed = pnlCells.add("checkbox", undefined, "숨김선 점선 표시 (해제: 실선)")',
       'hiddenDashed: chkHiddenDashed.value && radOneCell.value',
       'chkHiddenDashed.enabled = chkMode[0].value && radOneCell.value',
       '&& o.hiddenDashed) line.strokeDashes = [3, 2]',
-      'var radColor = pnlColor.add("radiobutton", undefined, "컬러")',
-      'var radGray = pnlColor.add("radiobutton", undefined, "회색 음영")',
-      'colorMode: radColor.value ? "color" : "gray"',
+      'var radColor = optionRow2.add("radiobutton", undefined, "컬러")',
+      'var radGray = optionRow2.add("radiobutton", undefined, "회색 음영")',
+      'colorMode: colorModeValue()',
       'cutCenterGray: makeRadialGradient(doc, "CutGray", kColor(0), kColor(55), 13.3)',
       'isCorner ? [128, 128, 128] : [180, 180, 180]',
       'function latticePoints(key)',
@@ -1454,29 +1454,29 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
   } else {
     const source = read(graphiteCrystal);
     const required = [
-      'new Window("dialog", "흑연 결정 구조 생성기")',
+      'label: "흑연"',
       'function generateHoneycombSheet(columns, rows, shiftX, shiftZ)',
       'function buildGraphiteGeometry(columns, rows, layerCount, layerGapRatio, stacking, interlayer)',
       'radAB = pnlStack.add("radiobutton", undefined, "AB 적층 (흑연)")',
       'radAA = pnlStack.add("radiobutton", undefined, "AA 적층")',
-      'var chkInterlayer = optionRow1.add("checkbox", undefined, "층간 점선")',
+      'chkInterlayer = pnlStack.add("checkbox", undefined, "층간 점선")',
       'var chkLit3D = optionRow1.add("checkbox", undefined, "구 3D 조명 효과")',
-      'var chkOutline = optionRow2.add("checkbox", undefined, "구 외곽선")',
-      'var sldColumns = addSlider(pnlGeometry, "가로 육각형", 1, 10, 4',
-      'var sldRows = addSlider(pnlGeometry, "세로 육각형", 1, 8, 3',
-      'var sldLayers = addSlider(pnlGeometry, "적층 수", 1, 8, 3',
-      'var sldBond = addSlider(pnlGeometry, "C-C 결합 길이", 2, 15, 6',
-      'var sldLayerGap = addSlider(pnlGeometry, "층간 거리", 3, 35, 14',
-      'var sldAtom = addSlider(pnlGeometry, "탄소 구 지름", 1, 12, 4',
-      'var sldBrightness = addSlider(pnlGeometry, "탄소 밝기", 40, 160, 100',
-      'var sldAngleR = addSlider(pnlView, "오른쪽 각도", 91, 179, 132',
-      'var sldAngleL = addSlider(pnlView, "왼쪽 각도", 91, 179, 108',
-      'var sldDepth = addSlider(pnlView, "앞·뒤 면 거리", 40, 160, 100',
+      'var chkOutline = optionRow1.add("checkbox", undefined, "구 외곽선")',
+      'sldColumns = addSliderRow(pnlGeometry, "가로 육각형", 112, 1, 10, 4',
+      'sldRows = addSliderRow(pnlGeometry, "세로 육각형", 112, 1, 8, 3',
+      'sldLayers = addSliderRow(pnlGeometry, "적층 수", 112, 1, 8, 3',
+      'sldBond = addSliderRow(pnlGeometry, "C-C 결합 길이", 112, 2, 15, 6',
+      'sldLayerGap = addSliderRow(pnlGeometry, "층간 거리", 112, 3, 35, 14',
+      'sldAtom = addSliderRow(pnlGeometry, "탄소 구 지름", 112, 1, 12, 4',
+      'sldBrightness = addSliderRow(pnlGeometry, "탄소 밝기", 112, 40, 160, 100',
+      'var sldAngleR = addAngleSlider("오른쪽 각도", 131)',
+      'var sldAngleL = addAngleSlider("왼쪽 각도", 109)',
+      'var sldDepth = addSliderRow(pnlAngles, "앞·뒤 면 거리", 90, 40, 160, 100',
       'record.interlayer ? kColor(65) : kColor(100)',
       'if (record.interlayer) line.strokeDashes = [3, 2]',
-      'holder.name = "GraphiteCrystal_Preview"',
-      'var PREF_KEY = "GraphiteCrystalMaker/settings"',
-      'drawGraphite(collectOptions(), app.activeDocument.activeLayer)',
+      '"GraphiteCrystal_Preview"',
+      'var PREF_KEY = "CrystalStructure/settings"',
+      'asArray(drawGraphite(collectOptions(), layer))',
     ];
     for (const token of required) {
       if (!source.includes(token)) {
@@ -1557,32 +1557,32 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
   } else {
     const source = read(diamondCrystal);
     const required = [
-      'new Window("dialog", "다이아몬드 결정 구조 생성기")',
+      'label: "다이아몬드"',
       'var DIAMOND_NEIGHBOR_DISTANCE = Math.sqrt(3) / 4',
       'function diamondSites(span)',
       'function diamondBonds(sites)',
       'function cellEdgeSegments(span)',
-      'var radOneCell = pnlCell.add("radiobutton", undefined, "1셀")',
-      'var radEightCells = pnlCell.add("radiobutton", undefined, "8셀 (2×2×2)")',
-      'var radPyramid = pnlCell.add("radiobutton", undefined, "피라미드 클러스터")',
-      'var chkCell = displayRow1.add("checkbox", undefined, "단위세포 라인")',
-      'var chkBonds = displayRow1.add("checkbox", undefined, "C-C 결합선")',
-      'var chkCompleteBoundary = displayRow2.add("checkbox", undefined, "경계 결합 완성")',
-      'var chkHiddenDashed = displayRow2.add("checkbox", undefined, "숨김선 점선 (해제: 실선)")',
-      'var sldCell = addSlider(pnlSize, "셀 한 변", 8, 80, 28',
+      'radOneCell = pnlCell.add("radiobutton", undefined, "1셀")',
+      'radEightCells = pnlCell.add("radiobutton", undefined, "8셀 (2×2×2)")',
+      'radPyramid = pnlCell.add("radiobutton", undefined, "피라미드 클러스터")',
+      'chkCell = displayRow1.add("checkbox", undefined, "단위세포 라인")',
+      'chkBonds = displayRow1.add("checkbox", undefined, "C-C 결합선")',
+      'chkCompleteBoundary = displayRow2.add("checkbox", undefined, "경계 결합 완성")',
+      'chkHiddenDashed = displayRow2.add("checkbox", undefined, "숨김선 점선 (해제: 실선)")',
+      'sldCell = addSliderRow(pnlSize, "셀 한 변", 112, 8, 80, 28',
       'pyramidInfoRow.add("statictext", undefined, "3층 (고정)")',
-      'var sldAtom = addSlider(pnlSize, "탄소 구 지름", 1, 12, 4',
-      'var sldBondWidth = addSlider(pnlSize, "결합선 굵기", 0.1, 2, 0.5',
-      'var sldBrightness = addSlider(pnlSize, "탄소 밝기", 40, 160, 100',
-      'var sldAngleR = addSlider(pnlView, "오른쪽 각도", 91, 179, 131',
-      'var sldAngleL = addSlider(pnlView, "왼쪽 각도", 91, 179, 109',
-      'var sldDepth = addSlider(pnlView, "앞·뒤 면 거리", 40, 160, 100',
+      'sldAtom = addSliderRow(pnlSize, "탄소 구 지름", 112, 1, 12, 4',
+      'sldBondWidth = addSliderRow(pnlSize, "결합선 굵기", 112, 0.1, 2, 0.5',
+      'sldBrightness = addSliderRow(pnlSize, "탄소 밝기", 112, 40, 160, 100',
+      'var sldAngleR = addAngleSlider("오른쪽 각도", 131)',
+      'var sldAngleL = addAngleSlider("왼쪽 각도", 109)',
+      'var sldDepth = addSliderRow(pnlAngles, "앞·뒤 면 거리", 90, 40, 160, 100',
       'hiddenDashed: chkHiddenDashed.value && (radOneCell.value || radPyramid.value)',
       'function completeDiamondNetwork(span)',
       'function diamondPyramidGeometry(levels)',
-      'holder.name = "DiamondCrystal_Preview"',
-      'var PREF_KEY = "DiamondCrystalMaker/settings"',
-      'drawDiamond(collectOptions(), app.activeDocument.activeLayer)',
+      '"DiamondCrystal_Preview"',
+      'var PREF_KEY = "CrystalStructure/settings"',
+      'asArray(drawDiamond(collectOptions(), layer))',
     ];
     for (const token of required) {
       if (!source.includes(token)) {
@@ -1599,7 +1599,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     }
 
     try {
-      const basisMatch = source.match(/var DIAMOND_BASIS = \[[\s\S]*?\n    \];/);
+      const basisMatch = source.match(/var DIAMOND_BASIS = \[[\s\S]*?\n {4,8}\];/);
       if (!basisMatch) throw new Error("missing diamond basis declaration");
       const declarations = [
         basisMatch[0],
