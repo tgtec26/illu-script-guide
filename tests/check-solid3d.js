@@ -3,15 +3,20 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const file = "스크립트/01_도형/Object_Solid3D.jsx";
+const file = "스크립트/01_도형/Object_3DLine.jsx";
 const source = fs.readFileSync(path.join(root, file), "utf8");
 
 // 다이얼로그 뒤의 기하·그리기 함수 전체를 잘라내 상태 변수와 함께 평가한다
 function loadEngine(state) {
-  const start = source.indexOf("// ---- 그리기");
-  const end = source.lastIndexOf("})();");
-  assert.ok(start > 0 && end > start, "engine section not found");
-  const body = source.slice(start, end);
+  // 공통 기하 구간 + 엔진 함수 본문(마지막 return api; 앞까지)을 한 스코프에 펼친다
+  const sharedStart = source.indexOf("// ==== 공통 기하");
+  const sharedEnd = source.indexOf("// ==== 입체 도형 엔진");
+  const engineStart = source.indexOf("function makeSolidEngine(variant) {");
+  const engineEnd = source.indexOf("// ==== 돌출 엔진", engineStart);
+  assert.ok(sharedStart > 0 && sharedEnd > sharedStart && engineStart > sharedEnd && engineEnd > engineStart, "engine section not found");
+  let body = source.slice(engineStart + "function makeSolidEngine(variant) {".length, engineEnd);
+  body = body.slice(0, body.lastIndexOf("return api;"));
+  body = source.slice(sharedStart, sharedEnd) + body;
   const defaults = {
     shapeIndex: 0, widthMm: 20, depthMm: 20, heightMm: 20, sideCount: 6, baseRotation: 0, topRatio: 50,
     rotY: 45, rotX: 35.3, rotZ: 0, perspectiveOn: false, perspectiveMm: 300, hiddenMode: 1,
@@ -28,8 +33,9 @@ function loadEngine(state) {
       {id: "box"}, {id: "tetra", regular: true}, {id: "octa", regular: true}, {id: "dodeca", regular: true}, {id: "icosa", regular: true},
       {id: "prism", sides: true}, {id: "pyramid", sides: true}, {id: "frustum", sides: true, taper: true},
       {id: "cylinder"}, {id: "cone"}, {id: "conefrustum", taper: true}, {id: "tube", taper: true, tube: true}];
-    ${Object.keys(s).map((k) => `var ${k} = ${JSON.stringify(s[k])};`).join("\n")}
-    var viewMatrix = null, eyeZ = 0, strokeColor = null;
+    ${Object.keys(s).map((k) => `var ${k};`).join("\n")}
+    var engine = { usesViewAngles: false }, perspectiveActive = false, variant = "rotation";
+    var viewMatrix = null, eyeZ = 0, strokeColor = null, documentIsCmyk = true, kColorCache = {};
     var paths = [];
     var doc = { groupItems: { add() { return makeGroup(); } }, documentColorSpace: "CMYK" };
     function makeGroup() {
@@ -48,6 +54,7 @@ function loadEngine(state) {
   `;
   const api = new Function("app", "PointType", "StrokeCap", "StrokeJoin", "DocumentColorSpace", "CMYKColor", "RGBColor",
     prelude + body + `
+    ${Object.keys(s).map((k) => `${k} = ${JSON.stringify(s[k])};`).join("\n")}
     return { buildModel, beginView, collectParts, collectFills, createSolid, projectModel, facingModel, splitCurve, findSilhouettes,
       makeCurvePath, paths, setState(next) { ${Object.keys(s).map((k) => `if ("${k}" in next) ${k} = next.${k};`).join(" ")} } };`
   )({ redraw() {} }, { SMOOTH: "smooth", CORNER: "corner" }, { BUTTENDCAP: 1 }, { MITERENDJOIN: 1 }, { CMYK: "CMYK" }, function () {}, function () {});
@@ -232,25 +239,41 @@ for (const id of Object.keys(topology)) {
 
 // 9. 설정 저장/복원: 필드 수와 범위 검증
 {
-  const applySaved = source.slice(source.indexOf("function applySavedSettings("), source.indexOf("// ---- 그리기"));
+  // 공통 항목(탭·시점·선과 면·위치) 뒤에 엔진 항목이 순서대로 붙는다. 입체 도형 엔진의 restoreFields도 같이 평가한다
+  const applySaved = source.slice(source.indexOf("function applySavedSettings("), source.indexOf("// ==== 공통 기하"));
+  const engineStart = source.indexOf("function makeSolidEngine(variant) {");
+  const solidRestore = source.slice(source.indexOf("function saveFields(", engineStart), source.indexOf("// ---- 그리기", engineStart));
   const run = (raw) => {
     const prelude = `
-      var SIZE_STEP_MM = 0.1, MAX_SIZE_MM = 200, POSITION_LIMIT_MM = 100, HIDDEN_NONE = 0, HIDDEN_SOLID = 2, FILL_NONE = 0, FILL_LIT = 2;
-      var SHAPES = new Array(11);
+      var SIZE_STEP_MM = 0.1, MAX_SIZE_MM = 200, SIDES_MIN = 3, SIDES_MAX = 24, POSITION_LIMIT_MM = 100, HIDDEN_NONE = 0, HIDDEN_SOLID = 2, FILL_NONE = 0, FILL_LIT = 2;
+      var SHAPES = new Array(12);
       var shapeIndex = 0, widthMm = 20, depthMm = 20, heightMm = 20, linkWidthDepth = true, sideCount = 6, baseRotation = 0, topRatio = 50;
-      var rotY = 45, rotX = 35.3, rotZ = 0, perspectiveOn = false, perspectiveMm = 300, hiddenMode = 1, offsetXmm = 0, offsetYmm = 0;
+      var tabIndex = 0, rotY = 45, rotX = 35.3, rotZ = 0, perspectiveOn = false, perspectiveMm = 300, hiddenMode = 1, offsetXmm = 0, offsetYmm = 0;
       var fillMode = 2, brightness = 70, contrast = 40, lightAzimuth = -35, lightElevation = 50;
       var PREF_KEY = "k";
+      var extrudeFields = null;
+      var angleR = 131, angleL = 109, depthPercent = 100;
+      var engines = [
+        { fieldCount: 8, restoreFields: function(f) { restoreFields(f); } },
+        { fieldCount: 8, restoreFields: function() {} },
+        { fieldCount: 2, restoreFields: function(f) { extrudeFields = f; } },
+        { fieldCount: 0, restoreFields: function() {} }];
       var app = { preferences: { getStringPreference() { return ${JSON.stringify(raw)}; } } };
       function parseNumber(text) { var n = String(text).replace(/,/g, ".").replace(/\\s/g, ""); if (n === "" || n === "+" || n === "-") return null; var v = Number(n); return isNaN(v) ? null : v; }
     `;
-    return new Function(prelude + applySaved + "\napplySavedSettings(); return {shapeIndex, widthMm, sideCount, rotX, perspectiveOn, hiddenMode, offsetYmm, linkWidthDepth, fillMode, brightness, lightAzimuth};")();
+    return new Function(prelude + applySaved + solidRestore +
+      "\napplySavedSettings(); return {tabIndex, shapeIndex, widthMm, sideCount, rotX, perspectiveOn, hiddenMode, offsetYmm, linkWidthDepth, fillMode, brightness, lightAzimuth, angleL, depthPercent, extrudeFields};")();
   };
-  const restored = run(["v2", 8, 30, 30, 12.5, 0, 5, 45, 70, 30, 20, 5, 1, 400, 2, 3, -4, 1, 55, 20, 30, 60].join("|"));
-  assert.deepStrictEqual(restored, { shapeIndex: 8, widthMm: 30, sideCount: 5, rotX: 20, perspectiveOn: true, hiddenMode: 2, offsetYmm: -4, linkWidthDepth: false, fillMode: 1, brightness: 55, lightAzimuth: 30 });
-  const badVersion = run(["v1", 8, 30, 30, 12.5, 0, 5, 45, 70, 30, 20, 5, 1, 400, 2, 3, -4].join("|"));
-  assert.strictEqual(badVersion.shapeIndex, 0, "old version string falls back to defaults");
-  const outOfRange = run(["v2", 99, 999, 30, 12.5, 1, 2, 45, 70, 30, 20, 5, 0, 400, 7, 3, -4, 9, 150, 20, 200, 60].join("|"));
+  // 공통 항목: 탭, 회전 3, 원근 2, 숨은선, 이동 2, 면 5, 관찰 각도 3
+  const shared = (tab) => [tab, 45, 20, 5, 1, 400, 2, 3, -4, 1, 55, 20, 30, 60, 120, 105, 88];
+  const solid2 = [0, 20, 20, 20, 1, 6, 0, 50];
+  const restored = run(["v2"].concat(shared(2), [8, 30, 30, 12.5, 0, 5, 45, 70], solid2, [25, 1]).join("|"));
+  assert.deepStrictEqual(restored, { tabIndex: 2, shapeIndex: 8, widthMm: 30, sideCount: 5, rotX: 20, perspectiveOn: true, hiddenMode: 2, offsetYmm: -4,
+    linkWidthDepth: false, fillMode: 1, brightness: 55, lightAzimuth: 30, angleL: 105, depthPercent: 88, extrudeFields: ["25", "1"] });
+  const badVersion = run(["v1"].concat([2, 45, 20, 5, 1, 400, 2, 3, -4, 1, 55, 20, 30, 60], [8, 30, 30, 12.5, 0, 5, 45, 70], [25, 1]).join("|"));
+  assert.strictEqual(badVersion.shapeIndex, 0, "v1 string (before 입체 도형2) falls back to defaults");
+  const outOfRange = run(["v2"].concat([7, 45, 20, 5, 0, 400, 7, 3, -4, 9, 150, 20, 200, 60, 50, 105, 300], [99, 999, 30, 12.5, 1, 2, 45, 70], solid2, [25, 0]).join("|"));
+  assert.strictEqual(outOfRange.tabIndex, 0, "bad tab index ignored");
   assert.strictEqual(outOfRange.shapeIndex, 0, "bad shape index ignored");
   assert.strictEqual(outOfRange.widthMm, 20, "bad width ignored");
   assert.strictEqual(outOfRange.sideCount, 6, "bad side count ignored");
@@ -258,10 +281,12 @@ for (const id of Object.keys(topology)) {
   assert.strictEqual(outOfRange.fillMode, 2, "bad fill mode ignored");
   assert.strictEqual(outOfRange.brightness, 70, "bad brightness ignored");
   assert.strictEqual(outOfRange.lightAzimuth, -35, "bad light azimuth ignored");
+  assert.strictEqual(outOfRange.angleL, 105, "angle in range restored");
+  assert.strictEqual(outOfRange.depthPercent, 100, "bad depth ignored");
   const shortString = run("v1|1|2");
   assert.strictEqual(shortString.shapeIndex, 0, "short string ignored");
-  const saveFields = source.match(/var parts = \["v2"[^\]]*\]/)[0].split(",").length;
-  assert.strictEqual(saveFields, 22, "save/restore field count matches");
+  const saveFields = source.match(/var parts = \["v2", tabIndex[^\]]*\]/)[0].split(",").length;
+  assert.strictEqual(saveFields, 18, "shared save/restore field count matches");
 }
 
 // 11. 면 음영: 등각 정육면체는 윗면 < 왼쪽 앞면 < 오른쪽 옆면 순으로 K가 커진다 (왼쪽 위 광원)
@@ -369,7 +394,7 @@ for (const id of Object.keys(topology)) {
 // 14. 커스텀 프리셋 문자열 파싱: 빈 칸·손상·범위 밖은 null, 정상은 복원
 {
   const parsePart = source.slice(source.indexOf("function parseCustomPreset("), source.indexOf("// 위치는 도형을 다시 만들지 않고"));
-  const restorePart = source.slice(source.indexOf("function restoreNumber("), source.indexOf("// ---- 그리기"));
+  const restorePart = source.slice(source.indexOf("function restoreNumber("), source.indexOf("// ==== 공통 기하"));
   const parse = new Function(`
     function parseNumber(text) { var n = String(text).replace(/,/g, ".").replace(/\\s/g, ""); if (n === "" || n === "+" || n === "-") return null; var v = Number(n); return isNaN(v) ? null : v; }
     ${restorePart} ${parsePart} return parseCustomPreset;`)();
@@ -378,7 +403,7 @@ for (const id of Object.keys(topology)) {
   assert.strictEqual(parse("1,2"), null, "short slot");
   assert.strictEqual(parse("400,0,0,0,300"), null, "angle out of range");
   assert.strictEqual(parse("0,0,0,0,10"), null, "distance out of range");
-  assert.ok(source.includes('PRESET_KEY = "ObjectSolid3D/presets"'), "presets use their own preference key");
+  assert.ok(source.includes('PRESET_KEY = "Object3DLine/presets"'), "presets use their own preference key");
 }
 
 // 15. 빨대: 안쪽 테두리 가시성, 안쪽 모선 숨은선, 고리·안쪽 벽 채우기

@@ -3,8 +3,12 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_EnergyFlow.jsx");
-const source = fs.readFileSync(scriptPath, "utf8");
+// 에너지 흐름 탭은 Object_Electricity.jsx 안의 makeEnergyFlowEngine에 원래 코드 그대로 들어 있다
+const scriptPath = path.join(root, "스크립트", "01_도형", "Object_Electricity.jsx");
+const wholeSource = fs.readFileSync(scriptPath, "utf8");
+const engineStart = wholeSource.indexOf("function makeEnergyFlowEngine(");
+assert.ok(engineStart > 0, "energy flow engine not found");
+const source = wholeSource.slice(engineStart);
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -107,6 +111,6 @@ const empty = helpers.arrowSpans(0, 100, 2, [0, 0]);
 near(empty[0][1], 50, 1e-9, "zero ratios split evenly");
 
 // 순수 문법 검사 (#지시문 제외)
-new Function(source.replace(/^#.*$/mg, ""));
+new Function(wholeSource.replace(/^#.*$/mg, ""));
 
 console.log("check-energy-flow: ok");

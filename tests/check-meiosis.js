@@ -3,11 +3,16 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_Meiosis.jsx");
+// 이 탭은 Object_CellDivision.jsx 안의 makeMeiosisEngine에 원래 코드 그대로 들어 있다
+const scriptPath = path.join(root, "스크립트", "01_도형", "Object_CellDivision.jsx");
 
-assert.ok(fs.existsSync(scriptPath), "Object_Meiosis.jsx must exist");
+assert.ok(fs.existsSync(scriptPath), "Object_CellDivision.jsx must exist");
 
-const source = fs.readFileSync(scriptPath, "utf8");
+const wholeSource = fs.readFileSync(scriptPath, "utf8");
+const engineStart = wholeSource.indexOf("function makeMeiosisEngine(");
+const engineEnd = wholeSource.indexOf("    // ==== ", engineStart);
+assert.ok(engineStart > 0, "engine not found");
+const source = wholeSource.slice(engineStart, engineEnd > 0 ? engineEnd : wholeSource.length);
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);

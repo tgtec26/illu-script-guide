@@ -3,15 +3,20 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const file = "스크립트/01_도형/Object_Extrude3D.jsx";
+const file = "스크립트/01_도형/Object_3DLine.jsx";
 const source = fs.readFileSync(path.join(root, file), "utf8");
 
 // 테두리 펴기부터 끝까지(기하·그리기 함수)를 잘라내 상태 변수와 함께 평가한다
 function loadEngine(state) {
-  const start = source.indexOf("// ---- 테두리 펴기");
-  const end = source.lastIndexOf("})();");
-  assert.ok(start > 0 && end > start, "engine section not found");
-  const body = source.slice(start, end);
+  // 공통 기하 구간 + 엔진 함수 본문(마지막 return api; 앞까지)을 한 스코프에 펼친다
+  const sharedStart = source.indexOf("// ==== 공통 기하");
+  const sharedEnd = source.indexOf("// ==== 입체 도형 엔진");
+  const engineStart = source.indexOf("function makeExtrudeEngine() {");
+  const engineEnd = source.indexOf("// ==== 회전체 엔진", engineStart);
+  assert.ok(sharedStart > 0 && sharedEnd > sharedStart && engineStart > sharedEnd && engineEnd > engineStart, "engine section not found");
+  let body = source.slice(engineStart + "function makeExtrudeEngine() {".length, engineEnd);
+  body = body.slice(0, body.lastIndexOf("return api;"));
+  body = source.slice(sharedStart, sharedEnd) + body;
   const defaults = {
     depthMm: 20, rotY: 0, rotX: 0, rotZ: 0, perspectiveOn: false, perspectiveMm: 300, hiddenMode: 1,
     fillMode: 0, brightness: 70, contrast: 40, lightAzimuth: -35, lightElevation: 50,
@@ -25,7 +30,8 @@ function loadEngine(state) {
     var FACING_EPSILON = 1e-9, FILL_OVERLAP_PT = 0.15;
     var FILL_NONE = 0, FILL_FLAT = 1, FILL_LIT = 2;
     var HIDDEN_NONE = 0, HIDDEN_DASHED = 1, HIDDEN_SOLID = 2;
-    ${Object.keys(s).map((k) => `var ${k} = ${JSON.stringify(s[k])};`).join("\n")}
+    ${Object.keys(s).map((k) => `var ${k};`).join("\n")}
+    var engine = { usesViewAngles: false }, perspectiveActive = false;
     var viewMatrix = null, eyeZ = 0, strokeColor = null;
     var setPointType = false, documentIsCmyk = true, kColorCache = {};
     var paths = [];
@@ -46,6 +52,7 @@ function loadEngine(state) {
   `;
   const api = new Function("app", "PointType", "StrokeCap", "StrokeJoin", "DocumentColorSpace", "CMYKColor", "RGBColor",
     prelude + body + `
+    ${Object.keys(s).map((k) => `${k} = ${JSON.stringify(s[k])};`).join("\n")}
     return { prepareContours, flattenContour, polygonArea, buildModel, beginView, collectParts, collectRulings,
       collectFills, createSolid, projectModel, occluded, insideProfile, probeInside, contourCurve, rulingCurve,
       splitCurve, mergeShortSpans, normalAtU, pointAtU, facingModel, solveCubic, paths,

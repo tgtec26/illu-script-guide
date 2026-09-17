@@ -22,7 +22,7 @@ Any script with a dialog must remember the options from the last run and presele
 - Validate every restored value against the same range the dialog enforces before applying it.
 - Wrap reads and writes in `try/catch`; a preference failure must never block the script.
 
-Reference implementations: `스크립트/01_도형/Object_sphere.jsx`, `스크립트/01_도형/Object_AxisTickMarks.jsx`, `스크립트/01_도형/Object_AtomModel.jsx`.
+Reference implementations: `스크립트/01_도형/Object_RoundSolids.jsx`(구 탭), `스크립트/01_도형/Object_GraphTools.jsx`(축 눈금 탭), `스크립트/01_도형/Object_ParticleModel.jsx`(원자 탭).
 
 ## Movable Preview (required)
 
@@ -88,7 +88,7 @@ Parameter keys for the `ai_plugin_setStroke` event (integer form of the four-cha
 - Strings in an action file are UTF-8 bytes written as uppercase hex, and the declared length is the **byte** count, not the character count.
 - Arrowhead names and the `/name` of enumerated parameters follow the Illustrator UI language. Keep them in one named constant per script so another language only needs that constant changed (Korean build: `화살표 1` = `ED9994EC82B4ED919C2031`, 11 bytes).
 - Wrap the whole action call in `try/catch` so the artwork survives a failure, and always unload the action set and delete the temporary file afterwards.
-- Reference implementations: `스크립트/01_도형/Object_AxisTickMarks.jsx` (`applyAxisArrowheads`), `스크립트/01_도형/Object_setdash_align_helper.jsxinc`. To find more keys, parse `스크립트/00_세팅/cjhaction_260624.aia` — it holds real recorded values.
+- Reference implementations: `스크립트/01_도형/Object_GraphTools.jsx` (축 눈금 탭의 `applyAxisArrowheads`), `스크립트/01_도형/Object_setdash_align_helper.jsxinc`. To find more keys, parse `스크립트/00_세팅/cjhaction_260624.aia` — it holds real recorded values.
 
 ## Expand and Pathfinder Must Go Through the Installed Action Set
 
@@ -113,7 +113,7 @@ shape.remove();
 - Wrap each call in `try/catch` and tell the user to re-run setup if the action set is missing.
 - Do the whole chain one object at a time. Expanding several objects together leaves the selection as a flat list of all the pieces, and the later merge then has nothing meaningful to work on.
 - Other useful actions in the same set: `선 두께 0.3`, `0.3 화살촉 넣기`, `글자깨고흰라인`, `화살표 확장`, `검은 선 흰색으로`. Decode `cjhaction_260624.aia` (UTF-8 hex) to see the full list.
-- Reference implementation: `스크립트/01_도형/Object_CellCycle.jsx` (`outlineArrows`, `applyExpandAction`).
+- Reference implementation: `스크립트/01_도형/Object_CellDivision.jsx` (세포 주기 탭의 `outlineArrows`, `applyExpandAction`).
 
 When a step-by-step diagnosis is needed, put the stage limit constant at the **top** of the IIFE, not next to the function it guards — a `var` declared after the dialog code runs too late to take effect, and the resulting tests silently exercise the full pipeline.
 
@@ -141,6 +141,15 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 - Read a group's parts into a name → item map in one pass instead of scanning by name for each part. Re-read after `add`/`move`/`remove`; references can go stale.
 - Skip work when the value did not change (gradient tint, text size, path geometry). Cache the last drawn key per object.
 - Benchmark in Illustrator, not by guessing: copy the script, replace `win.show()` with an option sweep timed by `new Date().getTime()` (not `$.hiresTimer`), run it with `osascript -e 'tell application id "com.adobe.illustrator" to do javascript (POSIX file "...")'`, and compare `doc.exportFile(PNG24)` output between runs. A modal alert in Illustrator blocks every AppleEvent until dismissed.
+
+## Tabbed Script Bundles
+
+관련 스크립트는 한 창의 탭으로 묶는다(`Object_3DLine.jsx`, `Object_ParticleModel.jsx`, `Object_CrystalStructure.jsx`, `Object_DnaModel.jsx`, `Object_Mechanics.jsx`, `Object_GraphTools.jsx`). 두 가지 구조가 있다.
+
+- 옵션을 공유하는 묶음(3D 라인·입자 모형·결정 구조): 공용 상태·패널은 IIFE 최상위, 탭별 상태·행·기하는 `makeXEngine()` 클로저 안. 엔진 인터페이스는 파일 머리 주석에 있다.
+- 서로 다른 다이얼로그를 그대로 담는 묶음(DNA 모형·역학·그래프·표): 원본 스크립트 본문이 `addRows(page)` 안에 그대로 들어가고, 창·푸터·show 부분만 `api.setPreview/updatePreview/clearPreview/commit` 훅으로 바뀐다. 각 탭의 저장 키(`PREF_KEY`)는 원래 것을 그대로 쓴다. 선택이 맞지 않는 탭은 `addRows`가 안내문을 돌려주고 호스트가 탭을 끈다.
+- ScriptUI `tabbedpanel.selection`(Tab)에는 `index`가 없다. 제목(`text`)을 라벨과 비교해 찾는다.
+- Node 테스트는 스코프를 평탄화해 공통 함수가 엔진 상수를 쓰는 오류를 못 잡는다. 통합 뒤에는 일러에서 탭마다 미리보기를 그려 확인한다.
 
 ## Escalation
 
