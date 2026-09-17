@@ -1,6 +1,6 @@
 const scripts = [
   { id: "setup", category: "세팅", name: "setup", file: "00_세팅/setup.jsx", summary: "새 PC에서 Illustrator 환경을 한 번에 맞춥니다. 단위, 키보드 증감, 문자 증감, 고정점 표시, 액션 세트를 적용합니다.", tags: ["환경설정", "액션", "새 PC"] },
-  { id: "atom-model", category: "도형", name: "원자 모형", file: "01_도형/Object_AtomModel.jsx", summary: "원자 구조를 빠르게 그릴 때 쓰는 생성 도구입니다. 과학 도판에서 반복되는 전자껍질 표현을 줄입니다.", tags: ["과학", "도형"] },
+  { id: "particle-model", category: "도형", name: "입자 모형 (원자·분자·이온 결합)", file: "01_도형/Object_ParticleModel.jsx", summary: "원자 모형·분자 모형·이온 결합 모형 생성기를 한 창의 탭으로 묶은 스크립트입니다. 핵 전하량 표시, 전자 - 기호, 전자 껍질 선, 핵·전자 3D 조명 효과, 크기(1껍질 지름·핵 지름·전자 지름·핵 전하량 글자)는 세 탭이 같이 쓰고, 정원을 하나 선택하고 실행하면 그 원을 최외곽 껍질로 삼아 크기를 맞춥니다. [원자] H~Ar 원소를 다중 선택하고 이온 전하(-3~+3), 1번 껍질 수평 배열, 2·3번 껍질 22.5° 이동을 고릅니다. [분자] H₂·N₂·O₂·F₂·Cl₂·HCl·H₂O·CO₂·Cl₂O·NH₃·CH₄ 공유 결합 모형을 껍질 겹침(%)과 함께 그립니다. [이온 결합] LiF·NaF·NaCl·KCl·Na₂O·K₂O·MgO·CaO·MgCl₂·CaCl₂ 화합물을 이온 전하 글자 크기·이온 간격·1껍질 전자 3시·9시 옵션으로 그립니다. 실시간 미리보기를 지원합니다.", tags: ["원자", "분자", "이온", "전자", "껍질", "모형", "화학"] },
   { id: "axis-tick", category: "도형", name: "축 눈금", file: "01_도형/Object_AxisTickMarks.jsx", summary: "사각형을 기준으로 아래축과 왼쪽축을 만들고, 화살표와 눈금 숫자를 배치합니다.", tags: ["그래프", "축", "눈금"] },
   { id: "bohr-orbit", category: "도형", name: "보어 궤도", file: "01_도형/Object_BohrQuantumOrbit.jsx", summary: "보어 원자 모형의 궤도 표현을 만드는 스크립트입니다.", tags: ["과학", "원자"] },
   { id: "circular-align", category: "도형", name: "원형 정렬", file: "01_도형/Object_CircularAlignment.jsx", summary: "선택한 개체를 원형 구조로 정렬할 때 사용합니다.", tags: ["배치", "정렬"] },
@@ -35,8 +35,6 @@ const scripts = [
   { id: "cubic-lattice", category: "도형", name: "입방정계 단위세포", file: "01_도형/Object_CubicLattice.jsx", summary: "입방정계 단위세포를 1셀 또는 2×2×2로 그립니다. 격자 유형, 관찰 각도, 숨은선 표시를 조절합니다.", tags: ["과학", "결정"] },
   { id: "diamond-crystal", category: "도형", name: "다이아몬드 결정", file: "01_도형/Object_DiamondCrystal.jsx", summary: "다이아몬드 결정 구조를 1셀·8셀·피라미드 클러스터로 그리고 C-C 결합선과 숨은선을 조절합니다.", tags: ["과학", "결정"] },
   { id: "graphite-crystal", category: "도형", name: "흑연 결정", file: "01_도형/Object_GraphiteCrystal.jsx", summary: "흑연 결정 구조를 AB 또는 AA 적층으로 그리고 층간 점선과 관찰 각도를 조절합니다.", tags: ["과학", "결정"] },
-  { id: "ionic-model", category: "도형", name: "이온 결합 모형", file: "01_도형/Object_IonicModel.jsx", summary: "NaCl 같은 이온 결합 화합물의 전자 껍질 모형을 만듭니다. 핵 전하량과 전자 기호 표시를 조절합니다.", tags: ["과학", "원자"] },
-  { id: "molecule-model", category: "도형", name: "분자 모형", file: "01_도형/Object_MoleculeModel.jsx", summary: "공유 결합 분자의 전자 껍질 모형을 만듭니다. 공유·비공유 전자쌍을 자동으로 배치합니다.", tags: ["과학", "분자"] },
   { id: "horizontal-projectile", category: "도형", name: "수평 던지기 포물선", file: "01_도형/Object_HorizontalProjectile.jsx", summary: "높은 곳에서 오른쪽으로 수평으로 던진 물체가 지면에 닿을 때까지의 포물선 궤적을 화면 중앙에 그립니다. 높이(m)·수평 속도(m/s)를 넣으면 낙하 시간과 수평 도달거리를 계산해 보여 주고, 도면 축척은 실제 1m = 2mm(가로·세로 동일), 중력 9.8m/s², 공기 저항은 없습니다. 선 두께와 위치를 미리보기로 조절하며 값을 바꿔도 투사 지점은 움직이지 않습니다.", tags: ["과학", "역학", "포물선", "운동"] },
   { id: "pendulum", category: "도형", name: "진자 운동", file: "01_도형/Object_Pendulum.jsx", summary: "선택한 수평선을 천장 삼아 진자 그림을 그립니다. 각도 θ, 진자 길이, 궤적, 직각 표시를 넣습니다.", tags: ["과학", "역학"] },
   { id: "polymer", category: "도형", name: "중합체 생성기", file: "01_도형/Object_PolymerMaker.jsx", summary: "선택한 패스를 따라 단위체를 배치해 중합체를 만듭니다. 단위체 모양과 색상을 조절합니다.", tags: ["과학", "중합체"] },
