@@ -113,7 +113,7 @@ shape.remove();
 - Wrap each call in `try/catch` and tell the user to re-run setup if the action set is missing.
 - Do the whole chain one object at a time. Expanding several objects together leaves the selection as a flat list of all the pieces, and the later merge then has nothing meaningful to work on.
 - Other useful actions in the same set: `선 두께 0.3`, `0.3 화살촉 넣기`, `글자깨고흰라인`, `화살표 확장`, `검은 선 흰색으로`. Decode `cjhaction_260624.aia` (UTF-8 hex) to see the full list.
-- Reference implementation: `스크립트/01_도형/Object_CellCycle.jsx` (`outlineArrows`, `applyExpandAction`).
+- Reference implementation: `스크립트/01_도형/Object_CellDivision.jsx` (세포 주기 탭의 `outlineArrows`, `applyExpandAction`).
 
 When a step-by-step diagnosis is needed, put the stage limit constant at the **top** of the IIFE, not next to the function it guards — a `var` declared after the dialog code runs too late to take effect, and the resulting tests silently exercise the full pipeline.
 

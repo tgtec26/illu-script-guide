@@ -31,7 +31,7 @@ const coilSpring = "스크립트/01_도형/Object_Mechanics.jsx";
 const sineWave = "스크립트/01_도형/Object_Mechanics.jsx";
 const weatherFront = "스크립트/01_도형/Object_front.jsx";
 const phospholipid = "스크립트/01_도형/Object_PhospholipidBilayer.jsx";
-const cellCycle = "스크립트/01_도형/Object_CellCycle.jsx";
+const cellCycle = "스크립트/01_도형/Object_CellDivision.jsx";
 const anchorAngle = "스크립트/01_도형/Object_AnchorAngle.jsx";
 const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
 const cubicLattice = "스크립트/01_도형/Object_CrystalStructure.jsx";
@@ -2033,7 +2033,8 @@ for (const file of updaterFiles) {
 
 // 세포 주기: 시작 경계, 경량 미리보기, 위치 이동, 옵션 저장의 실행 가능한 회귀 검사.
 {
-  const source = read(cellCycle);
+  // 세포 주기 탭은 Object_CellDivision.jsx 안의 makeCellCycleEngine에 있다. 다른 탭의 같은 이름 함수를 피해 엔진 구간만 본다
+  const source = read(cellCycle).slice(read(cellCycle).indexOf("function makeCellCycleEngine("));
   try {
     const numberConstant = (name) => {
       const match = source.match(new RegExp(`var\\s+${name}\\s*=\\s*(\\d+)`));
@@ -2167,7 +2168,8 @@ for (const file of updaterFiles) {
 // 세포 주기: Illustrator가 연속 DOM 수정 중 간헐적으로 던지는 오류(Target layer cannot be
 // modified / PARM)가 미리보기를 캔버스에 고아로 남기거나 스크립트를 죽이지 않아야 한다.
 {
-  const source = read(cellCycle);
+  // 세포 주기 탭은 Object_CellDivision.jsx 안의 makeCellCycleEngine에 있다. 다른 탭의 같은 이름 함수를 피해 엔진 구간만 본다
+  const source = read(cellCycle).slice(read(cellCycle).indexOf("function makeCellCycleEngine("));
   try {
     // 그리다 실패하면 반쯤 만든 그룹을 지우고 오류를 다시 던진다
     const halfBuilt = {removed: 0, remove() { this.removed++; }};
