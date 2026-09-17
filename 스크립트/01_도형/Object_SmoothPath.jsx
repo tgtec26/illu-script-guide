@@ -242,19 +242,21 @@ try {
     var ANALYZE_LADDER_MM = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5];
     function analyzeTolerances() {
         ensureSnapshots();
+        var computeStart = new Date().getTime();
         var counts = [];
         for (var t = 0; t < ANALYZE_LADDER_MM.length; t++) counts.push(0);
         // 패스마다 노드를 한 번 만들고 오차를 작은 것부터 이어서 돌린다. 8단계가 1단계 값이다.
         for (var i = 0; i < snapshots.length; i++) {
             var data = snapshots[i];
             var minPoints = data.closed ? MIN_CLOSED_POINTS : MIN_OPEN_POINTS;
-            var list = buildRemoveNodes(data, 6);
+            var list = buildRemoveNodes(data, 4);
             for (var k = 0; k < ANALYZE_LADDER_MM.length; k++) {
                 sweepRemove(list, ANALYZE_LADDER_MM[k] * MM, minPoints);
                 counts[k] += list.count;
             }
-            if (i % 20 === 19 || data.points.length > 1000) {
-                removeInfo.text = "계산 중... " + (i + 1) + " / " + snapshots.length;
+            if (i % 5 === 4) {
+                removeInfo.text = "계산 중... " + (i + 1) + " / " + snapshots.length +
+                    " · " + Math.round((new Date().getTime() - computeStart) / 1000) + "초";
                 dlg.update();
             }
         }
@@ -432,7 +434,7 @@ try {
     // 제거가 이어질수록 오차가 쌓여 허용치를 넘어선다.
     function removeAnchors(data, tolerance, minPoints) {
         if (tolerance <= 0 || data.points.length < 3) return data;
-        var list = buildRemoveNodes(data, 6);
+        var list = buildRemoveNodes(data, 4);
         sweepRemove(list, tolerance, minPoints);
         return nodesToData(list);
     }
@@ -485,7 +487,7 @@ try {
                     continue;
                 }
                 // 한 구간이 품는 원본 샘플 상한. 긴 직선이 수천 점을 삼키면 검사마다 그만큼 돈다.
-                if (prev.samples.length + node.samples.length - 1 > 240) {
+                if ((prev.samples.length + node.samples.length) / 2 - 1 > 240) {
                     node.error = Infinity;
                     node = next;
                     continue;
@@ -494,7 +496,7 @@ try {
                 if (merged.error <= tolerance) {
                     prev.right = merged.right;
                     next.left = merged.left;
-                    prev.samples = prev.samples.concat(node.samples.slice(1));
+                    prev.samples = prev.samples.concat(node.samples.slice(2));
                     prev.error = null;
                     next.error = null;
                     prev.after = next;
@@ -520,56 +522,70 @@ try {
         return {closed: list.closed, points: points};
     }
 
+    // 샘플은 [x0, y0, x1, y1, ...] 평면 배열. 점마다 배열을 만들면 ExtendScript의
+    // 가비지 컬렉터가 수만 앵커에서 수 분을 잡아먹는다.
     function sampleSegment(from, to, pieces) {
         var result = [];
+        var p0 = from.anchor, c1 = from.right, c2 = to.left, p3 = to.anchor;
         for (var k = 0; k <= pieces; k++) {
-            result.push(bezierPoint(from.anchor, from.right, to.left, to.anchor, k / pieces));
+            var t = k / pieces;
+            var u = 1 - t;
+            var a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+            result.push(a * p0[0] + b * c1[0] + c * c2[0] + d * p3[0]);
+            result.push(a * p0[1] + b * c1[1] + c * c2[1] + d * p3[1]);
         }
         return result;
     }
 
     // prev → next를 베지어 하나로 맞춘 뒤, prev.samples + mid.samples(원본 점)와의 최대 거리를 돌려준다.
+    // b의 첫 점은 a의 마지막 점과 같으므로 건너뛴다.
     function mergeSegments(prev, mid, next) {
         var a = prev.samples;
-        var b = mid.samples;             // b[0]은 a의 마지막 점과 같으므로 건너뛴다
-        var total = a.length + b.length - 1;
+        var b = mid.samples;
+        var total = (a.length + b.length) / 2 - 1;
         var p0 = prev.anchor;
         var p3 = next.anchor;
+        var i, sx, sy, d, worst = 0;
         var straight = isZeroHandle(prev.right, p0) && isZeroHandle(mid.left, mid.anchor) &&
             isZeroHandle(mid.right, mid.anchor) && isZeroHandle(next.left, p3);
-        var i, sample, d;
         if (straight) {
-            var worstLine = 0;
             for (i = 0; i < total; i++) {
-                sample = i < a.length ? a[i] : b[i - a.length + 1];
-                d = pointSegmentDistance(sample, p0, p3);
-                if (d > worstLine) worstLine = d;
+                if (i * 2 < a.length) { sx = a[i * 2]; sy = a[i * 2 + 1]; }
+                else { sx = b[(i * 2) - a.length + 2]; sy = b[(i * 2) - a.length + 3]; }
+                d = pointSegmentDistance([sx, sy], p0, p3);
+                if (d > worst) worst = d;
             }
-            return {right: [p0[0], p0[1]], left: [p3[0], p3[1]], error: worstLine};
+            return {right: [p0[0], p0[1]], left: [p3[0], p3[1]], error: worst};
         }
 
         // 현 길이 누적으로 매개변수 t를 만든다
         var params = [0];
         var length = 0;
-        var last = a[0];
+        var lx = a[0], ly = a[1];
         for (i = 1; i < total; i++) {
-            sample = i < a.length ? a[i] : b[i - a.length + 1];
-            length += distance(last, sample);
+            if (i * 2 < a.length) { sx = a[i * 2]; sy = a[i * 2 + 1]; }
+            else { sx = b[(i * 2) - a.length + 2]; sy = b[(i * 2) - a.length + 3]; }
+            var dx = sx - lx, dy = sy - ly;
+            length += Math.sqrt(dx * dx + dy * dy);
             params.push(length);
-            last = sample;
+            lx = sx; ly = sy;
         }
         if (length > 0) {
             for (i = 0; i < total; i++) params[i] /= length;
         }
-        var t0 = tangentAt(prev.right, p0, a[1]);
-        var t1 = tangentAt(next.left, p3, b[b.length - 2]);
-        var handles = fitHandles(a, b, params, p0, p3, t0, t1);
+        var t0 = tangentAt(prev.right, p0, a[2], a[3]);
+        var t1 = tangentAt(next.left, p3, b[b.length - 4], b[b.length - 3]);
+        var handles = fitHandles(a, b, total, params, p0, p3, t0, t1);
         var c1 = handles[0];
         var c2 = handles[1];
-        var worst = 0;
         for (i = 0; i < total; i++) {
-            sample = i < a.length ? a[i] : b[i - a.length + 1];
-            d = distance(sample, bezierPoint(p0, c1, c2, p3, params[i]));
+            if (i * 2 < a.length) { sx = a[i * 2]; sy = a[i * 2 + 1]; }
+            else { sx = b[(i * 2) - a.length + 2]; sy = b[(i * 2) - a.length + 3]; }
+            var t = params[i], u = 1 - t;
+            var ka = u * u * u, kb = 3 * u * u * t, kc = 3 * u * t * t, kd = t * t * t;
+            var ex = ka * p0[0] + kb * c1[0] + kc * c2[0] + kd * p3[0] - sx;
+            var ey = ka * p0[1] + kb * c1[1] + kc * c2[1] + kd * p3[1] - sy;
+            d = Math.sqrt(ex * ex + ey * ey);
             if (d > worst) worst = d;
         }
         return {right: c1, left: c2, error: worst};
@@ -579,39 +595,37 @@ try {
         return Math.abs(handle[0] - anchor[0]) < 0.0001 && Math.abs(handle[1] - anchor[1]) < 0.0001;
     }
 
-    // 핸들 방향. 핸들이 없으면(직선 구간) 곡선이 실제로 나아가는 쪽을 쓴다.
-    function tangentAt(handle, anchor, fallbackPoint) {
+    // 핸들 방향. 핸들이 없으면(직선 구간) 곡선이 실제로 나아가는 쪽(fx, fy)을 쓴다.
+    function tangentAt(handle, anchor, fx, fy) {
         var direction = normalize([handle[0] - anchor[0], handle[1] - anchor[1]]);
         if (direction[0] === 0 && direction[1] === 0) {
-            direction = normalize([fallbackPoint[0] - anchor[0], fallbackPoint[1] - anchor[1]]);
+            direction = normalize([fx - anchor[0], fy - anchor[1]]);
         }
         return direction;
     }
 
     // 양 끝 접선 방향이 정해진 베지어의 핸들 길이(α, β)를 최소제곱으로 푼다(Schneider 1990).
     // 풀이가 불안정하거나 핸들이 뒤로 접히면 현의 1/3 길이로 둔다.
-    function fitHandles(a, b, params, p0, p3, t0, t1) {
+    function fitHandles(a, b, total, params, p0, p3, t0, t1) {
         var c11 = 0, c12 = 0, c22 = 0, x1 = 0, x2 = 0;
-        var total = a.length + b.length - 1;
+        var sx, sy;
         for (var i = 0; i < total; i++) {
-            var sample = i < a.length ? a[i] : b[i - a.length + 1];
+            if (i * 2 < a.length) { sx = a[i * 2]; sy = a[i * 2 + 1]; }
+            else { sx = b[(i * 2) - a.length + 2]; sy = b[(i * 2) - a.length + 3]; }
             var t = params[i];
             var u = 1 - t;
             var b1 = 3 * u * u * t;
             var b2 = 3 * u * t * t;
-            var a1 = [t0[0] * b1, t0[1] * b1];
-            var a2 = [t1[0] * b2, t1[1] * b2];
-            var base = [
-                (u * u * u + b1) * p0[0] + (b2 + t * t * t) * p3[0],
-                (u * u * u + b1) * p0[1] + (b2 + t * t * t) * p3[1]
-            ];
-            var rx = sample[0] - base[0];
-            var ry = sample[1] - base[1];
-            c11 += a1[0] * a1[0] + a1[1] * a1[1];
-            c12 += a1[0] * a2[0] + a1[1] * a2[1];
-            c22 += a2[0] * a2[0] + a2[1] * a2[1];
-            x1 += a1[0] * rx + a1[1] * ry;
-            x2 += a2[0] * rx + a2[1] * ry;
+            var a1x = t0[0] * b1, a1y = t0[1] * b1;
+            var a2x = t1[0] * b2, a2y = t1[1] * b2;
+            var k0 = u * u * u + b1, k3 = b2 + t * t * t;
+            var rx = sx - (k0 * p0[0] + k3 * p3[0]);
+            var ry = sy - (k0 * p0[1] + k3 * p3[1]);
+            c11 += a1x * a1x + a1y * a1y;
+            c12 += a1x * a2x + a1y * a2y;
+            c22 += a2x * a2x + a2y * a2y;
+            x1 += a1x * rx + a1y * ry;
+            x2 += a2x * rx + a2y * ry;
         }
         var det = c11 * c22 - c12 * c12;
         var alpha, beta;
