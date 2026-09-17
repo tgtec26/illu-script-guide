@@ -30,6 +30,7 @@ function loadEngine(state) {
     var FILL_NONE = 0, FILL_FLAT = 1, FILL_LIT = 2;
     var HIDDEN_NONE = 0, HIDDEN_DASHED = 1, HIDDEN_SOLID = 2;
     ${Object.keys(s).map((k) => `var ${k};`).join("\n")}
+    var engine = { usesViewAngles: false }, perspectiveActive = false;
     var viewMatrix = null, eyeZ = 0, strokeColor = null, documentIsCmyk = true, kColorCache = {};
     var paths = [];
     var doc = { groupItems: { add() { return makeGroup(); } }, documentColorSpace: "CMYK" };

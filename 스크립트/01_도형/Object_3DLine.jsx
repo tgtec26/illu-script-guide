@@ -9,7 +9,9 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 3D → 2D 라인: 입체 도형·돌출·회전체를 한 창의 탭으로 묶었다. 시점·선과 면·위치는 세 탭이 같이 쓴다.
+// 3D → 2D 라인: 입체 도형·돌출·회전체를 한 창의 탭으로 묶었다. 시점·선과 면·위치는 탭들이 같이 쓴다.
+// 입체 도형은 탭이 둘이다. 1은 시점(가로 회전·위아래 기울기·화면 회전·원근으로 물체를 돌리는 카메라 방식),
+// 2는 관찰 각도(결정 구조와 같은 제도 방식: 모서리의 화면 각도와 앞·뒤 면 거리로 그림을 정함. 원근 없음).
 // 라이노에서 3D를 만들고 2D로 뽑던 작업을 일러스트레이터 안에서 끝내기 위한 스크립트.
 //   입체 도형: 선택 없이(또는 기준 개체 하나) 실행. 모든 도형이 볼록이라 "면이 앞을 보는가"만으로 숨은선을 가른다.
 //   돌출: 패스 하나 이상 선택. 닫힌 패스는 뚜껑 있는 기둥, 열린 패스는 띠. 겹친 깊이가 홀수인 곳이 구멍이다.
@@ -56,6 +58,10 @@ try {
     var rotZ = 0;       // 화면 회전
     var perspectiveOn = false;
     var perspectiveMm = 300;
+    var angleR = 131;          // 관찰 각도: 오른쪽 모서리 각도 (입체 도형2)
+    var angleL = 109;          // 관찰 각도: 왼쪽 모서리 각도
+    var depthPercent = 100;    // 관찰 각도: 앞·뒤 면 거리 (%)
+    var perspectiveActive = false; // 이번 그리기에 원근을 실제로 쓰는가 (관찰 각도 탭은 항상 평행 투영)
     var hiddenMode = HIDDEN_DASHED;
     var fillMode = FILL_LIT;
     var brightness = 70;       // 100 - K 중간값
@@ -89,7 +95,7 @@ try {
     var sel = doc.selection;
     for (var selIndex = 0; sel && selIndex < sel.length; selIndex++) selectedItems.push(sel[selIndex]);
 
-    var engines = [makeSolidEngine(), makeExtrudeEngine(), makeRevolveEngine()];
+    var engines = [makeSolidEngine("rotation"), makeSolidEngine("angles"), makeExtrudeEngine(), makeRevolveEngine()];
     for (var engineIndex = 0; engineIndex < engines.length; engineIndex++) {
         engines[engineIndex].error = engines[engineIndex].prepare(selectedItems);
     }
@@ -130,23 +136,33 @@ try {
     var viewPanel = win.add("panel", undefined, "시점");
     viewPanel.orientation = "column";
     viewPanel.alignChildren = "fill";
-    var rotYControl = addNumberRow(viewPanel, "가로 회전 (°)", rotY, -180, 180, ANGLE_STEP, 1,
+    // 시점(회전) 행과 관찰 각도 행을 같은 자리에 겹쳐 두고, 탭이 쓰는 쪽만 보인다
+    var viewStack = viewPanel.add("group");
+    viewStack.orientation = "stack";
+    viewStack.alignChildren = ["fill", "top"];
+    var rotationGroup = viewStack.add("group");
+    rotationGroup.orientation = "column";
+    rotationGroup.alignChildren = "fill";
+    var anglesGroup = viewStack.add("group");
+    anglesGroup.orientation = "column";
+    anglesGroup.alignChildren = "fill";
+    var rotYControl = addNumberRow(rotationGroup, "가로 회전 (°)", rotY, -180, 180, ANGLE_STEP, 1,
         "물체를 세로축 둘레로 돌린다. +면 앞면이 오른쪽으로 돌아간다 (회전체는 축 둘레 회전이 뜻이 없어 쓰지 않는다)", function(value, live) {
             rotY = value;
             updatePreview(live);
         }, true);
-    var rotXControl = addNumberRow(viewPanel, "위아래 기울기 (°)", rotX, -180, 180, ANGLE_STEP, 1,
+    var rotXControl = addNumberRow(rotationGroup, "위아래 기울기 (°)", rotX, -180, 180, ANGLE_STEP, 1,
         "앞뒤로 눕힌다. +면 위에서 내려다본다", function(value, live) {
             rotX = value;
             updatePreview(live);
         }, true);
-    var rotZControl = addNumberRow(viewPanel, "화면 회전 (°)", rotZ, -180, 180, ANGLE_STEP, 1,
+    var rotZControl = addNumberRow(rotationGroup, "화면 회전 (°)", rotZ, -180, 180, ANGLE_STEP, 1,
         "화면을 보는 채로 그림을 돌린다", function(value, live) {
             rotZ = value;
             updatePreview(live);
         }, true);
 
-    var presetRow = viewPanel.add("group");
+    var presetRow = rotationGroup.add("group");
     presetRow.alignChildren = ["left", "center"];
     presetRow.add("statictext", undefined, "시점 프리셋:").preferredSize.width = LABEL_WIDTH;
     var frontButton = presetRow.add("button", undefined, "정면");
@@ -154,7 +170,7 @@ try {
     var sideButton = presetRow.add("button", undefined, "측면");
     var topButton = presetRow.add("button", undefined, "윗면");
 
-    var customRow = viewPanel.add("group");
+    var customRow = rotationGroup.add("group");
     customRow.alignChildren = ["left", "center"];
     var customCaption = customRow.add("statictext", undefined, "커스텀:");
     customCaption.preferredSize.width = LABEL_WIDTH;
@@ -168,13 +184,46 @@ try {
     var presetSaveButton = customRow.add("button", undefined, "저장");
     presetSaveButton.helpTip = "누른 뒤 1~4 번호를 누르면 지금 시점이 저장된다. 다시 누르면 취소";
 
-    var perspectiveCheck = viewPanel.add("checkbox", undefined, "원근 적용 (끄면 평행 투영 = 등각 도면)");
+    var perspectiveCheck = rotationGroup.add("checkbox", undefined, "원근 적용 (끄면 평행 투영 = 등각 도면)");
     perspectiveCheck.value = perspectiveOn;
-    var perspectiveControl = addNumberRow(viewPanel, "시점 거리 (mm)", perspectiveMm, 50, 2000, 10, 0,
+    var perspectiveControl = addNumberRow(rotationGroup, "시점 거리 (mm)", perspectiveMm, 50, 2000, 10, 0,
         "가까울수록 원근이 강해진다", function(value, live) {
             perspectiveMm = value;
             updatePreview(live);
         });
+
+    // 관찰 각도 (결정 구조와 같은 제도 방식). 오른쪽 + 왼쪽 + 상단 = 360°
+    var angleRControl = addNumberRow(anglesGroup, "오른쪽 각도 (°)", angleR, 91, 179, 1, 0,
+        "세로 모서리와 오른쪽 아래 모서리 사이의 화면 각도", function(value, live) {
+            angleR = value;
+            updateTopAngleText();
+            updatePreview(live);
+        });
+    var angleLControl = addNumberRow(anglesGroup, "왼쪽 각도 (°)", angleL, 91, 179, 1, 0,
+        "세로 모서리와 왼쪽 아래 모서리 사이의 화면 각도", function(value, live) {
+            angleL = value;
+            updateTopAngleText();
+            updatePreview(live);
+        });
+    var depthControlRow = addNumberRow(anglesGroup, "앞·뒤 면 거리 (%)", depthPercent, 40, 160, 1, 0,
+        "깊이축만 늘리고 줄인다. 100이면 세 축 길이가 같은 제도식 그림", function(value, live) {
+            depthPercent = value;
+            updatePreview(live);
+        });
+    var topAngleRow = anglesGroup.add("group");
+    topAngleRow.alignChildren = ["left", "center"];
+    topAngleRow.add("statictext", undefined, "상단 각도(자동):").preferredSize.width = LABEL_WIDTH;
+    var topAngleText = topAngleRow.add("statictext", undefined, "120°");
+    topAngleText.preferredSize.width = 60;
+    var anglePresetRow = anglesGroup.add("group");
+    anglePresetRow.alignChildren = ["left", "center"];
+    anglePresetRow.add("statictext", undefined, "프리셋:");
+    // 결정 구조의 Isometric·Dimetric·Trimetric·Tetrahedral·Layered와 같은 값. 창 폭을 넘지 않게 짧은 이름을 쓴다
+    var anglePresets = [["등각", 120, 120, 100], ["2등각", 110, 110, null], ["3등각", 120, 105, null],
+        ["사면체", 131, 109, 88], ["층상", 132, 108, 78]];
+    for (var anglePresetIndex = 0; anglePresetIndex < anglePresets.length; anglePresetIndex++) {
+        anglePresetRow.add("button", undefined, anglePresets[anglePresetIndex][0]).onClick = makeAnglePresetHandler(anglePresets[anglePresetIndex]);
+    }
 
     var linePanel = win.add("panel", undefined, "선과 면");
     linePanel.orientation = "column";
@@ -379,12 +428,35 @@ try {
         }
     }
 
-    // 탭을 바꾸면 그 엔진이 쓰는 행만 켠다
+    // 탭을 바꾸면 그 엔진이 쓰는 행만 켠다. 시점 패널은 회전 묶음과 관찰 각도 묶음 중 하나만 보인다
     function syncEngineRows() {
         rotYControl.row.enabled = engine.usesRotY;
         sideButton.enabled = engine.usesRotY;
+        rotationGroup.visible = !engine.usesViewAngles;
+        anglesGroup.visible = engine.usesViewAngles;
+        viewPanel.text = engine.usesViewAngles ? "관찰 각도 (오른쪽 + 왼쪽 + 상단 = 360°)" : "시점";
         syncFillRows();
         engine.sync();
+    }
+
+    function updateTopAngleText() {
+        topAngleText.text = Math.round(360 - angleR - angleL) + "°";
+    }
+
+    // depth가 null이면 앞·뒤 면 거리는 그대로 둔다
+    function makeAnglePresetHandler(preset) {
+        return function() {
+            angleR = preset[1];
+            angleL = preset[2];
+            angleRControl.set(angleR, true);
+            angleLControl.set(angleL, true);
+            if (preset[3] !== null) {
+                depthPercent = preset[3];
+                depthControlRow.set(depthPercent, true);
+            }
+            updateTopAngleText();
+            updatePreview();
+        };
     }
 
     function syncFillRows() {
@@ -529,8 +601,9 @@ try {
 
     // 공통 항목 뒤에 엔진별 항목을 순서대로 잇는다. 엔진 항목 수가 바뀌면 v를 올린다
     function saveSettings() {
-        var parts = ["v1", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
-            offsetXmm, offsetYmm, fillMode, brightness, contrast, lightAzimuth, lightElevation];
+        var parts = ["v2", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
+            offsetXmm, offsetYmm, fillMode, brightness, contrast, lightAzimuth, lightElevation,
+            angleR, angleL, depthPercent];
         for (var i = 0; i < engines.length; i++) parts = parts.concat(engines[i].saveFields());
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (saveError) {}
     }
@@ -540,9 +613,9 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (readError) { return; }
         if (!raw) return;
         var p = String(raw).split("|");
-        var expected = 15;
+        var expected = 18;
         for (var i = 0; i < engines.length; i++) expected += engines[i].fieldCount;
-        if (p[0] !== "v1" || p.length !== expected) return;
+        if (p[0] !== "v2" || p.length !== expected) return;
         tabIndex = restoreInteger(p[1], tabIndex, 0, engines.length - 1);
         rotY = restoreNumber(p[2], rotY, -180, 180);
         rotX = restoreNumber(p[3], rotX, -180, 180);
@@ -557,7 +630,10 @@ try {
         contrast = restoreNumber(p[12], contrast, 0, 100);
         lightAzimuth = restoreNumber(p[13], lightAzimuth, -90, 90);
         lightElevation = restoreNumber(p[14], lightElevation, 0, 90);
-        var at = 15;
+        angleR = restoreNumber(p[15], angleR, 91, 179);
+        angleL = restoreNumber(p[16], angleL, 91, 179);
+        depthPercent = restoreNumber(p[17], depthPercent, 40, 160);
+        var at = 18;
         for (i = 0; i < engines.length; i++) {
             engines[i].restoreFields(p.slice(at, at + engines[i].fieldCount));
             at += engines[i].fieldCount;
@@ -582,16 +658,30 @@ try {
     // 모델 좌표: 원점 중심, X 오른쪽, Y 위, Z 화면 앞. 회전 뒤 Z가 클수록 보는 사람과 가깝다.
     // 세 엔진이 같이 쓰는 시점 행렬·투영·광원·색·선 스타일·베지어 도우미. 엔진 안에 같은 이름이 있으면 그쪽이 우선한다.
 
-    // 회전 행렬과 시점 거리를 한 번만 계산해 둔다
+    // 시점 행렬과 시점 거리를 한 번만 계산해 둔다.
+    // 회전 방식: 가로 회전(Y) → 위아래 기울기(X) → 화면 회전(Z). 턴테이블 위의 물체를 보는 순서다 (회전체는 자기 beginView를 쓴다).
+    // 관찰 각도 방식: 결정 구조와 같은 제도식 투영. 행 0·1은 x·z축의 화면 방향(사교 투영이라 직교 행렬이 아니다),
+    // 행 2는 두 화면축의 영공간 = 깊이 방향이라 앞뒤 판정·숨은선 광선이 그대로 맞는다. 원근은 쓰지 않는다.
     function beginView(model) {
-        var ry = rotY * Math.PI / 180;
-        var rx = rotX * Math.PI / 180;
-        var rz = rotZ * Math.PI / 180;
-        var matY = [[Math.cos(ry), 0, Math.sin(ry)], [0, 1, 0], [-Math.sin(ry), 0, Math.cos(ry)]];
-        var matX = [[1, 0, 0], [0, Math.cos(rx), -Math.sin(rx)], [0, Math.sin(rx), Math.cos(rx)]];
-        var matZ = [[Math.cos(rz), -Math.sin(rz), 0], [Math.sin(rz), Math.cos(rz), 0], [0, 0, 1]];
-        // 가로 회전(Y) → 위아래 기울기(X) → 화면 회전(Z). 턴테이블 위의 물체를 보는 순서다 (회전체는 자기 beginView를 쓴다)
-        viewMatrix = multiplyMatrix(matZ, multiplyMatrix(matX, matY));
+        if (engine.usesViewAngles) {
+            var alphaR = (angleR - 90) * Math.PI / 180;
+            var alphaL = (angleL - 90) * Math.PI / 180;
+            var depthScale = depthPercent / 100;
+            var cosR = Math.cos(alphaR), sinR = Math.sin(alphaR);
+            var cosL = Math.cos(alphaL), sinL = Math.sin(alphaL);
+            var rawView = normalize([depthScale * cosL, depthScale * Math.sin(alphaR + alphaL), cosR]);
+            viewMatrix = [[cosR, 0, -depthScale * cosL], [-sinR, 1, -depthScale * sinL], rawView];
+            perspectiveActive = false;
+        } else {
+            var ry = rotY * Math.PI / 180;
+            var rx = rotX * Math.PI / 180;
+            var rz = rotZ * Math.PI / 180;
+            var matY = [[Math.cos(ry), 0, Math.sin(ry)], [0, 1, 0], [-Math.sin(ry), 0, Math.cos(ry)]];
+            var matX = [[1, 0, 0], [0, Math.cos(rx), -Math.sin(rx)], [0, Math.sin(rx), Math.cos(rx)]];
+            var matZ = [[Math.cos(rz), -Math.sin(rz), 0], [Math.sin(rz), Math.cos(rz), 0], [0, 0, 1]];
+            viewMatrix = multiplyMatrix(matZ, multiplyMatrix(matX, matY));
+            perspectiveActive = perspectiveOn;
+        }
         // 눈이 도형 안으로 들어가지 않도록 최소 거리를 둔다
         eyeZ = Math.max(perspectiveMm * MM_TO_PT, model.radius * 1.5 + 1);
     }
@@ -618,7 +708,7 @@ try {
 
     // 모델 좌표의 점에서 눈을 향하는 단위 벡터
     function viewDirectionAt(point) {
-        if (!perspectiveOn) return toModel([0, 0, 1]);
+        if (!perspectiveActive) return toModel([0, 0, 1]);
         var vp = toView(point);
         return normalize(toModel([-vp[0], -vp[1], eyeZ - vp[2]]));
     }
@@ -634,7 +724,7 @@ try {
 
     // 뷰 좌표의 점을 아트보드 좌표로 투영한다
     function projectView(v) {
-        if (!perspectiveOn) return [originX + v[0], originY + v[1]];
+        if (!perspectiveActive) return [originX + v[0], originY + v[1]];
         var factor = eyeZ / (eyeZ - v[2]);
         return [originX + v[0] * factor, originY + v[1] * factor];
     }
@@ -647,7 +737,7 @@ try {
     function facingModel(p, n) {
         var vp = toView(p);
         var vn = toView(n);
-        if (!perspectiveOn) return vn[2];
+        if (!perspectiveActive) return vn[2];
         return vn[0] * (-vp[0]) + vn[1] * (-vp[1]) + vn[2] * (eyeZ - vp[2]);
     }
 
@@ -898,10 +988,11 @@ try {
     }
 
     // ==== 입체 도형 엔진 =====================================================
-    // 엔진 인터페이스: label·hint·usesRotY·liveWireframe / prepare(items)→오류문 또는 null, originX·originY /
+    // 엔진 인터페이스: label·hint·usesRotY·usesViewAngles·liveWireframe / prepare(items)→오류문 또는 null, originX·originY /
     // addRows(page)·sync() / create(live, finalOutput)→그룹 / finish(group) / fieldCount·saveFields()·restoreFields(fields)
 
-    function makeSolidEngine() {
+    function makeSolidEngine(variant) {
+        var byAngles = variant === "angles";
         var SIZE_STEP_MM = 0.1;
         var MAX_SIZE_MM = 200;
         var SIDES_MIN = 3;
@@ -939,9 +1030,10 @@ try {
         var shapeList, sidesCaption, sidesInput, sidesArrows, baseRotationControl, topRatioControl, widthControl, depthControl, heightControl, linkCheck;
 
         var api = {
-            label: "입체 도형",
-            hint: "선택 없이 실행. 개체를 하나 골랐으면 그 중심에 만든다",
-            usesRotY: true,
+            label: byAngles ? "입체 도형2" : "입체 도형1",
+            hint: byAngles ? "관찰 각도 방식. 선택 없이 실행. 개체를 하나 골랐으면 그 중심에 만든다" : "선택 없이 실행. 개체를 하나 골랐으면 그 중심에 만든다",
+            usesRotY: !byAngles,
+            usesViewAngles: byAngles,
             liveWireframe: false,
             originX: 0,
             originY: 0,
@@ -1916,6 +2008,7 @@ try {
             label: "돌출",
             hint: "패스를 하나 이상 선택. 확인하면 원본은 지운다",
             usesRotY: true,
+            usesViewAngles: false,
             liveWireframe: true,
             originX: 0,
             originY: 0,
@@ -3092,6 +3185,7 @@ try {
             label: "회전체",
             hint: "단면 패스 + 축 직선(앵커 2개) 선택. 확인하면 둘 다 지운다",
             usesRotY: false,
+            usesViewAngles: false,
             liveWireframe: false,
             originX: 0,
             originY: 0,
