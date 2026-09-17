@@ -27,8 +27,8 @@ const dashShift = "스크립트/01_도형/Object_dashshift.jsx";
 const cylinder = "스크립트/01_도형/Object_cylinder.jsx";
 const cone = "스크립트/01_도형/Object_cone.jsx";
 const sphere = "스크립트/01_도형/Object_sphere.jsx";
-const coilSpring = "스크립트/01_도형/Object_coilspring.jsx";
-const sineWave = "스크립트/01_도형/Object_SineWave.jsx";
+const coilSpring = "스크립트/01_도형/Object_Mechanics.jsx";
+const sineWave = "스크립트/01_도형/Object_Mechanics.jsx";
 const weatherFront = "스크립트/01_도형/Object_front.jsx";
 const phospholipid = "스크립트/01_도형/Object_PhospholipidBilayer.jsx";
 const cellCycle = "스크립트/01_도형/Object_CellCycle.jsx";
@@ -654,7 +654,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 {
   const source = read(coilSpring);
   const required = [
-    'new Window("dialog", "오브젝트 코일 스프링")',
+    'label: "코일 스프링"',
     'var LINE_WIDTH_PT = 0.3',
     'path.strokeWidth = LINE_WIDTH_PT',
     'var MIN_TURNS = 5',
@@ -2284,7 +2284,7 @@ for (const file of updaterFiles) {
 {
   const source = read(sineWave);
   const required = [
-    'new Window("dialog", "사인 곡선")',
+    'label: "사인 곡선"',
     'var AMPLITUDE_SLIDER_MAX = 30',
     'var WAVELENGTH_SLIDER_MAX = 30',
     'var WIDTH_STEP = 0.1',
