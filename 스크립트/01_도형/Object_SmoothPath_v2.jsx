@@ -51,6 +51,9 @@ try {
     var MM = 2.834645669;
     var MAX_TOLERANCE_MM = 2;      // 정리 강도 100일 때의 허용 오차
     var MAX_REMOVE_MM = 0.5;       // 앵커 제거 허용 오차 슬라이더 최대
+    // 분석 사다리. 다이얼로그가 떠 있는 동안 쓰이므로 dlg.show() 앞(여기)에 있어야 한다.
+    // 뒤에 두면 핸들러 안에서 undefined가 되고, ScriptUI는 핸들러의 예외를 조용히 삼킨다.
+    var ANALYZE_LADDER_MM = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5];
     var SAMPLE_STEP_MM = 0.25;     // 곡선을 점으로 잘게 나눌 간격
     var MIN_OPEN_POINTS = 2;
     var MIN_CLOSED_POINTS = 4;
@@ -115,7 +118,17 @@ try {
     analyzeList.preferredSize = [HINT_WIDTH, 150];
     var analyzeResults = [];       // [{tolerance, count}]
 
+    // ScriptUI는 핸들러 안의 예외를 조용히 삼키므로 직접 잡아 보여준다.
     analyzeButton.onClick = function() {
+        try {
+            runAnalysis();
+        } catch (analyzeError) {
+            log("error: " + analyzeError + " line " + analyzeError.line);
+            removeInfo.text = "분석 실패: " + analyzeError;
+            alert("분석 중 오류\n\n" + analyzeError + "\n줄 " + analyzeError.line);
+        }
+    };
+    function runAnalysis() {
         try { LOG_FILE.remove(); } catch (e) {}
         log("analyze start: " + targets.length + " paths");
         removeInfo.text = "읽는 중...";
@@ -144,7 +157,7 @@ try {
         removeInfo.text = "앵커 " + sourceAnchorCount + "개 · ★ 추천 " + suggested + "mm" +
             " · 읽기 " + Math.round((computeStart - readStart) / 1000) + "초 · 계산 " + Math.round((computeEnd - computeStart) / 1000) + "초";
         setRemoveValue(suggested);
-    };
+    }
     analyzeList.onChange = function() {
         if (!analyzeList.selection) return;
         setRemoveValue(analyzeResults[analyzeList.selection.index].tolerance);
@@ -254,7 +267,6 @@ try {
     }
 
     // 허용 오차 사다리마다 남는 앵커 수를 센다. 쓰기는 하지 않으므로 적용보다 훨씬 빠르다.
-    var ANALYZE_LADDER_MM = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5];
     function analyzeTolerances() {
         ensureSnapshots();
         var computeStart = new Date().getTime();
