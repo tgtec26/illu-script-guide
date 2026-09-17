@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_SmoothPath.jsx");
+const scriptPath = path.join(root, "스크립트", "01_도형", "Object_SmoothPath_v2.jsx");
 const source = fs.readFileSync(scriptPath, "utf8");
 
 function extractFunction(name) {
