@@ -24,9 +24,9 @@ const embedLinkedImages = "스크립트/10_기타/embed.jsx";
 const extUngroup = "스크립트/10_기타/ExtUngroup.jsx";
 const dashAlignHelper = "스크립트/01_도형/Object_setdash_align_helper.jsxinc";
 const dashShift = "스크립트/01_도형/Object_dashshift.jsx";
-const cylinder = "스크립트/01_도형/Object_cylinder.jsx";
-const cone = "스크립트/01_도형/Object_cone.jsx";
-const sphere = "스크립트/01_도형/Object_sphere.jsx";
+const cylinder = "스크립트/01_도형/Object_RoundSolids.jsx";
+const cone = "스크립트/01_도형/Object_RoundSolids.jsx";
+const sphere = "스크립트/01_도형/Object_RoundSolids.jsx";
 const coilSpring = "스크립트/01_도형/Object_Mechanics.jsx";
 const sineWave = "스크립트/01_도형/Object_Mechanics.jsx";
 const weatherFront = "스크립트/01_도형/Object_front.jsx";
@@ -528,7 +528,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 {
   const source = read(cylinder);
   const required = [
-    'new Window("dialog", "오브젝트 실린더")',
+    'label: "원기둥"',
     'var heightControls = addValueRow(',
     'var HEIGHT_STEP_MM = 0.05',
     'var DIAMETER_STEP_MM = 0.05',
@@ -586,7 +586,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 {
   const source = read(sphere);
   const required = [
-    'new Window("dialog", "오브젝트 스피어")',
+    'label: "구"',
     'addSliderWithSteps(longitudeRow, longitudeCount, 0, 24, 1)',
     'addSliderWithSteps(latitudeRow, latitudeCount, 0, 11, 1)',
     'var LINE_WIDTH_PT = 0.3',
@@ -701,7 +701,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 {
   const source = read(cone);
   const required = [
-    'new Window("dialog", "오브젝트 콘")',
+    'label: "원뿔"',
     'var topDiameterMm = 0',
     'var baseDiameterMm = roundTo(diameterMm, SIZE_STEP_MM)',
     'addSizeRow(sizePanel, "밑면 지름", baseDiameterMm, SIZE_STEP_MM, maxBaseDiameterMm)',

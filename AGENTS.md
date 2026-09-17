@@ -22,7 +22,7 @@ Any script with a dialog must remember the options from the last run and presele
 - Validate every restored value against the same range the dialog enforces before applying it.
 - Wrap reads and writes in `try/catch`; a preference failure must never block the script.
 
-Reference implementations: `스크립트/01_도형/Object_sphere.jsx`, `스크립트/01_도형/Object_GraphTools.jsx`(축 눈금 탭), `스크립트/01_도형/Object_ParticleModel.jsx`(원자 탭).
+Reference implementations: `스크립트/01_도형/Object_RoundSolids.jsx`(구 탭), `스크립트/01_도형/Object_GraphTools.jsx`(축 눈금 탭), `스크립트/01_도형/Object_ParticleModel.jsx`(원자 탭).
 
 ## Movable Preview (required)
 
