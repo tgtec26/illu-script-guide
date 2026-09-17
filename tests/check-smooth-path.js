@@ -25,6 +25,7 @@ const helperNames = [
   "relaxedSample", "pointSegmentDistance", "turnDeviation", "markCorners", "neighborAt", "cornerWindow", "smoothPoints",
   "relax", "buildBezier", "normalize", "distance", "pushUnique",
   "removeAnchors", "mergeSegments", "sampleSegment", "fitHandles", "tangentAt", "isZeroHandle", "suggestTolerance", "buildRemoveNodes", "sweepRemove", "nodesToData",
+  "smoothSharpRegions", "samplePathIndexed", "selectSharpSamples", "boundaryHandle", "collectSamples",
 ];
 const helperSource = helperNames.map(extractFunction).join("\n");
 const api = new Function(`${helperSource}\nreturn {${helperNames.join(", ")}};`)();
@@ -67,7 +68,28 @@ const options = (over) => Object.assign({
   minOpenPoints: 2,
   minClosedPoints: 4,
   removeTolerance: 0,
+  sharpOnly: false,
+  sharpPercent: 10,
+  refitTolerance: 0.1 * MM,
 }, over || {});
+
+// 결과 곡선을 촘촘히 샘플링해 구간별 최대 꺾임각을 잰다
+function peakTurn(data, from, to) {
+  const pts = [];
+  const count = data.closed ? data.points.length : data.points.length - 1;
+  for (let i = 0; i < count; i++) {
+    const a = data.points[i];
+    const b = data.points[(i + 1) % data.points.length];
+    for (let k = 0; k < 12; k++) pts.push(api.bezierPoint(a.anchor, a.right, b.left, b.anchor, k / 12));
+  }
+  let worst = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p = pts[i];
+    if (p[0] < from[0] || p[0] > to[0] || p[1] < from[1] || p[1] > to[1]) continue;
+    worst = Math.max(worst, api.turnDeviation(pts[i - 1], p, pts[i + 1]));
+  }
+  return worst;
+}
 
 // 핸들이 있는 점. left/right는 앵커 기준 상대 좌표로 받는다
 function smoothPoint(x, y, lx, ly, rx, ry) {
@@ -378,6 +400,69 @@ function radiusError(data, radius) {
   // 고르게 줄면(직선) 무릎이 없으므로 추천 없음
   const linear = tolerances.map((t) => 30000 - t * 50000);
   assert.strictEqual(api.suggestTolerance(tolerances, linear), null, "직선이면 추천 없음");
+}
+
+// 16. 급한 곳만 다듬기: 곡률이 가장 큰 구간만 바뀌고 나머지 앵커·핸들은 원본 그대로
+{
+  // 부드러운 원에 한 점만 안쪽으로 깊게 찔러 급한 굴곡을 만든다 (핸들도 짧게)
+  const circle = bezierCircle(16, 50);
+  const dent = circle.points[0];
+  dent.anchor = [30, 0];
+  dent.left = [30, -3];
+  dent.right = [30, 3];
+  const before = peakTurn(circle, [20, -20], [45, 20]);
+
+  const result = api.smoothSharpRegions(circle, options({ sharpOnly: true, sharpPercent: 10, smoothStrength: 80, cornerAngle: 0 }));
+  assert.strictEqual(result.closed, true, "닫힘 유지");
+  const after = peakTurn(result, [20, -20], [45, 20]);
+  assert.ok(after < before * 0.7, `굴곡 완화 ${before.toFixed(1)}° → ${after.toFixed(1)}°`);
+
+  // 굴곡 반대편(x < -20) 앵커는 좌표·핸들 모두 그대로
+  let untouched = 0;
+  for (const original of circle.points) {
+    if (original.anchor[0] > -20) continue;
+    const match = result.points.filter((p) => p.anchor[0] === original.anchor[0] && p.anchor[1] === original.anchor[1]);
+    assert.strictEqual(match.length, 1, `반대편 앵커 유지 ${original.anchor}`);
+    assert.deepStrictEqual(match[0].left, original.left, "반대편 왼쪽 핸들 유지");
+    assert.deepStrictEqual(match[0].right, original.right, "반대편 오른쪽 핸들 유지");
+    untouched++;
+  }
+  assert.ok(untouched >= 5, `원본 그대로인 앵커 ${untouched}개`);
+
+  // 범위 100%면 전체가 다듬어진다 (에러 없이 닫힌 패스 반환)
+  const all = api.smoothSharpRegions(circle, options({ sharpOnly: true, sharpPercent: 100, smoothStrength: 50, cornerAngle: 0 }));
+  assert.ok(all.points.length >= 4, "전체 다듬기");
+
+  // 강도 0이면 원본 그대로
+  assert.strictEqual(api.smoothSharpRegions(circle, options({ sharpOnly: true, smoothStrength: 0 })), circle, "강도 0");
+}
+
+// 17. 급한 곳만 다듬기: 열린 패스의 양 끝 앵커는 절대 바뀌지 않는다
+{
+  const open = { closed: false, points: [corner(0, 0), corner(40, 0), corner(50, 30), corner(60, 0), corner(100, 0)] };
+  const result = api.smoothSharpRegions(open, options({ sharpOnly: true, sharpPercent: 30, smoothStrength: 80, cornerAngle: 0 }));
+  assert.strictEqual(result.closed, false, "열림 유지");
+  assert.deepStrictEqual(result.points[0].anchor, [0, 0], "시작점");
+  assert.deepStrictEqual(result.points[result.points.length - 1].anchor, [100, 0], "끝점");
+  const peakBefore = peakTurn(open, [35, -5], [65, 35]);
+  const peakAfter = peakTurn(result, [35, -5], [65, 35]);
+  assert.ok(peakAfter < peakBefore, `꼭대기 완화 ${peakBefore.toFixed(1)} → ${peakAfter.toFixed(1)}`);
+}
+
+// 18. 곡률 상위 선택: 비율을 올리면 선택 구간이 넓어지고, 가장 급한 점은 항상 포함된다
+{
+  const pts = [];
+  for (let i = 0; i <= 80; i++) {
+    const x = i;
+    const y = i >= 38 && i <= 42 ? 6 - Math.abs(40 - i) * 1.5 : 0;   // 가운데 뾰족한 돌기
+    pts.push([x, y]);
+  }
+  const few = api.selectSharpSamples(pts, false, 3, 3, 1);
+  const many = api.selectSharpSamples(pts, false, 60, 3, 1);
+  const count = (mask) => mask.filter(Boolean).length;
+  assert.ok(few[40], "가장 급한 점 포함");
+  assert.ok(count(many) > count(few), `범위 확대 ${count(few)} → ${count(many)}`);
+  assert.ok(!few[5] && !few[75], "평평한 곳은 제외");
 }
 
 console.log("check-smooth-path: ok");

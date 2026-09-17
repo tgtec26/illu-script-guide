@@ -17,6 +17,7 @@ try {
       이미지 트레이스처럼 핸들이 제대로 붙은 복잡한 그림에 맞습니다.
     - 앵커 줄이기: 모양을 유지하면서 필요 없는 앵커를 없앱니다(RDP 단순화).
     - 곡선 다듬기: 꺾인 곳(미분 불가능한 점)과 곡률이 튀는 곳을 펴서 부드러운 곡선으로 만듭니다(Taubin 평활).
+    - 급한 곳만 다듬기: 곡률이 가장 큰 구간(범위 %)만 평활하고, 나머지 앵커·핸들은 원본 그대로 둡니다.
     - 모서리 유지 각도보다 급하게 꺾인 점은 모서리로 남기고, 나머지는 핸들을 이어 붙여 매끄럽게 만듭니다.
   사용법: 패스(그룹·복합 패스 포함)를 선택한 뒤 실행. 탭을 골라 확인.
     - 앵커 제거 탭: 수천 패스·수만 앵커를 다루므로 미리보기 없이 확인 때 한 번에 적용한다.
@@ -74,6 +75,8 @@ try {
     var simplifyStrength = 40;
     var smoothStrength = 40;
     var cornerAngle = 75;
+    var sharpOnly = false;
+    var sharpPercent = 10;
     var previewEnabled = true;
     var activeTab = 0;             // 0: 앵커 제거, 1: 부드럽게
     var applied = false;
@@ -180,6 +183,15 @@ try {
     var cornerHint = smoothPanel.add("statictext", undefined, "이 각도보다 급하게 꺾인 점은 모서리로 남깁니다. 0이면 모두 부드럽게.");
     cornerHint.preferredSize.width = HINT_WIDTH;
 
+    var sharpPanel = addPanel(smoothTab, "급한 곳만 다듬기");
+    var sharpCheck = sharpPanel.add("checkbox", undefined, "곡률이 가장 큰 구간만 다듬기 (나머지는 원본 그대로)");
+    sharpCheck.value = sharpOnly;
+    var sharpField = addNumberField(sharpPanel, "다듬을 범위", "%", sharpPercent, 1, 1, 100);
+    var sharpHint = sharpPanel.add("statictext", undefined,
+        "패스 길이 중 곡률 상위 몇 %를 다듬을지. 이 모드에서는 앵커 줄이기를 쓰지 않습니다.\n" +
+        "급한 곳이 모서리 유지 각도에 걸리면 다듬어지지 않으니 그때는 각도를 올리세요.", {multiline: true});
+    sharpHint.preferredSize.width = HINT_WIDTH;
+
     var infoText = smoothTab.add("statictext", undefined, "");
     infoText.preferredSize.width = HINT_WIDTH;
 
@@ -207,6 +219,18 @@ try {
         previewEnabled = previewCheck.value;
         updatePreview();
     };
+    sharpCheck.onClick = function() {
+        sharpOnly = sharpCheck.value;
+        applySharpMode();
+        updatePreview();
+    };
+    function applySharpMode() {
+        simplifyField.input.enabled = !sharpOnly;
+        simplifyField.slider.enabled = !sharpOnly;
+        sharpField.input.enabled = sharpOnly;
+        sharpField.slider.enabled = sharpOnly;
+    }
+    applySharpMode();
     okButton.onClick = function() {
         readFields();
         dlg.close(1);
@@ -396,6 +420,9 @@ try {
     function buildOptions() {
         return {
             removeTolerance: 0,
+            sharpOnly: sharpOnly,
+            sharpPercent: sharpPercent,
+            refitTolerance: 0.1 * MM,
             tolerance: toleranceFor(simplifyStrength),
             sampleStep: SAMPLE_STEP_MM * MM,
             smoothStrength: smoothStrength,
@@ -414,7 +441,7 @@ try {
     function updateInfoText(resultCount) {
         var tolMm = Math.round(toleranceFor(simplifyStrength) / MM * 100) / 100;
         infoText.text = "패스 " + targets.length + "개 · 앵커 " + sourceAnchorCount + " → " + resultCount +
-            " · 줄이기 허용 오차 " + tolMm + "mm";
+            (sharpOnly ? " · 곡률 상위 " + sharpPercent + "%만" : " · 줄이기 허용 오차 " + tolMm + "mm");
     }
 
     // -------------------------------------------------------
@@ -428,6 +455,7 @@ try {
         if (options.removeTolerance > 0) {
             data = removeAnchors(data, options.removeTolerance, minPoints);
         }
+        if (options.sharpOnly) return smoothSharpRegions(data, options);
         if (options.tolerance <= 0 && options.smoothStrength <= 0) return data;
 
         var polyline;
@@ -674,6 +702,177 @@ try {
             [p0[0] + t0[0] * alpha, p0[1] + t0[1] * alpha],
             [p3[0] + t1[0] * beta, p3[1] + t1[1] * beta]
         ];
+    }
+
+    // -------------------------------------------------------
+    // 급한 곳만 다듬기
+    // -------------------------------------------------------
+    // 곡률 상위 구간만 평활하고 그 구간의 앵커만 새로 만든다. 구간 밖 앵커·핸들은 손대지 않고,
+    // 경계 앵커는 바깥 핸들을 지킨 채 안쪽 핸들만 새 곡선 쪽으로 맞춘다.
+    function smoothSharpRegions(data, options) {
+        if (options.smoothStrength <= 0 || data.points.length < 3) return data;
+        var closed = data.closed;
+        var sampled = samplePathIndexed(data.points, closed, options.sampleStep);
+        var points = sampled.points;
+        if (points.length < 4) return data;
+        var window = cornerWindow(options);
+        var dilate = Math.max(1, Math.ceil(window / 2 / options.sampleStep));
+        var selected = selectSharpSamples(points, closed, options.sharpPercent, window, dilate);
+        var corners = markCorners(points, closed, options.cornerAngle, window);
+        var fixed = [];
+        for (var i = 0; i < points.length; i++) fixed.push(corners[i] || !selected[i]);
+        var relaxed = smoothPoints(points, closed, fixed, options.smoothStrength);
+
+        // 어느 원본 앵커를 교체할지. 열린 패스의 양 끝은 절대 교체하지 않는다.
+        var n = data.points.length;
+        var replaced = [];
+        var replacedCount = 0;
+        for (var k = 0; k < n; k++) {
+            var flag = selected[sampled.anchorAt[k]] && !(!closed && (k === 0 || k === n - 1));
+            replaced.push(flag);
+            if (flag) replacedCount++;
+        }
+        if (replacedCount === 0) return data;
+        if (replacedCount === n) {
+            // 전부 교체면 경계가 없다. 가장 덜 급한 앵커 하나를 남겨 경계로 삼는다.
+            var calmest = 0;
+            var calmestDev = Infinity;
+            for (var c = 0; c < n; c++) {
+                var idx = sampled.anchorAt[c];
+                var dev = turnDeviation(neighborAt(points, closed, idx, -1, window) || points[idx], points[idx],
+                    neighborAt(points, closed, idx, 1, window) || points[idx]);
+                if (dev < calmestDev) { calmestDev = dev; calmest = c; }
+            }
+            replaced[calmest] = false;
+        }
+
+        // 교체 구간(run)마다 경계 L(직전 미교체)·R(직후 미교체)을 찾고, 그 사이 샘플로 새 앵커를 만든다.
+        var insertAfter = {};       // L 앵커 번호 → 새 내부 점들
+        var leftHandleOf = {};      // R 앵커 번호 → 새 왼쪽 핸들
+        var rightHandleOf = {};     // L 앵커 번호 → 새 오른쪽 핸들
+        var visited = [];
+        for (var v = 0; v < n; v++) visited.push(false);
+        for (var start = 0; start < n; start++) {
+            if (!replaced[start] || visited[start]) continue;
+            if (replaced[(start - 1 + n) % n] && (closed || start > 0)) continue;   // run의 첫 앵커만
+            var run = [];
+            var cur = start;
+            while (replaced[cur] && !visited[cur]) {
+                visited[cur] = true;
+                run.push(cur);
+                cur = (cur + 1) % n;
+                if (!closed && cur === 0) break;
+            }
+            var L = (run[0] - 1 + n) % n;
+            var R = (run[run.length - 1] + 1) % n;
+            var region = collectSamples(relaxed, sampled.anchorAt[L], sampled.anchorAt[R], closed);
+            var minRegion = 2;
+            var reduced = simplifyPoints(region, false, options.refitTolerance, minRegion);
+            var regionCorners = [];
+            for (var q = 0; q < reduced.length; q++) regionCorners.push(false);
+            var bez = buildBezier(reduced, false, regionCorners);
+            var Lp = data.points[L];
+            var Rp = data.points[R];
+            rightHandleOf[L] = boundaryHandle(Lp.anchor, Lp.left, reduced.length > 1 ? reduced[1] : Rp.anchor, bez[0].right);
+            leftHandleOf[R] = boundaryHandle(Rp.anchor, Rp.right, reduced.length > 1 ? reduced[reduced.length - 2] : Lp.anchor, bez[bez.length - 1].left);
+            var interior = [];
+            for (var m = 1; m < bez.length - 1; m++) interior.push(bez[m]);
+            insertAfter[L] = interior;
+        }
+
+        var result = [];
+        for (var o = 0; o < n; o++) {
+            if (replaced[o]) continue;
+            var src = data.points[o];
+            result.push({
+                anchor: [src.anchor[0], src.anchor[1]],
+                left: leftHandleOf[o] ? leftHandleOf[o] : [src.left[0], src.left[1]],
+                right: rightHandleOf[o] ? rightHandleOf[o] : [src.right[0], src.right[1]],
+                corner: src.corner ? true : false
+            });
+            if (insertAfter[o]) {
+                for (var w = 0; w < insertAfter[o].length; w++) result.push(insertAfter[o][w]);
+            }
+        }
+        return {closed: closed, points: result};
+    }
+
+    // 경계 앵커의 안쪽 핸들. 바깥 핸들이 있으면 그 연장선 방향(매끄럽게 이어짐), 없으면 새 곡선이 준 핸들.
+    function boundaryHandle(anchor, outerHandle, towardPoint, fallback) {
+        var dir = normalize([anchor[0] - outerHandle[0], anchor[1] - outerHandle[1]]);
+        if (dir[0] === 0 && dir[1] === 0) return [fallback[0], fallback[1]];
+        var len = distance(anchor, towardPoint) / 3;
+        return [anchor[0] + dir[0] * len, anchor[1] + dir[1] * len];
+    }
+
+    // from에서 to까지(둘 다 포함)의 샘플. 닫힌 패스는 끝을 넘어 감고,
+    // from === to면 한 바퀴 전체(시작점이 끝에 한 번 더).
+    function collectSamples(points, from, to, closed) {
+        var out = [];
+        var i = from;
+        var guard = points.length + 1;
+        var first = true;
+        while (guard-- > 0) {
+            out.push([points[i][0], points[i][1]]);
+            if (i === to && !(first && closed && from === to)) break;
+            first = false;
+            i = closed ? (i + 1) % points.length : i + 1;
+            if (i >= points.length) break;
+        }
+        return out;
+    }
+
+    // samplePathPoints와 같되 원본 앵커 k가 몇 번째 샘플인지(anchorAt[k])도 돌려준다.
+    function samplePathIndexed(points, closed, step) {
+        var result = [];
+        var anchorAt = [];
+        var count = closed ? points.length : points.length - 1;
+        for (var i = 0; i < count; i++) {
+            var current = points[i];
+            var next = points[(i + 1) % points.length];
+            var span = distance(current.anchor, current.right) + distance(current.right, next.left) + distance(next.left, next.anchor);
+            var pieces = Math.ceil(span / step);
+            if (pieces < 1) pieces = 1;
+            if (pieces > 60) pieces = 60;
+            for (var k = 0; k < pieces; k++) {
+                pushUnique(result, bezierPoint(current.anchor, current.right, next.left, next.anchor, k / pieces));
+                if (k === 0) anchorAt.push(result.length - 1);
+            }
+        }
+        if (!closed) {
+            pushUnique(result, [points[points.length - 1].anchor[0], points[points.length - 1].anchor[1]]);
+            anchorAt.push(result.length - 1);
+        }
+        return {points: result, anchorAt: anchorAt};
+    }
+
+    // 곡률(앞뒤 window 거리의 방향 변화각) 상위 percent%의 샘플을 고르고 양옆으로 dilate칸 넓힌다.
+    function selectSharpSamples(points, closed, percent, window, dilate) {
+        var n = points.length;
+        var deviation = [];
+        for (var i = 0; i < n; i++) {
+            var prev = neighborAt(points, closed, i, -1, window);
+            var next = neighborAt(points, closed, i, 1, window);
+            deviation.push(prev === null || next === null ? 0 : turnDeviation(prev, points[i], next));
+        }
+        var sorted = deviation.slice().sort(function(a, b) { return b - a; });
+        var count = Math.ceil(n * percent / 100);
+        if (count < 1) count = 1;
+        if (count > n) count = n;
+        var threshold = sorted[count - 1];
+        var mask = [];
+        for (var j = 0; j < n; j++) mask.push(deviation[j] > 0 && deviation[j] >= threshold);
+        var grown = mask.slice();
+        for (var m = 0; m < n; m++) {
+            if (!mask[m]) continue;
+            for (var d = 1; d <= dilate; d++) {
+                var a = m - d, b = m + d;
+                if (closed) { a = (a + n) % n; b = b % n; }
+                if (a >= 0 && a < n) grown[a] = true;
+                if (b >= 0 && b < n) grown[b] = true;
+            }
+        }
+        return grown;
     }
 
     // 모서리인지 보는 거리. 샘플 간격·허용 오차보다 넉넉해야 떨림에 속지 않고,
@@ -1018,6 +1217,7 @@ try {
         removeMm = fieldValue(removeField, removeMm);
         simplifyStrength = fieldValue(simplifyField, simplifyStrength);
         smoothStrength = fieldValue(smoothField, smoothStrength);
+        sharpPercent = fieldValue(sharpField, sharpPercent);
         cornerAngle = fieldValue(cornerField, cornerAngle);
     }
 
@@ -1095,7 +1295,8 @@ try {
     }
 
     function saveSettings() {
-        var parts = ["v3", simplifyStrength, smoothStrength, cornerAngle, previewEnabled ? "1" : "0", removeMm, activeTab];
+        var parts = ["v4", simplifyStrength, smoothStrength, cornerAngle, previewEnabled ? "1" : "0", removeMm, activeTab,
+            sharpOnly ? "1" : "0", sharpPercent];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -1104,7 +1305,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if ((p[0] !== "v1" && p[0] !== "v2" && p[0] !== "v3") || p.length < 5) return;
+        if (!/^v[1-4]$/.test(p[0]) || p.length < 5) return;
 
         var savedSimplify = parseFloat(p[1]);
         var savedSmooth = parseFloat(p[2]);
@@ -1118,5 +1319,10 @@ try {
             if (!isNaN(savedRemove)) removeMm = clampValue(savedRemove, 0, MAX_REMOVE_MM);
         }
         if (p.length >= 7) activeTab = (p[6] === "1") ? 1 : 0;
+        if (p.length >= 9) {
+            sharpOnly = (p[7] === "1");
+            var savedSharp = parseFloat(p[8]);
+            if (!isNaN(savedSharp)) sharpPercent = clampValue(savedSharp, 1, 100);
+        }
     }
 })();
