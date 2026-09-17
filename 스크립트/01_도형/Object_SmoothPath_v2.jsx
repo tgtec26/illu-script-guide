@@ -721,11 +721,10 @@ try {
         var corners = markCorners(points, closed, options.cornerAngle, window);
         var fixed = [];
         for (var i = 0; i < points.length; i++) fixed.push(corners[i] || !selected[i]);
-        // 커널 반경: 강도 0→1mm, 100→5mm. 급한 굴곡의 반경보다 커야 눈에 띄게 펴진다.
-        var radius = (1 + 4 * options.smoothStrength / 100) * 2.834645669;
-        var span = Math.max(1, Math.round(radius / options.sampleStep));
-        var weights = featherWeights(fixed, closed, span);
-        var relaxed = relaxRegion(points, closed, fixed, options.smoothStrength, span, weights);
+        // 블러 반경 σ: 강도 0→0.5mm, 100→4.5mm. 급한 굴곡의 반경보다 커야 눈에 띄게 둥글어진다.
+        var sigma = (0.5 + 4 * options.smoothStrength / 100) * 2.834645669 / options.sampleStep;
+        var weights = featherWeights(fixed, closed, Math.max(1, Math.round(sigma * 2)));
+        var relaxed = blurRegion(points, closed, fixed, sigma, weights);
 
         // 어느 원본 앵커를 교체할지. 열린 패스의 양 끝은 절대 교체하지 않는다.
         var n = data.points.length;
@@ -801,18 +800,36 @@ try {
         return {closed: closed, points: result};
     }
 
-    // 구간 평활은 되밀기(Taubin μ) 없이 편다. Taubin은 크기를 지키느라 커널 규모의 굴곡을
-    // 일부러 남기지만, 여기는 고정 경계가 있어 쪼그라들 걱정이 없고 굴곡을 펴는 게 목적이다.
-    function relaxRegion(points, closed, fixed, strength, span, weights) {
-        var ratio = strength / 100;
-        if (ratio <= 0 || points.length < 3) return points;
-        var iterations = Math.max(1, Math.round(ratio * 12));
-        var current = [];
-        for (var i = 0; i < points.length; i++) current.push([points[i][0], points[i][1]]);
-        for (var pass = 0; pass < iterations; pass++) {
-            current = relax(current, closed, fixed, 0.5, span, weights);
+    // 구간 평활은 가우시안 블러 한 번. 라플라시안을 반복하면 구간이 고정점 사이의 직선으로
+    // 수렴해 도형이 찌그러지지만, 블러는 σ보다 큰 형태를 남기고 σ보다 급한 굴곡만 둥글린다.
+    // 고정점도 평균의 재료로는 쓰인다(곡선의 일부이므로). weights로 경계에서 원본에 녹아든다.
+    function blurRegion(points, closed, fixed, sigma, weights) {
+        var n = points.length;
+        var reach = Math.max(1, Math.ceil(sigma * 3));
+        if (closed && reach > Math.floor((n - 1) / 2)) reach = Math.floor((n - 1) / 2);
+        var kernel = [];
+        for (var k = 0; k <= reach; k++) kernel.push(Math.exp(-(k * k) / (2 * sigma * sigma)));
+        var result = [];
+        for (var i = 0; i < n; i++) {
+            if (fixed[i] || weights[i] <= 0) {
+                result.push([points[i][0], points[i][1]]);
+                continue;
+            }
+            var sx = 0, sy = 0, sw = 0;
+            for (var o = -reach; o <= reach; o++) {
+                var j = i + o;
+                if (closed) j = (j + n) % n;
+                else if (j < 0 || j > n - 1) continue;
+                var w = kernel[o < 0 ? -o : o];
+                sx += points[j][0] * w;
+                sy += points[j][1] * w;
+                sw += w;
+            }
+            var mx = sx / sw - points[i][0];
+            var my = sy / sw - points[i][1];
+            result.push([points[i][0] + weights[i] * mx, points[i][1] + weights[i] * my]);
         }
-        return current;
+        return result;
     }
 
     // 고정점에서 span칸 안쪽까지는 이동량을 거리에 비례해 줄인다(0 → 1).

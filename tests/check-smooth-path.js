@@ -25,7 +25,7 @@ const helperNames = [
   "relaxedSample", "pointSegmentDistance", "turnDeviation", "markCorners", "neighborAt", "cornerWindow", "smoothPoints",
   "relax", "buildBezier", "normalize", "distance", "pushUnique",
   "removeAnchors", "mergeSegments", "sampleSegment", "fitHandles", "tangentAt", "isZeroHandle", "suggestTolerance", "buildRemoveNodes", "sweepRemove", "nodesToData",
-  "smoothSharpRegions", "samplePathIndexed", "selectSharpSamples", "boundaryHandle", "collectSamples", "featherWeights", "relaxRegion",
+  "smoothSharpRegions", "samplePathIndexed", "selectSharpSamples", "boundaryHandle", "collectSamples", "featherWeights", "blurRegion",
 ];
 const helperSource = helperNames.map(extractFunction).join("\n");
 const api = new Function(`${helperSource}\nreturn {${helperNames.join(", ")}};`)();
