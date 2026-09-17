@@ -278,13 +278,13 @@ try {
         for (var i = 0; i < snapshots.length; i++) {
             var data = snapshots[i];
             var minPoints = data.closed ? MIN_CLOSED_POINTS : MIN_OPEN_POINTS;
-            if (i < 5 || i % 20 === 19) log("compute " + (i + 1) + "/" + snapshots.length + " (" + data.points.length + " pts)");
+            if (i % 50 === 49) log("compute " + (i + 1) + "/" + snapshots.length);
             var list = buildRemoveNodes(data, 4);
             for (var k = 0; k < ANALYZE_LADDER_MM.length; k++) {
                 sweepRemove(list, ANALYZE_LADDER_MM[k] * MM, minPoints);
                 counts[k] += list.count;
             }
-            if (i % 5 === 4) {
+            if (i % 25 === 24) {
                 removeInfo.text = "계산 중... " + (i + 1) + " / " + snapshots.length +
                     " · " + Math.round((new Date().getTime() - computeStart) / 1000) + "초";
                 dlg.update();
@@ -337,17 +337,16 @@ try {
         if (snapshots !== null) return;
         snapshots = [];
         sourceAnchorCount = 0;
+        // 패스당 DOM 호출이 곧 시간이다(앵커 수보다 패스 수에 비례). 여기서는 아무것도 더 묻지 않는다.
         for (var s = 0; s < targets.length; s++) {
-            var pointCount = targets[s].pathPoints.length;
-            if (s % 20 === 19 || s >= targets.length - 5) log("read " + (s + 1) + "/" + targets.length + " (" + pointCount + " pts)");
-            if (s % 20 === 19 || pointCount > 1000) {
-                removeInfo.text = "읽는 중... " + (s + 1) + " / " + targets.length +
-                    (pointCount > 1000 ? " (앵커 " + pointCount + "개짜리 패스)" : "");
-                dlg.update();
-            }
             var data = readPathData(targets[s]);
             snapshots.push(data);
             sourceAnchorCount += data.points.length;
+            if (s % 50 === 49) {
+                log("read " + (s + 1) + "/" + targets.length);
+                removeInfo.text = "읽는 중... " + (s + 1) + " / " + targets.length + " · 앵커 " + sourceAnchorCount;
+                dlg.update();
+            }
         }
     }
 
@@ -951,6 +950,7 @@ try {
     // (핸들이 없거나 좌우가 일직선이 아니면 모서리).
     function readPathData(path) {
         var points = [];
+        var closed = path.closed;
         var pathPoints = path.pathPoints;
         var count = pathPoints.length;
         for (var i = 0; i < count; i++) {
@@ -965,7 +965,7 @@ try {
                 corner: isCornerGeometry(anchor, left, right)
             });
         }
-        return {closed: path.closed, points: points};
+        return {closed: closed, points: points};
     }
 
     function isCornerGeometry(anchor, left, right) {
