@@ -248,12 +248,12 @@ try {
         for (var i = 0; i < snapshots.length; i++) {
             var data = snapshots[i];
             var minPoints = data.closed ? MIN_CLOSED_POINTS : MIN_OPEN_POINTS;
-            var nodes = buildRemoveNodes(data, 6);
+            var list = buildRemoveNodes(data, 6);
             for (var k = 0; k < ANALYZE_LADDER_MM.length; k++) {
-                sweepRemove(nodes, data.closed, ANALYZE_LADDER_MM[k] * MM, minPoints);
-                counts[k] += nodes.length;
+                sweepRemove(list, ANALYZE_LADDER_MM[k] * MM, minPoints);
+                counts[k] += list.count;
             }
-            if (i % 50 === 49) {
+            if (i % 20 === 19 || data.points.length > 1000) {
                 removeInfo.text = "계산 중... " + (i + 1) + " / " + snapshots.length;
                 dlg.update();
             }
@@ -304,13 +304,15 @@ try {
         snapshots = [];
         sourceAnchorCount = 0;
         for (var s = 0; s < targets.length; s++) {
+            var pointCount = targets[s].pathPoints.length;
+            if (s % 20 === 19 || pointCount > 1000) {
+                removeInfo.text = "읽는 중... " + (s + 1) + " / " + targets.length +
+                    (pointCount > 1000 ? " (앵커 " + pointCount + "개짜리 패스)" : "");
+                dlg.update();
+            }
             var data = readPathData(targets[s]);
             snapshots.push(data);
             sourceAnchorCount += data.points.length;
-            if (s % 50 === 49) {
-                removeInfo.text = "읽는 중... " + (s + 1) + " / " + targets.length;
-                dlg.update();
-            }
         }
     }
 
@@ -430,72 +432,92 @@ try {
     // 제거가 이어질수록 오차가 쌓여 허용치를 넘어선다.
     function removeAnchors(data, tolerance, minPoints) {
         if (tolerance <= 0 || data.points.length < 3) return data;
-        var nodes = buildRemoveNodes(data, 6);
-        sweepRemove(nodes, data.closed, tolerance, minPoints);
-        return nodesToData(nodes, data.closed);
+        var list = buildRemoveNodes(data, 6);
+        sweepRemove(list, tolerance, minPoints);
+        return nodesToData(list);
     }
 
-    // 원본 구간마다 샘플점을 붙인 작업 노드. 여러 허용 오차를 이어서 돌릴 때 재사용한다.
+    // 원본 구간마다 샘플점을 붙인 이중 연결 리스트. 배열 splice는 제거마다 뒤 전체를
+    // 옮겨 큰 패스(앵커 수천 개)에서 수 분이 걸리므로 포인터로 잇는다.
+    // 여러 허용 오차를 이어서 돌릴 때 같은 리스트를 재사용한다.
     function buildRemoveNodes(data, pieces) {
         var nodes = [];
-        var count = data.closed ? data.points.length : data.points.length - 1;
-        for (var i = 0; i < data.points.length; i++) {
+        var total = data.points.length;
+        var segmentCount = data.closed ? total : total - 1;
+        for (var i = 0; i < total; i++) {
             var point = data.points[i];
-            var node = {
+            nodes.push({
                 anchor: [point.anchor[0], point.anchor[1]],
                 left: [point.left[0], point.left[1]],
                 right: [point.right[0], point.right[1]],
                 corner: point.corner ? true : false,
-                samples: null,
-                error: null          // 마지막 검사 오차. 이웃이 바뀌면 null로 되돌린다
-            };
-            if (i < count) node.samples = sampleSegment(point, data.points[(i + 1) % data.points.length], pieces);
-            nodes.push(node);
+                samples: i < segmentCount ? sampleSegment(point, data.points[(i + 1) % total], pieces) : null,
+                error: null,         // 마지막 검사 오차. 이웃이 바뀌면 null로 되돌린다
+                before: null,
+                after: null
+            });
         }
-        return nodes;
+        for (var j = 0; j < total; j++) {
+            nodes[j].before = j > 0 ? nodes[j - 1] : (data.closed ? nodes[total - 1] : null);
+            nodes[j].after = j < total - 1 ? nodes[j + 1] : (data.closed ? nodes[0] : null);
+        }
+        return {head: nodes[0], tail: nodes[total - 1], closed: data.closed, count: total};
     }
 
-    // nodes를 제자리에서 줄인다. 낮은 오차로 돌린 결과에 더 큰 오차를 이어 돌려도
+    // 리스트를 제자리에서 줄인다. 낮은 오차로 돌린 결과에 더 큰 오차를 이어 돌려도
     // 오차는 여전히 원본 샘플 기준이므로 처음부터 돌린 것과 같은 자격의 결과다.
-    function sweepRemove(nodes, closed, tolerance, minPoints) {
+    function sweepRemove(list, tolerance, minPoints) {
         if (tolerance <= 0) return;
         var removedAny = true;
-        while (removedAny && nodes.length > minPoints) {
+        while (removedAny && list.count > minPoints) {
             removedAny = false;
-            var index = closed ? 0 : 1;
-            while (index < (closed ? nodes.length : nodes.length - 1) && nodes.length > minPoints) {
-                var prev = nodes[(index - 1 + nodes.length) % nodes.length];
-                var mid = nodes[index];
-                var next = nodes[(index + 1) % nodes.length];
+            var node = list.closed ? list.head : list.head.after;
+            var budget = list.count;                 // 한 바퀴만 돈다
+            while (node !== null && budget > 0 && list.count > minPoints) {
+                if (!list.closed && node === list.tail) break;
+                budget--;
+                var prev = node.before;
+                var next = node.after;
                 if (prev === next) break;
                 // 지난 검사에서 이미 허용치를 넘긴 점은 이웃이 바뀌지 않는 한 결과가 같다.
-                if (mid.error !== null && mid.error > tolerance) {
-                    index++;
+                if (node.error !== null && node.error > tolerance) {
+                    node = next;
                     continue;
                 }
-                var merged = mergeSegments(prev, mid, next);
+                // 한 구간이 품는 원본 샘플 상한. 긴 직선이 수천 점을 삼키면 검사마다 그만큼 돈다.
+                if (prev.samples.length + node.samples.length - 1 > 240) {
+                    node.error = Infinity;
+                    node = next;
+                    continue;
+                }
+                var merged = mergeSegments(prev, node, next);
                 if (merged.error <= tolerance) {
                     prev.right = merged.right;
                     next.left = merged.left;
-                    prev.samples = prev.samples.concat(mid.samples.slice(1));
+                    prev.samples = prev.samples.concat(node.samples.slice(1));
                     prev.error = null;
                     next.error = null;
-                    nodes.splice(index, 1);
+                    prev.after = next;
+                    next.before = prev;
+                    if (list.head === node) list.head = next;
+                    list.count--;
                     removedAny = true;
                 } else {
-                    mid.error = merged.error;
-                    index++;
+                    node.error = merged.error;
                 }
+                node = next;
             }
         }
     }
 
-    function nodesToData(nodes, closed) {
+    function nodesToData(list) {
         var points = [];
-        for (var k = 0; k < nodes.length; k++) {
-            points.push({anchor: nodes[k].anchor, left: nodes[k].left, right: nodes[k].right, corner: nodes[k].corner});
+        var node = list.head;
+        for (var k = 0; k < list.count && node !== null; k++) {
+            points.push({anchor: node.anchor, left: node.left, right: node.right, corner: node.corner});
+            node = node.after;
         }
-        return {closed: closed, points: points};
+        return {closed: list.closed, points: points};
     }
 
     function sampleSegment(from, to, pieces) {
