@@ -440,6 +440,171 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
   white-space: nowrap;
 }
 
+/* 묶음 카드의 탭 표시 · 탭 사이 이동 칩 */
+.bundle-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--category) 14%, white);
+  color: color-mix(in srgb, var(--category) 78%, var(--blue-950));
+  font-size: .74rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.chip-row, .sibling-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.sibling-label {
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: .84rem;
+  font-weight: 750;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--category) 28%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--category-soft) 60%, white);
+  color: color-mix(in srgb, var(--category) 74%, var(--blue-950));
+  font-size: .85rem;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  background: var(--category);
+}
+
+.chip.is-match, .chip.is-current {
+  border-color: var(--category);
+  background: var(--category);
+  color: #f5f8fd;
+}
+
+.chip.is-match::before, .chip.is-current::before { background: #f5f8fd; }
+
+a.chip:hover { border-color: var(--category); }
+
+/* 목록 → 묶음 안내 → 탭 세부, 지금 어디인지 */
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: .86rem;
+  font-weight: 700;
+}
+
+.crumbs a { color: var(--blue-700); }
+.crumbs a:hover { text-decoration: underline; }
+.crumb-sep { color: color-mix(in srgb, var(--muted) 62%, white); }
+
+.section-hint {
+  max-width: 660px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: .92rem;
+}
+
+/* 실행 경로·선택 조건·공통 옵션 */
+.fact-list {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--category) 22%, var(--line));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--category) 14%, var(--line));
+}
+
+.fact-list:empty { display: none; }
+
+.fact-list > div {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, .84);
+}
+
+.fact-list dt {
+  color: color-mix(in srgb, var(--category) 74%, var(--blue-950));
+  font-weight: 800;
+}
+
+.fact-list dd { margin: 0; color: #46566e; }
+
+/* 묶음 안내 페이지의 탭 목록 */
+.tab-index { display: grid; gap: 6px; }
+.tab-index h3 { margin: 0; }
+.tab-index-hint { margin: 0; color: var(--muted); font-size: .9rem; }
+
+.tab-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.tab-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--category) 24%, var(--line));
+  border-left: 4px solid var(--category);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, .78);
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+
+.tab-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--category) 52%, var(--line));
+  box-shadow: 0 14px 30px rgba(7, 26, 51, .08);
+}
+
+.tab-no {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--category) 16%, white);
+  color: color-mix(in srgb, var(--category) 78%, var(--blue-950));
+  font-size: .82rem;
+  font-weight: 800;
+}
+
+.tab-card h4 {
+  margin: 0;
+  color: var(--blue-900);
+  font-size: 1.02rem;
+}
+
+.tab-card p { margin: 0; color: #4a5970; font-size: .95rem; }
+
+.tab-card .tab-need { color: var(--muted); font-size: .84rem; }
+.tab-card .tab-need::before { content: "필요한 선택 · "; font-weight: 750; }
+
 .detail-hero {
   display: grid;
   gap: 18px;
@@ -623,9 +788,11 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 }
 
 @media (max-width: 920px) {
-  .hero, .script-grid, .install-layout, .admin-grid, .home-categories, .catalog-layout {
+  .hero, .script-grid, .install-layout, .admin-grid, .home-categories, .catalog-layout, .tab-cards {
     grid-template-columns: 1fr;
   }
+
+  .fact-list > div { grid-template-columns: 1fr; gap: 4px; }
 
   .category-tabs {
     flex-direction: row;

@@ -150,6 +150,7 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 - 서로 다른 다이얼로그를 그대로 담는 묶음(DNA 모형·역학·그래프·표): 원본 스크립트 본문이 `addRows(page)` 안에 그대로 들어가고, 창·푸터·show 부분만 `api.setPreview/updatePreview/clearPreview/commit` 훅으로 바뀐다. 각 탭의 저장 키(`PREF_KEY`)는 원래 것을 그대로 쓴다. 선택이 맞지 않는 탭은 `addRows`가 안내문을 돌려주고 호스트가 탭을 끈다.
 - ScriptUI `tabbedpanel.selection`(Tab)에는 `index`가 없다. 제목(`text`)을 라벨과 비교해 찾는다.
 - Node 테스트는 스코프를 평탄화해 공통 함수가 엔진 상수를 쓰는 오류를 못 잡는다. 통합 뒤에는 일러에서 탭마다 미리보기를 그려 확인한다.
+- 안내 홈페이지도 같은 구조다. 묶음을 만들거나 탭을 더하면 `docs/assets/app.js`의 그 항목에 `tabs`(필요하면 묶음 공통 옵션 `shared`, 선택 조건 `requires`)를 맞춘다. 목록 → 묶음 안내(`#script/<id>`) → 탭 세부(`#script/<id>/<탭id>`) 세 단계로 그려지고, 탭 이름(`name`)은 스크립트의 탭 라벨과 같게 둔다. 어드민의 세부 설명·이미지는 탭까지 따로 저장하므로(`content.json`의 `details["<id>/<탭id>"]`) 탭 `id`는 바꾸지 않는다.
 
 ## Escalation
 
