@@ -66,6 +66,13 @@ try {
             if (!engines[engineIndex].error) { tabIndex = engineIndex; break; }
         }
     }
+    // 어느 탭도 선택에 맞지 않으면 여기서 끝낸다 — 꺼진 탭을 tabs.selection에 넣으면 ScriptUI가 유형 오류를 던진다
+    if (engines[tabIndex].error) {
+        var problems = [];
+        for (engineIndex = 0; engineIndex < engines.length; engineIndex++) problems.push("[" + engines[engineIndex].label + "] " + engines[engineIndex].error);
+        alert("선택이 어느 탭에도 맞지 않습니다.\n\n" + problems.join("\n"));
+        return;
+    }
     var engine = engines[tabIndex];
     tabs.selection = tabIndex;
 
