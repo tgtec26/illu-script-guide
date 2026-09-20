@@ -606,8 +606,11 @@ try {
         if (syncCellParts(shape, parts)) parts = mapParts(shape);
         var face;
         if (options.raised) {
-            // 경사면: 분면마다 두 경사면을 잇는 대각 그라데이션. 축은 분면의 대각선 방향
-            var angle = Math.atan2(outer.height, outer.width) * 180 / Math.PI;
+            // 경사면: 분면마다 두 경사면을 잇는 대각 그라데이션. 두 색의 경계(50%)는 축에 수직으로 분면
+            // 가운데를 지나므로, 바깥 모서리에서 셀 중심으로 가는 이음선과 겹치려면 축이 그 이음선에
+            // 수직이어야 한다(각도 = atan2(너비, 높이)). 이음선 방향(atan2(높이, 너비))으로 두면 정사각형이
+            // 아닐 때 경계가 돌아가 아래 경사면 왼쪽이 밝고 위 경사면 오른쪽이 어두워진다
+            var angle = Math.atan2(outer.width, outer.height) * 180 / Math.PI;
             for (var q = 0; q < QUADRANTS.length; q++) {
                 var quadrant = replacePath(shape, findNamed(shape.pathItems, QUADRANTS[q].name), null);
                 writePath(quadrant, quadrantPoints(outer, radius, QUADRANTS[q].name));
