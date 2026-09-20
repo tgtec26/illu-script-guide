@@ -20,7 +20,7 @@ try {
       윗면 라운딩은 바깥 라운딩에 비례합니다. 끄면 평면입니다
     - '테두리'를 켜면 셀마다 검은 선을 두릅니다
     - 1행 1열에는 대각선과 '족'·'주기' 글자가 들어갑니다. 대각선은 곧은 사선 또는
-      사선·수평·사선(가운데 1/3을 가운데 높이에서 수평으로)으로 고릅니다
+      사선·수평·사선(45°로 가운데 높이까지 내려온 뒤 수평. 1열이 넓어지면 수평만 길어짐)으로 고릅니다
     - 글자는 한글=Spoqa, 숫자·영문=GSMediumB1 규칙을 글자마다 적용합니다
   사용법: 그냥 실행하면 화면 중앙에 만듭니다
 */
@@ -826,11 +826,13 @@ try {
 
     // 대각선과 실제 윗면의 왼쪽 위 베지어 곡선이 만나는 점을 찾는다.
     // roundedRectangle과 같은 반지름 제한·손잡이(0.55r, 여기선 0.5523r)를 써서 큰 라운딩에서도 패스에 닿는다.
-    // bent면 사선·수평·사선: 가운데 1/3을 가운데 높이에서 수평으로 두고 양쪽 사선이 모서리로 나간다.
+    // bent면 사선·수평·사선: 양쪽 사선은 45°로 가운데 높이까지 내려오고(길이는 셀 높이로 정해진다)
+    // 그 사이는 수평이라, 1열 너비를 넓히면 수평 구간만 길어진다. 셀이 높이보다 좁으면 사선이 가운데서 만난다.
     // 왼쪽 위 모서리에서 (dx, dy) 방향으로 나가는 첫 사선이 곡선과 만나는 점을 찾고, 오른쪽 아래는 점대칭
     function diagonalPoints(rect, radius, bent) {
         var r = Math.max(0, Math.min(radius, rect.width / 2, rect.height / 2));
-        var dx = bent ? rect.width / 3 : rect.width;
+        var knee = Math.min(rect.height / 2, rect.width / 2);
+        var dx = bent ? knee : rect.width;
         var dy = bent ? rect.height / 2 : rect.height;
         var x = 0;
         var y = 0;
@@ -849,8 +851,8 @@ try {
         }
         var points = [corner(rect.left + x, rect.top - y)];
         if (bent) {
-            points.push(corner(rect.left + rect.width / 3, rect.top - rect.height / 2));
-            points.push(corner(rect.left + rect.width * 2 / 3, rect.top - rect.height / 2));
+            points.push(corner(rect.left + knee, rect.top - rect.height / 2));
+            points.push(corner(rect.left + rect.width - knee, rect.top - rect.height / 2));
         }
         points.push(corner(rect.left + rect.width - x, rect.top - rect.height + y));
         return points;

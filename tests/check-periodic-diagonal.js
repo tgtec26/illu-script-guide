@@ -35,14 +35,14 @@ near(straight[0].anchor[1], 100, "straight start y");
 near(straight[1].anchor[0], 70, "straight end x");
 near(straight[1].anchor[1], 70, "straight end y");
 
-// 꺾은 선: 사선 → 가운데 1/3 수평(가운데 높이) → 사선
+// 꺾은 선: 45° 사선 → 수평(가운데 높이) → 45° 사선. 사선 길이는 높이로 정해진다
 const bent = diagonalPoints(rect, 0, true);
 assert.strictEqual(bent.length, 4, "bent: four points");
 near(bent[0].anchor[0], 10, "bent start x");
 near(bent[0].anchor[1], 100, "bent start y");
-near(bent[1].anchor[0], 30, "bent knee 1 x");
+near(bent[1].anchor[0], 25, "bent knee 1 x");
 near(bent[1].anchor[1], 85, "bent knee 1 y");
-near(bent[2].anchor[0], 50, "bent knee 2 x");
+near(bent[2].anchor[0], 55, "bent knee 2 x");
 near(bent[2].anchor[1], 85, "bent knee 2 y");
 near(bent[3].anchor[0], 70, "bent end x");
 near(bent[3].anchor[1], 70, "bent end y");
@@ -52,9 +52,17 @@ const rounded = diagonalPoints(rect, 5, true);
 const dx = rounded[0].anchor[0] - rect.left;
 const dy = rect.top - rounded[0].anchor[1];
 assert.ok(dx > 0 && dy > 0 && dx < 5 && dy < 5, "rounded: start inside the corner arc");
-near(dy / dx, (rect.height / 2) / (rect.width / 3), "rounded: start on the first slope");
+near(dy / dx, 1, "rounded: start on the 45° slope");
 // 끝점은 시작점과 점대칭
 near(rounded[3].anchor[0], rect.left + rect.width - dx, "rounded end x");
 near(rounded[3].anchor[1], rect.top - rect.height + dy, "rounded end y");
+
+// 넓은 셀: 수평 구간만 늘어난다. 좁은 셀: 사선이 가운데서 만난다
+const wide = diagonalPoints({ left: 0, top: 30, width: 120, height: 30 }, 0, true);
+near(wide[1].anchor[0], 15, "wide knee 1 x");
+near(wide[2].anchor[0], 105, "wide knee 2 x");
+const narrow = diagonalPoints({ left: 0, top: 30, width: 20, height: 30 }, 0, true);
+near(narrow[1].anchor[0], 10, "narrow knee 1 x");
+near(narrow[2].anchor[0], 10, "narrow knee 2 x");
 
 console.log("periodic diagonal: ok");
