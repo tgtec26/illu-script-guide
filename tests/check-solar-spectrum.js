@@ -138,10 +138,13 @@ assert.ok(source.includes('if (p[0] !== "v1" || p.length !== 15) return;'));
 assert.strictEqual((source.match(/saveSettings\(\);/g) || []).length, 1, "saveSettings is called from one place");
 assert.ok(/api\.commit = function\(\) \{[\s\S]*?saveSettings\(\);[\s\S]*?return true;/.test(source), "settings saved in commit only");
 assert.ok(source.includes('rect !== null ? defaultWidthMm : widthMm'));
-// 탭 호스트: 선택이 없어도 되는 탭이라 standalone 표시, 호스트는 저장 탭이 맞지 않을 때 이런 탭을 뒤로 미룬다
-assert.ok(source.includes('label: "태양 스펙트럼", error: null, standalone: true'));
-assert.ok(wholeSource.includes("makeModelCurvesEngine(), makeSolarSpectrumEngine()]"), "engine registered last");
-assert.ok(wholeSource.includes("(pass === 0 && engines[engineIndex].standalone)) continue;"), "host defers standalone tabs");
+// 탭 호스트: 사각형이 있어야 열리는 탭이다 (화면 중앙 모드는 없앴다). 호스트는 저장 탭이 맞지 않으면 앞에서부터 맞는 탭을 연다
+assert.ok(source.includes('label: "복사", error: null, addRows: addRows'));
+assert.ok(source.includes('if (rect === null) return "가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요'), "rectangle required");
+assert.ok(wholeSource.includes("makeModelCurvesEngine(), makePieChartEngine(), makeSolarSpectrumEngine()]"), "engine registered last");
+assert.ok(!wholeSource.includes("standalone"), "no standalone tabs remain");
+assert.ok(wholeSource.includes("if (!engines[engineIndex].error) tabIndex = engineIndex;"), "host opens the first fitting tab");
+assert.ok(wholeSource.includes('alert("먼저 도형을 그려 선택한 뒤 실행해주세요.'), "no-selection guidance");
 // 사각형: 있으면 그래프 영역이 되고 확인 때 지워진다. 크기 칸은 잠긴다
 assert.ok(source.includes("if (rect !== null) rect.remove();"));
 assert.ok(source.includes("widthField.row.enabled = false;"));
