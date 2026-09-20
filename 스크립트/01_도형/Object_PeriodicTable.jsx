@@ -37,6 +37,11 @@ try {
     var MAX_PERIOD = 5;
     var MAX_GROUP = 18;
     var CORNER_LABEL_SCALE = 0.9;   // 모서리 '족'·'주기'는 숫자 크기의 90%
+    // 점 텍스트 프레임(em 박스) 안에서 한글 글자가 차지하는 자리. Spoqa를 8·10·12pt로 잰 값(Text_ChatBubbles와 같다).
+    // 글자 아래 끝 = 프레임 아래 + 0.23, 글자 높이 0.896 (글자 크기 배수). 글자는 프레임 가운데보다 약 0.08 위에 있어
+    // 프레임으로 가운데를 맞추면 글자가 위로 치우친다
+    var GLYPH_BOTTOM = 0.23;
+    var GLYPH_HEIGHT = 0.896;
     // 키캡 경사면: 바깥 둥근 사각형을 4분면으로 나눠 분면마다 두 경사면(왼·위 등)을 대각 그라데이션으로 잇는다.
     // 색은 셀 음영 K 기준 오프셋 (참고 SVG: 왼 #ebebeb, 위 #dbdbdb, 오른 #b5b5b5, 아래 #9c9c9c, 윗면 #cfcfcf→#e8e8e8)
     var BEVEL_K = { left: -2, top: 4, right: 19, bottom: 29, faceDark: 9, faceLight: 0 };
@@ -570,7 +575,8 @@ try {
                 }
             }
             // 대각선은 모양이 바뀌었거나 사선·꺾은 선 선택이 바뀐 때만 다시 쓴다
-            if (cell.kind === "corner" && (changed || last.bent !== options.bentDiagonal)) {
+            var bentChanged = !changed && last.bent !== options.bentDiagonal;
+            if (cell.kind === "corner" && (changed || bentChanged)) {
                 var diagonal = findNamed(g.pathItems, "diagonal");
                 writePath(diagonal, diagonalPoints(rect,
                     options.raised ? radius * INNER_RADIUS_RATIO : radius, options.bentDiagonal), false);
@@ -583,13 +589,16 @@ try {
             if (!prototypes[shapeKey]) {
                 prototypes[shapeKey] = { shape: g.groupItems[0], left: outer.left, top: outer.top };
             }
-            // 글자는 모양이나 크기가 바뀐 셀만 다시 맞춘다 (자리만 바뀐 셀은 위에서 함께 옮겨졌다)
-            if (changed || last.font !== options.fontSize) {
+            // 글자는 모양·크기·대각선 종류가 바뀐 셀만 다시 맞춘다 (자리만 바뀐 셀은 위에서 함께 옮겨졌다)
+            if (changed || bentChanged || last.font !== options.fontSize) {
                 if (cell.kind === "corner") {
+                    // 꺾은 선이면 '족'·'주기'가 윗면 가장자리와 수평선 사이 한가운데(위·아래 반의 1/2)에 온다.
+                    // 프레임이 아니라 글자 자체의 세로 가운데를 맞춘다
+                    var labelY = options.bentDiagonal ? 0.25 : 0.27;
                     centerText(findNamed(g.textFrames, "groupLabel"), options.fontSize * CORNER_LABEL_SCALE,
-                        rect.left + rect.width * 0.7, rect.top - rect.height * 0.27);
+                        rect.left + rect.width * 0.7, rect.top - rect.height * labelY, true);
                     centerText(findNamed(g.textFrames, "periodLabel"), options.fontSize * CORNER_LABEL_SCALE,
-                        rect.left + rect.width * 0.3, rect.top - rect.height * 0.73);
+                        rect.left + rect.width * 0.3, rect.top - rect.height * (1 - labelY), true);
                 } else if (cell.kind === "head") {
                     centerText(findNamed(g.textFrames, "label"), options.fontSize,
                         rect.left + rect.width / 2, rect.top - rect.height / 2);
@@ -648,13 +657,15 @@ try {
         return map;
     }
 
-    // 글자 크기를 맞춘 뒤 프레임 범위의 가운데를 목표점으로 옮긴다
-    function centerText(frame, size, x, y) {
+    // 글자 크기를 맞춘 뒤 프레임 범위의 가운데를 목표점으로 옮긴다.
+    // glyph면 세로는 프레임이 아니라 한글 글자 자체(GLYPH_BOTTOM·GLYPH_HEIGHT)의 가운데를 맞춘다
+    function centerText(frame, size, x, y, glyph) {
         if (frame === null) return;
         if (frame.textRange.characterAttributes.size !== size) frame.textRange.characterAttributes.size = size;
         var b = frame.geometricBounds;
         var dx = x - (b[0] + b[2]) / 2;
-        var dy = y - (b[1] + b[3]) / 2;
+        var midY = glyph ? b[3] + (GLYPH_BOTTOM + GLYPH_HEIGHT / 2) * size : (b[1] + b[3]) / 2;
+        var dy = y - midY;
         if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) frame.translate(dx, dy);
     }
 
