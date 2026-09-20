@@ -160,7 +160,7 @@ const scripts = [
   { id: "quadrat", category: "도형", name: "방형구", file: "01_도형/Object_Quadrat.jsx", summary: "선택한 정사각형을 4×4 또는 5×5 방형구로 나누고 상대 밀도·상대 빈도 목표값에 맞춰 종을 배치합니다.", tags: ["과학", "생태"] },
   { id: "region-brace", category: "도형", name: "영역 중괄호", file: "01_도형/Object_RegionBrace.jsx", summary: "선택한 직선을 영역을 묶어 가리키는 중괄호로 바꿉니다. 0.5pt로 맞추고 가운데를 잘라 두 선으로 나눈 뒤 바깥 끝에는 화살표 7번, 가운데 끝에는 화살표 6번을 붙여 그룹으로 묶습니다. 가로선은 상하 반전, 세로선은 좌우 반전을 고를 수 있고, 미리보기를 보면서 가로·세로로 옮겨 자리를 잡습니다.", tags: ["중괄호", "영역", "화살표"] },
   { id: "step-flow", category: "도형", name: "단계 흐름도", file: "01_도형/Object_StepFlow.jsx", summary: "단계 수(3~6)와 이름을 넣으면 [박스] → [박스] → [박스]처럼 사각 박스와 화살표 3이 등간격으로 이어지는 흐름도를 만듭니다. 글자 크기, 박스 크기(공통 또는 글자 범위+여백)·코너 라운딩, 화살표 길이·두께·화살촉 크기·색(K 10 단위), 간격을 미리보기로 조절합니다.", tags: ["과학", "흐름도", "화살표"] },
-  { id: "silicate-structure", category: "도형", name: "규산염 결합 구조", file: "01_도형/Object_SilicateStructure.jsx", summary: "감람석·휘석·각섬석·흑운모의 SiO₄ 사면체 배열을 그립니다. Si 수와 원자 크기, K 음영, 산소 3D 조명을 조절합니다.", tags: ["과학", "광물"] },
+  { id: "silicate-structure", category: "도형", name: "규산염 결합 구조", file: "01_도형/Object_SilicateStructure.jsx", summary: "감람석·휘석·각섬석·흑운모의 SiO₄ 사면체 배열을 그립니다. 원자 모형 또는 삼각형 세 면에 음영을 넣은 사면체 모형을 고르고, Si 수와 크기, K 음영, 산소 3D 조명을 조절합니다.", tags: ["과학", "광물"] },
   {
     id: "dna-model",
     category: "도형",

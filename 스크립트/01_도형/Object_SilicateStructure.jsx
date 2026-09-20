@@ -18,6 +18,8 @@ try {
     - 이웃한 사면체가 공유하는 산소는 원 하나로 합쳐 그립니다
     - 줄 수는 광물마다 고정(감람석·휘석 1줄, 각섬석 2줄, 흑운모 4줄)이고
       Si 수를 고르면 가로 길이가 정해집니다
+    - 표현 방식: 원자 모형(산소·규소 원) 또는 사면체 모형(삼각형을 세 면으로 나눠
+      음영을 달리 하고 꼭짓점과 가운데에 작은 산소 원을 얹음). 배치는 같습니다
   사용법: 그냥 실행하면 화면 중앙에 만듭니다
 */
 
@@ -48,11 +50,15 @@ try {
     var mineralIndex = 1;
     var siCount = 4;
     var vertical = false;       // 사슬·판이 자라는 방향. 켜면 세로로 길어진다.
+    var tetraMode = false;      // 켜면 사면체 모형(삼각형 면 + 작은 산소 원), 끄면 원자 모형
     var oxygenMm = 4;
     var siliconMm = 1.6;
     var gapMm = 0;              // 한 사면체 안에서 산소 사이 빈 간격. 0이면 맞닿는다.
+    var triangleMm = 6;         // 사면체 모형: 삼각형 한 변 = 산소 중심 사이 거리
+    var tetraOxygenMm = 1.5;    // 사면체 모형: 꼭짓점·가운데 산소 원 지름
     var oxygenK = 0;
     var siliconK = 0;
+    var faceK = 60;             // 사면체 모형: 가장 어두운 면. 나머지 두 면은 1/3 · 2/3
     var lit3DOxygen = false;
     var offsetXmm = 0;
     var offsetYmm = 0;
@@ -73,6 +79,13 @@ try {
     dlg.alignChildren = "fill";
     dlg.spacing = 6;
     dlg.margins = 12;
+
+    var modePanel = addPanel(dlg, "표현 방식");
+    var modeRow = modePanel.add("group");
+    var atomRadio = modeRow.add("radiobutton", undefined, "원자 모형");
+    var tetraRadio = modeRow.add("radiobutton", undefined, "사면체 모형");
+    atomRadio.value = !tetraMode;
+    tetraRadio.value = tetraMode;
 
     var mineralPanel = addPanel(dlg, "광물");
     var mineralRadios = [];
@@ -100,14 +113,20 @@ try {
     horizontalRadio.value = !vertical;
     verticalRadio.value = vertical;
 
+    // 원자 모형 행과 사면체 모형 행은 같은 자리에 겹쳐 두고 고른 쪽만 보인다
     var sizePanel = addPanel(dlg, "크기");
-    var oxygenField = addNumberField(sizePanel, "산소 지름", "mm", oxygenMm, 0.1, 0.5, 20);
-    var siliconField = addNumberField(sizePanel, "규소 지름", "mm", siliconMm, 0.1, 0.2, 10);
-    var gapField = addNumberField(sizePanel, "산소 간격", "mm", gapMm, 0.1, -2, 10);
+    var sizeStack = addModeStack(sizePanel);
+    var oxygenField = addNumberField(sizeStack.atom, "산소 지름", "mm", oxygenMm, 0.1, 0.5, 20);
+    var siliconField = addNumberField(sizeStack.atom, "규소 지름", "mm", siliconMm, 0.1, 0.2, 10);
+    var gapField = addNumberField(sizeStack.atom, "산소 간격", "mm", gapMm, 0.1, -2, 10);
+    var triangleField = addNumberField(sizeStack.tetra, "삼각형 변", "mm", triangleMm, 0.5, 1, 30);
+    var tetraOxygenField = addNumberField(sizeStack.tetra, "산소 지름", "mm", tetraOxygenMm, 0.1, 0.3, 10);
 
     var shadePanel = addPanel(dlg, "음영");
     var oxygenKField = addNumberField(shadePanel, "산소", "K", oxygenK, 10, 0, 100);
-    var siliconKField = addNumberField(shadePanel, "규소", "K", siliconK, 10, 0, 100);
+    var shadeStack = addModeStack(shadePanel);
+    var siliconKField = addNumberField(shadeStack.atom, "규소", "K", siliconK, 10, 0, 100);
+    var faceKField = addNumberField(shadeStack.tetra, "면", "K", faceK, 10, 0, 100);
     var lit3DCheck = shadePanel.add("checkbox", undefined, "산소 3D 조명 효과");
     lit3DCheck.value = lit3DOxygen;
 
@@ -150,6 +169,16 @@ try {
             };
         })(ci);
     }
+    atomRadio.onClick = function() {
+        tetraMode = false;
+        updateModeState();
+        updatePreview();
+    };
+    tetraRadio.onClick = function() {
+        tetraMode = true;
+        updateModeState();
+        updatePreview();
+    };
     horizontalRadio.onClick = function() {
         vertical = false;
         updatePreview();
@@ -173,6 +202,7 @@ try {
 
     fillCountList(siCount);
     updateDirectionState();
+    updateModeState();
     updatePreview();
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
@@ -183,7 +213,7 @@ try {
         readFields(false);
         var finalGroup = drawStructure();
         moveItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
-        finalGroup.name = "Silicate " + MINERALS[mineralIndex].key;
+        finalGroup.name = "Silicate " + (tetraMode ? "tetra " : "") + MINERALS[mineralIndex].key;
         saveSettings();
         doc.selection = null;
         finalGroup.selected = true;
@@ -200,11 +230,13 @@ try {
         var mineral = MINERALS[mineralIndex];
         var rows = mineral.rows;
         var columns = Math.max(1, Math.round(siCount / rows));
-        var step = (oxygenMm + gapMm) * MM_TO_PT;   // 한 사면체 안에서 산소 중심 사이 거리
+        // 한 사면체 안에서 산소 중심 사이 거리 = 사면체 모형에서는 삼각형 한 변
+        var step = (tetraMode ? triangleMm : oxygenMm + gapMm) * MM_TO_PT;
         var rowHeight = step * Math.sqrt(3);
 
         var lattice = [];   // 이웃과 나눠 쓰는 밑면 산소
         var centers = [];   // 사면체 가운데: 산소 하나 + 규소 하나
+        var tetras = [];    // 사면체마다 밑면 산소 3개(삼각형 꼭짓점). centers와 같은 순서
         var j, k, i;
 
         function corner(ci, cj) {
@@ -218,13 +250,14 @@ try {
             pushUnique(lattice, bc[0], bc[1]);
             pushUnique(lattice, ca[0], ca[1]);
             centers.push([(ab[0] + bc[0] + ca[0]) / 3, (ab[1] + bc[1] + ca[1]) / 3]);
+            tetras.push([ab, bc, ca]);
         }
 
         // 감람석(사면체 하나)은 아래 산소 2개 위에 산소 1개가 얹힌 모양으로 고정한다.
         // 아래를 향한 격자 삼각형의 변 중점이 그 배치가 된다.
         if (isSingle()) {
             addTetrahedron(corner(1, 0), corner(0, 1), corner(1, 1));
-            return {lattice: lattice, centers: centers};
+            return {lattice: lattice, centers: centers, tetras: tetras};
         }
 
         // 한 줄은 위를 향한 사면체와 아래를 향한 사면체가 번갈아 붙은 지그재그다.
@@ -247,8 +280,9 @@ try {
         if (vertical) {
             rotateQuarter(lattice);
             rotateQuarter(centers);
+            for (i = 0; i < tetras.length; i++) rotateQuarter(tetras[i]);
         }
-        return {lattice: lattice, centers: centers};
+        return {lattice: lattice, centers: centers, tetras: tetras};
     }
 
     function isSingle() {
@@ -285,13 +319,19 @@ try {
     function drawStructure() {
         var layout = buildLayout();
         var group = doc.activeLayer.groupItems.add();
-        var oxygenDia = oxygenMm * MM_TO_PT;
+        var oxygenDia = (tetraMode ? tetraOxygenMm : oxygenMm) * MM_TO_PT;
         var siliconDia = siliconMm * MM_TO_PT;
 
         // 전체를 화면 중앙에 놓기 위한 이동량
         var shift = centerShift(layout, oxygenDia);
         var i, x, y;
 
+        // 사면체 모형은 삼각형 면을 먼저 깔고 그 위에 산소 원을 얹는다. 규소는 그리지 않는다
+        if (tetraMode) {
+            for (i = 0; i < layout.tetras.length; i++) {
+                drawFaces(group, layout.tetras[i], layout.centers[i], shift);
+            }
+        }
         // 1. 공유 산소 → 2. 사면체 가운데 산소 → 3. 규소 순으로 쌓는다
         for (i = 0; i < layout.lattice.length; i++) {
             drawOxygen(group, layout.lattice[i][0] + shift[0],
@@ -301,6 +341,7 @@ try {
             drawOxygen(group, layout.centers[i][0] + shift[0],
                 layout.centers[i][1] + shift[1], oxygenDia);
         }
+        if (tetraMode) return group;
         for (i = 0; i < layout.centers.length; i++) {
             x = layout.centers[i][0] + shift[0];
             y = layout.centers[i][1] + shift[1];
@@ -311,6 +352,45 @@ try {
             silicon.fillColor = makeGray(siliconK);
         }
         return group;
+    }
+
+    // 사면체 하나 = 꼭짓점 3개와 가운데(위로 솟은 산소)를 잇는 삼각형 면 3개.
+    // 밝은 면부터 면 K의 1/3 · 2/3 · 1로 어두워지고, 선은 산소 원과 같다
+    function drawFaces(group, corners, center, shift) {
+        var faces = orderFaces(corners);
+        for (var f = 0; f < 3; f++) {
+            var face = group.pathItems.add();
+            face.setEntirePath([
+                [faces[f].a[0] + shift[0], faces[f].a[1] + shift[1]],
+                [faces[f].b[0] + shift[0], faces[f].b[1] + shift[1]],
+                [center[0] + shift[0], center[1] + shift[1]]
+            ]);
+            face.closed = true;
+            face.filled = true;
+            face.fillColor = makeGray(Math.round(faceK * (f + 1) / 3));
+            face.stroked = true;
+            face.strokeWidth = OXYGEN_STROKE_PT;
+            face.strokeColor = makeGray(100);
+        }
+    }
+
+    // 삼각형 면 3개(바깥 변 a-b + 무게중심)를 밝은 면부터 돌려준다. 빛은 화면 왼쪽 위 135°에서
+    // 오고(산소 3D 하이라이트와 같은 방향), 면의 바깥 방향(무게중심 → 바깥 변 중점)이 빛을 향할수록
+    // 밝다. 위로 뾰족한 삼각형은 왼쪽·오른쪽·아래, 아래로 뾰족한 삼각형은 위·왼쪽·오른쪽 순이 되고
+    // 90도 돌린 세로 방향에서도 세 면이 다 다르다. 정삼각형이라 바깥 방향 길이는 같으니 내적만 비교한다
+    function orderFaces(corners) {
+        var cx = (corners[0][0] + corners[1][0] + corners[2][0]) / 3;
+        var cy = (corners[0][1] + corners[1][1] + corners[2][1]) / 3;
+        var faces = [];
+        for (var i = 0; i < 3; i++) {
+            var a = corners[i];
+            var b = corners[(i + 1) % 3];
+            var outX = (a[0] + b[0]) / 2 - cx;
+            var outY = (a[1] + b[1]) / 2 - cy;
+            faces.push({a: a, b: b, light: outY - outX});
+        }
+        faces.sort(function(p, q) { return q.light - p.light; });
+        return faces;
     }
 
     function centerShift(layout, oxygenDia) {
@@ -439,8 +519,11 @@ try {
         var oxygen = parseNumber(oxygenField.input.text);
         var silicon = parseNumber(siliconField.input.text);
         var gap = parseNumber(gapField.input.text);
+        var triangle = parseNumber(triangleField.input.text);
+        var tetraOxygen = parseNumber(tetraOxygenField.input.text);
         var oK = parseNumber(oxygenKField.input.text);
         var siK = parseNumber(siliconKField.input.text);
+        var fK = parseNumber(faceKField.input.text);
         var offX = parseNumber(offsetXField.input.text);
         var offY = parseNumber(offsetYField.input.text);
 
@@ -453,7 +536,13 @@ try {
             if (showAlert) alert("산소 간격은 -2부터 10mm 사이로, 산소 지름보다 작게 겹치도록 입력해주세요.");
             return false;
         }
-        if (oK === null || oK < 0 || oK > 100 || siK === null || siK < 0 || siK > 100) {
+        if (triangle === null || triangle < 1 || triangle > 30 ||
+                tetraOxygen === null || tetraOxygen < 0.3 || tetraOxygen > 10) {
+            if (showAlert) alert("사면체 모형의 삼각형 변과 산소 지름은 슬라이더 범위 안의 숫자로 입력해주세요.");
+            return false;
+        }
+        if (oK === null || oK < 0 || oK > 100 || siK === null || siK < 0 || siK > 100 ||
+                fK === null || fK < 0 || fK > 100) {
             if (showAlert) alert("음영은 0부터 100 사이로 입력해주세요.");
             return false;
         }
@@ -467,13 +556,25 @@ try {
         oxygenMm = oxygen;
         siliconMm = silicon;
         gapMm = gap;
+        triangleMm = triangle;
+        tetraOxygenMm = tetraOxygen;
         oxygenK = oK;
         siliconK = siK;
+        faceK = fK;
         lit3DOxygen = lit3DCheck.value;
         vertical = verticalRadio.value;
+        tetraMode = tetraRadio.value;
         offsetXmm = offX;
         offsetYmm = offY;
         return true;
+    }
+
+    // 고른 표현 방식의 크기·음영 행만 보인다
+    function updateModeState() {
+        sizeStack.atom.visible = !tetraMode;
+        shadeStack.atom.visible = !tetraMode;
+        sizeStack.tetra.visible = tetraMode;
+        shadeStack.tetra.visible = tetraMode;
     }
 
     // 고른 광물이 가진 Si 수만 라디오로 보여준다. 감람석은 1뿐이라 고를 것이 없다.
@@ -504,6 +605,22 @@ try {
         panel.spacing = 4;
         panel.margins = [10, 14, 10, 8];
         return panel;
+    }
+
+    // 원자 모형 행(atom)과 사면체 모형 행(tetra)을 같은 자리에 겹쳐 두는 묶음.
+    // 숨긴 쪽도 자리를 차지하므로 방식을 바꿔도 창 크기가 흔들리지 않는다
+    function addModeStack(parent) {
+        var stack = parent.add("group");
+        stack.orientation = "stack";
+        stack.alignChildren = ["left", "top"];
+        var columns = [];
+        for (var i = 0; i < 2; i++) {
+            columns[i] = stack.add("group");
+            columns[i].orientation = "column";
+            columns[i].alignChildren = "left";
+            columns[i].spacing = 4;
+        }
+        return {atom: columns[0], tetra: columns[1]};
     }
 
     function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
@@ -584,18 +701,19 @@ try {
     // 설정 기억
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v3", mineralIndex, siCount, oxygenMm, siliconMm,
+        var parts = ["v4", mineralIndex, siCount, oxygenMm, siliconMm,
             oxygenK, siliconK, lit3DOxygen ? 1 : 0, offsetXmm, offsetYmm,
-            vertical ? 1 : 0, gapMm];
+            vertical ? 1 : 0, gapMm, tetraMode ? 1 : 0, triangleMm, tetraOxygenMm, faceK];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
+    // v3는 앞 12항목까지, v4는 뒤에 표현 방식·삼각형 변·사면체 산소 지름·면 K가 붙는다
     function applySavedSettings() {
         var raw = "";
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length < 12) return;
+        if ((p[0] !== "v3" && p[0] !== "v4") || p.length < 12) return;
 
         var index = parseInt(p[1], 10);
         var count = parseInt(p[2], 10);
@@ -617,6 +735,14 @@ try {
         if (gap >= -2 && gap <= 10) gapMm = gap;
         if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
         if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
+        if (p.length < 16) return;
+        tetraMode = (p[12] === "1");
+        var triangle = parseFloat(p[13]);
+        var tetraOxygen = parseFloat(p[14]);
+        var fK = parseFloat(p[15]);
+        if (triangle >= 1 && triangle <= 30) triangleMm = triangle;
+        if (tetraOxygen >= 0.3 && tetraOxygen <= 10) tetraOxygenMm = tetraOxygen;
+        if (fK >= 0 && fK <= 100) faceK = fK;
     }
 
     function hasCount(counts, value) {
