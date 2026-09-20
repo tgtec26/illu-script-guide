@@ -15,9 +15,9 @@ try {
     - 말풍선 수(2~5)를 고르면 그만큼 입력창이 열리고, 입력한 글마다 말풍선이 생깁니다
     - 글을 다 넣고 '완료'를 눌러야 그리기 시작합니다(타이핑마다 다시 그리면 느려서)
     - 위에서부터 9시 꼬리(왼쪽 정렬) → 3시 꼬리(오른쪽 정렬)를 번갈아 놓습니다
-    - '같은 너비'를 켜면 모든 말풍선을 '말풍선 너비'로 맞추고 왼쪽 끝을 나란히 세웁니다.
-      글은 영역 텍스트로 만들어 그 너비 안에서 자동 줄바꿈되고(좁히면 줄이 늘고 넓히면 줄어듦),
-      빈 입력칸도 빈 말풍선으로 만듭니다
+    - '같은 너비'를 켜면 모든 말풍선을 채팅창 너비에 맞추고 왼쪽 끝을 나란히 세웁니다.
+      글은 영역 텍스트로 만들어 채팅창 너비(좌우 여백 제외) 안에서 자동 줄바꿈되고(좁히면 줄이 늘고
+      넓히면 줄어듦), 빈 입력칸도 빈 말풍선으로 만듭니다
     - 글자는 한글=Spoqa, 영문·숫자·기호=GSMediumB1 규칙을 글자마다 적용합니다
     - 여백·라운딩·꼬리 옵션은 Text_AreaTextRoundedBox와 같습니다. 글자 범위는 윤곽선 대신
       프레임 범위에 서체별 고정 비율을 적용해 어림합니다(윤곽선 변환을 되풀이하면 Illustrator가 불안정)
@@ -111,12 +111,9 @@ try {
     addRow(textPanel, "말풍선 간격", "gap", 0, 30, "mm", false);
     var sameWidth = textPanel.add("checkbox", undefined, "같은 너비");
     sameWidth.value = options.sameWidth;
-    sameWidth.helpTip = "모든 말풍선을 아래 '말풍선 너비'로 맞추고 글을 그 안에서 줄바꿈합니다";
-    var bubbleWidthRow = addRow(textPanel, "말풍선 너비", "bubbleWidth", 10, 100, "mm", false).parent;
-    bubbleWidthRow.enabled = options.sameWidth;
+    sameWidth.helpTip = "모든 말풍선을 채팅창 너비(좌우 여백 제외) 안에서 줄바꿈하고 왼쪽 끝을 나란히 세웁니다";
     sameWidth.onClick = function() {
         options.sameWidth = sameWidth.value;
-        bubbleWidthRow.enabled = sameWidth.value;
         rebuildPending = true;   // 포인트 ↔ 영역 텍스트 전환
         updatePreview();
     };
@@ -257,8 +254,9 @@ try {
                     app.redraw();
                 } catch (e) { clearPreview(); status.text = "이동 오류: " + e; }
             } else {
-                // 글자 크기·말풍선 너비는 글자부터 다시 (영역 텍스트 상자는 고쳐도 화면이 안 바뀐다)
-                if (key === "fontSize" || key === "bubbleWidth") rebuildPending = true;
+                // 글자 크기, 그리고 같은 너비 모드의 줄바꿈 폭(채팅창 너비·좌우 여백)은 글자부터 다시
+                // (영역 텍스트 상자는 고쳐도 화면이 안 바뀐다)
+                if (key === "fontSize" || (options.sameWidth && (key === "chatWidth" || key === "paddingX"))) rebuildPending = true;
                 updatePreview(dragging);
             }
         }
@@ -423,11 +421,13 @@ try {
     // -------------------------------------------------------
     // 그리기
     // -------------------------------------------------------
-    // 같은 너비 모드는 영역 텍스트(상자가 textPath가 되어 pathItems에는 남지 않는다), 아니면 포인트 텍스트
+    // 같은 너비 모드는 영역 텍스트(상자가 textPath가 되어 pathItems에는 남지 않는다), 아니면 포인트 텍스트.
+    // 줄바꿈 폭은 채팅창 너비에서 좌우 여백을 뺀 값이라 말풍선 몸통이 채팅창 너비를 넘지 않는다
+    function wrapWidthMM() { return Math.max(5, options.chatWidth - 2 * options.paddingX); }
     function makeTextFrame(container, text) {
         var frame;
         if (options.sameWidth) {
-            var box = container.pathItems.rectangle(0, 0, options.bubbleWidth * mmToPt, 100);
+            var box = container.pathItems.rectangle(0, 0, wrapWidthMM() * mmToPt, 100);
             frame = container.textFrames.areaText(box);
         } else {
             frame = container.textFrames.add();
@@ -629,35 +629,35 @@ try {
     function readSettings() {
         var result = { count: 2, fontSize: 8, chatWidth: 60, gap: 2,
             paddingX: 2, paddingY: 1.5, radius: 1.5, tailOffset: 30, tailBend: 100, tailSize: 100,
-            flip: false, offsetX: 0, offsetY: 0, preview: true, sameWidth: false, bubbleWidth: 40 };
+            flip: false, offsetX: 0, offsetY: 0, preview: true, sameWidth: false };
         try {
             var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-            if (p[0] !== "v4" || p.length !== 17) return result;
+            if (p[0] !== "v5" || p.length !== 16) return result;
             var keys = ["count", "fontSize", "chatWidth", "gap", "paddingX", "paddingY", "radius",
-                "tailOffset", "tailBend", "tailSize", "offsetX", "offsetY", "bubbleWidth"];
-            var mins = [2, 4, 20, 0, 0, 0, 0, 0, 0, 20, -100, -100, 10];
-            var maxs = [MAX_BUBBLES, 30, 200, 30, 50, 50, 50, 100, 100, 400, 100, 100, 100];
+                "tailOffset", "tailBend", "tailSize", "offsetX", "offsetY"];
+            var mins = [2, 4, 20, 0, 0, 0, 0, 0, 0, 20, -100, -100];
+            var maxs = [MAX_BUBBLES, 30, 200, 30, 50, 50, 50, 100, 100, 400, 100, 100];
             for (var i = 0; i < keys.length; i++) {
                 var raw = p[i + 1];
                 var value = Number(raw);
                 if (!/\S/.test(raw) || !isFinite(value) || value < mins[i] || value > maxs[i]) return result;
             }
-            if (!/^[01]$/.test(p[14]) || !/^[01]$/.test(p[15]) || !/^[01]$/.test(p[16])) return result;
+            if (!/^[01]$/.test(p[13]) || !/^[01]$/.test(p[14]) || !/^[01]$/.test(p[15])) return result;
             for (var j = 0; j < keys.length; j++) result[keys[j]] = Number(p[j + 1]);
             result.count = Math.round(result.count);
-            result.flip = p[14] === "1";
-            result.preview = p[15] === "1";
-            result.sameWidth = p[16] === "1";
+            result.flip = p[13] === "1";
+            result.preview = p[14] === "1";
+            result.sameWidth = p[15] === "1";
         } catch (e) {}
         return result;
     }
 
     function saveSettings() {
         try {
-            app.preferences.setStringPreference(PREF_KEY, ["v4", options.count, options.fontSize,
+            app.preferences.setStringPreference(PREF_KEY, ["v5", options.count, options.fontSize,
                 options.chatWidth, options.gap, options.paddingX, options.paddingY, options.radius,
                 options.tailOffset, options.tailBend, options.tailSize, options.offsetX, options.offsetY,
-                options.bubbleWidth, options.flip ? 1 : 0, options.preview ? 1 : 0, options.sameWidth ? 1 : 0].join("|"));
+                options.flip ? 1 : 0, options.preview ? 1 : 0, options.sameWidth ? 1 : 0].join("|"));
         } catch (e) {}
     }
 })();
