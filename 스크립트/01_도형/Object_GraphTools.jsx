@@ -10,8 +10,8 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 그래프·표: 축 눈금·그래프 마커·표·점선 분할선을 한 창의 탭으로 묶었다.
-// 탭마다 필요한 선택이 다르다 (축 눈금: 사각형, 마커: 꺾은선 패스, 표·점선 분할선: 축에 나란한 사각형).
+// 그래프·표: 축 눈금·그래프 마커·표·점선 분할선·모델 곡선을 한 창의 탭으로 묶었다.
+// 탭마다 필요한 선택이 다르다 (축 눈금: 사각형, 마커: 꺾은선 패스, 표·점선 분할선·모델 곡선: 축에 나란한 사각형).
 // 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적는다. 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
 (function() {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
@@ -25,7 +25,7 @@ try {
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
-    var engines = [makeAxisTicksEngine(), makeGraphMarkersEngine(), makeTableEngine(), makeDashedGridEngine()];
+    var engines = [makeAxisTicksEngine(), makeGraphMarkersEngine(), makeTableEngine(), makeDashedGridEngine(), makeModelCurvesEngine()];
 
     var win = new Window("dialog", "그래프·표");
     win.orientation = "column";
@@ -1985,6 +1985,678 @@ try {
                 try {
                     app.preferences.setStringPreference(PREF_KEY, ["v2", options.rows, options.cols, options.k].join("|"));
                 } catch (e) {}
+            }
+            return null;
+        }
+        return api;
+    }
+    // ==== 모델 곡선 ====
+    // 사각형을 그래프 영역으로 삼아 과학 교과서의 이상적 모델 곡선(정규분포·생장 곡선·하디-바인베르크 등)을 그린다.
+    // 사각형 너비가 x 0→1, 높이가 y 0→1이고 종류마다 y를 [0, 1]로 정규화해 봉우리·점근선을 높이 %로 조절한다.
+    function makeModelCurvesEngine() {
+        var api = {label: "모델 곡선", error: null, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        function addRows(page) {
+            var PREF_KEY = "ObjectModelCurves/settings";
+            var MM = 2.834645669;
+            var SEGMENTS = 16;      // 곡선 하나를 호길이로 등분하는 조각 수. 극값 고정점은 따로 더한다
+            var SAMPLES = 512;      // 호길이 표·극값 탐색 표본 수
+            var DASH_PATTERN = [2, 1];
+            var WIDTH_STEP = 0.1;
+            var WIDTH_SLIDER_MAX = 2;
+            var WIDTH_MAX = 100;
+            var POSITION_LIMIT_MM = 100;
+            var OFFSET_STEP_MM = 0.1;
+            var MAX_PARAM_ROWS = 4;
+            var MAX_FLAGS = 3;
+
+            // 곡선 종류. params는 숫자 행, flags는 체크박스, build(값들, 체크들)→그릴 곡선 목록.
+            // 곡선은 curve(f(x)→y, 시작 x, 끝 x) / hump(...)처럼 고정점을 직접 두는 조각 / dashedLine(점근선).
+            var TYPES = [
+                { label: "정규분포",
+                  params: [param("중심 위치", "%", 0, 100, 1, 50), param("폭 σ", "%", 1, 50, 1, 15), param("높이", "%", 1, 100, 1, 100)],
+                  flags: [],
+                  build: function(p) {
+                      var mean = p[0] / 100, sigma = p[1] / 100, height = p[2] / 100;
+                      return [curve(function(x) { var d = (x - mean) / sigma; return height * Math.exp(-d * d / 2); })];
+                  } },
+                { label: "이론적 생장 곡선 (J형, 지수)",
+                  params: [param("가파름", "", 0.5, 10, 0.5, 4), param("높이", "%", 1, 100, 1, 100)],
+                  flags: [],
+                  build: function(p) {
+                      var rate = p[0], height = p[1] / 100, top = Math.exp(rate) - 1;
+                      return [curve(function(x) { return height * (Math.exp(rate * x) - 1) / top; })];
+                  } },
+                { label: "실제 생장 곡선 (S형, 로지스틱)",
+                  params: [param("환경 수용력 K", "%", 1, 100, 1, 80), param("가파름", "", 1, 30, 1, 10), param("변곡점 위치", "%", 0, 100, 1, 50)],
+                  flags: [flag("K 점선", true)],
+                  build: function(p, f) {
+                      var capacity = p[0] / 100, rate = p[1], middle = p[2] / 100;
+                      var list = [curve(function(x) { return capacity / (1 + Math.exp(-rate * (x - middle))); })];
+                      if (f[0]) list.push(dashedLine(0, capacity, 1, capacity));
+                      return list;
+                  } },
+                { label: "하디-바인베르크 (p², 2pq, q²)",
+                  params: [],
+                  flags: [flag("AA (p²)", true), flag("Aa (2pq)", true), flag("aa (q²)", true)],
+                  build: function(p, f) {
+                      var list = [];
+                      if (f[0]) list.push(curve(function(x) { return x * x; }));
+                      if (f[1]) list.push(curve(function(x) { return 2 * x * (1 - x); }));
+                      if (f[2]) list.push(curve(function(x) { return (1 - x) * (1 - x); }));
+                      return list;
+                  } },
+                { label: "효소 반응 속도 (미카엘리스-멘텐)",
+                  params: [param("Vmax", "%", 1, 100, 1, 90), param("Km 위치", "%", 1, 100, 1, 20)],
+                  flags: [flag("Vmax 점선", true)],
+                  build: function(p, f) {
+                      var vmax = p[0] / 100, km = p[1] / 100;
+                      var list = [curve(function(x) { return vmax * x / (km + x); })];
+                      if (f[0]) list.push(dashedLine(0, vmax, 1, vmax));
+                      return list;
+                  } },
+                { label: "산소 해리 곡선 (힐 식)",
+                  params: [param("P50 위치", "%", 1, 100, 1, 26), param("힐 계수 n", "", 1, 5, 0.1, 2.7), param("높이", "%", 1, 100, 1, 100)],
+                  flags: [],
+                  build: function(p) {
+                      var p50 = p[0] / 100, n = p[1], height = p[2] / 100, kn = Math.pow(p50, n);
+                      return [curve(function(x) { var xn = Math.pow(x, n); return height * xn / (kn + xn); })];
+                  } },
+                { label: "생존 곡선 (Ⅰ·Ⅱ·Ⅲ형)",
+                  params: [param("곡률", "", 1.5, 8, 0.5, 4)],
+                  flags: [flag("Ⅰ형", true), flag("Ⅱ형", true), flag("Ⅲ형", true)],
+                  build: function(p, f) {
+                      var k = p[0], list = [];
+                      if (f[0]) list.push(curve(function(x) { return 1 - Math.pow(x, k); }));
+                      if (f[1]) list.push(curve(function(x) { return 1 - x; }));
+                      if (f[2]) list.push(curve(function(x) { return Math.pow(1 - x, k); }));
+                      return list;
+                  } },
+                { label: "활성화 에너지 (반응 좌표)",
+                  params: [param("반응물 높이", "%", 0, 100, 1, 40), param("생성물 높이", "%", 0, 100, 1, 20),
+                      param("활성화 에너지", "%", 1, 100, 1, 50), param("촉매 Ea", "%", 1, 100, 1, 25)],
+                  flags: [flag("촉매 곡선", true)],
+                  build: function(p, f) {
+                      var list = [hump(p[0] / 100, p[1] / 100, p[2] / 100)];
+                      if (f[0]) list.push(hump(p[0] / 100, p[1] / 100, p[3] / 100));
+                      return list;
+                  } },
+                { label: "지수 감소 (반감기)",
+                  params: [param("반감기 위치", "%", 1, 100, 1, 25), param("높이", "%", 1, 100, 1, 100)],
+                  flags: [],
+                  build: function(p) {
+                      var rate = Math.LN2 / (p[0] / 100), height = p[1] / 100;
+                      return [curve(function(x) { return height * Math.exp(-rate * x); })];
+                  } },
+                { label: "맥스웰-볼츠만 분포",
+                  params: [param("봉우리 위치", "%", 5, 95, 1, 30), param("높이", "%", 1, 100, 1, 100)],
+                  flags: [],
+                  build: function(p) {
+                      var peak = p[0] / 100, height = p[1] / 100;
+                      return [curve(function(x) { var u = x / peak; return height * u * u * Math.exp(1 - u * u); })];
+                  } },
+                { label: "반비례 (보일 법칙)",
+                  params: [param("시작 위치", "%", 1, 90, 1, 20), param("높이", "%", 1, 100, 1, 100)],
+                  flags: [],
+                  build: function(p) {
+                      var start = p[0] / 100, height = p[1] / 100;
+                      return [curve(function(x) { return height * start / x; }, start, 1)];
+                  } },
+                { label: "거듭제곱 (y = xⁿ)",
+                  params: [param("지수 n", "", 0.2, 6, 0.1, 2), param("높이", "%", 1, 100, 1, 100)],
+                  flags: [],
+                  build: function(p) {
+                      var n = p[0], height = p[1] / 100;
+                      return [curve(function(x) { return height * Math.pow(x, n); })];
+                  } }
+            ];
+
+            function param(label, unit, min, max, step, initial) {
+                return {label: label, unit: unit, min: min, max: max, step: step, initial: initial};
+            }
+            function flag(label, initial) { return {label: label, initial: initial}; }
+            function curve(fn, from, to) {
+                return {fn: fn, from: from === undefined ? 0 : from, to: to === undefined ? 1 : to};
+            }
+            function dashedLine(x0, y0, x1, y1) {
+                return {segments: [[[x0, y0], [x0 + (x1 - x0) / 3, y0 + (y1 - y0) / 3], [x1 - (x1 - x0) / 3, y1 - (y1 - y0) / 3], [x1, y1]]], dashed: true};
+            }
+            // 반응 좌표 도표: 반응물 평탄 구간 → 봉우리(반응물 + Ea) → 생성물 평탄 구간. 손잡이는 모두 수평이라 매끈하다
+            function hump(reactant, product, activation) {
+                var flat = 0.12, peakX = 0.5, peakY = reactant + activation;
+                function straight(x0, y0, x1, y1) {
+                    return [[x0, y0], [x0 + (x1 - x0) / 3, y0], [x1 - (x1 - x0) / 3, y1], [x1, y1]];
+                }
+                function bend(x0, y0, x1, y1) {
+                    return [[x0, y0], [x0 + (x1 - x0) / 2, y0], [x1 - (x1 - x0) / 2, y1], [x1, y1]];
+                }
+                return {segments: [
+                    straight(0, reactant, flat, reactant),
+                    bend(flat, reactant, peakX, peakY),
+                    bend(peakX, peakY, 1 - flat, product),
+                    straight(1 - flat, product, 1, product)
+                ]};
+            }
+
+            var doc = app.activeDocument;
+            var rect = getSelectedRectangle(doc.selection);
+            if (rect === null) return "그래프 영역이 될 사각형 하나를 선택해주세요. 가로·세로 변이 축에 나란해야 합니다.";
+            var bounds = rect.geometricBounds; // [left, top, right, bottom]
+            var boxLeft = bounds[0], boxBottom = bounds[3];
+            var boxWidth = bounds[2] - bounds[0], boxHeight = bounds[1] - bounds[3];
+            if (boxWidth <= 0 || boxHeight <= 0) return "너비와 높이가 0보다 큰 사각형을 선택해주세요.";
+            var rectWasHidden = rect.hidden;
+
+            var typeIndex = 0;
+            var values = [], flagValues = [];
+            for (var t = 0; t < TYPES.length; t++) {
+                values.push([]);
+                flagValues.push([]);
+                for (var pi = 0; pi < TYPES[t].params.length; pi++) values[t].push(TYPES[t].params[pi].initial);
+                for (var fi = 0; fi < TYPES[t].flags.length; fi++) flagValues[t].push(TYPES[t].flags[fi].initial);
+            }
+            var strokeWidthPt = 0.3;
+            var keepRect = true;
+            var offsetXmm = 0, offsetYmm = 0;
+            var previewEnabled = true;
+            var previewGroup = null;
+
+            applySavedSettings();
+
+            var LABEL_WIDTH = 112;
+            var SLIDER_WIDTH = 196;
+            var dlg = page;
+
+            var typeRow = dlg.add("group");
+            typeRow.add("statictext", undefined, "곡선 종류:");
+            var typeList = typeRow.add("dropdownlist", undefined, []);
+            for (t = 0; t < TYPES.length; t++) typeList.add("item", TYPES[t].label);
+            typeList.preferredSize.width = 250;
+            typeList.selection = typeIndex;
+
+            // 숫자 행·체크박스는 최대 개수만큼 만들어 두고 종류에 따라 라벨·범위만 바꾼다
+            var optionPanel = addPanel(dlg, "옵션");
+            var paramFields = [];
+            for (pi = 0; pi < MAX_PARAM_ROWS; pi++) paramFields.push(addNumberField(optionPanel, "", "", 0, 1, 0, 1));
+            var flagRow = optionPanel.add("group");
+            flagRow.spacing = 12;
+            var flagChecks = [];
+            for (fi = 0; fi < MAX_FLAGS; fi++) {
+                var check = flagRow.add("checkbox", undefined, "");
+                check.preferredSize.width = 100;   // 나중에 바뀌는 글자가 잘리지 않게 폭을 미리 잡는다
+                check.onClick = updatePreview;
+                flagChecks.push(check);
+            }
+
+            var strokePanel = addPanel(dlg, "선");
+            var widthField = addNumberField(strokePanel, "두께", "pt", strokeWidthPt, WIDTH_STEP, 0, WIDTH_SLIDER_MAX);
+            widthField.maximum = WIDTH_MAX;
+            var keepCheck = strokePanel.add("checkbox", undefined, "사각형 유지 (끄면 확정할 때 지움)");
+            keepCheck.value = keepRect;
+            keepCheck.onClick = updatePreview;
+
+            var positionPanel = addPanel(dlg, "위치");
+            var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            // 위치는 곡선을 다시 만들지 않고 미리보기만 옮긴다
+            bindOffsetField(offsetXField, true);
+            bindOffsetField(offsetYField, false);
+
+            applyTypeToRows();
+            typeList.onChange = function() {
+                if (!typeList.selection || typeList.selection.index === typeIndex) return;
+                readFields(false);
+                typeIndex = typeList.selection.index;
+                applyTypeToRows();
+                updatePreview();
+            };
+
+            // 탭 호스트가 부르는 훅
+            api.setPreview = function(on) {
+                previewEnabled = on;
+                rect.selected = false;
+                updatePreview();
+            };
+            api.updatePreview = updatePreview;
+            api.clearPreview = function() {
+                clearPreview();
+                rect.hidden = rectWasHidden;
+                rect.selected = true;
+            };
+            api.commit = function() {
+                if (!readFields(true)) return false;
+                if (currentSpecs().length === 0) {
+                    alert("그릴 곡선이 없습니다. 곡선을 하나 이상 켜주세요.");
+                    return false;
+                }
+                clearPreview();
+                var group = buildGroup();
+                moveItem(group, offsetXmm * MM, offsetYmm * MM);
+                group.name = "Model Curve";
+                rect.hidden = rectWasHidden;
+                if (!keepRect) rect.remove();
+                saveSettings();
+                doc.selection = null;
+                group.selected = true;
+                return true;
+            };
+
+            // -------------------------------------------------------
+            // 곡선 만들기
+            // -------------------------------------------------------
+            function currentSpecs() {
+                return TYPES[typeIndex].build(values[typeIndex], flagValues[typeIndex]);
+            }
+
+            function buildGroup() {
+                var specs = currentSpecs();
+                var group = rect.parent.groupItems.add();
+                try { group.move(rect, ElementPlacement.PLACEBEFORE); } catch (e) {}
+                for (var i = 0; i < specs.length; i++) {
+                    var path = drawSegments(group, specSegments(specs[i], boxWidth, boxHeight), boxLeft, boxBottom);
+                    if (specs[i].dashed) try { path.strokeDashes = DASH_PATTERN; } catch (e2) {}
+                }
+                return group;
+            }
+
+            // 곡선 하나를 베지어 조각 목록 [[P0, P1, P2, P3], ...]으로. 좌표는 사각형 왼쪽 아래 기준 pt
+            function specSegments(spec, width, height) {
+                if (spec.fn) return fitCurve(spec, width, height);
+                var scaled = [];
+                for (var i = 0; i < spec.segments.length; i++) {
+                    var seg = [];
+                    for (var j = 0; j < 4; j++) seg.push([spec.segments[i][j][0] * width, spec.segments[i][j][1] * height]);
+                    scaled.push(seg);
+                }
+                return scaled;
+            }
+
+            // y = f(x)를 표본으로 훑어 호길이 표를 만들고, 극값에는 고정점을 꼭 두고 나머지는 호길이로 등분한다.
+            // 조각마다 접선 방향은 도함수에서, 손잡이 길이는 조각 중점이 곡선 위에 오도록 푼다.
+            function fitCurve(spec, width, height) {
+                var fn = spec.fn, from = spec.from, to = spec.to;
+                var xs = [], px = [], py = [], cum = [0], i;
+                for (i = 0; i <= SAMPLES; i++) {
+                    var x = from + (to - from) * i / SAMPLES;
+                    xs.push(x);
+                    px.push(x * width);
+                    py.push(fn(x) * height);
+                    if (i > 0) cum.push(cum[i - 1] + Math.sqrt((px[i] - px[i - 1]) * (px[i] - px[i - 1]) + (py[i] - py[i - 1]) * (py[i] - py[i - 1])));
+                }
+                var total = cum[SAMPLES];
+
+                var critical = [from];
+                for (i = 1; i < SAMPLES; i++) {
+                    if ((py[i] - py[i - 1]) * (py[i + 1] - py[i]) < 0) critical.push(refineExtremum(fn, xs[i - 1], xs[i + 1]));
+                }
+                critical.push(to);
+
+                var anchors = [from];
+                for (i = 1; i < critical.length; i++) {
+                    var s0 = lengthAt(critical[i - 1]), s1 = lengthAt(critical[i]);
+                    var pieces = Math.max(1, Math.round(SEGMENTS * (s1 - s0) / total));
+                    for (var j = 1; j < pieces; j++) anchors.push(xAtLength(s0 + (s1 - s0) * j / pieces));
+                    anchors.push(critical[i]);
+                }
+
+                var segments = [];
+                for (i = 1; i < anchors.length; i++) {
+                    var middle = xAtLength((lengthAt(anchors[i - 1]) + lengthAt(anchors[i])) / 2);
+                    segments.push(fitSegment(fn, from, to, anchors[i - 1], anchors[i], middle, width, height));
+                }
+                return segments;
+
+                function lengthAt(x) {
+                    var t = (x - from) / (to - from) * SAMPLES;
+                    var k = Math.floor(t);
+                    if (k >= SAMPLES) return total;
+                    if (k < 0) return 0;
+                    return cum[k] + (cum[k + 1] - cum[k]) * (t - k);
+                }
+                function xAtLength(s) {
+                    var lo = 0, hi = SAMPLES;
+                    while (hi - lo > 1) {
+                        var mid = (lo + hi) >> 1;
+                        if (cum[mid] <= s) lo = mid; else hi = mid;
+                    }
+                    var span = cum[hi] - cum[lo];
+                    return xs[lo] + (xs[hi] - xs[lo]) * (span > 0 ? (s - cum[lo]) / span : 0);
+                }
+            }
+
+            // 기울기 부호가 바뀌는 [a, b] 안에서 극값 위치를 이분법으로 좁힌다
+            function refineExtremum(fn, a, b) {
+                var h = (b - a) * 0.001;
+                var risingAtA = fn(a + h) - fn(a) > 0;
+                for (var i = 0; i < 40; i++) {
+                    var m = (a + b) / 2;
+                    if ((fn(m + h) - fn(m - h) > 0) === risingAtA) a = m; else b = m;
+                }
+                return (a + b) / 2;
+            }
+
+            // 단위 접선. 정의역 끝에서는 한쪽 차분을 쓴다
+            function tangentAt(fn, from, to, x, width, height) {
+                var h = (to - from) * 0.000001;
+                var a = Math.max(from, x - h), b = Math.min(to, x + h);
+                var dx = (b - a) * width, dy = (fn(b) - fn(a)) * height;
+                var length = Math.sqrt(dx * dx + dy * dy);
+                if (length < 0.000000000001) return [1, 0];
+                return [dx / length, dy / length];
+            }
+
+            // 조각의 베지어 중점 B(0.5)가 곡선의 호길이 중점과 같아지도록 손잡이 길이를 푼다.
+            //   B(0.5) = (P0+P3)/2 + (3/8)(a·d0 − b·d1)
+            // 접선이 나란하면(직선) 풀리지 않으므로 현 길이의 1/3로 둔다.
+            function fitSegment(fn, from, to, x0, x1, xm, width, height) {
+                var p0 = [x0 * width, fn(x0) * height], p3 = [x1 * width, fn(x1) * height];
+                var d0 = tangentAt(fn, from, to, x0, width, height), d1 = tangentAt(fn, from, to, x1, width, height);
+                var chord = Math.sqrt((p3[0] - p0[0]) * (p3[0] - p0[0]) + (p3[1] - p0[1]) * (p3[1] - p0[1]));
+                var a = chord / 3, b = chord / 3;
+                var wantX = (xm * width - (p0[0] + p3[0]) / 2) * 8 / 3;
+                var wantY = (fn(xm) * height - (p0[1] + p3[1]) / 2) * 8 / 3;
+                var determinant = d1[0] * d0[1] - d0[0] * d1[1];
+                if (Math.abs(determinant) > 0.000001) {
+                    var outOf = (d1[0] * wantY - d1[1] * wantX) / determinant;
+                    var into = (d0[0] * wantY - d0[1] * wantX) / determinant;
+                    if (isFinite(outOf) && isFinite(into) && outOf > 0 && into > 0 && outOf < chord * 2 && into < chord * 2) {
+                        a = outOf;
+                        b = into;
+                    }
+                }
+                return [p0, [p0[0] + d0[0] * a, p0[1] + d0[1] * a], [p3[0] - d1[0] * b, p3[1] - d1[1] * b], p3];
+            }
+
+            function drawSegments(container, segments, originX, originY) {
+                var anchors = [], i;
+                for (i = 0; i < segments.length; i++) anchors.push([originX + segments[i][0][0], originY + segments[i][0][1]]);
+                var lastSegment = segments[segments.length - 1];
+                anchors.push([originX + lastSegment[3][0], originY + lastSegment[3][1]]);
+
+                var path = container.pathItems.add();
+                path.setEntirePath(anchors);
+                path.closed = false;
+                for (i = 0; i < anchors.length; i++) {
+                    var point = path.pathPoints[i];
+                    var left = i > 0 ? segments[i - 1][2] : null;
+                    var right = i < segments.length ? segments[i][1] : null;
+                    point.leftDirection = left ? [originX + left[0], originY + left[1]] : anchors[i];
+                    point.rightDirection = right ? [originX + right[0], originY + right[1]] : anchors[i];
+                    point.pointType = (i === 0 || i === segments.length) ? PointType.CORNER : PointType.SMOOTH;
+                }
+                path.filled = false;
+                path.stroked = true;
+                path.strokeWidth = strokeWidthPt;
+                path.strokeColor = makeBlack();
+                return path;
+            }
+
+            // K 100 검정. RGB 문서면 검정 RGB
+            function makeBlack() {
+                var color;
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    color = new CMYKColor();
+                    color.cyan = 0; color.magenta = 0; color.yellow = 0; color.black = 100;
+                } else {
+                    color = new RGBColor();
+                    color.red = 0; color.green = 0; color.blue = 0;
+                }
+                return color;
+            }
+
+            // -------------------------------------------------------
+            // 미리보기
+            // -------------------------------------------------------
+            function updatePreview() {
+                clearPreview();
+                if (!readFields(false)) {
+                    app.redraw();
+                    return;
+                }
+                rect.hidden = (previewEnabled && !keepRect) ? true : rectWasHidden;
+                if (!previewEnabled || currentSpecs().length === 0) {
+                    app.redraw();
+                    return;
+                }
+                previewGroup = buildGroup();
+                moveItem(previewGroup, offsetXmm * MM, offsetYmm * MM);
+                previewGroup.name = "Model Curve Preview";
+                app.redraw();
+            }
+
+            function clearPreview() {
+                if (previewGroup === null) return;
+                try { previewGroup.remove(); } catch (e) {}
+                previewGroup = null;
+            }
+
+            // -------------------------------------------------------
+            // 입력
+            // -------------------------------------------------------
+            // 종류에 맞춰 숫자 행·체크박스의 라벨과 범위를 바꾼다. 안 쓰는 행은 숨긴다
+            function applyTypeToRows() {
+                var type = TYPES[typeIndex];
+                for (var i = 0; i < MAX_PARAM_ROWS; i++) {
+                    var field = paramFields[i];
+                    var used = i < type.params.length;
+                    field.row.visible = used;
+                    if (!used) continue;
+                    var p = type.params[i];
+                    field.label.text = p.label + (p.unit ? " (" + p.unit + "):" : ":");
+                    field.step = p.step;
+                    field.minimum = p.min;
+                    field.maximum = p.max;
+                    field.slider.minvalue = p.min;
+                    field.slider.maxvalue = p.max;
+                    field.slider.stepdelta = p.step;
+                    field.slider.jumpdelta = p.step * 10;
+                    field.input.text = formatValue(values[typeIndex][i]);
+                    syncSlider(field, values[typeIndex][i]);
+                }
+                for (i = 0; i < MAX_FLAGS; i++) {
+                    var usedFlag = i < type.flags.length;
+                    flagChecks[i].visible = usedFlag;
+                    if (usedFlag) {
+                        flagChecks[i].text = type.flags[i].label;
+                        flagChecks[i].value = flagValues[typeIndex][i];
+                    }
+                }
+            }
+
+            function readFields(showAlert) {
+                var type = TYPES[typeIndex];
+                for (var i = 0; i < type.params.length; i++) {
+                    var p = type.params[i];
+                    var value = parseNumber(paramFields[i].input.text);
+                    if (value === null || value < p.min || value > p.max) {
+                        if (showAlert) alert(p.label + "은(는) " + p.min + "부터 " + p.max + p.unit + " 사이로 입력해주세요.");
+                        return false;
+                    }
+                    values[typeIndex][i] = value;
+                }
+                for (i = 0; i < type.flags.length; i++) flagValues[typeIndex][i] = flagChecks[i].value;
+                var width = parseNumber(widthField.input.text);
+                if (width === null || width < 0 || width > WIDTH_MAX) {
+                    if (showAlert) alert("선 두께는 0부터 " + WIDTH_MAX + "pt 사이로 입력해주세요.");
+                    return false;
+                }
+                strokeWidthPt = width;
+                keepRect = keepCheck.value;
+                return true;
+            }
+
+            // -------------------------------------------------------
+            // 설정 기억: v1 | 종류 | 두께 | 사각형 유지 | 가로 | 세로 | 종류별 "값,값;체크,체크" × 종류 수
+            // -------------------------------------------------------
+            function saveSettings() {
+                var parts = ["v1", typeIndex, strokeWidthPt, keepRect ? 1 : 0, offsetXmm, offsetYmm];
+                for (var t = 0; t < TYPES.length; t++) {
+                    var bits = [];
+                    for (var i = 0; i < flagValues[t].length; i++) bits.push(flagValues[t][i] ? 1 : 0);
+                    parts.push(values[t].join(",") + ";" + bits.join(","));
+                }
+                try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+            }
+
+            function applySavedSettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+                if (!raw) return;
+                var parts = String(raw).split("|");
+                if (parts[0] !== "v1" || parts.length !== 6 + TYPES.length) return;
+                var type = parseInt(parts[1], 10);
+                if (isFinite(type) && type >= 0 && type < TYPES.length) typeIndex = type;
+                var width = parseNumber(parts[2]);
+                if (width !== null && width >= 0 && width <= WIDTH_MAX) strokeWidthPt = width;
+                keepRect = parts[3] !== "0";
+                var offX = parseNumber(parts[4]), offY = parseNumber(parts[5]);
+                if (offX !== null && Math.abs(offX) <= POSITION_LIMIT_MM) offsetXmm = offX;
+                if (offY !== null && Math.abs(offY) <= POSITION_LIMIT_MM) offsetYmm = offY;
+                // 종류별 값은 개수와 범위가 맞는 것만 살린다
+                for (var t = 0; t < TYPES.length; t++) {
+                    var halves = parts[6 + t].split(";");
+                    var numbers = halves[0] === "" ? [] : halves[0].split(",");
+                    var bits = (halves.length < 2 || halves[1] === "") ? [] : halves[1].split(",");
+                    if (numbers.length !== TYPES[t].params.length || bits.length !== TYPES[t].flags.length) continue;
+                    var restored = [], ok = true;
+                    for (var i = 0; i < numbers.length; i++) {
+                        var value = parseNumber(numbers[i]);
+                        if (value === null || value < TYPES[t].params[i].min || value > TYPES[t].params[i].max) { ok = false; break; }
+                        restored.push(value);
+                    }
+                    if (!ok) continue;
+                    values[t] = restored;
+                    for (i = 0; i < bits.length; i++) flagValues[t][i] = bits[i] === "1";
+                }
+            }
+
+            // -------------------------------------------------------
+            // 선택
+            // -------------------------------------------------------
+            function getSelectedRectangle(selection) {
+                if (!selection || selection.length !== 1) return null;
+                var item = selection[0];
+                if (!item || item.typename !== "PathItem" || item.guides || item.clipping) return null;
+                if (!item.closed || !item.pathPoints || item.pathPoints.length !== 4) return null;
+                var xs = [];
+                var ys = [];
+                for (var i = 0; i < 4; i++) {
+                    var point = item.pathPoints[i];
+                    if (point.leftDirection[0] !== point.anchor[0] ||
+                            point.leftDirection[1] !== point.anchor[1] ||
+                            point.rightDirection[0] !== point.anchor[0] ||
+                            point.rightDirection[1] !== point.anchor[1]) return null;
+                    pushDistinct(xs, point.anchor[0]);
+                    pushDistinct(ys, point.anchor[1]);
+                }
+                if (xs.length !== 2 || ys.length !== 2) return null;
+                return item;
+            }
+
+            function pushDistinct(list, value) {
+                for (var i = 0; i < list.length; i++) {
+                    if (Math.abs(list[i] - value) < 0.01) return;
+                }
+                list.push(value);
+            }
+
+            // -------------------------------------------------------
+            // 다이얼로그 부품
+            // -------------------------------------------------------
+            function addPanel(parent, title) {
+                var panel = parent.add("panel", undefined, title);
+                panel.orientation = "column";
+                panel.alignChildren = "left";
+                panel.spacing = 4;
+                panel.margins = [10, 14, 10, 8];
+                return panel;
+            }
+
+            // 숫자 조절 행: 라벨 (단위): | 입력창 | 스크롤바(‹ › 내장)
+            function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.spacing = 6;
+                var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
+                label.preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, formatValue(value));
+                input.characters = 6;
+                input.justify = "center";
+                var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+                slider.stepdelta = step;
+                slider.jumpdelta = step * 10;
+                slider.preferredSize.width = SLIDER_WIDTH;
+
+                var field = {row: row, label: label, input: input, slider: slider, step: step,
+                    minimum: minimum, maximum: maximum, syncing: false};
+
+                slider.onChanging = function() {
+                    if (field.syncing) return;
+                    input.text = formatValue(clampValue(roundToStep(slider.value, field.step), field.minimum, field.maximum));
+                    commitField(field);
+                };
+                input.onChanging = function() { commitField(field); };
+                input.onChange = function() {
+                    var parsed = parseNumber(input.text);
+                    if (parsed === null) parsed = field.minimum;
+                    parsed = clampValue(parsed, field.minimum, field.maximum);
+                    input.text = formatValue(parsed);
+                    syncSlider(field, parsed);
+                    commitField(field);
+                };
+                return field;
+            }
+
+            function commitField(field) {
+                if (field.onCommit) field.onCommit();
+                else updatePreview();
+            }
+
+            function bindOffsetField(field, isX) {
+                field.onCommit = function() {
+                    var value = parseNumber(field.input.text);
+                    if (value === null) return;
+                    value = clampValue(value, field.minimum, field.maximum);
+                    var delta = (value - (isX ? offsetXmm : offsetYmm)) * MM;
+                    if (isX) offsetXmm = value;
+                    else offsetYmm = value;
+                    if (delta === 0 || previewGroup === null) return;
+                    moveItem(previewGroup, isX ? delta : 0, isX ? 0 : delta);
+                    app.redraw();
+                };
+            }
+
+            function moveItem(item, deltaX, deltaY) {
+                if (item === null || (deltaX === 0 && deltaY === 0)) return;
+                try { item.translate(deltaX, deltaY); } catch (e) {}
+            }
+
+            // 슬라이더 범위를 넘는 값은 입력칸에만 남기고 슬라이더는 끝에 붙여 둔다
+            function syncSlider(field, value) {
+                field.syncing = true;
+                field.slider.value = clampValue(value, field.slider.minvalue, field.slider.maxvalue);
+                field.syncing = false;
+            }
+
+            function clampValue(value, minimum, maximum) {
+                if (value < minimum) return minimum;
+                if (value > maximum) return maximum;
+                return value;
+            }
+
+            function roundToStep(value, step) {
+                return Math.round(value / step) * step;
+            }
+
+            function parseNumber(text) {
+                var normalized = String(text).replace(/,/g, ".").replace(/^\s+|\s+$/g, "");
+                if (normalized === "") return null;
+                var value = Number(normalized);
+                return isFinite(value) ? value : null;
+            }
+
+            function formatValue(value) {
+                return String(Math.round(value * 100) / 100);
             }
             return null;
         }
