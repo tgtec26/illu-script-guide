@@ -12,6 +12,8 @@ try {
 // 입자 모형: 원자·분자·이온 결합 모형 생성기를 한 창의 탭으로 묶었다.
 // 옵션(핵 전하량·전자 기호·껍질 선·3D 조명)과 크기(1껍질 지름·핵·전자·글자)는 세 탭이 같이 쓴다.
 // 정원 하나를 선택하고 실행하면 그 원을 최외곽 껍질로 삼아 크기를 맞추고, 생성 시 원은 지운다.
+// 탭마다 '임시 생성하기'로 모형을 확정해 두고 '완료하기'로 닫으면 여러 탭의 모형을 한 번에 만든다.
+// 임시 생성한 모형은 완료 전까지 살아 있어, 공통 옵션·크기를 바꾸면 함께 다시 그려진다.
 (function() {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
 
@@ -135,13 +137,15 @@ try {
         prevNucleus = sldNucleus.value; // 핵 지름이 함께 바뀌었으므로 기준 갱신
         sldOverall.syncLabel();
     };
-    sldOverall.onChange = function() { sldOverall.syncLabel(); updatePreview(); };
+    sldOverall.onChange = function() { sldOverall.syncLabel(); updateShared(); };
     sldNucleus.onChanging = function() {
         scaleSlider(sldChargeFont, sldNucleus.value / prevNucleus);
         prevNucleus = sldNucleus.value;
         sldNucleus.syncLabel();
     };
-    sldNucleus.onChange = function() { sldNucleus.syncLabel(); updatePreview(); };
+    sldNucleus.onChange = function() { sldNucleus.syncLabel(); updateShared(); };
+    sldElectron.onChange = function() { sldElectron.syncLabel(); updateShared(); };
+    sldChargeFont.onChange = function() { sldChargeFont.syncLabel(); updateShared(); };
 
     // --- 위치 (미리보기를 다시 그리지 않고 옮긴다) ---
     var pnlPosition = win.add("panel", undefined, "위치");
@@ -160,6 +164,7 @@ try {
         if (isX) offsetXmm = value;
         else offsetYmm = value;
         if (delta === 0) return;
+        pending = true;
         translateItems(previewItems, isX ? delta : 0, isX ? 0 : delta);
         try { app.redraw(); } catch (e) {}
     }
@@ -168,13 +173,22 @@ try {
         for (var i = 0; i < items.length; i++) { try { items[i].translate(deltaX, deltaY); } catch (e) {} }
     }
 
-    var btnGenerate = win.add("button", undefined, "모형 생성하기", {name: "ok"});
+    // --- 버튼: 임시 생성(창을 유지한 채 현재 탭 모형을 확정) / 완료(미리보기 중인 모형까지 생성하고 닫기) ---
+    var footer = win.add("group");
+    var lblStaged = footer.add("statictext", undefined, "임시 생성 0개");
+    lblStaged.preferredSize.width = 90;
+    var footerSpacer = footer.add("group");
+    footerSpacer.alignment = ["fill", "center"];
+    var btnStage = footer.add("button", undefined, "임시 생성하기");
+    var btnFinish = footer.add("button", undefined, "완료하기", {name: "ok"});
     // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
     try { win.defaultElement = null; } catch (defaultError) {}
-    btnGenerate.preferredSize.height = 40;
+    btnStage.preferredSize.height = 40;
+    btnFinish.preferredSize.height = 40;
 
     // --- 아트보드 실시간 미리보기 (Object_sphere 방식) ---
     var previewItems = [];
+    var pending = false; // 미리보기 중인 모형이 아직 문서에 확정되지 않았으면 true (중복 생성 방지)
     function clearPreview() {
         for (var i = 0; i < previewItems.length; i++) { try { previewItems[i].remove(); } catch (e) {} }
         previewItems = [];
@@ -193,6 +207,7 @@ try {
     }
     function updatePreview() {
         if (app.documents.length === 0) return;
+        pending = true;
         clearPreview();
         if (chkPreview.value && engine.selectedCount() > 0) {
             // 그리기 도중 오류(MRAP 등)가 나도 남은 조각을 제거할 수 있도록,
@@ -209,12 +224,63 @@ try {
         try { app.redraw(); } catch (e) {}
     }
 
-    // 컨트롤 변경 시 미리보기 갱신
-    chkNucleus.onClick = updatePreview;
-    chkShowMinus.onClick = updatePreview;
-    chkShellLine.onClick = updatePreview;
-    chkLit3DNucleus.onClick = updatePreview;
-    chkLit3DElectron.onClick = updatePreview;
+    // --- 임시 생성한 모형: 완료 전까지 살아 있어 공통 옵션·크기가 바뀌면 함께 다시 그린다 ---
+    // 탭별 옵션은 확정 시점의 값을 스냅샷으로 들고, 위치는 화면 중심 기준 이동량(pt)으로 기억한다.
+    // 다시 그릴 때는 그 탭의 컨트롤에 스냅샷을 잠시 넣고 그린 뒤 현재 값으로 되돌린다
+    var staged = []; // { engine, fields, overall, dx, dy, holder }
+    var stagedRedrawWarned = false;
+    // 그리기 도중 오류(MRAP 등)가 나면 조각이 남으므로, 새 그림을 끝까지 그린 뒤에만 이전 그림을 지운다.
+    // 실패하면 조각을 지우고 한 번 다시 시도하고, 그래도 실패하면 이전 그림을 그대로 둔다
+    function drawStaged(rec) {
+        var eng = rec.engine;
+        var current = eng.saveFields();
+        eng.restoreFields(rec.fields);
+        eng.scaleWith(sldOverall.value / rec.overall); // 1껍질 지름 연동(탭별 크기)을 스냅샷에도 적용
+        var fresh = null, error = null;
+        for (var attempt = 0; attempt < 2 && !fresh; attempt++) {
+            try {
+                fresh = app.activeDocument.activeLayer.groupItems.add();
+                eng.draw(fresh, false);
+                fresh.translate(rec.dx, rec.dy);
+            } catch (e) {
+                error = e;
+                try { fresh.remove(); } catch (e2) {}
+                fresh = null;
+                try { app.redraw(); } catch (e3) {}
+            }
+        }
+        if (fresh) {
+            if (rec.holder) { try { rec.holder.remove(); } catch (e) {} }
+            rec.holder = fresh;
+        } else if (!stagedRedrawWarned) {
+            stagedRedrawWarned = true;
+            alert("임시 생성한 모형을 그리는 중 오류가 나서 이번 갱신을 건너뜁니다.\n" + error);
+        }
+        eng.restoreFields(current);
+        syncSliderLabels();
+    }
+    function updateShared() {
+        for (var i = 0; i < staged.length; i++) drawStaged(staged[i]);
+        updatePreview();
+    }
+    // 완료·취소 시 홀더 그룹을 풀어 최종 생성과 같은 구조(원자·분자·화합물 그룹)로 남긴다
+    function finalizeStaged() {
+        for (var i = 0; i < staged.length; i++) {
+            var holder = staged[i].holder;
+            if (!holder) continue;
+            try {
+                for (var n = holder.pageItems.length; n > 0; n--) holder.pageItems[n - 1].move(holder, ElementPlacement.PLACEAFTER);
+                holder.remove();
+            } catch (e) {}
+        }
+    }
+
+    // 컨트롤 변경 시 미리보기 갱신. 공통 옵션은 임시 생성한 모형도 함께 갱신
+    chkNucleus.onClick = updateShared;
+    chkShowMinus.onClick = updateShared;
+    chkShellLine.onClick = updateShared;
+    chkLit3DNucleus.onClick = updateShared;
+    chkLit3DElectron.onClick = updateShared;
     chkPreview.onClick = updatePreview;
 
     tabs.onChange = function() {
@@ -235,7 +301,7 @@ try {
     var PREF_KEY = "ParticleModel/settings";
     var LEGACY_SHARED_KEY = "ModelMakerShared/settings"; // 탭으로 묶기 전 세 스크립트가 공유하던 공통 옵션. 새 키가 비었을 때만 읽는다
     function collectSettings() {
-        var parts = ["v1", tabIndex,
+        var parts = ["v2", tabIndex,
             chkNucleus.value ? "1" : "0",
             chkShowMinus.value ? "1" : "0",
             chkShellLine.value ? "1" : "0",
@@ -261,7 +327,7 @@ try {
         var p = String(raw).split("|");
         var expected = 14;
         for (var i = 0; i < engines.length; i++) expected += engines[i].fieldCount;
-        if (p[0] !== "v1" || p.length !== expected) return;
+        if (p[0] !== "v2" || p.length !== expected) return;
         try {
             tabIndex = restoreInteger(p[1], 0, 0, engines.length - 1);
             chkNucleus.value = (p[2] === "1");
@@ -321,9 +387,31 @@ try {
         return value;
     }
 
-    // 생성 버튼: 검증 후 설정 저장하고 닫는다. 실제 생성은 show() 반환 후 처리
-    btnGenerate.onClick = function() {
+    // 현재 탭의 모형을 문서에 최종 생성한다(가이드 원 삭제 포함). 미리보기는 먼저 지워 둔 상태여야 한다
+    function commitModel() {
+        try { translateItems(engine.draw(app.activeDocument.activeLayer, true), offsetXmm * MM, offsetYmm * MM); } catch (e) { alert("생성 오류: " + e); }
+        try { app.redraw(); } catch (e) {}
+    }
+    // 임시 생성: 현재 탭 모형을 스냅샷으로 확정하고 창은 그대로 둔다. 직전 확정 뒤 바뀐 것이 없으면 중복 생성하지 않는다
+    btnStage.onClick = function() {
         if (engine.selectedCount() === 0) { alert(engine.emptyMessage); return; }
+        if (!pending) return;
+        var g = detectGuideCircle();
+        var center = app.activeDocument.activeView.centerPoint;
+        var rec = { engine: engine, fields: engine.saveFields(), overall: sldOverall.value,
+            dx: offsetXmm * MM + (g ? g.cx - center[0] : 0), dy: offsetYmm * MM + (g ? g.cy - center[1] : 0), holder: null };
+        if (g) { try { g.item.remove(); } catch (e) {} } // 가이드 원은 첫 확정 때 지운다. 이후 미리보기는 화면 중심 기준
+        clearPreview();
+        staged.push(rec);
+        drawStaged(rec);
+        saveSettings();
+        lblStaged.text = "임시 생성 " + staged.length + "개";
+        updatePreview(); // 다음 모형의 미리보기는 같은 자리에 다시 그린다. 확정 직후이므로 pending은 내린다
+        pending = false;
+    };
+    // 완료: 설정 저장하고 닫는다. 미리보기 중인 모형의 실제 생성은 show() 반환 후 처리
+    btnFinish.onClick = function() {
+        if (staged.length === 0 && engine.selectedCount() === 0) { alert(engine.emptyMessage); return; }
         saveSettings();
         win.close(1);
     };
@@ -361,13 +449,12 @@ try {
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     var result = win.show();
 
-    // 미리보기 정리 후, 확인(1)일 때만 최종 오브젝트 생성(가이드 원 삭제 포함)
+    // 미리보기 정리 후, 완료(1)이고 미리보기 중인 모형이 아직 확정되지 않았을 때만 최종 생성(가이드 원 삭제 포함).
+    // 임시 생성한 모형은 취소해도 그대로 남긴다(홀더 그룹만 푼다)
     clearPreview();
+    finalizeStaged();
     try { app.redraw(); } catch (e) {} // 미리보기 잔여 제거를 먼저 반영해 깨끗한 상태에서 생성
-    if (result === 1 && app.documents.length > 0) {
-        try { translateItems(engine.draw(app.activeDocument.activeLayer, true), offsetXmm * MM, offsetYmm * MM); } catch (e) { alert("생성 오류: " + e); }
-        try { app.redraw(); } catch (e) {}
-    }
+    if (result === 1 && pending && app.documents.length > 0) commitModel();
 
     // ---- 다이얼로그 도우미 ------------------------------------------------
 
@@ -376,7 +463,7 @@ try {
         var g = parent.add("group");
         g.spacing = 3;
         var lab = g.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
-        lab.preferredSize.width = 90;
+        lab.preferredSize.width = 120; // "핵 전하량 글자 (pt):"가 잘리지 않는 폭
         var input = g.add("edittext", undefined, "");
         input.characters = 5;
         var s = g.add("scrollbar", undefined, initV, minV, maxV);
@@ -456,17 +543,18 @@ try {
         // 1. 데이터 정의
         var elements = ["H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar"];
         var chargeLabels = ["-3", "-2", "-1", "0", "+1", "+2", "+3"];
-        var checkBoxes, chargeRadios, chkHorizontalFirst, chkRotateShell2, chkRotateShell3;
+        var checkBoxes, chargeRadios, sldIonFont, chkHorizontalFirst, chkRotateShell2, chkRotateShell3;
 
         var api = {
             label: "원자",
             emptyMessage: "원소를 선택하세요.",
-            fieldCount: 5,
+            fieldCount: 6,
             addRows: addRows,
             selectedCount: function() { return countChecked(checkBoxes); },
             maxShells: maxShells,
             draw: drawWith,
-            scaleWith: function() {},
+            // 전체 크기 연동: 이온 전하 글자도 같은 비율로
+            scaleWith: function(r) { scaleSlider(sldIonFont, r); },
             saveFields: saveFields,
             restoreFields: restoreFields
         };
@@ -476,13 +564,16 @@ try {
 
             // --- 이온 전하 패널 ---
             var pnlCharge = page.add("panel", undefined, "이온 전하");
-            pnlCharge.orientation = "row";
+            pnlCharge.alignChildren = "left";
+            pnlCharge.spacing = 2;
+            var chargeRow = pnlCharge.add("group");
             chargeRadios = [];
             for (var j = 0; j < chargeLabels.length; j++) {
-                chargeRadios[j] = pnlCharge.add("radiobutton", undefined, chargeLabels[j]);
+                chargeRadios[j] = chargeRow.add("radiobutton", undefined, chargeLabels[j]);
                 chargeRadios[j].onClick = updatePreview;
                 if (chargeLabels[j] === "0") chargeRadios[j].value = true;
             }
+            sldIonFont = addSlider(pnlCharge, "이온 전하 글자", 1, 20, 6, "pt", 0.1);
 
             // --- 배치 옵션 ---
             var pnlLayout = page.add("panel", undefined, "배치");
@@ -512,7 +603,7 @@ try {
             return drawAtomModel(sel.join(","), String(currentCharge()), chkNucleus.value,
                 chkHorizontalFirst.value, chkRotateShell2.value, chkRotateShell3.value, chkShowMinus.value,
                 chkLit3DNucleus.value, chkLit3DElectron.value, chkShellLine.value,
-                sldOverall.value, sldNucleus.value, sldElectron.value, sldChargeFont.value, targetLayer, consumeGuide);
+                sldOverall.value, sldNucleus.value, sldElectron.value, sldChargeFont.value, sldIonFont.value, targetLayer, consumeGuide);
         }
         // 선택된 원소의 최대 껍질 수 (가이드 원 환산용). 선택이 없으면 3
         function maxShells() {
@@ -532,7 +623,7 @@ try {
             var ci = 3;
             for (var r = 0; r < chargeRadios.length; r++) if (chargeRadios[r].value) { ci = r; break; }
             return [checkedString(checkBoxes), ci, chkHorizontalFirst.value ? "1" : "0",
-                chkRotateShell2.value ? "1" : "0", chkRotateShell3.value ? "1" : "0"];
+                chkRotateShell2.value ? "1" : "0", chkRotateShell3.value ? "1" : "0", sldIonFont.value];
         }
         function restoreFields(f) {
             restoreChecked(checkBoxes, f[0]);
@@ -541,11 +632,12 @@ try {
             chkHorizontalFirst.value = (f[2] === "1");
             chkRotateShell2.value = (f[3] === "1");
             chkRotateShell3.value = (f[4] === "1");
+            restoreSlider(sldIonFont, f[5]);
         }
 
         // 3. 핵심 그리기 로직
         // 3. 핵심 그리기 로직 (추가된 파라미터 적용)
-        function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateShell2, optRotateShell3, optShowMinus, optLit3DNucleus, optLit3DElectron, optShellLine, outerMM, nucMM, elecMM, fontPt, targetLayer, consumeGuide) {
+        function drawAtomModel(atomicNumbersStr, ionChargeStr, showNucleusTextStr, optHorizontalFirst, optRotateShell2, optRotateShell3, optShowMinus, optLit3DNucleus, optLit3DElectron, optShellLine, outerMM, nucMM, elecMM, fontPt, ionFontPt, targetLayer, consumeGuide) {
             if (app.documents.length === 0) return [];
 
             var atomStrings = atomicNumbersStr.split(",");
@@ -747,7 +839,7 @@ try {
                     var lbl = atomGroup.textFrames.add();
                     var absC = Math.abs(ionCharge);
                     lbl.contents = (absC > 1 ? absC : "") + (ionCharge > 0 ? "+" : "-");
-                    lbl.textRange.characterAttributes.size = 6; // 이온 전하량 글자: 6pt 고정
+                    lbl.textRange.characterAttributes.size = ionFontPt;
                     // 이온 전하량 서체 적용
                     try { lbl.textRange.characterAttributes.textFont = app.textFonts.getByName(fontName); } catch(e) {}
 
