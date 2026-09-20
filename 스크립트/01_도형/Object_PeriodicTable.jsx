@@ -19,7 +19,8 @@ try {
       그 안에 경사 폭만큼 들인 윗면(왼쪽 위→오른쪽 아래로 밝아짐)을 놓아 얇은 키캡처럼 보입니다.
       윗면 라운딩은 바깥 라운딩에 비례합니다. 끄면 평면입니다
     - '테두리'를 켜면 셀마다 검은 선을 두릅니다
-    - 1행 1열에는 대각선과 '족'·'주기' 글자가 들어갑니다
+    - 1행 1열에는 대각선과 '족'·'주기' 글자가 들어갑니다. 대각선은 곧은 사선 또는
+      사선·수평·사선(가운데 1/3을 가운데 높이에서 수평으로)으로 고릅니다
     - 글자는 한글=Spoqa, 숫자·영문=GSMediumB1 규칙을 글자마다 적용합니다
   사용법: 그냥 실행하면 화면 중앙에 만듭니다
 */
@@ -110,6 +111,13 @@ try {
     raisedCheck.helpTip = "왼·위는 밝고 오른·아래는 어두운 경사면을 둘러 얇은 키캡처럼 보이게 합니다";
     var borderCheck = styleRow.add("checkbox", undefined, "테두리");
     borderCheck.value = options.border;
+    var diagonalRow = stylePanel.add("group");
+    var diagonalCaption = diagonalRow.add("statictext", undefined, "대각선:");
+    diagonalCaption.preferredSize.width = 85;
+    var straightRadio = diagonalRow.add("radiobutton", undefined, "사선");
+    var bentRadio = diagonalRow.add("radiobutton", undefined, "사선·수평·사선");
+    straightRadio.value = !options.bentDiagonal;
+    bentRadio.value = options.bentDiagonal;
     addRow(stylePanel, "경사 폭", "depth", 0.1, 3, "mm", 0.1);
     addRow(stylePanel, "선 두께", "strokeW", 0.1, 3, "pt", 0.1);
     addRow(stylePanel, "머리글 음영", "headK", 0, 100, "K", 5);
@@ -149,6 +157,14 @@ try {
     };
     borderCheck.onClick = function() {
         options.border = borderCheck.value;
+        updatePreview();
+    };
+    straightRadio.onClick = function() {
+        options.bentDiagonal = false;
+        updatePreview();
+    };
+    bentRadio.onClick = function() {
+        options.bentDiagonal = true;
         updatePreview();
     };
     previewCheck.onClick = function() {
@@ -552,16 +568,17 @@ try {
                 } else {
                     drawShape(g.groupItems[0], outer, rect, radius, bevel, kind, fills);
                 }
-                if (cell.kind === "corner") {
-                    var diagonal = findNamed(g.pathItems, "diagonal");
-                    writePath(diagonal, diagonalPoints(rect,
-                        options.raised ? radius * INNER_RADIUS_RATIO : radius), false);
-                    diagonal.filled = false;
-                    diagonal.stroked = true;
-                    diagonal.strokeWidth = 0.3;
-                    diagonal.strokeColor = lineColor;
-                    diagonal.strokeCap = StrokeCap.BUTTENDCAP;
-                }
+            }
+            // 대각선은 모양이 바뀌었거나 사선·꺾은 선 선택이 바뀐 때만 다시 쓴다
+            if (cell.kind === "corner" && (changed || last.bent !== options.bentDiagonal)) {
+                var diagonal = findNamed(g.pathItems, "diagonal");
+                writePath(diagonal, diagonalPoints(rect,
+                    options.raised ? radius * INNER_RADIUS_RATIO : radius, options.bentDiagonal), false);
+                diagonal.filled = false;
+                diagonal.stroked = true;
+                diagonal.strokeWidth = 0.3;
+                diagonal.strokeColor = lineColor;
+                diagonal.strokeCap = StrokeCap.BUTTENDCAP;
             }
             if (!prototypes[shapeKey]) {
                 prototypes[shapeKey] = { shape: g.groupItems[0], left: outer.left, top: outer.top };
@@ -578,7 +595,8 @@ try {
                         rect.left + rect.width / 2, rect.top - rect.height / 2);
                 }
             }
-            cellGeomKeys[cell.key] = { shape: shapeKey, left: outer.left, top: outer.top, font: options.fontSize };
+            cellGeomKeys[cell.key] = { shape: shapeKey, left: outer.left, top: outer.top, font: options.fontSize,
+                bent: options.bentDiagonal };
         }
     }
 
@@ -808,8 +826,12 @@ try {
 
     // 대각선과 실제 윗면의 왼쪽 위 베지어 곡선이 만나는 점을 찾는다.
     // roundedRectangle과 같은 반지름 제한·손잡이(0.55r, 여기선 0.5523r)를 써서 큰 라운딩에서도 패스에 닿는다.
-    function diagonalPoints(rect, radius) {
+    // bent면 사선·수평·사선: 가운데 1/3을 가운데 높이에서 수평으로 두고 양쪽 사선이 모서리로 나간다.
+    // 왼쪽 위 모서리에서 (dx, dy) 방향으로 나가는 첫 사선이 곡선과 만나는 점을 찾고, 오른쪽 아래는 점대칭
+    function diagonalPoints(rect, radius, bent) {
         var r = Math.max(0, Math.min(radius, rect.width / 2, rect.height / 2));
+        var dx = bent ? rect.width / 3 : rect.width;
+        var dy = bent ? rect.height / 2 : rect.height;
         var x = 0;
         var y = 0;
         if (r > 0) {
@@ -821,12 +843,17 @@ try {
                 var u = 1 - t;
                 x = 3 * u * t * t * (r - k) + t * t * t * r;
                 y = u * u * u * r + 3 * u * u * t * (r - k);
-                if (y * rect.width > x * rect.height) low = t;
+                if (y * dx > x * dy) low = t;
                 else high = t;
             }
         }
-        return [corner(rect.left + x, rect.top - y),
-            corner(rect.left + rect.width - x, rect.top - rect.height + y)];
+        var points = [corner(rect.left + x, rect.top - y)];
+        if (bent) {
+            points.push(corner(rect.left + rect.width / 3, rect.top - rect.height / 2));
+            points.push(corner(rect.left + rect.width * 2 / 3, rect.top - rect.height / 2));
+        }
+        points.push(corner(rect.left + rect.width - x, rect.top - rect.height + y));
+        return points;
     }
 
     function corner(x, y) {
@@ -882,10 +909,11 @@ try {
         var result = { groups: "1, 2, 13~18", periods: [true, true, true, true, false],
             cellW: 15, cellH: 12, gap: 1, radius: 0.7, headRowH: 12, headColW: 15,
             raised: true, border: false, depth: 1.2, strokeW: 0.3, headK: 20, bodyK: 10,
-            fontSize: 10, offsetX: 0, offsetY: 0, preview: true };
+            fontSize: 10, offsetX: 0, offsetY: 0, preview: true, bentDiagonal: false };
         try {
             var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-            if (p[0] !== "v1" || p.length !== 19) return result;
+            // v1은 19항목, v2는 뒤에 대각선 종류(0 사선, 1 사선·수평·사선)가 붙는다
+            if (!(p[0] === "v1" && p.length === 19) && !(p[0] === "v2" && p.length === 20)) return result;
             var keys = ["cellW", "cellH", "gap", "radius", "headRowH", "headColW", "depth", "strokeW",
                 "headK", "bodyK", "fontSize", "offsetX", "offsetY"];
             var mins = [5, 5, 0, 0, 5, 5, 0.1, 0.1, 0, 0, 4, -100, -100];
@@ -897,12 +925,14 @@ try {
             }
             if (parseGroups(p[1]) === null || !/^[01]{5}$/.test(p[2])) return result;
             if (!/^[01]$/.test(p[16]) || !/^[01]$/.test(p[17]) || !/^[01]$/.test(p[18])) return result;
+            if (p.length === 20 && !/^[01]$/.test(p[19])) return result;
             result.groups = p[1];
             for (var j = 0; j < MAX_PERIOD; j++) result.periods[j] = p[2].charAt(j) === "1";
             for (var k = 0; k < keys.length; k++) result[keys[k]] = Number(p[k + 3]);
             result.raised = p[16] === "1";
             result.border = p[17] === "1";
             result.preview = p[18] === "1";
+            result.bentDiagonal = p[19] === "1";
         } catch (e) {}
         return result;
     }
@@ -911,11 +941,12 @@ try {
         try {
             var flags = "";
             for (var i = 0; i < MAX_PERIOD; i++) flags += options.periods[i] ? "1" : "0";
-            app.preferences.setStringPreference(PREF_KEY, ["v1", options.groups, flags,
+            app.preferences.setStringPreference(PREF_KEY, ["v2", options.groups, flags,
                 options.cellW, options.cellH, options.gap, options.radius, options.headRowH, options.headColW,
                 options.depth, options.strokeW, options.headK, options.bodyK, options.fontSize,
                 options.offsetX, options.offsetY,
-                options.raised ? 1 : 0, options.border ? 1 : 0, options.preview ? 1 : 0].join("|"));
+                options.raised ? 1 : 0, options.border ? 1 : 0, options.preview ? 1 : 0,
+                options.bentDiagonal ? 1 : 0].join("|"));
         } catch (e) {}
     }
 

@@ -2879,9 +2879,11 @@ for (const file of cabinetFiles) {
   roundedRectPath(rectGroup, {left: 0, top: 10, width: 20, height: 10}, 50);
   assert.deepStrictEqual(rectCalls, [['rectangle', 10, 0, 20, 10], ['roundedRectangle', 10, 0, 20, 10, 2, 2],
     ['roundedRectangle', 10, 0, 20, 10, 5, 5]], `${file} rounded rect via one DOM call, radius clamped`);
-  assert.ok(source.includes('p[0] !== "v1" || p.length !== 19'), `${file}: settings string must be v1 with 19 fields`);
-  const saveArgs = source.match(/\["v1", options\.groups, flags,([\s\S]*?)\]\.join\("\|"\)/)[1].split(",").length;
-  assert.strictEqual(saveArgs, 16, `${file}: saveSettings writes 16 fields after groups and flags`);
+  // v1(19항목)은 그대로 읽고, v2는 뒤에 대각선 종류가 붙어 20항목이다
+  assert.ok(source.includes('!(p[0] === "v1" && p.length === 19) && !(p[0] === "v2" && p.length === 20)'),
+    `${file}: settings string must be v1 with 19 fields or v2 with 20`);
+  const saveArgs = source.match(/\["v2", options\.groups, flags,([\s\S]*?)\]\.join\("\|"\)/)[1].split(",").length;
+  assert.strictEqual(saveArgs, 17, `${file}: saveSettings writes 17 fields after groups and flags`);
 }
 
 process.exit(failures === 0 ? 0 : 1);
