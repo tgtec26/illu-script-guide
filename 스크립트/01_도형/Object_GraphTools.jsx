@@ -24,8 +24,9 @@ try {
     for (var selIndex = 0; sel && selIndex < sel.length; selIndex++) selectedItems.push(sel[selIndex]);
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
-    // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
-    var engines = [makeAxisTicksEngine(), makeGraphMarkersEngine(), makeTableEngine(), makeDashedGridEngine(), makeModelCurvesEngine()];
+    // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true /
+    // standalone: 선택이 없어도 되는 탭. 저장된 탭이 선택에 맞지 않을 때 선택을 쓰는 탭 뒤로 미룬다
+    var engines = [makeAxisTicksEngine(), makeGraphMarkersEngine(), makeTableEngine(), makeDashedGridEngine(), makeModelCurvesEngine(), makeSolarSpectrumEngine()];
 
     var win = new Window("dialog", "그래프·표");
     win.orientation = "column";
@@ -57,15 +58,17 @@ try {
     try { win.defaultElement = null; } catch (defaultError) {}
     var cancelButton = footer.add("button", undefined, "취소", {name: "cancel"});
 
-    // 저장된 탭이 선택에 맞지 않으면 선택을 쓰는 탭부터(뒤에서부터) 가능한 탭을 연다
+    // 저장된 탭이 선택에 맞지 않으면 선택을 쓰는 탭부터(뒤에서부터) 가능한 탭을 열고, 선택이 필요 없는 탭은 그다음이다
     var tabIndex = 0;
     try {
         var savedTab = parseInt(app.preferences.getStringPreference(TAB_PREF_KEY), 10);
         if (isFinite(savedTab) && savedTab >= 0 && savedTab < engines.length) tabIndex = savedTab;
     } catch (tabError) {}
-    if (engines[tabIndex].error) {
+    for (var pass = 0; pass < 2 && engines[tabIndex].error; pass++) {
         for (engineIndex = engines.length - 1; engineIndex >= 0; engineIndex--) {
-            if (!engines[engineIndex].error) { tabIndex = engineIndex; break; }
+            if (engines[engineIndex].error || (pass === 0 && engines[engineIndex].standalone)) continue;
+            tabIndex = engineIndex;
+            break;
         }
     }
     // 어느 탭도 선택에 맞지 않으면 여기서 끝낸다 — 꺼진 탭을 tabs.selection에 넣으면 ScriptUI가 유형 오류를 던진다
@@ -2657,6 +2660,1070 @@ try {
 
             function formatValue(value) {
                 return String(Math.round(value * 100) / 100);
+            }
+            return null;
+        }
+        return api;
+    }
+
+    // ==== 태양 스펙트럼 ====
+    // 대기 밖과 지표면에서의 태양 복사 에너지 스펙트럼 그래프.
+    //   - 데이터: ASTM G173-03 표준 스펙트럼(NREL). 대기 밖 = extraterrestrial, 지표면 = global tilt(AM1.5), 5 nm 간격.
+    //     200~275 nm의 대기 밖 값은 ASTM E490 값으로 보강해 곡선이 0 근처에서 시작한다.
+    //   - 단순화: 가우시안 평활(σ, nm). 고정점은 Douglas-Peucker로 줄이고 핸들은 Catmull-Rom으로 잇는다.
+    //   - 흡수 영역: 지표면 곡선의 어깨(투과율 극대) 사이 골짜기를 닫힌 면으로 만든다.
+    //     자외선(오존)과 적외선(수증기·CO₂)은 색이 다르고, 위쪽 경계는 대기 밖 곡선 또는 포락선 중 고른다.
+    // 선택이 없어도 동작한다(화면 중앙). 사각형 하나를 선택하면 그 사각형이 그래프 영역이 되고 확인할 때 지워진다.
+    function makeSolarSpectrumEngine() {
+        var api = {label: "태양 스펙트럼", error: null, standalone: true, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        function addRows(page) {
+            var PREF_KEY = "ObjectSolarSpectrum/settings";
+            var MM = 2.834645669;
+            // 화살표 이름은 Illustrator UI 언어를 따른다 (한국어판 기준)
+            var ARROW_NAME = "화살표 1";
+
+            // ASTM G173-03 (NREL) 스펙트럼. 200~4000 nm, 5 nm 간격, 단위 mW/m²/nm
+            var LAMBDA_MIN = 200;
+            var LAMBDA_STEP = 5;
+            var ET_DATA = [
+                11, 17, 23, 40, 58, 62, 67, 65, 63, 67, 70, 100, 130, 181, 232, 157, 82, 176, 563, 527, 458, 642,
+                533, 685, 775, 829, 1110, 1010, 1054, 916, 1012, 1141, 1089, 1097, 1293, 985, 1152, 1080, 1252,
+                1245, 1689, 1715, 1537, 1769, 1599, 1755, 1212, 1709, 1830, 1965, 2069, 2001, 1997, 1984, 1939,
+                2080, 2068, 1979, 2032, 2051, 1916, 1947, 1910, 1875, 1860, 1928, 1892, 1895, 1800, 1874, 1863,
+                1889, 1786, 1849, 1828, 1834, 1834, 1836, 1722, 1778, 1770, 1773, 1724, 1712, 1711, 1644, 1665,
+                1652, 1613, 1627, 1526, 1523, 1558, 1567, 1534, 1499, 1494, 1465, 1479, 1435, 1422, 1433, 1404,
+                1350, 1349, 1347, 1336, 1327, 1283, 1292, 1274, 1277, 1259, 1245, 1215, 1208, 1193, 1187, 1170,
+                1128, 1125, 1100, 1110, 1109, 1074, 1070, 1056, 1048, 1050, 1036, 910, 927, 1000, 974, 977, 936,
+                949, 955, 942, 926, 914, 918, 895, 888, 885, 876, 869, 856, 840, 824, 829, 769, 806, 796, 791, 773,
+                775, 771, 757, 754, 743, 684, 731, 711, 701, 699, 692, 684, 674, 668, 661, 658, 648, 645, 622, 618,
+                623, 612, 604, 583, 600, 591, 587, 582, 569, 570, 564, 563, 556, 550, 546, 547, 529, 535, 529, 519,
+                522, 516, 506, 506, 500, 502, 492, 490, 484, 479, 475, 466, 460, 456, 459, 453, 450, 443, 442, 441,
+                435, 429, 419, 419, 415, 410, 407, 392, 399, 394, 385, 386, 374, 380, 371, 368, 365, 366, 359, 357,
+                357, 352, 347, 348, 339, 340, 340, 337, 333, 333, 323, 327, 313, 319, 318, 312, 314, 312, 310, 303,
+                306, 306, 301, 301, 301, 271, 294, 288, 288, 278, 267, 278, 269, 278, 270, 267, 265, 267, 261, 247,
+                264, 262, 242, 258, 253, 247, 233, 244, 234, 237, 237, 237, 226, 225, 228, 224, 224, 221, 222, 216,
+                206, 213, 208, 211, 205, 204, 199, 202, 198, 197, 193, 182, 190, 186, 185, 185, 182, 181, 180, 176,
+                176, 174, 174, 171, 168, 169, 169, 155, 160, 163, 159, 158, 156, 153, 153, 151, 149, 147, 146, 132,
+                147, 146, 140, 138, 140, 139, 137, 136, 135, 134, 131, 132, 130, 120, 126, 128, 126, 123, 124, 122,
+                120, 119, 120, 117, 117, 115, 115, 114, 112, 112, 110, 109, 107, 108, 106, 105, 103, 102, 101, 101,
+                99, 98, 98, 96, 96, 96, 95, 94, 93, 92, 92, 91, 91, 90, 90, 89, 88, 82, 85, 86, 85, 85, 83, 83, 83,
+                81, 81, 80, 80, 79, 78, 78, 77, 76, 75, 74, 74, 73, 73, 73, 71, 71, 71, 69, 70, 69, 69, 68, 68, 66,
+                66, 66, 65, 65, 64, 63, 63, 63, 62, 61, 62, 59, 60, 60, 60, 59, 59, 57, 58, 57, 57, 56, 56, 56, 55,
+                54, 55, 54, 53, 53, 52, 52, 52, 49, 51, 51, 50, 49, 48, 48, 48, 47, 47, 47, 46, 46, 45, 45, 45, 44,
+                44, 43, 43, 43, 43, 43, 43, 42, 42, 41, 41, 41, 40, 40, 40, 40, 39, 39, 39, 39, 38, 38, 38, 37, 37,
+                37, 37, 37, 36, 36, 36, 36, 36, 35, 35, 35, 35, 34, 34, 34, 34, 33, 33, 33, 33, 33, 32, 32, 32, 32,
+                32, 31, 31, 31, 31, 30, 30, 30, 30, 29, 29, 29, 29, 29, 29, 29, 29, 28, 28, 28, 28, 27, 27, 27, 27,
+                27, 26, 26, 26, 26, 26, 26, 26, 25, 25, 25, 25, 25, 25, 25, 24, 24, 24, 24, 24, 24, 24, 24, 23, 23,
+                23, 23, 23, 23, 22, 22, 22, 22, 22, 22, 21, 21, 21, 21, 21, 21, 21, 21, 21, 20, 20, 20, 20, 20, 20,
+                20, 20, 20, 20, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 18, 18, 18, 18, 18, 18, 18, 18, 18, 17, 17,
+                17, 17, 17, 17, 17, 17, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 15, 15, 15, 15, 15, 15, 15, 15,
+                15, 15, 15, 15, 15, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 13, 13, 13, 13, 13,
+                13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
+                12, 12, 12, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 10, 10, 10,
+                10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+                9, 9, 9, 9, 9, 9, 9, 9
+            ];
+            var GROUND_DATA = [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 16, 51, 136, 205, 279, 471, 464,
+                502, 459, 528, 611, 598, 624, 755, 589, 701, 674, 797, 808, 1114, 1151, 1049, 1226, 1123, 1249,
+                875, 1245, 1350, 1462, 1560, 1522, 1529, 1535, 1508, 1619, 1618, 1568, 1622, 1649, 1545, 1564,
+                1548, 1531, 1524, 1578, 1545, 1554, 1483, 1544, 1540, 1563, 1474, 1520, 1482, 1478, 1502, 1532,
+                1371, 1431, 1475, 1490, 1469, 1470, 1474, 1403, 1392, 1446, 1434, 1457, 1359, 1350, 1399, 1421,
+                1420, 1396, 1397, 1375, 1182, 1271, 1282, 1321, 1318, 1259, 986, 1038, 1129, 1218, 1220, 1250,
+                1234, 1238, 266, 686, 1161, 1177, 1164, 1159, 1091, 1093, 1073, 1055, 1056, 895, 862, 969, 916,
+                1003, 1016, 1017, 894, 913, 988, 963, 968, 927, 940, 944, 924, 814, 743, 817, 625, 678, 744, 711,
+                432, 251, 472, 368, 147, 341, 421, 504, 635, 590, 605, 688, 732, 752, 735, 682, 719, 708, 699, 698,
+                691, 682, 672, 665, 655, 648, 636, 629, 605, 593, 597, 593, 556, 521, 486, 506, 479, 250, 142, 144,
+                71, 15, 256, 146, 122, 313, 286, 389, 459, 452, 441, 407, 462, 447, 448, 437, 453, 428, 458, 462,
+                460, 465, 461, 457, 457, 451, 431, 396, 387, 412, 422, 424, 413, 405, 353, 384, 301, 286, 259, 322,
+                229, 231, 168, 109, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 26, 62, 21, 40, 50, 27, 66, 85,
+                93, 50, 185, 61, 125, 175, 183, 251, 184, 271, 266, 265, 259, 255, 267, 265, 277, 270, 268, 266,
+                267, 242, 240, 245, 259, 242, 258, 238, 237, 218, 241, 234, 238, 237, 234, 215, 218, 225, 222, 223,
+                212, 222, 214, 206, 213, 205, 210, 200, 198, 188, 190, 187, 178, 174, 162, 168, 155, 166, 153, 160,
+                133, 142, 115, 101, 77, 89, 47, 32, 15, 10, 3, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 1, 1, 4, 3, 11, 17, 10, 22, 29, 49, 68, 76, 83, 86, 81, 38, 15, 40, 27, 45, 74, 85, 96,
+                90, 91, 68, 55, 69, 62, 66, 77, 87, 85, 89, 90, 86, 93, 90, 92, 88, 89, 90, 90, 91, 89, 85, 85, 84,
+                76, 82, 80, 82, 75, 79, 79, 71, 74, 79, 76, 78, 75, 76, 74, 73, 71, 72, 68, 67, 68, 65, 64, 66, 63,
+                63, 61, 59, 59, 64, 58, 52, 56, 57, 58, 46, 51, 42, 47, 50, 49, 31, 44, 43, 31, 37, 41, 44, 34, 34,
+                27, 27, 33, 45, 15, 43, 21, 14, 25, 33, 24, 17, 16, 8, 6, 4, 3, 7, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 3, 1, 0, 3, 1, 3, 1, 6, 6, 2, 1, 5, 2, 5, 7, 0, 1, 1, 7, 10, 4, 8, 3, 7, 6, 1, 8, 6, 2, 2, 4, 1,
+                0, 6, 3, 2, 6, 4, 2, 2, 1, 4, 1, 1, 2, 10, 3, 6, 11, 3, 3, 7, 6, 9, 14, 13, 9, 11, 8, 4, 3, 0, 0,
+                0, 0, 2, 0, 0, 7, 4, 1, 3, 10, 1, 2, 1, 6, 3, 11, 9, 1, 2, 4, 4, 0, 0, 4, 5, 9, 3, 4, 8, 4, 5, 7,
+                4, 8, 5, 7, 10, 10, 13, 4, 7, 7, 13, 10, 9, 12, 8, 11, 11, 8, 13, 10, 12, 11, 11, 12, 10, 12, 12,
+                12, 12, 11, 12, 11, 11, 9, 9, 10, 11, 9, 11, 11, 8, 9, 10, 9, 9, 10, 10, 10, 9, 9, 12, 10, 10, 10,
+                11, 11, 10, 11, 11, 10, 8, 5, 8, 9, 10, 10, 11, 11, 9, 9, 10, 11, 9, 9, 9, 10, 9, 9, 9, 9, 9, 9,
+                10, 9, 8, 9, 10, 9, 8, 8, 10, 10, 10, 8, 9, 9, 9, 9, 8, 8, 7, 7, 7, 7, 7, 7, 8, 8, 7, 7, 7, 7, 7,
+                7, 7, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7
+            ];
+
+            // 흡수띠 후보 구간(nm). 양끝은 ±40 nm 안에서 투과율(지표면/대기 밖)이 가장 큰 어깨로 옮긴다.
+            // 산소·수증기 0.72/0.76, 수증기 0.82, 0.94, 1.13, 1.38, 1.87, 수증기·CO₂ 2.5~2.9 µm
+            var NOMINAL_BANDS = [[680, 780], [790, 860], [860, 1010], [1060, 1200], [1280, 1560], [1700, 2100], [2300, 3300]];
+            var SHOULDER_SEARCH_NM = 40;
+            var MIN_BAND_DEPTH = 0.03;      // 포락선 대비 골 깊이가 이보다 얕으면(평활로 사라지면) 면을 만들지 않는다
+            var UV_END_NM = 400;            // 자외선·가시광선 경계
+            var VISIBLE_END_NM = 700;       // 가시광선·적외선 경계
+            var SIMPLIFY_TOLERANCE_MM = 0.1;
+            var PEAK_HEIGHT_RATIO = 0.92;   // 대기 밖 곡선 봉우리가 차지하는 그래프 높이 비율
+            var AXIS_MARGIN_MM = 3;         // 축이 그래프 영역보다 더 나가는 길이(화살촉 자리)
+            var TICK_LENGTH_MM = 1;
+            var TEXT_GAP_MM = 1;
+            var RANGE_GAP_MM = 2;           // 파장 영역 화살표와 위쪽 글자 사이
+
+            var doc = app.activeDocument;
+            // 사각형이 선택되어 있으면 그래프 영역, 아니면 화면 중앙. 다른 선택은 무시한다
+            var rect = getSelectedRectangle(doc.selection);
+            var rectWasHidden = rect !== null && rect.hidden;
+            var viewCenter = doc.activeView.centerPoint;
+            var centerX = viewCenter[0];
+            var centerY = viewCenter[1];
+
+            // 옵션 (설정 저장 대상)
+            var widthMm = 80;
+            var heightMm = 50;
+            var maxUm = 3;
+            var sigmaNm = 15;
+            var strokePt = 0.4;
+            var showGround = true;
+            var showUV = true;
+            var showBands = true;
+            var fillToET = true;
+            var showTicks = true;
+            var showLegend = true;
+            var showRanges = true;
+            var POSITION_LIMIT_MM = 100;
+            var offsetXmm = 0;
+            var offsetYmm = 0;
+            var previewEnabled = true;
+            var previewGroup = null;
+
+            var WIDTH_RANGE = [30, 200];
+            var HEIGHT_RANGE = [20, 150];
+            var MAX_UM_RANGE = [1.5, 4];
+            var SIGMA_RANGE = [0, 60];
+            var STROKE_RANGE = [0.2, 1.5];
+
+            applySavedSettings();
+            // 사각형이 크기를 정할 때도 저장되는 기본 크기는 그대로 둔다
+            var defaultWidthMm = widthMm;
+            var defaultHeightMm = heightMm;
+            if (rect !== null) {
+                var rectBounds = rect.geometricBounds; // [left, top, right, bottom]
+                widthMm = Math.round((rectBounds[2] - rectBounds[0]) / MM * 100) / 100;
+                heightMm = Math.round((rectBounds[1] - rectBounds[3]) / MM * 100) / 100;
+            }
+
+            var black = makeColor(0, 0, 0, 100);
+            var etColor = makeColor(0, 100, 100, 0);
+            var uvColor = makeColor(70, 40, 0, 0);
+            var bandColor = makeColor(60, 0, 90, 0);
+            var tickFont = getFont("GSMediumB1");
+            var korFont = getFont("SpoqaHanSansNeo-Regular");
+
+            var LABEL_WIDTH = 84;
+            // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+            var SLIDER_WIDTH = 196;
+
+            var dlg = page;
+
+            var sizePanel = addPanel(dlg, "크기");
+            // 사각형이 있으면 크기는 사각형이 정한다. 값이 범위 밖이면 확인에서 걸린다
+            var widthField = addNumberField(sizePanel, "폭", "mm", widthMm, 1, WIDTH_RANGE[0], WIDTH_RANGE[1]);
+            var heightField = addNumberField(sizePanel, "높이", "mm", heightMm, 1, HEIGHT_RANGE[0], HEIGHT_RANGE[1]);
+            if (rect !== null) {
+                widthField.row.enabled = false;
+                heightField.row.enabled = false;
+                widthField.input.helpTip = "선택한 사각형의 크기";
+                heightField.input.helpTip = "선택한 사각형의 크기";
+            }
+            var maxUmField = addNumberField(sizePanel, "최대 파장", "µm", maxUm, 0.5, MAX_UM_RANGE[0], MAX_UM_RANGE[1]);
+
+            var curvePanel = addPanel(dlg, "곡선");
+            var sigmaField = addNumberField(curvePanel, "단순화", "nm", sigmaNm, 1, SIGMA_RANGE[0], SIGMA_RANGE[1]);
+            sigmaField.input.helpTip = "가우시안 평활 폭. 0이면 데이터 그대로, 클수록 잔 요철과 얕은 흡수 골이 사라진다";
+            var strokeField = addNumberField(curvePanel, "선 두께", "pt", strokePt, 0.1, STROKE_RANGE[0], STROKE_RANGE[1]);
+
+            var showPanel = addPanel(dlg, "표시");
+            var showRow1 = showPanel.add("group");
+            var groundCheck = showRow1.add("checkbox", undefined, "지표면 곡선");
+            var uvCheck = showRow1.add("checkbox", undefined, "오존 흡수 영역");
+            var bandCheck = showRow1.add("checkbox", undefined, "수증기·CO₂ 흡수 영역");
+            groundCheck.value = showGround;
+            uvCheck.value = showUV;
+            bandCheck.value = showBands;
+            uvCheck.enabled = showGround;
+            bandCheck.enabled = showGround;
+            var showRow2 = showPanel.add("group");
+            var tickCheck = showRow2.add("checkbox", undefined, "눈금 숫자");
+            var legendCheck = showRow2.add("checkbox", undefined, "축 범례");
+            var rangeCheck = showRow2.add("checkbox", undefined, "파장 영역 화살표");
+            tickCheck.value = showTicks;
+            legendCheck.value = showLegend;
+            rangeCheck.value = showRanges;
+            rangeCheck.helpTip = "자외선·가시광선·적외선 구간을 축 아래에 양쪽 화살표로 표시한다. 화살촉은 확인할 때 붙는다";
+            var fillRow = showPanel.add("group");
+            fillRow.add("statictext", undefined, "흡수 영역 위쪽:");
+            var fillToETRadio = fillRow.add("radiobutton", undefined, "대기 밖 곡선까지");
+            var fillToEnvelopeRadio = fillRow.add("radiobutton", undefined, "포락선까지");
+            fillToETRadio.value = fillToET;
+            fillToEnvelopeRadio.value = !fillToET;
+            fillToETRadio.helpTip = "교과서 그림처럼 흡수 영역이 대기 밖 곡선에 닿는다";
+            fillToEnvelopeRadio.helpTip = "지표면 곡선의 어깨끼리 이은 포락선까지만 채운다. 두 곡선 사이 흰 틈은 산란 손실";
+
+            var positionPanel = addPanel(dlg, "위치");
+            var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
+            bindOffsetField(offsetXField, true);
+            bindOffsetField(offsetYField, false);
+
+            groundCheck.onClick = function() {
+                showGround = groundCheck.value;
+                uvCheck.enabled = showGround;
+                bandCheck.enabled = showGround;
+                updatePreview();
+            };
+            uvCheck.onClick = function() { showUV = uvCheck.value; updatePreview(); };
+            bandCheck.onClick = function() { showBands = bandCheck.value; updatePreview(); };
+            tickCheck.onClick = function() { showTicks = tickCheck.value; updatePreview(); };
+            legendCheck.onClick = function() { showLegend = legendCheck.value; updatePreview(); };
+            rangeCheck.onClick = function() { showRanges = rangeCheck.value; updatePreview(); };
+            fillToETRadio.onClick = function() { fillToET = true; updatePreview(); };
+            fillToEnvelopeRadio.onClick = function() { fillToET = false; updatePreview(); };
+
+            // 탭 호스트가 부르는 훅. 이 탭이 켜져 있는 동안만 원본 사각형을 숨긴다
+            api.setPreview = function(on) {
+                previewEnabled = on;
+                if (rect !== null) {
+                    rect.hidden = true;
+                    rect.selected = false;
+                }
+                updatePreview();
+            };
+            api.updatePreview = updatePreview;
+            api.clearPreview = function() {
+                clearPreview();
+                if (rect !== null) {
+                    rect.hidden = rectWasHidden;
+                    rect.selected = true;
+                }
+            };
+            api.commit = function() {
+                if (!readFields(true)) return false;
+                clearPreview();
+                var finalGroup = drawSpectrum(true);
+                moveItem(finalGroup, offsetXmm * MM, offsetYmm * MM);
+                finalGroup.name = "Solar Spectrum";
+                if (rect !== null) rect.remove();
+                saveSettings();
+                doc.selection = null;
+                finalGroup.selected = true;
+                return true;
+            };
+
+            // -------------------------------------------------------
+            // 그리기
+            // -------------------------------------------------------
+            function drawSpectrum(isFinal) {
+                var group = doc.activeLayer.groupItems.add();
+                var plotW = widthMm * MM;
+                var plotH = heightMm * MM;
+                var originX, originY;
+                if (rect !== null) {
+                    var bounds = rect.geometricBounds;
+                    originX = bounds[0];
+                    originY = bounds[3];
+                    plotW = bounds[2] - bounds[0];
+                    plotH = bounds[1] - bounds[3];
+                } else {
+                    originX = centerX - plotW / 2;
+                    originY = centerY - plotH / 2;
+                }
+                var maxNm = maxUm * 1000;
+                var axisMargin = AXIS_MARGIN_MM * MM;
+                var tolerance = SIMPLIFY_TOLERANCE_MM * MM;
+                var count = Math.min(ET_DATA.length, Math.floor((maxNm - LAMBDA_MIN) / LAMBDA_STEP) + 1);
+
+                var etSmooth = gaussianSmooth(ET_DATA, sigmaNm);
+                var groundSmooth = gaussianSmooth(GROUND_DATA, sigmaNm);
+                var peak = 0;
+                for (var p = 0; p < count; p++) if (etSmooth[p] > peak) peak = etSmooth[p];
+
+                function xAt(index) { return originX + (LAMBDA_MIN + index * LAMBDA_STEP) / maxNm * plotW; }
+                function xOfNm(nm) { return originX + nm / maxNm * plotW; }
+                function yAt(value) { return originY + value / peak * plotH * PEAK_HEIGHT_RATIO; }
+                function toPoints(values) {
+                    var pts = [];
+                    for (var i = 0; i < count; i++) pts.push([xAt(i), yAt(values[i])]);
+                    return pts;
+                }
+
+                // 흡수 영역의 양끝은 두 곡선 모두의 고정점이어야 면의 아래·위 변이 곡선과 정확히 겹친다
+                var bands = (showGround && showBands) ? findBands(groundSmooth, etSmooth, count) : [];
+                var uv = (showGround && showUV) ? uvBand(groundSmooth, etSmooth, count, fillToET ? indexOfNm(UV_END_NM, count) : -1) : null;
+                var forced = [];
+                if (uv !== null) forced.push(uv.ib);
+                for (var b = 0; b < bands.length; b++) forced.push(bands[b].ia, bands[b].ib);
+
+                var etPoints = toPoints(etSmooth);
+                var etAnchors = smoothAnchors(etPoints, simplifyIndices(etPoints, tolerance, fillToET ? forced : []));
+                var groundAnchors = null;
+                if (showGround) {
+                    var groundPoints = toPoints(groundSmooth);
+                    groundAnchors = smoothAnchors(groundPoints, simplifyIndices(groundPoints, tolerance, forced));
+                }
+
+                var fillGroup = group.groupItems.add();
+                fillGroup.name = "Absorption";
+                var axisGroup = group.groupItems.add();
+                axisGroup.name = "Axes";
+                var curveGroup = group.groupItems.add();
+                curveGroup.name = "Curves";
+                var labelGroup = group.groupItems.add();
+                labelGroup.name = "Labels";
+
+                // ---- 흡수 영역: 아래 변은 지표면 곡선 그대로, 위 변은 대기 밖 곡선(뒤집음) 또는 포락선 ----
+                function addFill(band, color) {
+                    var bottom = subPath(groundAnchors, band.ia, band.ib);
+                    var top;
+                    if (fillToET) {
+                        top = reversePath(subPath(etAnchors, band.ia, band.ib));
+                    } else {
+                        var envPoints = [];
+                        for (var k = band.ia; k <= band.ib; k++) envPoints.push([xAt(k), yAt(band.env[k - band.ia])]);
+                        top = reversePath(smoothAnchors(envPoints, simplifyIndices(envPoints, tolerance, [])));
+                    }
+                    var path = addPath(fillGroup, joinParts([bottom, top]), true);
+                    path.stroked = false;
+                    path.filled = true;
+                    path.fillColor = color;
+                }
+                if (uv !== null) addFill(uv, uvColor);
+                for (var f = 0; f < bands.length; f++) addFill(bands[f], bandColor);
+
+                // ---- 축: L자 (위 → 원점 → 오른쪽), 눈금은 0.5 µm마다 ----
+                var axis = axisGroup.pathItems.add();
+                axis.setEntirePath([
+                    [originX, originY + plotH + axisMargin],
+                    [originX, originY],
+                    [originX + plotW + axisMargin, originY]
+                ]);
+                strokeOnly(axis, black, strokePt);
+
+                var textBottom = originY - TEXT_GAP_MM * MM;  // 글자를 쌓아 내려갈 기준선
+                for (var um = 0; um <= maxUm + 1e-9; um += 0.5) {
+                    var tickX = xOfNm(um * 1000);
+                    if (um > 0) {
+                        var tick = axisGroup.pathItems.add();
+                        tick.setEntirePath([[tickX, originY], [tickX, originY + TICK_LENGTH_MM * MM]]);
+                        strokeOnly(tick, black, strokePt);
+                    }
+                    if (showTicks) {
+                        var label = addText(labelGroup, um === 0 ? "0" : um.toFixed(1), tickFont, false);
+                        var placed = placeGlyph(label, tickX, originY - TEXT_GAP_MM * MM, "center");
+                        if (placed[3] < textBottom) textBottom = placed[3];
+                    }
+                }
+
+                if (showLegend) {
+                    var xLegend = addText(labelGroup, "파장(µm)", korFont, false);
+                    var xLegendBounds = placeGlyph(xLegend, originX + plotW + axisMargin, textBottom - TEXT_GAP_MM * MM, "right");
+                    textBottom = xLegendBounds[3];
+                    var yLegend = addText(labelGroup, "복사 에너지의 세기(상대값)", korFont, true);
+                    placeGlyph(yLegend, originX - TEXT_GAP_MM * MM, originY + plotH, "right");
+                }
+
+                // ---- 파장 영역: 자외선 | 가시광선 | 적외선 양쪽 화살표 ----
+                var rangeLines = [];
+                if (showRanges) {
+                    var rangeY = textBottom - RANGE_GAP_MM * MM;
+                    var ranges = [[0, UV_END_NM, "자외선"], [UV_END_NM, VISIBLE_END_NM, "가시광선"], [VISIBLE_END_NM, maxNm, "적외선"]];
+                    for (var r = 0; r < ranges.length; r++) {
+                        var fromNm = ranges[r][0];
+                        var toNm = Math.min(ranges[r][1], maxNm);
+                        if (toNm - fromNm < 1) continue;
+                        var line = axisGroup.pathItems.add();
+                        line.setEntirePath([[xOfNm(fromNm), rangeY], [xOfNm(toNm), rangeY]]);
+                        strokeOnly(line, black, strokePt);
+                        rangeLines.push(line);
+                        addRangeLabel(ranges[r][2], xOfNm(fromNm), xOfNm(toNm), rangeY - TEXT_GAP_MM * MM);
+                    }
+                }
+
+                // 영역 글자. 칸보다 넓으면 교과서처럼 두 줄로 나눈다 (가시광선 → 가시/광선)
+                function addRangeLabel(text, fromX, toX, top) {
+                    var label = addText(labelGroup, text, korFont, false);
+                    try { label.textRange.paragraphAttributes.justification = Justification.CENTER; } catch (e) {}
+                    var bounds = placeGlyph(label, (fromX + toX) / 2, top, "center");
+                    if (bounds[2] - bounds[0] > toX - fromX - 0.5 * MM && text.length >= 4) {
+                        var half = Math.floor(text.length / 2);
+                        label.contents = text.substring(0, half) + "\r" + text.substring(half);
+                        placeGlyph(label, (fromX + toX) / 2, top, "center");
+                    }
+                }
+
+                // ---- 곡선: 지표면(검정) 위에 대기 밖(빨강) ----
+                if (groundAnchors !== null) strokeOnly(addPath(curveGroup, groundAnchors, false), black, strokePt);
+                strokeOnly(addPath(curveGroup, etAnchors, false), etColor, strokePt);
+
+                // 축·영역 화살촉: DOM에 노출되지 않는 속성이라 액션으로 적용. 미리보기에서는 생략
+                if (isFinal) applyArrowheads([axis].concat(rangeLines), strokePt);
+
+                return group;
+            }
+
+            // -------------------------------------------------------
+            // 데이터 → 고정점 (순수 계산)
+            // -------------------------------------------------------
+            function indexOfNm(nm, count) {
+                var index = Math.round((nm - LAMBDA_MIN) / LAMBDA_STEP);
+                if (index < 0) index = 0;
+                if (index > count - 1) index = count - 1;
+                return index;
+            }
+
+            function gaussianSmooth(values, sigmaNm) {
+                if (sigmaNm <= 0) return values.slice(0);
+                var s = sigmaNm / LAMBDA_STEP;
+                var half = Math.ceil(3 * s);
+                var kernel = [];
+                for (var k = -half; k <= half; k++) kernel.push(Math.exp(-0.5 * (k / s) * (k / s)));
+                var out = [];
+                for (var i = 0; i < values.length; i++) {
+                    var acc = 0;
+                    var weightSum = 0;
+                    for (var m = -half; m <= half; m++) {
+                        var j = i + m;
+                        if (j < 0 || j >= values.length) continue;
+                        acc += values[j] * kernel[m + half];
+                        weightSum += kernel[m + half];
+                    }
+                    out.push(acc / weightSum);
+                }
+                return out;
+            }
+
+            // 투과율 = 지표면 / 대기 밖. 대기 밖이 0인 곳은 0
+            function transmission(ground, et, count) {
+                var ratio = [];
+                for (var i = 0; i < count; i++) ratio.push(et[i] > 1e-9 ? ground[i] / et[i] : 0);
+                return ratio;
+            }
+
+            // 후보 구간마다 양끝을 어깨(투과율 극대)로 옮기고, 어깨 사이 투과율을 직선으로 이어 만든 포락선 아래 골을 흡수 영역으로 본다.
+            // 돌려주는 값: {ia, ib, env} — env[k]는 인덱스 ia+k에서 위 변의 값(지표면 값 이상)
+            function findBands(ground, et, count) {
+                var ratio = transmission(ground, et, count);
+                function snap(nm) {
+                    var best = indexOfNm(nm, count);
+                    for (var i = indexOfNm(nm - SHOULDER_SEARCH_NM, count); i <= indexOfNm(nm + SHOULDER_SEARCH_NM, count); i++) {
+                        if (ratio[i] > ratio[best]) best = i;
+                    }
+                    return best;
+                }
+                var bands = [];
+                for (var n = 0; n < NOMINAL_BANDS.length; n++) {
+                    if (NOMINAL_BANDS[n][0] >= LAMBDA_MIN + (count - 1) * LAMBDA_STEP) continue;
+                    var ia = snap(NOMINAL_BANDS[n][0]);
+                    var ib = snap(NOMINAL_BANDS[n][1]);
+                    if (ib - ia < 2) continue;
+                    var env = [];
+                    var depth = 0;
+                    for (var i = ia; i <= ib; i++) {
+                        var r = ratio[ia] + (ratio[ib] - ratio[ia]) * (i - ia) / (ib - ia);
+                        var top = Math.max(ground[i], et[i] * r);
+                        env.push(top);
+                        if (top > 1e-9) depth = Math.max(depth, (top - ground[i]) / top);
+                    }
+                    if (depth >= MIN_BAND_DEPTH) bands.push({ia: ia, ib: ib, env: env});
+                }
+                return bands;
+            }
+
+            // 자외선(오존) 영역: 가시광선 쪽 투과율을 자외선으로 연장한 포락선 아래.
+            // endIndex가 0 이상이면 그 인덱스에서 끝내고, 아니면 380~460 nm의 투과율 극대에서 끝낸다
+            function uvBand(ground, et, count, endIndex) {
+                var ratio = transmission(ground, et, count);
+                var ib = indexOfNm(UV_END_NM, count);
+                for (var i = indexOfNm(380, count); i <= indexOfNm(460, count); i++) if (ratio[i] > ratio[ib]) ib = i;
+                var shoulder = ratio[ib];
+                if (endIndex >= 0) ib = endIndex;
+                var env = [];
+                for (var k = 0; k <= ib; k++) env.push(Math.max(ground[k], et[k] * shoulder));
+                return {ia: 0, ib: ib, env: env};
+            }
+
+            // Douglas-Peucker. forced 인덱스와 양끝은 반드시 남긴다. 남길 인덱스를 오름차순으로 돌려준다
+            function simplifyIndices(points, tolerance, forced) {
+                var n = points.length;
+                var keep = [];
+                for (var i = 0; i < n; i++) keep.push(false);
+                keep[0] = true;
+                keep[n - 1] = true;
+                for (var f = 0; f < forced.length; f++) keep[forced[f]] = true;
+
+                var stack = [];
+                var previous = 0;
+                for (var s = 1; s < n; s++) {
+                    if (!keep[s]) continue;
+                    stack.push([previous, s]);
+                    previous = s;
+                }
+                while (stack.length > 0) {
+                    var segment = stack.pop();
+                    var a = segment[0];
+                    var b = segment[1];
+                    if (b - a < 2) continue;
+                    var ax = points[a][0], ay = points[a][1];
+                    var dx = points[b][0] - ax, dy = points[b][1] - ay;
+                    var length = Math.sqrt(dx * dx + dy * dy) || 1;
+                    var farthest = -1;
+                    var farthestDistance = -1;
+                    for (var m = a + 1; m < b; m++) {
+                        var distance = Math.abs(dy * (points[m][0] - ax) - dx * (points[m][1] - ay)) / length;
+                        if (distance > farthestDistance) {
+                            farthestDistance = distance;
+                            farthest = m;
+                        }
+                    }
+                    if (farthestDistance > tolerance) {
+                        keep[farthest] = true;
+                        stack.push([a, farthest], [farthest, b]);
+                    }
+                }
+                var indices = [];
+                for (var k = 0; k < n; k++) if (keep[k]) indices.push(k);
+                return indices;
+            }
+
+            // 남긴 점들을 Catmull-Rom(현 길이 매개화)으로 이어 고정점·핸들을 만든다. 양끝 핸들은 고정점에 붙인다
+            function smoothAnchors(points, indices) {
+                var anchors = [];
+                for (var i = 0; i < indices.length; i++) {
+                    var current = points[indices[i]];
+                    var anchor = {a: current.slice(0), l: current.slice(0), r: current.slice(0), idx: indices[i]};
+                    if (i > 0 && i < indices.length - 1) {
+                        var before = points[indices[i - 1]];
+                        var after = points[indices[i + 1]];
+                        var dIn = distance(before, current);
+                        var dOut = distance(current, after);
+                        var tx = (after[0] - before[0]) / (dIn + dOut);
+                        var ty = (after[1] - before[1]) / (dIn + dOut);
+                        anchor.l = [current[0] - tx * dIn / 3, current[1] - ty * dIn / 3];
+                        anchor.r = [current[0] + tx * dOut / 3, current[1] + ty * dOut / 3];
+                    }
+                    anchors.push(anchor);
+                }
+                return anchors;
+            }
+
+            function distance(p, q) {
+                var dx = q[0] - p[0], dy = q[1] - p[1];
+                return Math.sqrt(dx * dx + dy * dy) || 1e-9;
+            }
+
+            function copyAnchor(anchor) {
+                return {a: anchor.a.slice(0), l: anchor.l.slice(0), r: anchor.r.slice(0), idx: anchor.idx};
+            }
+
+            // 데이터 인덱스 i0~i1 사이의 고정점만 (양끝은 forced로 남겨둔 인덱스여야 한다)
+            function subPath(anchors, i0, i1) {
+                var part = [];
+                for (var i = 0; i < anchors.length; i++) {
+                    if (anchors[i].idx >= i0 && anchors[i].idx <= i1) part.push(copyAnchor(anchors[i]));
+                }
+                return part;
+            }
+
+            function reversePath(anchors) {
+                var reversed = [];
+                for (var i = anchors.length - 1; i >= 0; i--) {
+                    var anchor = copyAnchor(anchors[i]);
+                    var left = anchor.l;
+                    anchor.l = anchor.r;
+                    anchor.r = left;
+                    reversed.push(anchor);
+                }
+                return reversed;
+            }
+
+            // 조각들을 이어 닫힌 윤곽으로. 맞닿는 점은 하나로 합치고(들어오는 핸들·나가는 핸들만 유지), 떨어진 점은 모서리로 잇는다
+            function joinParts(parts) {
+                var result = [];
+                for (var p = 0; p < parts.length; p++) {
+                    var part = [];
+                    for (var i = 0; i < parts[p].length; i++) part.push(copyAnchor(parts[p][i]));
+                    if (result.length > 0 && part.length > 0) {
+                        var last = result[result.length - 1];
+                        if (distance(last.a, part[0].a) < 0.01) {
+                            last.r = part[0].r;
+                            part.shift();
+                        } else {
+                            last.r = last.a.slice(0);
+                            part[0].l = part[0].a.slice(0);
+                        }
+                    }
+                    result = result.concat(part);
+                }
+                if (result.length > 1) {
+                    var tail = result[result.length - 1];
+                    var head = result[0];
+                    if (distance(tail.a, head.a) < 0.01) {
+                        head.l = tail.l;
+                        result.pop();
+                    } else {
+                        tail.r = tail.a.slice(0);
+                        head.l = head.a.slice(0);
+                    }
+                }
+                return result;
+            }
+
+            // -------------------------------------------------------
+            // 일러스트레이터 개체
+            // -------------------------------------------------------
+            function addPath(container, anchors, closed) {
+                var path = container.pathItems.add();
+                var coords = [];
+                for (var i = 0; i < anchors.length; i++) coords.push(anchors[i].a);
+                path.setEntirePath(coords);
+                for (var j = 0; j < anchors.length; j++) {
+                    var point = path.pathPoints[j];
+                    var anchor = anchors[j];
+                    point.leftDirection = anchor.l;
+                    point.rightDirection = anchor.r;
+                    var leftOnAnchor = anchor.l[0] === anchor.a[0] && anchor.l[1] === anchor.a[1];
+                    var rightOnAnchor = anchor.r[0] === anchor.a[0] && anchor.r[1] === anchor.a[1];
+                    point.pointType = (leftOnAnchor || rightOnAnchor) ? PointType.CORNER : PointType.SMOOTH;
+                }
+                path.closed = closed;
+                return path;
+            }
+
+            function strokeOnly(path, color, weight) {
+                path.stroked = true;
+                path.strokeColor = color;
+                path.strokeWidth = weight;
+                path.filled = false;
+                return path;
+            }
+
+            function addText(container, text, font, vertical) {
+                var tf = container.textFrames.add();
+                tf.contents = text;
+                if (vertical) tf.orientation = TextOrientation.VERTICAL;
+                var attr = tf.textRange.characterAttributes;
+                if (font !== null) attr.textFont = font;
+                attr.size = 8;
+                attr.fillColor = black;
+                return tf;
+            }
+
+            // 글리프의 보이는 경계 측정 (복제 → 윤곽선 변환 → 경계 확인 → 삭제)
+            function glyphBounds(tf) {
+                var dup = tf.duplicate();
+                var outline = dup.createOutline();
+                var gb = outline.geometricBounds; // [left, top, right, bottom]
+                outline.remove();
+                return gb;
+            }
+
+            // 글리프 경계의 위쪽을 top에, 가로는 mode(center: 가운데 = x, right: 오른쪽 = x)에 맞춘다. 놓인 뒤의 경계를 돌려준다
+            function placeGlyph(tf, x, top, mode) {
+                var gb = glyphBounds(tf);
+                var dx = (mode === "right") ? x - gb[2] : x - (gb[0] + gb[2]) / 2;
+                var dy = top - gb[1];
+                tf.translate(dx, dy);
+                return [gb[0] + dx, gb[1] + dy, gb[2] + dx, gb[3] + dy];
+            }
+
+            function moveItem(item, deltaX, deltaY) {
+                if (item === null || (deltaX === 0 && deltaY === 0)) return;
+                try { item.translate(deltaX, deltaY); } catch (e) {}
+            }
+
+            function makeColor(c, m, y, k) {
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    cmyk.cyan = c;
+                    cmyk.magenta = m;
+                    cmyk.yellow = y;
+                    cmyk.black = k;
+                    return cmyk;
+                }
+                var rgb = new RGBColor();
+                rgb.red = Math.round(255 * (1 - c / 100) * (1 - k / 100));
+                rgb.green = Math.round(255 * (1 - m / 100) * (1 - k / 100));
+                rgb.blue = Math.round(255 * (1 - y / 100) * (1 - k / 100));
+                return rgb;
+            }
+
+            function getFont(name) {
+                try {
+                    return app.textFonts.getByName(name);
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function getSelectedRectangle(selection) {
+                if (!selection || selection.length !== 1) return null;
+                var item = selection[0];
+                if (!item || item.typename !== "PathItem" || item.guides || item.clipping) return null;
+                if (!item.closed || !item.pathPoints || item.pathPoints.length !== 4) return null;
+                var xs = [];
+                var ys = [];
+                for (var i = 0; i < 4; i++) {
+                    var point = item.pathPoints[i];
+                    if (point.leftDirection[0] !== point.anchor[0] ||
+                            point.leftDirection[1] !== point.anchor[1] ||
+                            point.rightDirection[0] !== point.anchor[0] ||
+                            point.rightDirection[1] !== point.anchor[1]) return null;
+                    pushDistinct(xs, point.anchor[0]);
+                    pushDistinct(ys, point.anchor[1]);
+                }
+                if (xs.length !== 2 || ys.length !== 2) return null;
+                return item;
+            }
+
+            function pushDistinct(list, value) {
+                for (var i = 0; i < list.length; i++) {
+                    if (Math.abs(list[i] - value) < 0.01) return;
+                }
+                list.push(value);
+            }
+
+            // 화살촉: 임시 액션 파일(ai_plugin_setStroke)로 양끝에 붙인다. 실패해도 선 자체는 그대로 남는다
+            function applyArrowheads(paths, weight) {
+                var actionSetName = "Codex_SolarSpectrum";
+                var actionName = "Arrowheads";
+                var actionFile = new File(Folder.temp + "/Codex_SolarSpectrumArrowheads.aia");
+
+                try {
+                    doc.selection = null;
+                    for (var i = 0; i < paths.length; i++) paths[i].selected = true;
+
+                    writeArrowheadAction(actionFile, actionSetName, actionName, weight);
+                    try { app.unloadAction(actionSetName, ""); } catch (e) {}
+                    app.loadAction(actionFile);
+                    app.doScript(actionName, actionSetName);
+                } catch (actionError) {
+                    // 화살표 이름은 UI 언어에 따라 다르다
+                }
+
+                try { app.unloadAction(actionSetName, ""); } catch (e2) {}
+                try { actionFile.remove(); } catch (e3) {}
+                doc.selection = null;
+            }
+
+            // 액션 파일의 문자열은 UTF-8 바이트를 16진수로 적는다
+            function toActionHex(text) {
+                var bytes = [];
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    if (code < 0x80) {
+                        bytes.push(code);
+                    } else if (code < 0x800) {
+                        bytes.push(0xC0 | (code >> 6), 0x80 | (code & 0x3F));
+                    } else {
+                        bytes.push(0xE0 | (code >> 12), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F));
+                    }
+                }
+                var hex = "";
+                for (var j = 0; j < bytes.length; j++) {
+                    var part = bytes[j].toString(16).toUpperCase();
+                    if (part.length < 2) part = "0" + part;
+                    hex += part;
+                }
+                return {hex: hex, length: bytes.length};
+            }
+
+            function writeArrowheadAction(actionFile, actionSetName, actionName, weight) {
+                var setName = toActionHex(actionSetName);
+                var name = toActionHex(actionName);
+                var arrow = toActionHex(ARROW_NAME);
+                var lines = [];
+
+                lines.push("/version 3");
+                lines.push("/name [ " + setName.length);
+                lines.push("    " + setName.hex);
+                lines.push("]");
+                lines.push("/isOpen 1");
+                lines.push("/actionCount 1");
+                lines.push("/action-1 {");
+                lines.push("    /name [ " + name.length);
+                lines.push("        " + name.hex);
+                lines.push("    ]");
+                lines.push("    /keyIndex 0");
+                lines.push("    /colorIndex 0");
+                lines.push("    /isOpen 1");
+                lines.push("    /eventCount 1");
+                lines.push("    /event-1 {");
+                lines.push("        /useRulersIn1stQuadrant 0");
+                lines.push("        /internalName (ai_plugin_setStroke)");
+                lines.push("        /localizedName [ 10");
+                lines.push("            536574205374726F6B65");
+                lines.push("        ]");
+                lines.push("        /isOpen 1");
+                lines.push("        /isOn 1");
+                lines.push("        /hasDialog 0");
+                lines.push("        /parameterCount 6");
+
+                // 선 두께 (pt)
+                lines.push("        /parameter-1 {");
+                lines.push("            /key 2003072104");
+                lines.push("            /showInPalette -1");
+                lines.push("            /type (unit real)");
+                lines.push("            /value " + weight);
+                lines.push("            /unit 592476268");
+                lines.push("        }");
+                // 시작 화살표
+                lines.push("        /parameter-2 {");
+                lines.push("            /key 1634231345");
+                lines.push("            /showInPalette -1");
+                lines.push("            /type (ustring)");
+                lines.push("            /value [ " + arrow.length);
+                lines.push("                " + arrow.hex);
+                lines.push("            ]");
+                lines.push("        }");
+                // 끝 화살표
+                lines.push("        /parameter-3 {");
+                lines.push("            /key 1634231346");
+                lines.push("            /showInPalette -1");
+                lines.push("            /type (ustring)");
+                lines.push("            /value [ " + arrow.length);
+                lines.push("                " + arrow.hex);
+                lines.push("            ]");
+                lines.push("        }");
+                // 시작/끝 화살표 크기 100%
+                lines.push("        /parameter-4 {");
+                lines.push("            /key 1634951985");
+                lines.push("            /showInPalette -1");
+                lines.push("            /type (real)");
+                lines.push("            /value 100.0");
+                lines.push("        }");
+                lines.push("        /parameter-5 {");
+                lines.push("            /key 1634951986");
+                lines.push("            /showInPalette -1");
+                lines.push("            /type (real)");
+                lines.push("            /value 100.0");
+                lines.push("        }");
+                // 화살표 정렬: 패스 끝의 팁
+                lines.push("        /parameter-6 {");
+                lines.push("            /key 1634230636");
+                lines.push("            /showInPalette -1");
+                lines.push("            /type (enumerated)");
+                lines.push("            /name [ 17");
+                lines.push("                ED8CA8EC8AA420EB819DEC9D9820ED8C81");
+                lines.push("            ]");
+                lines.push("            /value 0");
+                lines.push("        }");
+
+                lines.push("    }");
+                lines.push("}");
+
+                actionFile.encoding = "UTF-8";
+                actionFile.open("w");
+                actionFile.write(lines.join("\n"));
+                actionFile.close();
+            }
+
+            // -------------------------------------------------------
+            // 미리보기 · 입력
+            // -------------------------------------------------------
+            function updatePreview() {
+                clearPreview();
+                if (!previewEnabled) {
+                    app.redraw();
+                    return;
+                }
+                if (!readFields(false)) {
+                    app.redraw();
+                    return;
+                }
+                previewGroup = drawSpectrum(false);
+                moveItem(previewGroup, offsetXmm * MM, offsetYmm * MM);
+                previewGroup.name = "Solar Spectrum Preview";
+                app.redraw();
+            }
+
+            function clearPreview() {
+                if (previewGroup === null) return;
+                try { previewGroup.remove(); } catch (e) {}
+                previewGroup = null;
+            }
+
+            function readFields(showAlert) {
+                var width = parseNumber(widthField.input.text);
+                var height = parseNumber(heightField.input.text);
+                var maximum = parseNumber(maxUmField.input.text);
+                var sigma = parseNumber(sigmaField.input.text);
+                var stroke = parseNumber(strokeField.input.text);
+                var offX = parseNumber(offsetXField.input.text);
+                var offY = parseNumber(offsetYField.input.text);
+
+                // 사각형이 있으면 크기는 사각형이 정하므로 검사하지 않는다
+                if (rect === null && (!inRange(width, WIDTH_RANGE) || !inRange(height, HEIGHT_RANGE))) {
+                    if (showAlert) alert("폭은 " + WIDTH_RANGE[0] + "~" + WIDTH_RANGE[1] + "mm, 높이는 " +
+                        HEIGHT_RANGE[0] + "~" + HEIGHT_RANGE[1] + "mm 사이로 입력해주세요.");
+                    return false;
+                }
+                if (!inRange(maximum, MAX_UM_RANGE)) {
+                    if (showAlert) alert("최대 파장은 " + MAX_UM_RANGE[0] + "~" + MAX_UM_RANGE[1] + "µm 사이로 입력해주세요.");
+                    return false;
+                }
+                if (!inRange(sigma, SIGMA_RANGE)) {
+                    if (showAlert) alert("단순화는 " + SIGMA_RANGE[0] + "~" + SIGMA_RANGE[1] + "nm 사이로 입력해주세요.");
+                    return false;
+                }
+                if (!inRange(stroke, STROKE_RANGE)) {
+                    if (showAlert) alert("선 두께는 " + STROKE_RANGE[0] + "~" + STROKE_RANGE[1] + "pt 사이로 입력해주세요.");
+                    return false;
+                }
+                if (!inRange(offX, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM]) || !inRange(offY, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM])) {
+                    if (showAlert) alert("이동은 -" + POSITION_LIMIT_MM + "부터 " + POSITION_LIMIT_MM + "mm 사이로 입력해주세요.");
+                    return false;
+                }
+
+                widthMm = width;
+                heightMm = height;
+                maxUm = maximum;
+                sigmaNm = sigma;
+                strokePt = stroke;
+                offsetXmm = offX;
+                offsetYmm = offY;
+                return true;
+            }
+
+            function inRange(value, range) {
+                return value !== null && value >= range[0] && value <= range[1];
+            }
+
+            // -------------------------------------------------------
+            // 다이얼로그 부품
+            // -------------------------------------------------------
+            function addPanel(parent, title) {
+                var panel = parent.add("panel", undefined, title);
+                panel.orientation = "column";
+                panel.alignChildren = "left";
+                panel.spacing = 4;
+                panel.margins = [10, 14, 10, 8];
+                return panel;
+            }
+
+            function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                var label = row.add("statictext", undefined, labelText + " (" + unit + "):");
+                label.preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, formatValue(value));
+                input.characters = 6;
+                input.justify = "center";
+                var slider = row.add("scrollbar", undefined, clampValue(value, minimum, maximum), minimum, maximum);
+                slider.stepdelta = step;
+                slider.jumpdelta = step * 10;
+                slider.preferredSize.width = SLIDER_WIDTH;
+
+                var field = {row: row, input: input, slider: slider, step: step, minimum: minimum, maximum: maximum, syncing: false};
+
+                slider.onChanging = function() {
+                    if (field.syncing) return;
+                    var stepped = Math.round(slider.value / step) * step;
+                    input.text = formatValue(clampValue(stepped, field.minimum, field.maximum));
+                    commitField(field);
+                };
+                input.onChanging = function() { commitField(field); };
+                input.onChange = function() {
+                    var parsed = parseNumber(input.text);
+                    if (parsed === null) parsed = field.minimum;
+                    parsed = clampValue(parsed, field.minimum, field.maximum);
+                    input.text = formatValue(parsed);
+                    field.syncing = true;
+                    slider.value = parsed;
+                    field.syncing = false;
+                    commitField(field);
+                };
+                return field;
+            }
+
+            // 위치 필드는 도형을 다시 만들지 않고 미리보기만 옮기도록 갈아끼운다
+            function commitField(field) {
+                if (field.onCommit) field.onCommit();
+                else updatePreview();
+            }
+
+            function bindOffsetField(field, isX) {
+                field.onCommit = function() {
+                    var value = parseNumber(field.input.text);
+                    if (value === null) return;
+                    value = clampValue(value, field.minimum, field.maximum);
+                    var delta = (value - (isX ? offsetXmm : offsetYmm)) * MM;
+                    if (isX) offsetXmm = value;
+                    else offsetYmm = value;
+                    if (delta === 0 || previewGroup === null) return;
+                    try { previewGroup.translate(isX ? delta : 0, isX ? 0 : delta); } catch (e) {}
+                    app.redraw();
+                };
+            }
+
+            function clampValue(value, minimum, maximum) {
+                if (value < minimum) value = minimum;
+                if (value > maximum) value = maximum;
+                return value;
+            }
+
+            function parseNumber(text) {
+                var normalized = String(text).replace(/,/g, ".").replace(/^\s+|\s+$/g, "");
+                if (normalized === "") return null;
+                var value = Number(normalized);
+                return isFinite(value) ? value : null;
+            }
+
+            function formatValue(value) {
+                return String(Math.round(value * 100) / 100);
+            }
+
+            // -------------------------------------------------------
+            // 설정 저장 · 복원
+            // -------------------------------------------------------
+            function saveSettings() {
+                var parts = ["v1", rect !== null ? defaultWidthMm : widthMm, rect !== null ? defaultHeightMm : heightMm, maxUm, sigmaNm, strokePt,
+                    showGround ? 1 : 0, showUV ? 1 : 0, showBands ? 1 : 0, fillToET ? 1 : 0,
+                    showTicks ? 1 : 0, showLegend ? 1 : 0, showRanges ? 1 : 0, offsetXmm, offsetYmm];
+                try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+            }
+
+            function applySavedSettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+                if (!raw) return;
+                var p = raw.split("|");
+                if (p[0] !== "v1" || p.length !== 15) return;
+
+                var width = parseFloat(p[1]);
+                var height = parseFloat(p[2]);
+                var maximum = parseFloat(p[3]);
+                var sigma = parseFloat(p[4]);
+                var stroke = parseFloat(p[5]);
+                var offX = parseFloat(p[13]);
+                var offY = parseFloat(p[14]);
+                if (inRange(width, WIDTH_RANGE)) widthMm = width;
+                if (inRange(height, HEIGHT_RANGE)) heightMm = height;
+                if (inRange(maximum, MAX_UM_RANGE)) maxUm = maximum;
+                if (inRange(sigma, SIGMA_RANGE)) sigmaNm = sigma;
+                if (inRange(stroke, STROKE_RANGE)) strokePt = stroke;
+                showGround = p[6] === "1";
+                showUV = p[7] === "1";
+                showBands = p[8] === "1";
+                fillToET = p[9] === "1";
+                showTicks = p[10] === "1";
+                showLegend = p[11] === "1";
+                showRanges = p[12] === "1";
+                if (inRange(offX, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM])) offsetXmm = offX;
+                if (inRange(offY, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM])) offsetYmm = offY;
             }
             return null;
         }

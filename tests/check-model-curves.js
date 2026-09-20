@@ -175,7 +175,7 @@ assert.deepStrictEqual(humpSegments[1][3], [50, 67.5], "explicit segments are sc
 // 설정 문자열: v1 + 6필드 + 종류별 값, 탭 등록, 저장 키
 assert.ok(source.includes('parts[0] !== "v1" || parts.length !== 6 + TYPES.length'), "settings string must be v1 with per-type values");
 assert.ok(source.includes('var PREF_KEY = "ObjectModelCurves/settings"'), "own preference key");
-assert.ok(wholeSource.includes("makeDashedGridEngine(), makeModelCurvesEngine()]"), "engine registered as the last tab");
+assert.ok(wholeSource.includes("makeDashedGridEngine(), makeModelCurvesEngine()"), "engine registered after the dashed grid tab");
 assert.ok(wholeSource.includes("Folder.temp + \"/illu_last_script.txt\""), "RepeatLast memo header present");
 
 console.log("check-model-curves: ok");
