@@ -34,7 +34,7 @@ function extractTypes() {
 
 const SEGMENTS = 16;
 const SAMPLES = 512;
-const helpers = ["param", "flag", "curve", "dashedLine", "hump", "specSegments", "fitCurve", "refineExtremum", "tangentAt", "fitSegment"];
+const helpers = ["param", "flag", "curve", "dashedLine", "polyline", "stateChange", "hump", "specSegments", "fitCurve", "refineExtremum", "tangentAt", "fitSegment"];
 const lib = new Function(
   `var SEGMENTS = ${SEGMENTS}, SAMPLES = ${SAMPLES};\n` +
   helpers.map(extractFunction).join("\n") + "\n" + extractTypes() +
@@ -54,8 +54,8 @@ const build = (prefix, params, flags) => {
   return type.build(params || p, flags || f);
 };
 
-// 12종. 기본값으로 만든 곡선은 모두 y가 [0, 1] 안에 있다
-assert.strictEqual(lib.TYPES.length, 12, "12 curve types");
+// 16종. 기본값으로 만든 곡선은 모두 y가 [0, 1] 안에 있다
+assert.strictEqual(lib.TYPES.length, 16, "16 curve types");
 for (const type of lib.TYPES) {
   assert.ok(type.params.length <= 4 && type.flags.length <= 3, `${type.label}: rows fit the dialog`);
   for (const p of type.params) assert.ok(p.min <= p.initial && p.initial <= p.max, `${type.label}: ${p.label} default in range`);
@@ -172,10 +172,61 @@ for (const seg of steepSegments) for (const pt of seg) assert.ok(isFinite(pt[0])
 const humpSegments = lib.specSegments(lib.hump(0.4, 0.2, 0.5), width, height);
 assert.deepStrictEqual(humpSegments[1][3], [50, 67.5], "explicit segments are scaled to the box");
 
-// 설정 문자열: v1 + 6필드 + 종류별 값, 탭 등록, 저장 키
-assert.ok(source.includes('parts[0] !== "v1" || parts.length !== 6 + TYPES.length'), "settings string must be v1 with per-type values");
+// 설정 문자열: v2(중학교 곡선 4종 추가) + 6필드 + 종류별 값, 탭 등록, 저장 키
+assert.ok(source.includes('parts[0] !== "v2" || parts.length !== 6 + TYPES.length'), "settings string must be v2 with per-type values");
 assert.ok(source.includes('var PREF_KEY = "ObjectModelCurves/settings"'), "own preference key");
 assert.ok(wholeSource.includes("makeDashedGridEngine(), makeModelCurvesEngine()"), "engine registered after the dashed grid tab");
 assert.ok(wholeSource.includes("Folder.temp + \"/illu_last_script.txt\""), "RepeatLast memo header present");
 
 console.log("check-model-curves: ok");
+
+// 가열 곡선: 수평 구간 두 개가 녹는점·끓는점에 있고, 오르는 구간은 기울기가 같으며, 모서리 점이다
+{
+  const [line, meltGuide, boilGuide] = build("가열·냉각 곡선", [30, 70, 20, 30], [false, true]);
+  assert.ok(line.corners && !line.dashed && meltGuide.dashed && boilGuide.dashed);
+  const pts = [line.segments[0][0]].concat(line.segments.map((s) => s[3]));
+  assert.strictEqual(pts.length, 6);
+  assert.ok(near(pts[1][1], 0.3) && near(pts[2][1], 0.3) && near(pts[2][0] - pts[1][0], 0.2), "melting plateau");
+  assert.ok(near(pts[3][1], 0.7) && near(pts[4][1], 0.7) && near(pts[4][0] - pts[3][0], 0.3), "boiling plateau");
+  const slope = (a, b) => (b[1] - a[1]) / (b[0] - a[0]);
+  assert.ok(near(slope(pts[0], pts[1]), slope(pts[2], pts[3]), 1e-9) && near(slope(pts[2], pts[3]), slope(pts[4], pts[5]), 1e-9), "equal heating rate");
+  assert.ok(near(pts[5][0], 1) && near(meltGuide.segments[0][3][0], pts[1][0]), "guide reaches plateau start");
+  // 냉각은 좌우를 뒤집어 높은 온도에서 시작한다
+  const cooling = build("가열·냉각 곡선", [30, 70, 20, 30], [true, true]);
+  const c0 = cooling[0].segments[0][0];
+  assert.ok(near(c0[0], 0) && c0[1] > 0.7, "cooling starts hot");
+  assert.ok(near(cooling[1].segments[0][3][0], 1 - pts[2][0]), "cooling guide reaches plateau start");
+  // 녹는점이 끓는점보다 높게 들어와도 순서를 지킨다
+  const swapped = build("가열·냉각 곡선", [80, 40, 10, 10], [false, false])[0];
+  assert.ok(swapped.segments[2][3][1] > swapped.segments[0][3][1], "boiling above melting");
+}
+
+// 열평형: 두 곡선이 높은·낮은 온도에서 시작해 같은 온도로 모인다
+{
+  const [hot, cold] = build("열평형", [80, 20, 40, 8], [false]);
+  assert.ok(near(hot.fn(0), 0.8) && near(cold.fn(0), 0.2));
+  assert.ok(near(hot.fn(1), 0.4, 0.01) && near(cold.fn(1), 0.4, 0.01));
+  // 열평형 온도가 두 온도 밖이면 가까운 쪽으로 붙이고, 점선을 켜면 그 높이에 하나 더
+  const clamped = build("열평형", [60, 30, 95, 8], [true]);
+  assert.strictEqual(clamped.length, 3);
+  assert.ok(near(clamped[2].segments[0][0][1], 0.6), "equilibrium clamped to the hot temperature");
+}
+
+// 비열: 켠 물질만, 위 끝에 닿으면 그 자리에서 멈춘다
+{
+  const lines = build("비열 비교", [10, 80, 50, 30], [true, false, true]);
+  assert.strictEqual(lines.length, 2);
+  assert.ok(near(lines[0].segments[0][3][1], 0.9) && near(lines[0].segments[0][3][0], 1));
+  const steep = build("비열 비교", [50, 100, 50, 30], [true, false, false])[0];
+  assert.ok(near(steep.segments[0][3][1], 1) && near(steep.segments[0][3][0], 0.5), "stops at the top");
+}
+
+// 샤를: 연장선이 왼쪽 아래(-273 ℃, 부피 0)에서 0 ℃ 점까지, 실선은 같은 기울기로 이어진다
+{
+  const [solid, dashed] = build("샤를 법칙", [40, 30], [true]);
+  assert.ok(dashed.dashed && near(dashed.segments[0][0][0], 0) && near(dashed.segments[0][0][1], 0));
+  assert.ok(near(solid.segments[0][0][0], 0.4) && near(solid.segments[0][0][1], 0.3));
+  const end = solid.segments[0][3];
+  assert.ok(near(end[1] / end[0], 0.3 / 0.4), "same line through the origin");
+}
+console.log("model curve middle-school checks passed");

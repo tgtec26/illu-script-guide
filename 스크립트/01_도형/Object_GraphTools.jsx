@@ -2107,6 +2107,48 @@ try {
                   build: function(p) {
                       var n = p[0], height = p[1] / 100;
                       return [curve(function(x) { return height * Math.pow(x, n); })];
+                  } },
+                { label: "가열·냉각 곡선 (상태 변화)",
+                  params: [param("녹는점", "%", 5, 90, 1, 30), param("끓는점", "%", 10, 95, 1, 70),
+                      param("녹는 시간", "%", 0, 40, 1, 20), param("끓는 시간", "%", 0, 40, 1, 30)],
+                  flags: [flag("냉각 곡선", false), flag("온도 점선", true)],
+                  build: function(p, f) { return stateChange(p[0] / 100, p[1] / 100, p[2] / 100, p[3] / 100, f[0], f[1]); } },
+                { label: "열평형 (두 물체 온도)",
+                  params: [param("높은 온도", "%", 1, 100, 1, 85), param("낮은 온도", "%", 0, 99, 1, 15),
+                      param("열평형 온도", "%", 0, 100, 1, 50), param("빠르기", "", 1, 20, 0.5, 6)],
+                  flags: [flag("열평형 점선", false)],
+                  build: function(p, f) {
+                      var hot = Math.max(p[0], p[1]) / 100, cold = Math.min(p[0], p[1]) / 100;
+                      var eq = Math.min(Math.max(p[2] / 100, cold), hot), k = p[3];
+                      var list = [curve(function(x) { return eq + (hot - eq) * Math.exp(-k * x); }),
+                          curve(function(x) { return eq + (cold - eq) * Math.exp(-k * x); })];
+                      if (f[0]) list.push(dashedLine(0, eq, 1, eq));
+                      return list;
+                  } },
+                { label: "비열 비교 (가열 시간–온도)",
+                  params: [param("처음 온도", "%", 0, 90, 1, 10), param("A 오른 온도", "%", 1, 100, 1, 80),
+                      param("B 오른 온도", "%", 1, 100, 1, 50), param("C 오른 온도", "%", 1, 100, 1, 30)],
+                  flags: [flag("A", true), flag("B", true), flag("C", false)],
+                  build: function(p, f) {
+                      var start = p[0] / 100, list = [];
+                      // 오른 온도: 가열 시간 끝(x = 1)까지 오른 양. 위 끝에 닿으면 거기서 멈춘다
+                      for (var i = 0; i < 3; i++) {
+                          if (!f[i]) continue;
+                          var rise = p[i + 1] / 100, end = Math.min(1, (1 - start) / rise);
+                          list.push(polyline([[0, start], [end, start + rise * end]], false));
+                      }
+                      return list;
+                  } },
+                { label: "샤를 법칙 (부피–온도)",
+                  params: [param("0 ℃ 위치", "%", 5, 95, 1, 50), param("0 ℃ 부피", "%", 5, 95, 1, 50)],
+                  flags: [flag("-273 ℃까지 점선", true)],
+                  build: function(p, f) {
+                      // 사각형 왼쪽 끝이 -273 ℃. 부피는 거기서 0이 되는 직선
+                      var zero = p[0] / 100, volume = p[1] / 100, slope = volume / zero;
+                      var end = Math.min(1, 1 / slope);
+                      var list = [polyline([[zero, volume], [end, slope * end]], false)];
+                      if (f[0]) list.push(polyline([[0, 0], [zero, volume]], true));
+                      return list;
                   } }
             ];
 
@@ -2119,6 +2161,47 @@ try {
             }
             function dashedLine(x0, y0, x1, y1) {
                 return {segments: [[[x0, y0], [x0 + (x1 - x0) / 3, y0 + (y1 - y0) / 3], [x1 - (x1 - x0) / 3, y1 - (y1 - y0) / 3], [x1, y1]]], dashed: true};
+            }
+            // 꺾은선: 점을 곧은 조각으로 잇고, 꺾이는 점은 모서리로 둔다
+            function polyline(points, dashed) {
+                var segments = [];
+                for (var i = 1; i < points.length; i++) {
+                    var a = points[i - 1], b = points[i];
+                    segments.push([a, [a[0] + (b[0] - a[0]) / 3, a[1] + (b[1] - a[1]) / 3],
+                        [b[0] - (b[0] - a[0]) / 3, b[1] - (b[1] - a[1]) / 3], b]);
+                }
+                return {segments: segments, dashed: dashed, corners: true};
+            }
+            // 가열 곡선: 고체 → 녹는 구간(수평) → 액체 → 끓는 구간(수평) → 기체. 오르는 구간은 기울기가 같아
+            // 가로 길이가 오른 온도에 비례한다. 냉각이면 좌우를 뒤집는다. 온도 점선은 세로축에서 수평 구간까지
+            function stateChange(melt, boil, meltTime, boilTime, cooling, guides) {
+                var start = 0.05;
+                melt = Math.max(melt, start + 0.02);
+                boil = Math.max(boil, melt + 0.02);
+                var top = Math.min(1, boil + (1 - boil) * 0.6);
+                var flat = meltTime + boilTime;
+                if (flat > 0.9) {
+                    meltTime *= 0.9 / flat;
+                    boilTime *= 0.9 / flat;
+                }
+                var rising = 1 - meltTime - boilTime;
+                var totalRise = top - start;
+                var x1 = rising * (melt - start) / totalRise;
+                var x2 = x1 + meltTime;
+                var x3 = x2 + rising * (boil - melt) / totalRise;
+                var x4 = x3 + boilTime;
+                var points = [[0, start], [x1, melt], [x2, melt], [x3, boil], [x4, boil], [1, top]];
+                if (cooling) {
+                    var flipped = [];
+                    for (var i = points.length - 1; i >= 0; i--) flipped.push([1 - points[i][0], points[i][1]]);
+                    points = flipped;
+                }
+                var list = [polyline(points, false)];
+                if (guides) {
+                    list.push(polyline([[0, melt], [cooling ? 1 - x2 : x1, melt]], true));
+                    list.push(polyline([[0, boil], [cooling ? 1 - x4 : x3, boil]], true));
+                }
+                return list;
             }
             // 반응 좌표 도표: 반응물 평탄 구간 → 봉우리(반응물 + Ea) → 생성물 평탄 구간. 손잡이는 모두 수평이라 매끈하다
             function hump(reactant, product, activation) {
@@ -2252,7 +2335,7 @@ try {
                 var group = rect.parent.groupItems.add();
                 try { group.move(rect, ElementPlacement.PLACEBEFORE); } catch (e) {}
                 for (var i = 0; i < specs.length; i++) {
-                    var path = drawSegments(group, specSegments(specs[i], boxWidth, boxHeight), boxLeft, boxBottom);
+                    var path = drawSegments(group, specSegments(specs[i], boxWidth, boxHeight), boxLeft, boxBottom, specs[i].corners === true);
                     if (specs[i].dashed) try { path.strokeDashes = DASH_PATTERN; } catch (e2) {}
                 }
                 return group;
@@ -2366,7 +2449,7 @@ try {
                 return [p0, [p0[0] + d0[0] * a, p0[1] + d0[1] * a], [p3[0] - d1[0] * b, p3[1] - d1[1] * b], p3];
             }
 
-            function drawSegments(container, segments, originX, originY) {
+            function drawSegments(container, segments, originX, originY, corners) {
                 var anchors = [], i;
                 for (i = 0; i < segments.length; i++) anchors.push([originX + segments[i][0][0], originY + segments[i][0][1]]);
                 var lastSegment = segments[segments.length - 1];
@@ -2381,7 +2464,7 @@ try {
                     var right = i < segments.length ? segments[i][1] : null;
                     point.leftDirection = left ? [originX + left[0], originY + left[1]] : anchors[i];
                     point.rightDirection = right ? [originX + right[0], originY + right[1]] : anchors[i];
-                    point.pointType = (i === 0 || i === segments.length) ? PointType.CORNER : PointType.SMOOTH;
+                    point.pointType = (corners || i === 0 || i === segments.length) ? PointType.CORNER : PointType.SMOOTH;
                 }
                 path.filled = false;
                 path.stroked = true;
@@ -2485,10 +2568,10 @@ try {
             }
 
             // -------------------------------------------------------
-            // 설정 기억: v1 | 종류 | 두께 | 사각형 유지 | 가로 | 세로 | 종류별 "값,값;체크,체크" × 종류 수
+            // 설정 기억: v2 | 종류 | 두께 | 사각형 유지 | 가로 | 세로 | 종류별 "값,값;체크,체크" × 종류 수
             // -------------------------------------------------------
             function saveSettings() {
-                var parts = ["v1", typeIndex, strokeWidthPt, keepRect ? 1 : 0, offsetXmm, offsetYmm];
+                var parts = ["v2", typeIndex, strokeWidthPt, keepRect ? 1 : 0, offsetXmm, offsetYmm];
                 for (var t = 0; t < TYPES.length; t++) {
                     var bits = [];
                     for (var i = 0; i < flagValues[t].length; i++) bits.push(flagValues[t][i] ? 1 : 0);
@@ -2502,7 +2585,7 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var parts = String(raw).split("|");
-                if (parts[0] !== "v1" || parts.length !== 6 + TYPES.length) return;
+                if (parts[0] !== "v2" || parts.length !== 6 + TYPES.length) return;
                 var type = parseInt(parts[1], 10);
                 if (isFinite(type) && type >= 0 && type < TYPES.length) typeIndex = type;
                 var width = parseNumber(parts[2]);
