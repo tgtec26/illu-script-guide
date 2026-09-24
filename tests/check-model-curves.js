@@ -34,7 +34,7 @@ function extractTypes() {
 
 const SEGMENTS = 16;
 const SAMPLES = 512;
-const helpers = ["param", "flag", "curve", "dashedLine", "polyline", "stateChange", "hump", "specSegments", "fitCurve", "refineExtremum", "tangentAt", "fitSegment"];
+const helpers = ["param", "flag", "curve", "dashedLine", "polyline", "stateChange", "hump", "solubilityCurves", "originLines", "specSegments", "fitCurve", "refineExtremum", "tangentAt", "fitSegment"];
 const lib = new Function(
   `var SEGMENTS = ${SEGMENTS}, SAMPLES = ${SAMPLES};\n` +
   helpers.map(extractFunction).join("\n") + "\n" + extractTypes() +
@@ -54,8 +54,8 @@ const build = (prefix, params, flags) => {
   return type.build(params || p, flags || f);
 };
 
-// 16종. 기본값으로 만든 곡선은 모두 y가 [0, 1] 안에 있다
-assert.strictEqual(lib.TYPES.length, 16, "16 curve types");
+// 25종. 기본값으로 만든 곡선은 모두 y가 [0, 1] 안에 있다
+assert.strictEqual(lib.TYPES.length, 25, "25 curve types");
 for (const type of lib.TYPES) {
   assert.ok(type.params.length <= 4 && type.flags.length <= 3, `${type.label}: rows fit the dialog`);
   for (const p of type.params) assert.ok(p.min <= p.initial && p.initial <= p.max, `${type.label}: ${p.label} default in range`);
@@ -172,8 +172,8 @@ for (const seg of steepSegments) for (const pt of seg) assert.ok(isFinite(pt[0])
 const humpSegments = lib.specSegments(lib.hump(0.4, 0.2, 0.5), width, height);
 assert.deepStrictEqual(humpSegments[1][3], [50, 67.5], "explicit segments are scaled to the box");
 
-// 설정 문자열: v2(중학교 곡선 4종 추가) + 6필드 + 종류별 값, 탭 등록, 저장 키
-assert.ok(source.includes('parts[0] !== "v2" || parts.length !== 6 + TYPES.length'), "settings string must be v2 with per-type values");
+// 설정 문자열: v3(중2 곡선 9종 추가) + 6필드 + 종류별 값, 탭 등록, 저장 키
+assert.ok(source.includes('parts[0] !== "v3" || parts.length !== 6 + TYPES.length'), "settings string must be v3 with per-type values");
 assert.ok(source.includes('var PREF_KEY = "ObjectModelCurves/settings"'), "own preference key");
 assert.ok(wholeSource.includes("makeDashedGridEngine(), makeModelCurvesEngine()"), "engine registered after the dashed grid tab");
 assert.ok(wholeSource.includes("Folder.temp + \"/illu_last_script.txt\""), "RepeatLast memo header present");
@@ -230,3 +230,64 @@ console.log("check-model-curves: ok");
   assert.ok(near(end[1] / end[0], 0.3 / 0.4), "same line through the origin");
 }
 console.log("model curve middle-school checks passed");
+
+// 용해도 곡선: 표의 값을 지나고(10 ℃마다), 단조 증가, 세로축 위에서 멈춘다
+{
+  const [kno3, nacl, cuso4] = build("용해도 곡선 (질산 칼륨", [100, 250], [true, true, true]);
+  assert.ok(near(kno3.fn(0) * 250, 13.3, 1e-9) && near(kno3.fn(0.6) * 250, 110, 1e-9) && near(kno3.fn(0.9) * 250, 202, 1e-9), "KNO3 table values");
+  assert.ok(near(nacl.fn(0.2) * 250, 36.0, 1e-9) && near(cuso4.fn(1) * 250, 75.4, 1e-9), "NaCl, CuSO4 table values");
+  for (const spec of [kno3, nacl, cuso4]) for (let x = 0.01; x <= spec.to; x += 0.01) assert.ok(spec.fn(x) >= spec.fn(x - 0.01) - 1e-12, "monotone");
+  // 세로축 150 g: 질산 칼륨은 약 75 ℃에서 위 끝에 닿아 멈춘다
+  const clipped = build("용해도 곡선 (질산 칼륨", [100, 150], [true, false, false])[0];
+  assert.ok(clipped.to > 0.7 && clipped.to < 0.8 && near(clipped.fn(clipped.to), 1, 1e-6), `clipped at the top: ${clipped.to}`);
+  // 가로축 최대 50 ℃: x = 1이 50 ℃
+  const half = build("용해도 곡선 (질산 칼륨", [50, 250], [true, false, false])[0];
+  assert.ok(near(half.fn(1) * 250, 85.5, 1e-9), "x axis rescaled");
+  // 처음부터 세로축을 넘는 물질(질산 나트륨 73 g > 50 g)은 그리지 않는다
+  assert.strictEqual(build("용해도 곡선 (질산 나트륨", [100, 50], [true, true, true]).length, 2);
+}
+// 기체 용해도: 온도가 오를수록 줄고, 압력 2배면 2배
+{
+  const [one, two] = build("기체 용해도", [40, 1.5], [true, true]);
+  assert.ok(near(one.fn(0), 0.4) && near(two.fn(0), 0.8) && near(two.fn(0.5), 2 * one.fn(0.5)));
+  assert.ok(one.fn(1) < one.fn(0), "falls with temperature");
+}
+// 물·소금물: 같은 빠르기로 오르고, 물은 끓는점에서 수평, 소금물은 더 높은 곳에서 끓기 시작해 계속 오른다
+{
+  const [water, salt, guide] = build("순물질·혼합물 가열", [60, 4, 35], [true, true, true]);
+  const w = [water.segments[0][0]].concat(water.segments.map((s) => s[3]));
+  const sa = [salt.segments[0][0]].concat(salt.segments.map((s) => s[3]));
+  assert.ok(near(w[1][1], 0.6) && near(w[2][1], 0.6) && near(w[1][0], 0.35), "water plateau");
+  assert.ok(near(sa[1][1], 0.64) && sa[2][1] > sa[1][1], "salt water boils higher and keeps rising");
+  const slope = (a, b) => (b[1] - a[1]) / (b[0] - a[0]);
+  assert.ok(near(slope(w[0], w[1]), slope(sa[0], sa[1]), 1e-9), "same heating rate");
+  assert.ok(guide.dashed);
+  // 오르는 구간이 길고 끓는점이 낮아도 가로 끝을 넘지 않는다
+  const long = build("순물질·혼합물 가열", [20, 10, 80], [false, true, false])[0];
+  for (const seg of long.segments) for (const pt of seg) assert.ok(pt[0] <= 1 + 1e-9 && pt[1] <= 1 + 1e-9, "inside the box");
+}
+// 물 + 에탄올: 첫 완만한 구간은 에탄올 끓는 높이 근처, 끝은 물 끓는 높이에서 수평
+{
+  const [line] = build("혼합물 가열 (물 + 에탄올", [50, 75, 30], [false]);
+  const pts = [line.segments[0][0]].concat(line.segments.map((s) => s[3]));
+  assert.strictEqual(pts.length, 5);
+  assert.ok(near(pts[1][1], 0.5) && pts[2][1] > 0.5 && pts[2][1] < 0.6, "gentle ethanol stage");
+  assert.ok(near(pts[3][1], 0.75) && near(pts[4][1], 0.75) && near(pts[4][0], 1), "water boils flat");
+}
+// 원점 직선(밀도·저항): 기울기 %는 x = 1 높이, 위 끝에서 멈춘다
+{
+  const [a, b, c] = build("질량–부피", [150, 80, 40], [true, true, true]);
+  assert.ok(near(a.segments[0][3][0], 1 / 1.5) && near(a.segments[0][3][1], 1), "steep line stops at the top");
+  assert.ok(near(b.segments[0][3][0], 1) && near(b.segments[0][3][1], 0.8));
+  assert.ok(near(c.segments[0][0][0], 0) && near(c.segments[0][0][1], 0), "through the origin");
+  assert.strictEqual(build("전압–전류").length, 2, "resistance defaults draw A and B");
+}
+// 광합성량: 빛의 세기는 포화, 온도는 최적 온도에서 봉우리이고 오른쪽이 더 가파르다
+{
+  const [light] = build("광합성량–빛의 세기", [80, 45], [false]);
+  assert.ok(near(light.fn(0), 0) && near(light.fn(0.45), 0.8 * (1 - Math.exp(-3)), 1e-9) && light.fn(1) < 0.8);
+  const [temp] = build("광합성량–온도", [60, 80, 28, 14]);
+  assert.ok(near(temp.fn(0.6), 0.8), "peak at the optimum");
+  assert.ok(temp.fn(0.6 + 0.1) < temp.fn(0.6 - 0.1), "falls faster above the optimum");
+}
+console.log("model curve grade-2 checks passed");

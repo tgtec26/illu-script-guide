@@ -2149,6 +2149,93 @@ try {
                       var list = [polyline([[zero, volume], [end, slope * end]], false)];
                       if (f[0]) list.push(polyline([[0, 0], [zero, volume]], true));
                       return list;
+                  } },
+                // 용해도 곡선: 물 100 g에 녹는 최대 g, 0~100 ℃ 10 ℃ 간격 실제 값. 가로·세로축 최대에 맞춰 그리고 위 끝에서 멈춘다
+                { label: "용해도 곡선 (질산 칼륨·염화 나트륨·황산 구리)",
+                  params: [param("가로축 최대", "℃", 20, 100, 10, 100), param("세로축 최대", "g", 10, 400, 10, 250)],
+                  flags: [flag("질산 칼륨", true), flag("염화 나트륨", true), flag("황산 구리", true)],
+                  build: function(p, f) {
+                      return solubilityCurves([[13.3, 20.9, 31.6, 45.8, 63.9, 85.5, 110, 138, 169, 202, 246],
+                          [35.7, 35.8, 36.0, 36.3, 36.6, 37.0, 37.3, 37.8, 38.4, 39.0, 39.8],
+                          [14.3, 17.4, 20.7, 25.0, 28.5, 33.3, 40.0, 47.1, 55.0, 64.2, 75.4]], f, p[0], p[1]);
+                  } },
+                { label: "용해도 곡선 (질산 나트륨·염화 칼륨·붕산)",
+                  params: [param("가로축 최대", "℃", 20, 100, 10, 100), param("세로축 최대", "g", 10, 400, 10, 200)],
+                  flags: [flag("질산 나트륨", true), flag("염화 칼륨", true), flag("붕산", true)],
+                  build: function(p, f) {
+                      return solubilityCurves([[73, 80, 88, 96, 104, 114, 124, 136, 148, 161, 180],
+                          [28.0, 31.2, 34.2, 37.2, 40.1, 42.6, 45.8, 48.8, 51.3, 53.9, 56.3],
+                          [2.7, 3.6, 5.0, 6.6, 8.7, 11.5, 14.8, 18.6, 23.6, 30.4, 40.3]], f, p[0], p[1]);
+                  } },
+                { label: "기체 용해도 (온도·압력)",
+                  params: [param("0 ℃ 높이", "%", 5, 50, 1, 40), param("줄어드는 빠르기", "", 0.5, 5, 0.1, 1.5)],
+                  flags: [flag("압력 1배", true), flag("압력 2배", true)],
+                  build: function(p, f) {
+                      // 헨리 법칙: 압력이 2배면 녹는 양도 2배
+                      var height = p[0] / 100, rate = p[1], list = [];
+                      for (var i = 0; i < 2; i++) {
+                          if (!f[i]) continue;
+                          list.push((function(h) { return curve(function(x) { return h * Math.exp(-rate * x); }); })(height * (i + 1)));
+                      }
+                      return list;
+                  } },
+                { label: "순물질·혼합물 가열 (물·소금물)",
+                  params: [param("끓는점", "%", 20, 85, 1, 60), param("소금물 차이", "%", 1, 10, 0.5, 4), param("오르는 구간", "%", 10, 80, 1, 35)],
+                  flags: [flag("물", true), flag("소금물", true), flag("끓는점 점선", true)],
+                  build: function(p, f) {
+                      // 같은 빠르기로 오르고, 물은 끓는점에서 수평, 소금물은 더 높은 온도에서 끓기 시작해 천천히 계속 오른다
+                      var start = 0.1, boil = p[0] / 100, gap = p[1] / 100, rise = p[2] / 100, list = [];
+                      var rate = (boil - start) / rise;
+                      var saltBoil = boil + gap, saltX = (saltBoil - start) / rate;
+                      if (f[0]) list.push(polyline([[0, start], [rise, boil], [1, boil]], false));
+                      if (f[1]) list.push(saltX < 1 ? polyline([[0, start], [saltX, saltBoil], [1, Math.min(1, saltBoil + gap * 2)]], false)
+                          : polyline([[0, start], [1, start + rate]], false));
+                      if (f[2]) list.push(polyline([[0, boil], [rise, boil]], true));
+                      return list;
+                  } },
+                { label: "혼합물 가열 (물 + 에탄올)",
+                  params: [param("에탄올 끓는 높이", "%", 20, 70, 1, 50), param("물 끓는 높이", "%", 40, 95, 1, 75), param("완만한 구간", "%", 5, 50, 1, 30)],
+                  flags: [flag("온도 점선", true)],
+                  build: function(p, f) {
+                      // 오름 → 에탄올이 끓어 나가는 완만한 구간(조금씩 오름) → 다시 오름 → 물이 끓는 수평 구간
+                      var start = 0.1, low = p[0] / 100, high = Math.max(p[1] / 100, low + 0.1), plateau = p[2] / 100;
+                      var x1 = 0.2, x2 = x1 + plateau, lowEnd = low + (high - low) * 0.15, x3 = Math.min(0.95, x2 + 0.15);
+                      var list = [polyline([[0, start], [x1, low], [x2, lowEnd], [x3, high], [1, high]], false)];
+                      if (f[0]) {
+                          list.push(polyline([[0, low], [x1, low]], true));
+                          list.push(polyline([[0, high], [x3, high]], true));
+                      }
+                      return list;
+                  } },
+                { label: "질량–부피 (밀도 비교)",
+                  params: [param("A 기울기", "%", 5, 400, 5, 150), param("B 기울기", "%", 5, 400, 5, 80), param("C 기울기", "%", 5, 400, 5, 40)],
+                  flags: [flag("A", true), flag("B", true), flag("C", true)],
+                  build: function(p, f) { return originLines(p, f); } },
+                { label: "전압–전류 (저항 비교)",
+                  params: [param("A 기울기", "%", 5, 400, 5, 150), param("B 기울기", "%", 5, 400, 5, 75), param("C 기울기", "%", 5, 400, 5, 40)],
+                  flags: [flag("A", true), flag("B", true), flag("C", false)],
+                  build: function(p, f) { return originLines(p, f); } },
+                { label: "광합성량–빛의 세기·이산화 탄소 농도",
+                  params: [param("최대 높이", "%", 10, 100, 1, 80), param("포화 위치", "%", 5, 100, 1, 45)],
+                  flags: [flag("최대 점선", false)],
+                  build: function(p, f) {
+                      // 포화 위치에서 최대의 95%
+                      var top = p[0] / 100, rate = 3 / (p[1] / 100);
+                      var list = [curve(function(x) { return top * (1 - Math.exp(-rate * x)); })];
+                      if (f[0]) list.push(dashedLine(0, top, 1, top));
+                      return list;
+                  } },
+                { label: "광합성량–온도",
+                  params: [param("최적 온도 위치", "%", 10, 90, 1, 60), param("높이", "%", 10, 100, 1, 80),
+                      param("왼쪽 폭", "%", 5, 60, 1, 28), param("오른쪽 폭", "%", 5, 60, 1, 14)],
+                  flags: [],
+                  build: function(p) {
+                      // 최적 온도까지 서서히 오르고 그 뒤로 빠르게 떨어진다. 양쪽 가우스를 봉우리에서 이어 붙인다
+                      var peak = p[0] / 100, top = p[1] / 100, left = p[2] / 100, right = p[3] / 100;
+                      return [curve(function(x) {
+                          var d = (x - peak) / (x < peak ? left : right);
+                          return top * Math.exp(-d * d);
+                      })];
                   } }
             ];
 
@@ -2200,6 +2287,54 @@ try {
                 if (guides) {
                     list.push(polyline([[0, melt], [cooling ? 1 - x2 : x1, melt]], true));
                     list.push(polyline([[0, boil], [cooling ? 1 - x4 : x3, boil]], true));
+                }
+                return list;
+            }
+            // 표(0, 10, … 100 ℃의 값)를 단조 3차 보간(프리치–칼슨)으로 이은 용해도 곡선. 가로 0~1이 0~가로축 최대 ℃,
+            // 세로 1이 세로축 최대 g. 세로축 위로 나가면 닿는 온도에서 멈추고, 처음부터 넘으면 그리지 않는다
+            function solubilityCurves(tables, flags, maxTemp, maxAmount) {
+                var list = [];
+                for (var i = 0; i < tables.length; i++) {
+                    if (!flags[i]) continue;
+                    var fn = (function(values) {
+                        var n = values.length, slopes = [], tangents = [];
+                        for (var j = 0; j < n - 1; j++) slopes.push((values[j + 1] - values[j]) / 10);
+                        tangents.push(slopes[0]);
+                        for (j = 1; j < n - 1; j++) tangents.push(slopes[j - 1] * slopes[j] <= 0 ? 0 : (slopes[j - 1] + slopes[j]) / 2);
+                        tangents.push(slopes[n - 2]);
+                        for (j = 0; j < n - 1; j++) {
+                            if (slopes[j] === 0) { tangents[j] = 0; tangents[j + 1] = 0; continue; }
+                            var a = tangents[j] / slopes[j], b = tangents[j + 1] / slopes[j], h = a * a + b * b;
+                            if (h > 9) { tangents[j] = 3 * a / Math.sqrt(h) * slopes[j]; tangents[j + 1] = 3 * b / Math.sqrt(h) * slopes[j]; }
+                        }
+                        return function(x) {
+                            var t = Math.max(0, Math.min(100, x * maxTemp));
+                            var k = Math.min(n - 2, Math.floor(t / 10)), u = (t - 10 * k) / 10;
+                            var h00 = (1 + 2 * u) * (1 - u) * (1 - u), h10 = u * (1 - u) * (1 - u), h01 = u * u * (3 - 2 * u), h11 = u * u * (u - 1);
+                            return (h00 * values[k] + h10 * 10 * tangents[k] + h01 * values[k + 1] + h11 * 10 * tangents[k + 1]) / maxAmount;
+                        };
+                    })(tables[i]);
+                    if (fn(0) > 1) continue;
+                    var end = 1;
+                    if (fn(1) > 1) {
+                        var lo = 0, hi = 1;
+                        for (var step = 0; step < 50; step++) {
+                            var mid = (lo + hi) / 2;
+                            if (fn(mid) > 1) hi = mid; else lo = mid;
+                        }
+                        end = lo;
+                    }
+                    list.push(curve(fn, 0, end));
+                }
+                return list;
+            }
+            // 원점을 지나는 직선 세 개: 기울기 % = 가로 끝(x = 1)에서의 높이. 위 끝에 닿으면 거기서 멈춘다
+            function originLines(p, f) {
+                var list = [];
+                for (var i = 0; i < 3; i++) {
+                    if (!f[i]) continue;
+                    var slope = p[i] / 100, end = Math.min(1, 1 / slope);
+                    list.push(polyline([[0, 0], [end, slope * end]], false));
                 }
                 return list;
             }
@@ -2568,10 +2703,10 @@ try {
             }
 
             // -------------------------------------------------------
-            // 설정 기억: v2 | 종류 | 두께 | 사각형 유지 | 가로 | 세로 | 종류별 "값,값;체크,체크" × 종류 수
+            // 설정 기억: v3 | 종류 | 두께 | 사각형 유지 | 가로 | 세로 | 종류별 "값,값;체크,체크" × 종류 수
             // -------------------------------------------------------
             function saveSettings() {
-                var parts = ["v2", typeIndex, strokeWidthPt, keepRect ? 1 : 0, offsetXmm, offsetYmm];
+                var parts = ["v3", typeIndex, strokeWidthPt, keepRect ? 1 : 0, offsetXmm, offsetYmm];
                 for (var t = 0; t < TYPES.length; t++) {
                     var bits = [];
                     for (var i = 0; i < flagValues[t].length; i++) bits.push(flagValues[t][i] ? 1 : 0);
@@ -2585,7 +2720,7 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var parts = String(raw).split("|");
-                if (parts[0] !== "v2" || parts.length !== 6 + TYPES.length) return;
+                if (parts[0] !== "v3" || parts.length !== 6 + TYPES.length) return;
                 var type = parseInt(parts[1], 10);
                 if (isFinite(type) && type >= 0 && type < TYPES.length) typeIndex = type;
                 var width = parseNumber(parts[2]);
