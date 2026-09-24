@@ -20,7 +20,7 @@ function extractFunction(name) {
 }
 
 const names = ["convectionLoops", "baseLoops", "loopPieces", "trimEnd", "heatArrows", "corner", "arcPoints",
-  "beakerShape", "v", "roundPolyline", "unit"];
+  "beakerShape", "offsetWall", "v", "roundPolyline", "unit"];
 const lib = new Function(`var MM = 2.834645669;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= (tol || 1e-9), `${label}: expected ${b}, got ${a}`);
 const box = [0, 60, 100, 0];
@@ -146,6 +146,16 @@ for (const clockwise of [true, false]) {
   assert.ok(b.outline.some((p) => Math.abs(p.anchor[0] - 19) < 1e-9), "left wall centre 1 outside");
   assert.deepStrictEqual(b.ends, [b.outline[0].anchor, b.outline[b.outline.length - 1].anchor]);
   assert.deepStrictEqual(b.box, [18, 90, 82, 8], "box reaches the outer glass");
+}
+// 유리 두께 0이면 안쪽 벽 그대로 한 줄 선, 벽 옮기기는 Object_LabGlassware.jsx와 같은 함수
+{
+  const zero = lib.beakerShape([50, 50], 60, 80, 0.5, 0);
+  assert.strictEqual(zero.glass, 0);
+  near(Math.max(...zero.outline.map((p) => p.anchor[0])), 80, 1e-9, "single line on the inner wall");
+  assert.ok(source.includes("var GLASS_RANGE = [0, 5];"), "glass can be zero");
+  const lab = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_LabGlassware.jsx"), "utf8");
+  const pick = (src) => { const i = src.indexOf("    function offsetWall("); return src.slice(i, src.indexOf("\n    }\n", i)); };
+  assert.strictEqual(pick(source), pick(lab), "offsetWall matches Object_LabGlassware.jsx");
 }
 assert.ok(source.includes('if (p[0] !== "v4" || p.length !== 17) return;'), "settings bumped to v4");
 assert.ok(source.includes('var PREF_KEY = "ObjectConvection/settings";'));

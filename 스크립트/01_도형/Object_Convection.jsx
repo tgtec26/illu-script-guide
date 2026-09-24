@@ -14,7 +14,8 @@ try {
 //   - 축에 나란한 사각형을 선택하면 그 자리에 비커(Object_LabGlassware.jsx와 같은 모양)를 그리고 물을 채운다.
 //     너비·높이(mm)와 물 높이(%)를 고치고, 고리는 물 안에만 그린다. 확인하면 사각형은 지워진다.
 //     유리는 '유리 두께'만큼 물 바깥쪽으로 두꺼운 두 겹 선(굵은 검정 선 위에 흰 선, 끝은 둥글게)이고,
-//     양 끝(부리 끝·오른쪽 위 끝)은 두께의 RIM_SCALE배인 둥근 알로 조금 더 두껍다.
+//     양 끝(부리 끝·오른쪽 위 끝)은 두께의 RIM_SCALE배인 둥근 알로 조금 더 두껍다. 0이면 한 줄 선.
+//     Object_LabGlassware.jsx의 유리 두께와 같은 방식이다 (벽을 변에 수직으로 두께 절반만큼 바깥으로 옮긴다).
 //   - 화살표 3개: 같은 방향으로 도는 고리를 '간격'만큼씩 안쪽으로 겹쳐 세 줄로 그린다.
 //   - 가운데 가열: 두 고리. 가운데에서 올라가 위에서 양옆으로 퍼지고, 옆면을 따라 내려와 바닥에서 가운데로 모인다.
 //   - 왼쪽·오른쪽 가열: 고리 하나. 가열한 쪽으로 올라가 반대쪽으로 내려온다.
@@ -54,7 +55,7 @@ try {
     var SPACING_RANGE = [0.5, 15];
     var SIZE_RANGE = [3, 300];
     var LEVEL_RANGE = [10, 100];
-    var GLASS_RANGE = [0.2, 5];
+    var GLASS_RANGE = [0, 5];
 
     var doc = app.activeDocument;
     if (!doc.selection || doc.selection.length !== 1) {
@@ -108,7 +109,7 @@ try {
         heightRow = addValueRow(beakerPanel, "높이", "mm", heightMm, SIZE_RANGE[0], SIZE_RANGE[1], 0.5, 1);
         levelRow = addValueRow(beakerPanel, "물 높이", "%", levelPct, LEVEL_RANGE[0], LEVEL_RANGE[1], 1, 0);
         glassRow = addValueRow(beakerPanel, "유리 두께", "mm", glassMm, GLASS_RANGE[0], GLASS_RANGE[1], 0.1, 1);
-        glassRow.input.helpTip = "물 바깥쪽으로 두꺼워진다. 양 끝은 조금 더 두껍고 둥글다";
+        glassRow.input.helpTip = "0이면 한 줄 선, 올리면 흰 안쪽의 두 겹 유리(바깥쪽으로 두꺼워지고 열린 끝은 둥글게 조금 더 두껍다)";
     }
 
     var loopPanel = addPanel(dlg, "순환");
@@ -303,6 +304,15 @@ try {
                 line.name = "수면";
             }
         }
+        if (!(beaker.glass > 0)) {
+            var outline = drawBezier(previewGroup, beaker.outline);
+            outline.filled = false;
+            outline.stroked = true;
+            outline.strokeColor = black;
+            outline.strokeWidth = LINE_WIDTH_PT;
+            outline.name = "비커";
+            return;
+        }
         // 유리: 검정(두께 + 테두리 두 줄) → 흰색(두께) 순서로 겹치면 흰 안쪽을 가진 두 겹 선이 된다.
         // 양 끝 알도 같은 순서로 검정 원 → 흰 원을 겹쳐 하나로 이어진 윤곽이 되게 한다
         var glass = previewGroup.groupItems.add();
@@ -459,9 +469,9 @@ try {
         var T = center[1] + h / 2, B = center[1] - h / 2;
         var lip = w * 0.06;
         var r0 = Math.min(w * 0.08, h * 0.2);
-        // 유리 가운데 선: 안쪽 벽에서 두께 절반만큼 바깥
-        var g = glass / 2;
-        var wall = [v(L - g - lip, T + lip * 0.3, 0), v(L - g, T - lip, lip * 0.8), v(L - g, B - g, r0 + g), v(R + g, B - g, r0 + g), v(R + g, T, 0)];
+        // 유리 가운데 선: 안쪽 벽을 두께 절반만큼 바깥으로 옮긴 선 (유리가 없으면 안쪽 벽 그대로)
+        var inner = [v(L - lip, T + lip * 0.3, 0), v(L, T - lip, lip * 0.8), v(L, B, r0), v(R, B, r0), v(R, T, 0)];
+        var wall = glass > 0 ? offsetWall(inner, glass / 2) : inner;
         // 안쪽 벽은 부리 아래(T − lip)부터 곧게 내려온다
         var top = T - lip;
         var levelY = B + (top - B) * level;
@@ -481,6 +491,39 @@ try {
             surface: levelY < top - 0.01 ? [[L + inset, levelY], [R - inset, levelY]] : null,
             water: [L, levelY, R, B]
         };
+    }
+
+    // 꺾은선 꼭짓점을 진행 방향 오른쪽으로 d만큼 평행 이동 (가운데 꼭짓점은 두 변 법선의 이등분선 방향으로 d / cos).
+    // 왼쪽으로 꺾이는 꼭짓점(바깥으로 볼록)은 둥글기 반지름을 d만큼 키우고, 오른쪽으로 꺾이면 줄인다.
+    // Object_LabGlassware.jsx의 offsetWall과 같다
+    function offsetWall(vertices, d) {
+        var n = vertices.length;
+        var out = [];
+        function normal(a, b) {
+            var dx = b.x - a.x, dy = b.y - a.y, length = Math.sqrt(dx * dx + dy * dy);
+            return {x: dy / length, y: -dx / length, ex: dx / length, ey: dy / length};
+        }
+        for (var i = 0; i < n; i++) {
+            var cur = vertices[i];
+            var n1 = i > 0 ? normal(vertices[i - 1], cur) : null;
+            var n2 = i < n - 1 ? normal(cur, vertices[i + 1]) : null;
+            var mx, my, r = cur.r;
+            if (n1 === null || n2 === null) {
+                var only = n1 || n2;
+                mx = only.x * d;
+                my = only.y * d;
+            } else {
+                var bx = n1.x + n2.x, by = n1.y + n2.y;
+                var bl = Math.sqrt(bx * bx + by * by);
+                var cos = bl > 1e-9 ? (bx / bl * n1.x + by / bl * n1.y) : 1;
+                mx = bl > 1e-9 ? bx / bl * d / cos : n1.x * d;
+                my = bl > 1e-9 ? by / bl * d / cos : n1.y * d;
+                var turn = n1.ex * n2.ey - n1.ey * n2.ex;
+                if (r > 0) r = turn > 0 ? r + d : Math.max(0, r - d);
+            }
+            out.push(v(cur.x + mx, cur.y + my, r));
+        }
+        return out;
     }
 
     function v(x, y, r) {
