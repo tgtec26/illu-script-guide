@@ -15,6 +15,8 @@ try {
 //   - 혈액 순환: 심장 네 칸(보는 사람 기준 왼쪽이 우심방·우심실), 위에 폐, 아래에 온몸. 우심실 → 폐동맥 → 폐 → 폐정맥 → 좌심방(폐순환),
 //     좌심실 → 대동맥 → 온몸 → 대정맥 → 우심방(온몸 순환). 동맥혈은 빨간색, 정맥혈은 파란색(회색 모드는 연한·진한 회색).
 //     혈관은 굵은 선 아래에 흰 테두리를 깔아 서로 지나가는 곳이 끊겨 보인다. 혈관 가운데와 심방 → 심실에 화살촉.
+//     혈관이 꺾이는 곳은 '혈관 모서리' 반지름(mm)만큼 둥글린다 (0이면 각진 모서리).
+//   - 화살표 두께(pt)는 심방 → 심실·여과·재흡수·분비 화살표 선에, 화살촉 크기(%)는 모든 화살촉에 쓴다.
 //   - 네프론: 사구체와 보먼주머니, 세뇨관(근위 → 헨레 고리 → 원위), 집합관, 세뇨관을 둘러싼 모세 혈관.
 //     관은 굵은 회색 선 아래에 더 굵은 검은 선을 깔아 테두리 있는 관으로 보인다. 여과·재흡수·분비 화살표를 넣을 수 있다.
 
@@ -27,8 +29,11 @@ try {
     var PREF_KEY = "ObjectCirculation/settings";
     var MM = 2.834645669;
     var LINE_WIDTH_PT = 0.3;
-    var HEAD_LENGTH = 1.8 * MM;
-    var HEAD_WIDTH = 1.4 * MM;
+    // 화살촉 기본 크기 (화살촉 크기 100%). 그릴 때 HEAD_LENGTH·HEAD_WIDTH를 배율에 맞춘다
+    var BASE_HEAD_LENGTH = 1.8 * MM;
+    var BASE_HEAD_WIDTH = 1.4 * MM;
+    var HEAD_LENGTH = BASE_HEAD_LENGTH;
+    var HEAD_WIDTH = BASE_HEAD_WIDTH;
     var ARTERIAL = {cmyk: [0, 90, 80, 0], rgb: [220, 40, 40], k: 15};
     var VENOUS = {cmyk: [85, 45, 0, 0], rgb: [40, 100, 200], k: 55};
     var TUBE_K = 12;
@@ -41,6 +46,9 @@ try {
     var POSITION_LIMIT_MM = 100;
     var SIZE_RANGE = [30, 200];
     var VESSEL_RANGE = [0.5, 8];
+    var CORNER_RANGE = [0, 20];
+    var ARROW_RANGE = [0.1, 3];
+    var HEAD_RANGE = [30, 300];
     var FONT_RANGE = [5, 20];
 
     var doc = app.activeDocument;
@@ -51,6 +59,9 @@ try {
     var kind = 0;
     var sizeMm = 80;
     var vesselPt = 3;
+    var cornerMm = 3;
+    var arrowPt = 0.3;
+    var headPct = 100;
     var colorOn = true;
     var labelsOn = true;
     var loopsOn = true;
@@ -77,6 +88,8 @@ try {
     addRadioRow(shapePanel, "종류", KINDS, kind, function(i) { kind = i; syncEnabled(); updatePreview(); });
     var sizeRow = addValueRow(shapePanel, "높이", "mm", sizeMm, SIZE_RANGE[0], SIZE_RANGE[1], 1, 0);
     var vesselRow = addValueRow(shapePanel, "관 굵기", "pt", vesselPt, VESSEL_RANGE[0], VESSEL_RANGE[1], 0.5, 1);
+    var cornerRow = addValueRow(shapePanel, "혈관 모서리", "mm", cornerMm, CORNER_RANGE[0], CORNER_RANGE[1], 0.5, 1);
+    cornerRow.input.helpTip = "혈관이 꺾이는 곳의 둥글기 반지름. 0이면 각진 모서리 (혈액 순환만)";
 
     var markPanel = addPanel(dlg, "표시");
     var checkRow = markPanel.add("group");
@@ -85,6 +98,10 @@ try {
     var checkRow2 = markPanel.add("group");
     var loopsCheck = checkRow2.add("checkbox", undefined, "폐순환·온몸 순환");
     var transportCheck = checkRow2.add("checkbox", undefined, "여과·재흡수·분비");
+    var arrowRow = addValueRow(markPanel, "화살표 두께", "pt", arrowPt, ARROW_RANGE[0], ARROW_RANGE[1], 0.1, 1);
+    arrowRow.input.helpTip = "심방 → 심실, 여과·재흡수·분비 화살표 선";
+    var headRow = addValueRow(markPanel, "화살촉 크기", "%", headPct, HEAD_RANGE[0], HEAD_RANGE[1], 10, 0);
+    headRow.input.helpTip = "혈관 화살촉을 포함한 모든 화살촉";
     var fontRow = addValueRow(markPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
 
     var positionPanel = addPanel(dlg, "위치");
@@ -112,6 +129,9 @@ try {
     transportCheck.onClick = function() { transportOn = transportCheck.value; updatePreview(); };
     bindValueRow(sizeRow, function() { return sizeMm; }, function(v) { sizeMm = v; });
     bindValueRow(vesselRow, function() { return vesselPt; }, function(v) { vesselPt = v; });
+    bindValueRow(cornerRow, function() { return cornerMm; }, function(v) { cornerMm = v; });
+    bindValueRow(arrowRow, function() { return arrowPt; }, function(v) { arrowPt = v; });
+    bindValueRow(headRow, function() { return headPct; }, function(v) { headPct = v; });
     bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
     bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
     bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
@@ -137,7 +157,13 @@ try {
     }
     app.redraw();
 
+    function setRowEnabled(controls, enabled) {
+        controls.input.enabled = enabled;
+        controls.slider.enabled = enabled;
+    }
+
     function syncEnabled() {
+        setRowEnabled(cornerRow, kind === 0);
         loopsCheck.enabled = kind === 0;
         transportCheck.enabled = kind === 1;
     }
@@ -154,6 +180,8 @@ try {
     function buildPreview() {
         previewGroup = layer.groupItems.add();
         previewGroup.name = KINDS[kind];
+        HEAD_LENGTH = BASE_HEAD_LENGTH * headPct / 100;
+        HEAD_WIDTH = BASE_HEAD_WIDTH * headPct / 100;
         var H = sizeMm * MM;
         if (kind === 0) {
             drawCirculation(H);
@@ -168,9 +196,9 @@ try {
         return colorOn ? makeColor(spec) : makeGray(spec.k);
     }
 
-    // 흰 테두리를 깐 굵은 혈관 선 (points는 꺾은선 또는 베지어 점)
+    // 흰 테두리를 깐 굵은 혈관 선. smooth면 점을 부드럽게 잇고, 아니면 꺾은선의 모서리를 cornerMm만큼 둥글린다
     function addVessel(points, spec, name, smooth) {
-        var bezier = smooth ? smoothPoints(points) : cornerPoints(points);
+        var bezier = smooth ? smoothPoints(points) : roundCorners(points, cornerMm * MM);
         var under = drawBezier(previewGroup, bezier, false);
         styleLine(under, vesselPt + 2, null, 0);
         under.strokeJoin = StrokeJoin.ROUNDENDJOIN;
@@ -221,7 +249,7 @@ try {
             room.name = ch.name;
             if (labelsOn) addText(ch.name, (ch.box[0] + ch.box[2]) / 2, (ch.box[1] + ch.box[3]) / 2, 0);
         }
-        for (var f = 0; f < c.valves.length; f++) addArrow(c.valves[f], "심방 → 심실");
+        for (var f = 0; f < c.valves.length; f++) addArrow(c.valves[f], "심방 → 심실").strokeWidth = arrowPt;
         if (labelsOn) {
             for (var l = 0; l < c.vesselLabels.length; l++) addText(c.vesselLabels[l].text, c.vesselLabels[l].p[0], c.vesselLabels[l].p[1], c.vesselLabels[l].align);
         }
@@ -261,7 +289,7 @@ try {
         knot.name = "사구체";
         if (transportOn) {
             for (var a = 0; a < n.transport.length; a++) {
-                addArrow(n.transport[a].points, n.transport[a].text);
+                addArrow(n.transport[a].points, n.transport[a].text).strokeWidth = arrowPt;
                 if (labelsOn) addText(n.transport[a].text, n.transport[a].label[0], n.transport[a].label[1], 0);
             }
         }
@@ -309,6 +337,35 @@ try {
             ],
             loopY: [(lungY - organH / 2 + cy + h / 2) / 2, (bodyY + organH / 2 - cy - h / 2) / 2]
         };
+    }
+
+    // 꺾은선의 가운데 꼭짓점마다 반지름 r인 원호로 둥글린 베지어 점. 원호가 시작하는 거리(접선 길이)는
+    // 이웃 조각 길이의 절반을 넘지 않게 줄인다. r이 0이면 꺾은선 그대로
+    function roundCorners(list, r) {
+        var points = [{anchor: list[0], left: list[0], right: list[0]}];
+        for (var i = 1; i < list.length - 1; i++) {
+            var p = list[i];
+            var ax = list[i - 1][0] - p[0], ay = list[i - 1][1] - p[1];
+            var bx = list[i + 1][0] - p[0], by = list[i + 1][1] - p[1];
+            var la = Math.sqrt(ax * ax + ay * ay), lb = Math.sqrt(bx * bx + by * by);
+            var cosInner = (ax * bx + ay * by) / (la * lb);
+            var turn = Math.PI - Math.acos(Math.max(-1, Math.min(1, cosInner)));
+            if (r <= 0 || turn < 1e-6 || la < 1e-9 || lb < 1e-9) {
+                points.push({anchor: p, left: p, right: p});
+                continue;
+            }
+            // 반지름 r인 원호의 접선 길이 r·tan(φ/2)
+            var t = Math.min(r * Math.tan(turn / 2), la / 2, lb / 2);
+            var radius = t / Math.tan(turn / 2);
+            var handle = 4 / 3 * Math.tan(turn / 4) * radius;
+            var ux = ax / la, uy = ay / la, vx = bx / lb, vy = by / lb;
+            var a = [p[0] + ux * t, p[1] + uy * t], b = [p[0] + vx * t, p[1] + vy * t];
+            points.push({anchor: a, left: a, right: [a[0] - ux * handle, a[1] - uy * handle]});
+            points.push({anchor: b, left: [b[0] - vx * handle, b[1] - vy * handle], right: b});
+        }
+        var last = list[list.length - 1];
+        points.push({anchor: last, left: last, right: last});
+        return points;
     }
 
     // 두 점 사이를 진폭 amp, 반 파장 n개로 구불거리는 점 목록 (끝점 포함)
@@ -368,8 +425,8 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1", kind, sizeMm, vesselPt, colorOn ? "1" : "0", labelsOn ? "1" : "0", loopsOn ? "1" : "0", transportOn ? "1" : "0",
-            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+        var parts = ["v2", kind, sizeMm, vesselPt, colorOn ? "1" : "0", labelsOn ? "1" : "0", loopsOn ? "1" : "0", transportOn ? "1" : "0",
+            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", cornerMm, arrowPt, headPct];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -378,7 +435,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 12) return;
+        if (p[0] !== "v2" || p.length !== 15) return;
         kind = restoreNumber(p[1], kind, [0, KINDS.length - 1], 1);
         sizeMm = restoreNumber(p[2], sizeMm, SIZE_RANGE, 1);
         vesselPt = restoreNumber(p[3], vesselPt, VESSEL_RANGE, 0.5);
@@ -390,6 +447,9 @@ try {
         offsetXmm = restoreNumber(p[9], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         offsetYmm = restoreNumber(p[10], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         previewEnabled = p[11] === "1";
+        cornerMm = restoreNumber(p[12], cornerMm, CORNER_RANGE, 0.5);
+        arrowPt = restoreNumber(p[13], arrowPt, ARROW_RANGE, 0.1);
+        headPct = restoreNumber(p[14], headPct, HEAD_RANGE, 10);
     }
 
     // -------------------------------------------------------
@@ -442,14 +502,7 @@ try {
         return points;
     }
 
-        // 꺾은선 점 목록 → 손잡이 없는 베지어 점
-    function cornerPoints(list) {
-        var points = [];
-        for (var i = 0; i < list.length; i++) points.push({anchor: list[i], left: list[i], right: list[i]});
-        return points;
-    }
-
-        // 끝이 tip, 방향 (dx, dy)인 채운 삼각형의 세 점
+            // 끝이 tip, 방향 (dx, dy)인 채운 삼각형의 세 점
     function arrowHeadPoints(tip, dx, dy) {
         var length = Math.sqrt(dx * dx + dy * dy);
         var ux = dx / length, uy = dy / length;

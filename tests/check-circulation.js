@@ -21,7 +21,7 @@ function extractFunction(name) {
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= (tol || 1e-9), `${label}: expected ${b}, got ${a}`);
 
-const names = ["circulationLayout", "wiggle", "nephronLayout"];
+const names = ["circulationLayout", "wiggle", "nephronLayout", "roundCorners"];
 const lib = new Function(`${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 const c = lib.circulationLayout(200);
@@ -51,5 +51,25 @@ const w = lib.wiggle([0, 0], [10, 0], 2, 4);
 assert.deepStrictEqual(w[0], [0, 0]);
 near(w[w.length - 1][0], 10, 1e-9, "wiggle ends at b");
 assert.ok(source.includes('var PREF_KEY = "ObjectCirculation/settings";'));
-assert.ok(source.includes('p[0] !== "v1" || p.length !== 12'), "settings field count");
+// 혈관 모서리: 직각 꺾임 하나에 앵커 두 개, 접선 길이 = 반지름, 원호 위, 끝점은 그대로
+{
+  const pts = lib.roundCorners([[0, 0], [10, 0], [10, 10]], 3);
+  assert.strictEqual(pts.length, 4);
+  assert.deepStrictEqual(pts[0].anchor, [0, 0]);
+  assert.deepStrictEqual(pts[3].anchor, [10, 10]);
+  near(pts[1].anchor[0], 7, 1e-9, "arc starts r before the corner");
+  near(pts[2].anchor[1], 3, 1e-9, "arc ends r after the corner");
+  // 베지어 가운데 점이 중심 (7, 3), 반지름 3 원 위에 있다
+  const [p0, p1, p2, p3] = [pts[1].anchor, pts[1].right, pts[2].left, pts[2].anchor];
+  const mid = [0, 1].map((k) => (p0[k] + 3 * p1[k] + 3 * p2[k] + p3[k]) / 8);
+  near(Math.hypot(mid[0] - 7, mid[1] - 3), 3, 0.01, "quarter circle");
+  // 반지름 0이면 꺾은선 그대로, 짧은 조각이면 반지름을 줄인다
+  assert.deepStrictEqual(lib.roundCorners([[0, 0], [10, 0], [10, 10]], 0).map((p) => p.anchor), [[0, 0], [10, 0], [10, 10]]);
+  const tight = lib.roundCorners([[0, 0], [4, 0], [4, 10]], 5);
+  near(tight[1].anchor[0], 2, 1e-9, "tangent length capped at half the shorter piece");
+  // 모든 혈관이 둥글려도 NaN 없이 그려진다
+  for (const v of c.vessels) for (const p of lib.roundCorners(v.points, 8)) for (const q of [p.anchor, p.left, p.right]) assert.ok(isFinite(q[0]) && isFinite(q[1]));
+}
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 15'), "settings field count");
+assert.ok(source.includes("HEAD_LENGTH = BASE_HEAD_LENGTH * headPct / 100;"), "head size scales every arrowhead");
 console.log("circulation checks passed");
