@@ -20,8 +20,8 @@ function extractFunction(name) {
 }
 
 const names = ["convectionLoops", "baseLoops", "loopPieces", "trimEnd", "heatArrows", "corner", "arcPoints",
-  "beakerShape", "v", "roundPolyline", "unit", "flattenBezier", "clipBelow", "spanAt"];
-const lib = new Function(`var MM = 2.834645669, FLATTEN_STEPS = 12;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+  "beakerShape", "v", "roundPolyline", "unit"];
+const lib = new Function(`var MM = 2.834645669;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= (tol || 1e-9), `${label}: expected ${b}, got ${a}`);
 const box = [0, 60, 100, 0];
 
@@ -90,17 +90,63 @@ for (const clockwise of [true, false]) {
 // 비커: 너비·높이는 받은 값, 물은 바닥부터 물 높이까지, 고리 상자는 물 안
 {
   const b = lib.beakerShape([50, 50], 60, 80, 0.5);
-  assert.deepStrictEqual(b.box, [20, 90, 80, 10]);
+  assert.deepStrictEqual(b.box, [20, 90, 80, 10], "no glass: box is the inner wall");
   const top = 90 - 60 * 0.06;
   near(b.water[1], 10 + (top - 10) * 0.5, 1e-9, "water level");
   near(b.water[3], 10, 1e-9, "water bottom");
-  for (const p of b.waterPoly) assert.ok(p[1] <= b.water[1] + 1e-9 && p[0] >= 20 - 1e-9 && p[0] <= 80 + 1e-9, "water inside the beaker");
-  assert.ok(b.surface && near(b.surface[0][1], b.water[1], 1e-9, "surface at the level") === undefined);
+  // 물은 바닥 모서리만 둥근 사각형: 앵커 6개, 모두 비커 안
+  assert.strictEqual(b.waterPoints.length, 6, "six anchors, no flattened polygon");
+  for (const p of b.waterPoints) for (const q of [p.anchor, p.left, p.right]) {
+    assert.ok(q[1] <= b.water[1] + 1e-9 && q[1] >= 10 - 1e-9 && q[0] >= 20 - 1e-9 && q[0] <= 80 + 1e-9, "water inside the beaker");
+  }
+  assert.deepStrictEqual(b.surface, [[20, b.water[1]], [80, b.water[1]]], "surface spans the walls");
+  // 수면이 바닥 모서리 원호에 걸리면 수면 선을 벽 안쪽으로 들인다
+  const low = lib.beakerShape([50, 50], 60, 80, 0.03);
+  assert.ok(low.surface[0][0] > 20 && low.surface[1][0] < 80, "surface inset inside the rounded corner");
   const loops = lib.convectionLoops(b.water, 0, 3, 0.5, 3, 2);
   for (const l of loops) assert.ok(l.top <= b.water[1] - 3 + 1e-9 && l.bottom >= 10 + 3 - 1e-9, "loops stay in the water");
   // 가득 채우면 수면 선을 따로 긋지 않는다
   assert.strictEqual(lib.beakerShape([0, 0], 30, 40, 1).surface, null);
 }
-assert.ok(source.includes('if (p[0] !== "v2" || p.length !== 15) return;'), "settings bumped to v2");
+// 끊김 위치: 조각은 변의 곧은 부분에서 시작·끝나고(곡선 위가 아님), 다음 조각 시작과 gap만큼 떨어진다
+for (const clockwise of [true, false]) {
+  const loop = {left: 10, top: 50, right: 90, bottom: 10, r: 8, clockwise};
+  for (const f of [0.25, 0.5, 1]) {
+    const pieces = lib.loopPieces(loop, 1.5, f);
+    for (let i = 0; i < 4; i++) {
+      const p = pieces[i];
+      const start = p[0].anchor, end = p[p.length - 1].anchor, prev = p[p.length - 2].anchor;
+      const onStraight = (q) => (Math.abs(q[0] - 10) < 1e-9 || Math.abs(q[0] - 90) < 1e-9) ? (q[1] >= 18 - 1e-9 && q[1] <= 42 + 1e-9)
+        : (Math.abs(q[1] - 10) < 1e-9 || Math.abs(q[1] - 50) < 1e-9) && q[0] >= 18 - 1e-9 && q[0] <= 82 + 1e-9;
+      assert.ok(onStraight(start), `f ${f}: piece ${i} starts on a straight side`);
+      if (f >= 0.25) {
+        assert.ok(onStraight(end), `f ${f}: piece ${i} ends on a straight side`);
+        assert.ok(Math.abs(end[0] - prev[0]) < 1e-9 || Math.abs(end[1] - prev[1]) < 1e-9, "last segment is straight");
+      }
+      const next = pieces[(i + 1) % 4][0].anchor;
+      near(Math.hypot(end[0] - next[0], end[1] - next[1]), 1.5, 1e-9, "gap before the next piece");
+    }
+  }
+  // 50%면 첫 조각은 오르는 변 가운데에서 시작
+  const mid = lib.loopPieces(loop, 0, 0.5)[0][0].anchor;
+  near(mid[0], clockwise ? 10 : 90, 1e-9, "rising side");
+  near(mid[1], 30, 1e-9, "middle of the side");
+  // 0이면 예전과 같다
+  assert.deepStrictEqual(lib.loopPieces(loop, 1.5, 0), lib.loopPieces(loop, 1.5));
+}
+// 유리 두께: 가운데 선은 안쪽 벽에서 두께 절반 바깥, 물과 수면은 그대로, 양 끝은 선의 첫·끝 점
+{
+  const plain = lib.beakerShape([50, 50], 60, 80, 0.5, 0);
+  const b = lib.beakerShape([50, 50], 60, 80, 0.5, 2);
+  assert.deepStrictEqual(b.waterPoints, plain.waterPoints, "water unchanged by the glass");
+  assert.deepStrictEqual(b.surface, plain.surface, "surface unchanged by the glass");
+  const xs = b.outline.map((p) => p.anchor[0]), ys = b.outline.map((p) => p.anchor[1]);
+  near(Math.max(...xs), 81, 1e-9, "right wall centre 1 outside");
+  near(Math.min(...ys), 9, 1e-9, "bottom centre 1 below");
+  assert.ok(b.outline.some((p) => Math.abs(p.anchor[0] - 19) < 1e-9), "left wall centre 1 outside");
+  assert.deepStrictEqual(b.ends, [b.outline[0].anchor, b.outline[b.outline.length - 1].anchor]);
+  assert.deepStrictEqual(b.box, [18, 90, 82, 8], "box reaches the outer glass");
+}
+assert.ok(source.includes('if (p[0] !== "v4" || p.length !== 17) return;'), "settings bumped to v4");
 assert.ok(source.includes('var PREF_KEY = "ObjectConvection/settings";'));
 console.log("convection checks passed");
