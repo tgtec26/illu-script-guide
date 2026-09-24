@@ -52,6 +52,9 @@ try {
     var doc = app.activeDocument;
     var viewCenter = doc.activeView.centerPoint;
     var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
+    var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+    var batangFont = findOptionalFont("Batang");
+    var ENG_BASELINE_PT = 0.5;
 
     // 옵션
     var kind = 1;
@@ -473,9 +476,9 @@ try {
     function addText(text, x, y, align, container) {
         var frame = (container || previewGroup).textFrames.add();
         frame.contents = text;
-        frame.textRange.characterAttributes.textFont = korFont;
         frame.textRange.characterAttributes.size = fontPt;
         frame.textRange.characterAttributes.fillColor = makeGray(100);
+        applyTextFonts(frame);
         var b = frame.geometricBounds;
         var anchorX = align === 1 ? b[0] : (align === -1 ? b[2] : (b[0] + b[2]) / 2);
         frame.translate(x - anchorX, y - (b[1] + b[3]) / 2);
@@ -492,7 +495,54 @@ try {
         return doc.layers.add();
     }
 
-        function findTextFont(names) {
+        // 글자 서체 (02_문자/Text_koen.jsx·Text_input.jsx 규칙): 한글·공백은 Spoqa(기준선 0), 영문·숫자·기호는
+    // GSMediumB1(기준선 +0.5pt). 항목 기호 (가)(나)는 바탕 1.25배, ㉠·ⓐ는 바탕 1.125배 (8pt 기준 10pt·9pt).
+    // 크기를 정한 뒤에 부른다
+    function applyTextFonts(frame) {
+        var text = frame.contents;
+        for (var i = 0; i < text.length; i++) {
+            var code = text.charCodeAt(i);
+            var attributes = frame.textRange.characters[i].characterAttributes;
+            var bracket = batangFont !== null && isBracketLabel(text, i);
+            if (bracket || (batangFont !== null && isCircledLabel(code))) {
+                attributes.textFont = batangFont;
+                attributes.size = attributes.size * (bracket ? 1.25 : 1.125);
+                attributes.baselineShift = 0;
+            } else if (isKoreanOrSpace(code)) {
+                attributes.textFont = korFont;
+                attributes.baselineShift = 0;
+            } else {
+                attributes.textFont = engFont;
+                attributes.baselineShift = ENG_BASELINE_PT;
+            }
+        }
+    }
+
+    function isKoreanOrSpace(code) {
+        return (code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160;
+    }
+
+    // i번째 글자가 "(한글 한 글자)" 세 글자 안에 드는가
+    function isBracketLabel(text, i) {
+        for (var start = i - 2; start <= i; start++) {
+            if (start < 0 || start + 2 >= text.length) continue;
+            var inner = text.charCodeAt(start + 1);
+            if (text.charAt(start) === "(" && text.charAt(start + 2) === ")" && inner >= 0xAC00 && inner <= 0xD7A3) return true;
+        }
+        return false;
+    }
+
+    // ㉠㉡… ⓐⓑ…
+    function isCircledLabel(code) {
+        return (code >= 0x3260 && code <= 0x327F) || (code >= 0x24D0 && code <= 0x24E9);
+    }
+
+    // 없으면 null (바탕이 없으면 항목 기호도 Spoqa로 둔다)
+    function findOptionalFont(name) {
+        try { return app.textFonts.getByName(name); } catch (e) { return null; }
+    }
+
+    function findTextFont(names) {
         for (var i = 0; i < names.length; i++) {
             try { return app.textFonts.getByName(names[i]); } catch (e) {}
         }
