@@ -19,7 +19,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["glassware", "v", "rectVertices", "roundPolyline", "bezierCorner", "unit", "arcPoints", "joinBezier", "closeLoop",
+const names = ["glassware", "wallOutline", "offsetWall", "v", "rectVertices", "roundPolyline", "bezierCorner", "unit", "arcPoints", "joinBezier", "closeLoop",
   "flattenBezier", "clipBelow", "spanAt", "tickLines"];
 const lib = new Function(`var FLATTEN_STEPS = 12;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= (tol || 1e-9), `${label}: expected ${b}, got ${a}`);
@@ -95,5 +95,48 @@ for (let kind = 0; kind < 6; kind++) {
   assert.strictEqual(g.tickSide, "outside");
   assert.strictEqual(g.fills.length, 2);
 }
+// 유리 두께: 0이면 예전 한 줄 윤곽. 두께가 있으면 유리 벽 윤곽에 glass가 붙고, 안쪽·수위는 그대로, 벽은 두께 절반 바깥
+{
+  const bboxOf = (points) => {
+    const xs = points.map((p) => p.anchor[0]), ys = points.map((p) => p.anchor[1]);
+    return [Math.min(...xs), Math.max(...ys), Math.max(...xs), Math.min(...ys)];
+  };
+  for (let kind = 0; kind < 6; kind++) {
+    const plain = lib.glassware(kind, box, 0.5);
+    assert.deepStrictEqual(lib.glassware(kind, box, 0.5, 0), plain, `kind ${kind}: zero glass keeps the single line`);
+    assert.ok(!plain.outlines.some((o) => o.glass), `kind ${kind}: no glass by default`);
+    const thick = lib.glassware(kind, box, 0.5, 2);
+    const glassy = thick.outlines.filter((o) => o.glass === 2);
+    assert.strictEqual(glassy.length, 1, `kind ${kind}: exactly one glass wall`);
+    assert.deepStrictEqual(thick.interior, plain.interior, `kind ${kind}: interior unchanged`);
+    near(thick.levelY, plain.levelY, 1e-9, `kind ${kind}: level unchanged`);
+    // 유리 벽 윤곽의 바닥이 두께 절반(1)만큼 아래
+    const i = thick.outlines.indexOf(glassy[0]);
+    const a = bboxOf(plain.outlines[i].points), g = bboxOf(glassy[0].points);
+    near(a[3] - g[3], 1, 1e-9, `kind ${kind}: bottom moves down`);
+    assert.ok(g[0] < a[0] && g[2] > a[2], `kind ${kind}: wider than the plain wall`);
+    // 받침·날개·피스톤은 그대로
+    for (let o = 0; o < thick.outlines.length; o++) {
+      if (o !== i) assert.deepStrictEqual(thick.outlines[o], plain.outlines[o], `kind ${kind}: part ${o} unchanged`);
+    }
+  }
+  // offsetWall: 진행 방향 오른쪽(바깥)으로 d, 모서리 둥글기는 바깥 볼록이면 +d
+  const u = lib.offsetWall([lib.v(0, 10, 0), lib.v(0, 0, 3), lib.v(10, 0, 3), lib.v(10, 10, 0)], 1);
+  assert.deepStrictEqual(u.map((p) => [p.x, p.y, p.r]), [[-1, 10, 0], [-1, -1, 4], [11, -1, 4], [11, 10, 0]]);
+  // 비스듬한 변도 변에 수직으로 d만큼
+  const slant = lib.offsetWall([lib.v(0, 0, 0), lib.v(3, -4, 0)], 1);
+  near(Math.hypot(slant[0].x, slant[0].y), 1, 1e-9, "perpendicular offset");
+  near(slant[0].x * 3 + slant[0].y * -4, 0, 1e-9, "normal to the edge");
+  // 주사기 통은 날개가 덮으므로 끝 알이 없다
+  assert.ok(lib.glassware(4, box, 0.5, 2).outlines[0].noRims, "syringe barrel has no rim beads");
+  assert.ok(!lib.glassware(0, box, 0.5, 2).outlines[0].noRims, "beaker keeps its rim beads");
+  // 온도계 눈금은 유리 바깥에서 시작
+  near(lib.glassware(5, box, 0.5, 2).tickX, lib.glassware(5, box, 0.5).tickX + 2, 1e-9, "thermometer ticks outside the glass");
+  // 시험관 바닥은 반원 그대로 (반지름 = 반너비 + 1)
+  const tube = lib.glassware(2, box, 0.5, 2).outlines[0].points;
+  const bottom = Math.min(...tube.map((p) => p.anchor[1]));
+  near(bottom, 0 - 1, 1e-9, "test tube bottom");
+}
+assert.ok(source.includes('if (p[0] !== "v2" || p.length !== 11) return;'), "settings bumped to v2");
 assert.ok(source.includes('var PREF_KEY = "ObjectLabGlassware/settings";'));
 console.log("lab glassware checks passed");

@@ -28,6 +28,8 @@ try {
     var PREF_KEY = "ObjectLabGlassware/settings";
     var MM = 2.834645669;
     var LINE_WIDTH_PT = 0.3;
+    // 유리 양 끝 알: 유리 두께의 몇 배
+    var RIM_SCALE = 1.25;
     var FLATTEN_STEPS = 12;
     // 종류: 이름, 기본 크기(mm), 액체 행 이름
     var KINDS = [
@@ -46,6 +48,7 @@ try {
     var LEVEL_RANGE = [0, 100];
     var K_RANGE = [0, 100];
     var TICK_RANGE = [2, 50];
+    var GLASS_RANGE = [0, 5];
 
     var doc = app.activeDocument;
     var rect = getSelectedRectangle(doc.selection);
@@ -65,6 +68,7 @@ try {
     var liquidK = 20;
     var ticksOn = false;
     var tickCount = 10;
+    var glassMm = 0;
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
@@ -92,6 +96,8 @@ try {
     kindList.preferredSize.width = 160;
     var widthRow = addValueRow(kindPanel, "너비", "mm", widthMm, SIZE_RANGE[0], SIZE_RANGE[1], 0.5, 1);
     var heightRow = addValueRow(kindPanel, "높이", "mm", heightMm, SIZE_RANGE[0], SIZE_RANGE[1], 0.5, 1);
+    var glassRow = addValueRow(kindPanel, "유리 두께", "mm", glassMm, GLASS_RANGE[0], GLASS_RANGE[1], 0.1, 1);
+    glassRow.input.helpTip = "0이면 한 줄 선, 올리면 흰 안쪽의 두 겹 유리(바깥쪽으로 두꺼워지고 열린 끝은 둥글게 조금 더 두껍다). 받침·날개·피스톤은 그대로";
 
     var liquidPanel = addPanel(dlg, "액체");
     var liquidCheck = liquidPanel.add("checkbox", undefined, "액체 넣기");
@@ -138,6 +144,7 @@ try {
     tickCheck.onClick = function() { ticksOn = tickCheck.value; syncEnabled(); updatePreview(); };
     bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; });
     bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; });
+    bindValueRow(glassRow, function() { return glassMm; }, function(v) { glassMm = v; });
     bindValueRow(levelRow, function() { return levelPct; }, function(v) { levelPct = v; });
     bindValueRow(kRow, function() { return liquidK; }, function(v) { liquidK = v; });
     bindValueRow(tickRow, function() { return tickCount; }, function(v) { tickCount = v; });
@@ -216,7 +223,7 @@ try {
         var w = widthMm * MM;
         var h = heightMm * MM;
         var box = {left: center[0] - w / 2, top: center[1] + h / 2, width: w, height: h};
-        var g = glassware(kind, box, levelPct / 100);
+        var g = glassware(kind, box, levelPct / 100, glassMm * MM);
         var black = makeGray(100);
         var container = rect !== null ? rect.parent : findEditableLayer();
         previewGroup = container.groupItems.add();
@@ -241,6 +248,10 @@ try {
             }
         }
         for (var i = 0; i < g.outlines.length; i++) {
+            if (g.outlines[i].glass > 0) {
+                drawGlassWall(previewGroup, g.outlines[i].points, g.outlines[i].glass, g.outlines[i].closed, g.outlines[i].noRims);
+                continue;
+            }
             var outline = drawBezier(previewGroup, g.outlines[i].points, g.outlines[i].closed);
             outline.stroked = true;
             outline.strokeColor = black;
@@ -284,9 +295,11 @@ try {
     // -------------------------------------------------------
     // 기구 모양 (순수 계산)
     // -------------------------------------------------------
-    // 돌려주는 것: outlines [{points(베지어 점), closed, fill?}], fills [베지어 점 목록], interior(안쪽 다각형),
-    // interiorBottom/Top, levelY, tickSide("inside" | "outside"), tickX(y)→눈금 시작 x, gas(다각형 또는 null)
-    function glassware(kindIndex, box, level) {
+    // 돌려주는 것: outlines [{points(베지어 점), closed, fill?, glass?}], fills [베지어 점 목록], interior(안쪽 다각형),
+    // interiorBottom/Top, levelY, tickSide("inside" | "outside"), tickX(y)→눈금 시작 x, gas(다각형 또는 null).
+    // glass: 0보다 크면 유리 벽(열린 벽, 온도계 관·구부) 윤곽은 안쪽 벽에서 두께 절반 바깥의 유리 가운데 선이고
+    // glass에 두께가 들어간다. 받침·날개·피스톤은 그대로 한 줄 선이다. 안쪽(액체·눈금)은 두께와 관계없다
+    function glassware(kindIndex, box, level, glass) {
         var L = box.left;
         var T = box.top;
         var W = box.width;
@@ -302,7 +315,7 @@ try {
             var lip = W * 0.06;
             var r0 = Math.min(W * 0.08, H * 0.2);
             wall = [v(L - lip, T + lip * 0.3, 0), v(L, T - lip, lip * 0.8), v(L, B, r0), v(R, B, r0), v(R, T, 0)];
-            result.outlines.push({points: roundPolyline(wall, false), closed: false});
+            result.outlines.push(wallOutline(wall, glass));
             result.interior = flattenBezier(roundPolyline(wall.slice(1), false));
         } else if (kindIndex === 1) {
             // 삼각 플라스크: 목(너비 32%, 높이 28%) + 사다리꼴 몸통
@@ -313,12 +326,12 @@ try {
             wall = [v(cx - neck / 2 - rim, T, 0), v(cx - neck / 2, T - rim, 0), v(cx - neck / 2, T - neckH, W * 0.04),
                 v(L, B, r1), v(R, B, r1), v(cx + neck / 2, T - neckH, W * 0.04), v(cx + neck / 2, T - rim, 0),
                 v(cx + neck / 2 + rim, T, 0)];
-            result.outlines.push({points: roundPolyline(wall, false), closed: false});
+            result.outlines.push(wallOutline(wall, glass));
             result.interior = flattenBezier(roundPolyline(wall.slice(1, wall.length - 1), false));
         } else if (kindIndex === 2) {
             // 시험관: 바닥 두 모서리 반지름이 반너비라 반원이 된다
             wall = [v(L, T, 0), v(L, B, W / 2), v(R, B, W / 2), v(R, T, 0)];
-            result.outlines.push({points: roundPolyline(wall, false), closed: false});
+            result.outlines.push(wallOutline(wall, glass));
             result.interior = flattenBezier(roundPolyline(wall, false));
         } else if (kindIndex === 3) {
             // 눈금실린더: 받침(너비 전체, 높이 5%) 위에 너비 50% 관, 왼쪽 위 부리
@@ -329,7 +342,7 @@ try {
             var spout = tubeW * 0.12;
             wall = [v(tl - spout, T + spout * 0.3, 0), v(tl, T - spout, spout * 0.8), v(tl, B + footH, 0),
                 v(tr, B + footH, 0), v(tr, T, 0)];
-            result.outlines.push({points: roundPolyline(wall, false), closed: false});
+            result.outlines.push(wallOutline(wall, glass));
             var foot = [v(L + W * 0.05, B + footH, 0), v(L, B, 0), v(R, B, 0), v(R - W * 0.05, B + footH, 0)];
             result.outlines.push({points: roundPolyline(foot, true), closed: true, fill: 0});
             result.interior = flattenBezier(roundPolyline(wall.slice(1), false));
@@ -345,7 +358,8 @@ try {
             wall = [v(bl, barrelTop, 0), v(bl, barrelBottom, 0), v(cx - nozzleW / 2, barrelBottom, 0),
                 v(cx - nozzleW / 2, B, 0), v(cx + nozzleW / 2, B, 0), v(cx + nozzleW / 2, barrelBottom, 0),
                 v(br, barrelBottom, 0), v(br, barrelTop, 0)];
-            result.outlines.push({points: roundPolyline(wall, false), closed: false});
+            // 통 위 끝은 날개가 덮으므로 끝 알을 달지 않는다
+            result.outlines.push(wallOutline(wall, glass, true));
             var flangeW = W * 0.22;
             var flangeH = H * 0.015;
             result.outlines.push({points: roundPolyline(rectVertices(bl - flangeW, barrelTop + flangeH, flangeW, flangeH), true), closed: true, fill: 0});
@@ -371,10 +385,18 @@ try {
             var half = tubeWidth / 2;
             var joinY = bulbCy + Math.sqrt(bulbR * bulbR - half * half);
             var alpha = Math.asin(half / bulbR);     // 연결점이 세로축에서 벌어진 각
-            var tube = roundPolyline([v(cx + half, joinY, 0), v(cx + half, T, half), v(cx - half, T, half), v(cx - half, joinY, 0)], false);
+            // 유리가 있으면 관과 구부를 두께 절반만큼 키운 가운데 선을 쓴다 (구부 중심·관 꼭대기 원 중심은 그대로)
+            var gh = (glass || 0) / 2;
+            var oh = half + gh, oR = bulbR + gh;
+            var oJoin = bulbCy + Math.sqrt(oR * oR - oh * oh);
+            var oAlpha = Math.asin(oh / oR);
+            var tubeTop = T - half + oh;
+            var tube = roundPolyline([v(cx + oh, oJoin, 0), v(cx + oh, tubeTop, oh), v(cx - oh, tubeTop, oh), v(cx - oh, oJoin, 0)], false);
             // 왼쪽 연결점에서 구부 둘레를 돌아 오른쪽 연결점으로 (반시계, 아래를 지난다)
-            var arc = arcPoints(cx, bulbCy, bulbR, Math.PI / 2 + alpha, Math.PI * 2.5 - alpha);
-            result.outlines.push({points: closeLoop(joinBezier(tube, arc)), closed: true, fill: 0});
+            var arc = arcPoints(cx, bulbCy, oR, Math.PI / 2 + oAlpha, Math.PI * 2.5 - oAlpha);
+            var bulbOutline = {points: closeLoop(joinBezier(tube, arc)), closed: true, fill: 0};
+            if (gh > 0) bulbOutline.glass = glass;
+            result.outlines.push(bulbOutline);
             var colW = tubeWidth * 0.36;
             var bottomY = joinY;
             var topY = T - half - tubeWidth * 0.1;
@@ -383,7 +405,7 @@ try {
             result.fills.push(roundPolyline(rectVertices(cx - colW / 2, colTop, colW, colTop - (bulbCy)), true));
             result.interior = [[cx - half, joinY], [cx + half, joinY], [cx + half, T - half], [cx - half, T - half]];
             result.tickSide = "outside";
-            result.tickX = cx + half;
+            result.tickX = cx + half + (glass || 0);
         }
 
         var ys = [];
@@ -392,6 +414,46 @@ try {
         result.interiorTop = Math.max.apply(null, ys);
         result.levelY = result.interiorBottom + (result.interiorTop - result.interiorBottom) * level;
         return result;
+    }
+
+    // 열린 벽 윤곽. 유리가 있으면 벽을 바깥쪽(진행 방향 오른쪽)으로 두께 절반만큼 옮긴 가운데 선. noRims면 양 끝 알 없음
+    function wallOutline(wall, glass, noRims) {
+        if (!(glass > 0)) return {points: roundPolyline(wall, false), closed: false};
+        var outline = {points: roundPolyline(offsetWall(wall, glass / 2), false), closed: false, glass: glass};
+        if (noRims) outline.noRims = true;
+        return outline;
+    }
+
+    // 꺾은선 꼭짓점을 진행 방향 오른쪽으로 d만큼 평행 이동 (가운데 꼭짓점은 두 변 법선의 이등분선 방향으로 d / cos).
+    // 왼쪽으로 꺾이는 꼭짓점(바깥으로 볼록)은 둥글기 반지름을 d만큼 키우고, 오른쪽으로 꺾이면 줄인다
+    function offsetWall(vertices, d) {
+        var n = vertices.length;
+        var out = [];
+        function normal(a, b) {
+            var dx = b.x - a.x, dy = b.y - a.y, length = Math.sqrt(dx * dx + dy * dy);
+            return {x: dy / length, y: -dx / length, ex: dx / length, ey: dy / length};
+        }
+        for (var i = 0; i < n; i++) {
+            var cur = vertices[i];
+            var n1 = i > 0 ? normal(vertices[i - 1], cur) : null;
+            var n2 = i < n - 1 ? normal(cur, vertices[i + 1]) : null;
+            var mx, my, r = cur.r;
+            if (n1 === null || n2 === null) {
+                var only = n1 || n2;
+                mx = only.x * d;
+                my = only.y * d;
+            } else {
+                var bx = n1.x + n2.x, by = n1.y + n2.y;
+                var bl = Math.sqrt(bx * bx + by * by);
+                var cos = bl > 1e-9 ? (bx / bl * n1.x + by / bl * n1.y) : 1;
+                mx = bl > 1e-9 ? bx / bl * d / cos : n1.x * d;
+                my = bl > 1e-9 ? by / bl * d / cos : n1.y * d;
+                var turn = n1.ex * n2.ey - n1.ey * n2.ex;
+                if (r > 0) r = turn > 0 ? r + d : Math.max(0, r - d);
+            }
+            out.push(v(cur.x + mx, cur.y + my, r));
+        }
+        return out;
     }
 
     function v(x, y, r) {
@@ -584,6 +646,34 @@ try {
         return path;
     }
 
+    // 두꺼운 유리: 검정(두께 + 테두리 두 줄) → 흰색(두께) 순서로 겹쳐 흰 안쪽의 두 겹 선을 만든다.
+    // 열린 벽은 끝이 둥글고, 양 끝에는 두께의 RIM_SCALE배인 둥근 알을 같은 순서로 겹쳐 조금 더 두껍게 한다.
+    // 닫힌 모양(온도계)과 noRims(주사기 통)는 알이 없다. 닫힌 모양은 검정 층을 흰색으로 채워 안쪽을 가린다
+    function drawGlassWall(container, points, glass, closed, noRims) {
+        var group = container.groupItems.add();
+        group.name = "유리";
+        var layers = [[100, glass + LINE_WIDTH_PT * 2], [0, glass]];
+        var ends = closed || noRims ? [] : [points[0].anchor, points[points.length - 1].anchor];
+        for (var i = 0; i < layers.length; i++) {
+            var wall = drawBezier(group, points, closed);
+            wall.filled = closed && i === 0;
+            if (wall.filled) wall.fillColor = makeGray(0);
+            wall.stroked = true;
+            wall.strokeColor = makeGray(layers[i][0]);
+            wall.strokeWidth = layers[i][1];
+            wall.strokeCap = StrokeCap.ROUNDENDCAP;
+            wall.strokeJoin = StrokeJoin.ROUNDENDJOIN;
+            for (var e = 0; e < ends.length; e++) {
+                var d = glass * RIM_SCALE + (layers[i][1] - glass);
+                var rim = group.pathItems.ellipse(ends[e][1] + d / 2, ends[e][0] - d / 2, d, d);
+                rim.stroked = false;
+                rim.filled = true;
+                rim.fillColor = makeGray(layers[i][0]);
+            }
+        }
+        return group;
+    }
+
     function strokeLine(container, points, color) {
         var line = container.pathItems.add();
         line.setEntirePath(points);
@@ -751,8 +841,8 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1", kind, liquidOn ? "1" : "0", levelPct, liquidK, ticksOn ? "1" : "0", tickCount,
-            offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+        var parts = ["v2", kind, liquidOn ? "1" : "0", levelPct, liquidK, ticksOn ? "1" : "0", tickCount,
+            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", glassMm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -761,7 +851,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 10) return;
+        if (p[0] !== "v2" || p.length !== 11) return;
         kind = restoreNumber(p[1], kind, [0, KINDS.length - 1], 1);
         liquidOn = p[2] === "1";
         levelPct = restoreNumber(p[3], levelPct, LEVEL_RANGE, 1);
@@ -771,6 +861,7 @@ try {
         offsetXmm = restoreNumber(p[7], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         offsetYmm = restoreNumber(p[8], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         previewEnabled = p[9] === "1";
+        glassMm = restoreNumber(p[10], glassMm, GLASS_RANGE, 0.1);
     }
 
     function restoreNumber(text, fallback, range, step) {
