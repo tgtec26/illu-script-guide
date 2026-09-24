@@ -11,6 +11,9 @@ try {
 } catch (e) {}
 
 // 대류 순환 화살표: 선택한 개체(비커·사각형 등)의 경계 상자 안에 대류 고리를 그린다.
+//   - 축에 나란한 사각형을 선택하면 그 자리에 비커(Object_LabGlassware.jsx와 같은 모양)를 그리고 물을 채운다.
+//     너비·높이(mm)와 물 높이(%)를 고치고, 고리는 물 안에만 그린다. 확인하면 사각형은 지워진다.
+//   - 화살표 3개: 같은 방향으로 도는 고리를 '간격'만큼씩 안쪽으로 겹쳐 세 줄로 그린다.
 //   - 가운데 가열: 두 고리. 가운데에서 올라가 위에서 양옆으로 퍼지고, 옆면을 따라 내려와 바닥에서 가운데로 모인다.
 //   - 왼쪽·오른쪽 가열: 고리 하나. 가열한 쪽으로 올라가 반대쪽으로 내려온다.
 //   - 고리는 둥근 사각형을 네 변으로 끊은 선이고, 변마다 끝(다음 모서리를 돈 뒤)에 화살촉을 단다.
@@ -30,6 +33,10 @@ try {
     // 화살촉 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
     var ARROW_NAME = "화살표 1";
     var HEAT_POSITIONS = ["가운데", "왼쪽", "오른쪽"];
+    var LOOP_COUNTS = [1, 3];
+    var LINE_WIDTH_PT = 0.3;
+    var WATER_K = 15;
+    var FLATTEN_STEPS = 12;
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
@@ -40,6 +47,9 @@ try {
     var WIDTH_RANGE = [0.1, 3];
     var HEAD_RANGE = [20, 300];
     var FONT_RANGE = [5, 20];
+    var SPACING_RANGE = [0.5, 15];
+    var SIZE_RANGE = [3, 300];
+    var LEVEL_RANGE = [10, 100];
 
     var doc = app.activeDocument;
     if (!doc.selection || doc.selection.length !== 1) {
@@ -48,6 +58,12 @@ try {
     }
     var target = doc.selection[0];
     var bounds = target.geometricBounds;
+    // 사각형이면 비커로 바꾼다. 비커 크기는 사각형에서 오므로 저장하지 않는다
+    var rect = getSelectedRectangle(doc.selection);
+    var rectWasHidden = rect !== null ? rect.hidden : false;
+    var center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
+    var widthMm = Math.round((bounds[2] - bounds[0]) / MM * 10) / 10;
+    var heightMm = Math.round((bounds[1] - bounds[3]) / MM * 10) / 10;
     var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
 
     // 옵션
@@ -58,6 +74,9 @@ try {
     var lineWidth = 0.5;
     var headScale = 60;
     var heatMark = true;
+    var loopCount = 0;
+    var spacingMm = 2.5;
+    var levelPct = 75;
     var fontPt = 8;
     var offsetXmm = 0;
     var offsetYmm = 0;
@@ -75,6 +94,14 @@ try {
     dlg.spacing = 6;
     dlg.margins = 12;
 
+    var widthRow = null, heightRow = null, levelRow = null;
+    if (rect !== null) {
+        var beakerPanel = addPanel(dlg, "비커");
+        widthRow = addValueRow(beakerPanel, "너비", "mm", widthMm, SIZE_RANGE[0], SIZE_RANGE[1], 0.5, 1);
+        heightRow = addValueRow(beakerPanel, "높이", "mm", heightMm, SIZE_RANGE[0], SIZE_RANGE[1], 0.5, 1);
+        levelRow = addValueRow(beakerPanel, "물 높이", "%", levelPct, LEVEL_RANGE[0], LEVEL_RANGE[1], 1, 0);
+    }
+
     var loopPanel = addPanel(dlg, "순환");
     var heatRow = loopPanel.add("group");
     heatRow.add("statictext", undefined, "가열 위치:").preferredSize.width = LABEL_WIDTH;
@@ -86,9 +113,15 @@ try {
     roundRow.input.helpTip = "고리 모서리 반지름 (짧은 변에 대한 비율)";
     var gapRow = addValueRow(loopPanel, "끊김 간격", "mm", gapMm, GAP_RANGE[0], GAP_RANGE[1], 0.1, 1);
     gapRow.input.helpTip = "화살촉 끝과 다음 변 사이";
+    var countRow = loopPanel.add("group");
+    countRow.add("statictext", undefined, "화살표:").preferredSize.width = LABEL_WIDTH;
+    var countRadios = [];
+    for (var c = 0; c < LOOP_COUNTS.length; c++) countRadios.push(countRow.add("radiobutton", undefined, LOOP_COUNTS[c] + "개"));
+    var spacingRow = addValueRow(loopPanel, "화살표 간격", "mm", spacingMm, SPACING_RANGE[0], SPACING_RANGE[1], 0.5, 1);
+    spacingRow.input.helpTip = "겹친 고리 사이 거리";
 
     var stylePanel = addPanel(dlg, "모양");
-    var widthRow = addValueRow(stylePanel, "선 두께", "pt", lineWidth, WIDTH_RANGE[0], WIDTH_RANGE[1], 0.1, 1);
+    var lineWidthRow = addValueRow(stylePanel, "선 두께", "pt", lineWidth, WIDTH_RANGE[0], WIDTH_RANGE[1], 0.1, 1);
     var headRow = addValueRow(stylePanel, "화살촉 크기", "%", headScale, HEAD_RANGE[0], HEAD_RANGE[1], 10, 0);
     var heatCheck = stylePanel.add("checkbox", undefined, "가열 표시 (아래 화살표와 '가열')");
     var fontRow = addValueRow(stylePanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
@@ -108,6 +141,8 @@ try {
     footer.add("button", undefined, "취소", {name: "cancel"});
 
     heatRadios[heatAt].value = true;
+    countRadios[loopCount].value = true;
+    spacingRow.input.enabled = spacingRow.slider.enabled = loopCount === 1;
     heatCheck.value = heatMark;
     fontRow.input.enabled = fontRow.slider.enabled = heatMark;
 
@@ -115,6 +150,15 @@ try {
         heatRadios[hr].onClick = (function(index) {
             return function() { heatAt = index; updatePreview(); };
         })(hr);
+    }
+    for (var cr = 0; cr < countRadios.length; cr++) {
+        countRadios[cr].onClick = (function(index) {
+            return function() {
+                loopCount = index;
+                spacingRow.input.enabled = spacingRow.slider.enabled = loopCount === 1;
+                updatePreview();
+            };
+        })(cr);
     }
     heatCheck.onClick = function() {
         heatMark = heatCheck.value;
@@ -124,7 +168,13 @@ try {
     bindValueRow(marginRow, function() { return marginMm; }, function(v) { marginMm = v; });
     bindValueRow(roundRow, function() { return roundPct; }, function(v) { roundPct = v; });
     bindValueRow(gapRow, function() { return gapMm; }, function(v) { gapMm = v; });
-    bindValueRow(widthRow, function() { return lineWidth; }, function(v) { lineWidth = v; });
+    bindValueRow(lineWidthRow, function() { return lineWidth; }, function(v) { lineWidth = v; });
+    bindValueRow(spacingRow, function() { return spacingMm; }, function(v) { spacingMm = v; });
+    if (rect !== null) {
+        bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; });
+        bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; });
+        bindValueRow(levelRow, function() { return levelPct; }, function(v) { levelPct = v; });
+    }
     bindValueRow(headRow, function() { return headScale; }, function(v) { headScale = v; });
     bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
     bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
@@ -135,6 +185,9 @@ try {
     };
     okButton.onClick = function() {
         if (previewGroup === null) buildPreview();
+        if (rect !== null) {
+            try { rect.remove(); } catch (removeError) {}
+        }
         saveSettings();
         dlg.close(1);
     };
@@ -144,7 +197,10 @@ try {
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
     var confirmed = dlg.show() === 1;
-    if (!confirmed) clearPreview();
+    if (!confirmed) {
+        clearPreview();
+        if (rect !== null) rect.hidden = rectWasHidden;
+    }
     doc.selection = null;
     try { (confirmed && previewGroup !== null ? previewGroup : target).selected = true; } catch (selectError) {}
     app.redraw();
@@ -152,19 +208,33 @@ try {
     // -------------------------------------------------------
     // 미리보기
     // -------------------------------------------------------
+    // 비커로 바꾸는 동안 원래 사각형은 숨긴다
     function updatePreview() {
         clearPreview();
-        if (previewEnabled) buildPreview();
+        if (previewEnabled) {
+            if (rect !== null) rect.hidden = true;
+            buildPreview();
+        } else if (rect !== null) {
+            rect.hidden = rectWasHidden;
+        }
         app.redraw();
     }
 
     function buildPreview() {
-        var loops = convectionLoops(bounds, heatAt, marginMm * MM, roundPct / 100);
-        if (loops.length === 0) return;
-        previewGroup = target.layer.groupItems.add();
-        previewGroup.name = "대류";
-        previewGroup.move(target, ElementPlacement.PLACEBEFORE);
         var black = makeGray(100);
+        // 고리를 그릴 상자와 가열 표시 기준 상자. 비커면 고리는 물 안에
+        var loopBounds = bounds, heatBounds = bounds, beaker = null;
+        if (rect !== null) {
+            beaker = beakerShape(center, widthMm * MM, heightMm * MM, levelPct / 100);
+            loopBounds = beaker.water;
+            heatBounds = beaker.box;
+        }
+        var loops = convectionLoops(loopBounds, heatAt, marginMm * MM, roundPct / 100, LOOP_COUNTS[loopCount], spacingMm * MM);
+        if (loops.length === 0 && beaker === null) return;
+        previewGroup = target.layer.groupItems.add();
+        previewGroup.name = beaker !== null ? "대류 (비커)" : "대류";
+        previewGroup.move(target, ElementPlacement.PLACEBEFORE);
+        if (beaker !== null) drawBeaker(beaker, black);
         var paths = [];
         for (var i = 0; i < loops.length; i++) {
             var pieces = loopPieces(loops[i], gapMm * MM);
@@ -178,7 +248,7 @@ try {
             }
         }
         if (heatMark) {
-            var marks = heatArrows(bounds, heatAt);
+            var marks = heatArrows(heatBounds, heatAt);
             for (var m = 0; m < marks.length; m++) {
                 var arrow = previewGroup.pathItems.add();
                 arrow.setEntirePath(marks[m]);
@@ -201,6 +271,34 @@ try {
         if (offsetXmm !== 0 || offsetYmm !== 0) previewGroup.translate(offsetXmm * MM, offsetYmm * MM);
     }
 
+    // 물(면) → 수면 선 → 비커 윤곽 (고리는 그 위에 그린다)
+    function drawBeaker(beaker, black) {
+        if (beaker.waterPoly.length >= 3) {
+            var water = previewGroup.pathItems.add();
+            water.setEntirePath(beaker.waterPoly);
+            water.closed = true;
+            water.stroked = false;
+            water.filled = true;
+            water.fillColor = makeGray(WATER_K);
+            water.name = "물";
+            if (beaker.surface !== null) {
+                var line = previewGroup.pathItems.add();
+                line.setEntirePath(beaker.surface);
+                line.filled = false;
+                line.stroked = true;
+                line.strokeColor = black;
+                line.strokeWidth = LINE_WIDTH_PT;
+                line.name = "수면";
+            }
+        }
+        var outline = drawBezier(previewGroup, beaker.outline);
+        outline.filled = false;
+        outline.stroked = true;
+        outline.strokeColor = black;
+        outline.strokeWidth = LINE_WIDTH_PT;
+        outline.name = "비커";
+    }
+
     function clearPreview() {
         if (previewGroup === null) return;
         try { previewGroup.remove(); } catch (e) {}
@@ -216,8 +314,27 @@ try {
     // 고리 (순수 계산)
     // -------------------------------------------------------
     // 고리 목록: {left, top, right, bottom, r, clockwise}. 가운데 가열이면 여백만큼 들인 상자를 반으로 나눈 두 고리
-    // (왼쪽은 반시계: 가운데로 오른다, 오른쪽은 시계), 왼쪽 가열이면 시계(왼쪽으로 오른다) 하나, 오른쪽이면 반시계 하나
-    function convectionLoops(b, heat, margin, round) {
+    // (왼쪽은 반시계: 가운데로 오른다, 오른쪽은 시계), 왼쪽 가열이면 시계(왼쪽으로 오른다) 하나, 오른쪽이면 반시계 하나.
+    // count가 3이면 고리마다 spacing씩 안쪽으로 들인 고리를 두 개 더 (바깥부터). 너무 작거나 납작한 고리는 뺀다
+    function convectionLoops(b, heat, margin, round, count, spacing) {
+        count = count || 1;
+        spacing = spacing || 0;
+        var base = baseLoops(b, heat, margin, round);
+        var list = [];
+        for (var i = 0; i < base.length; i++) {
+            for (var k = 0; k < count; k++) {
+                var inset = k * spacing;
+                var l = base[i].left + inset, r = base[i].right - inset;
+                var t = base[i].top - inset, bt = base[i].bottom + inset;
+                // 안쪽 고리는 짧은 변이 간격보다 짧으면 납작하게 찌그러지므로 뺀다
+                if (r - l <= 0 || t - bt <= 0 || (k > 0 && Math.min(r - l, t - bt) < spacing)) break;
+                list.push({left: l, top: t, right: r, bottom: bt, r: Math.min(r - l, t - bt) / 2 * round, clockwise: base[i].clockwise});
+            }
+        }
+        return list;
+    }
+
+    function baseLoops(b, heat, margin, round) {
         var left = b[0] + margin;
         var right = b[2] - margin;
         var top = b[1] - margin;
@@ -287,6 +404,124 @@ try {
         var list = [];
         for (var i = -1; i <= 1; i++) list.push([[x + i * spread, top - length], [x + i * spread, top]]);
         return list;
+    }
+
+    // 비커 (Object_LabGlassware.jsx와 같은 모양): 왼쪽 위 부리, 바닥 모서리만 둥글게. 가운데 center, 너비 w, 높이 h.
+    // 돌려주는 것: outline(베지어 점), box [왼, 위, 오, 아래], waterPoly(물 다각형), surface(수면 선 또는 null),
+    // water(물이 찬 상자: 안쪽 벽 사이, 바닥 ~ 수면)
+    function beakerShape(center, w, h, level) {
+        var L = center[0] - w / 2, R = center[0] + w / 2;
+        var T = center[1] + h / 2, B = center[1] - h / 2;
+        var lip = w * 0.06;
+        var r0 = Math.min(w * 0.08, h * 0.2);
+        var wall = [v(L - lip, T + lip * 0.3, 0), v(L, T - lip, lip * 0.8), v(L, B, r0), v(R, B, r0), v(R, T, 0)];
+        var interior = flattenBezier(roundPolyline(wall.slice(1), false));
+        var top = T - lip;
+        var levelY = B + (top - B) * level;
+        var span = spanAt(interior, levelY);
+        return {
+            outline: roundPolyline(wall, false),
+            box: [L, T, R, B],
+            waterPoly: clipBelow(interior, levelY),
+            surface: span !== null && levelY < top - 0.01 ? [[span[0], levelY], [span[1], levelY]] : null,
+            water: [L, levelY, R, B]
+        };
+    }
+
+    function v(x, y, r) {
+        return {x: x, y: y, r: r};
+    }
+
+    // 꼭짓점마다 반지름 r만큼 원호로 둥글린 꺾은선 → 베지어 점. r은 꼭짓점에서 원호가 시작하는 거리(접선 길이)로,
+    // 이웃 변 길이의 절반을 넘지 않게 줄인다
+    function roundPolyline(vertices, closed) {
+        var points = [];
+        var n = vertices.length;
+        for (var i = 0; i < n; i++) {
+            var cur = vertices[i];
+            var hasPrev = closed || i > 0;
+            var hasNext = closed || i < n - 1;
+            if (cur.r <= 0 || !hasPrev || !hasNext) {
+                points.push(corner(cur.x, cur.y));
+                continue;
+            }
+            var prev = vertices[(i - 1 + n) % n];
+            var next = vertices[(i + 1) % n];
+            var d1 = unit(prev.x - cur.x, prev.y - cur.y);
+            var d2 = unit(next.x - cur.x, next.y - cur.y);
+            var t = Math.min(cur.r, d1.length / 2, d2.length / 2);
+            // 꺾이는 각 φ: 접선 길이 t인 원호의 반지름 t / tan(φ/2), 손잡이 길이 4/3·tan(φ/4)·반지름
+            var cosInner = d1.x * d2.x + d1.y * d2.y;
+            var turn = Math.PI - Math.acos(Math.max(-1, Math.min(1, cosInner)));
+            if (turn < 1e-6) {
+                points.push(corner(cur.x, cur.y));
+                continue;
+            }
+            var radius = t / Math.tan(turn / 2);
+            var handle = 4 / 3 * Math.tan(turn / 4) * radius;
+            var a = [cur.x + d1.x * t, cur.y + d1.y * t];
+            var b = [cur.x + d2.x * t, cur.y + d2.y * t];
+            points.push({anchor: a, left: a, right: [a[0] - d1.x * handle, a[1] - d1.y * handle]});
+            points.push({anchor: b, left: [b[0] - d2.x * handle, b[1] - d2.y * handle], right: b});
+        }
+        return points;
+    }
+
+    function unit(x, y) {
+        var length = Math.sqrt(x * x + y * y);
+        return length > 0 ? {x: x / length, y: y / length, length: length} : {x: 0, y: 0, length: 0};
+    }
+
+    // 베지어 점 목록을 다각형으로 (조각마다 FLATTEN_STEPS등분). 다각형은 끝에서 처음으로 곧게 닫힌다고 본다
+    function flattenBezier(points) {
+        var poly = [points[0].anchor];
+        for (var i = 1; i < points.length; i++) {
+            var p0 = points[i - 1].anchor, p1 = points[i - 1].right, p2 = points[i].left, p3 = points[i].anchor;
+            for (var s = 1; s <= FLATTEN_STEPS; s++) {
+                var t = s / FLATTEN_STEPS;
+                var u = 1 - t;
+                poly.push([
+                    u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0],
+                    u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]
+                ]);
+            }
+        }
+        return poly;
+    }
+
+    // 다각형에서 y ≤ level인 부분 (서덜랜드-호지먼, 반평면 하나)
+    function clipBelow(poly, level) {
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            var a = poly[i];
+            var b = poly[(i + 1) % poly.length];
+            var aIn = a[1] <= level;
+            var bIn = b[1] <= level;
+            if (aIn) out.push(a);
+            if (aIn !== bIn) {
+                var t = (level - a[1]) / (b[1] - a[1]);
+                out.push([a[0] + (b[0] - a[0]) * t, level]);
+            }
+        }
+        return out;
+    }
+
+    // 높이 y에서 다각형 안쪽의 왼쪽·오른쪽 끝 x [왼, 오]. 없으면 null
+    function spanAt(poly, y) {
+        var xs = [];
+        for (var i = 0; i < poly.length; i++) {
+            var a = poly[i];
+            var b = poly[(i + 1) % poly.length];
+            if ((a[1] <= y && b[1] >= y) || (a[1] >= y && b[1] <= y)) {
+                if (Math.abs(b[1] - a[1]) < 1e-9) {
+                    xs.push(a[0], b[0]);
+                } else {
+                    xs.push(a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]));
+                }
+            }
+        }
+        if (xs.length < 2) return null;
+        return [Math.min.apply(null, xs), Math.max.apply(null, xs)];
     }
 
     function corner(x, y) {
@@ -436,6 +671,32 @@ try {
         actionFile.close();
     }
 
+    // 축에 나란한 사각형 패스 하나면 그 패스, 아니면 null
+    function getSelectedRectangle(selection) {
+        if (!selection || selection.length !== 1) return null;
+        var item = selection[0];
+        if (!item || item.typename !== "PathItem" || item.guides || item.clipping) return null;
+        if (!item.closed || !item.pathPoints || item.pathPoints.length !== 4) return null;
+        var xs = [];
+        var ys = [];
+        for (var i = 0; i < 4; i++) {
+            var point = item.pathPoints[i];
+            if (point.leftDirection[0] !== point.anchor[0] || point.leftDirection[1] !== point.anchor[1] ||
+                    point.rightDirection[0] !== point.anchor[0] || point.rightDirection[1] !== point.anchor[1]) return null;
+            pushDistinct(xs, point.anchor[0]);
+            pushDistinct(ys, point.anchor[1]);
+        }
+        if (xs.length !== 2 || ys.length !== 2) return null;
+        return item;
+    }
+
+    function pushDistinct(list, value) {
+        for (var i = 0; i < list.length; i++) {
+            if (Math.abs(list[i] - value) < 0.01) return;
+        }
+        list.push(value);
+    }
+
     function findTextFont(names) {
         for (var i = 0; i < names.length; i++) {
             try { return app.textFonts.getByName(names[i]); } catch (e) {}
@@ -558,8 +819,8 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1", heatAt, marginMm, roundPct, gapMm, lineWidth, headScale, heatMark ? "1" : "0", fontPt,
-            offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+        var parts = ["v2", heatAt, marginMm, roundPct, gapMm, lineWidth, headScale, heatMark ? "1" : "0", fontPt,
+            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", loopCount, spacingMm, levelPct];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -568,7 +829,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 12) return;
+        if (p[0] !== "v2" || p.length !== 15) return;
         heatAt = restoreNumber(p[1], heatAt, [0, HEAT_POSITIONS.length - 1], 1);
         marginMm = restoreNumber(p[2], marginMm, MARGIN_RANGE, 0.5);
         roundPct = restoreNumber(p[3], roundPct, ROUND_RANGE, 1);
@@ -580,6 +841,9 @@ try {
         offsetXmm = restoreNumber(p[9], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         offsetYmm = restoreNumber(p[10], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         previewEnabled = p[11] === "1";
+        loopCount = restoreNumber(p[12], loopCount, [0, LOOP_COUNTS.length - 1], 1);
+        spacingMm = restoreNumber(p[13], spacingMm, SPACING_RANGE, 0.5);
+        levelPct = restoreNumber(p[14], levelPct, LEVEL_RANGE, 1);
     }
 
     function restoreNumber(text, fallback, range, step) {

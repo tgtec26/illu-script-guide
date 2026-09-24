@@ -19,8 +19,9 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["convectionLoops", "loopPieces", "trimEnd", "heatArrows", "corner", "arcPoints"];
-const lib = new Function(`var MM = 2.834645669;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+const names = ["convectionLoops", "baseLoops", "loopPieces", "trimEnd", "heatArrows", "corner", "arcPoints",
+  "beakerShape", "v", "roundPolyline", "unit", "flattenBezier", "clipBelow", "spanAt"];
+const lib = new Function(`var MM = 2.834645669, FLATTEN_STEPS = 12;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= (tol || 1e-9), `${label}: expected ${b}, got ${a}`);
 const box = [0, 60, 100, 0];
 
@@ -67,5 +68,39 @@ for (const clockwise of [true, false]) {
   for (const m of marks) assert.ok(m[1][1] > m[0][1] && m[1][1] < 0);
   near(marks[1][0][0], 25, 1e-9, "under the left quarter");
 }
+// 화살표 3개: 고리마다 간격만큼 안쪽으로 들인 고리 두 개가 더, 같은 방향
+{
+  const loops = lib.convectionLoops(box, 1, 4, 0.3, 3, 5);
+  assert.strictEqual(loops.length, 3);
+  for (let k = 0; k < 3; k++) {
+    near(loops[k].left, 4 + 5 * k, 1e-9, "inset left");
+    near(loops[k].top, 56 - 5 * k, 1e-9, "inset top");
+    assert.ok(loops[k].clockwise, "same direction");
+  }
+  assert.strictEqual(lib.convectionLoops(box, 0, 4, 0.3, 3, 5).length, 6, "two loops × three");
+  // 간격이 커서 안쪽 고리가 사라지면 뺀다
+  assert.strictEqual(lib.convectionLoops(box, 1, 4, 0.3, 3, 30).length, 1, "too small inner loops are dropped");
+  // 얕은 물: 안쪽 고리의 짧은 변이 간격보다 짧으면 뺀다 (높이 12 → 4 → 납작)
+  const shallow = lib.convectionLoops([0, 20, 100, 0], 1, 4, 0.3, 3, 4);
+  assert.strictEqual(shallow.length, 2, "flat inner loop is dropped");
+  for (const l of shallow.slice(1)) assert.ok(Math.min(l.right - l.left, l.top - l.bottom) >= 4, "inner loops are not flat");
+  assert.deepStrictEqual(lib.convectionLoops(box, 1, 4, 0.3), lib.convectionLoops(box, 1, 4, 0.3, 1, 5), "one loop by default");
+}
+
+// 비커: 너비·높이는 받은 값, 물은 바닥부터 물 높이까지, 고리 상자는 물 안
+{
+  const b = lib.beakerShape([50, 50], 60, 80, 0.5);
+  assert.deepStrictEqual(b.box, [20, 90, 80, 10]);
+  const top = 90 - 60 * 0.06;
+  near(b.water[1], 10 + (top - 10) * 0.5, 1e-9, "water level");
+  near(b.water[3], 10, 1e-9, "water bottom");
+  for (const p of b.waterPoly) assert.ok(p[1] <= b.water[1] + 1e-9 && p[0] >= 20 - 1e-9 && p[0] <= 80 + 1e-9, "water inside the beaker");
+  assert.ok(b.surface && near(b.surface[0][1], b.water[1], 1e-9, "surface at the level") === undefined);
+  const loops = lib.convectionLoops(b.water, 0, 3, 0.5, 3, 2);
+  for (const l of loops) assert.ok(l.top <= b.water[1] - 3 + 1e-9 && l.bottom >= 10 + 3 - 1e-9, "loops stay in the water");
+  // 가득 채우면 수면 선을 따로 긋지 않는다
+  assert.strictEqual(lib.beakerShape([0, 0], 30, 40, 1).surface, null);
+}
+assert.ok(source.includes('if (p[0] !== "v2" || p.length !== 15) return;'), "settings bumped to v2");
 assert.ok(source.includes('var PREF_KEY = "ObjectConvection/settings";'));
 console.log("convection checks passed");
