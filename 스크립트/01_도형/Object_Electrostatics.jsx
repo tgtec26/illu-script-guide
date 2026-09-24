@@ -12,7 +12,8 @@ try {
 
 
 // 정전기: 화면 가운데에 검전기나 정전기 유도 모식도를 그린다.
-//   - 검전기: 유리병, 마개, 금속판·금속 막대, 막대 아래 끝에 매달린 금속박 두 장.
+//   - 검전기: 살짝 위에서 본 모습 (교재 그림 비율). 둥근 어깨의 유리병과 안쪽 바닥, 테 달린 원통 마개와 기둥,
+//     얇은 원판 금속판, 굵은 금속 막대, 막대 끝에서 휘어 벌어지는 금속박 두 장. 음영은 면마다 단색 K 한 가지.
 //     상태 '대전 안 됨'은 금속박이 닫히고 +−가 짝지어 있다. '대전체를 가까이'는 정전기 유도라 금속판에 대전체와 반대 전하,
 //     금속박에 같은 전하가 모여 금속박이 벌어진다. '접촉 후'는 대전체를 뗀 뒤라 검전기 전체가 대전체와 같은 전하로 대전되어 벌어진다.
 //   - 금속 막대 유도: 왼쪽 대전체에 가까운 A쪽에 반대 전하, 먼 B쪽에 같은 전하가 모인다.
@@ -34,6 +35,10 @@ try {
     var METAL_K = 25;
     var STOPPER_K = 50;
     var ROD_K = 12;
+    // 살짝 위에서 본 원: 타원 세로 ÷ 가로
+    var TILT = 0.17;
+    var PLATE_K = 75;
+    var ROD_METAL_K = 80;
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
     var KINDS = ["검전기", "금속 막대 유도"];
@@ -171,19 +176,20 @@ try {
         previewGroup.translate(viewCenter[0] + offsetXmm * MM, viewCenter[1] + offsetYmm * MM);
     }
 
+    // 살짝 위에서 본 검전기 (오투 중학 과학 2-2 87쪽 검전기 비율): 둥근 어깨의 유리병, 병 목을 덮는 테와 긴 원통 마개,
+    // 가는 기둥, 얇은 금속판, 굵은 금속 막대 끝에서 휘어 벌어지는 금속박.
+    // 유리병 → 병 바닥 → 금속 막대·금속박 → 마개 → 기둥 → 금속판 순서로 겹친다
     function drawElectroscope(H, rodSign) {
         var p = electroscopeParts(H);
         var charges = electroscopeCharges(state, rodSign);
-        var jar = previewGroup.pathItems.roundedRectangle(p.jar[1], p.jar[0], p.jar[2] - p.jar[0], p.jar[1] - p.jar[3], H * 0.08, H * 0.08);
+        var jar = addBezier(jarOutline(p), true, "유리병");
         styleFace(jar, GLASS_K);
-        jar.name = "유리병";
-        addLine([[0, p.plate[1]], [0, p.foilTop[1]]], null, "금속 막대").strokeWidth = 1.2;
-        var plate = previewGroup.pathItems.rectangle(p.plate[1] + p.plateThick, p.plate[0] - p.plateWidth / 2, p.plateWidth, p.plateThick);
-        styleFace(plate, METAL_K);
-        plate.name = "금속판";
-        var stopper = previewGroup.pathItems.rectangle(p.stopper[1], p.stopper[0], p.stopper[2], p.stopper[3]);
-        styleFace(stopper, STOPPER_K);
-        stopper.name = "마개";
+        var dish = previewGroup.pathItems.ellipse(p.dish[1] + p.dish[3], -p.dish[2], p.dish[2] * 2, p.dish[3] * 2);
+        styleLine(dish, LINE_WIDTH_PT, null, 40);
+        dish.name = "병 바닥";
+        var dishFront = addBezier(lowerHalfEllipse(0, p.dish[1] - p.dishThick, p.dish[2], p.dish[3]), false, "병 바닥");
+        styleLine(dishFront, LINE_WIDTH_PT, null, 40);
+        addPolygon([[-p.rodRx, p.cap[0]], [p.rodRx, p.cap[0]], [p.rodRx, p.foilTop[1]], [-p.rodRx, p.foilTop[1]]], ROD_METAL_K, "금속 막대");
         var angle = charges.foil.open ? foilAngle : 4;
         var foils = [];
         for (var side = -1; side <= 1; side += 2) {
@@ -191,24 +197,54 @@ try {
             addPolygon(foil.outline, METAL_K, "금속박");
             foils.push(foil);
         }
+        addCylinder(p.rimRx, p.cap[0], p.rimTop, STOPPER_K + 10, "마개 테");
+        addCylinder(p.capRx, p.rimTop, p.cap[1], STOPPER_K, "마개");
+        addCylinder(p.stemRx, p.cap[1], p.plate[0], STOPPER_K, "마개 기둥");
+        addCylinder(p.plateRx, p.plate[0], p.plate[1], PLATE_K, "금속판");
         var s = chargeMm * MM;
-        placeCharges([p.plate[0], p.plate[1] + p.plateThick + s * 0.8], p.plateWidth * 0.8, 0, charges.plate, 3, s);
+        placeCharges([0, p.plate[1] + p.plateRx * TILT + s * 0.8], p.plateRx * 1.6, 0, charges.plate, 3, s);
         // 닫힌 금속박은 붙어 있어 짝을 하나씩만 둔다
         for (var f = 0; f < 2; f++) placeCharges(foils[f].middle, p.foilLength * 0.5, foils[f].angle, charges.foil.sign, charges.foil.open ? 2 : 1, s);
         var rod = null;
         if (state === 1) {
             // 대전체: 금속판 위 왼쪽에서 비스듬히 다가오는 막대
-            rod = rodShape([p.plate[0] - H * 0.05, p.plate[1] + H * 0.12], H * 0.55, H * 0.09, 20);
-            addPolygon(rod.outline, ROD_K, "대전체");
+            rod = rodShape([-H * 0.05, p.plate[1] + H * 0.16], H * 0.55, H * 0.09, 20);
+            styleFace(addBezier(rod.capsule, true, "대전체"), ROD_K);
             placeCharges(rod.middle, H * 0.4, rod.angle, rodSign, 4, s);
         }
         if (!labelsOn) return;
         var gap = fontPt * 0.6;
-        var right = p.jar[2] + gap * 2;
-        addLabel("금속판", [p.plate[0] + p.plateWidth / 2, p.plate[1] + p.plateThick / 2], right);
-        addLabel("금속 막대", [0, (p.stopper[1] - p.stopper[3] + p.foilTop[1]) / 2 - H * 0.05], right);
+        var right = p.bodyRx + gap * 2;
+        addLabel("금속판", [p.plateRx, (p.plate[0] + p.plate[1]) / 2], right);
+        addLabel("금속 막대", [p.rodRx, (p.cap[0] + p.foilTop[1]) / 2], right);
+        addLabel("유리병", [p.bodyRx, p.sideTop - H * 0.08], right);
         addLabel("금속박", foils[1].tip, right);
-        if (rod !== null) addText("대전체", rod.middle[0], rod.middle[1] + H * 0.1, 0);
+        if (rod !== null) addText("대전체", rod.middle[0], rod.middle[1] + H * 0.14, 0);
+    }
+
+    // 원통: 옆면(아래는 앞쪽 반 타원) 위에 윗면 타원
+    function addCylinder(rx, bottom, top, k, name) {
+        var ry = rx * TILT;
+        var side = [{anchor: [-rx, top], left: [-rx, top], right: [-rx, top]}].concat(lowerHalfEllipse(0, bottom, rx, ry));
+        side.push({anchor: [rx, top], left: [rx, top], right: [rx, top]});
+        styleFace(addBezier(side, true, name), k);
+        var lid = previewGroup.pathItems.ellipse(top + ry, -rx, rx * 2, ry * 2);
+        styleFace(lid, k);
+        lid.name = name;
+    }
+
+    function addBezier(points, closed, name) {
+        var path = previewGroup.pathItems.add();
+        var anchors = [];
+        for (var i = 0; i < points.length; i++) anchors.push(points[i].anchor);
+        path.setEntirePath(anchors);
+        for (var j = 0; j < points.length; j++) {
+            path.pathPoints[j].leftDirection = points[j].left;
+            path.pathPoints[j].rightDirection = points[j].right;
+        }
+        path.closed = closed;
+        path.name = name;
+        return path;
     }
 
     function drawInduction(L, rodSign) {
@@ -272,28 +308,68 @@ try {
     // -------------------------------------------------------
     // 기하 (순수 계산)
     // -------------------------------------------------------
-    // 검전기 부품 자리 (높이 H, 병 바닥 가운데가 y = −H/2). jar·stopper는 [왼쪽, 위, 오른쪽, 아래] / [왼쪽, 위, 너비, 높이]
+    // 검전기 부품 자리 (높이 H, 병 바닥 앞 끝 y = −H/2 ~ 금속판 윗면 y ≈ H/2). 원통은 [아래 y, 위 y]와 가로 반지름,
+    // 타원 세로 = 가로 × TILT. 비율은 교재 그림에서 쟀다
     function electroscopeParts(H) {
-        var W = H * 0.72;
-        var jarTop = H * 0.2;
-        var stopperW = W * 0.3, stopperH = H * 0.08;
         return {
-            jar: [-W / 2, jarTop, W / 2, -H / 2],
-            stopper: [-stopperW / 2, jarTop + stopperH / 2, stopperW, stopperH],
-            plate: [0, H * 0.45], plateWidth: W * 0.55, plateThick: H * 0.025,
-            foilTop: [0, -H * 0.05], foilLength: H * 0.28, foilWidth: H * 0.035
+            bottom: -H / 2, bodyRx: H * 0.323, sideTop: -H * 0.04, sideBottom: -H * 0.40, neckRx: H * 0.126, neckTop: H * 0.22,
+            dish: [0, -H * 0.28, H * 0.31, H * 0.31 * TILT], dishThick: H * 0.05,
+            cap: [H * 0.19, H * 0.40], rimTop: H * 0.225, rimRx: H * 0.136, capRx: H * 0.126,
+            stemRx: H * 0.045,
+            plate: [H * 0.455, H * 0.473], plateRx: H * 0.188,
+            rodRx: H * 0.017,
+            foilTop: [0, -H * 0.134], foilLength: H * 0.3, foilWidth: H * 0.03
         };
     }
 
-    // 막대 아래 끝 top에 매달린 금속박: 세로에서 angleDeg만큼(+는 오른쪽) 벌어진 가는 사각형
+    // 유리병 앞모습: 목 → 둥근 어깨(목에서 가로로 나가 옆에서 세로로) → 곧은 옆 → 둥근 바닥(앞쪽 반 타원) → 반대편.
+    // 목 위 끝은 마개 테가 덮는다
+    function jarOutline(p) {
+        var k = 0.5523;
+        var w = p.bodyRx - p.neckRx, h = p.neckTop - p.sideTop;
+        var pts = [];
+        function corner(x, y) { pts.push({anchor: [x, y], left: [x, y], right: [x, y]}); }
+        pts.push({anchor: [-p.neckRx, p.neckTop], left: [-p.neckRx, p.neckTop], right: [-p.neckRx - w * k, p.neckTop]});
+        pts.push({anchor: [-p.bodyRx, p.sideTop], left: [-p.bodyRx, p.sideTop + h * k], right: [-p.bodyRx, p.sideTop]});
+        pts = pts.concat(lowerHalfEllipse(0, p.sideBottom, p.bodyRx, p.sideBottom - p.bottom));
+        pts.push({anchor: [p.bodyRx, p.sideTop], left: [p.bodyRx, p.sideTop], right: [p.bodyRx, p.sideTop + h * k]});
+        pts.push({anchor: [p.neckRx, p.neckTop], left: [p.neckRx + w * k, p.neckTop], right: [p.neckRx, p.neckTop]});
+        return pts;
+    }
+
+    // 중심 (cx, cy) 타원의 아래 반: 왼쪽 끝 → 아래 → 오른쪽 끝 (베지어 3점)
+    function lowerHalfEllipse(cx, cy, rx, ry) {
+        var k = 0.5523;
+        return [
+            {anchor: [cx - rx, cy], left: [cx - rx, cy], right: [cx - rx, cy - ry * k]},
+            {anchor: [cx, cy - ry], left: [cx - rx * k, cy - ry], right: [cx + rx * k, cy - ry]},
+            {anchor: [cx + rx, cy], left: [cx + rx, cy - ry * k], right: [cx + rx, cy]}
+        ];
+    }
+
+    // 막대 아래 끝 top에 매달린 금속박: 처음엔 아래로 내려가다 휘어 끝이 세로에서 angleDeg만큼(+는 오른쪽) 벌어진 띠.
+    // 끝점은 top에서 length 거리, angleDeg 방향
     function foilPoints(top, length, width, angleDeg) {
         var a = -Math.PI / 2 + angleDeg * Math.PI / 180;
-        var ux = Math.cos(a), uy = Math.sin(a);
-        var nx = -uy * width / 2, ny = ux * width / 2;
-        var tip = [top[0] + ux * length, top[1] + uy * length];
+        var tip = [top[0] + Math.cos(a) * length, top[1] + Math.sin(a) * length];
+        var control = [top[0], top[1] - length * 0.5];
+        var left = [], right = [];
+        var steps = 8;
+        for (var i = 0; i <= steps; i++) {
+            var t = i / steps, u = 1 - t;
+            var x = u * u * top[0] + 2 * u * t * control[0] + t * t * tip[0];
+            var y = u * u * top[1] + 2 * u * t * control[1] + t * t * tip[1];
+            var dx = 2 * u * (control[0] - top[0]) + 2 * t * (tip[0] - control[0]);
+            var dy = 2 * u * (control[1] - top[1]) + 2 * t * (tip[1] - control[1]);
+            var d = Math.sqrt(dx * dx + dy * dy);
+            var nx = -dy / d * width / 2, ny = dx / d * width / 2;
+            left.push([x + nx, y + ny]);
+            right.unshift([x - nx, y - ny]);
+        }
+        var m = 0.55, mu = 1 - m;
         return {
-            outline: [[top[0] + nx, top[1] + ny], [tip[0] + nx, tip[1] + ny], [tip[0] - nx, tip[1] - ny], [top[0] - nx, top[1] - ny]],
-            tip: tip, middle: [top[0] + ux * length * 0.55, top[1] + uy * length * 0.55], angle: a
+            outline: left.concat(right), tip: tip, angle: a,
+            middle: [mu * mu * top[0] + 2 * mu * m * control[0] + m * m * tip[0], mu * mu * top[1] + 2 * mu * m * control[1] + m * m * tip[1]]
         };
     }
 
@@ -305,8 +381,25 @@ try {
         var start = [end[0] - ux * length, end[1] - uy * length];
         return {
             outline: [[start[0] + nx, start[1] + ny], [end[0] + nx, end[1] + ny], [end[0] - nx, end[1] - ny], [start[0] - nx, start[1] - ny]],
+            capsule: capsulePoints(start, end, thick / 2),
             middle: [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2], angle: a
         };
+    }
+
+    // 양 끝이 반원인 막대 (베지어 6점). 전체 길이가 start–end가 되도록 반원 중심을 r만큼 안으로 둔다
+    function capsulePoints(start, end, r) {
+        var dx = end[0] - start[0], dy = end[1] - start[1];
+        var d = Math.sqrt(dx * dx + dy * dy);
+        var u = [dx / d, dy / d], n = [-u[1], u[0]];
+        var k = 0.5523 * r;
+        var s0 = [start[0] + u[0] * r, start[1] + u[1] * r], e0 = [end[0] - u[0] * r, end[1] - u[1] * r];
+        function at(c, a, b) { return [c[0] + a[0] * b, c[1] + a[1] * b]; }
+        function pt(anchor, left, right) { return {anchor: anchor, left: left, right: right}; }
+        var p1 = at(s0, n, r), p2 = at(e0, n, r), p3 = at(e0, u, r), p4 = at(e0, n, -r), p5 = at(s0, n, -r), p6 = at(s0, u, -r);
+        return [
+            pt(p1, at(p1, u, -k), p1), pt(p2, p2, at(p2, u, k)), pt(p3, at(p3, n, k), at(p3, n, -k)),
+            pt(p4, at(p4, u, k), p4), pt(p5, p5, at(p5, u, -k)), pt(p6, at(p6, n, -k), at(p6, n, k))
+        ];
     }
 
     // 상태별 전하: 0이면 +− 짝. 가까이면 금속판은 반대, 금속박은 같은 전하. 접촉 후면 모두 같은 전하
