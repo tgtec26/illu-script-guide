@@ -76,4 +76,5 @@ assert.ok(lib.litShape(0, 0, 10, 270)[1].anchor[0] < 0, "last quarter lit on the
   for (const ray of lunar.rays) near(Math.abs(ray[0][1]), lunar.sun.r, 1e-9, "ray starts on the sun edge");
 }
 assert.ok(source.includes('var PREF_KEY = "ObjectMoonPhase/settings";'));
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 21'), "settings field count");
 console.log("moon phase checks passed");

@@ -13,7 +13,7 @@ try {
 // 달의 위상·일식·월식: 화면 가운데에 그린다.
 //   - 위상: 지구를 가운데 두고 공전 궤도(파선) 위에 달을 8개(또는 4개) 놓는다. 햇빛 쪽 반은 밝고 반대쪽 반은 어둡다.
 //     달은 태양 쪽(0°)에서 시작해 시계 반대 방향으로 돈다. 궤도 바깥에 지구(북반구)에서 본 모양을 그리고,
-//     이름(삭·초승달·상현달·망·하현달·그믐달)이나 기호를 붙인다. 햇빛은 태양 쪽에서 오는 평행 화살표.
+//     이름(삭·초승달·상현달·망·하현달·그믐달)이나 기호를 붙인다. 햇빛은 태양 쪽에서 오는 평행 화살표(굵기·간격·수·색 K 조절).
 //   - 일식: 태양–달–지구, 월식: 태양–지구–달을 일직선에 놓고 본그림자(진하게)·반그림자(연하게)를 그린다.
 //     반그림자는 태양 반대쪽 가장자리에서 가려 주는 천체의 가장자리를 지나는 선, 본그림자는 같은 쪽 가장자리를 지나는 선
 //     (월식). 두 경계를 태양 가장자리에서 오는 광선(선)으로도 그린다. 일식의 본그림자는 실제로는 지구에 겨우 닿으므로 그림에서는 꼭짓점을 지구 표면 조금 안쪽에 둔다.
@@ -47,6 +47,9 @@ try {
     var WIDTH_RANGE = [40, 300];
     var K_RANGE = [0, 100];
     var FONT_RANGE = [5, 20];
+    var RAY_WEIGHT_RANGE = [0.1, 3];
+    var RAY_GAP_RANGE = [1, 50];
+    var RAY_COUNT_RANGE = [1, 15];
 
     var doc = app.activeDocument;
     var viewCenter = doc.activeView.centerPoint;
@@ -62,6 +65,10 @@ try {
     var moonMm = 6;
     var earthMm = 12;
     var sunOnRight = true;
+    var rayWeight = 0.3;
+    var rayGapMm = 14;
+    var rayCount = 5;
+    var rayK = 100;
     var showApparent = true;
     var labelStyle = 2;
     var widthMm = 120;
@@ -103,6 +110,10 @@ try {
     var orbitRow = addValueRow(phasePanel, "궤도 반지름", "mm", orbitMm, ORBIT_RANGE[0], ORBIT_RANGE[1], 0.5, 1);
     var moonRow = addValueRow(phasePanel, "달 지름", "mm", moonMm, BODY_RANGE[0], BODY_RANGE[1], 0.5, 1);
     var earthRow = addValueRow(phasePanel, "지구 지름", "mm", earthMm, BODY_RANGE[0], BODY_RANGE[1], 0.5, 1);
+    var rayWeightRow = addValueRow(phasePanel, "햇빛 굵기", "pt", rayWeight, RAY_WEIGHT_RANGE[0], RAY_WEIGHT_RANGE[1], 0.1, 1);
+    var rayGapRow = addValueRow(phasePanel, "햇빛 간격", "mm", rayGapMm, RAY_GAP_RANGE[0], RAY_GAP_RANGE[1], 0.5, 1);
+    var rayCountRow = addValueRow(phasePanel, "햇빛 수", "개", rayCount, RAY_COUNT_RANGE[0], RAY_COUNT_RANGE[1], 1, 0);
+    var rayKRow = addValueRow(phasePanel, "햇빛 색", "K", rayK, K_RANGE[0], K_RANGE[1], 10, 0);
     var apparentCheck = phasePanel.add("checkbox", undefined, "지구에서 본 모양 (궤도 바깥)");
     var labelRow = phasePanel.add("group");
     labelRow.add("statictext", undefined, "표시:").preferredSize.width = LABEL_WIDTH;
@@ -159,6 +170,10 @@ try {
     bindValueRow(orbitRow, function() { return orbitMm; }, function(v) { orbitMm = v; });
     bindValueRow(moonRow, function() { return moonMm; }, function(v) { moonMm = v; });
     bindValueRow(earthRow, function() { return earthMm; }, function(v) { earthMm = v; });
+    bindValueRow(rayWeightRow, function() { return rayWeight; }, function(v) { rayWeight = v; });
+    bindValueRow(rayGapRow, function() { return rayGapMm; }, function(v) { rayGapMm = v; });
+    bindValueRow(rayCountRow, function() { return rayCount; }, function(v) { rayCount = v; });
+    bindValueRow(rayKRow, function() { return rayK; }, function(v) { rayK = v; });
     bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; });
     bindValueRow(umbraRow, function() { return umbraK; }, function(v) { umbraK = v; });
     bindValueRow(penumbraRow, function() { return penumbraK; }, function(v) { penumbraK = v; });
@@ -242,9 +257,16 @@ try {
             drawBody(cx + dx * orbit, cy + dy * orbit, moonR, sunAngle, "달");
             if (showApparent) drawApparent(cx + dx * apparentDistance, cy + dy * apparentDistance, apparentR, phase);
             var text = labelStyle === 1 ? LETTERS[i] : (labelStyle === 2 ? (PHASE_NAMES[phase] || "") : "");
-            if (text !== "") addText(text, cx + dx * labelDistance, cy + dy * labelDistance);
+            if (text !== "") {
+                // 글자 상자의 가까운 모서리가 달 바깥에 오도록, 상자가 이 방향으로 차지하는 폭만큼 더 민다 (대각선 자리의 긴 이름이 달에 겹치지 않게)
+                var edge = apparentDistance + (showApparent ? apparentR : 0) + fontPt * 0.4;
+                var label = addText(text, cx + dx * edge, cy + dy * edge);
+                var lb = label.geometricBounds;
+                var push = Math.abs(dx) * (lb[2] - lb[0]) / 2 + Math.abs(dy) * (lb[1] - lb[3]) / 2;
+                label.translate(dx * push, dy * push);
+            }
         }
-        drawSunlight(cx, cy, labelDistance + fontPt * 2, sunOnRight ? 1 : -1, orbit);
+        drawSunlight(cx, cy, labelDistance + fontPt * 2, sunOnRight ? 1 : -1);
     }
 
     // 천체 하나: 흰 원 + 태양 반대쪽 반원(어두운 면)
@@ -276,27 +298,29 @@ try {
         }
     }
 
-    // 태양 쪽 바깥에서 지구 쪽으로 오는 평행 화살표 5개와 '햇빛'
-    function drawSunlight(cx, cy, distance, side, spread) {
+    // 태양 쪽 바깥에서 지구 쪽으로 오는 평행 화살표(굵기·간격·수·색 조절)와 '햇빛'
+    function drawSunlight(cx, cy, distance, side) {
+        var gap = rayGapMm * MM;
+        var spread = gap * (rayCount - 1) / 2;
         var group = previewGroup.groupItems.add();
         group.name = "햇빛";
         var length = 10 * MM;
         var paths = [];
-        for (var i = 0; i < 5; i++) {
-            var y = cy + spread * (i - 2) / 2;
+        for (var i = 0; i < rayCount; i++) {
+            var y = cy - spread + gap * i;
             var x0 = cx + side * (distance + length);
             var x1 = cx + side * distance;
             var line = group.pathItems.add();
             line.setEntirePath([[x0, y], [x1, y]]);
             line.filled = false;
             line.stroked = true;
-            line.strokeColor = makeGray(100);
-            line.strokeWidth = LINE_WIDTH_PT;
+            line.strokeColor = makeGray(rayK);
+            line.strokeWidth = rayWeight;
             paths.push(line);
         }
         var label = addText("햇빛", cx + side * (distance + length / 2), cy + spread + fontPt);
         label.move(group, ElementPlacement.PLACEATEND);
-        applyArrowheads(paths, LINE_WIDTH_PT, 100);
+        applyArrowheads(paths, rayWeight, 100);
     }
 
     function buildEclipse(cx, cy) {
@@ -767,8 +791,9 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1", mode, positions, orbitMm, moonMm, earthMm, sunOnRight ? "1" : "0", showApparent ? "1" : "0",
-            labelStyle, widthMm, darkK, umbraK, penumbraK, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+        var parts = ["v2", mode, positions, orbitMm, moonMm, earthMm, sunOnRight ? "1" : "0", showApparent ? "1" : "0",
+            labelStyle, widthMm, darkK, umbraK, penumbraK, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
+            rayWeight, rayGapMm, rayCount, rayK];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -777,7 +802,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 17) return;
+        if (p[0] !== "v2" || p.length !== 21) return;
         mode = restoreNumber(p[1], mode, [0, MODES.length - 1], 1);
         positions = p[2] === "4" ? 4 : 8;
         orbitMm = restoreNumber(p[3], orbitMm, ORBIT_RANGE, 0.5);
@@ -794,6 +819,10 @@ try {
         offsetXmm = restoreNumber(p[14], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         offsetYmm = restoreNumber(p[15], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         previewEnabled = p[16] === "1";
+        rayWeight = restoreNumber(p[17], rayWeight, RAY_WEIGHT_RANGE, 0.1);
+        rayGapMm = restoreNumber(p[18], rayGapMm, RAY_GAP_RANGE, 0.5);
+        rayCount = restoreNumber(p[19], rayCount, RAY_COUNT_RANGE, 1);
+        rayK = restoreNumber(p[20], rayK, K_RANGE, 10);
     }
 
     function restoreNumber(text, fallback, range, step) {
