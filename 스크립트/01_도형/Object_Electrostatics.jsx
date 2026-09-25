@@ -203,8 +203,13 @@ try {
         addCylinder(p.plateRx, p.plate[0], p.plate[1], PLATE_K, "금속판");
         var s = chargeMm * MM;
         placeCharges([0, p.plate[1] + p.plateRx * TILT + s * 0.8], p.plateRx * 1.6, 0, charges.plate, 3, s);
-        // 닫힌 금속박은 붙어 있어 짝을 하나씩만 둔다
-        for (var f = 0; f < 2; f++) placeCharges(foils[f].middle, p.foilLength * 0.5, foils[f].angle, charges.foil.sign, charges.foil.open ? 2 : 1, s);
+        if (charges.foil.open) {
+            for (var f = 0; f < 2; f++) placeCharges(foils[f].middle, p.foilLength * 0.5, foils[f].angle, charges.foil.sign, 2, s);
+        } else {
+            // 닫힌 금속박은 두 장이 붙어 있어 한가운데 세로로 +− 짝 두 개만 둔다 (장마다 두면 겹친다)
+            var mid = [(foils[0].middle[0] + foils[1].middle[0]) / 2, (foils[0].middle[1] + foils[1].middle[1]) / 2];
+            placeCharges(mid, p.foilLength * 0.45, -Math.PI / 2, charges.foil.sign, 2, s);
+        }
         var rod = null;
         if (state === 1) {
             // 대전체: 금속판 위 왼쪽에서 비스듬히 다가오는 막대
@@ -285,7 +290,7 @@ try {
             var c = [center[0] + ux * t, center[1] + uy * t];
             if (value === 0) {
                 // 짝: 막대 방향과 수직으로 나란히
-                var off = s * 0.6;
+                var off = s * 0.8;
                 addCharge([c[0] - uy * off, c[1] + ux * off], 1, s);
                 addCharge([c[0] + uy * off, c[1] - ux * off], -1, s);
             } else {
