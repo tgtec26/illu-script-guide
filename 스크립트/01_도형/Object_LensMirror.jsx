@@ -1377,8 +1377,18 @@ try {
                     styleLine(arc, LINE_WIDTH_PT, null);
                     arc.name = "각 표시";
                     if (!labelsOn) continue;
-                    var middle = (Math.PI + (angle < 0 ? angle + 2 * Math.PI : angle)) / 2;
-                    addText(marks[i][1], m[0] + (radius + fontPt * 0.6) * Math.cos(middle), m[1] + (radius + fontPt * 0.6) * Math.sin(middle), 0);
+                    var end = angle < 0 ? angle + 2 * Math.PI : angle;
+                    var middle = (Math.PI + end) / 2;
+                    // 글자가 법선·광선 사이(쐐기)에 들어갈 만큼 각이 넓으면 이등분선 위, 좁으면 쐐기 밖(호 끝 옆, 광선 바깥쪽)에 둔다
+                    var halfHeight = fontPt * 0.45, pad = fontPt * 0.15;
+                    var labelR = radius + fontPt * 0.6;
+                    var half = Math.abs(end - Math.PI) / 2;
+                    if (labelR * Math.sin(half) >= halfHeight + pad) {
+                        addText(marks[i][1], m[0] + labelR * Math.cos(middle), m[1] + labelR * Math.sin(middle), 0);
+                    } else {
+                        var side = Math.sin(end) < 0 ? -1 : 1;
+                        addText(marks[i][1], m[0] + radius * Math.cos(end), m[1] + radius * Math.sin(end) + side * (halfHeight + pad), 0);
+                    }
                 }
             }
 
