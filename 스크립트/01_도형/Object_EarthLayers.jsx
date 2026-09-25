@@ -47,6 +47,13 @@ try {
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
     var MODES = ["평면", "3D 절단", "반구 분리"];
+    // 지시선 끝 글자: 층 이름 또는 지각부터 차례로 기호
+    var LABEL_STYLES = [
+        {label: "이름", chars: null},
+        {label: "A B C", chars: ["A", "B", "C", "D"]},
+        {label: "ⓐ ⓑ ⓒ", chars: ["ⓐ", "ⓑ", "ⓒ", "ⓓ"]},
+        {label: "㉠ ㉡ ㉢", chars: ["㉠", "㉡", "㉢", "㉣"]}
+    ];
     var CUT_VIEWS = ["절개한 구", "잘라낸 조각"];
     var SURFACE_K = 10;
     var ANGLE_PRESETS = [360, 180, 90];
@@ -75,6 +82,7 @@ try {
     var viewCenter = doc.activeView.centerPoint;
     var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
     var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+    var batangFont = findOptionalFont("Batang");
 
     // 옵션
     var mode = 0;
@@ -93,6 +101,7 @@ try {
     var shadeOn = true;
     var namesOn = true;
     var stateOn = false;
+    var labelStyle = 0;
     var depthOn = true;
     var fontPt = 8;
     var offsetXmm = 0;
@@ -175,9 +184,20 @@ try {
 
     var markPanel = addPanel(dlg, "표시");
     var checkRow = markPanel.add("group");
-    var namesCheck = checkRow.add("checkbox", undefined, "층 이름");
+    var namesCheck = checkRow.add("checkbox", undefined, "지시선·글자");
     var stateCheck = checkRow.add("checkbox", undefined, "상태 (고체·액체)");
     var depthCheck = checkRow.add("checkbox", undefined, "깊이 (km)");
+    var styleRow = markPanel.add("group");
+    styleRow.add("statictext", undefined, "글자:").preferredSize.width = LABEL_WIDTH;
+    var styleRadios = [];
+    for (var ls = 0; ls < LABEL_STYLES.length; ls++) {
+        styleRadios.push(styleRow.add("radiobutton", undefined, LABEL_STYLES[ls].label));
+        styleRadios[ls].onClick = (function(index) {
+            return function() { labelStyle = index; syncEnabled(); updatePreview(); };
+        })(ls);
+    }
+    styleRadios[labelStyle].value = true;
+    styleRow.helpTip = "지각부터 내핵까지 차례로 붙인다";
     var leaderRow = addValueRow(markPanel, "지시선 길이", "mm", leaderMm, LEADER_RANGE[0], LEADER_RANGE[1], 1, 0);
     leaderRow.input.helpTip = "단면 오른쪽 끝에서 글자까지";
     var fontRow = addValueRow(markPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
@@ -276,11 +296,12 @@ try {
         for (var i = 0; i < angleRadios.length; i++) angleRadios[i].value = ANGLE_PRESETS[i] === angleDeg;
     }
 
-    // 상태·지시선 길이는 층 이름이 있을 때만, 깊이는 평면에서만, 위쪽 반만은 잘라낸 조각에서만 뜻이 있다
+    // 상태는 층 이름일 때만, 기호·지시선 길이는 지시선이 있을 때만, 깊이는 평면에서만, 위쪽 반만은 잘라낸 조각에서만 뜻이 있다
     function syncEnabled() {
         depthCheck.enabled = mode === 0;
         upperCheck.enabled = cutView === 1;
-        stateCheck.enabled = namesOn;
+        stateCheck.enabled = namesOn && labelStyle === 0;
+        for (var r = 0; r < styleRadios.length; r++) styleRadios[r].enabled = namesOn;
         leaderRow.input.enabled = namesOn;
         leaderRow.slider.enabled = namesOn;
     }
@@ -473,7 +494,7 @@ try {
     function drawNames(anchors, rightX) {
         var endX = rightX + leaderMm * MM;
         var kneeX = rightX + Math.min(leaderMm * MM * 0.4, 3 * MM);
-        var ys = spreadLabels(anchors, fontPt * 1.3);
+        var ys = spreadLabels(anchors, fontPt * 1.3, kneeX);
         for (var i = 0; i < anchors.length; i++) {
             var leader = previewGroup.pathItems.add();
             leader.setEntirePath(Math.abs(ys[i] - anchors[i][1]) < 0.01 ? [anchors[i], [endX, ys[i]]]
@@ -487,7 +508,8 @@ try {
             dot.stroked = false;
             dot.filled = true;
             dot.fillColor = makeGray(100);
-            var label = LAYERS[i].name + (stateOn ? " (" + LAYERS[i].state + ")" : "");
+            var chars = LABEL_STYLES[labelStyle].chars;
+            var label = chars ? chars[i] : LAYERS[i].name + (stateOn ? " (" + LAYERS[i].state + ")" : "");
             addText(label, endX + fontPt * 0.4, ys[i], true);
         }
     }
@@ -896,11 +918,38 @@ try {
         return lower.concat(upperHull);
     }
 
-    // 이름 높이: 점 높이에서 시작해 위에서부터 차례로, 바로 위 이름과 gap보다 가까우면 아래로 민다
-    function spreadLabels(anchors, gap) {
-        var order = [];
-        for (var i = 0; i < anchors.length; i++) order.push(i);
-        order.sort(function(a, b) { return anchors[b][1] - anchors[a][1]; });
+    // 이름 높이: 정한 순서대로 위에서부터, 점 높이에서 시작해 바로 위 이름과 gap보다 가까우면 아래로 민다.
+    // kneeX(꺾임점 x)를 주면 쌓는 순서를 모두 시도해 점 → 꺾임점 지시선이 가장 적게 교차하는 순서를 쓴다
+    // (점들이 한 줄로 같은 높이에 있으면 높이 순서만으로는 선이 엇갈린다). 같으면 점 높이 순서에 가까운 것
+    function spreadLabels(anchors, gap, kneeX) {
+        var byHeight = [];
+        for (var i = 0; i < anchors.length; i++) byHeight.push(i);
+        byHeight.sort(function(a, b) { return anchors[b][1] - anchors[a][1] || a - b; });
+        if (kneeX === undefined) return stackLabels(anchors, byHeight, gap);
+        var best = null, bestScore = Infinity;
+        permute(byHeight.slice(0), 0);
+        return best;
+
+        function permute(order, k) {
+            if (k === order.length) {
+                var ys = stackLabels(anchors, order, gap);
+                var score = leaderCrossings(anchors, ys, kneeX) * 1000;
+                for (var m = 0; m < order.length; m++) score += Math.abs(m - indexOf(byHeight, order[m]));
+                if (score < bestScore) {
+                    bestScore = score;
+                    best = ys;
+                }
+                return;
+            }
+            for (var n = k; n < order.length; n++) {
+                var t = order[k]; order[k] = order[n]; order[n] = t;
+                permute(order, k + 1);
+                t = order[k]; order[k] = order[n]; order[n] = t;
+            }
+        }
+    }
+
+    function stackLabels(anchors, order, gap) {
         var ys = [], previous = Infinity;
         for (var k = 0; k < order.length; k++) {
             var y = Math.min(anchors[order[k]][1], previous - gap);
@@ -908,6 +957,28 @@ try {
             previous = y;
         }
         return ys;
+    }
+
+    function indexOf(list, value) {
+        for (var i = 0; i < list.length; i++) if (list[i] === value) return i;
+        return -1;
+    }
+
+    // 점 i → (kneeX, ys[i]) 선분끼리 교차하는 쌍의 수 (꺾임점 뒤 가로선은 높이가 달라 만나지 않는다)
+    function leaderCrossings(anchors, ys, kneeX) {
+        var count = 0;
+        for (var a = 0; a < anchors.length; a++) {
+            for (var b = a + 1; b < anchors.length; b++) {
+                if (segmentsCross(anchors[a], [kneeX, ys[a]], anchors[b], [kneeX, ys[b]])) count++;
+            }
+        }
+        return count;
+    }
+
+    function segmentsCross(p1, p2, q1, q2) {
+        function side(a, b, c) { return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]); }
+        var d1 = side(q1, q2, p1), d2 = side(q1, q2, p2), d3 = side(p1, p2, q1), d4 = side(p1, p2, q2);
+        return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
     }
 
     // 절단면(축과 방향 ek가 이루는 반평면) 위, 테두리 매개변수 t 방향의 층 가운데 점들
@@ -1085,19 +1156,51 @@ try {
         return path;
     }
 
-    // 한글·공백은 Spoqa(기준선 0), 영문·숫자·기호는 GSMediumB1(기준선 +0.5pt)
+    // 글자 서체 (02_문자/Text_koen.jsx·Text_input.jsx 규칙): 한글·공백은 Spoqa(기준선 0), 영문·숫자·기호는
+    // GSMediumB1(기준선 +0.5pt). 항목 기호 (가)(나)는 바탕 1.25배, ㉠·ⓐ는 바탕 1.125배 (8pt 기준 10pt·9pt).
+    // 크기를 정한 뒤에 부른다
     function applyTextFonts(frame) {
         var text = frame.contents;
         for (var i = 0; i < text.length; i++) {
-            var korean = isKoreanOrSpace(text.charCodeAt(i));
+            var code = text.charCodeAt(i);
             var attributes = frame.textRange.characters[i].characterAttributes;
-            attributes.textFont = korean ? korFont : engFont;
-            attributes.baselineShift = korean ? 0 : ENG_BASELINE_PT;
+            var bracket = batangFont !== null && isBracketLabel(text, i);
+            if (bracket || (batangFont !== null && isCircledLabel(code))) {
+                attributes.textFont = batangFont;
+                attributes.size = attributes.size * (bracket ? 1.25 : 1.125);
+                attributes.baselineShift = 0;
+            } else if (isKoreanOrSpace(code)) {
+                attributes.textFont = korFont;
+                attributes.baselineShift = 0;
+            } else {
+                attributes.textFont = engFont;
+                attributes.baselineShift = ENG_BASELINE_PT;
+            }
         }
     }
 
     function isKoreanOrSpace(code) {
         return (code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160;
+    }
+
+    // i번째 글자가 "(한글 한 글자)" 세 글자 안에 드는가
+    function isBracketLabel(text, i) {
+        for (var start = i - 2; start <= i; start++) {
+            if (start < 0 || start + 2 >= text.length) continue;
+            var inner = text.charCodeAt(start + 1);
+            if (text.charAt(start) === "(" && text.charAt(start + 2) === ")" && inner >= 0xAC00 && inner <= 0xD7A3) return true;
+        }
+        return false;
+    }
+
+    // ㉠㉡… ⓐⓑ…
+    function isCircledLabel(code) {
+        return (code >= 0x3260 && code <= 0x327F) || (code >= 0x24D0 && code <= 0x24E9);
+    }
+
+    // 없으면 null (바탕이 없으면 항목 기호도 Spoqa로 둔다)
+    function findOptionalFont(name) {
+        try { return app.textFonts.getByName(name); } catch (e) { return null; }
     }
 
     // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
@@ -1232,9 +1335,9 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v4", angleDeg, radiusMm, crustPct, leaderMm, shadeOn ? "1" : "0", namesOn ? "1" : "0",
+        var parts = ["v5", angleDeg, radiusMm, crustPct, leaderMm, shadeOn ? "1" : "0", namesOn ? "1" : "0",
             stateOn ? "1" : "0", depthOn ? "1" : "0", fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
-            mode, cutView, cutDeg, rotDeg, tiltDeg, turnDeg, upperOnly ? "1" : "0", spread[0], spread[1], spread[2], spread[3], ratioPct];
+            mode, cutView, cutDeg, rotDeg, tiltDeg, turnDeg, upperOnly ? "1" : "0", spread[0], spread[1], spread[2], spread[3], ratioPct, labelStyle];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -1243,7 +1346,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v4" || p.length !== 25) return;
+        if (p[0] !== "v5" || p.length !== 26) return;
         angleDeg = restoreNumber(p[1], angleDeg, ANGLE_RANGE, 1);
         radiusMm = restoreNumber(p[2], radiusMm, RADIUS_RANGE, 1);
         crustPct = restoreNumber(p[3], crustPct, CRUST_RANGE, 0.5);
@@ -1265,6 +1368,7 @@ try {
         upperOnly = p[19] === "1";
         for (var s = 0; s < 4; s++) spread[s] = restoreNumber(p[20 + s], spread[s], [0, SPREAD_MAX_MM], 0.5);
         ratioPct = restoreNumber(p[24], ratioPct, RATIO_RANGE, 1);
+        labelStyle = restoreNumber(p[25], labelStyle, [0, LABEL_STYLES.length - 1], 1);
     }
 
     function restoreNumber(text, fallback, range, step) {

@@ -21,7 +21,7 @@ function extractFunction(name) {
 
 const names = ["layerRadii", "sectorRange", "labelAngle", "sectorPoints", "labelAnchors", "depthMarks", "arcPoints", "isKoreanOrSpace",
   "projectView", "dot", "normalizeAngle", "paramArc", "closedEllipsePts", "segPts", "joinLoop", "scalePts", "wedgePiece", "convexHull",
-  "faceAnchors", "hemiLayers", "hemiAnchors", "spreadLabels", "spreadToX", "spreadFromX", "nearestHandle"];
+  "faceAnchors", "hemiLayers", "hemiAnchors", "spreadLabels", "stackLabels", "indexOf", "leaderCrossings", "segmentsCross", "spreadToX", "spreadFromX", "nearestHandle"];
 const lib = new Function(
   "var EARTH_RADIUS_KM = 6400, TRACK_PAD = 10, SPREAD_MAX_MM = 80;\n" +
   `${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`
@@ -87,7 +87,11 @@ assert.ok(source.includes('var PREF_KEY = "ObjectEarthLayers/settings";'));
 // 글자 서체: 한글·공백만 Spoqa, 숫자·영문·괄호는 GSMediumB1
 assert.ok([..."지각 "].every((ch) => lib.isKoreanOrSpace(ch.charCodeAt(0))));
 assert.ok(![..."6400km()"].some((ch) => lib.isKoreanOrSpace(ch.charCodeAt(0))));
-assert.ok(source.includes("attributes.baselineShift = korean ? 0 : ENG_BASELINE_PT;"), "Latin and digits get the +0.5pt baseline");
+assert.ok(source.includes("attributes.baselineShift = ENG_BASELINE_PT;"), "Latin and digits get the +0.5pt baseline");
+// 기호: ㉠·ⓐ는 바탕 1.125배, 지각부터 차례로
+assert.ok(source.includes('var batangFont = findOptionalFont("Batang");') && source.includes("attributes.size * (bracket ? 1.25 : 1.125)"), "circled labels in Batang");
+assert.ok(source.includes('{label: "ⓐ ⓑ ⓒ", chars: ["ⓐ", "ⓑ", "ⓒ", "ⓓ"]}') && source.includes('{label: "㉠ ㉡ ㉢", chars: ["㉠", "㉡", "㉢", "㉣"]}'), "label styles");
+assert.ok(source.includes("var label = chars ? chars[i] :"), "symbol replaces the layer name");
 // 잘라낸 조각: 윤곽은 볼록하고 모든 절단면(보이는 것)은 윤곽 안에 있다
 {
   const bez = (a, b, t) => [0, 1].map((k) => (1 - t) ** 3 * a.anchor[k] + 3 * (1 - t) ** 2 * t * a.right[k] + 3 * (1 - t) * t * t * b.left[k] + t ** 3 * b.anchor[k]);
@@ -164,5 +168,17 @@ assert.ok(source.includes("attributes.baselineShift = korean ? 0 : ENG_BASELINE_
 // 이름 높이: 떨어져 있으면 그대로, 가까우면 위에서부터 gap씩 아래로
 assert.deepStrictEqual(lib.spreadLabels([[0, 30], [0, 10], [0, -20]], 5), [30, 10, -20]);
 assert.deepStrictEqual(lib.spreadLabels([[0, 10], [0, 11], [0, 9]], 5), [6, 11, 1]);
-assert.ok(source.includes('p[0] !== "v4" || p.length !== 25'), "settings field count");
+// 점이 한 줄로 같은 높이면 꺾임점에 가까운(오른쪽) 점이 위 이름을 가져 지시선이 교차하지 않는다
+{
+  const row = [[40, 0], [30, 0], [20, 0], [5, 0]];   // 지각 → 내핵 (오른쪽 → 왼쪽)
+  const ys = lib.spreadLabels(row, 5, 50);
+  assert.strictEqual(lib.leaderCrossings(row, ys, 50), 0, "no crossing leaders");
+  assert.deepStrictEqual(ys, [0, -5, -10, -15], "rightmost point takes the top name");
+  // 원래 교차하던 순서(내핵이 위)는 교차가 생긴다
+  assert.ok(lib.leaderCrossings(row, [-15, -10, -5, 0], 50) > 0);
+  // 45° 줄(평면)은 높이 순서 그대로
+  const diag = [[30, 30], [20, 20], [10, 10], [3, 3]];
+  assert.deepStrictEqual(lib.spreadLabels(diag, 5, 50), [30, 20, 10, 3]);
+}
+assert.ok(source.includes('p[0] !== "v5" || p.length !== 26'), "settings field count");
 console.log("earth layer checks passed");
