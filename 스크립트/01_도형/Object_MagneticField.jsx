@@ -42,6 +42,7 @@ try {
     var POSITION_LIMIT_MM = 100;
     var LENGTH_RANGE = [10, 150];
     var THICK_RANGE = [3, 60];
+    var CORNER_RANGE = [0, 30];
     var LINES_RANGE = [2, 24];
     var RANGE_RANGE = [120, 400];
     var TURNS_RANGE = [2, 20];
@@ -58,6 +59,7 @@ try {
     var kind = 0;
     var lengthMm = 40;
     var thickMm = 10;
+    var cornerMm = 0;
     var lineCount = 10;
     var rangePct = 200;
     var turns = 8;
@@ -88,6 +90,8 @@ try {
     lengthRow.input.helpTip = "직선 도선에서는 가장 바깥 동심원의 반지름";
     var thickRow = addValueRow(shapePanel, "두께", "mm", thickMm, THICK_RANGE[0], THICK_RANGE[1], 0.5, 1);
     thickRow.input.helpTip = "막대 폭 / 코일 지름";
+    var cornerRow = addValueRow(shapePanel, "코너 둥글기", "mm", cornerMm, CORNER_RANGE[0], CORNER_RANGE[1], 0.5, 1);
+    cornerRow.input.helpTip = "막대자석 바깥 모서리만 둥글게. 최대 적용값은 길이·두께의 절반";
     var turnsRow = addValueRow(shapePanel, "감은 수", "회", turns, TURNS_RANGE[0], TURNS_RANGE[1], 1, 0);
     var currentRadios = addRadioRow(shapePanel, "전류", CURRENTS, current, function(i) { current = i; updatePreview(); });
     currentRadios[0].helpTip = "코일은 위 줄 도선의 전류 방향";
@@ -122,6 +126,7 @@ try {
     labelsCheck.onClick = function() { labelsOn = labelsCheck.value; updatePreview(); };
     bindValueRow(lengthRow, function() { return lengthMm; }, function(v) { lengthMm = v; });
     bindValueRow(thickRow, function() { return thickMm; }, function(v) { thickMm = v; });
+    bindValueRow(cornerRow, function() { return cornerMm; }, function(v) { cornerMm = v; });
     bindValueRow(turnsRow, function() { return turns; }, function(v) { turns = v; });
     bindValueRow(linesRow, function() { return lineCount; }, function(v) { lineCount = v; });
     bindValueRow(rangeRow, function() { return rangePct; }, function(v) { rangePct = v; });
@@ -153,6 +158,7 @@ try {
     // 종류마다 쓰는 행만 켠다
     function syncEnabled() {
         setRowEnabled(thickRow, kind !== 1);
+        setRowEnabled(cornerRow, kind === 0);
         setRowEnabled(turnsRow, kind === 2);
         setRowEnabled(rangeRow, kind !== 1);
         for (var i = 0; i < currentRadios.length; i++) currentRadios[i].enabled = kind !== 0;
@@ -199,10 +205,15 @@ try {
     }
 
     function drawMagnet(length, thick) {
-        var north = previewGroup.pathItems.rectangle(thick / 2, -length / 2, length / 2, thick);
+        var radius = Math.min(cornerMm * MM, length / 2, thick / 2);
+        var north = radius > 0
+            ? drawBezier(previewGroup, magnetHalfPoints(length, thick, radius, true), true)
+            : previewGroup.pathItems.rectangle(thick / 2, -length / 2, length / 2, thick);
         styleFace(north, NORTH_K);
         north.name = "N극";
-        var south = previewGroup.pathItems.rectangle(thick / 2, 0, length / 2, thick);
+        var south = radius > 0
+            ? drawBezier(previewGroup, magnetHalfPoints(length, thick, radius, false), true)
+            : previewGroup.pathItems.rectangle(thick / 2, 0, length / 2, thick);
         styleFace(south, SOUTH_K);
         south.name = "S극";
         if (!labelsOn) return;
@@ -210,6 +221,29 @@ try {
         var northLabel = addText("N", -length / 4, 0, 0);
         northLabel.textRange.characterAttributes.fillColor = makeGray(0);
         addText("S", length / 4, 0, 0);
+    }
+
+    // 가운데 N·S 경계는 직선, 바깥 모서리 두 곳만 베지어 호로 둥글린다
+    function magnetHalfPoints(length, thick, radius, north) {
+        var left = -length / 2, right = length / 2, top = thick / 2, bottom = -thick / 2;
+        var handle = radius * 0.5522847498;
+        var xy = north
+            ? [[left + radius, top], [0, top], [0, bottom], [left + radius, bottom], [left, bottom + radius], [left, top - radius]]
+            : [[0, top], [right - radius, top], [right, top - radius], [right, bottom + radius], [right - radius, bottom], [0, bottom]];
+        var points = [];
+        for (var i = 0; i < xy.length; i++) points.push({anchor: xy[i], left: xy[i], right: xy[i]});
+        if (north) {
+            points[0].left = [left + radius - handle, top];
+            points[3].right = [left + radius - handle, bottom];
+            points[4].left = [left, bottom + radius - handle];
+            points[5].right = [left, top - radius + handle];
+        } else {
+            points[1].right = [right - radius + handle, top];
+            points[2].left = [right, top - radius + handle];
+            points[3].right = [right, bottom + radius - handle];
+            points[4].left = [right - radius + handle, bottom];
+        }
+        return points;
     }
 
     // 도선 단면 줄 두 개(위·아래 반대 기호), 안쪽 나란한 자기력선, 양 끝 N·S
@@ -352,7 +386,7 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1", kind, lengthMm, thickMm, lineCount, rangePct, turns, current, arrowsOn ? "1" : "0", labelsOn ? "1" : "0",
+        var parts = ["v2", kind, lengthMm, thickMm, cornerMm, lineCount, rangePct, turns, current, arrowsOn ? "1" : "0", labelsOn ? "1" : "0",
             fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -362,20 +396,21 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 14) return;
+        if (p[0] !== "v2" || p.length !== 15) return;
         kind = restoreNumber(p[1], kind, [0, KINDS.length - 1], 1);
         lengthMm = restoreNumber(p[2], lengthMm, LENGTH_RANGE, 1);
         thickMm = restoreNumber(p[3], thickMm, THICK_RANGE, 0.5);
-        lineCount = restoreNumber(p[4], lineCount, LINES_RANGE, 1);
-        rangePct = restoreNumber(p[5], rangePct, RANGE_RANGE, 10);
-        turns = restoreNumber(p[6], turns, TURNS_RANGE, 1);
-        current = restoreNumber(p[7], current, [0, CURRENTS.length - 1], 1);
-        arrowsOn = p[8] === "1";
-        labelsOn = p[9] === "1";
-        fontPt = restoreNumber(p[10], fontPt, FONT_RANGE, 0.5);
-        offsetXmm = restoreNumber(p[11], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
-        offsetYmm = restoreNumber(p[12], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
-        previewEnabled = p[13] === "1";
+        cornerMm = restoreNumber(p[4], cornerMm, CORNER_RANGE, 0.5);
+        lineCount = restoreNumber(p[5], lineCount, LINES_RANGE, 1);
+        rangePct = restoreNumber(p[6], rangePct, RANGE_RANGE, 10);
+        turns = restoreNumber(p[7], turns, TURNS_RANGE, 1);
+        current = restoreNumber(p[8], current, [0, CURRENTS.length - 1], 1);
+        arrowsOn = p[9] === "1";
+        labelsOn = p[10] === "1";
+        fontPt = restoreNumber(p[11], fontPt, FONT_RANGE, 0.5);
+        offsetXmm = restoreNumber(p[12], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
+        offsetYmm = restoreNumber(p[13], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
+        previewEnabled = p[14] === "1";
     }
 
     // -------------------------------------------------------

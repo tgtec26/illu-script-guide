@@ -40,6 +40,7 @@ try {
     var K_RANGE = [0, 100];
     var RATIO_RANGE = [0, 100];
     var ARROW_RANGE = [0.5, 20];
+    var ARROW_WIDTH_RANGE = [0.1, 5];
     var HEAD_RANGE = [20, 200];
     var SEED_RANGE = [1, 99];
     var MAX_PARTICLES = 3000;
@@ -61,6 +62,8 @@ try {
     var particleK = 40;
     var arrowRatio = 0;       // 화살표를 붙일 입자 비율 %
     var arrowMm = 3;
+    var arrowWidthPt = LINE_WIDTH_PT;
+    var arrowK = 100;
     var headScale = 50;
     var seed = 1;
     var offsetXmm = 0;
@@ -95,6 +98,8 @@ try {
     var ratioRow = addValueRow(arrowPanel, "붙일 비율", "%", arrowRatio, RATIO_RANGE[0], RATIO_RANGE[1], 5, 0);
     ratioRow.input.helpTip = "0이면 화살표 없음";
     var arrowRow = addValueRow(arrowPanel, "화살표 길이", "mm", arrowMm, ARROW_RANGE[0], ARROW_RANGE[1], 0.1, 1);
+    var arrowWidthRow = addValueRow(arrowPanel, "화살표 두께", "pt", arrowWidthPt, ARROW_WIDTH_RANGE[0], ARROW_WIDTH_RANGE[1], 0.1, 1);
+    var arrowKRow = addValueRow(arrowPanel, "화살표 색", "K", arrowK, K_RANGE[0], K_RANGE[1], 10, 0);
     var headRow = addValueRow(arrowPanel, "화살촉 크기", "%", headScale, HEAD_RANGE[0], HEAD_RANGE[1], 10, 0);
 
     var positionPanel = addPanel(dlg, "위치");
@@ -125,6 +130,8 @@ try {
     bindValueRow(seedRow, function() { return seed; }, function(v) { seed = v; });
     bindValueRow(ratioRow, function() { return arrowRatio; }, function(v) { arrowRatio = v; syncEnabled(); });
     bindValueRow(arrowRow, function() { return arrowMm; }, function(v) { arrowMm = v; });
+    bindValueRow(arrowWidthRow, function() { return arrowWidthPt; }, function(v) { arrowWidthPt = v; });
+    bindValueRow(arrowKRow, function() { return arrowK; }, function(v) { arrowK = v; });
     bindValueRow(headRow, function() { return headScale; }, function(v) { headScale = v; });
     bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
     bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
@@ -156,6 +163,8 @@ try {
         setRowEnabled(levelRow, state !== 2);
         setRowEnabled(countRow, state === 2);
         setRowEnabled(arrowRow, arrowRatio > 0);
+        setRowEnabled(arrowWidthRow, arrowRatio > 0);
+        setRowEnabled(arrowKRow, arrowRatio > 0);
         setRowEnabled(headRow, arrowRatio > 0);
     }
 
@@ -191,6 +200,7 @@ try {
         previewGroup.move(shape, ElementPlacement.PLACEBEFORE);
 
         var stroke = makeGray(100);
+        var arrowStroke = makeGray(arrowK);
         var fill = makeGray(particleK);
         var particles = previewGroup.groupItems.add();
         particles.name = "Particles";
@@ -228,11 +238,11 @@ try {
                     [c[0] + dx * (gap + arrowMm * MM), c[1] + dy * (gap + arrowMm * MM)]]);
                 line.filled = false;
                 line.stroked = true;
-                line.strokeColor = stroke;
-                line.strokeWidth = LINE_WIDTH_PT;
+                line.strokeColor = arrowStroke;
+                line.strokeWidth = arrowWidthPt;
                 paths.push(line);
             }
-            applyArrowheads(paths, LINE_WIDTH_PT, headScale);
+            applyArrowheads(paths, arrowWidthPt, headScale);
         }
         if (offsetXmm !== 0 || offsetYmm !== 0) previewGroup.translate(offsetXmm * MM, offsetYmm * MM);
     }
@@ -604,7 +614,7 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1", state, diameterMm, levelPct, gasCount, particleK, arrowRatio, arrowMm, headScale, seed,
+        var parts = ["v2", state, diameterMm, levelPct, gasCount, particleK, arrowRatio, arrowMm, arrowWidthPt, arrowK, headScale, seed,
             offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -614,7 +624,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 13) return;
+        if (p[0] !== "v2" || p.length !== 15) return;
         state = restoreNumber(p[1], state, [0, STATES.length - 1], 1);
         diameterMm = restoreNumber(p[2], diameterMm, DIAMETER_RANGE, 0.1);
         levelPct = restoreNumber(p[3], levelPct, LEVEL_RANGE, 1);
@@ -622,11 +632,13 @@ try {
         particleK = restoreNumber(p[5], particleK, K_RANGE, 10);
         arrowRatio = restoreNumber(p[6], arrowRatio, RATIO_RANGE, 5);
         arrowMm = restoreNumber(p[7], arrowMm, ARROW_RANGE, 0.1);
-        headScale = restoreNumber(p[8], headScale, HEAD_RANGE, 10);
-        seed = restoreNumber(p[9], seed, SEED_RANGE, 1);
-        offsetXmm = restoreNumber(p[10], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
-        offsetYmm = restoreNumber(p[11], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
-        previewEnabled = p[12] === "1";
+        arrowWidthPt = restoreNumber(p[8], arrowWidthPt, ARROW_WIDTH_RANGE, 0.1);
+        arrowK = restoreNumber(p[9], arrowK, K_RANGE, 10);
+        headScale = restoreNumber(p[10], headScale, HEAD_RANGE, 10);
+        seed = restoreNumber(p[11], seed, SEED_RANGE, 1);
+        offsetXmm = restoreNumber(p[12], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
+        offsetYmm = restoreNumber(p[13], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
+        previewEnabled = p[14] === "1";
     }
 
     function restoreNumber(text, fallback, range, step) {

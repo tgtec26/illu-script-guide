@@ -21,7 +21,7 @@ function extractFunction(name) {
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= (tol || 1e-9), `${label}: expected ${b}, got ${a}`);
 
-const names = ["fieldAt", "traceLine", "fieldLines", "coilInsideLines", "wireRadii"];
+const names = ["fieldAt", "traceLine", "fieldLines", "coilInsideLines", "wireRadii", "magnetHalfPoints"];
 const lib = new Function(`${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 막대자석: 선은 모두 막대 밖, 좌우 대칭 쌍이 있고 NaN 없음
@@ -47,8 +47,15 @@ for (const line of inside) assert.ok(line[0][0] > line[2][0], "inside points tow
 const radii = lib.wireRadii(50, 5);
 near(radii[4], 50, 1e-9, "outer radius");
 for (let i = 2; i < radii.length; i++) assert.ok(radii[i] - radii[i - 1] > radii[i - 1] - radii[i - 2], "spacing grows");
+// N·S 경계는 직선, 둥근 모서리는 막대 바깥쪽에만 둔다
+const north = lib.magnetHalfPoints(100, 20, 5, true);
+const south = lib.magnetHalfPoints(100, 20, 5, false);
+assert.deepStrictEqual(north.slice(1, 3).map((p) => p.anchor), [[0, 10], [0, -10]]);
+assert.deepStrictEqual(south.map((p) => p.anchor).filter((p) => p[0] === 0), [[0, 10], [0, -10]]);
+assert.ok(north[0].left[0] < north[0].anchor[0] && north[5].right[1] > north[5].anchor[1]);
+assert.ok(south[1].right[0] > south[1].anchor[0] && south[4].left[0] > south[4].anchor[0]);
 // 호출 결과에 바로 textRange를 대입하면 일러스트레이터가 종료된다
 assert.ok(!/addText\([^;]*\)\.textRange/.test(source), "no chained textRange assignment");
 assert.ok(source.includes('var PREF_KEY = "ObjectMagneticField/settings";'));
-assert.ok(source.includes('p[0] !== "v1" || p.length !== 14'), "settings field count");
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 15'), "settings field count");
 console.log("magnetic field checks passed");
