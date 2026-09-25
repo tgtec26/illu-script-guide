@@ -69,4 +69,7 @@ const angleOf = (p) => Math.atan2(p[1], p[0]);
   }
 }
 assert.ok(source.includes('var PREF_KEY = "ObjectStarTrails/settings";'));
+// 각도 글자의 도(°)는 GSMediumB1의 U+02D8 글리프로 바꿔 넣는다
+assert.ok(source.includes('var DEGREE_GLYPH = "\\u02D8";'));
+assert.ok(source.includes("frame.contents = text.replace(/\\u00B0/g, DEGREE_GLYPH);"));
 console.log("star trail checks passed");

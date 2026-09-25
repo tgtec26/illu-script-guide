@@ -30,6 +30,8 @@ try {
     var GUIDE_DASH = [2, 1.5];
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
+    // 도(°, U+00B0)는 GSMediumB1의 U+02D8(˘) 글리프로 넣는다 (02_문자/Text_degree.jsx)
+    var DEGREE_GLYPH = "\u02D8";
     // 화살촉 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
     var ARROW_NAME = "화살표 1";
     var DIRECTIONS = ["북쪽", "동쪽", "남쪽", "서쪽"];
@@ -375,7 +377,7 @@ try {
     // 가운데가 (x, y)인 글자
     function addText(text, x, y) {
         var frame = previewGroup.textFrames.add();
-        frame.contents = text;
+        frame.contents = text.replace(/\u00B0/g, DEGREE_GLYPH);
         frame.textRange.characterAttributes.size = fontPt;
         frame.textRange.characterAttributes.fillColor = makeGray(100);
         applyTextFonts(frame);
