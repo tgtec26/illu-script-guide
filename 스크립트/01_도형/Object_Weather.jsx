@@ -20,6 +20,15 @@ try {
     var FORM_MM = 2.834645669;
     var FORM_KOR_FONT = formFindFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
+    // 화살표·정렬 이름은 Illustrator UI 언어를 따른다 (Object_RegionBrace.jsx와 같은 판정)
+    var locale = "";
+    try { locale = String(app.locale).toLowerCase(); } catch (localeError) {}
+    var isKorean = (locale === "" || locale.indexOf("ko") === 0);
+    var ARROW_AXIS = isKorean ? "화살표 1" : "Arrow 1";
+    var ARROW_BRACE_OUTER = isKorean ? "화살표 7" : "Arrow 7";
+    var ARROW_BRACE_INNER = isKorean ? "화살표 6" : "Arrow 6";
+    var ARROW_ALIGN_TIP = isKorean ? "패스 끝의 팁" : "Tip of arrow at end of path";
+    var BRACE_PT = 0.5;
 
     runFormHost("날씨", [makeAtmosphereEngine(), makePressureEngine(), makeBreezeEngine()], "Weather/tab");
 
@@ -33,11 +42,15 @@ try {
                 {key: "width", label: "너비", unit: "mm", min: 30, max: 150, step: 1, value: 60},
                 {key: "height", label: "높이", unit: "mm", min: 40, max: 200, step: 1, value: 80},
                 {key: "top", label: "최고 높이", unit: "km", min: 100, max: 150, step: 10, value: 120},
+                {key: "kmStep", label: "높이 눈금", items: ["10 km", "20 km"], value: 0},
+                {key: "tickIn", label: "눈금 방향", items: ["바깥", "안쪽"], value: 0},
                 {panel: "표시"},
                 {key: "names", check: "층 이름", value: true},
                 {key: "bounds", check: "계면 이름", value: false},
                 {key: "ozone", check: "오존층", value: true},
                 {key: "shade", check: "층 음영", value: true},
+                {key: "arrows", check: "축 화살표", value: true},
+                {key: "braces", check: "층 묶음 기호", value: false},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
             ],
             draw: drawAtmosphere
@@ -60,55 +73,135 @@ try {
         return list;
     }
 
+    // 층마다 [아래, 위] 높이(km). 열권은 그래프 맨 위까지
+    function atmosphereSpans(top) {
+        var bounds = [0, 11, 50, 80, top];
+        var list = [];
+        for (var i = 0; i < 4; i++) list.push([bounds[i], bounds[i + 1]]);
+        return list;
+    }
+
     function drawAtmosphere(t, o) {
         var mm = t.mm;
         var W = o.width * mm, H = o.height * mm, F = o.font;
+        var AXIS_PT = 0.4, GRAPH_PT = 0.8, TICK = 1 * mm, ARROW_MARGIN = 3 * mm;
+        var NAMES = ["대류권", "성층권", "중간권", "열권"];
+        var BOUNDS = ["대류권 계면", "성층권 계면", "중간권 계면"];
         function X(temp) { return (temp + 100) / 120 * W; }
         function Y(km) { return km / o.top * H; }
-        var ATMOSPHERE_LAYERS = [
-            {name: "대류권", bound: "대류권 계면", top: 11},
-            {name: "성층권", bound: "성층권 계면", top: 50},
-            {name: "중간권", bound: "중간권 계면", top: 80},
-            {name: "열권", bound: "", top: 1000}
-        ];
+        var spans = atmosphereSpans(o.top);
 
-        var bottom = 0;
-        for (var i = 0; i < ATMOSPHERE_LAYERS.length; i++) {
-            var layer = ATMOSPHERE_LAYERS[i], top = Math.min(layer.top, o.top);
+        for (var i = 0; i < spans.length; i++) {
+            var bottom = spans[i][0], top = spans[i][1];
             if (o.shade) t.rect(0, Y(top), W, Y(bottom), i % 2 === 0 ? 15 : 5, null, 0);
-            // 오존층과 겹치면 오존층 위쪽 가운데에 쓴다
+            // 묶음 기호가 없으면 그래프 안 오른쪽에. 오존층과 겹치면 오존층 위쪽 가운데에 쓴다
             var mid = (o.ozone && bottom < 30 && top > 20) ? (30 + top) / 2 : (bottom + top) / 2;
-            if (o.names) t.text(layer.name, W - 1.5 * mm, Y(mid), F, "right");
-            bottom = top;
+            if (o.names && !o.braces) t.text(NAMES[i], W - 1.5 * mm, Y(mid), F, "right");
         }
         if (o.ozone) {
             t.rect(0, Y(30), W, Y(20), 35, null, 0);
             t.text("오존층", 1.5 * mm, Y(25), F, "left");
         }
         for (var j = 0; j < 3; j++) {
-            var y = Y(ATMOSPHERE_LAYERS[j].top);
+            var y = Y(spans[j][1]);
             t.line([0, y], [W, y], 0.3, 100, [2, 1.5]);
-            if (o.bounds) t.text(ATMOSPHERE_LAYERS[j].bound, 1.5 * mm, y + F * 0.65, F, "left");
+            if (o.bounds) t.text(BOUNDS[j], 1.5 * mm, y + F * 0.65, F, "left");
         }
 
-        // 축과 눈금
-        t.line([0, 0], [0, H + 3 * mm], 0.5);
-        t.line([0, 0], [W + 3 * mm, 0], 0.5);
-        for (var km = 0; km <= o.top; km += 10) {
-            t.line([0, Y(km)], [-1.2 * mm, Y(km)], 0.3);
-            t.text(String(km), -2 * mm, Y(km), F, "right");
+        // 눈금: 바깥이면 축 밖으로, 안쪽이면 그래프 안으로 1mm (Object_GraphTools.jsx 축 탭과 같은 길이·두께)
+        var tickSign = o.tickIn ? 1 : -1;
+        var labelGap = (o.tickIn ? 1 : 2) * mm;
+        var kmStep = o.kmStep ? 20 : 10;
+        for (var km = 0; km <= o.top; km += kmStep) {
+            t.line([0, Y(km)], [tickSign * TICK, Y(km)], AXIS_PT);
+            t.text(String(km), -labelGap, Y(km), F, "right");
         }
         for (var temp = -100; temp <= 20; temp += 20) {
-            t.line([X(temp), 0], [X(temp), -1.2 * mm], 0.3);
-            if ((temp + 100) % 40 === 0) t.text(String(temp), X(temp), -1.5 * mm - F * 0.5, F);
+            t.line([X(temp), 0], [X(temp), tickSign * TICK], AXIS_PT);
+            if ((temp + 100) % 40 === 0) t.text(String(temp), X(temp), -labelGap + 0.5 * mm - F * 0.5, F);
         }
-        t.text("높이(km)", 0, H + 3 * mm + F * 0.7, F);
-        t.text("기온(°C)", W + 3 * mm, -1.5 * mm - F * 0.5, F, "left");
+        t.text("높이(km)", 0, H + ARROW_MARGIN + F * 0.7, F);
+        t.text("기온(°C)", W + ARROW_MARGIN, -labelGap + 0.5 * mm - F * 0.5, F, "left");
 
         var points = atmosphereProfile(o.top);
         var line = [];
         for (var p = 0; p < points.length; p++) line.push([X(points[p][0]), Y(points[p][1])]);
-        t.path(line, false, null, 100, 0.75);
+        t.path(line, false, null, 100, GRAPH_PT);
+
+        // 축은 한 패스(Y축 끝 → 원점 → X축 끝). 화살촉은 DOM에 없어 액션으로 단다
+        var axis = t.path([[0, H + ARROW_MARGIN], [0, 0], [W + ARROW_MARGIN, 0]], false, null, 100, AXIS_PT);
+        if (o.arrows) setStrokeArrowheads([axis], ARROW_AXIS, ARROW_AXIS, AXIS_PT);
+
+        // 층 묶음 기호 (Object_RegionBrace.jsx): 층 높이만큼의 세로선을 가운데에서 잘라
+        // 바깥 끝에 화살표 7, 가운데 끝에 화살표 6. 이웃한 기호가 붙지 않게 0.2mm씩 띄운다
+        if (o.braces) {
+            var bx = W + ARROW_MARGIN + 2 * mm, inset = 0.2 * mm;
+            var heads = [], tails = [];
+            for (var b = 0; b < spans.length; b++) {
+                var y1 = Y(spans[b][1]) - inset, y0 = Y(spans[b][0]) + inset, ym = (y0 + y1) / 2;
+                heads.push(t.line([bx, y1], [bx, ym], BRACE_PT));
+                tails.push(t.line([bx, ym], [bx, y0], BRACE_PT));
+                if (o.names) t.text(NAMES[b], bx + 2 * mm, ym, F, "left");
+            }
+            setStrokeArrowheads(heads, ARROW_BRACE_OUTER, ARROW_BRACE_INNER, BRACE_PT);
+            setStrokeArrowheads(tails, ARROW_BRACE_INNER, ARROW_BRACE_OUTER, BRACE_PT);
+        }
+    }
+
+    // 선택한 패스들에 한 번에 화살촉을 단다 (임시 .aia 액션, AGENTS.md 'Stroke Properties Missing From the DOM').
+    // 실패해도 선은 그대로 남는다
+    function setStrokeArrowheads(paths, startName, endName, width) {
+        var setName = "Codex_WeatherArrow", actionName = "Arrowheads";
+        var file = new File(Folder.temp + "/Codex_WeatherArrow.aia");
+        try {
+            doc.selection = null;
+            for (var i = 0; i < paths.length; i++) paths[i].selected = true;
+            var hexSet = actionHex(setName), hexName = actionHex(actionName);
+            var start = actionHex(startName), end = actionHex(endName), align = actionHex(ARROW_ALIGN_TIP);
+            var lines = [
+                "/version 3", "/name [ " + hexSet.length, "    " + hexSet.hex, "]", "/isOpen 1", "/actionCount 1",
+                "/action-1 {", "    /name [ " + hexName.length, "        " + hexName.hex, "    ]",
+                "    /keyIndex 0", "    /colorIndex 0", "    /isOpen 1", "    /eventCount 1",
+                "    /event-1 {", "        /useRulersIn1stQuadrant 0", "        /internalName (ai_plugin_setStroke)",
+                "        /localizedName [ 10", "            536574205374726F6B65", "        ]",
+                "        /isOpen 1", "        /isOn 1", "        /hasDialog 0", "        /parameterCount 6",
+                "        /parameter-1 {", "            /key 2003072104", "            /showInPalette -1",
+                "            /type (unit real)", "            /value " + width, "            /unit 592476268", "        }",
+                "        /parameter-2 {", "            /key 1634231345", "            /showInPalette -1", "            /type (ustring)",
+                "            /value [ " + start.length, "                " + start.hex, "            ]", "        }",
+                "        /parameter-3 {", "            /key 1634231346", "            /showInPalette -1", "            /type (ustring)",
+                "            /value [ " + end.length, "                " + end.hex, "            ]", "        }",
+                "        /parameter-4 {", "            /key 1634951985", "            /showInPalette -1", "            /type (real)", "            /value 100.0", "        }",
+                "        /parameter-5 {", "            /key 1634951986", "            /showInPalette -1", "            /type (real)", "            /value 100.0", "        }",
+                "        /parameter-6 {", "            /key 1634230636", "            /showInPalette -1", "            /type (enumerated)",
+                "            /name [ " + align.length, "                " + align.hex, "            ]", "            /value 0", "        }",
+                "    }", "}"
+            ];
+            file.encoding = "UTF-8";
+            file.open("w");
+            file.write(lines.join("\n"));
+            file.close();
+            try { app.unloadAction(setName, ""); } catch (e) {}
+            app.loadAction(file);
+            app.doScript(actionName, setName);
+        } catch (actionError) {}
+        try { app.unloadAction(setName, ""); } catch (e2) {}
+        try { file.remove(); } catch (e3) {}
+        doc.selection = null;
+    }
+
+    // 액션 파일의 문자열은 UTF-8 바이트를 대문자 16진수로, 길이는 바이트 수
+    function actionHex(text) {
+        var bytes = [];
+        for (var i = 0; i < text.length; i++) {
+            var code = text.charCodeAt(i);
+            if (code < 0x80) bytes.push(code);
+            else if (code < 0x800) bytes.push(0xC0 | (code >> 6), 0x80 | (code & 0x3F));
+            else bytes.push(0xE0 | (code >> 12), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F));
+        }
+        var hex = "";
+        for (var j = 0; j < bytes.length; j++) hex += (bytes[j] < 16 ? "0" : "") + bytes[j].toString(16).toUpperCase();
+        return {hex: hex, length: bytes.length};
     }
 
     // ==== 기압과 바람 ====

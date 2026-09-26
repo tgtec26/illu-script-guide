@@ -32,7 +32,10 @@ function load(file, names) {
 
 // 날씨
 {
-  const { source, h } = load("Object_Weather.jsx", ["atmosphereProfile", "isobarRadius", "windDirection", "breezeArrows"]);
+  const { source, h } = load("Object_Weather.jsx", ["atmosphereProfile", "atmosphereSpans", "isobarRadius", "windDirection", "breezeArrows", "actionHex"]);
+  assert.deepStrictEqual(h.atmosphereSpans(120), [[0, 11], [11, 50], [50, 80], [80, 120]], "brace spans cover every layer");
+  assert.deepStrictEqual(h.actionHex("패스 끝의 팁"), { hex: "ED8CA8EC8AA420EB819DEC9D9820ED8C81", length: 17 }, "same bytes as GraphTools");
+  assert.deepStrictEqual(h.actionHex("화살표 1"), { hex: "ED9994EC82B4ED919C2031", length: 11 }, "AGENTS.md arrow name bytes");
   const full = h.atmosphereProfile(150);
   assert.deepStrictEqual(full[full.length - 1], [20, 120], "stops at the right edge of the temperature axis");
   const cut = h.atmosphereProfile(100);
