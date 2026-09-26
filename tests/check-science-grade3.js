@@ -57,6 +57,33 @@ function load(file, names) {
   const land = h.breezeArrows(100, 50, 9, false);
   assert.ok(land[0][1][0] > land[0][0][0], "land breeze blows toward sea");
   for (const key of ["ObjectAtmosphere", "ObjectPressureSystem", "ObjectSeaLandBreeze"]) assert.ok(source.includes(`"${key}/settings"`));
+  // 화살촉 액션 파일: 시작 화살촉이 없으면 끝 화살촉·끝 크기만 적고, 순서는 기록된 액션(두께→시작→끝→크기→정렬)과 같다
+  {
+    const src = ["setStrokeArrowheads", "actionHex"].map((name) => {
+      const i = source.indexOf(`function ${name}(`);
+      let depth = 0;
+      for (let k = source.indexOf("{", i); ; k++) {
+        if (source[k] === "{") depth++;
+        if (source[k] === "}" && --depth === 0) return source.slice(i, k + 1);
+      }
+    }).join("\n");
+    const written = [], ran = [];
+    function File() { this.open = () => {}; this.close = () => {}; this.remove = () => {}; this.write = (t) => written.push(t); }
+    const app = { loadAction() {}, unloadAction() {}, doScript: (a, b) => ran.push([a, b]) };
+    const make = new Function("File", "Folder", "app", "doc", "ARROW_ALIGN_TIP", `${src}\nreturn setStrokeArrowheads;`);
+    const set = make(File, { temp: "/tmp" }, app, { selection: null }, "패스 끝의 팁");
+    set([{}], null, "화살표 1", 0.75, 80);
+    const one = written[0];
+    assert.ok(one.includes("/parameterCount 4"));
+    assert.ok(!one.includes("/key 1634231345") && !one.includes("/key 1634951985"), "no start arrowhead");
+    assert.ok(one.indexOf("/key 1634231346") < one.indexOf("/key 1634951986") && one.includes("/value 80.0"));
+    set([{}], "화살표 7", "화살표 6", 0.5, 100);
+    const two = written[1];
+    assert.ok(two.includes("/parameterCount 6"));
+    const order = ["2003072104", "1634231345", "1634231346", "1634951985", "1634951986", "1634230636"].map((k) => two.indexOf(`/key ${k}`));
+    assert.deepStrictEqual([...order].sort((x, y) => x - y), order, "recorded parameter order");
+    assert.strictEqual(ran.length, 2);
+  }
 }
 
 // 화학 반응 모형: 반응 전후 원자 수가 같다

@@ -130,7 +130,7 @@ try {
 
         // 축은 한 패스(Y축 끝 → 원점 → X축 끝). 화살촉은 DOM에 없어 액션으로 단다
         var axis = t.path([[0, H + ARROW_MARGIN], [0, 0], [W + ARROW_MARGIN, 0]], false, null, 100, AXIS_PT);
-        if (o.arrows) setStrokeArrowheads([axis], ARROW_AXIS, ARROW_AXIS, AXIS_PT);
+        if (o.arrows) setStrokeArrowheads([axis], ARROW_AXIS, ARROW_AXIS, AXIS_PT, 100);
 
         // 층 묶음 기호 (Object_RegionBrace.jsx): 층 높이만큼의 세로선을 가운데에서 잘라
         // 바깥 끝에 화살표 7, 가운데 끝에 화살표 6. 이웃한 기호가 붙지 않게 0.2mm씩 띄운다
@@ -143,40 +143,42 @@ try {
                 tails.push(t.line([bx, ym], [bx, y0], BRACE_PT));
                 if (o.names) t.text(NAMES[b], bx + 2 * mm, ym, F, "left");
             }
-            setStrokeArrowheads(heads, ARROW_BRACE_OUTER, ARROW_BRACE_INNER, BRACE_PT);
-            setStrokeArrowheads(tails, ARROW_BRACE_INNER, ARROW_BRACE_OUTER, BRACE_PT);
+            setStrokeArrowheads(heads, ARROW_BRACE_OUTER, ARROW_BRACE_INNER, BRACE_PT, 100);
+            setStrokeArrowheads(tails, ARROW_BRACE_INNER, ARROW_BRACE_OUTER, BRACE_PT, 100);
         }
     }
 
     // 선택한 패스들에 한 번에 화살촉을 단다 (임시 .aia 액션, AGENTS.md 'Stroke Properties Missing From the DOM').
-    // 실패해도 선은 그대로 남는다
-    function setStrokeArrowheads(paths, startName, endName, width) {
+    // startName이 null이면 시작 화살촉은 건드리지 않는다(새 선이라 없음). scale은 촉 크기 %. 실패해도 선은 그대로 남는다
+    function setStrokeArrowheads(paths, startName, endName, width, scale) {
         var setName = "Codex_WeatherArrow", actionName = "Arrowheads";
         var file = new File(Folder.temp + "/Codex_WeatherArrow.aia");
         try {
             doc.selection = null;
             for (var i = 0; i < paths.length; i++) paths[i].selected = true;
             var hexSet = actionHex(setName), hexName = actionHex(actionName);
-            var start = actionHex(startName), end = actionHex(endName), align = actionHex(ARROW_ALIGN_TIP);
+            var end = actionHex(endName), align = actionHex(ARROW_ALIGN_TIP);
+            // 순서는 기록된 액션과 같게: 두께, 시작·끝 화살촉, 시작·끝 크기, 정렬
+            var params = [["            /key 2003072104", "            /showInPalette -1", "            /type (unit real)", "            /value " + width, "            /unit 592476268"]];
+            if (startName !== null) {
+                var start = actionHex(startName);
+                params.push(["            /key 1634231345", "            /showInPalette -1", "            /type (ustring)", "            /value [ " + start.length, "                " + start.hex, "            ]"]);
+            }
+            params.push(["            /key 1634231346", "            /showInPalette -1", "            /type (ustring)", "            /value [ " + end.length, "                " + end.hex, "            ]"]);
+            if (startName !== null) params.push(["            /key 1634951985", "            /showInPalette -1", "            /type (real)", "            /value " + scale.toFixed(1)]);
+            params.push(["            /key 1634951986", "            /showInPalette -1", "            /type (real)", "            /value " + scale.toFixed(1)]);
+            params.push(["            /key 1634230636", "            /showInPalette -1", "            /type (enumerated)", "            /name [ " + align.length, "                " + align.hex, "            ]", "            /value 0"]);
             var lines = [
                 "/version 3", "/name [ " + hexSet.length, "    " + hexSet.hex, "]", "/isOpen 1", "/actionCount 1",
                 "/action-1 {", "    /name [ " + hexName.length, "        " + hexName.hex, "    ]",
                 "    /keyIndex 0", "    /colorIndex 0", "    /isOpen 1", "    /eventCount 1",
                 "    /event-1 {", "        /useRulersIn1stQuadrant 0", "        /internalName (ai_plugin_setStroke)",
                 "        /localizedName [ 10", "            536574205374726F6B65", "        ]",
-                "        /isOpen 1", "        /isOn 1", "        /hasDialog 0", "        /parameterCount 6",
-                "        /parameter-1 {", "            /key 2003072104", "            /showInPalette -1",
-                "            /type (unit real)", "            /value " + width, "            /unit 592476268", "        }",
-                "        /parameter-2 {", "            /key 1634231345", "            /showInPalette -1", "            /type (ustring)",
-                "            /value [ " + start.length, "                " + start.hex, "            ]", "        }",
-                "        /parameter-3 {", "            /key 1634231346", "            /showInPalette -1", "            /type (ustring)",
-                "            /value [ " + end.length, "                " + end.hex, "            ]", "        }",
-                "        /parameter-4 {", "            /key 1634951985", "            /showInPalette -1", "            /type (real)", "            /value 100.0", "        }",
-                "        /parameter-5 {", "            /key 1634951986", "            /showInPalette -1", "            /type (real)", "            /value 100.0", "        }",
-                "        /parameter-6 {", "            /key 1634230636", "            /showInPalette -1", "            /type (enumerated)",
-                "            /name [ " + align.length, "                " + align.hex, "            ]", "            /value 0", "        }",
-                "    }", "}"
+                "        /isOpen 1", "        /isOn 1", "        /hasDialog 0", "        /parameterCount " + params.length
             ];
+            for (var n = 0; n < params.length; n++) lines = lines.concat(["        /parameter-" + (n + 1) + " {"], params[n], ["        }"]);
+            lines = lines.concat(["    }", "}"]);
+
             file.encoding = "UTF-8";
             file.open("w");
             file.write(lines.join("\n"));
@@ -221,7 +223,15 @@ try {
                 {panel: "표시"},
                 {key: "center", check: "중심 글자", value: true},
                 {key: "values", check: "기압 값", value: false},
-                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
+                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
+                {panel: "화살표"},
+                {key: "arrowPt", label: "선 두께", unit: "pt", min: 0.3, max: 2, step: 0.05, value: 0.75},
+                {key: "headScale", label: "촉 크기", unit: "%", min: 30, max: 200, step: 5, value: 100},
+                {panel: "축 (옆에서 본 모습)"},
+                {key: "axes", check: "축", value: false},
+                {key: "axisArrows", check: "축 화살표", value: true},
+                {key: "ticks", label: "눈금 수", unit: "개", min: 0, max: 10, step: 1, value: 4},
+                {key: "tickIn", label: "눈금 방향", items: ["바깥", "안쪽"], value: 0}
             ],
             draw: drawPressure
         });
@@ -269,33 +279,54 @@ try {
         if (o.center) t.text(high ? "고" : "저", 0, 0, F * 1.5);
         var ring = (Math.max(1, Math.floor(o.rings / 2)) + 0.5) * gap;
         var length = Math.min(gap * 1.4, 12 * mm);
+        var winds = [];
         for (var w = 0; w < o.winds; w++) {
             var theta = (w + 0.5) / o.winds * 2 * Math.PI;
             var rr = isobarRadius(theta, ring, o.bend, o.seed);
             var c = [rr * Math.cos(theta), rr * Math.sin(theta)];
             var d = windDirection(theta, high);
-            t.arrow([c[0] - d[0] * length / 2, c[1] - d[1] * length / 2], [c[0] + d[0] * length / 2, c[1] + d[1] * length / 2], 0.75);
+            winds.push(t.line([c[0] - d[0] * length / 2, c[1] - d[1] * length / 2], [c[0] + d[0] * length / 2, c[1] + d[1] * length / 2], o.arrowPt));
         }
+        // 화살촉은 기권 탭 축과 같은 화살표 1 (패스 끝의 팁)
+        if (winds.length) setStrokeArrowheads(winds, null, ARROW_AXIS, o.arrowPt, o.headScale);
     }
 
-    // 옆 모습: 가운데 하강(고기압)·상승(저기압) 기류, 지면에서 불어 나가거나 들어오는 바람, 위에서 반대로
+    // 옆 모습: 가운데 하강(고기압)·상승(저기압) 기류, 지면에서 불어 나가거나 들어오는 바람, 위에서 반대로.
+    // 축을 켜면 지면이 가로축, 왼쪽 끝이 높이 축이다 (기권 탭과 같은 0.4pt 한 패스, 눈금 1mm)
     function drawPressureSide(t, o, high) {
         var mm = t.mm, F = o.font;
         var half = o.gap * o.rings * mm, H = half * 1.2, g = 2.5 * mm, low = 1.8 * mm;
-        t.line([-half, 0], [half, 0], 0.5);
-        if (high) t.arrow([0, H], [0, low + g], 0.75); else t.arrow([0, low + g], [0, H], 0.75);
+        var AXIS_PT = 0.4, TICK = 1 * mm, ARROW_MARGIN = 3 * mm;
+        var flows = [];
+        function flow(a, b) { flows.push(t.line(a, b, o.arrowPt)); }
+        if (high) flow([0, H], [0, low + g]); else flow([0, low + g], [0, H]);
         for (var side = -1; side <= 1; side += 2) {
             var near = side * g, far = side * half * 0.85;
             if (high) {
-                t.arrow([near, low], [far, low], 0.75);
-                t.arrow([far, H], [near, H], 0.75);
+                flow([near, low], [far, low]);
+                flow([far, H], [near, H]);
             } else {
-                t.arrow([far, low], [near, low], 0.75);
-                t.arrow([near, H], [far, H], 0.75);
+                flow([far, low], [near, low]);
+                flow([near, H], [far, H]);
             }
         }
+        setStrokeArrowheads(flows, null, ARROW_AXIS, o.arrowPt, o.headScale);
         t.text(high ? "하강 기류" : "상승 기류", 1.5 * mm, H / 2, F, "left");
-        if (o.center) t.text(high ? "고기압" : "저기압", 0, -F * 0.8, F);
+
+        if (o.axes) {
+            var sign = o.tickIn ? 1 : -1;
+            for (var i = 1; i <= o.ticks; i++) {
+                var tx = -half + 2 * half * i / o.ticks, ty = H * i / o.ticks;
+                t.line([tx, 0], [tx, sign * TICK], AXIS_PT);
+                t.line([-half, ty], [-half + sign * TICK, ty], AXIS_PT);
+            }
+            var axis = t.path([[-half, H + ARROW_MARGIN], [-half, 0], [half + ARROW_MARGIN, 0]], false, null, 100, AXIS_PT);
+            if (o.axisArrows) setStrokeArrowheads([axis], ARROW_AXIS, ARROW_AXIS, AXIS_PT, 100);
+            t.text("높이", -half, H + ARROW_MARGIN + F * 0.7, F);
+        } else {
+            t.line([-half, 0], [half, 0], 0.5);
+        }
+        if (o.center) t.text(high ? "고기압" : "저기압", 0, -F * 0.8 - (o.axes && !o.tickIn ? TICK : 0), F);
     }
 
     // ==== 해륙풍·계절풍 ====
