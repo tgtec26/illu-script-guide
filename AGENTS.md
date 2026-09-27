@@ -8,7 +8,7 @@ For contained Adobe Illustrator JSX requests, default to direct implementation i
 - Treat requests such as `바로 구현`, `진행해`, and `마무리` as authorization to implement without approval loops.
 - Make reasonable UI and geometry assumptions from existing repository patterns; state only material assumptions in the final handoff.
 - Verify with focused safety tests, JSX syntax check, and `git diff --check`. Broaden tests only when a failure or shared behavior requires it.
-- Commit and push only when the user asks to publish, update, or finish the work.
+- Commit automatically when a unit of work is done and its tests pass. Push automatically only after the script was actually run in Illustrator and the PNG checked (Node tests alone are not enough); ask first if Illustrator verification was not possible, or if the change touches `setup-*`/`UPDATE.md`/shared `.jsxinc` files or deletes/renames scripts colleagues use (they receive pushes via `git pull`). Report what was pushed in one line.
 - `스크립트/` is mirrored into Illustrator's scripts folder, so edits reach Illustrator immediately. Never copy scripts or ask whether to copy them.
 - Keep progress updates short. Do not pause for process-only choices.
 
