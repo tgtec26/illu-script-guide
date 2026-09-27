@@ -20,7 +20,7 @@ try {
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
-    var engines = [makeUnitCircleEngine(), makeTriangleEngine(), makeVennEngine(), makeMoveEngine()];
+    var engines = [makeUnitCircleEngine(), makeTriangleEngine(), makeVennEngine(), makeMoveEngine(), makeCountEngine()];
 
     var win = new Window("dialog", "고등학교 수학");
     win.orientation = "column";
@@ -2357,6 +2357,467 @@ try {
                     bValue = restoreNumber(p[4], bValue, -10, 10);
                     for (var i = 0; i < FLAG_KEYS.length; i++) opt[FLAG_KEYS[i]] = p[5].charAt(i) === "1";
                     unitMm = restoreNumber(p[6], unitMm, 2, 15);
+                    fontPt = restoreNumber(p[7], fontPt, 5, 14);
+                    offsetXmm = restoreNumber(p[8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[10] === "1";
+                } catch (restoreError) {}
+            }
+
+            function restoreNumber(text, fallback, minimum, maximum) {
+                var value = parseNumber(text);
+                return value === null ? fallback : clamp(value, minimum, maximum);
+            }
+        }
+        return api;
+    }
+
+    // ==== 경우의 수 ====
+    // 경우의 수 도식: 도로망(마을을 한 줄로 놓고 A-B:3처럼 준 도로 수만큼 곡선, 건너뛰는 도로는 가운데 마을 위로)과
+    // 색칠 지도(가로 4칸, 가운데 원 + 네 조각, 위 한 칸 + 아래 세 칸)를 그린다. 선 0.8pt. 선택은 필요 없다.
+    function makeCountEngine() {
+        var api = {label: "경우의 수", error: null, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        function addRows(page) {
+            var PREF_KEY = "HighMathCount/settings";
+            var MM_TO_PT = 2.834645669;
+            var POSITION_LIMIT_MM = 100;
+            var LABEL_WIDTH = 100;
+            var INPUT_WIDTH = 50;
+            var SLIDER_WIDTH = 196;
+            var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
+            var ENG_FONT_NAME = "GSMediumB1";
+            var ENG_BASELINE_PT = 0.5;
+            var MAIN_PT = 0.8;
+            var DOT_RADIUS_MM = 0.8;
+            var LABEL_GAP_MM = 1;
+            var MODES = ["도로망", "색칠 지도"];
+            var MAPS = ["가로 4칸 (A~D)", "가운데 원 + 네 조각 (A~E)", "위 한 칸 + 아래 세 칸 (A~D)"];
+
+            var doc = app.activeDocument;
+            var viewCenter = doc.activeView.centerPoint;
+            var layer = findEditableLayer();
+            var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
+            var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+
+            // 옵션
+            var mode = 0;
+            var roadsText = "A-B:3, B-C:2, A-C:1";
+            var townGapMm = 25;
+            var roadGapMm = 4;
+            var mapIndex = 1;
+            var mapMm = 40;
+            var fontPt = 8;
+            var offsetXmm = 0;
+            var offsetYmm = 0;
+            var previewEnabled = true;
+            applySettings();
+
+            var previewGroup = null;
+
+            var win = page;   // 탭 페이지에 그대로 쌓는다
+
+            var modeRow = win.add("group");
+            modeRow.add("statictext", undefined, "종류:");
+            var modeList = modeRow.add("dropdownlist", undefined, MODES);
+            modeList.selection = mode;
+
+            var roadPanel = addPanel(win, "도로망");
+            var roadsRow = roadPanel.add("group");
+            roadsRow.add("statictext", undefined, "도로:");
+            var roadsInput = roadsRow.add("edittext", undefined, roadsText);
+            roadsInput.preferredSize.width = 300;
+            roadsInput.helpTip = "A-B:3, B-C:2처럼 '마을-마을:도로 수'를 쉼표로. 마을은 나온 순서대로 한 줄에 놓는다";
+            var townControls = addValueRow(roadPanel, "마을 간격", "mm", townGapMm, 10, 60, 0.5, 1);
+            var roadControls = addValueRow(roadPanel, "도로 간격", "mm", roadGapMm, 1.5, 10, 0.5, 1);
+            var messageText = roadPanel.add("statictext", undefined, " ");
+            messageText.preferredSize.width = 360;
+
+            var mapPanel = addPanel(win, "색칠 지도");
+            var mapRow = mapPanel.add("group");
+            mapRow.add("statictext", undefined, "모양:");
+            var mapList = mapRow.add("dropdownlist", undefined, MAPS);
+            mapList.selection = mapIndex;
+            var mapControls = addValueRow(mapPanel, "크기", "mm", mapMm, 20, 100, 1, 0);
+
+            var sizePanel = addPanel(win, "글자 · 위치");
+            var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+            var offsetXControls = addValueRow(sizePanel, "가로 이동", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+            var offsetYControls = addValueRow(sizePanel, "세로 이동", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+
+            refreshEnabled();
+            modeList.onChange = function() {
+                mode = modeList.selection ? modeList.selection.index : 0;
+                refreshEnabled();
+                updatePreview();
+            };
+            roadsInput.onChanging = function() { roadsText = roadsInput.text; updatePreview(); };
+            mapList.onChange = function() { mapIndex = mapList.selection ? mapList.selection.index : 0; updatePreview(); };
+            bindValueRow(townControls, function(value) { townGapMm = value; });
+            bindValueRow(roadControls, function(value) { roadGapMm = value; });
+            bindValueRow(mapControls, function(value) { mapMm = value; });
+            bindValueRow(fontControls, function(value) { fontPt = value; });
+            // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false);
+
+            // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다. 도로를 못 읽으면 확정하지 않는다
+            api.commit = function() {
+                if (previewGroup === null) buildPreview();
+                if (previewGroup === null) {
+                    alert(messageText.text);
+                    return false;
+                }
+                saveSettings();
+                doc.selection = null;
+                previewGroup.selected = true;
+                return true;
+            };
+            api.setPreview = function(on) {
+                previewEnabled = on;
+                updatePreview();
+            };
+            api.updatePreview = updatePreview;
+            api.clearPreview = function() {
+                clearPreview();
+                app.redraw();
+            };
+            return null;
+
+            function refreshEnabled() {
+                roadPanel.enabled = mode === 0;
+                mapPanel.enabled = mode === 1;
+            }
+
+            // -------------------------------------------------------
+            // 미리보기
+            // -------------------------------------------------------
+            function updatePreview() {
+                clearPreview();
+                if (previewEnabled) buildPreview();
+                app.redraw();
+            }
+
+            function clearPreview() {
+                if (previewGroup !== null) {
+                    try { previewGroup.remove(); } catch (e) {}
+                }
+                previewGroup = null;
+            }
+
+            function buildPreview() {
+                var drawing;
+                if (mode === 0) {
+                    var roads = parseRoads(roadsText);
+                    if (roads === null || roads.edges.length === 0) {
+                        messageText.text = "도로를 읽지 못함 (예: A-B:3, B-C:2)";
+                        return;
+                    }
+                    messageText.text = " ";
+                    drawing = buildRoads(roads, townGapMm * MM_TO_PT, roadGapMm * MM_TO_PT);
+                } else {
+                    drawing = buildMap(mapIndex, mapMm * MM_TO_PT);
+                }
+                previewGroup = layer.groupItems.add();
+                previewGroup.name = MODES[mode];
+                for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
+                for (var c = 0; c < drawing.circles.length; c++) addCircle(drawing.circles[c]);
+                for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
+                for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                var b = previewGroup.geometricBounds;
+                previewGroup.translate(viewCenter[0] - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT,
+                    viewCenter[1] - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
+            }
+
+            // line: {points:[{anchor,left,right}], closed}
+            function addPath(line) {
+                var path = previewGroup.pathItems.add();
+                var anchors = [];
+                for (var i = 0; i < line.points.length; i++) anchors.push(line.points[i].anchor);
+                path.setEntirePath(anchors);
+                for (var j = 0; j < line.points.length; j++) {
+                    var point = path.pathPoints[j];
+                    point.leftDirection = line.points[j].left;
+                    point.rightDirection = line.points[j].right;
+                }
+                path.closed = !!line.closed;
+                path.filled = false;
+                path.stroked = true;
+                path.strokeColor = makeGray(100);
+                path.strokeWidth = MAIN_PT;
+                path.strokeCap = StrokeCap.BUTTENDCAP;
+                path.strokeJoin = StrokeJoin.MITERENDJOIN;
+            }
+
+            function addCircle(circle) {
+                var r = circle.radius;
+                var path = previewGroup.pathItems.ellipse(circle.center[1] + r, circle.center[0] - r, r * 2, r * 2);
+                path.filled = true;
+                path.fillColor = makeGray(0);
+                path.stroked = true;
+                path.strokeColor = makeGray(100);
+                path.strokeWidth = MAIN_PT;
+            }
+
+            function addDot(at) {
+                var r = DOT_RADIUS_MM * MM_TO_PT;
+                var circle = previewGroup.pathItems.ellipse(at[1] + r, at[0] - r, r * 2, r * 2);
+                circle.stroked = false;
+                circle.filled = true;
+                circle.fillColor = makeGray(100);
+            }
+
+            // dir이 [0,0]이면 at에 가운데를 맞추고, 아니면 dir 쪽으로 간격을 둔다
+            function addLabel(label) {
+                var frame = previewGroup.textFrames.add();
+                frame.contents = label.text;
+                var range = frame.textRange;
+                var attributes = range.characterAttributes;
+                attributes.size = fontPt;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame);
+                var b = frame.geometricBounds;
+                var halfW = (b[2] - b[0]) / 2, halfH = (b[1] - b[3]) / 2;
+                var dir = label.dir;
+                var reach = (dir[0] === 0 && dir[1] === 0) ? 0 : (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
+                var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
+                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+            }
+
+            // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자 GSMediumB1(기준선 +0.5pt). 마을·영역 이름은 똑바로
+            function applyTextFonts(frame) {
+                var text = frame.contents;
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    var character = frame.textRange.characters[i];
+                    var attributes = character.characterAttributes;
+                    var korean = (code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160;
+                    attributes.textFont = korean ? korFont : engFont;
+                    attributes.baselineShift = korean ? 0 : ENG_BASELINE_PT;
+                }
+            }
+
+            function findTextFont(names) {
+                for (var i = 0; i < names.length; i++) {
+                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
+                }
+                return app.textFonts[0];
+            }
+
+            // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
+            function findEditableLayer() {
+                var active = doc.activeLayer;
+                if (!active.locked && active.visible) return active;
+                for (var i = 0; i < doc.layers.length; i++) {
+                    if (!doc.layers[i].locked && doc.layers[i].visible) return doc.layers[i];
+                }
+                return doc.layers.add();
+            }
+
+            // K값(0~100)만 있는 회색. RGB 문서면 같은 밝기의 회색으로
+            function makeGray(k) {
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    cmyk.cyan = 0;
+                    cmyk.magenta = 0;
+                    cmyk.yellow = 0;
+                    cmyk.black = k;
+                    return cmyk;
+                }
+                var value = Math.round(255 * (1 - k / 100));
+                var rgb = new RGBColor();
+                rgb.red = value;
+                rgb.green = value;
+                rgb.blue = value;
+                return rgb;
+            }
+
+            // -------------------------------------------------------
+            // 계산 (일러 DOM을 쓰지 않는다 → tests/check-count.js)
+            // -------------------------------------------------------
+            // "A-B:3, B-C:2" → {towns:["A","B","C"], edges:[{from, to, count}]}. 못 읽으면 null (글자 단위로 읽는다)
+            function parseRoads(text) {
+                var parts = String(text).split(","), towns = [], edges = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var part = parts[i].replace(/\s/g, "");
+                    if (part === "") continue;
+                    var dash = part.indexOf("-"), colon = part.indexOf(":");
+                    if (dash <= 0 || colon <= dash + 1 || colon === part.length - 1) return null;
+                    var from = part.substring(0, dash), to = part.substring(dash + 1, colon), countText = part.substring(colon + 1);
+                    for (var c = 0; c < countText.length; c++) if (countText.charAt(c) < "0" || countText.charAt(c) > "9") return null;
+                    var count = parseInt(countText, 10);
+                    if (count < 1 || count > 8 || from === to) return null;
+                    if (indexOf(towns, from) < 0) towns.push(from);
+                    if (indexOf(towns, to) < 0) towns.push(to);
+                    edges.push({ from: indexOf(towns, from), to: indexOf(towns, to), count: count });
+                }
+                return { towns: towns, edges: edges };
+            }
+
+            function indexOf(list, value) {
+                for (var i = 0; i < list.length; i++) if (list[i] === value) return i;
+                return -1;
+            }
+
+            // 마을은 가로 한 줄. 이웃 마을 사이 도로는 가운데 기준 위아래로 나란히, 건너뛰는 도로는 위로 크게 휜다
+            function buildRoads(roads, townGap, roadGap) {
+                var out = { lines: [], circles: [], dots: [], texts: [] };
+                var positions = [];
+                for (var i = 0; i < roads.towns.length; i++) positions.push([i * townGap, 0]);
+                for (var e = 0; e < roads.edges.length; e++) {
+                    var edge = roads.edges[e];
+                    var p = positions[Math.min(edge.from, edge.to)], q = positions[Math.max(edge.from, edge.to)];
+                    var skip = Math.abs(edge.to - edge.from) - 1;
+                    for (var k = 0; k < edge.count; k++) {
+                        var height = skip > 0 ? townGap * 0.35 * skip + roadGap * (k + 1) : roadGap * (k - (edge.count - 1) / 2);
+                        out.lines.push({ points: bentRoad(p, q, height), closed: false });
+                    }
+                }
+                for (var t = 0; t < positions.length; t++) {
+                    out.dots.push(positions[t]);
+                    out.texts.push({ text: roads.towns[t], at: positions[t], dir: [0, -1], clear: DOT_RADIUS_MM * 2.834645669 });
+                }
+                return out;
+            }
+
+            // p에서 q로 가는 길. 가운데가 height만큼(위 +) 휘는 곡선 (2차 베지어를 3차로), 0이면 직선
+            function bentRoad(p, q, height) {
+                var mid = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2 + height * 2];   // 2차 베지어 조절점: 곡선 꼭대기가 height
+                var h1 = [p[0] + (mid[0] - p[0]) * 2 / 3, p[1] + (mid[1] - p[1]) * 2 / 3];
+                var h2 = [q[0] + (mid[0] - q[0]) * 2 / 3, q[1] + (mid[1] - q[1]) * 2 / 3];
+                return [{ anchor: p, left: p, right: h1 }, { anchor: q, left: h2, right: q }];
+            }
+
+            // 색칠 지도: 바깥 사각형(가로 size, 세로 size·0.7)과 나누는 선, 영역 이름
+            function buildMap(index, size) {
+                var out = { lines: [], circles: [], dots: [], texts: [] };
+                var w = size, h = size * 0.7;
+                out.lines.push({ points: [plain([0, 0]), plain([w, 0]), plain([w, h]), plain([0, h])], closed: true });
+                function cut(a, b) { out.lines.push({ points: [plain(a), plain(b)], closed: false }); }
+                function name(text, x, y) { out.texts.push({ text: text, at: [x, y], dir: [0, 0] }); }
+                if (index === 0) {
+                    for (var i = 1; i < 4; i++) cut([w * i / 4, 0], [w * i / 4, h]);
+                    for (var j = 0; j < 4; j++) name("ABCD".charAt(j), w * (j + 0.5) / 4, h / 2);
+                } else if (index === 1) {
+                    cut([w / 2, 0], [w / 2, h]);
+                    cut([0, h / 2], [w, h / 2]);
+                    out.circles.push({ center: [w / 2, h / 2], radius: h * 0.22 });
+                    name("A", w / 4, h * 3 / 4); name("B", w * 3 / 4, h * 3 / 4);
+                    name("C", w / 4, h / 4); name("D", w * 3 / 4, h / 4); name("E", w / 2, h / 2);
+                } else {
+                    cut([0, h / 2], [w, h / 2]);
+                    cut([w / 3, 0], [w / 3, h / 2]);
+                    cut([w * 2 / 3, 0], [w * 2 / 3, h / 2]);
+                    name("A", w / 2, h * 3 / 4);
+                    for (var k = 0; k < 3; k++) name("BCD".charAt(k), w * (k + 0.5) / 3, h / 4);
+                }
+                return out;
+            }
+
+            function plain(p) { return { anchor: p, left: p, right: p }; }
+
+            // -------------------------------------------------------
+            // 다이얼로그 부품
+            // -------------------------------------------------------
+            function addPanel(parent, title) {
+                var panel = parent.add("panel", undefined, title);
+                panel.alignChildren = ["left", "top"];
+                panel.margins = [12, 16, 12, 12];
+                panel.spacing = 6;
+                return panel;
+            }
+
+            function addValueRow(parent, label, unitText, value, minimum, maximum, step, decimals) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.add("statictext", undefined, label + " (" + unitText + "):").preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, formatNumber(value, decimals));
+                input.preferredSize.width = INPUT_WIDTH;
+                var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+                slider.stepdelta = step;
+                slider.jumpdelta = step * 10;
+                slider.preferredSize.width = SLIDER_WIDTH;
+                return { input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals };
+            }
+
+            function setRowValue(controls, value) {
+                controls.input.text = formatNumber(value, controls.decimals);
+                try { controls.slider.value = value; } catch (e) {}
+            }
+
+            function bindValueRow(controls, setter) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    setRowValue(controls, value);
+                    setter(value);
+                    updatePreview();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? controls.slider.value : value);
+                };
+            }
+
+            function bindPositionRow(controls, getter, setter, isX) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    var delta = (value - getter()) * MM_TO_PT;
+                    setter(value);
+                    setRowValue(controls, value);
+                    if (delta === 0 || previewGroup === null) return;
+                    previewGroup.translate(isX ? delta : 0, isX ? 0 : delta);
+                    app.redraw();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? getter() : value);
+                };
+            }
+
+            function parseNumber(text) {
+                var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+                return isNaN(value) ? null : value;
+            }
+
+            function clamp(value, minimum, maximum) {
+                if (value < minimum) return minimum;
+                if (value > maximum) return maximum;
+                return value;
+            }
+
+            function roundTo(value, step) {
+                return Math.round(value / step) * step;
+            }
+
+            function formatNumber(value, decimals) {
+                return (Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
+            }
+
+            // -------------------------------------------------------
+            // 설정 저장 · 복원
+            // -------------------------------------------------------
+            function saveSettings() {
+                var parts = ["v1", mode, encodeURIComponent(roadsText), townGapMm, roadGapMm, mapIndex, mapMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+            }
+
+            function applySettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+                if (!raw) return;
+                var p = raw.split("|");
+                if (p[0] !== "v1" || p.length !== 11) return;
+                try {
+                    mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
+                    roadsText = decodeURIComponent(p[2]);
+                    townGapMm = restoreNumber(p[3], townGapMm, 10, 60);
+                    roadGapMm = restoreNumber(p[4], roadGapMm, 1.5, 10);
+                    mapIndex = Math.round(restoreNumber(p[5], mapIndex, 0, MAPS.length - 1));
+                    mapMm = restoreNumber(p[6], mapMm, 20, 100);
                     fontPt = restoreNumber(p[7], fontPt, 5, 14);
                     offsetXmm = restoreNumber(p[8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
