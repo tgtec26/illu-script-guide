@@ -20,7 +20,7 @@ try {
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
-    var engines = [makeUnitCircleEngine(), makeTriangleEngine(), makeVennEngine(), makeMoveEngine(), makeCountEngine(), makeCalculusEngine()];
+    var engines = [makeUnitCircleEngine(), makeTriangleEngine(), makeVennEngine(), makeMoveEngine(), makeCountEngine(), makeCalculusEngine(), makeDistributionEngine()];
 
     var win = new Window("dialog", "고등학교 수학");
     win.orientation = "column";
@@ -3922,6 +3922,712 @@ try {
                     offsetXmm = restoreNumber(p[19], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[20], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[21] === "1";
+                } catch (restoreError) {}
+            }
+
+            function restoreNumber(text, fallback, minimum, maximum) {
+                var value = parseNumber(text);
+                return value === null ? fallback : clamp(value, minimum, maximum);
+            }
+        }
+        return api;
+    }
+
+    // ==== 확률분포 ====
+    // 확률분포 그림: 정규분포 N(m, σ²) 곡선(두 번째 분포를 겹쳐 비교할 수 있다)과 이항분포 B(n, p) 막대(정규분포 근사 곡선).
+    // P(a≤X≤b), P(X≥a), P(X≤b) 영역을 칠하고, 확률(표준화한 Z 범위 포함)·평균·분산을 창에 보여 준다.
+    // 축 아래 글자는 값(50, 60) 또는 문자(m, a, b, m+σ)로 고른다. 세로축은 두지 않는다(교과서·평가원 그림처럼).
+    // 선 두께: 곡선 0.8pt, 축·막대 테두리 0.4pt, 평균 점선 0.3pt. 선택은 필요 없다.
+    function makeDistributionEngine() {
+        var api = {label: "확률분포", error: null, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        function addRows(page) {
+            var PREF_KEY = "HighMathDistribution/settings";
+            var MM_TO_PT = 2.834645669;
+            var POSITION_LIMIT_MM = 100;
+            var LABEL_WIDTH = 100;
+            var INPUT_WIDTH = 50;
+            var SLIDER_WIDTH = 196;
+            var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
+            var ENG_FONT_NAME = "GSMediumB1";
+            var ITALIC_FONT_NAME = "GSMediItaC1";
+            var EQN_FONT_NAME = "HancomEQN";   // GSMediumB1에 없는 기호(σ …)
+            var ENG_BASELINE_PT = 0.5;
+            var AXIS_PT = 0.4;
+            var CURVE_PT = 0.8;
+            var GUIDE_PT = 0.3;
+            var GUIDE_DASH = [2, 1.5];
+            var TICK_MM = 1.2;
+            var LABEL_GAP_MM = 0.8;
+            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var TAIL_SIGMAS = 3.5;   // 곡선은 평균에서 ±3.5σ까지 (끝 높이가 꼭대기의 0.2%라 축에 닿아 보인다)
+            var BAR_RATIO = 0.6;     // 막대 폭 / 막대 간격
+            var MODES = ["정규분포", "이항분포"];
+            var AXIS_NAMES = ["x", "z", "없음"];
+            var SHADES = ["칠하지 않음", "a ≤ X ≤ b", "X ≥ a", "X ≤ b"];
+            var LABELS = ["값", "문자 (m, a, b)"];
+            // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
+            var FLAG_KEYS = ["second", "meanLine", "sigmaTicks", "approx"];
+
+            var doc = app.activeDocument;
+            var viewCenter = doc.activeView.centerPoint;
+            var layer = findEditableLayer();
+            var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
+            var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+            var italicFont = findTextFont([ITALIC_FONT_NAME, ENG_FONT_NAME]);
+            var eqnFont = findTextFont([EQN_FONT_NAME, ENG_FONT_NAME]);
+
+            // 옵션
+            var mode = 0;
+            var axisName = 0;
+            var mean = 50, sigma = 10;
+            var mean2 = 60, sigma2 = 5;
+            var trials = 10, chance = 0.5;
+            var shade = 1;
+            var labelKind = 0;
+            var aValue = 40, bValue = 70;
+            var widthMm = 80, heightMm = 25;
+            var shadeK = 20;
+            var fontPt = 8;
+            var opt = { second: false, meanLine: true, sigmaTicks: false, approx: false };
+            var offsetXmm = 0;
+            var offsetYmm = 0;
+            var previewEnabled = true;
+            applySettings();
+
+            var previewGroup = null;
+
+            var win = page;   // 탭 페이지에 그대로 쌓는다
+
+            var distPanel = addPanel(win, "분포");
+            var modeRow = distPanel.add("group");
+            modeRow.add("statictext", undefined, "종류:");
+            var modeList = modeRow.add("dropdownlist", undefined, MODES);
+            modeList.selection = mode;
+            modeRow.add("statictext", undefined, "축 이름:");
+            var axisList = modeRow.add("dropdownlist", undefined, AXIS_NAMES);
+            axisList.selection = axisName;
+            var meanControls = addValueRow(distPanel, "평균 m", "", mean, -500, 500, 0.5, 1);
+            var sigmaControls = addValueRow(distPanel, "표준편차 σ", "", sigma, 0.1, 100, 0.1, 1);
+            var secondRow = distPanel.add("group");
+            var secondCheck = secondRow.add("checkbox", undefined, "두 번째 정규분포 겹치기");
+            bindOption(secondCheck, "second");
+            var mean2Controls = addValueRow(distPanel, "평균 m₂", "", mean2, -500, 500, 0.5, 1);
+            var sigma2Controls = addValueRow(distPanel, "표준편차 σ₂", "", sigma2, 0.1, 100, 0.1, 1);
+            var trialsControls = addValueRow(distPanel, "시행 횟수 n", "", trials, 1, 40, 1, 0);
+            var chanceControls = addValueRow(distPanel, "확률 p", "", chance, 0.01, 0.99, 0.01, 2);
+
+            var probPanel = addPanel(win, "확률");
+            var shadeRow = probPanel.add("group");
+            shadeRow.add("statictext", undefined, "칠하기:");
+            var shadeList = shadeRow.add("dropdownlist", undefined, SHADES);
+            shadeList.selection = shade;
+            shadeRow.add("statictext", undefined, "글자:");
+            var labelList = shadeRow.add("dropdownlist", undefined, LABELS);
+            labelList.selection = labelKind;
+            var aControls = addValueRow(probPanel, "a", "", aValue, -500, 500, 0.5, 1);
+            var bControls = addValueRow(probPanel, "b", "", bValue, -500, 500, 0.5, 1);
+            var shadeControls = addValueRow(probPanel, "음영", "K", shadeK, 5, 60, 5, 0);
+
+            var stylePanel = addPanel(win, "표시");
+            var widthControls = addValueRow(stylePanel, "가로 길이", "mm", widthMm, 30, 200, 1, 0);
+            var heightControls = addValueRow(stylePanel, "높이", "mm", heightMm, 10, 100, 1, 0);
+            var fontControls = addValueRow(stylePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+            var checkRow = stylePanel.add("group");
+            var meanCheck = checkRow.add("checkbox", undefined, "평균 점선");
+            bindOption(meanCheck, "meanLine");
+            var sigmaCheck = checkRow.add("checkbox", undefined, "m±σ, m±2σ 눈금");
+            bindOption(sigmaCheck, "sigmaTicks");
+            var approxCheck = checkRow.add("checkbox", undefined, "정규분포 근사");
+            approxCheck.helpTip = "이항분포 막대 위에 N(np, np(1-p)) 곡선을 겹친다";
+            bindOption(approxCheck, "approx");
+
+            var messageText = win.add("statictext", undefined, " ", {multiline: true});
+            messageText.preferredSize = [380, 32];
+
+            var positionPanel = addPanel(win, "위치");
+            var offsetXControls = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+            var offsetYControls = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+
+            refreshEnabled();
+            modeList.onChange = function() {
+                mode = modeList.selection ? modeList.selection.index : 0;
+                refreshEnabled();
+                updatePreview();
+            };
+            axisList.onChange = function() { axisName = axisList.selection ? axisList.selection.index : 0; updatePreview(); };
+            bindValueRow(meanControls, function(value) { mean = value; });
+            bindValueRow(sigmaControls, function(value) { sigma = value; });
+            bindValueRow(mean2Controls, function(value) { mean2 = value; });
+            bindValueRow(sigma2Controls, function(value) { sigma2 = value; });
+            bindValueRow(trialsControls, function(value) { trials = value; });
+            bindValueRow(chanceControls, function(value) { chance = value; });
+            shadeList.onChange = function() { shade = shadeList.selection ? shadeList.selection.index : 0; refreshEnabled(); updatePreview(); };
+            labelList.onChange = function() { labelKind = labelList.selection ? labelList.selection.index : 0; updatePreview(); };
+            bindValueRow(aControls, function(value) { aValue = value; });
+            bindValueRow(bControls, function(value) { bValue = value; });
+            bindValueRow(shadeControls, function(value) { shadeK = value; });
+            bindValueRow(widthControls, function(value) { widthMm = value; });
+            bindValueRow(heightControls, function(value) { heightMm = value; });
+            bindValueRow(fontControls, function(value) { fontPt = value; });
+            // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false);
+
+            // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다
+            api.commit = function() {
+                if (previewGroup === null) buildPreview();
+                saveSettings();
+                doc.selection = null;
+                previewGroup.selected = true;
+                return true;
+            };
+            api.setPreview = function(on) {
+                previewEnabled = on;
+                updatePreview();
+            };
+            api.updatePreview = updatePreview;
+            api.clearPreview = function() {
+                clearPreview();
+                app.redraw();
+            };
+            return null;
+
+            function refreshEnabled() {
+                var normal = mode === 0;
+                meanControls.input.parent.enabled = normal;
+                sigmaControls.input.parent.enabled = normal;
+                secondRow.enabled = normal;
+                mean2Controls.input.parent.enabled = normal;
+                sigma2Controls.input.parent.enabled = normal;
+                trialsControls.input.parent.enabled = !normal;
+                chanceControls.input.parent.enabled = !normal;
+                sigmaCheck.enabled = normal;
+                approxCheck.enabled = !normal;
+                aControls.input.parent.enabled = shade === 1 || shade === 2;
+                bControls.input.parent.enabled = shade === 1 || shade === 3;
+            }
+
+            function bindOption(check, key) {
+                check.value = opt[key];
+                check.onClick = function() {
+                    opt[key] = check.value;
+                    updatePreview();
+                };
+            }
+
+            // -------------------------------------------------------
+            // 미리보기
+            // -------------------------------------------------------
+            function updatePreview() {
+                clearPreview();
+                if (previewEnabled) buildPreview();
+                app.redraw();
+            }
+
+            function clearPreview() {
+                if (previewGroup !== null) {
+                    try { previewGroup.remove(); } catch (e) {}
+                }
+                previewGroup = null;
+            }
+
+            function buildPreview() {
+                var o = {
+                    width: widthMm * MM_TO_PT, height: heightMm * MM_TO_PT, tick: TICK_MM * MM_TO_PT, shadeK: shadeK,
+                    axisName: axisName < 2 ? AXIS_NAMES[axisName] : "", shade: shade, a: aValue, b: bValue, letters: labelKind === 1,
+                    meanLine: opt.meanLine
+                };
+                var drawing;
+                if (mode === 0) {
+                    o.curves = [{ m: mean, s: sigma }];
+                    if (opt.second) o.curves.push({ m: mean2, s: sigma2 });
+                    o.sigmaTicks = opt.sigmaTicks;
+                    drawing = buildNormal(o);
+                } else {
+                    o.n = Math.round(trials);
+                    o.p = chance;
+                    o.approx = opt.approx;
+                    drawing = buildBinomial(o);
+                }
+                messageText.text = drawing.notes.length > 0 ? drawing.notes.join(" · ") : " ";
+
+                previewGroup = layer.groupItems.add();
+                previewGroup.name = "확률분포";
+                for (var s = 0; s < drawing.fills.length; s++) addFill(drawing.fills[s]);
+                for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
+                for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
+                for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                previewGroup.translate(viewCenter[0] - o.width / 2 + offsetXmm * MM_TO_PT, viewCenter[1] - o.height / 2 + offsetYmm * MM_TO_PT);
+            }
+
+            // 칠한 영역·막대: {points:[{anchor,left,right}], k, stroked}
+            function addFill(fill) {
+                var path = previewGroup.pathItems.add();
+                setBezier(path, fill.points);
+                path.closed = true;
+                path.filled = fill.k > 0;
+                if (fill.k > 0) path.fillColor = makeGray(fill.k);
+                path.stroked = !!fill.stroked;
+                if (fill.stroked) {
+                    path.strokeColor = makeGray(100);
+                    path.strokeWidth = AXIS_PT;
+                    path.strokeJoin = StrokeJoin.MITERENDJOIN;
+                }
+            }
+
+            // line: {points:[{anchor,left,right}], kind:"axis"|"curve"|"guide"}
+            function addPath(line) {
+                var path = previewGroup.pathItems.add();
+                setBezier(path, line.points);
+                path.closed = false;
+                path.filled = false;
+                path.stroked = true;
+                path.strokeColor = makeGray(100);
+                path.strokeWidth = line.kind === "curve" ? CURVE_PT : (line.kind === "axis" ? AXIS_PT : GUIDE_PT);
+                path.strokeCap = StrokeCap.BUTTENDCAP;
+                path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
+                if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
+            }
+
+            function setBezier(path, points) {
+                var anchors = [], curved = false;
+                for (var i = 0; i < points.length; i++) {
+                    anchors.push(points[i].anchor);
+                    if (points[i].left !== points[i].anchor || points[i].right !== points[i].anchor) curved = true;
+                }
+                path.setEntirePath(anchors);
+                if (!curved) return;
+                for (var j = 0; j < points.length; j++) {
+                    var point = path.pathPoints[j];
+                    point.leftDirection = points[j].left;
+                    point.rightDirection = points[j].right;
+                }
+            }
+
+            // 끝이 tip, 방향 dir인 채운 화살촉 (뒤가 notch만큼 파인 모양)
+            function addArrow(arrow) {
+                var d = arrow.dir, n = [-d[1], d[0]];
+                var tip = arrow.tip;
+                var back = [tip[0] - d[0] * ARROW.length, tip[1] - d[1] * ARROW.length];
+                var path = previewGroup.pathItems.add();
+                path.setEntirePath([
+                    tip,
+                    [back[0] + n[0] * ARROW.halfWidth, back[1] + n[1] * ARROW.halfWidth],
+                    [back[0] + d[0] * ARROW.notch, back[1] + d[1] * ARROW.notch],
+                    [back[0] - n[0] * ARROW.halfWidth, back[1] - n[1] * ARROW.halfWidth]
+                ]);
+                path.closed = true;
+                path.stroked = false;
+                path.filled = true;
+                path.fillColor = makeGray(100);
+            }
+
+            // at에서 dir 쪽으로 간격(+clear)을 두고 글자의 가까운 가장자리가 오게 둔다. sub: 아래첨자 글자 위치
+            function addLabel(label) {
+                var frame = previewGroup.textFrames.add();
+                frame.contents = label.text;
+                var range = frame.textRange;
+                var attributes = range.characterAttributes;
+                attributes.size = fontPt;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, label.upright);
+                if (label.sub) {
+                    for (var s = 0; s < label.sub.length; s++) {
+                        var subAttributes = frame.textRange.characters[label.sub[s]].characterAttributes;
+                        subAttributes.baselinePosition = FontBaselineOption.SUBSCRIPT;
+                    }
+                }
+                var b = frame.geometricBounds;
+                var halfW = (b[2] - b[0]) / 2, halfH = (b[1] - b[3]) / 2;
+                var dir = label.dir;
+                var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
+                var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
+                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+            }
+
+            // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
+            // GSMediumB1에 없는 기호(σ)는 HancomEQN. 숫자(upright)는 똑바로
+            function applyTextFonts(frame, upright) {
+                var text = frame.contents;
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    var character = frame.textRange.characters[i];
+                    var attributes = character.characterAttributes;
+                    if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
+                        attributes.textFont = korFont;
+                        attributes.baselineShift = 0;
+                    } else if (code > 126) {
+                        attributes.textFont = eqnFont;
+                        attributes.baselineShift = 0;
+                    } else if (!upright && code >= 97 && code <= 122) {
+                        attributes.textFont = italicFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    } else {
+                        attributes.textFont = engFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    }
+                }
+            }
+
+            function findTextFont(names) {
+                for (var i = 0; i < names.length; i++) {
+                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
+                }
+                return app.textFonts[0];
+            }
+
+            // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
+            function findEditableLayer() {
+                var active = doc.activeLayer;
+                if (!active.locked && active.visible) return active;
+                for (var i = 0; i < doc.layers.length; i++) {
+                    if (!doc.layers[i].locked && doc.layers[i].visible) return doc.layers[i];
+                }
+                return doc.layers.add();
+            }
+
+            // K값(0~100)만 있는 회색. RGB 문서면 같은 밝기의 회색으로
+            function makeGray(k) {
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    cmyk.cyan = 0;
+                    cmyk.magenta = 0;
+                    cmyk.yellow = 0;
+                    cmyk.black = k;
+                    return cmyk;
+                }
+                var value = Math.round(255 * (1 - k / 100));
+                var rgb = new RGBColor();
+                rgb.red = value;
+                rgb.green = value;
+                rgb.blue = value;
+                return rgb;
+            }
+
+            // -------------------------------------------------------
+            // 계산 (일러 DOM을 쓰지 않는다 → tests/check-distribution.js). 그림은 (0,0)~(width, height)
+            // -------------------------------------------------------
+            // 정규분포: o.curves [{m, s}], 가장 높은 꼭대기가 height, 모든 곡선의 ±3.5σ가 가로 길이에 들어간다
+            function buildNormal(o) {
+                var out = { fills: [], lines: [], arrows: [], texts: [], notes: [] };
+                var lo = Infinity, hi = -Infinity, peak = 0;
+                for (var i = 0; i < o.curves.length; i++) {
+                    var c = o.curves[i];
+                    lo = Math.min(lo, c.m - TAIL_SIGMAS * c.s);
+                    hi = Math.max(hi, c.m + TAIL_SIGMAS * c.s);
+                    peak = Math.max(peak, normalDensity(c.m, c.m, c.s));
+                }
+                var sx = o.width / (hi - lo), sy = o.height / peak;
+                function X(v) { return (v - lo) * sx; }
+                var first = o.curves[0];
+                var range = shadeRange(o, lo, hi);
+
+                // 칠하기 (첫 번째 분포)
+                if (range !== null) {
+                    var edge = normalPoints(first.m, first.s, range[0], range[1], lo, sx, sy);
+                    var closing = straight([[X(range[1]), 0], [X(range[0]), 0]]);
+                    out.fills.push({ points: edge.concat(closing), k: o.shadeK });
+                    // 한쪽 확률은 그림 밖(±3.5σ 너머)의 꼬리까지 더한다
+                    var upper = o.shade === 2 ? 1 : normalCdf((range[1] - first.m) / first.s);
+                    var lower = o.shade === 3 ? 0 : normalCdf((range[0] - first.m) / first.s);
+                    var p = upper - lower;
+                    out.notes.push(probabilityText(o, range, first) + " = " + formatValue(p, 4));
+                }
+
+                addAxis(out, o, 0, o.width);
+                for (var k = 0; k < o.curves.length; k++) {
+                    var curve = o.curves[k];
+                    out.lines.push({ points: normalPoints(curve.m, curve.s, curve.m - TAIL_SIGMAS * curve.s, curve.m + TAIL_SIGMAS * curve.s, lo, sx, sy), kind: "curve" });
+                    if (o.meanLine) out.lines.push({ points: straight([[X(curve.m), 0], [X(curve.m), normalDensity(curve.m, curve.m, curve.s) * sy]]), kind: "guide" });
+                }
+
+                // 축 아래 글자: 평균, (m±σ, m±2σ), a·b. 같은 자리의 글자는 하나만
+                var marks = [];
+                for (var m = 0; m < o.curves.length; m++) {
+                    var name = o.curves.length > 1 ? "m" + (m + 1) : "m";
+                    marks.push({ v: o.curves[m].m, text: o.letters ? name : formatValue(o.curves[m].m, 2), sub: o.letters && o.curves.length > 1 ? [1] : null });
+                }
+                if (o.sigmaTicks) {
+                    var steps = [-2, -1, 1, 2];
+                    for (var st = 0; st < steps.length; st++) {
+                        var n = steps[st], letter = (n < 0 ? "-" : "+") + (Math.abs(n) === 1 ? "" : String(Math.abs(n))) + "σ";
+                        marks.push({ v: first.m + n * first.s, text: o.letters ? "m" + letter : formatValue(first.m + n * first.s, 2) });
+                    }
+                }
+                addRangeMarks(marks, o, range);
+                placeMarks(out, marks, X, o.tick);
+                return out;
+            }
+
+            // 이항분포 B(n, p): k = 0 … n 막대, 가장 높은 막대가 height. 칠하는 범위의 막대는 K로
+            function buildBinomial(o) {
+                var out = { fills: [], lines: [], arrows: [], texts: [], notes: [] };
+                var n = o.n, p = o.p, probs = [], top = 0;
+                for (var k = 0; k <= n; k++) {
+                    probs.push(binomialProbability(n, k, p));
+                    top = Math.max(top, probs[k]);
+                }
+                var mu = n * p, variance = n * p * (1 - p), sd = Math.sqrt(variance);
+                if (o.approx) top = Math.max(top, normalDensity(mu, mu, sd));
+                var step = o.width / (n + 2), sy = o.height / top;
+                function X(v) { return (v + 1) * step; }
+                var range = shadeRange(o, -0.5, n + 0.5);
+                var sum = 0;
+                for (var b = 0; b <= n; b++) {
+                    var shaded = range !== null && b >= range[0] - 1e-9 && b <= range[1] + 1e-9;
+                    if (shaded) sum += probs[b];
+                    var h = probs[b] * sy, half = step * BAR_RATIO / 2;
+                    if (h < 0.05) continue;
+                    out.fills.push({ points: straight([[X(b) - half, 0], [X(b) + half, 0], [X(b) + half, h], [X(b) - half, h]]), k: shaded ? o.shadeK : 0, stroked: true });
+                }
+                out.notes.push("E(X) = " + formatValue(mu, 2) + ", V(X) = " + formatValue(variance, 2) + ", σ(X) = " + formatValue(sd, 2));
+                if (range !== null) out.notes.push(probabilityText(o, range, null) + " = " + formatValue(sum, 4));
+
+                addAxis(out, o, 0, o.width);
+                if (o.approx && sd > 0) {
+                    var from = Math.max(-1, mu - TAIL_SIGMAS * sd), to = Math.min(n + 1, mu + TAIL_SIGMAS * sd);
+                    out.lines.push({ points: normalPoints(mu, sd, from, to, -1, step, sy), kind: "curve" });
+                }
+                if (o.meanLine) out.lines.push({ points: straight([[X(mu), 0], [X(mu), o.height]]), kind: "guide" });
+
+                // 막대 아래 k (많으면 5칸마다)
+                var every = n <= 15 ? 1 : 5, marks = [];
+                for (var t = 0; t <= n; t += every) marks.push({ v: t, text: String(t), tickless: true });
+                addRangeMarks(marks, o, range);
+                placeMarks(out, marks, X, o.tick);
+                return out;
+            }
+
+            // 칠할 x 범위 [시작, 끝] (그림 범위로 자른다). 칠하지 않으면 null
+            function shadeRange(o, lo, hi) {
+                if (o.shade === 0) return null;
+                var from = o.shade === 1 ? Math.min(o.a, o.b) : (o.shade === 2 ? o.a : lo);
+                var to = o.shade === 1 ? Math.max(o.a, o.b) : (o.shade === 2 ? hi : o.b);
+                from = Math.max(from, lo);
+                to = Math.min(to, hi);
+                return to - from > 1e-9 ? [from, to] : null;
+            }
+
+            // a·b 글자 (칠하는 쪽 끝만)
+            function addRangeMarks(marks, o, range) {
+                if (range === null) return;
+                if (o.shade !== 3) marks.push({ v: o.a, text: o.letters ? "a" : formatValue(o.a, 2) });
+                if (o.shade !== 2) marks.push({ v: o.b, text: o.letters ? "b" : formatValue(o.b, 2) });
+            }
+
+            function placeMarks(out, marks, X, tick) {
+                var used = [];
+                for (var i = 0; i < marks.length; i++) {
+                    var x = X(marks[i].v), taken = false;
+                    for (var j = 0; j < used.length; j++) if (Math.abs(used[j] - x) < 0.5) taken = true;
+                    if (taken) continue;
+                    used.push(x);
+                    if (!marks[i].tickless) out.lines.push({ points: straight([[x, -tick / 2], [x, tick / 2]]), kind: "axis" });
+                    var label = { text: marks[i].text, at: [x, 0], dir: [0, -1], clear: tick / 2, upright: !isNaN(parseFloat(marks[i].text)) };
+                    if (marks[i].sub) label.sub = marks[i].sub;
+                    out.texts.push(label);
+                }
+            }
+
+            function addAxis(out, o, left, right) {
+                var margin = o.width * 0.04, end = right + margin + ARROW.length;
+                out.lines.push({ points: straight([[left - margin, 0], [end - ARROW.length + ARROW.notch, 0]]), kind: "axis" });
+                out.arrows.push({ tip: [end, 0], dir: [1, 0] });
+                if (o.axisName) out.texts.push({ text: o.axisName, at: [end, 0], dir: [0, -1] });
+            }
+
+            // P(a≤X≤b) = P(-1≤Z≤2). first가 없으면(이항분포) 표준화하지 않는다
+            function probabilityText(o, range, first) {
+                var v = o.axisName === "z" ? "Z" : "X";
+                function part(a, b, fa, fb) {
+                    if (o.shade === 2) return "P(" + v + "≥" + fa(a) + ")";
+                    if (o.shade === 3) return "P(" + v + "≤" + fb(b) + ")";
+                    return "P(" + fa(a) + "≤" + v + "≤" + fb(b) + ")";
+                }
+                function plain(value) { return formatValue(value, 2); }
+                var text = part(range[0], range[1], plain, plain);
+                if (first && v === "X") {
+                    v = "Z";
+                    text += " = " + part(range[0], range[1],
+                        function(value) { return formatValue((value - first.m) / first.s, 2); },
+                        function(value) { return formatValue((value - first.m) / first.s, 2); });
+                }
+                return text;
+            }
+
+            // 정규분포 곡선 [from, to]를 베지어로. 앵커는 끝점과 그 사이 평균에서 0.5σ 간격 (에르미트 → 베지어)
+            function normalPoints(m, s, from, to, lo, sx, sy) {
+                var xs = [from], k = Math.floor((from - m) / (s / 2)) + 1;
+                for (var x = m + k * s / 2; x < to - s * 1e-6; x = m + (++k) * s / 2) if (x > from + s * 1e-6) xs.push(x);
+                xs.push(to);
+                var out = [];
+                for (var i = 0; i < xs.length; i++) {
+                    var v = xs[i], y = normalDensity(v, m, s), slope = -(v - m) / (s * s) * y;
+                    var anchor = [(v - lo) * sx, y * sy], left = anchor, right = anchor;
+                    if (i > 0) {
+                        var hl = (v - xs[i - 1]) / 3;
+                        left = [(v - hl - lo) * sx, (y - slope * hl) * sy];
+                    }
+                    if (i < xs.length - 1) {
+                        var hr = (xs[i + 1] - v) / 3;
+                        right = [(v + hr - lo) * sx, (y + slope * hr) * sy];
+                    }
+                    out.push({ anchor: anchor, left: left, right: right });
+                }
+                return out;
+            }
+
+            function normalDensity(x, m, s) {
+                var z = (x - m) / s;
+                return Math.exp(-z * z / 2) / (s * Math.sqrt(2 * Math.PI));
+            }
+
+            // 표준정규분포의 누적확률 P(Z≤z). erf 근사 (Abramowitz–Stegun 7.1.26, 오차 1.5e-7)
+            function normalCdf(z) {
+                var x = Math.abs(z) / Math.SQRT2, t = 1 / (1 + 0.3275911 * x);
+                var erf = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+                return z >= 0 ? (1 + erf) / 2 : (1 - erf) / 2;
+            }
+
+            function binomialProbability(n, k, p) {
+                var c = 1;
+                for (var i = 1; i <= k; i++) c = c * (n - k + i) / i;
+                return c * Math.pow(p, k) * Math.pow(1 - p, n - k);
+            }
+
+            function straight(anchors) {
+                var points = [];
+                for (var i = 0; i < anchors.length; i++) points.push({ anchor: anchors[i], left: anchors[i], right: anchors[i] });
+                return points;
+            }
+
+            // 소수 digits자리까지, 뒤의 0은 뺀다
+            function formatValue(v, digits) {
+                var scale = Math.pow(10, digits), r = Math.round(v * scale) / scale;
+                return String(r === 0 ? 0 : r);
+            }
+
+            // -------------------------------------------------------
+            // 다이얼로그 부품
+            // -------------------------------------------------------
+            function addPanel(parent, title) {
+                var panel = parent.add("panel", undefined, title);
+                panel.alignChildren = ["left", "top"];
+                panel.margins = [12, 16, 12, 12];
+                panel.spacing = 6;
+                return panel;
+            }
+
+            function addValueRow(parent, label, unitText, value, minimum, maximum, step, decimals) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.add("statictext", undefined, label + (unitText ? " (" + unitText + "):" : ":")).preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, formatNumber(value, decimals));
+                input.preferredSize.width = INPUT_WIDTH;
+                var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+                slider.stepdelta = step;
+                slider.jumpdelta = step * 10;
+                slider.preferredSize.width = SLIDER_WIDTH;
+                return { input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals };
+            }
+
+            function setRowValue(controls, value) {
+                controls.input.text = formatNumber(value, controls.decimals);
+                try { controls.slider.value = value; } catch (e) {}
+            }
+
+            function bindValueRow(controls, setter) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    setRowValue(controls, value);
+                    setter(value);
+                    updatePreview();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? controls.slider.value : value);
+                };
+            }
+
+            function bindPositionRow(controls, getter, setter, isX) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    var delta = (value - getter()) * MM_TO_PT;
+                    setter(value);
+                    setRowValue(controls, value);
+                    if (delta === 0 || previewGroup === null) return;
+                    previewGroup.translate(isX ? delta : 0, isX ? 0 : delta);
+                    app.redraw();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? getter() : value);
+                };
+            }
+
+            function parseNumber(text) {
+                var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+                return isNaN(value) ? null : value;
+            }
+
+            function clamp(value, minimum, maximum) {
+                if (value < minimum) return minimum;
+                if (value > maximum) return maximum;
+                return value;
+            }
+
+            function roundTo(value, step) {
+                return Math.round(value / step) * step;
+            }
+
+            function formatNumber(value, decimals) {
+                return (Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
+            }
+
+
+            // -------------------------------------------------------
+            // 설정 저장 · 복원
+            // -------------------------------------------------------
+            function saveSettings() {
+                var flags = "";
+                for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
+                var parts = ["v1", mode, axisName, mean, sigma, mean2, sigma2, trials, chance, shade, labelKind, aValue, bValue, shadeK,
+                    widthMm, heightMm, fontPt, flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+            }
+
+            function applySettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+                if (!raw) return;
+                var p = raw.split("|");
+                if (p[0] !== "v1" || p.length !== 21 || p[17].length !== FLAG_KEYS.length) return;
+                try {
+                    mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
+                    axisName = Math.round(restoreNumber(p[2], axisName, 0, AXIS_NAMES.length - 1));
+                    mean = restoreNumber(p[3], mean, -500, 500);
+                    sigma = restoreNumber(p[4], sigma, 0.1, 100);
+                    mean2 = restoreNumber(p[5], mean2, -500, 500);
+                    sigma2 = restoreNumber(p[6], sigma2, 0.1, 100);
+                    trials = Math.round(restoreNumber(p[7], trials, 1, 40));
+                    chance = restoreNumber(p[8], chance, 0.01, 0.99);
+                    shade = Math.round(restoreNumber(p[9], shade, 0, SHADES.length - 1));
+                    labelKind = Math.round(restoreNumber(p[10], labelKind, 0, LABELS.length - 1));
+                    aValue = restoreNumber(p[11], aValue, -500, 500);
+                    bValue = restoreNumber(p[12], bValue, -500, 500);
+                    shadeK = restoreNumber(p[13], shadeK, 5, 60);
+                    widthMm = restoreNumber(p[14], widthMm, 30, 200);
+                    heightMm = restoreNumber(p[15], heightMm, 10, 100);
+                    fontPt = restoreNumber(p[16], fontPt, 5, 14);
+                    for (var i = 0; i < FLAG_KEYS.length; i++) opt[FLAG_KEYS[i]] = p[17].charAt(i) === "1";
+                    offsetXmm = restoreNumber(p[18], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[19], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[20] === "1";
                 } catch (restoreError) {}
             }
 
