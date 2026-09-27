@@ -15,9 +15,19 @@ probe="$1"; wrap="${probe%.jsx}.wrap.jsx"; docfile="$(dirname "$probe")/illu-pro
 pid=$(pgrep -f "MacOS/Adobe Illustrator$") || { echo "일러가 꺼져 있음"; exit 1; }
 idle() { local c; c=$(ps -o %cpu= -p "$pid" | tr -d ' '); awk "BEGIN{exit !($c<8)}"; }
 for i in $(seq 1 30); do idle && break; sleep 2; done
-idle || { echo "일러가 1분 넘게 바쁨 (cpu $(ps -o %cpu= -p "$pid" | tr -d ' ')%) — 보내지 않음. 문서가 0개면 일러를 다시 켠 뒤 실행"; exit 2; }
+# 1분 넘게 바쁘면 원인을 본다: AIHangMonitor가 헛돌면(시계만 읽는 샘플이 많으면) 보내지 않고,
+# 확장 패널(CC 라이브러리 등)의 계속 다시 그리기 같은 배경 부하면 보낸다 (그 부하는 프로브와 무관)
+if ! idle; then
+    f=$(mktemp); sample "$pid" 1 -file "$f" >/dev/null 2>&1
+    spin=$(awk '/Thread_.*AIHangMonitor/{t=1; next} /Thread_/{t=0} t && /mach_continuous_time|clock_gettime/ {match($0,/[0-9]+ /); n+=substr($0,RSTART,RLENGTH)} END{print n+0}' "$f"); rm -f "$f"
+    if [ "$spin" -gt 200 ]; then
+        echo "일러의 응답 없음 감시(AIHangMonitor)가 헛도는 중 — 보내지 않음. 문서를 닫고(0개) 일러를 다시 켠 뒤 실행"; exit 2
+    fi
+    echo "(일러 배경 부하 cpu $(ps -o %cpu= -p "$pid" | tr -d ' ')% — 감시 스레드는 정상이라 보냄)"
+fi
 cat > "$wrap" <<JS
-var __level = app.userInteractionLevel, __out, __file = new File("$docfile"), __doc = null;
+// 일러의 스크립트 엔진은 실행 사이에 전역 변수를 기억한다. var만 쓰면 앞 실행의 값이 남으니 매번 명시적으로 비운다
+var __level = app.userInteractionLevel, __out = undefined, __file = new File("$docfile"), __doc = null;
 app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
 try {
     for (var __i = 0; __i < app.documents.length; __i++) {
@@ -49,7 +59,7 @@ start=$(date +%s)
 osascript -e "with timeout of 600 seconds" -e "tell application id \"com.adobe.illustrator\" to do javascript (POSIX file \"$wrap\")" -e "end timeout"
 took=$(( $(date +%s) - start ))
 for i in $(seq 1 15); do idle && break; sleep 2; done
-state="한가"; idle || state="바쁨 — 다음 프로브 전에 확인 (감시 스레드가 헛돌면 문서를 닫고 일러 재시작)"
+state="한가"; idle || state="바쁨 (다음 실행 때 원인을 다시 본다)"
 echo "[${probe##*/}: ${took}s, 일러 ${state}]"
 [ "$took" -gt 5 ] && echo "  (5초를 넘김: 프로브를 더 쪼갤 것)"
 exit 0
