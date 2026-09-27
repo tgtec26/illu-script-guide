@@ -160,7 +160,7 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 - 프로브는 반드시 `tools/illu-probe.sh probe.jsx`로 돌린다. 일러가 한가할 때만 보내고, 경고창을 끄고, 만든 문서를 닫고, 중간에 끊지 않는다.
 - 한 번에 한 경우만, 10초 안쪽으로 짠다. PNG는 150~200%로 내보낸다. 문서 만들기만 3~4초 걸린다. 여러 경우는 호출을 나눈다.
 - `timeout` 명령으로 osascript를 끊지 않는다. 끊어도 일러는 그 스크립트를 계속 실행하고 다음 요청이 뒤에 쌓인다.
-- 실행 뒤 일러 CPU가 오래(1분 이상) 높으면 다음 프로브를 보내지 않는다. 열린 문서가 0개인지 확인한 뒤 일러를 정상 종료하고 다시 켜면 풀린다(`osascript -e 'tell application id "com.adobe.illustrator" to quit'`, `open -g -b com.adobe.illustrator`). 문서가 열려 있으면 사용자에게 묻는다.
+- 실행기는 일러가 1분 안에 한가해지지 않으면 보내지 않고 멈춘다(종료 코드 2). 13~17초짜리 프로브로도 감시가 다시 걸린 적이 있다(2026-09-28). 실행 뒤 일러 CPU가 오래(1분 이상) 높으면 다음 프로브를 보내지 않는다. 열린 문서가 0개인지 확인한 뒤 일러를 정상 종료하고 다시 켜면 풀린다(`osascript -e 'tell application id "com.adobe.illustrator" to quit'`, `open -g -b com.adobe.illustrator`). 문서가 열려 있으면 사용자에게 묻는다.
 - 프로브는 원본을 고치지 않는다. 설정 저장(`setStringPreference`)은 프로브 안에서 막아 사용자 설정을 덮지 않는다.
 - Windows 기기에는 osascript가 없다. 같은 원칙(짧게, 경고창 끄기, 한가할 때만)으로 사용자 테스트를 부탁한다.
 
