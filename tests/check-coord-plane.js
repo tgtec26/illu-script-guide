@@ -30,7 +30,8 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["compileFunction", "evaluateNumber", "parsePointList", "plotFunction", "toBezier", "formulaDisplay", "buildPlane", "straight"];
+const names = ["compileFunction", "evaluateNumber", "parsePointList", "plotFunction", "toBezier", "formulaDisplay", "buildPlane", "straight",
+  "piLabel", "findIntersections", "parseAsymptotes"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
@@ -90,14 +91,57 @@ for (const text of ["y=-x^2+4", "y=6/x", "y=√x", "y=x^3/4-x"]) {
 }
 
 // 식 표시: ^ 다음은 위첨자
-assert.deepStrictEqual(g.formulaDisplay("y=-x^2+4"), { text: "y=-x2+4", sup: [4] });
-assert.deepStrictEqual(g.formulaDisplay("y=x^12*2"), { text: "y=x122", sup: [3, 4] });
+assert.deepStrictEqual(g.formulaDisplay("y=-x^2+4"), { text: "y=-x2+4", sup: [4], sub: [], roman: [] });
+assert.deepStrictEqual(g.formulaDisplay("y=x^12*2"), { text: "y=x122", sup: [3, 4], sub: [], roman: [] });
+// 함수 이름은 똑바로, 뒤에 한 칸. log의 밑은 아래첨자, pi는 π
+assert.deepStrictEqual(g.formulaDisplay("y=sin 2x"), { text: "y=sin 2x", sup: [], sub: [], roman: [2, 3, 4] });
+assert.deepStrictEqual(g.formulaDisplay("y=log_2 x"), { text: "y=log2x", sup: [], sub: [5], roman: [2, 3, 4] });
+assert.deepStrictEqual(g.formulaDisplay("y=cos(x-pi)"), { text: "y=cos(x-π)", sup: [], sub: [], roman: [2, 3, 4] });
+
+// 고등학교 함수
+near(f("y=2^x", 3), 8, "exponential");
+near(f("y=e^x", 1), Math.E, "e");
+near(f("y=log_2 x", 8), 3, "log base 2");
+near(f("y=log_2 3x", 8 / 3), 3, "log_2 3x = log2(3x), not log_23");
+near(f("y=log_2(x+1)", 7), 3, "log base with parens");
+near(f("y=log x", 1000), 3, "common log");
+near(f("y=ln x", Math.E), 1, "natural log");
+near(f("y=sin 2x", Math.PI / 4), 1, "sin 2x = sin(2x)");
+near(f("y=2sin x", Math.PI / 2), 2, "2 sin x");
+near(f("y=sin x cos x", Math.PI / 4), 0.5, "sin x cos x = sin(x)·cos(x)");
+near(f("y=cos(x-π)", 0), -1, "π symbol");
+near(f("y=tan x + 1", Math.PI / 4), 2, "tan");
+near(f("y=|x-1|", -2), 3, "absolute value");
+near(f("y=2|x|+1", -3), 7, "implicit product with abs");
+near(f("y=||x|-2|", 0), 2, "nested abs");
+for (const bad of ["y=sin", "y=log_", "y=|x", "y=cot x"]) assert.strictEqual(g.compileFunction(bad), null, bad);
+assert.strictEqual(g.evaluateNumber("pi/2"), Math.PI / 2);
+
+// π 눈금 글자
+assert.deepStrictEqual([-4, -3, -1, 1, 2, 3, 4].map(g.piLabel), ["-2π", "-3π/2", "-π/2", "π/2", "π", "3π/2", "2π"]);
+
+// 교점: 직선과 포물선, y=2^x와 y=log_2 x는 만나지 않음, tan의 불연속은 교점이 아님
+{
+  const fn = (t) => ({ fn: g.compileFunction(t) });
+  const c = g.findIntersections([fn("y=x^2"), fn("y=x+2")], -5, 5, -5, 5);
+  assert.strictEqual(c.length, 2);
+  near(c[0].x, -1, "first crossing", 1e-9); near(c[1].x, 2, "second crossing", 1e-9);
+  assert.strictEqual(g.findIntersections([fn("y=2^x"), fn("y=log_2 x")], -5, 5, -5, 5).length, 0);
+  assert.strictEqual(g.findIntersections([fn("y=tan x"), fn("y=0")], -1.5, 1.5, -5, 5).length, 1, "only x=0, not the poles");
+  assert.strictEqual(g.findIntersections([fn("y=x^2"), fn("y=x+20")], -5, 5, -5, 5).length, 0, "outside the y range");
+}
+
+// 점근선 입력
+assert.deepStrictEqual(g.parseAsymptotes("x=1, y = -2"), [{ axis: "x", value: 1 }, { axis: "y", value: -2 }]);
+assert.deepStrictEqual(g.parseAsymptotes(""), []);
+for (const bad of ["x", "z=1", "x=", "x=a"]) assert.strictEqual(g.parseAsymptotes(bad), null, bad);
 
 // 평면 전체
 {
   const d = g.buildPlane({ xMin: -2, xMax: 3, yMin: -1, yMax: 2, unit: 10, tick: 2, grid: true, numbers: true,
     functions: [{ fn: g.compileFunction("y=x"), label: "y=x" }], formulas: true,
-    points: g.parsePointList("A(1,2)").list, coords: true, guides: true });
+    points: g.parsePointList("A(1,2)").list, coords: true, guides: true,
+    piAxis: false, intersections: false, identity: false, asymptotes: [] });
   assert.deepStrictEqual(d.arrows.map((a) => a.tip), [[38, 0], [0, 28]], "arrow tips past the max");
   const axes = d.lines.filter((l) => l.kind === "axis" && l.points[0].anchor[1] === 0 && l.points[1].anchor[1] === 0);
   assert.deepStrictEqual(axes[0].points.map((p) => p.anchor), [[-25, 0], [35, 0]], "x axis stops at the arrow notch");
@@ -110,4 +154,27 @@ assert.deepStrictEqual(g.formulaDisplay("y=x^12*2"), { text: "y=x122", sup: [3, 
 assert.ok(source.includes('var PREF_KEY = "CoordPlane/settings";'));
 assert.ok(!/[(,=]\s*\/=/.test(source), "regex literal must not start with = (ExtendScript syntax error)");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+// π 단위 가로축: 최댓값 4 → 2π, 눈금 글자, 점근선·y=x 점선, 교점 이름
+{
+  const d = g.buildPlane({ xMin: -4, xMax: 4, yMin: -2, yMax: 2, unit: 10, tick: 2, grid: false, numbers: true,
+    functions: [{ fn: g.compileFunction("y=sin x"), label: "y=sin x" }, { fn: g.compileFunction("y=1/2"), label: "y=1/2" }],
+    formulas: false, points: [], coords: false, guides: false,
+    piAxis: true, intersections: true, identity: true, asymptotes: [{ axis: "x", value: Math.PI / 2 }] });
+  const xLabels = d.texts.filter((t) => t.dir[0] === 0 && t.dir[1] === -1 && t.clear > 0).map((t) => t.text);
+  assert.deepStrictEqual(xLabels, ["-2π", "-3π/2", "-π", "-π/2", "π/2", "π", "3π/2", "2π"]);
+  near(d.arrows[0].tip[0], (2 * Math.PI + 0.8) * 10, "x arrow past 2π");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "guide").length, 2, "asymptote + y=x");
+  assert.deepStrictEqual(d.texts.filter((t) => /^[A-Z]$/.test(t.text) && t.text !== "O").map((t) => t.text), ["A", "B", "C", "D"], "sin x = 1/2 four times in [-2π, 2π]");
+}
+
+// 같은 곳에서 끝나는 두 그래프의 식 글자는 한 줄 이상 벌어진다
+{
+  const d = g.buildPlane({ xMin: -5, xMax: 6, yMin: -5, yMax: 6, unit: 10, tick: 2, grid: false, numbers: false,
+    functions: [{ fn: g.compileFunction("y=√(x+2)"), label: "y=√(x+2)" }, { fn: g.compileFunction("y=|x|-3"), label: "y=|x|-3" }],
+    formulas: true, points: [], coords: false, guides: false, piAxis: false, intersections: false, identity: false, asymptotes: [], fontSize: 8 });
+  const labels = d.texts.filter((t) => t.text.startsWith("y="));
+  assert.strictEqual(labels.length, 2);
+  assert.ok(Math.abs(labels[0].at[1] - labels[1].at[1]) >= 8 * 1.3 - 1e-9, "formula labels do not overlap");
+}
+
 console.log("coord plane checks passed");
