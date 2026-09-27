@@ -153,6 +153,17 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 - Node 테스트는 스코프를 평탄화해 공통 함수가 엔진 상수를 쓰는 오류를 못 잡는다. 통합 뒤에는 일러에서 탭마다 미리보기를 그려 확인한다.
 - 안내 홈페이지도 같은 구조다. 묶음을 만들거나 탭을 더하면 `docs/assets/app.js`의 그 항목에 `tabs`(필요하면 묶음 공통 옵션 `shared`, 선택 조건 `requires`)를 맞춘다. 목록 → 묶음 안내(`#script/<id>`) → 탭 세부(`#script/<id>/<탭id>`) 세 단계로 그려지고, 탭 이름(`name`)은 스크립트의 탭 라벨과 같게 둔다. 어드민의 세부 설명·이미지는 탭까지 따로 저장하므로(`content.json`의 `details["<id>/<탭id>"]`) 탭 `id`는 바꾸지 않는다.
 
+## Verifying in Illustrator Without Freezing It (required)
+
+2026-09-27: 검증 프로브를 osascript로 길게(20초 이상, 연달아) 돌리자 일러가 느려지고 Dock 아이콘이 계속 튀었다. 닫을 창은 없었다. `sample`로 보니 일러의 `AIHangMonitor`(응답 없음 감시) 스레드가 CPU 80%로 계속 돌고 있었다. `do javascript`가 주 스레드를 오래 막으면 감시가 걸리고, 끝난 뒤에도 풀리지 않는다. 실제 사용(모달 다이얼로그)에서는 생기지 않는 테스트 방식의 문제다.
+
+- 프로브는 반드시 `tools/illu-probe.sh probe.jsx`로 돌린다. 일러가 한가할 때만 보내고, 경고창을 끄고, 만든 문서를 닫고, 중간에 끊지 않는다.
+- 한 번에 한 경우만, 10초 안쪽으로 짠다. PNG는 150~200%로 내보낸다. 문서 만들기만 3~4초 걸린다. 여러 경우는 호출을 나눈다.
+- `timeout` 명령으로 osascript를 끊지 않는다. 끊어도 일러는 그 스크립트를 계속 실행하고 다음 요청이 뒤에 쌓인다.
+- 실행 뒤 일러 CPU가 오래(1분 이상) 높으면 다음 프로브를 보내지 않는다. 열린 문서가 0개인지 확인한 뒤 일러를 정상 종료하고 다시 켜면 풀린다(`osascript -e 'tell application id "com.adobe.illustrator" to quit'`, `open -g -b com.adobe.illustrator`). 문서가 열려 있으면 사용자에게 묻는다.
+- 프로브는 원본을 고치지 않는다. 설정 저장(`setStringPreference`)은 프로브 안에서 막아 사용자 설정을 덮지 않는다.
+- Windows 기기에는 osascript가 없다. 같은 원칙(짧게, 경고창 끄기, 한가할 때만)으로 사용자 테스트를 부탁한다.
+
 ## Escalation
 
 Ask before expanding scope, changing unrelated files, using multiple agents, or starting a formal design workflow.
