@@ -3,7 +3,18 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_StatChart.jsx"), "utf8");
+// 중학교 수학 묶음(Object_MiddleMath.jsx)의 "StatChart" 탭 엔진만 잘라 읽는다. 탭마다 같은 이름의 함수가 있다
+const bundle = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_MiddleMath.jsx"), "utf8");
+const source = (() => {
+  const start = bundle.indexOf("function makeStatChartEngine(");
+  assert.ok(start >= 0, "missing engine: makeStatChartEngine");
+  let depth = 0;
+  for (let index = bundle.indexOf("{", start); index < bundle.length; index++) {
+    if (bundle[index] === "{") depth++;
+    if (bundle[index] === "}" && --depth === 0) return bundle.slice(start, index + 1);
+  }
+  throw new Error("unbalanced engine");
+})();
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
