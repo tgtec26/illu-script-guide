@@ -31,7 +31,7 @@ function extractFunction(name) {
 }
 
 const names = ["compileFunction", "evaluateNumber", "parsePointList", "plotFunction", "toBezier", "formulaDisplay", "buildPlane", "straight",
-  "piLabel", "findIntersections", "parseAsymptotes"];
+  "piLabel", "findIntersections", "parseAsymptotes", "graphSymbol", "parseRegion", "regionPolygons", "dropCollinear"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
@@ -139,7 +139,7 @@ for (const bad of ["x", "z=1", "x=", "x=a"]) assert.strictEqual(g.parseAsymptote
 // 평면 전체
 {
   const d = g.buildPlane({ xMin: -2, xMax: 3, yMin: -1, yMax: 2, unit: 10, tick: 2, grid: true, numbers: true,
-    functions: [{ fn: g.compileFunction("y=x"), label: "y=x" }], formulas: true,
+    functions: [{ fn: g.compileFunction("y=x"), label: "y=x" }], nameStyle: 1, hideAxes: false, region: [],
     points: g.parsePointList("A(1,2)").list, coords: true, guides: true,
     piAxis: false, intersections: false, identity: false, asymptotes: [] });
   assert.deepStrictEqual(d.arrows.map((a) => a.tip), [[38, 0], [0, 28]], "arrow tips past the max");
@@ -158,7 +158,7 @@ assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript
 {
   const d = g.buildPlane({ xMin: -4, xMax: 4, yMin: -2, yMax: 2, unit: 10, tick: 2, grid: false, numbers: true,
     functions: [{ fn: g.compileFunction("y=sin x"), label: "y=sin x" }, { fn: g.compileFunction("y=1/2"), label: "y=1/2" }],
-    formulas: false, points: [], coords: false, guides: false,
+    nameStyle: 0, hideAxes: false, region: [], points: [], coords: false, guides: false,
     piAxis: true, intersections: true, identity: true, asymptotes: [{ axis: "x", value: Math.PI / 2 }] });
   const xLabels = d.texts.filter((t) => t.dir[0] === 0 && t.dir[1] === -1 && t.clear > 0).map((t) => t.text);
   assert.deepStrictEqual(xLabels, ["-2π", "-3π/2", "-π", "-π/2", "π/2", "π", "3π/2", "2π"]);
@@ -171,10 +171,64 @@ assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript
 {
   const d = g.buildPlane({ xMin: -5, xMax: 6, yMin: -5, yMax: 6, unit: 10, tick: 2, grid: false, numbers: false,
     functions: [{ fn: g.compileFunction("y=√(x+2)"), label: "y=√(x+2)" }, { fn: g.compileFunction("y=|x|-3"), label: "y=|x|-3" }],
-    formulas: true, points: [], coords: false, guides: false, piAxis: false, intersections: false, identity: false, asymptotes: [], fontSize: 8 });
+    nameStyle: 1, hideAxes: false, region: [], points: [], coords: false, guides: false, piAxis: false, intersections: false, identity: false, asymptotes: [], fontSize: 8 });
   const labels = d.texts.filter((t) => t.text.startsWith("y="));
   assert.strictEqual(labels.length, 2);
   assert.ok(Math.abs(labels[0].at[1] - labels[1].at[1]) >= 8 * 1.3 - 1e-9, "formula labels do not overlap");
+}
+
+// 그래프 이름 ㉠·(가), 5개까지
+assert.deepStrictEqual([0, 1, 4].map((i) => g.graphSymbol(2, i)), ["㉠", "㉡", "㉤"]);
+assert.deepStrictEqual([0, 1, 4].map((i) => g.graphSymbol(3, i)), ["(가)", "(나)", "(마)"]);
+assert.ok(source.includes("var FUNCTION_COUNT = 5;"));
+{
+  const fns = ["y=x^2", "y=2x^2", "y=1/2x^2", "y=-x^2"].map((t) => ({ fn: g.compileFunction(t), label: t }));
+  const d = g.buildPlane({ xMin: -3, xMax: 3, yMin: -4, yMax: 4, unit: 10, tick: 2, grid: false, numbers: false, functions: fns,
+    nameStyle: 2, hideAxes: false, region: [], points: [], coords: false, guides: false, piAxis: false, intersections: false, identity: false,
+    asymptotes: [], fontSize: 8 });
+  assert.deepStrictEqual(d.texts.filter((t) => t.symbol).map((t) => t.text).sort(), ["㉠", "㉡", "㉢", "㉣"]);
+}
+
+// 축 없이 모눈: 축·화살촉·x/y/O 글자 없이 0 줄까지 격자
+{
+  const d = g.buildPlane({ xMin: -2, xMax: 3, yMin: -1, yMax: 2, unit: 10, tick: 2, grid: false, numbers: true, functions: [],
+    nameStyle: 0, hideAxes: true, region: [], points: [], coords: false, guides: false, piAxis: false, intersections: false, identity: false, asymptotes: [] });
+  assert.strictEqual(d.arrows.length, 0);
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 0);
+  assert.strictEqual(d.lines.filter((l) => l.kind === "grid").length, 6 + 4);
+  assert.strictEqual(d.texts.length, 0);
+}
+
+// 칠하기: 두 직선 y=-x+4, y=2x+1과 두 축으로 둘러싸인 사각형
+{
+  const region = g.parseRegion("y<=-x+4, y ≤ 2x+1, x>=0, y>=0");
+  assert.strictEqual(region.length, 4);
+  assert.deepStrictEqual(g.parseRegion(""), []);
+  for (const bad of ["z<1", "y=2", "y<", "x<a", "y<2x+"]) assert.strictEqual(g.parseRegion(bad), null, bad);
+  const polys = g.regionPolygons(region, -5, 5, -5, 5);
+  assert.strictEqual(polys.length, 1);
+  const poly = polys[0];
+  // 꼭짓점: (0,0) (4,0) (1,3) (0,1)
+  const has = (x, y) => poly.some((p) => Math.abs(p[0] - x) < 1e-6 && Math.abs(p[1] - y) < 1e-6);
+  assert.ok(has(0, 0) && has(4, 0) && has(0, 1), JSON.stringify(poly));
+  assert.ok(poly.some((p) => Math.abs(p[0] - 1) < 0.02 && Math.abs(p[1] - 3) < 0.04), "corner near (1,3)");
+  assert.ok(poly.length <= 6, "straight edges keep only a few points: " + poly.length);
+  // 넓이 (신발끈) = 사각형 (0,0)(4,0)(1,3)(0,1) = 13/2
+  let area = 0;
+  for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length]; area += p[0] * q[1] - q[0] * p[1]; }
+  near(Math.abs(area) / 2, 6.5, "area", 0.02);
+  // 포물선 아래: 곡선 경계는 여러 점
+  const cap = g.regionPolygons(g.parseRegion("y<=-x^2+4, y>=0"), -5, 5, -5, 5);
+  assert.strictEqual(cap.length, 1);
+  assert.ok(cap[0].length > 10);
+  // 떨어진 두 조각
+  assert.strictEqual(g.regionPolygons(g.parseRegion("y>=x^2-1, y<=0"), -5, 5, -5, 5).length, 1);
+  assert.strictEqual(g.regionPolygons(g.parseRegion("y>=-x^2+1, y<=0"), -3, 3, -5, 5).length, 2);
+  // buildPlane이 좌표를 unit으로 바꿔 fills에 넣는다
+  const d = g.buildPlane({ xMin: -5, xMax: 5, yMin: -5, yMax: 5, unit: 10, tick: 2, grid: false, numbers: false, functions: [],
+    nameStyle: 0, hideAxes: false, region: region, points: [], coords: false, guides: false, piAxis: false, intersections: false, identity: false, asymptotes: [] });
+  assert.strictEqual(d.fills.length, 1);
+  assert.ok(d.fills[0].some((p) => Math.abs(p[0] - 40) < 1e-4 && Math.abs(p[1]) < 1e-4));
 }
 
 console.log("coord plane checks passed");
