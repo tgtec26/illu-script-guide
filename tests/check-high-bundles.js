@@ -9,7 +9,7 @@ const bundles = {
   "Object_HighMath1.jsx": ["수학Ⅰ", ["ExpLog", "Trig", "UnitCircle", "Triangle", "Sequence"]],
   "Object_HighMath2.jsx": ["수학Ⅱ", ["Piecewise", "Extrema", "Calculus"]],
   "Object_HighStatistics.jsx": ["확률과 통계", ["Count", "Distribution"]],
-  "Object_HighGeometry.jsx": ["기하", ["Conic", "Vector"]],
+  "Object_HighGeometry.jsx": ["기하", ["Conic", "Vector", "Space"]],
 };
 assert.ok(!fs.existsSync(path.join(dir, "Object_HighMath.jsx")), "the old single bundle is removed");
 const tabKeys = new Set(), seen = new Set();
@@ -28,5 +28,5 @@ for (const [file, [title, engines]] of Object.entries(bundles)) {
   assert.ok(source.indexOf("illu_last_script.txt") < source.indexOf("(function() {"), file + ": last-script memo at the top");
   assert.ok(source.includes("ui_tab_helper.jsxinc") && source.includes("bindTabOrder(win)"), file + ": tab order helper");
 }
-assert.strictEqual(seen.size, 16);
+assert.strictEqual(seen.size, 17);
 console.log("high-school bundle checks passed");

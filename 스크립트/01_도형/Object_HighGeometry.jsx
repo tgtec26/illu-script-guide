@@ -9,7 +9,7 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 고등학교 기하: 이차곡선(포물선·타원·쌍곡선), 평면벡터 그림을 한 창의 탭으로 묶는다 (중학교 수학 묶음과 같은 구조).
+// 고등학교 기하: 이차곡선(포물선·타원·쌍곡선), 평면벡터, 공간도형(정사영·삼수선·두 평면이 이루는 각) 그림을 한 창의 탭으로 묶는다 (중학교 수학 묶음과 같은 구조).
 // 고등학교 수학은 과목별 스크립트 다섯 개(공통수학·수학Ⅰ·수학Ⅱ·확률과 통계·기하)로 나뉘어 있고, 탭마다 저장 키는 예전 그대로다.
 // 탭마다 필요한 선택이 다르고, 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적는다.
 // 선 두께는 평가원 수능 그림 측정값에 맞춘 과학 기준(축 0.4pt, 메인 0.8pt, 보조 0.3pt)이다.
@@ -21,7 +21,7 @@ try {
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
-    var engines = [makeConicEngine(), makeVectorEngine()];
+    var engines = [makeConicEngine(), makeVectorEngine(), makeSpaceEngine()];
 
     var win = new Window("dialog", "기하");
     win.orientation = "column";
@@ -1515,6 +1515,559 @@ try {
                     offsetXmm = restoreNumber(p[11], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[12], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[13] === "1";
+                } catch (restoreError) {}
+            }
+
+            function restoreNumber(text, fallback, minimum, maximum) {
+                var value = parseNumber(text);
+                return value === null ? fallback : clamp(value, minimum, maximum);
+            }
+        }
+        return api;
+    }
+
+    // ==== 공간도형 ====
+    // 공간도형(기하): 평면을 평행사변형으로 보는 사투상(깊이 방향 0.5배, 30°)으로 세 가지 그림을 그린다.
+    // - 정사영: 평면 α 위의 선분 AB와 정사영 A′B′, 수선 AA′·BB′(점선), A에서 A′B′에 평행한 보조선과 각 θ. A′B′ = AB cos θ
+    // - 삼수선 정리: 평면 밖의 점 P, 수선의 발 H, 평면 위의 직선 l, H에서 l에 내린 수선의 발 M, 직각 표시 (PH⊥α, HM⊥l → PM⊥l)
+    // - 두 평면이 이루는 각: 교선 l에서 만나는 평면 α, β, l에 수직인 두 선분과 각 θ, β 위의 점을 α로 내린 정사영(선택)
+    // 직각 표시는 3차원에서 만든 작은 정사각형을 투상해 기울기가 맞다. 길이는 mm, 계산은 창에 보여 준다.
+    // 선 두께: 평면 0.4pt, 도형 0.8pt, 수선·보조선 점선 0.3pt, 직각 표시·각 호 0.3pt. 선택은 필요 없다.
+    function makeSpaceEngine() {
+        var api = {label: "공간도형", error: null, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        function addRows(page) {
+            var PREF_KEY = "HighGeometrySpace/settings";
+            var MM_TO_PT = 2.834645669;
+            var POSITION_LIMIT_MM = 100;
+            var LABEL_WIDTH = 100;
+            var INPUT_WIDTH = 50;
+            var SLIDER_WIDTH = 196;
+            var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
+            var ENG_FONT_NAME = "GSMediumB1";
+            var ITALIC_FONT_NAME = "GSMediItaC1";
+            var EQN_FONT_NAME = "HancomEQN";   // GSMediumB1에 없는 기호(α, β, θ, ′)
+            var ENG_BASELINE_PT = 0.5;
+            var PLANE_PT = 0.4;
+            var MAIN_PT = 0.8;
+            var GUIDE_PT = 0.3;
+            var GUIDE_DASH = [2, 1.5];
+            var DOT_RADIUS_MM = 0.5;
+            var MARK_MM = 2;
+            var LABEL_GAP_MM = 0.8;
+            var DEPTH = { scale: 0.5, angle: 30 };   // 사투상: 깊이(y)를 0.5배, 30° 방향으로
+            var MODES = ["정사영", "삼수선 정리", "두 평면이 이루는 각"];
+            // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
+            var FLAG_KEYS = ["marks", "names", "projection"];
+
+            var doc = app.activeDocument;
+            var viewCenter = doc.activeView.centerPoint;
+            var layer = findEditableLayer();
+            var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
+            var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+            var italicFont = findTextFont([ITALIC_FONT_NAME, ENG_FONT_NAME]);
+            var eqnFont = findTextFont([EQN_FONT_NAME, ENG_FONT_NAME]);
+
+            // 옵션
+            var mode = 0;
+            var planeMm = 60;
+            var thetaDeg = 35;
+            var lengthMm = 40;
+            var heightMm = 10;
+            var distanceMm = 15;
+            var directionDeg = 15;
+            var fontPt = 9;
+            var opt = { marks: true, names: true, projection: true };
+            var offsetXmm = 0;
+            var offsetYmm = 0;
+            var previewEnabled = true;
+            applySettings();
+
+            var previewGroup = null;
+
+            var win = page;   // 탭 페이지에 그대로 쌓는다
+
+            var shapePanel = addPanel(win, "그림");
+            var modeRow = shapePanel.add("group");
+            modeRow.add("statictext", undefined, "종류:");
+            var modeList = modeRow.add("dropdownlist", undefined, MODES);
+            modeList.selection = mode;
+            var planeControls = addValueRow(shapePanel, "평면 가로", "mm", planeMm, 30, 120, 1, 0);
+            var thetaControls = addValueRow(shapePanel, "각 θ", "°", thetaDeg, 5, 85, 1, 0);
+            var lengthControls = addValueRow(shapePanel, "선분 AB", "mm", lengthMm, 10, 100, 1, 0);
+            var heightControls = addValueRow(shapePanel, "높이", "mm", heightMm, 0, 60, 0.5, 1);
+            heightControls.input.helpTip = "정사영: A의 높이 AA′, 삼수선: PH";
+            var distanceControls = addValueRow(shapePanel, "HM 거리", "mm", distanceMm, 3, 60, 0.5, 1);
+            var directionControls = addValueRow(shapePanel, "평면 위 방향", "°", directionDeg, -80, 80, 1, 0);
+            directionControls.input.helpTip = "정사영의 A′B′, 삼수선의 직선 l이 가로와 이루는 각 (평면 위에서)";
+            var checkRow = shapePanel.add("group");
+            var marksCheck = checkRow.add("checkbox", undefined, "직각 표시");
+            bindOption(marksCheck, "marks");
+            var namesCheck = checkRow.add("checkbox", undefined, "점·평면 이름");
+            bindOption(namesCheck, "names");
+            var projectionCheck = checkRow.add("checkbox", undefined, "β 위 점의 정사영");
+            bindOption(projectionCheck, "projection");
+            var fontControls = addValueRow(shapePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+
+            var messageText = win.add("statictext", undefined, " ", {multiline: true});
+            messageText.preferredSize = [380, 32];
+
+            var positionPanel = addPanel(win, "위치");
+            var offsetXControls = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+            var offsetYControls = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+
+            refreshEnabled();
+            modeList.onChange = function() {
+                mode = modeList.selection ? modeList.selection.index : 0;
+                refreshEnabled();
+                updatePreview();
+            };
+            bindValueRow(planeControls, function(value) { planeMm = value; });
+            bindValueRow(thetaControls, function(value) { thetaDeg = value; });
+            bindValueRow(lengthControls, function(value) { lengthMm = value; });
+            bindValueRow(heightControls, function(value) { heightMm = value; });
+            bindValueRow(distanceControls, function(value) { distanceMm = value; });
+            bindValueRow(directionControls, function(value) { directionDeg = value; });
+            bindValueRow(fontControls, function(value) { fontPt = value; });
+            // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false);
+
+            // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다
+            api.commit = function() {
+                if (previewGroup === null) buildPreview();
+                saveSettings();
+                doc.selection = null;
+                previewGroup.selected = true;
+                return true;
+            };
+            api.setPreview = function(on) {
+                previewEnabled = on;
+                updatePreview();
+            };
+            api.updatePreview = updatePreview;
+            api.clearPreview = function() {
+                clearPreview();
+                app.redraw();
+            };
+            return null;
+
+            function refreshEnabled() {
+                thetaControls.input.parent.enabled = mode !== 1;
+                lengthControls.input.parent.enabled = mode === 0;
+                heightControls.input.parent.enabled = mode !== 2;
+                distanceControls.input.parent.enabled = mode === 1;
+                directionControls.input.parent.enabled = mode !== 2;
+                projectionCheck.enabled = mode === 2;
+            }
+
+            function bindOption(check, key) {
+                check.value = opt[key];
+                check.onClick = function() {
+                    opt[key] = check.value;
+                    updatePreview();
+                };
+            }
+
+            // -------------------------------------------------------
+            // 미리보기
+            // -------------------------------------------------------
+            function updatePreview() {
+                clearPreview();
+                if (previewEnabled) buildPreview();
+                app.redraw();
+            }
+
+            function clearPreview() {
+                if (previewGroup !== null) {
+                    try { previewGroup.remove(); } catch (e) {}
+                }
+                previewGroup = null;
+            }
+
+            function buildPreview() {
+                var drawing = buildSpace({
+                    mode: mode, plane: planeMm, theta: thetaDeg, length: lengthMm, height: heightMm, distance: distanceMm,
+                    direction: directionDeg, marks: opt.marks, names: opt.names, projection: opt.projection, mark: MARK_MM
+                });
+                messageText.text = drawing.notes.length > 0 ? drawing.notes.join("\n") : " ";
+
+                previewGroup = layer.groupItems.add();
+                previewGroup.name = "공간도형";
+                for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
+                for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
+                for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                var b = previewGroup.geometricBounds;
+                previewGroup.translate(viewCenter[0] - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT, viewCenter[1] - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
+            }
+
+            // line: {points:[[x,y]…] (mm), closed, kind:"plane"|"main"|"guide"|"mark"}
+            function addPath(line) {
+                var path = previewGroup.pathItems.add();
+                var anchors = [];
+                for (var i = 0; i < line.points.length; i++) anchors.push([line.points[i][0] * MM_TO_PT, line.points[i][1] * MM_TO_PT]);
+                path.setEntirePath(anchors);
+                path.closed = !!line.closed;
+                path.filled = false;
+                path.stroked = true;
+                path.strokeColor = makeGray(100);
+                path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "plane" ? PLANE_PT : GUIDE_PT);
+                path.strokeCap = StrokeCap.BUTTENDCAP;
+                path.strokeJoin = StrokeJoin.MITERENDJOIN;
+                if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
+            }
+
+            function addDot(at) {
+                var r = DOT_RADIUS_MM * MM_TO_PT;
+                var circle = previewGroup.pathItems.ellipse(at[1] * MM_TO_PT + r, at[0] * MM_TO_PT - r, r * 2, r * 2);
+                circle.stroked = false;
+                circle.filled = true;
+                circle.fillColor = makeGray(100);
+            }
+
+            // at(mm)에서 dir 쪽으로 간격을 두고 글자의 가까운 가장자리가 오게 둔다
+            function addLabel(label) {
+                var frame = previewGroup.textFrames.add();
+                frame.contents = label.text;
+                var range = frame.textRange;
+                var attributes = range.characterAttributes;
+                attributes.size = fontPt;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, label.upright);
+                var b = frame.geometricBounds;
+                var halfW = (b[2] - b[0]) / 2, halfH = (b[1] - b[3]) / 2;
+                var dir = label.dir;
+                var reach = LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
+                var x = label.at[0] * MM_TO_PT + dir[0] * reach, y = label.at[1] * MM_TO_PT + dir[1] * reach;
+                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+            }
+
+            // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
+            // GSMediumB1에 없는 기호(α, β, θ, ′)는 HancomEQN. 점 이름(upright)은 똑바로
+            function applyTextFonts(frame, upright) {
+                var text = frame.contents;
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    var character = frame.textRange.characters[i];
+                    var attributes = character.characterAttributes;
+                    if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
+                        attributes.textFont = korFont;
+                        attributes.baselineShift = 0;
+                    } else if (code > 126) {
+                        attributes.textFont = eqnFont;
+                        attributes.baselineShift = 0;
+                    } else if (!upright && code >= 97 && code <= 122) {
+                        attributes.textFont = italicFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    } else {
+                        attributes.textFont = engFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    }
+                }
+            }
+
+            function findTextFont(names) {
+                for (var i = 0; i < names.length; i++) {
+                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
+                }
+                return app.textFonts[0];
+            }
+
+            // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
+            function findEditableLayer() {
+                var active = doc.activeLayer;
+                if (!active.locked && active.visible) return active;
+                for (var i = 0; i < doc.layers.length; i++) {
+                    if (!doc.layers[i].locked && doc.layers[i].visible) return doc.layers[i];
+                }
+                return doc.layers.add();
+            }
+
+            // K값(0~100)만 있는 회색. RGB 문서면 같은 밝기의 회색으로
+            function makeGray(k) {
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    cmyk.cyan = 0;
+                    cmyk.magenta = 0;
+                    cmyk.yellow = 0;
+                    cmyk.black = k;
+                    return cmyk;
+                }
+                var value = Math.round(255 * (1 - k / 100));
+                var rgb = new RGBColor();
+                rgb.red = value;
+                rgb.green = value;
+                rgb.blue = value;
+                return rgb;
+            }
+
+            // -------------------------------------------------------
+            // 계산 (일러 DOM을 쓰지 않는다 → tests/check-space.js). 공간 좌표 (x 가로, y 깊이, z 위), mm
+            // -------------------------------------------------------
+            // 사투상: 깊이 y는 0.5배로 줄여 30° 방향으로 민다
+            function project(p) {
+                var a = DEPTH.angle * Math.PI / 180;
+                return [p[0] + p[1] * DEPTH.scale * Math.cos(a), p[2] + p[1] * DEPTH.scale * Math.sin(a)];
+            }
+
+            function buildSpace(o) {
+                var out = { lines: [], dots: [], texts: [], notes: [] };
+                var W = o.plane, D = o.plane * 0.75, rad = Math.PI / 180;
+                function line(points, kind, closed) {
+                    var list = [];
+                    for (var i = 0; i < points.length; i++) list.push(project(points[i]));
+                    out.lines.push({ points: list, kind: kind, closed: !!closed });
+                }
+                function name(text, p, dir, upright) {
+                    if (o.names) out.texts.push({ text: text, at: project(p), dir: dir, upright: upright !== false });
+                }
+                function dot(p) { out.dots.push(project(p)); }
+                function mark(at, u, v) {
+                    if (!o.marks) return;
+                    var s = o.mark, a = unit3(u), b = unit3(v);
+                    line([add3(at, scale3(a, s)), add3(add3(at, scale3(a, s)), scale3(b, s)), add3(at, scale3(b, s))], "mark");
+                }
+                function arc(at, u, v, r, label) {
+                    var a = unit3(u), b = unit3(v), angle = Math.acos(Math.max(-1, Math.min(1, dot3(a, b)))), points = [];
+                    for (var i = 0; i <= 16; i++) {
+                        var t = angle * i / 16, p = add3(scale3(a, Math.sin(angle - t) / Math.sin(angle)), scale3(b, Math.sin(t) / Math.sin(angle)));
+                        points.push(add3(at, scale3(p, r)));
+                    }
+                    line(points, "mark");
+                    var mid = unit3(add3(a, b)), tip = project(add3(at, scale3(mid, r))), base = project(at);
+                    out.texts.push({ text: label, at: tip, dir: unit2([tip[0] - base[0], tip[1] - base[1]]) });
+                }
+                var planeCorners = [[0, 0, 0], [W, 0, 0], [W, D, 0], [0, D, 0]];
+
+                if (o.mode === 0) {
+                    // 정사영: A′에서 방향 φ로 A′B′ = AB cos θ, A는 높이 h, B는 h + AB sin θ
+                    line(planeCorners, "plane", true);
+                    name("α", [W, D, 0], [0.7071, 0.7071], false);
+                    var phi = o.direction * rad, dir = [Math.cos(phi), Math.sin(phi), 0];
+                    var theta = o.theta * rad, projLength = o.length * Math.cos(theta);
+                    var A1 = [W * 0.2, D * 0.3, 0], B1 = add3(A1, scale3(dir, projLength));
+                    var A = [A1[0], A1[1], o.height], B = [B1[0], B1[1], o.height + o.length * Math.sin(theta)];
+                    line([A, B], "main");
+                    line([A1, B1], "main");
+                    if (o.height > 0) line([A, A1], "guide");
+                    line([B, B1], "guide");
+                    // A에서 A′B′에 평행한 보조선 AC와 각 θ
+                    var C = add3(A, scale3(dir, projLength));
+                    line([A, C], "guide");
+                    arc(A, sub3(C, A), sub3(B, A), Math.min(8, o.length * 0.3), "θ");
+                    mark(A1, [0, 0, 1], dir);
+                    mark(B1, [0, 0, 1], scale3(dir, -1));
+                    var back = [-dir[0], -dir[1]];
+                    name("A", A, unit2([back[0], 0.4]));
+                    name("B", B, [0, 1]);
+                    name("A′", A1, [0, -1]);
+                    name("B′", B1, [0.7071, -0.7071]);
+                    for (var pd = 0; pd < 4; pd++) dot([A, B, A1, B1][pd]);
+                    out.notes.push("A′B′ = AB cos θ = " + fmt(o.length) + " × cos " + fmt(o.theta) + "° = " + fmt(projLength) + " (mm)");
+                } else if (o.mode === 1) {
+                    // 삼수선: PH ⊥ α, HM ⊥ l → PM ⊥ l
+                    line(planeCorners, "plane", true);
+                    name("α", [W, D, 0], [0.7071, 0.7071], false);
+                    var ph = o.direction * rad, along = [Math.cos(ph), Math.sin(ph), 0], normal = [-Math.sin(ph), Math.cos(ph), 0];
+                    if (normal[1] > 0) normal = scale3(normal, -1);   // M은 H보다 앞(아래)쪽
+                    var H = [W * 0.45, D * 0.6, 0], P = [H[0], H[1], o.height], M = add3(H, scale3(normal, o.distance));
+                    var ends = clipToPlane(M, along, W, D);
+                    if (ends !== null) {
+                        line(ends, "main");
+                        name("l", ends[1], [0.7071, 0.7071], false);
+                    }
+                    line([P, H], "main");
+                    line([H, M], "main");
+                    line([P, M], "main");
+                    mark(H, [0, 0, 1], sub3(M, H));
+                    mark(M, along, sub3(H, M));
+                    mark(M, scale3(along, -1), sub3(P, M));
+                    name("P", P, [0, 1]);
+                    name("H", H, [0.7071, 0.7071]);
+                    name("M", M, [0, -1]);
+                    for (var qd = 0; qd < 3; qd++) dot([P, H, M][qd]);
+                    var pm = Math.sqrt(o.height * o.height + o.distance * o.distance);
+                    out.notes.push("PH ⊥ α, HM ⊥ l 이면 PM ⊥ l (삼수선 정리)");
+                    out.notes.push("PM = √(PH² + HM²) = " + fmt(pm) + " (mm)");
+                } else {
+                    // 두 평면: 교선 l은 앞쪽 가로선. α는 수평, β는 l을 축으로 θ만큼 세운 면
+                    var theta2 = o.theta * rad, up = [0, Math.cos(theta2), Math.sin(theta2)];
+                    line(planeCorners, "plane", true);
+                    line([[0, 0, 0], [W, 0, 0], add3([W, 0, 0], scale3(up, D)), scale3(up, D)], "plane", true);
+                    name("α", [W, D, 0], [0.7071, -0.7071], false);
+                    name("β", add3([W, 0, 0], scale3(up, D)), [0.7071, 0.7071], false);
+                    name("l", [W, 0, 0], [1, 0], false);
+                    var O = [W * 0.4, 0, 0], Qa = [O[0], D * 0.6, 0], Qb = add3(O, scale3(up, D * 0.6));
+                    line([O, Qa], "main");
+                    line([O, Qb], "main");
+                    mark(O, [1, 0, 0], [0, 1, 0]);
+                    mark(O, [1, 0, 0], up);
+                    arc(O, [0, 1, 0], up, D * 0.18, "θ");
+                    name("O", O, [0, -1]);
+                    dot(O);
+                    if (o.projection) {
+                        var foot = [Qb[0], Qb[1], 0];
+                        line([Qb, foot], "guide");
+                        mark(foot, [0, 0, 1], [0, -1, 0]);
+                        name("Q", Qb, [-0.7071, 0.7071]);
+                        name("Q′", foot, [0.7071, -0.7071]);
+                        dot(Qb);
+                        dot(foot);
+                        out.notes.push("OQ′ = OQ cos θ, 정사영의 넓이 S′ = S cos θ (cos " + fmt(o.theta) + "° = " + fmt(Math.cos(theta2)) + ")");
+                    } else {
+                        out.notes.push("두 평면이 이루는 각 θ = " + fmt(o.theta) + "° (교선 l에 수직인 두 직선이 이루는 각)");
+                    }
+                }
+                return out;
+            }
+
+            // 점 p를 지나고 방향 d인 직선을 평면 사각형 [0,W]×[0,D] (z=0) 안으로 자른 두 끝. 안 지나면 null
+            function clipToPlane(p, d, W, D) {
+                var t0 = -1e9, t1 = 1e9;
+                var bounds = [[0, 0, W], [1, 0, D]];
+                for (var i = 0; i < bounds.length; i++) {
+                    var axis = bounds[i][0], lo = bounds[i][1], hi = bounds[i][2];
+                    if (Math.abs(d[axis]) < 1e-12) {
+                        if (p[axis] < lo || p[axis] > hi) return null;
+                        continue;
+                    }
+                    var a = (lo - p[axis]) / d[axis], b = (hi - p[axis]) / d[axis];
+                    t0 = Math.max(t0, Math.min(a, b));
+                    t1 = Math.min(t1, Math.max(a, b));
+                }
+                if (t1 - t0 < 1e-9) return null;
+                return [add3(p, scale3(d, t0)), add3(p, scale3(d, t1))];
+            }
+
+            function add3(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+            function sub3(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+            function scale3(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+            function dot3(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+            function unit3(a) {
+                var length = Math.sqrt(dot3(a, a));
+                return length > 0 ? scale3(a, 1 / length) : [1, 0, 0];
+            }
+            function unit2(v) {
+                var length = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
+                return length > 0 ? [v[0] / length, v[1] / length] : [0.7071, 0.7071];
+            }
+
+            function fmt(v) {
+                var r = Math.round(v * 100) / 100;
+                return String(r === 0 ? 0 : r);
+            }
+
+            // -------------------------------------------------------
+            // 다이얼로그 부품
+            // -------------------------------------------------------
+            function addPanel(parent, title) {
+                var panel = parent.add("panel", undefined, title);
+                panel.alignChildren = ["left", "top"];
+                panel.margins = [12, 16, 12, 12];
+                panel.spacing = 6;
+                return panel;
+            }
+
+            function addValueRow(parent, label, unitText, value, minimum, maximum, step, decimals) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.add("statictext", undefined, label + (unitText ? " (" + unitText + "):" : ":")).preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, formatNumber(value, decimals));
+                input.preferredSize.width = INPUT_WIDTH;
+                var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+                slider.stepdelta = step;
+                slider.jumpdelta = step * 10;
+                slider.preferredSize.width = SLIDER_WIDTH;
+                return { input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals };
+            }
+
+            function setRowValue(controls, value) {
+                controls.input.text = formatNumber(value, controls.decimals);
+                try { controls.slider.value = value; } catch (e) {}
+            }
+
+            function bindValueRow(controls, setter) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    setRowValue(controls, value);
+                    setter(value);
+                    updatePreview();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? controls.slider.value : value);
+                };
+            }
+
+            function bindPositionRow(controls, getter, setter, isX) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    var delta = (value - getter()) * MM_TO_PT;
+                    setter(value);
+                    setRowValue(controls, value);
+                    if (delta === 0 || previewGroup === null) return;
+                    previewGroup.translate(isX ? delta : 0, isX ? 0 : delta);
+                    app.redraw();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? getter() : value);
+                };
+            }
+
+            function parseNumber(text) {
+                var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+                return isNaN(value) ? null : value;
+            }
+
+            function clamp(value, minimum, maximum) {
+                if (value < minimum) return minimum;
+                if (value > maximum) return maximum;
+                return value;
+            }
+
+            function roundTo(value, step) {
+                return Math.round(value / step) * step;
+            }
+
+            function formatNumber(value, decimals) {
+                return (Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
+            }
+
+
+            // -------------------------------------------------------
+            // 설정 저장 · 복원
+            // -------------------------------------------------------
+            function saveSettings() {
+                var flags = "";
+                for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
+                var parts = ["v1", mode, planeMm, thetaDeg, lengthMm, heightMm, distanceMm, directionDeg, fontPt, flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+            }
+
+            function applySettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+                if (!raw) return;
+                var p = raw.split("|");
+                if (p[0] !== "v1" || p.length !== 13 || p[9].length !== FLAG_KEYS.length) return;
+                try {
+                    mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
+                    planeMm = restoreNumber(p[2], planeMm, 30, 120);
+                    thetaDeg = restoreNumber(p[3], thetaDeg, 5, 85);
+                    lengthMm = restoreNumber(p[4], lengthMm, 10, 100);
+                    heightMm = restoreNumber(p[5], heightMm, 0, 60);
+                    distanceMm = restoreNumber(p[6], distanceMm, 3, 60);
+                    directionDeg = restoreNumber(p[7], directionDeg, -80, 80);
+                    fontPt = restoreNumber(p[8], fontPt, 5, 14);
+                    for (var i = 0; i < FLAG_KEYS.length; i++) opt[FLAG_KEYS[i]] = p[9].charAt(i) === "1";
+                    offsetXmm = restoreNumber(p[10], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[11], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[12] === "1";
                 } catch (restoreError) {}
             }
 
