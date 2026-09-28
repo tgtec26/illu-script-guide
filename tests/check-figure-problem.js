@@ -28,10 +28,11 @@ function extractFunction(name) {
 }
 
 const names = ["buildFigure", "outward", "awayFrom", "lerp", "dist", "extend", "unitVector", "circleLayout", "convexHull", "beltPoints", "circlePoints",
-  "arcPoints", "join", "polyline", "splitNames", "productText", "splitTerm", "expansionText", "numText", "rootText", "formatValue"];
+  "arcPoints", "join", "polyline", "splitNames", "productText", "splitTerm", "expansionText", "numText", "rootText", "formatValue",
+  "bagPoints", "roundRectPoints", "pipSpots", "fractionText"];
 const g = new Function(`var RIGHT_MARK_MM = 1.5;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
-const base = { kind: 0, p: [3, 4, 0, 0], across: "a,b", down: "a,b", unit: 10, names: true, guides: true, lengths: true, extra: false };
+const base = { kind: 0, p: [3, 4, 0, 0], across: "a,b", down: "a,b", cards: "1,2,3,4,5,6,7", unit: 10, names: true, guides: true, lengths: true, extra: false };
 const build = (o) => g.buildFigure(Object.assign({}, base, o));
 const text = (d, t) => d.texts.find((x) => x.text === t);
 
@@ -123,6 +124,43 @@ assert.strictEqual(build({ kind: 4, p: [3, 2, 3, 2], across: "a,b", down: "c,d" 
   near(Math.min(...xs), -1, "left of belt");
   near(Math.max(...xs), 5, "right of belt");
 }
+
+// 확률: 공 주머니 12개(한 줄 4개) → 번호 1~12, 주머니 켜면 선 하나 더
+{
+  const d = build({ kind: 8, p: [12, 4, 0, 0], extra: false });
+  assert.deepStrictEqual(d.texts.map((t) => t.text), ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]);
+  assert.strictEqual(d.lines.length, 12);
+  assert.strictEqual(build({ kind: 8, p: [12, 4, 0, 0], extra: true }).lines.length, 13);
+  // 마지막 줄이 모자라면 가운데로: 5개를 4개씩 → 다섯째 공은 x = 0
+  const five = build({ kind: 8, p: [5, 4, 0, 0] });
+  near(five.texts[4].at[0], 0, "last row centered");
+}
+// 숫자 카드: 글자 목록대로 카드, 두 자리 수 경우의 수
+{
+  const d = build({ kind: 9, cards: "0, 1,2,3" });
+  assert.deepStrictEqual(d.texts.map((t) => t.text), ["0", "1", "2", "3"]);
+  assert.strictEqual(d.lines.length, 4);
+  assert.ok(d.notes[0].startsWith("카드 4장: 두 장으로 만드는 두 자리 수 최대 12가지"));
+}
+// 주사위: 눈 개수와 합
+{
+  const d = build({ kind: 10, p: [2, 3, 5, 6] });
+  assert.strictEqual(d.pips.length, 3 + 5);
+  assert.strictEqual(d.notes[0], "눈 3, 5 (합 8), 모든 경우의 수 36");
+  assert.deepStrictEqual([1, 2, 3, 4, 5, 6].map((v) => g.pipSpots(v).length), [1, 2, 3, 4, 5, 6]);
+}
+// 갈림길 2번: A 1/4, B 1/2, C 1/4 (기출 2학년 2학기 20번)
+{
+  const d = build({ kind: 11, p: [2, 0, 0, 0], extra: true });
+  assert.strictEqual(d.notes[0], "끝 지점에 갈 확률: A 1/4, B 1/2, C 1/4 (갈림 2번, 갈림길마다 1/2)");
+  assert.strictEqual(d.texts.filter((t) => t.text === "1/2").length, 6);
+  assert.strictEqual(d.lines.length, 1 + 2 + 4);
+  assert.strictEqual(build({ kind: 11, p: [3, 0, 0, 0] }).notes[0], "끝 지점에 갈 확률: A 1/8, B 3/8, C 3/8, D 1/8 (갈림 3번, 갈림길마다 1/2)");
+  assert.strictEqual(g.fractionText(6, 16), "3/8");
+  assert.strictEqual(g.fractionText(4, 4), "1");
+}
+// 둥근 직사각형은 닫힌 고리로 네 모서리 호 (앵커 8개)
+assert.strictEqual(g.roundRectPoints([0, 0], 20, 28, 3).length, 8);
 
 assert.ok(source.includes('var PREF_KEY = "MiddleFigureProblem/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");

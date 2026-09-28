@@ -601,7 +601,7 @@ try {
 
     // 공통 항목 뒤에 엔진별 항목을 순서대로 잇는다. 엔진 항목 수가 바뀌면 v를 올린다
     function saveSettings() {
-        var parts = ["v2", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
+        var parts = ["v3", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
             offsetXmm, offsetYmm, fillMode, brightness, contrast, lightAzimuth, lightElevation,
             angleR, angleL, depthPercent];
         for (var i = 0; i < engines.length; i++) parts = parts.concat(engines[i].saveFields());
@@ -615,7 +615,7 @@ try {
         var p = String(raw).split("|");
         var expected = 18;
         for (var i = 0; i < engines.length; i++) expected += engines[i].fieldCount;
-        if (p[0] !== "v2" || p.length !== expected) return;
+        if (p[0] !== "v3" || p.length !== expected) return;
         tabIndex = restoreInteger(p[1], tabIndex, 0, engines.length - 1);
         rotY = restoreNumber(p[2], rotY, -180, 180);
         rotX = restoreNumber(p[3], rotX, -180, 180);
@@ -1012,7 +1012,10 @@ try {
         {id: "cylinder", label: "원기둥"},
         {id: "cone", label: "원뿔"},
         {id: "conefrustum", label: "원뿔대", taper: true},
-        {id: "tube", label: "빨대 (속 빈 원기둥)", taper: true, tube: true}
+        {id: "tube", label: "빨대 (속 빈 원기둥)", taper: true, tube: true},
+        {id: "cutcube", label: "잘린 정육면체 (꼭짓점 자르기)"},
+        {id: "sphere4", label: "구 (1/4 잘라냄)", regular: true, sphere: true},
+        {id: "sphere8", label: "구 (1/8 잘라냄)", regular: true, sphere: true}
     ];
 
         var shapeIndex = 0;
@@ -1023,11 +1026,15 @@ try {
         var sideCount = 6;
         var baseRotation = 0;
         var topRatio = 50;
+        var showNames = false;   // 꼭짓점 이름 (A, B, C …)
+        var NAME_FONT_NAME = "GSMediumB1";
+        var NAME_SIZE_PT = 8;
+        var NAME_GAP_PT = 2.5;
 
         // 실행 시 선택한 오브젝트가 있으면 그 중심을 생성 기준점으로 쓰고, 확인 시 지운다.
         // (취소하면 그대로 둔다.) 선택이 없으면 화면 중앙에 만든다.
         var guideItem = null;
-        var shapeList, sidesCaption, sidesInput, sidesArrows, baseRotationControl, topRatioControl, widthControl, depthControl, heightControl, linkCheck;
+        var shapeList, sidesCaption, sidesInput, sidesArrows, baseRotationControl, topRatioControl, widthControl, depthControl, heightControl, linkCheck, namesCheck;
 
         var api = {
             label: byAngles ? "입체 도형2" : "입체 도형1",
@@ -1037,7 +1044,7 @@ try {
             liveWireframe: false,
             originX: 0,
             originY: 0,
-            fieldCount: 8,
+            fieldCount: 9,
             prepare: prepare,
             addRows: addRows,
             sync: syncShapeRows,
@@ -1128,7 +1135,13 @@ try {
                 });
             linkCheck = sizePanel.add("checkbox", undefined, "가로·세로 같게 (정원·정다각형 유지)");
             linkCheck.value = linkWidthDepth;
-            return true;
+            namesCheck = sizePanel.add("checkbox", undefined, "꼭짓점 이름 (A, B, C …)");
+            namesCheck.value = showNames;
+            namesCheck.helpTip = "다면체 꼭짓점에 이름을 붙인다. 위층부터, 화면 왼쪽 꼭짓점에서 시작해 위에서 보아 반시계로 (각뿔은 꼭짓점이 A)";
+            namesCheck.onClick = function() {
+                showNames = namesCheck.value;
+                updatePreview();
+            };
 
             shapeList.onChange = function() {
                 shapeIndex = shapeList.selection ? shapeList.selection.index : 0;
@@ -1143,6 +1156,7 @@ try {
                     updatePreview();
                 }
             };
+            return true;
         }
 
         function setSideCount(value) {
@@ -1174,6 +1188,12 @@ try {
             depthControl.row.enabled = shape.regular !== true;
             heightControl.row.enabled = shape.regular !== true;
             linkCheck.enabled = shape.regular !== true;
+            // 이름은 꼭짓점이 있는 다면체만
+            if (namesCheck) namesCheck.enabled = !isRound(shape.id);
+        }
+
+        function isRound(id) {
+            return id === "cylinder" || id === "cone" || id === "conefrustum" || id === "tube" || id === "sphere4" || id === "sphere8";
         }
 
         function finish(group) {
@@ -1186,7 +1206,7 @@ try {
         }
 
         function saveFields() {
-            return [shapeIndex, widthMm, depthMm, heightMm, linkWidthDepth ? 1 : 0, sideCount, baseRotation, topRatio];
+            return [shapeIndex, widthMm, depthMm, heightMm, linkWidthDepth ? 1 : 0, sideCount, baseRotation, topRatio, showNames ? 1 : 0];
         }
 
         function restoreFields(f) {
@@ -1198,6 +1218,7 @@ try {
             sideCount = restoreInteger(f[5], sideCount, SIDES_MIN, SIDES_MAX);
             baseRotation = restoreNumber(f[6], baseRotation, 0, 360);
             topRatio = restoreNumber(f[7], topRatio, 0, 100);
+            showNames = f[8] === "1";
         }
 
         // ---- 그리기 -----------------------------------------------------------
@@ -1206,6 +1227,8 @@ try {
         function createSolid() {
             var model = buildModel();
             beginView(model);
+            // 잘라낸 구는 평행 투영으로만 그린다 (실루엣을 시선에 수직인 대원으로 잡는다)
+            if (SHAPES[shapeIndex].sphere) perspectiveActive = false;
 
             var parts = collectParts(model);
             var group;
@@ -1225,11 +1248,80 @@ try {
                 lineGroup.name = "선";
                 if (hiddenMode !== HIDDEN_NONE) drawParts(lineGroup, parts.hidden, hiddenMode === HIDDEN_DASHED);
                 drawParts(lineGroup, parts.visible, false);
+                if (showNames && model.verts) drawVertexNames(group, model);
             } catch (drawError) {
                 try { group.remove(); } catch (cleanupError) {}
                 return null;
             }
             return group;
+        }
+
+        // 꼭짓점 이름 글자: 투영한 꼭짓점에서 도형 가운데의 반대쪽으로 간격을 두고 글자 가운데를 놓는다
+        function drawVertexNames(group, model) {
+            var nameGroup = group.groupItems.add();
+            nameGroup.name = "꼭짓점 이름";
+            var order = vertexOrder(model), center = [0, 0], i;
+            var font = null;
+            try { font = app.textFonts.getByName(NAME_FONT_NAME); } catch (fontError) {}
+            for (i = 0; i < model.verts.length; i++) {
+                var q = projectModel(model.verts[i]);
+                center = [center[0] + q[0] / model.verts.length, center[1] + q[1] / model.verts.length];
+            }
+            for (i = 0; i < order.length; i++) {
+                var at = projectModel(model.verts[order[i]]);
+                var dir = [at[0] - center[0], at[1] - center[1]], len = Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1]);
+                dir = len > 1e-9 ? [dir[0] / len, dir[1] / len] : [0, 1];
+                var frame = nameGroup.textFrames.add();
+                frame.contents = vertexName(i);
+                try {
+                    frame.textRange.characterAttributes.size = NAME_SIZE_PT;
+                    if (font !== null) frame.textRange.characterAttributes.textFont = font;
+                    frame.textRange.characterAttributes.fillColor = strokeColor;
+                } catch (styleError) {}
+                var b = frame.geometricBounds, halfW = (b[2] - b[0]) / 2, halfH = (b[1] - b[3]) / 2;
+                var reach = NAME_GAP_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
+                frame.translate(at[0] + dir[0] * reach - (b[0] + b[2]) / 2, at[1] + dir[1] * reach - (b[1] + b[3]) / 2);
+            }
+        }
+
+        // A, B, … Z, A′, B′ …
+        function vertexName(i) {
+            return String.fromCharCode(65 + i % 26) + (i >= 26 ? "\u2032" : "");
+        }
+
+        // 이름 붙일 순서: 높은 층(y)부터. 층 안에서는 위에서 보아 반시계(atan2(z, x)가 줄어드는 쪽)로 돌고,
+        // 맨 위층은 화면에서 가장 왼쪽 꼭짓점에서 시작한다. 아래층은 윗층의 시작 방향과 가장 가까운 꼭짓점에서 시작해 ABCD-EFGH처럼 맞춘다
+        function vertexOrder(model) {
+            var verts = model.verts, layers = [], i, k;
+            var idx = [];
+            for (i = 0; i < verts.length; i++) idx.push(i);
+            idx.sort(function(a, b) { return verts[b][1] - verts[a][1]; });
+            for (i = 0; i < idx.length; i++) {
+                var last = layers[layers.length - 1];
+                if (last && Math.abs(verts[last[0]][1] - verts[idx[i]][1]) < 1e-6) last.push(idx[i]);
+                else layers.push([idx[i]]);
+            }
+            function angleOf(v) { return Math.atan2(verts[v][2], verts[v][0]); }
+            var order = [], startAngle = null;
+            for (i = 0; i < layers.length; i++) {
+                var layer = layers[i];
+                layer.sort(function(a, b) { return angleOf(b) - angleOf(a); });
+                var start = 0;
+                if (layer.length > 1) {
+                    if (startAngle === null) {
+                        for (k = 1; k < layer.length; k++) if (projectModel(verts[layer[k]])[0] < projectModel(verts[layer[start]])[0] - 1e-6) start = k;
+                    } else {
+                        var best = Infinity;
+                        for (k = 0; k < layer.length; k++) {
+                            var diff = Math.abs(Math.atan2(Math.sin(angleOf(layer[k]) - startAngle), Math.cos(angleOf(layer[k]) - startAngle)));
+                            if (diff < best - 1e-9) { best = diff; start = k; }
+                        }
+                    }
+                    if (startAngle === null) startAngle = angleOf(layer[start]);
+                }
+                for (k = 0; k < layer.length; k++) order.push(layer[(start + k) % layer.length]);
+            }
+            return order;
         }
 
         function refsFacing(refs) {
@@ -1594,7 +1686,112 @@ try {
             if (kind === "prism" || kind === "pyramid" || kind === "frustum") {
                 return buildPrismModel(kind, halfW, halfD, height);
             }
+            if (kind === "cutcube") return buildCutCubeModel(halfW, halfD, height);
+            if (kind === "sphere4" || kind === "sphere8") return buildCutSphereModel(kind, halfW);
             return buildPlatonicModel(kind, halfW, halfD, height);
+        }
+
+        // 직육면체에서 오른쪽 위 앞 꼭짓점을 그 꼭짓점과 이웃한 세 꼭짓점을 지나는 평면으로 잘라낸 칠면체
+        // (정육면체면 교과서의 "세 꼭짓점 B, D, G를 지나는 평면으로 자른 입체"). 꼭짓점 7개, 면 7개(정사각형 3, 삼각형 3, 자른 면 1)
+        function buildCutCubeModel(halfW, halfD, height) {
+            var h = height / 2;
+            var verts = [
+                [-halfW, -h, -halfD], [halfW, -h, -halfD], [halfW, -h, halfD], [-halfW, -h, halfD],
+                [-halfW, h, -halfD], [halfW, h, -halfD], [-halfW, h, halfD]
+            ];
+            // 5: 오른쪽 위 뒤, 2: 오른쪽 아래 앞, 6: 왼쪽 위 앞 = 잘린 꼭짓점 (오른쪽 위 앞)의 이웃 셋
+            var faces = [
+                [0, 1, 2, 3],      // 밑면
+                [0, 1, 5, 4],      // 뒷면
+                [0, 3, 6, 4],      // 왼쪽 면
+                [4, 5, 6],         // 윗면 (삼각형)
+                [1, 2, 5],         // 오른쪽 면 (삼각형)
+                [3, 2, 6],         // 앞면 (삼각형)
+                [5, 2, 6]          // 자른 면
+            ];
+            return makePolyModel(verts, faces);
+        }
+
+        // 구에서 1/4(x > 0, z > 0인 쐐기) 또는 1/8(x, y, z > 0인 팔분공간)을 잘라낸 입체. 반지름 = 가로의 절반.
+        // 볼록이 아니라 가시성은 점에서 눈 쪽으로 쏜 광선이 남은 입체 안을 지나는지로 가른다.
+        // 선: 실루엣(시선에 수직인 대원 중 남은 부분), 적도(남은 부분), 자른 면의 테두리 호와 반지름 선분
+        function buildCutSphereModel(kind, R) {
+            var eighth = kind === "sphere8";
+            var margin = R * 1e-4;
+            // 실루엣이 시점에 따라 달라지므로 여기서 시점을 먼저 정한다 (평행 투영)
+            beginView({radius: R});
+            perspectiveActive = false;
+            function removed(q) {
+                return q[0] > margin && q[2] > margin && (!eighth || q[1] > margin);
+            }
+            function inSolid(q) {
+                return dot(q, q) < (R - margin * 10) * (R - margin * 10) && !removed(q);
+            }
+            // 눈 쪽으로 가면서 입체 안을 지나면 가려진 점 (+1 보임, -1 숨음)
+            function visibility(p) {
+                var v = viewDirectionAt(p), steps = 120, reach = 2.2 * R;
+                for (var i = 1; i <= steps; i++) {
+                    var lam = reach * i / steps;
+                    if (inSolid([p[0] + v[0] * lam, p[1] + v[1] * lam, p[2] + v[2] * lam])) return -1;
+                }
+                return 1;
+            }
+            function curveOf(pointAt, t0, t1, closed) {
+                return { pointAt: pointAt, visibilityAt: function(t) { return visibility(pointAt(t)); }, tMin: t0, tMax: t1, closed: closed };
+            }
+            var curves = [];
+            // 실루엣 대원: 시선에 수직인 화면 가로·세로 방향으로 돈다. 잘라낸 곳에 든 호는 뺀다
+            var ex = toModel([1, 0, 0]), ey = toModel([0, 1, 0]);
+            var silhouette = function(t) { return add(scale(ex, R * Math.cos(t)), scale(ey, R * Math.sin(t))); };
+            var kept = keptRange(silhouette, removed);
+            if (kept) curves.push(curveOf(silhouette, kept[0], kept[1], kept[2]));
+            // 적도 (y = 0): 잘라낸 쐐기(0 < φ < 90°) 밖만. 1/8이면 그 부분은 자른 면의 호가 된다
+            curves.push(curveOf(function(t) { return [R * Math.cos(t), 0, R * Math.sin(t)]; }, Math.PI / 2, 2 * Math.PI, false));
+            if (!eighth) {
+                // 자른 두 반원 면의 테두리 (위 극 → 아래 극)와 두 면이 만나는 축
+                curves.push(curveOf(function(t) { return [R * Math.sin(t), R * Math.cos(t), 0]; }, 0, Math.PI, false));
+                curves.push(curveOf(function(t) { return [0, R * Math.cos(t), R * Math.sin(t)]; }, 0, Math.PI, false));
+                curves.push(curveOf(function(t) { return [0, R * (1 - 2 * t), 0]; }, 0, 1, false));
+            } else {
+                // 자른 세 사분원 면의 호와, 중심에서 세 축으로 가는 반지름
+                curves.push(curveOf(function(t) { return [R * Math.cos(t), R * Math.sin(t), 0]; }, 0, Math.PI / 2, false));
+                curves.push(curveOf(function(t) { return [0, R * Math.cos(t), R * Math.sin(t)]; }, 0, Math.PI / 2, false));
+                curves.push(curveOf(function(t) { return [R * Math.sin(t), 0, R * Math.cos(t)]; }, 0, Math.PI / 2, false));
+                curves.push(curveOf(function(t) { return [R * t, 0, 0]; }, 0, 1, false));
+                curves.push(curveOf(function(t) { return [0, R * t, 0]; }, 0, 1, false));
+                curves.push(curveOf(function(t) { return [0, 0, R * t]; }, 0, 1, false));
+            }
+            return {faces: [], edges: [], curves: curves, round: null, radius: R};
+        }
+
+        // 닫힌 곡선 pointAt(0~2π)에서 cut에 든 호를 뺀 범위 [t0, t1, 닫힘]. 전부 들면 null
+        function keptRange(pointAt, cut) {
+            var n = 720, inside = [], i, any = false, all = true;
+            for (i = 0; i < n; i++) {
+                inside.push(cut(pointAt(2 * Math.PI * i / n)));
+                if (inside[i]) any = true; else all = false;
+            }
+            if (!any) return [0, 2 * Math.PI, true];
+            if (all) return null;
+            // 잘린 호가 끝나는 곳(안 → 밖)에서 시작해 다시 들어가는 곳(밖 → 안)에서 끝난다
+            var startIndex = -1, endIndex = -1;
+            for (i = 0; i < n; i++) {
+                var j = (i + 1) % n;
+                if (inside[i] && !inside[j]) startIndex = i;
+                if (!inside[i] && inside[j]) endIndex = i;
+            }
+            function refine(a, b, fromInside) {
+                for (var k = 0; k < 40; k++) {
+                    var m = (a + b) / 2;
+                    if (cut(pointAt(m)) === fromInside) a = m; else b = m;
+                }
+                return (a + b) / 2;
+            }
+            var step = 2 * Math.PI / n;
+            var t0 = refine(startIndex * step, (startIndex + 1) * step, true);
+            var t1 = refine(endIndex * step, (endIndex + 1) * step, false);
+            while (t1 <= t0) t1 += 2 * Math.PI;
+            return [t0, t1, false];
         }
 
         // 각기둥·각뿔·각뿔대: 밑면 다각형은 XZ 평면. 밑면 회전 0이면 한 변이 정면을 보게 놓는다 (4각이면 반듯한 상자)
@@ -1873,7 +2070,7 @@ try {
                     edgeMap[key].faces.push(i);
                 }
             }
-            return {faces: faces, edges: edges, curves: [], round: null, radius: radius};
+            return {faces: faces, edges: edges, curves: [], round: null, radius: radius, verts: verts};
         }
 
         // 원기둥·원뿔·원뿔대: 옆면 P(t,s) = (A(s)cos t, y(s), C(s)sin t)

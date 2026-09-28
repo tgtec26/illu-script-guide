@@ -149,7 +149,9 @@ try {
             var FACE_TOP = 0;
             var FACE_INNER = 1;
             var FACE_OUTER = 2;
-            var faceK = [0, 0, 0];
+            var FACE_WATER = 3;
+            var faceK = [0, 0, 0, 20];
+            var waterPercent = 0;   // 물 높이 (밑면에서 윗면까지의 %). 0이면 물 없음
             var activeFace = FACE_TOP;
             var previewEnabled = true;
             var previewGroup = null;
@@ -191,6 +193,8 @@ try {
             );
             var heightInput = heightControls.input;
             var heightSlider = heightControls.slider;
+            var waterControls = addValueRow(sizePanel, "물 높이", "%", String(waterPercent), 0, 100, 1);
+            waterControls.input.helpTip = "그릇에 담긴 물의 높이 (밑면 0% ~ 윗면 100%). 0이면 물을 그리지 않는다. 내경이 있으면 쓰지 않는다";
 
             var viewPanel = addPanel(dlg, "시점");
             var xControls = addAngleRow(viewPanel, "X축", viewAngle, true);
@@ -240,6 +244,7 @@ try {
             var topFaceRadio = colorRow.add("radiobutton", undefined, "보이는면");
             var innerFaceRadio = colorRow.add("radiobutton", undefined, "내부");
             var outerFaceRadio = colorRow.add("radiobutton", undefined, "외부");
+            var waterFaceRadio = colorRow.add("radiobutton", undefined, "물");
             topFaceRadio.value = true;
             var kValueText = colorRow.add("statictext", undefined, "000K");
             kValueText.preferredSize.width = 42;
@@ -289,6 +294,20 @@ try {
                 innerDiameterSlider.value = innerDiameterMm;
                 innerDiameterInput.text = formatNumber(innerDiameterMm, 2);
                 setInnerFaceEnabled(innerDiameterMm > 0);
+                updatePreview();
+            };
+
+            waterControls.slider.onChanging = function() {
+                waterPercent = clamp(Math.round(waterControls.slider.value), 0, 100);
+                waterControls.input.text = String(waterPercent);
+                updatePreview();
+            };
+            waterControls.slider.onChange = waterControls.slider.onChanging;
+            waterControls.input.onChange = function() {
+                var value = parseNumber(waterControls.input.text);
+                if (value !== null) waterPercent = clamp(Math.round(value), 0, 100);
+                waterControls.input.text = String(waterPercent);
+                waterControls.slider.value = waterPercent;
                 updatePreview();
             };
 
@@ -400,6 +419,11 @@ try {
 
             outerFaceRadio.onClick = function() {
                 activeFace = FACE_OUTER;
+                updateKDisplay();
+            };
+
+            waterFaceRadio.onClick = function() {
+                activeFace = FACE_WATER;
                 updateKDisplay();
             };
 
@@ -554,14 +578,15 @@ try {
 
             function saveSettings() {
                 var parts = [
-                    "v4", viewAngle, viewY, viewZ,
+                    "v5", viewAngle, viewY, viewZ,
                     isVertical ? "1" : "0",
                     divisionsEnabled ? "1" : "0",
                     divisionCount, divisionRotation,
                     faceK[0], faceK[1], faceK[2],
                     encodeURIComponent(divisionRatioText),
                     innerDiameterMm, heightMm,
-                    offsetXmm, offsetYmm
+                    offsetXmm, offsetYmm,
+                    faceK[FACE_WATER], waterPercent
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -571,7 +596,7 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if ((p[0] !== "v3" && p[0] !== "v4") || p.length < 14) return;
+                if ((p[0] !== "v3" && p[0] !== "v4" && p[0] !== "v5") || p.length < 14) return;
                 viewAngle = restoreNumber(p[1], viewAngle, -180, 180);
                 viewY = restoreNumber(p[2], viewY, -180, 180);
                 viewZ = restoreNumber(p[3], viewZ, -180, 180);
@@ -585,9 +610,14 @@ try {
                 try { divisionRatioText = decodeURIComponent(p[11]); } catch (e2) {}
                 innerDiameterMm = roundTo(restoreNumber(p[12], innerDiameterMm, 0, maxInnerDiameterMm), DIAMETER_STEP_MM);
                 heightMm = roundTo(restoreNumber(p[13], heightMm, 0, maxHeightMm), HEIGHT_STEP_MM);
-                if (p[0] === "v4" && p.length >= 16) {
+                if ((p[0] === "v4" || p[0] === "v5") && p.length >= 16) {
                     offsetXmm = restoreNumber(p[14], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[15], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                }
+                // v5: 물 칠하기 K와 물 높이
+                if (p[0] === "v5" && p.length >= 18) {
+                    faceK[FACE_WATER] = Math.round(restoreNumber(p[16], faceK[FACE_WATER], 0, 100));
+                    waterPercent = Math.round(restoreNumber(p[17], waterPercent, 0, 100));
                 }
             }
 
@@ -817,6 +847,18 @@ try {
                 applyFill(bodyFill, faceK[FACE_OUTER]);
                 try { bodyFill.zOrder(ZOrderMethod.SENDTOBACK); } catch(bodyFillOrderError) {}
 
+                // 물: 밑면(second 쪽)에서 물 높이까지 몸통 모양으로 칠하고 수면 타원을 그린다. 몸통 칠 바로 위, 선·앞면 아래
+                if (waterPercent > 0 && innerRatio <= 0) {
+                    var water = waterGeometry(centerX, centerY, secondX, secondY, waterPercent / 100);
+                    var waterBody = makeBodyFill(group, water.surfaceX, water.surfaceY, secondX, secondY,
+                        capWidth / 2, capHeight / 2, 0, 0);
+                    waterBody.stroked = false;
+                    applyFill(waterBody, faceK[FACE_WATER]);
+                    var waterSurface = makeCap(group, water.surfaceX, water.surfaceY, capWidth, capHeight);
+                    applyFill(waterSurface, faceK[FACE_WATER]);
+                    copyStrokeStyle(source, waterSurface);
+                }
+
                 var rearCap = makeRearRim(
                     group,
                     rearX,
@@ -902,6 +944,11 @@ try {
                     copyStrokeStyle(source, capDivision);
                 }
                 return group;
+            }
+
+            // 수면 타원의 중심: 밑면(second) 중심에서 윗면(원본 원) 중심 쪽으로 level(0~1)만큼
+            function waterGeometry(topX, topY, bottomX, bottomY, level) {
+                return {surfaceX: bottomX + (topX - bottomX) * level, surfaceY: bottomY + (topY - bottomY) * level};
             }
 
             // 쉼표로 구분한 비율 목록. 2개 이상, 전부 0보다 커야 유효. 아니면 null(균등 분할).

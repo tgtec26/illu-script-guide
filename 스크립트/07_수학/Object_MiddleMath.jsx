@@ -5748,10 +5748,14 @@ try {
                 { name: "평행선과 선분의 비", params: [["위 간격", 0.5, 10, 0.5, 2], ["아래 간격", 0.5, 10, 0.5, 3], ["둘째 직선 (°)", 20, 160, 5, 65], ["첫째 직선 (°)", 20, 160, 5, 105]], extra: "" },
                 { name: "사다리꼴과 평행선", params: [["AD", 1, 20, 0.5, 4], ["BC", 1, 20, 0.5, 8], ["AE:AB (%)", 10, 90, 5, 40], null], extra: "대각선 AC" },
                 { name: "넓이: 정사각형 - 정사각형", params: [["큰 변 a", 1, 20, 0.5, 5], ["작은 변 b", 0.5, 19, 0.5, 2], null, null], extra: "재배열한 직사각형 (나)" },
-                { name: "넓이: 곱셈 공식", params: [["가로 1", 0.5, 20, 0.5, 3], ["가로 2", 0.5, 20, 0.5, 2], ["세로 1", 0.5, 20, 0.5, 3], ["세로 2", 0.5, 20, 0.5, 2]], extra: "", pieces: true },
+                { name: "넓이: 곱셈 공식", params: [["가로 1", 0.5, 20, 0.5, 3], ["가로 2", 0.5, 20, 0.5, 2], ["세로 1", 0.5, 20, 0.5, 3], ["세로 2", 0.5, 20, 0.5, 2]], extra: "", pieces: "조각 이름:" },
                 { name: "원 묶음: 한 줄", params: [["반지름 r", 0.5, 10, 0.5, 3], ["원 개수", 2, 8, 1, 3], null, null], extra: "" },
                 { name: "원 묶음: 삼각형", params: [["반지름 r", 0.5, 10, 0.5, 3], ["줄 수", 2, 4, 1, 2], null, null], extra: "" },
-                { name: "원 묶음: 사각형", params: [["반지름 r", 0.5, 10, 0.5, 3], ["가로 개수", 1, 5, 1, 2], ["세로 개수", 1, 4, 1, 2], null], extra: "" }
+                { name: "원 묶음: 사각형", params: [["반지름 r", 0.5, 10, 0.5, 3], ["가로 개수", 1, 5, 1, 2], ["세로 개수", 1, 4, 1, 2], null], extra: "" },
+                { name: "확률: 공 주머니", params: [["공 개수", 2, 20, 1, 12], ["한 줄 개수", 2, 8, 1, 4], null, null], extra: "주머니 그리기" },
+                { name: "확률: 숫자 카드", params: [null, null, null, null], extra: "", pieces: "카드 글자:" },
+                { name: "확률: 주사위", params: [["주사위 개수", 1, 3, 1, 2], ["첫째 눈", 1, 6, 1, 3], ["둘째 눈", 1, 6, 1, 5], ["셋째 눈", 1, 6, 1, 6]], extra: "" },
+                { name: "확률: 갈림길", params: [["갈림 횟수", 1, 4, 1, 2], null, null, null], extra: "갈림길마다 1/2" }
             ];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
             var FLAG_KEYS = ["names", "guides", "lengths", "extra"];
@@ -5773,6 +5777,7 @@ try {
                 for (var pr = 0; pr < PARAM_COUNT; pr++) params[pk].push(KINDS[pk].params[pr] ? KINDS[pk].params[pr][4] : 0);
             }
             var piecesAcross = "a,b", piecesDown = "a,b";
+            var cardText = "1,2,3,4,5,6,7";
             var unitMm = 6;
             var shadeK = 20;
             var fontPt = 8;
@@ -5832,7 +5837,11 @@ try {
                 updatePreview();
             };
             for (var bp = 0; bp < PARAM_COUNT; bp++) bindParamRow(bp);
-            acrossInput.onChanging = function() { piecesAcross = acrossInput.text; updatePreview(); };
+            acrossInput.onChanging = function() {
+                if (isCardKind()) cardText = acrossInput.text;
+                else piecesAcross = acrossInput.text;
+                updatePreview();
+            };
             downInput.onChanging = function() { piecesDown = downInput.text; updatePreview(); };
             bindValueRow(unitControls, function(value) { unitMm = value; });
             bindValueRow(shadeControls, function(value) { shadeK = value; });
@@ -5886,10 +5895,16 @@ try {
                     } catch (e) {}
                     setRowValue(controls, params[kind][i]);
                 }
+                // 곱셈 공식은 가로·세로 조각 이름, 숫자 카드는 카드 글자 하나
                 piecesRow.enabled = !!KINDS[kind].pieces;
+                piecesRow.children[0].text = KINDS[kind].pieces || "조각 이름:";
+                acrossInput.text = isCardKind() ? cardText : piecesAcross;
+                downInput.enabled = !isCardKind();
                 extraCheck.enabled = KINDS[kind].extra !== "";
                 extraCheck.text = KINDS[kind].extra !== "" ? KINDS[kind].extra : "추가";
             }
+
+            function isCardKind() { return KINDS[kind].name === "확률: 숫자 카드"; }
 
             function bindParamRow(index) {
                 bindValueRow(paramControls[index], function(value) { params[kind][index] = value; });
@@ -5913,7 +5928,7 @@ try {
 
             function buildPreview() {
                 var drawing = buildFigure({
-                    kind: kind, p: params[kind], across: piecesAcross, down: piecesDown, unit: unitMm * MM_TO_PT,
+                    kind: kind, p: params[kind], across: piecesAcross, down: piecesDown, cards: cardText, unit: unitMm * MM_TO_PT,
                     names: opt.names, guides: opt.guides, lengths: opt.lengths, extra: opt.extra
                 });
                 messageText.text = drawing.notes.length > 0 ? drawing.notes.join("\n") : " ";
@@ -5922,8 +5937,19 @@ try {
                 for (var f = 0; f < drawing.fills.length; f++) addFill(drawing.fills[f]);
                 for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
+                for (var q = 0; q < drawing.pips.length; q++) addPip(drawing.pips[q]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
                 previewGroup.translate(viewCenter[0] - drawing.center[0] + offsetXmm * MM_TO_PT, viewCenter[1] - drawing.center[1] + offsetYmm * MM_TO_PT);
+            }
+
+            // 주사위 눈: 검은 원 (선 없음)
+            function addPip(points) {
+                var path = previewGroup.pathItems.add();
+                setPoints(path, points);
+                path.closed = true;
+                path.stroked = false;
+                path.filled = true;
+                path.fillColor = makeGray(100);
             }
 
             function addFill(points) {
@@ -6077,7 +6103,7 @@ try {
             // -------------------------------------------------------
             function buildFigure(o) {
                 var u = o.unit, p = o.p;
-                var out = { fills: [], lines: [], dots: [], texts: [], notes: [], center: [0, 0] };
+                var out = { fills: [], lines: [], dots: [], pips: [], texts: [], notes: [], center: [0, 0] };
                 var all = [];   // 가운데 맞춤용 점
                 function S(q) { var pt = [q[0] * u, q[1] * u]; all.push(pt); return pt; }
                 function seg(a, b, kind) { out.lines.push({ points: polyline([S(a), S(b)]), closed: false, kind: kind || "main" }); }
@@ -6228,6 +6254,73 @@ try {
                         out.texts.push({ text: dy[1], at: S([0, hb[1] / 2]), dir: [-1, 0] });
                     }
                     out.notes.push("(" + ax[0] + "+" + ax[1] + ")(" + dy[0] + "+" + dy[1] + ") = " + expansionText(terms));
+                } else if (o.kind === 8) {
+                    // 번호 공: 지름 2 단위인 원을 한 줄에 cols개씩, 가운데에 번호. 주머니는 공을 감싸는 둥근 자루와 묶은 목
+                    var count = Math.round(p[0]), cols = Math.round(p[1]), rowsB = Math.ceil(count / cols);
+                    for (var bi2 = 0; bi2 < count; bi2++) {
+                        var row2 = Math.floor(bi2 / cols), col2 = bi2 % cols;
+                        // 마지막 줄은 가운데로
+                        var inRow = row2 === rowsB - 1 ? count - row2 * cols : cols;
+                        var bx = (col2 - (inRow - 1) / 2) * 2.2, by = (rowsB - 1 - row2) * 2.2;
+                        out.lines.push({ points: circlePoints(S([bx, by]), u), closed: true, kind: "main" });
+                        out.texts.push({ text: String(bi2 + 1), at: S([bx, by]), dir: [0, 0], upright: true });
+                    }
+                    if (o.extra) {
+                        var halfW = cols * 1.1 + 0.8, top = (rowsB - 1) * 2.2 + 1.8, bottom = -1.8;
+                        out.lines.push({ points: bagPoints(halfW, top, bottom, u), closed: true, kind: "main" });
+                        S([-halfW, bottom]); S([halfW, top + 2]);
+                    }
+                    out.notes.push("공 " + count + "개 (1 ~ " + count + "), 한 개를 꺼낼 때 모든 경우의 수 " + count);
+                } else if (o.kind === 9) {
+                    // 숫자 카드: 둥근 직사각형(가로 2, 세로 2.8 단위)을 한 줄로
+                    var cards = String(o.cards).replace(/\s/g, "").split(",");
+                    var shown2 = [];
+                    for (var ci2 = 0; ci2 < cards.length; ci2++) if (cards[ci2] !== "") shown2.push(cards[ci2]);
+                    for (var cj = 0; cj < shown2.length; cj++) {
+                        var x0c = cj * 2.5;
+                        out.lines.push({ points: roundRectPoints(S([x0c, 0]), 2 * u, 2.8 * u, 0.3 * u), closed: true, kind: "main" });
+                        out.texts.push({ text: shown2[cj], at: S([x0c + 1, 1.4]), dir: [0, 0], upright: true });
+                    }
+                    var n2 = shown2.length;
+                    out.notes.push("카드 " + n2 + "장: 두 장으로 만드는 두 자리 수 최대 " + n2 * (n2 - 1) + "가지 (0이 있으면 십의 자리에 못 옴)");
+                } else if (o.kind === 10) {
+                    // 주사위 앞면: 한 변 3 단위 둥근 정사각형과 눈 (표준 배치)
+                    var diceCount = Math.round(p[0]), faces = [p[1], p[2], p[3]], sum = 0;
+                    for (var di = 0; di < diceCount; di++) {
+                        var dx0 = di * 4, value = Math.round(faces[di]);
+                        sum += value;
+                        out.lines.push({ points: roundRectPoints(S([dx0, 0]), 3 * u, 3 * u, 0.45 * u), closed: true, kind: "main" });
+                        var spots = pipSpots(value);
+                        for (var sp = 0; sp < spots.length; sp++) {
+                            out.pips.push(circlePoints(S([dx0 + 1.5 + spots[sp][0] * 0.85, 1.5 + spots[sp][1] * 0.85]), (value === 1 ? 0.42 : 0.3) * u));
+                        }
+                    }
+                    out.notes.push("눈 " + faces.slice(0, diceCount).join(", ") + (diceCount > 1 ? " (합 " + sum + ")" : "") + ", 모든 경우의 수 " + Math.pow(6, diceCount));
+                } else if (o.kind === 11) {
+                    // 갈림길: 위에서 출발해 갈림마다 양쪽으로 갈라지고 다시 만나는 길 (파스칼 삼각형). 끝 지점 A, B, C … 와 확률
+                    var levels = Math.round(p[0]), dxL = 2, dyL = 2.4;
+                    var node = function(k, i) { return [(i - k / 2) * dxL, -k * dyL]; };
+                    seg([0, dyL * 0.6], node(0, 0));
+                    for (var k2 = 0; k2 < levels; k2++) {
+                        for (var i2 = 0; i2 <= k2; i2++) {
+                            seg(node(k2, i2), node(k2 + 1, i2));
+                            seg(node(k2, i2), node(k2 + 1, i2 + 1));
+                            out.dots.push(S(node(k2, i2)));
+                            if (o.extra) {
+                                var l1 = lerp(node(k2, i2), node(k2 + 1, i2), 0.5), r1 = lerp(node(k2, i2), node(k2 + 1, i2 + 1), 0.5);
+                                out.texts.push({ text: "1/2", at: S(l1), dir: [-0.8944, 0.4472] });
+                                out.texts.push({ text: "1/2", at: S(r1), dir: [0.8944, 0.4472] });
+                            }
+                        }
+                    }
+                    var probs = [], total = Math.pow(2, levels), comb = 1;
+                    for (var e2 = 0; e2 <= levels; e2++) {
+                        var endName = String.fromCharCode(65 + e2);
+                        if (o.names) out.texts.push({ text: endName, at: S(node(levels, e2)), dir: [0, -1], upright: true });
+                        probs.push(endName + " " + fractionText(comb, total));
+                        comb = comb * (levels - e2) / (e2 + 1);
+                    }
+                    out.notes.push("끝 지점에 갈 확률: " + probs.join(", ") + " (갈림 " + levels + "번, 갈림길마다 1/2)");
                 } else {
                     // 원 묶음: 중심을 반지름 1 단위로 놓고, 중심들의 볼록 껍질을 반지름만큼 밖으로 민 끈
                     var r = p[0], centers = circleLayout(o.kind, p);
@@ -6273,6 +6366,42 @@ try {
                     var p1 = [at[0] + d1[0] * s, at[1] + d1[1] * s], p2 = [p1[0] + d2[0] * s, p1[1] + d2[1] * s], p3 = [at[0] + d2[0] * s, at[1] + d2[1] * s];
                     out.lines.push({ points: polyline([S(p1), S(p2), S(p3)]), closed: false, kind: "thin" });
                 }
+            }
+
+            // 공 주머니: 아래가 둥근 자루, 위로 좁아진 목과 묶은 끈 (반지름·높이는 단위 좌표, u로 pt 변환)
+            function bagPoints(halfW, top, bottom, u) {
+                var neck = halfW * 0.35, r = Math.min(halfW, (top - bottom) / 2) * 0.8;
+                var pieces = [
+                    arcPoints([(-halfW + r) * u, (bottom + r) * u], r * u, 180, 270),
+                    arcPoints([(halfW - r) * u, (bottom + r) * u], r * u, 270, 360),
+                    polyline([[halfW * u, (top - 1) * u], [neck * u, (top + 0.8) * u], [neck * 1.4 * u, (top + 1.6) * u], [-neck * 1.4 * u, (top + 1.6) * u], [-neck * u, (top + 0.8) * u], [-halfW * u, (top - 1) * u]])
+                ];
+                return join(pieces);
+            }
+
+            // 모서리가 둥근 직사각형 (왼쪽 아래 corner, 가로 w, 세로 h, 모서리 반지름 r, pt)
+            function roundRectPoints(corner, w, h, r) {
+                var x = corner[0], y = corner[1];
+                return join([
+                    arcPoints([x + r, y + r], r, 180, 270),
+                    arcPoints([x + w - r, y + r], r, 270, 360),
+                    arcPoints([x + w - r, y + h - r], r, 0, 90),
+                    arcPoints([x + r, y + h - r], r, 90, 180)
+                ]);
+            }
+
+            // 주사위 눈 자리 (가운데 0, 모서리 ±1)
+            function pipSpots(value) {
+                var c = [0, 0], tl = [-1, 1], tr = [1, 1], bl = [-1, -1], br = [1, -1], ml = [-1, 0], mr = [1, 0];
+                return [[c], [tl, br], [tl, c, br], [tl, tr, bl, br], [tl, tr, c, bl, br], [tl, tr, ml, mr, bl, br]][Math.max(1, Math.min(6, value)) - 1];
+            }
+
+            // 기약분수 p/q
+            function fractionText(p, q) {
+                var a = Math.round(p), b = Math.round(q);
+                function gcd(x, y) { return y === 0 ? x : gcd(y, x % y); }
+                var g = gcd(a, b);
+                return b / g === 1 ? String(a / g) : (a / g) + "/" + (b / g);
             }
 
             // 선분 PQ에서 R의 반대쪽으로 향하는 단위 법선
@@ -6566,8 +6695,8 @@ try {
                 var flags = "", values = [];
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
                 for (var k = 0; k < KINDS.length; k++) values.push(params[k].join(","));
-                var parts = ["v1", kind, values.join(";"), encodeURIComponent(piecesAcross), encodeURIComponent(piecesDown), unitMm, shadeK, fontPt, flags,
-                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v2", kind, values.join(";"), encodeURIComponent(piecesAcross), encodeURIComponent(piecesDown), unitMm, shadeK, fontPt, flags,
+                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", encodeURIComponent(cardText)];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -6576,7 +6705,7 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 12 || p[8].length !== FLAG_KEYS.length) return;
+                if (p[0] !== "v2" || p.length !== 13 || p[8].length !== FLAG_KEYS.length) return;
                 try {
                     kind = Math.round(restoreNumber(p[1], kind, 0, KINDS.length - 1));
                     var groups = p[2].split(";");
@@ -6599,6 +6728,7 @@ try {
                     offsetXmm = restoreNumber(p[9], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[10], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[11] === "1";
+                    cardText = decodeURIComponent(p[12]);
                 } catch (restoreError) {}
             }
 

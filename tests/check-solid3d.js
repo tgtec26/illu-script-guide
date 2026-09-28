@@ -32,7 +32,8 @@ function loadEngine(state) {
     var SHAPES = [
       {id: "box"}, {id: "tetra", regular: true}, {id: "octa", regular: true}, {id: "dodeca", regular: true}, {id: "icosa", regular: true},
       {id: "prism", sides: true}, {id: "pyramid", sides: true}, {id: "frustum", sides: true, taper: true},
-      {id: "cylinder"}, {id: "cone"}, {id: "conefrustum", taper: true}, {id: "tube", taper: true, tube: true}];
+      {id: "cylinder"}, {id: "cone"}, {id: "conefrustum", taper: true}, {id: "tube", taper: true, tube: true},
+      {id: "cutcube"}, {id: "sphere4", regular: true, sphere: true}, {id: "sphere8", regular: true, sphere: true}];
     ${Object.keys(s).map((k) => `var ${k};`).join("\n")}
     var engine = { usesViewAngles: false }, perspectiveActive = false, variant = "rotation";
     var viewMatrix = null, eyeZ = 0, strokeColor = null, documentIsCmyk = true, kColorCache = {};
@@ -55,14 +56,14 @@ function loadEngine(state) {
   const api = new Function("app", "PointType", "StrokeCap", "StrokeJoin", "DocumentColorSpace", "CMYKColor", "RGBColor",
     prelude + body + `
     ${Object.keys(s).map((k) => `${k} = ${JSON.stringify(s[k])};`).join("\n")}
-    return { buildModel, beginView, collectParts, collectFills, createSolid, projectModel, facingModel, splitCurve, findSilhouettes,
+    return { vertexOrder, vertexName, buildModel, beginView, collectParts, collectFills, createSolid, projectModel, facingModel, splitCurve, findSilhouettes,
       makeCurvePath, paths, setState(next) { ${Object.keys(s).map((k) => `if ("${k}" in next) ${k} = next.${k};`).join(" ")} } };`
   )({ redraw() {} }, { SMOOTH: "smooth", CORNER: "corner" }, { BUTTENDCAP: 1 }, { MITERENDJOIN: 1 }, { CMYK: "CMYK" }, function () {}, function () {});
   return api;
 }
 
 function shapeIndexOf(id) {
-  return ["box", "tetra", "octa", "dodeca", "icosa", "prism", "pyramid", "frustum", "cylinder", "cone", "conefrustum", "tube"].indexOf(id);
+  return ["box", "tetra", "octa", "dodeca", "icosa", "prism", "pyramid", "frustum", "cylinder", "cone", "conefrustum", "tube", "cutcube", "sphere4", "sphere8"].indexOf(id);
 }
 
 // 1. 다면체 위상: 꼭짓점·면·모서리 수와 모든 모서리가 면 2개를 가지는지
@@ -247,32 +248,34 @@ for (const id of Object.keys(topology)) {
     const prelude = `
       var SIZE_STEP_MM = 0.1, MAX_SIZE_MM = 200, SIDES_MIN = 3, SIDES_MAX = 24, POSITION_LIMIT_MM = 100, HIDDEN_NONE = 0, HIDDEN_SOLID = 2, FILL_NONE = 0, FILL_LIT = 2;
       var SHAPES = new Array(12);
-      var shapeIndex = 0, widthMm = 20, depthMm = 20, heightMm = 20, linkWidthDepth = true, sideCount = 6, baseRotation = 0, topRatio = 50;
+      var shapeIndex = 0, widthMm = 20, depthMm = 20, heightMm = 20, linkWidthDepth = true, sideCount = 6, baseRotation = 0, topRatio = 50, showNames = false;
       var tabIndex = 0, rotY = 45, rotX = 35.3, rotZ = 0, perspectiveOn = false, perspectiveMm = 300, hiddenMode = 1, offsetXmm = 0, offsetYmm = 0;
       var fillMode = 2, brightness = 70, contrast = 40, lightAzimuth = -35, lightElevation = 50;
       var PREF_KEY = "k";
       var extrudeFields = null;
       var angleR = 131, angleL = 109, depthPercent = 100;
       var engines = [
-        { fieldCount: 8, restoreFields: function(f) { restoreFields(f); } },
-        { fieldCount: 8, restoreFields: function() {} },
+        { fieldCount: 9, restoreFields: function(f) { restoreFields(f); } },
+        { fieldCount: 9, restoreFields: function() {} },
         { fieldCount: 2, restoreFields: function(f) { extrudeFields = f; } },
         { fieldCount: 0, restoreFields: function() {} }];
       var app = { preferences: { getStringPreference() { return ${JSON.stringify(raw)}; } } };
       function parseNumber(text) { var n = String(text).replace(/,/g, ".").replace(/\\s/g, ""); if (n === "" || n === "+" || n === "-") return null; var v = Number(n); return isNaN(v) ? null : v; }
     `;
     return new Function(prelude + applySaved + solidRestore +
-      "\napplySavedSettings(); return {tabIndex, shapeIndex, widthMm, sideCount, rotX, perspectiveOn, hiddenMode, offsetYmm, linkWidthDepth, fillMode, brightness, lightAzimuth, angleL, depthPercent, extrudeFields};")();
+      "\napplySavedSettings(); return {showNames, tabIndex, shapeIndex, widthMm, sideCount, rotX, perspectiveOn, hiddenMode, offsetYmm, linkWidthDepth, fillMode, brightness, lightAzimuth, angleL, depthPercent, extrudeFields};")();
   };
   // 공통 항목: 탭, 회전 3, 원근 2, 숨은선, 이동 2, 면 5, 관찰 각도 3
   const shared = (tab) => [tab, 45, 20, 5, 1, 400, 2, 3, -4, 1, 55, 20, 30, 60, 120, 105, 88];
-  const solid2 = [0, 20, 20, 20, 1, 6, 0, 50];
-  const restored = run(["v2"].concat(shared(2), [8, 30, 30, 12.5, 0, 5, 45, 70], solid2, [25, 1]).join("|"));
-  assert.deepStrictEqual(restored, { tabIndex: 2, shapeIndex: 8, widthMm: 30, sideCount: 5, rotX: 20, perspectiveOn: true, hiddenMode: 2, offsetYmm: -4,
+  const solid2 = [0, 20, 20, 20, 1, 6, 0, 50, 0];
+  const restored = run(["v3"].concat(shared(2), [8, 30, 30, 12.5, 0, 5, 45, 70, 1], solid2, [25, 1]).join("|"));
+  assert.deepStrictEqual(restored, { showNames: true, tabIndex: 2, shapeIndex: 8, widthMm: 30, sideCount: 5, rotX: 20, perspectiveOn: true, hiddenMode: 2, offsetYmm: -4,
     linkWidthDepth: false, fillMode: 1, brightness: 55, lightAzimuth: 30, angleL: 105, depthPercent: 88, extrudeFields: ["25", "1"] });
   const badVersion = run(["v1"].concat([2, 45, 20, 5, 1, 400, 2, 3, -4, 1, 55, 20, 30, 60], [8, 30, 30, 12.5, 0, 5, 45, 70], [25, 1]).join("|"));
   assert.strictEqual(badVersion.shapeIndex, 0, "v1 string (before 입체 도형2) falls back to defaults");
-  const outOfRange = run(["v2"].concat([7, 45, 20, 5, 0, 400, 7, 3, -4, 9, 150, 20, 200, 60, 50, 105, 300], [99, 999, 30, 12.5, 1, 2, 45, 70], solid2, [25, 0]).join("|"));
+  const beforeNames = run(["v2"].concat(shared(2), [8, 30, 30, 12.5, 0, 5, 45, 70], [0, 20, 20, 20, 1, 6, 0, 50], [25, 1]).join("|"));
+  assert.strictEqual(beforeNames.shapeIndex, 0, "v2 string (before 꼭짓점 이름) falls back to defaults");
+  const outOfRange = run(["v3"].concat([7, 45, 20, 5, 0, 400, 7, 3, -4, 9, 150, 20, 200, 60, 50, 105, 300], [99, 999, 30, 12.5, 1, 2, 45, 70, 0], solid2, [25, 0]).join("|"));
   assert.strictEqual(outOfRange.tabIndex, 0, "bad tab index ignored");
   assert.strictEqual(outOfRange.shapeIndex, 0, "bad shape index ignored");
   assert.strictEqual(outOfRange.widthMm, 20, "bad width ignored");
@@ -285,7 +288,7 @@ for (const id of Object.keys(topology)) {
   assert.strictEqual(outOfRange.depthPercent, 100, "bad depth ignored");
   const shortString = run("v1|1|2");
   assert.strictEqual(shortString.shapeIndex, 0, "short string ignored");
-  const saveFields = source.match(/var parts = \["v2", tabIndex[^\]]*\]/)[0].split(",").length;
+  const saveFields = source.match(/var parts = \["v3", tabIndex[^\]]*\]/)[0].split(",").length;
   assert.strictEqual(saveFields, 18, "shared save/restore field count matches");
 }
 
@@ -480,5 +483,85 @@ assert.ok(source.includes("bindTabOrder(win)"), "tab order bound before show");
 assert.ok(source.includes("win.defaultElement = null"), "no default button");
 assert.ok(/"미리보기"/.test(source), "preview checkbox");
 assert.ok(source.includes("가로 이동 (mm)") && source.includes("세로 이동 (mm)"), "position rows");
+
+// 12. 잘린 정육면체: 꼭짓점 7, 면 7 (사각형 3, 삼각형 4), 모서리 12. 자른 면은 세 이웃 꼭짓점을 지난다
+{
+  const engine = loadEngine({ shapeIndex: shapeIndexOf("cutcube") });
+  const model = engine.buildModel();
+  assert.strictEqual(model.verts.length, 7);
+  assert.strictEqual(model.faces.length, 7);
+  assert.deepStrictEqual(model.faces.map((f) => f.points.length).sort(), [3, 3, 3, 3, 4, 4, 4]);
+  assert.strictEqual(model.edges.length, 12);
+  const h = 20 * 2.834645669 / 2;
+  const cut = model.faces[6];
+  const n = cut.normal;
+  assert.ok(n[0] > 0 && n[1] > 0 && n[2] > 0, "cut face looks toward the removed corner");
+  // 잘린 면의 법선 = (1,1,1)/√3 (정육면체)
+  for (const c of n) assert.ok(Math.abs(c - 1 / Math.sqrt(3)) < 1e-9);
+  assert.ok(model.verts.every((v) => !(v[0] > 0 && v[1] > 0 && v[2] > 0)), "corner (+,+,+) removed");
+  engine.beginView(model);
+  const parts = engine.collectParts(model);
+  assert.strictEqual(parts.visible.length + parts.hidden.length, 12);
+}
+
+// 13. 꼭짓점 이름 순서: 직육면체는 윗면 ABCD(화면 왼쪽부터 위에서 보아 반시계), 아랫면 EFGH가 각각 A~D 바로 아래
+{
+  const engine = loadEngine({ shapeIndex: shapeIndexOf("box"), rotY: 30, rotX: 30 });
+  const model = engine.buildModel();
+  engine.beginView(model);
+  const order = engine.vertexOrder(model);
+  assert.strictEqual(order.length, 8);
+  const v = (i) => model.verts[order[i]];
+  for (let i = 0; i < 4; i++) {
+    assert.ok(v(i)[1] > 0, "top layer first");
+    assert.ok(Math.abs(v(i)[0] - v(i + 4)[0]) < 1e-9 && Math.abs(v(i)[2] - v(i + 4)[2]) < 1e-9, "E under A, F under B …");
+  }
+  // A는 윗면에서 화면 가장 왼쪽
+  const xs = [0, 1, 2, 3].map((i) => engine.projectModel(v(i))[0]);
+  assert.strictEqual(Math.min(...xs), xs[0]);
+  // 위에서 보아 반시계: atan2(z, x)가 줄어든다 (한 바퀴 안에서)
+  const ang = [0, 1, 2, 3].map((i) => Math.atan2(v(i)[2], v(i)[0]));
+  let turn = 0;
+  for (let i = 0; i < 4; i++) { let d = ang[(i + 1) % 4] - ang[i]; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; turn += d; }
+  assert.ok(Math.abs(turn + 2 * Math.PI) < 1e-9, "one clockwise-in-atan2 (counterclockwise from above) turn");
+  // 육각뿔: 꼭짓점이 A, 밑면 B~G
+  const pyr = loadEngine({ shapeIndex: shapeIndexOf("pyramid"), sideCount: 6 });
+  const pm = pyr.buildModel();
+  pyr.beginView(pm);
+  const po = pyr.vertexOrder(pm);
+  assert.strictEqual(po.length, 7);
+  assert.ok(pm.verts[po[0]][1] > 0 && pm.verts[po[1]][1] < 0, "apex is A");
+  assert.deepStrictEqual([0, 25, 26].map(engine.vertexName), ["A", "Z", "A′"]);
+}
+
+// 14. 잘라낸 구: 반지름 = 가로/2, 실루엣에서 잘라낸 쪽 호는 빠지고, 잘린 쐐기를 들여다보는 시점에서는 축과 자른 면 테두리가 보인다
+{
+  const R = 20 * 2.834645669 / 2;
+  const q = loadEngine({ shapeIndex: shapeIndexOf("sphere4"), rotY: -45, rotX: 30 });   // 쐐기(x>0, z>0) 쪽에서 본다
+  // 잘라낸 구는 buildModel 안에서 시점을 정한다 (실루엣이 시점에 따라 달라서)
+  const m2 = q.buildModel();
+  const parts = q.collectParts(m2);
+  const arcs = [...parts.visible, ...parts.hidden];
+  assert.ok(arcs.every((p) => p.kind === "arc"));
+  // 모든 곡선 점은 구 위나 안에 있다
+  for (const c of m2.curves) for (let i = 0; i <= 20; i++) {
+    const p = c.pointAt(c.tMin + (c.tMax - c.tMin) * i / 20);
+    assert.ok(Math.hypot(...p) <= R + 1e-6);
+  }
+  // 축(마지막 곡선)은 보인다
+  const axis = m2.curves[m2.curves.length - 1];
+  assert.ok(axis.visibilityAt(0.5) > 0, "axis visible when looking into the wedge");
+  // 반대편에서 보면 축은 가려진다
+  const back = loadEngine({ shapeIndex: shapeIndexOf("sphere4"), rotY: 135, rotX: 30 });
+  const mb = back.buildModel();
+  assert.ok(mb.curves[mb.curves.length - 1].visibilityAt(0.5) < 0, "axis hidden from the back");
+  // 실루엣은 잘라낸 쪽이 보이는 시점에서 한 바퀴보다 짧다
+  assert.ok(m2.curves[0].closed === false && m2.curves[0].tMax - m2.curves[0].tMin < 2 * Math.PI);
+  // 1/8: 반지름 선분 3개와 호 3개가 더해진다 (실루엣, 적도 + 6)
+  const e = loadEngine({ shapeIndex: shapeIndexOf("sphere8"), rotY: -45, rotX: 30 });
+  const me = e.buildModel();
+  assert.strictEqual(me.curves.length, 8);
+  assert.ok(me.curves.slice(5).every((c) => c.visibilityAt(0.5) > 0), "three radii visible from the cut corner");
+}
 
 console.log("check-solid3d: ok");
