@@ -20,7 +20,7 @@ try {
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
-    var engines = [makeUnitCircleEngine(), makeTriangleEngine(), makeVennEngine(), makeMoveEngine(), makeCountEngine(), makeCalculusEngine(), makeDistributionEngine(), makeSequenceEngine(), makeCircleLineEngine(), makeConicEngine()];
+    var engines = [makeUnitCircleEngine(), makeTriangleEngine(), makeVennEngine(), makeMoveEngine(), makeCountEngine(), makeCalculusEngine(), makeDistributionEngine(), makeSequenceEngine(), makeCircleLineEngine(), makeConicEngine(), makeExpLogEngine()];
 
     var win = new Window("dialog", "고등학교 수학");
     win.orientation = "column";
@@ -7322,6 +7322,922 @@ try {
                     offsetXmm = restoreNumber(p[12], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[13], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[14] === "1";
+                } catch (restoreError) {}
+            }
+
+            function restoreNumber(text, fallback, minimum, maximum) {
+                var value = parseNumber(text);
+                return value === null ? fallback : clamp(value, minimum, maximum);
+            }
+        }
+        return api;
+    }
+
+    // ==== 지수·로그 ====
+    // 지수·로그 그래프: y=a^(x-m)+n, y=log_a(x-m)+n, 또는 지수와 그 역함수인 로그를 y=x 점선과 함께 그린다.
+    // 점근선(점선), 지나는 점((m, 1+n), (m+1, a+n) …)과 좌표, 역함수에서 대칭인 두 점을 잇는 점선, 밑을 바꾼 비교 그래프(3, 1/2)를 고른다.
+    // 증가·감소, 점근선, 정의역·치역은 창에 보여 준다. 식 읽기·그래프 베지어는 중학교 수학 좌표평면 탭과 같은 코드다.
+    // 선 두께: 축 0.4pt, 그래프 0.8pt, 점근선·y=x·대칭 점선 0.3pt. 선택은 필요 없다.
+    function makeExpLogEngine() {
+        var api = {label: "지수·로그", error: null, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        function addRows(page) {
+            var PREF_KEY = "HighMathExpLog/settings";
+            var MM_TO_PT = 2.834645669;
+            var POSITION_LIMIT_MM = 100;
+            var LABEL_WIDTH = 100;
+            var INPUT_WIDTH = 50;
+            var SLIDER_WIDTH = 196;
+            var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
+            var ENG_FONT_NAME = "GSMediumB1";
+            var ITALIC_FONT_NAME = "GSMediItaC1";
+            var EQN_FONT_NAME = "HancomEQN";   // GSMediumB1에 없는 기호
+            var ENG_BASELINE_PT = 0.5;
+            var AXIS_PT = 0.4;
+            var GRAPH_PT = 0.8;
+            var GUIDE_PT = 0.3;
+            var GRID_K = 30;
+            var GUIDE_DASH = [2, 1.5];
+            var TICK_MM = 1.2;
+            var DOT_RADIUS_MM = 0.6;
+            var LABEL_GAP_MM = 0.8;
+            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var MODES = ["지수함수", "로그함수", "지수와 로그 (역함수)"];
+            // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
+            var FLAG_KEYS = ["asymptotes", "points", "coords", "mirror", "formulas", "grid", "numbers"];
+
+            var doc = app.activeDocument;
+            var viewCenter = doc.activeView.centerPoint;
+            var layer = findEditableLayer();
+            var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
+            var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+            var italicFont = findTextFont([ITALIC_FONT_NAME, ENG_FONT_NAME]);
+            var eqnFont = findTextFont([EQN_FONT_NAME, ENG_FONT_NAME]);
+
+            // 옵션
+            var mode = 2;
+            var baseValue = 2;
+            var mValue = 0, nValue = 0;
+            var compareText = "";
+            var xMin = -3, xMax = 5, yMin = -3, yMax = 5;
+            var unitMm = 6;
+            var fontPt = 8;
+            var opt = { asymptotes: true, points: true, coords: true, mirror: false, formulas: true, grid: false, numbers: true };
+            var offsetXmm = 0;
+            var offsetYmm = 0;
+            var previewEnabled = true;
+            applySettings();
+
+            var previewGroup = null;
+
+            var win = page;   // 탭 페이지에 그대로 쌓는다
+
+            var functionPanel = addPanel(win, "함수");
+            var modeRow = functionPanel.add("group");
+            modeRow.add("statictext", undefined, "그래프:");
+            var modeList = modeRow.add("dropdownlist", undefined, MODES);
+            modeList.selection = mode;
+            var baseControls = addValueRow(functionPanel, "밑 a", "", baseValue, 0.1, 10, 0.1, 1);
+            var mControls = addValueRow(functionPanel, "x축 방향 m", "", mValue, -10, 10, 0.5, 1);
+            var nControls = addValueRow(functionPanel, "y축 방향 n", "", nValue, -10, 10, 0.5, 1);
+            var compareRow = functionPanel.add("group");
+            compareRow.add("statictext", undefined, "비교할 밑:");
+            var compareInput = compareRow.add("edittext", undefined, compareText);
+            compareInput.preferredSize.width = 260;
+            compareInput.helpTip = "3, 1/2처럼 쉼표로. 같은 m, n으로 밑만 바꾼 그래프를 겹친다 (역함수 모드에서는 지수함수만)";
+
+            var markPanel = addPanel(win, "표시");
+            addCheckRow(markPanel, [["asymptotes", "점근선"], ["points", "지나는 점"], ["coords", "점 좌표"]]);
+            addCheckRow(markPanel, [["mirror", "대칭인 점 잇기"], ["formulas", "그래프 끝에 식"]]);
+
+            var rangePanel = addPanel(win, "범위 · 눈금");
+            var xMinControls = addValueRow(rangePanel, "x 최솟값", "", xMin, -20, 0, 1, 0);
+            var xMaxControls = addValueRow(rangePanel, "x 최댓값", "", xMax, 1, 20, 1, 0);
+            var yMinControls = addValueRow(rangePanel, "y 최솟값", "", yMin, -20, 0, 1, 0);
+            var yMaxControls = addValueRow(rangePanel, "y 최댓값", "", yMax, 1, 20, 1, 0);
+            var unitControls = addValueRow(rangePanel, "단위 길이", "mm", unitMm, 2, 20, 0.5, 1);
+            var fontControls = addValueRow(rangePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+            addCheckRow(rangePanel, [["grid", "격자"], ["numbers", "눈금 숫자"]]);
+
+            var messageText = win.add("statictext", undefined, " ", {multiline: true});
+            messageText.preferredSize = [380, 46];
+
+            var positionPanel = addPanel(win, "위치");
+            var offsetXControls = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+            var offsetYControls = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+
+            modeList.onChange = function() { mode = modeList.selection ? modeList.selection.index : 0; updatePreview(); };
+            bindValueRow(baseControls, function(value) { baseValue = value; });
+            bindValueRow(mControls, function(value) { mValue = value; });
+            bindValueRow(nControls, function(value) { nValue = value; });
+            compareInput.onChanging = function() { compareText = compareInput.text; updatePreview(); };
+            bindValueRow(xMinControls, function(value) { xMin = value; });
+            bindValueRow(xMaxControls, function(value) { xMax = value; });
+            bindValueRow(yMinControls, function(value) { yMin = value; });
+            bindValueRow(yMaxControls, function(value) { yMax = value; });
+            bindValueRow(unitControls, function(value) { unitMm = value; });
+            bindValueRow(fontControls, function(value) { fontPt = value; });
+            // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false);
+
+            // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다. 밑이 1이면 확정하지 않는다
+            api.commit = function() {
+                if (previewGroup === null) buildPreview();
+                if (previewGroup === null) {
+                    alert(messageText.text);
+                    return false;
+                }
+                saveSettings();
+                doc.selection = null;
+                previewGroup.selected = true;
+                return true;
+            };
+            api.setPreview = function(on) {
+                previewEnabled = on;
+                updatePreview();
+            };
+            api.updatePreview = updatePreview;
+            api.clearPreview = function() {
+                clearPreview();
+                app.redraw();
+            };
+            return null;
+
+            function addCheckRow(parent, items) {
+                var row = parent.add("group");
+                for (var i = 0; i < items.length; i++) {
+                    var check = row.add("checkbox", undefined, items[i][1]);
+                    check.preferredSize.width = 120;
+                    bindOption(check, items[i][0]);
+                }
+            }
+
+            function bindOption(check, key) {
+                check.value = opt[key];
+                check.onClick = function() {
+                    opt[key] = check.value;
+                    updatePreview();
+                };
+            }
+
+            // -------------------------------------------------------
+            // 미리보기
+            // -------------------------------------------------------
+            function updatePreview() {
+                clearPreview();
+                if (previewEnabled) buildPreview();
+                app.redraw();
+            }
+
+            function clearPreview() {
+                if (previewGroup !== null) {
+                    try { previewGroup.remove(); } catch (e) {}
+                }
+                previewGroup = null;
+            }
+
+            function buildPreview() {
+                if (Math.abs(baseValue - 1) < 1e-9) {
+                    messageText.text = "밑 a는 1이 아니어야 함";
+                    return;
+                }
+                var compare = parseBases(compareText);
+                var drawing = buildExpLog({
+                    mode: mode, a: baseValue, m: mValue, n: nValue, compare: compare === null ? [] : compare,
+                    xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unit: unitMm * MM_TO_PT, tick: TICK_MM * MM_TO_PT, fontSize: fontPt,
+                    asymptotes: opt.asymptotes, points: opt.points, coords: opt.coords, mirror: opt.mirror, formulas: opt.formulas,
+                    grid: opt.grid, numbers: opt.numbers
+                });
+                if (compare === null) drawing.notes.push("비교할 밑을 읽지 못함 (양수, 1이 아닌 수: 3, 1/2)");
+                messageText.text = drawing.notes.length > 0 ? drawing.notes.join("\n") : " ";
+
+                previewGroup = layer.groupItems.add();
+                previewGroup.name = "지수·로그";
+                for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
+                for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
+                for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
+                for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
+            }
+
+            // line: {points:[{anchor,left,right}], kind:"axis"|"graph"|"guide"|"grid"}
+            function addPath(line) {
+                var path = previewGroup.pathItems.add();
+                var anchors = [], curved = false;
+                for (var i = 0; i < line.points.length; i++) {
+                    anchors.push(line.points[i].anchor);
+                    if (line.points[i].left !== line.points[i].anchor || line.points[i].right !== line.points[i].anchor) curved = true;
+                }
+                path.setEntirePath(anchors);
+                if (curved) {
+                    for (var j = 0; j < line.points.length; j++) {
+                        var point = path.pathPoints[j];
+                        point.leftDirection = line.points[j].left;
+                        point.rightDirection = line.points[j].right;
+                    }
+                }
+                path.closed = false;
+                path.filled = false;
+                path.stroked = true;
+                path.strokeColor = makeGray(line.kind === "grid" ? GRID_K : 100);
+                path.strokeWidth = line.kind === "graph" ? GRAPH_PT : (line.kind === "axis" ? AXIS_PT : GUIDE_PT);
+                path.strokeCap = StrokeCap.BUTTENDCAP;
+                path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
+                if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
+                if (line.kind === "grid") path.zOrder(ZOrderMethod.SENDTOBACK);
+            }
+
+            // 끝이 tip, 방향 dir인 채운 화살촉 (뒤가 notch만큼 파인 모양)
+            function addArrow(arrow) {
+                var d = arrow.dir, n = [-d[1], d[0]];
+                var tip = arrow.tip;
+                var back = [tip[0] - d[0] * ARROW.length, tip[1] - d[1] * ARROW.length];
+                var path = previewGroup.pathItems.add();
+                path.setEntirePath([
+                    tip,
+                    [back[0] + n[0] * ARROW.halfWidth, back[1] + n[1] * ARROW.halfWidth],
+                    [back[0] + d[0] * ARROW.notch, back[1] + d[1] * ARROW.notch],
+                    [back[0] - n[0] * ARROW.halfWidth, back[1] - n[1] * ARROW.halfWidth]
+                ]);
+                path.closed = true;
+                path.stroked = false;
+                path.filled = true;
+                path.fillColor = makeGray(100);
+            }
+
+            function addDot(at) {
+                var r = DOT_RADIUS_MM * MM_TO_PT;
+                var circle = previewGroup.pathItems.ellipse(at[1] + r, at[0] - r, r * 2, r * 2);
+                circle.stroked = false;
+                circle.filled = true;
+                circle.fillColor = makeGray(100);
+            }
+
+            // at에서 dir 쪽으로 간격(+clear)을 두고 글자의 가까운 가장자리가 오게 둔다.
+            // sup/sub: 위·아래첨자 글자 위치, roman: 기울이지 않는 함수 이름(log)
+            function addLabel(label) {
+                var frame = previewGroup.textFrames.add();
+                frame.contents = label.text;
+                var range = frame.textRange;
+                var attributes = range.characterAttributes;
+                attributes.size = fontPt;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, label.upright);
+                var marks = [[label.sup, "sup"], [label.sub, "sub"], [label.roman, "roman"]];
+                for (var m = 0; m < marks.length; m++) {
+                    if (!marks[m][0]) continue;
+                    for (var s = 0; s < marks[m][0].length; s++) {
+                        var markAttributes = frame.textRange.characters[marks[m][0][s]].characterAttributes;
+                        if (marks[m][1] === "sup") markAttributes.baselinePosition = FontBaselineOption.SUPERSCRIPT;
+                        else if (marks[m][1] === "sub") markAttributes.baselinePosition = FontBaselineOption.SUBSCRIPT;
+                        else markAttributes.textFont = engFont;
+                    }
+                }
+                var b = frame.geometricBounds;
+                var halfW = (b[2] - b[0]) / 2, halfH = (b[1] - b[3]) / 2;
+                var dir = label.dir;
+                var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
+                var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
+                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+            }
+
+            // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
+            // GSMediumB1에 없는 기호는 HancomEQN. 숫자(upright)는 똑바로
+            function applyTextFonts(frame, upright) {
+                var text = frame.contents;
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    var character = frame.textRange.characters[i];
+                    var attributes = character.characterAttributes;
+                    if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
+                        attributes.textFont = korFont;
+                        attributes.baselineShift = 0;
+                    } else if (code > 126) {
+                        attributes.textFont = eqnFont;
+                        attributes.baselineShift = 0;
+                    } else if (!upright && code >= 97 && code <= 122) {
+                        attributes.textFont = italicFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    } else {
+                        attributes.textFont = engFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    }
+                }
+            }
+
+            function findTextFont(names) {
+                for (var i = 0; i < names.length; i++) {
+                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
+                }
+                return app.textFonts[0];
+            }
+
+            // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
+            function findEditableLayer() {
+                var active = doc.activeLayer;
+                if (!active.locked && active.visible) return active;
+                for (var i = 0; i < doc.layers.length; i++) {
+                    if (!doc.layers[i].locked && doc.layers[i].visible) return doc.layers[i];
+                }
+                return doc.layers.add();
+            }
+
+            // K값(0~100)만 있는 회색. RGB 문서면 같은 밝기의 회색으로
+            function makeGray(k) {
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    cmyk.cyan = 0;
+                    cmyk.magenta = 0;
+                    cmyk.yellow = 0;
+                    cmyk.black = k;
+                    return cmyk;
+                }
+                var value = Math.round(255 * (1 - k / 100));
+                var rgb = new RGBColor();
+                rgb.red = value;
+                rgb.green = value;
+                rgb.blue = value;
+                return rgb;
+            }
+
+            // -------------------------------------------------------
+            // 계산 (일러 DOM을 쓰지 않는다 → tests/check-exp-log.js). 원점 (0,0), 1 = unit pt
+            // -------------------------------------------------------
+            // 그릴 그래프 목록: {kind:"exp"|"log", a, m, n}. 역함수 모드의 로그는 지수 y=a^(x-m)+n의 역함수 y=log_a(x-n)+m
+            function graphList(o) {
+                var list = [], bases = [o.a].concat(o.compare);
+                for (var i = 0; i < bases.length; i++) {
+                    if (o.mode === 1) list.push({ kind: "log", a: bases[i], m: o.m, n: o.n, main: i === 0 });
+                    else list.push({ kind: "exp", a: bases[i], m: o.m, n: o.n, main: i === 0 });
+                }
+                if (o.mode === 2) list.push({ kind: "log", a: o.a, m: o.n, n: o.m, main: true, inverse: true });
+                return list;
+            }
+
+            function graphFunction(g) {
+                if (g.kind === "exp") return function(x) { return Math.pow(g.a, x - g.m) + g.n; };
+                return function(x) { return x - g.m > 0 ? Math.log(x - g.m) / Math.log(g.a) + g.n : NaN; };
+            }
+
+            // formulaDisplay가 읽는 식: y=2^(x-1)+3, y=(1/2)^x, y=log_2(x+1)-2, y=log_(1/2)x
+            function graphFormula(g) {
+                var base = baseText(g.a), shift = shiftText("x", g.m), tail = g.n === 0 ? "" : (g.n > 0 ? "+" : "-") + formatValue(Math.abs(g.n));
+                if (g.kind === "exp") {
+                    var baseShown = base.indexOf("/") >= 0 ? "(" + base + ")" : base;
+                    return "y=" + baseShown + "^" + (g.m === 0 ? "x" : "(" + shift + ")") + tail;
+                }
+                var sub = base.length > 1 ? "(" + base + ")" : base;
+                return "y=log_" + sub + (g.m === 0 ? "x" : "(" + shift + ")") + tail;
+            }
+
+            // 1/2처럼 역수가 정수면 분수로, 아니면 소수
+            function baseText(a) {
+                var inverse = 1 / a;
+                if (a < 1 && Math.abs(inverse - Math.round(inverse)) < 1e-9) return "1/" + Math.round(inverse);
+                return formatValue(a);
+            }
+
+            function shiftText(name, shift) {
+                return shift === 0 ? name : name + (shift > 0 ? "-" : "+") + formatValue(Math.abs(shift));
+            }
+
+            function buildExpLog(o) {
+                var u = o.unit;
+                var out = { lines: [], arrows: [], dots: [], texts: [], notes: [] };
+                var box = [o.xMin, o.xMax, o.yMin, o.yMax];
+                function inBox(p) { return p[0] >= o.xMin - 1e-9 && p[0] <= o.xMax + 1e-9 && p[1] >= o.yMin - 1e-9 && p[1] <= o.yMax + 1e-9; }
+
+                var left = Math.min(o.xMin, 0) - 0.5, right = o.xMax + 0.8, bottom = Math.min(o.yMin, 0) - 0.5, top = o.yMax + 0.8;
+                if (o.grid) {
+                    for (var gx = o.xMin; gx <= o.xMax; gx++) if (gx !== 0) out.lines.push(straight([[gx * u, o.yMin * u], [gx * u, o.yMax * u]], "grid"));
+                    for (var gy = o.yMin; gy <= o.yMax; gy++) if (gy !== 0) out.lines.push(straight([[o.xMin * u, gy * u], [o.xMax * u, gy * u]], "grid"));
+                }
+                out.lines.push(straight([[left * u, 0], [right * u - ARROW.length + ARROW.notch, 0]], "axis"));
+                out.lines.push(straight([[0, bottom * u], [0, top * u - ARROW.length + ARROW.notch]], "axis"));
+                out.arrows.push({ tip: [right * u, 0], dir: [1, 0] });
+                out.arrows.push({ tip: [0, top * u], dir: [0, 1] });
+                out.texts.push({ text: "x", at: [right * u, 0], dir: [0, -1] });
+                out.texts.push({ text: "y", at: [0, top * u], dir: [-1, 0] });
+                out.texts.push({ text: "O", at: [0, 0], dir: [-0.7071, -0.7071], upright: true });
+                for (var tx = o.xMin; tx <= o.xMax; tx++) {
+                    if (tx === 0) continue;
+                    out.lines.push(straight([[tx * u, -o.tick / 2], [tx * u, o.tick / 2]], "axis"));
+                    if (o.numbers) out.texts.push({ text: String(tx), at: [tx * u, 0], dir: [0, -1], clear: o.tick / 2, upright: true });
+                }
+                for (var ty = o.yMin; ty <= o.yMax; ty++) {
+                    if (ty === 0) continue;
+                    out.lines.push(straight([[-o.tick / 2, ty * u], [o.tick / 2, ty * u]], "axis"));
+                    if (o.numbers) out.texts.push({ text: String(ty), at: [0, ty * u], dir: [-1, 0], clear: o.tick / 2, upright: true });
+                }
+
+                var graphs = graphList(o), formulaLabels = [], marked = [];
+                if (o.mode === 2) {
+                    var lo = Math.max(o.xMin, o.yMin), hi = Math.min(o.xMax, o.yMax);
+                    if (hi > lo) out.lines.push(straight([[lo * u, lo * u], [hi * u, hi * u]], "guide"));
+                    if (o.formulas && hi > lo) out.texts.push({ text: "y=x", at: [hi * u, hi * u], dir: [0.7071, 0.7071] });
+                }
+                for (var k = 0; k < graphs.length; k++) {
+                    var g = graphs[k], fn = graphFunction(g);
+                    var segments = plotFunction(fn, o.xMin, o.xMax, o.yMin, o.yMax);
+                    for (var s = 0; s < segments.length; s++) if (segments[s].length >= 2) out.lines.push({ points: toBezier(segments[s], u), kind: "graph" });
+                    if (o.formulas && segments.length > 0) {
+                        var lastSegment = segments[segments.length - 1], end = lastSegment[lastSegment.length - 1];
+                        var display = formulaDisplay(graphFormula(g));
+                        formulaLabels.push({ text: display.text, sup: display.sup, sub: display.sub, roman: display.roman, at: [end.x * u, end.y * u], dir: [1, 0] });
+                    }
+                    if (!g.main) continue;
+                    // 점근선: 지수 y=n, 로그 x=m
+                    if (o.asymptotes) {
+                        if (g.kind === "exp" && g.n >= o.yMin && g.n <= o.yMax && g.n !== 0) out.lines.push(straight([[o.xMin * u, g.n * u], [o.xMax * u, g.n * u]], "guide"));
+                        if (g.kind === "log" && g.m >= o.xMin && g.m <= o.xMax && g.m !== 0) out.lines.push(straight([[g.m * u, o.yMin * u], [g.m * u, o.yMax * u]], "guide"));
+                    }
+                    // 지나는 점: 지수 (m, 1+n), (m+1, a+n) / 로그 (m+1, n), (m+a, 1+n)
+                    var passes = g.kind === "exp" ? [[g.m, 1 + g.n], [g.m + 1, g.a + g.n]] : [[g.m + 1, g.n], [g.m + g.a, 1 + g.n]];
+                    for (var p = 0; p < passes.length; p++) {
+                        var at = passes[p];
+                        if (!inBox(at)) continue;
+                        marked.push({ point: at, kind: g.kind });
+                        if (!o.points) continue;
+                        out.dots.push([at[0] * u, at[1] * u]);
+                        if (o.coords) out.texts.push({ text: "(" + formatValue(at[0]) + ", " + formatValue(at[1]) + ")", at: [at[0] * u, at[1] * u],
+                            dir: g.kind === "exp" ? [-0.7071, 0.7071] : [0.7071, -0.7071], upright: true });
+                    }
+                    out.notes.push(noteFor(g));
+                }
+                // 역함수: 지수 위의 점 (p, q)와 로그 위의 점 (q, p)를 y=x에 수직인 점선으로 잇는다
+                if (o.mode === 2 && o.mirror) {
+                    for (var mk = 0; mk < marked.length; mk++) {
+                        if (marked[mk].kind !== "exp") continue;
+                        var P = marked[mk].point, Q = [P[1], P[0]];
+                        if (inBox(Q) && Math.abs(P[0] - P[1]) > 1e-9) out.lines.push(straight([[P[0] * u, P[1] * u], [Q[0] * u, Q[1] * u]], "guide"));
+                    }
+                }
+
+                // 끝점이 가까운 식 글자는 위에서부터 한 줄 간격 이상 벌린다
+                formulaLabels.sort(function(pp, qq) { return qq.at[1] - pp.at[1]; });
+                var lineGap = (o.fontSize || 8) * 1.3;
+                for (var fl = 0; fl < formulaLabels.length; fl++) {
+                    for (var prior = 0; prior < fl; prior++) {
+                        var upper = formulaLabels[prior], lower = formulaLabels[fl];
+                        if (Math.abs(upper.at[0] - lower.at[0]) < lineGap * 4 && upper.at[1] - lower.at[1] < lineGap) lower.at = [lower.at[0], upper.at[1] - lineGap];
+                    }
+                    out.texts.push(formulaLabels[fl]);
+                }
+                return out;
+            }
+
+            // y=2^x: 증가, 점근선 y=0, 치역 y>0
+            function noteFor(g) {
+                var shown = graphFormula(g);
+                var trend = g.a > 1 ? "증가" : "감소";
+                if (g.kind === "exp") return shown + ": " + trend + ", 점근선 y=" + formatValue(g.n) + ", 치역 y>" + formatValue(g.n);
+                return shown + ": " + trend + ", 점근선 x=" + formatValue(g.m) + ", 정의역 x>" + formatValue(g.m);
+            }
+
+            // "3, 1/2" → [3, 0.5]. 빈 칸은 [], 양수가 아니거나 1이면 null
+            function parseBases(text) {
+                var parts = String(text).split(","), list = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var part = parts[i].replace(/\s/g, "");
+                    if (part === "") continue;
+                    if (part.indexOf("x") >= 0) return null;
+                    var fn = compileFunction(part);
+                    if (fn === null) return null;
+                    var value = fn(0);
+                    if (!isFinite(value) || value <= 0 || Math.abs(value - 1) < 1e-9) return null;
+                    list.push(value);
+                }
+                return list;
+            }
+
+            function formatValue(v) {
+                var r = Math.round(v * 100) / 100;
+                return String(r === 0 ? 0 : r);
+            }
+
+            function straight(anchors, kind) {
+                var points = [];
+                for (var i = 0; i < anchors.length; i++) points.push({ anchor: anchors[i], left: anchors[i], right: anchors[i] });
+                return { points: points, kind: kind };
+            }
+
+            // 좌표 범위 [x0,x1]×[y0,y1] 안에 드는 조각들. 각 점 {x, y, m(기울기)}
+            function plotFunction(fn, x0, x1, y0, y1) {
+                var TOLERANCE = 0.004, MAX_DEPTH = 10, STEP = 0.25, LIMIT = 4000;
+                var margin = (y1 - y0) * 1e-9;
+                var segments = [], current = null, count = 0;
+
+                function value(x) {
+                    var y;
+                    try { y = fn(x); } catch (e) { return NaN; }
+                    return (typeof y === "number" && isFinite(y)) ? y : NaN;
+                }
+                function inside(x) {
+                    var y = value(x);
+                    return !isNaN(y) && y >= y0 - margin && y <= y1 + margin;
+                }
+                function slope(x) {
+                    var h = 1e-5 * (1 + Math.abs(x));
+                    var a = value(x - h), b = value(x + h), c = value(x);
+                    if (!isNaN(a) && !isNaN(b)) return (b - a) / (2 * h);
+                    if (!isNaN(b)) return (b - c) / h;
+                    if (!isNaN(a)) return (c - a) / h;
+                    return 0;
+                }
+                function emit(x) {
+                    if (current === null) {
+                        current = [];
+                        segments.push(current);
+                    }
+                    if (count++ > LIMIT) return;
+                    var y = Math.min(y1, Math.max(y0, value(x)));
+                    current.push({ x: x, y: y, m: slope(x) });
+                }
+                function finish() { current = null; }
+                // 안(inX)과 밖(outX) 사이 경계. 안쪽 끝을 돌려준다
+                function edge(inX, outX) {
+                    for (var i = 0; i < 40; i++) {
+                        var mid = (inX + outX) / 2;
+                        if (inside(mid)) inX = mid;
+                        else outX = mid;
+                    }
+                    return inX;
+                }
+                // a는 이미 넣었다. b까지 넣는다
+                function refine(a, b, depth) {
+                    var mid = (a + b) / 2;
+                    if (!inside(mid)) {
+                        var cut = edge(a, mid);
+                        if (cut > a) refine(a, cut, depth + 1);
+                        finish();
+                        var resume = edge(b, mid);
+                        emit(resume);
+                        if (b > resume) refine(resume, b, depth + 1);
+                        return;
+                    }
+                    var h = b - a;
+                    var ya = value(a), yb = value(b);
+                    var guess = (ya + yb) / 2 + h * (slope(a) - slope(b)) / 8;
+                    if (depth < MAX_DEPTH && Math.abs(guess - value(mid)) > TOLERANCE) {
+                        refine(a, mid, depth + 1);
+                        refine(mid, b, depth + 1);
+                    } else {
+                        emit(b);
+                    }
+                }
+
+                var steps = Math.ceil((x1 - x0) / STEP);
+                for (var i = 0; i < steps; i++) {
+                    var a = x0 + (x1 - x0) * i / steps, b = x0 + (x1 - x0) * (i + 1) / steps;
+                    var inA = inside(a), inB = inside(b);
+                    if (inA && current === null) emit(a);
+                    if (inA && inB) {
+                        refine(a, b, 0);
+                    } else if (inA) {
+                        var last = edge(a, b);
+                        if (last > a) refine(a, last, 0);
+                        finish();
+                    } else if (inB) {
+                        var first = edge(b, a);
+                        emit(first);
+                        refine(first, b, 0);
+                    }
+                }
+                for (var k = 0; k < segments.length; k++) segments[k] = simplify(segments[k]);
+                return segments;
+
+                // 빼도 앞뒤 점의 에르미트 곡선이 함수에서 벗어나지 않는 점은 지운다 (직선은 두 점만 남는다)
+                function simplify(points) {
+                    if (points.length < 3) return points;
+                    var kept = [points[0]];
+                    for (var i = 1; i < points.length - 1; i++) {
+                        if (!fits(kept[kept.length - 1], points[i + 1])) kept.push(points[i]);
+                    }
+                    kept.push(points[points.length - 1]);
+                    return kept;
+                }
+                function fits(p, q) {
+                    var h = q.x - p.x;
+                    for (var j = 1; j < 8; j++) {
+                        var t = j / 8, x = p.x + h * t, y = value(x);
+                        if (isNaN(y) || y < y0 - margin || y > y1 + margin) return false;
+                        var t2 = t * t, t3 = t2 * t;
+                        var guess = (2 * t3 - 3 * t2 + 1) * p.y + (t3 - 2 * t2 + t) * h * p.m + (-2 * t3 + 3 * t2) * q.y + (t3 - t2) * h * q.m;
+                        if (Math.abs(guess - y) > TOLERANCE) return false;
+                    }
+                    return true;
+                }
+            }
+
+            // 에르미트 → 베지어: 핸들 = 이웃까지 x 간격의 1/3만큼 접선 방향
+            function toBezier(points, unit) {
+                var out = [];
+                for (var i = 0; i < points.length; i++) {
+                    var p = points[i];
+                    var anchor = [p.x * unit, p.y * unit];
+                    var left = anchor, right = anchor;
+                    if (i > 0) {
+                        var hl = (p.x - points[i - 1].x) / 3;
+                        left = [(p.x - hl) * unit, (p.y - p.m * hl) * unit];
+                    }
+                    if (i < points.length - 1) {
+                        var hr = (points[i + 1].x - p.x) / 3;
+                        right = [(p.x + hr) * unit, (p.y + p.m * hr) * unit];
+                    }
+                    out.push({ anchor: anchor, left: left, right: right });
+                }
+                return out;
+            }
+
+            // 식 표시: ^와 *는 빼고 ^ 다음은 위첨자, _ 다음은 아래첨자(log_2 → log₂). sin·cos·tan·log·ln은 똑바로(roman),
+            // 그 뒤에 괄호·첨자가 없으면 한 칸 띄운다 (sin x). pi는 π
+            function formulaDisplay(text) {
+                var source = String(text).replace(/\s/g, "").split("pi").join("π");
+                var FUNCS = ["sin", "cos", "tan", "log", "ln"];
+                var out = "", sup = [], sub = [], roman = [];
+                for (var i = 0; i < source.length; i++) {
+                    var ch = source.charAt(i);
+                    if (ch === "*") continue;
+                    if (ch === "^" || ch === "_") {
+                        var marks = ch === "^" ? sup : sub;
+                        var next = source.charAt(i + 1);
+                        if (next === "(") {
+                            var close = source.indexOf(")", i + 2);
+                            if (close < 0) close = source.length;
+                            for (var j = i + 2; j < close; j++) {
+                                marks.push(out.length);
+                                out += source.charAt(j);
+                            }
+                            i = close;
+                        } else if (next >= "0" && next <= "9") {
+                            while (i + 1 < source.length && source.charAt(i + 1) >= "0" && source.charAt(i + 1) <= "9") {
+                                marks.push(out.length);
+                                out += source.charAt(++i);
+                            }
+                        } else if (next !== "") {
+                            marks.push(out.length);
+                            out += source.charAt(++i);
+                        }
+                        continue;
+                    }
+                    var name = null;
+                    for (var k = 0; k < FUNCS.length; k++) if (source.substr(i, FUNCS[k].length) === FUNCS[k]) { name = FUNCS[k]; break; }
+                    if (name) {
+                        for (var n = 0; n < name.length; n++) {
+                            roman.push(out.length);
+                            out += name.charAt(n);
+                        }
+                        i += name.length - 1;
+                        var after = source.charAt(i + 1);
+                        if (after !== "" && after !== "(" && after !== "_" && after !== "^") out += " ";
+                        continue;
+                    }
+                    out += ch;
+                }
+                return { text: out, sup: sup, sub: sub, roman: roman };
+            }
+
+            // "y=…", "f(x)=…" 또는 식만. x의 함수(function)로 만들고, 못 읽으면 null.
+            // 2x, 1/2x(=½x), x^2, √x, |x-1|, 2^x, e^x, π(pi), sin 2x, cos(x+1), tan x, log_2 x, log x(밑 10), ln x
+            function compileFunction(text) {
+                var s = String(text).split("−").join("-").split("×").join("*").split("÷").join("/")
+                    .split("²").join("^2").split("³").join("^3").split("π").join("pi");
+                // log_2 x처럼 밑 뒤의 빈칸은 밑의 끝이다 (빈칸을 지운 log_23x와 구별)
+                s = s.replace(/log_(\d+)\s+/g, "log_($1)").replace(/\s/g, "");
+                var eq = s.indexOf("=");
+                if (eq >= 0) s = s.substring(eq + 1);
+                if (s === "") return null;
+                var NAMES = ["sin", "cos", "tan", "log", "ln", "pi", "e", "x"];
+                var FUNCS = { sin: Math.sin, cos: Math.cos, tan: Math.tan };
+                var pos = 0, absDepth = 0;
+                function peek() { return s.charAt(pos); }
+                function isDigit(ch) { return ch >= "0" && ch <= "9"; }
+                function nameAt() {
+                    for (var i = 0; i < NAMES.length; i++) if (s.substr(pos, NAMES[i].length) === NAMES[i]) return NAMES[i];
+                    return null;
+                }
+                // 곱셈 기호 없이 이어지는 인수의 시작 (2x, 2√3, 2(x+1), 2sin x, 2|x|)
+                function startsFactor() {
+                    var ch = peek();
+                    return ch === "√" || ch === "(" || isDigit(ch) || ch === "." || nameAt() !== null || (ch === "|" && absDepth === 0);
+                }
+                function expression() {
+                    var node = term();
+                    while (peek() === "+" || peek() === "-") {
+                        var op = s.charAt(pos++);
+                        node = binary(op, node, term());
+                    }
+                    return node;
+                }
+                function term() {
+                    var node = unary();
+                    while (peek() === "*" || peek() === "/" || startsFactor()) {
+                        var op = peek();
+                        if (op === "*" || op === "/") pos++;
+                        else op = "*";
+                        node = binary(op, node, power());
+                    }
+                    return node;
+                }
+                function unary() {
+                    if (peek() === "-") { pos++; return negate(unary()); }
+                    if (peek() === "+") { pos++; return unary(); }
+                    return power();
+                }
+                function power() {
+                    var base = primary();
+                    if (peek() === "^") {
+                        pos++;
+                        return binary("^", base, unary());
+                    }
+                    return base;
+                }
+                // 함수 인수: 괄호면 그 괄호, 아니면 곱셈으로 이어진 인수들 (sin 2x = sin(2x), 다음 함수 이름 앞에서 끝)
+                function argument() {
+                    if (peek() === "(") return primary();
+                    var node = power();
+                    while (startsFactor() && peek() !== "(" && !isFunctionName(nameAt())) node = binary("*", node, power());
+                    return node;
+                }
+                function isFunctionName(name) { return name === "sin" || name === "cos" || name === "tan" || name === "log" || name === "ln"; }
+                function primary() {
+                    var ch = peek();
+                    if (ch === "|") {
+                        pos++;
+                        absDepth++;
+                        var inside = expression();
+                        if (peek() !== "|") throw new Error("abs");
+                        pos++;
+                        absDepth--;
+                        return function(x) { return Math.abs(inside(x)); };
+                    }
+                    var name = nameAt();
+                    if (name !== null) {
+                        pos += name.length;
+                        if (name === "x") return function(x) { return x; };
+                        if (name === "pi") return function() { return Math.PI; };
+                        if (name === "e") return function() { return Math.E; };
+                        if (name === "log") {
+                            var base = function() { return 10; };
+                            if (peek() === "_") { pos++; base = primary(); }
+                            var logArg = argument();
+                            return function(x) { return Math.log(logArg(x)) / Math.log(base(x)); };
+                        }
+                        var arg = argument();
+                        if (name === "ln") return function(x) { return Math.log(arg(x)); };
+                        var fn = FUNCS[name];
+                        return function(x) { return fn(arg(x)); };
+                    }
+                    if (ch === "√") { pos++; var inner = power(); return function(x) { return Math.sqrt(inner(x)); }; }
+                    if (ch === "(") {
+                        pos++;
+                        var node = expression();
+                        if (peek() !== ")") throw new Error("paren");
+                        pos++;
+                        return node;
+                    }
+                    var begin = pos, dots = 0;
+                    while (isDigit(peek()) || peek() === ".") {
+                        if (peek() === ".") dots++;
+                        pos++;
+                    }
+                    var number = parseFloat(s.substring(begin, pos));
+                    if (pos === begin || dots > 1 || isNaN(number)) throw new Error("number");
+                    return function() { return number; };
+                }
+                function negate(node) { return function(x) { return -node(x); }; }
+                function binary(op, a, b) {
+                    if (op === "+") return function(x) { return a(x) + b(x); };
+                    if (op === "-") return function(x) { return a(x) - b(x); };
+                    if (op === "*") return function(x) { return a(x) * b(x); };
+                    if (op === "/") return function(x) { return a(x) / b(x); };
+                    return function(x) { return Math.pow(a(x), b(x)); };
+                }
+                try {
+                    var fn = expression();
+                    if (pos !== s.length) return null;
+                    return fn;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            // -------------------------------------------------------
+            // 다이얼로그 부품
+            // -------------------------------------------------------
+            function addPanel(parent, title) {
+                var panel = parent.add("panel", undefined, title);
+                panel.alignChildren = ["left", "top"];
+                panel.margins = [12, 16, 12, 12];
+                panel.spacing = 6;
+                return panel;
+            }
+
+            function addValueRow(parent, label, unitText, value, minimum, maximum, step, decimals) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.add("statictext", undefined, label + (unitText ? " (" + unitText + "):" : ":")).preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, formatNumber(value, decimals));
+                input.preferredSize.width = INPUT_WIDTH;
+                var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+                slider.stepdelta = step;
+                slider.jumpdelta = step * 10;
+                slider.preferredSize.width = SLIDER_WIDTH;
+                return { input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals };
+            }
+
+            function setRowValue(controls, value) {
+                controls.input.text = formatNumber(value, controls.decimals);
+                try { controls.slider.value = value; } catch (e) {}
+            }
+
+            function bindValueRow(controls, setter) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    setRowValue(controls, value);
+                    setter(value);
+                    updatePreview();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? controls.slider.value : value);
+                };
+            }
+
+            function bindPositionRow(controls, getter, setter, isX) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    var delta = (value - getter()) * MM_TO_PT;
+                    setter(value);
+                    setRowValue(controls, value);
+                    if (delta === 0 || previewGroup === null) return;
+                    previewGroup.translate(isX ? delta : 0, isX ? 0 : delta);
+                    app.redraw();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? getter() : value);
+                };
+            }
+
+            function parseNumber(text) {
+                var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+                return isNaN(value) ? null : value;
+            }
+
+            function clamp(value, minimum, maximum) {
+                if (value < minimum) return minimum;
+                if (value > maximum) return maximum;
+                return value;
+            }
+
+            function roundTo(value, step) {
+                return Math.round(value / step) * step;
+            }
+
+            function formatNumber(value, decimals) {
+                return (Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
+            }
+
+
+            // -------------------------------------------------------
+            // 설정 저장 · 복원
+            // -------------------------------------------------------
+            function saveSettings() {
+                var flags = "";
+                for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
+                var parts = ["v1", mode, baseValue, mValue, nValue, encodeURIComponent(compareText), xMin, xMax, yMin, yMax, unitMm, fontPt,
+                    flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+            }
+
+            function applySettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+                if (!raw) return;
+                var p = raw.split("|");
+                if (p[0] !== "v1" || p.length !== 16 || p[12].length !== FLAG_KEYS.length) return;
+                try {
+                    mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
+                    baseValue = restoreNumber(p[2], baseValue, 0.1, 10);
+                    mValue = restoreNumber(p[3], mValue, -10, 10);
+                    nValue = restoreNumber(p[4], nValue, -10, 10);
+                    compareText = decodeURIComponent(p[5]);
+                    xMin = Math.round(restoreNumber(p[6], xMin, -20, 0));
+                    xMax = Math.round(restoreNumber(p[7], xMax, 1, 20));
+                    yMin = Math.round(restoreNumber(p[8], yMin, -20, 0));
+                    yMax = Math.round(restoreNumber(p[9], yMax, 1, 20));
+                    unitMm = restoreNumber(p[10], unitMm, 2, 20);
+                    fontPt = restoreNumber(p[11], fontPt, 5, 14);
+                    for (var i = 0; i < FLAG_KEYS.length; i++) opt[FLAG_KEYS[i]] = p[12].charAt(i) === "1";
+                    offsetXmm = restoreNumber(p[13], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[14], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[15] === "1";
                 } catch (restoreError) {}
             }
 
