@@ -98,6 +98,21 @@ try {
     if (result !== 1) engine.clearPreview();
     try { app.redraw(); } catch (redrawError) {}
 
+    // 음수 숫자(-2, -1/2, -π)를 점 위·아래에 둘 때는 빼기 기호를 빼고 숫자 가운데를 점에 맞춘다(평가원 그림).
+    // 글자를 이만큼 가로로 옮기면 된다. 빼기를 지운 사본으로 숫자 너비를 재므로 서체·크기가 달라도 맞다
+    function negativeNumberShift(frame, dir) {
+        if (dir[0] !== 0 || dir[1] === 0) return 0;
+        if (!/^[-−][0-9.π]/.test(frame.contents)) return 0;
+        try {
+            var full = frame.geometricBounds;
+            var probe = frame.duplicate();
+            probe.textRange.characters[0].remove();
+            var rest = probe.geometricBounds;
+            probe.remove();
+            return -((full[2] - full[0]) - (rest[2] - rest[0])) / 2;
+        } catch (e) { return 0; }
+    }
+
     // ==== 표기 (원래 Object_GeoMarks.jsx) ====
     // 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
     try {
@@ -981,7 +996,7 @@ try {
                 var b = frame.geometricBounds;
                 var halfH = (b[1] - b[3]) / 2;
                 var y = label.at[1] + label.dir * (label.clear + LABEL_GAP_MM * MM_TO_PT + halfH);
-                frame.translate(label.at[0] - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(label.at[0] + negativeNumberShift(frame, [0, label.dir]) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자·기호 GSMediumB1(기준선 +0.5pt).
@@ -1646,7 +1661,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자·기호 GSMediumB1(기준선 +0.5pt).
@@ -2625,7 +2640,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자·기호 GSMediumB1(기준선 +0.5pt).
@@ -3282,7 +3297,7 @@ try {
                 var dir = label.dir;
                 var reach = DOT_RADIUS_MM * MM_TO_PT + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자·기호 GSMediumB1(기준선 +0.5pt). O·I·G는 똑바로
@@ -4476,7 +4491,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자·기호 GSMediumB1(기준선 +0.5pt). 점 이름은 똑바로

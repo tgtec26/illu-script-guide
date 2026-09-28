@@ -106,6 +106,21 @@ try {
     if (result !== 1) engine.clearPreview();
     try { app.redraw(); } catch (redrawError) {}
 
+    // 음수 숫자(-2, -1/2, -π)를 점 위·아래에 둘 때는 빼기 기호를 빼고 숫자 가운데를 점에 맞춘다(평가원 그림).
+    // 글자를 이만큼 가로로 옮기면 된다. 빼기를 지운 사본으로 숫자 너비를 재므로 서체·크기가 달라도 맞다
+    function negativeNumberShift(frame, dir) {
+        if (dir[0] !== 0 || dir[1] === 0) return 0;
+        if (!/^[-−][0-9.π]/.test(frame.contents)) return 0;
+        try {
+            var full = frame.geometricBounds;
+            var probe = frame.duplicate();
+            probe.textRange.characters[0].remove();
+            var rest = probe.geometricBounds;
+            probe.remove();
+            return -((full[2] - full[0]) - (rest[2] - rest[0])) / 2;
+        } catch (e) { return 0; }
+    }
+
     // ==== 경우의 수 ====
     // 경우의 수 도식: 도로망(마을을 한 줄로 놓고 A-B:3처럼 준 도로 수만큼 곡선, 건너뛰는 도로는 가운데 마을 위로)과
     // 색칠 지도(가로 4칸, 가운데 원 + 네 조각, 위 한 칸 + 아래 세 칸), 격자 최단 경로(A 왼쪽 아래 → B 오른쪽 위, 지나는 점 P,
@@ -393,7 +408,7 @@ try {
                 var dir = label.dir;
                 var reach = (dir[0] === 0 && dir[1] === 0) ? 0 : (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자 GSMediumB1(기준선 +0.5pt). 마을·영역 이름은 똑바로
@@ -1126,7 +1141,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
@@ -1690,7 +1705,7 @@ try {
                 var dir = label.dir;
                 var reach = LABEL_GAP_MM * MM_TO_PT * (label.small ? 0.5 : 1) + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 그 밖의 기호(ᶜ, ×)는 HancomEQN.

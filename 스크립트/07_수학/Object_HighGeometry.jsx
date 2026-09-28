@@ -106,6 +106,21 @@ try {
     if (result !== 1) engine.clearPreview();
     try { app.redraw(); } catch (redrawError) {}
 
+    // 음수 숫자(-2, -1/2, -π)를 점 위·아래에 둘 때는 빼기 기호를 빼고 숫자 가운데를 점에 맞춘다(평가원 그림).
+    // 글자를 이만큼 가로로 옮기면 된다. 빼기를 지운 사본으로 숫자 너비를 재므로 서체·크기가 달라도 맞다
+    function negativeNumberShift(frame, dir) {
+        if (dir[0] !== 0 || dir[1] === 0) return 0;
+        if (!/^[-−][0-9.π]/.test(frame.contents)) return 0;
+        try {
+            var full = frame.geometricBounds;
+            var probe = frame.duplicate();
+            probe.textRange.characters[0].remove();
+            var rest = probe.geometricBounds;
+            probe.remove();
+            return -((full[2] - full[0]) - (rest[2] - rest[0])) / 2;
+        } catch (e) { return 0; }
+    }
+
     // ==== 이차곡선 ====
     // 이차곡선: 포물선 y²=4px(x²=4py), 타원 x²/a²+y²/b²=1, 쌍곡선 x²/a²-y²/b²=±1을 좌표평면에 그린다. 중심(꼭짓점)을 (m, n)으로 옮길 수 있다.
     // 초점 F·F′, 꼭짓점, 준선(포물선)·점근선(쌍곡선), 곡선 위의 점 P와 초점까지 선분(포물선은 준선까지 수선 PH), P에서의 접선을 고른다.
@@ -379,7 +394,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
@@ -1144,7 +1159,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var cx = label.at[0] + dir[0] * reach, cy = label.at[1] + dir[1] * reach;
-                var dx = cx - (left + right) / 2, dy = cy - (bottom + top + arrowRise) / 2;
+                var dx = cx + (frames.length === 1 ? negativeNumberShift(frames[0], dir) : 0) - (left + right) / 2, dy = cy - (bottom + top + arrowRise) / 2;
                 for (var m = 0; m < frames.length; m++) {
                     frames[m].translate(dx, dy);
                     if (!parts[m].vector) continue;
@@ -1739,7 +1754,7 @@ try {
                 var dir = label.dir;
                 var reach = LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] * MM_TO_PT + dir[0] * reach, y = label.at[1] * MM_TO_PT + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,

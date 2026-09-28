@@ -106,6 +106,21 @@ try {
     if (result !== 1) engine.clearPreview();
     try { app.redraw(); } catch (redrawError) {}
 
+    // 음수 숫자(-2, -1/2, -π)를 점 위·아래에 둘 때는 빼기 기호를 빼고 숫자 가운데를 점에 맞춘다(평가원 그림).
+    // 글자를 이만큼 가로로 옮기면 된다. 빼기를 지운 사본으로 숫자 너비를 재므로 서체·크기가 달라도 맞다
+    function negativeNumberShift(frame, dir) {
+        if (dir[0] !== 0 || dir[1] === 0) return 0;
+        if (!/^[-−][0-9.π]/.test(frame.contents)) return 0;
+        try {
+            var full = frame.geometricBounds;
+            var probe = frame.duplicate();
+            probe.textRange.characters[0].remove();
+            var rest = probe.geometricBounds;
+            probe.remove();
+            return -((full[2] - full[0]) - (rest[2] - rest[0])) / 2;
+        } catch (e) { return 0; }
+    }
+
     // ==== 도형의 이동 ====
     // 도형의 이동: 점(A(1,2) B(4,1) C(2,4))으로 준 도형을 평행이동하거나 x축·y축·원점·y=x·y=-x, 점 (a, b), 직선 x=a·y=b에 대하여
     // 대칭이동한 그림을 좌표평면에 그린다. 옮긴 점은 A′, B′ …(프라임은 HancomEQN). 대칭축은 점선과 이름,
@@ -347,7 +362,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
@@ -957,7 +972,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
@@ -1871,7 +1886,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
@@ -2793,7 +2808,7 @@ try {
                 var dir = label.dir;
                 var reach = LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문 GSMediumB1(기준선 +0.5pt), 없는 기호는 HancomEQN. 집합 이름은 똑바로
@@ -3441,7 +3456,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
@@ -4108,7 +4123,7 @@ try {
                 var dir = label.dir;
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
-                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
