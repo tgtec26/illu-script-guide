@@ -91,6 +91,30 @@ assert.strictEqual(build({ perpendicular: true, a: 0, b: 180 }).lines.length, 0)
   near(pts[1][0], 10, "arc starts at A"); near(pts[pts.length - 1][1], 10, "arc ends at B");
 }
 
+// 내접 사각형 ABCD: 마주 보는 두 각 ∠A + ∠C = 180° (A 210°, B 330°, C 20°, D 120° → ∠A 75°, ∠C 105°)
+{
+  const d = build({ quad: true, values: true, c: 20, d: 120 });
+  assert.deepStrictEqual(texts(d).filter((t) => t.endsWith("°")), ["75°", "105°"]);
+  assert.deepStrictEqual(texts(d).filter((t) => !t.endsWith("°")).sort(), ["A", "B", "C", "D"]);
+  const quad = d.lines[0].points.map((p) => p.anchor);
+  assert.strictEqual(quad.length, 5, "closed ABCDA");
+  for (const p of quad) near(g.dist(p, [0, 0]), 10, "vertex on circle");
+  // 순서가 뒤섞여도 원 위 순서대로 잇는다: C를 A와 B 사이로
+  const e = build({ quad: true, c: 270, d: 120 });
+  const order = e.lines[0].points.map((p) => Math.round((Math.atan2(p.anchor[1], p.anchor[0]) * 180 / Math.PI + 360) % 360));
+  assert.deepStrictEqual(order, [210, 270, 330, 120, 210]);
+  // 두 접선을 함께 켜면 접점은 E, F
+  assert.ok(["E", "F"].every((n) => texts(build({ quad: true, external: true })).includes(n)));
+}
+// 접선과 현: 접선과 현 TA가 이루는 각 = 원주각 ∠TPA (T 45°, A 210°, P 100° → 호 TA(P 없는 쪽) 195° → 97.5°)
+{
+  const d = build({ tangentChord: true, values: true });
+  assert.deepStrictEqual(texts(d).filter((t) => t.endsWith("°")), ["97.5°", "97.5°"]);
+  assert.ok(["T", "A", "P"].every((n) => texts(d).includes(n)));
+  // P를 반대쪽 호로 옮기면 각도 바뀐다 (P 300° → 호 TA 165° → 82.5°)
+  assert.deepStrictEqual(texts(build({ tangentChord: true, values: true, p: 300 })).filter((t) => t.endsWith("°")), ["82.5°", "82.5°"]);
+}
+
 assert.ok(source.includes('var PREF_KEY = "CircleProps/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 console.log("circle props checks passed");
