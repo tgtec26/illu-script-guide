@@ -6,7 +6,7 @@ const assert = require("assert");
 const dir = path.resolve(__dirname, "..", "스크립트", "07_수학");
 const bundles = {
   "Object_HighCommon.jsx": ["공통수학", ["Quadratic", "Move", "CircleLine", "Inequality", "Venn", "Rational"]],
-  "Object_HighMath1.jsx": ["수학Ⅰ", ["ExpLog", "Trig", "UnitCircle", "Triangle", "Sequence"]],
+  "Object_HighMath1.jsx": ["수학Ⅰ", ["ExpLog", "Trig", "UnitCircle", "CircleGraph", "Triangle", "Sequence"]],
   "Object_HighMath2.jsx": ["수학Ⅱ", ["Piecewise", "Extrema", "Calculus", "Motion"]],
   "Object_HighStatistics.jsx": ["확률과 통계", ["Count", "ProbTree", "Distribution"]],
   "Object_HighGeometry.jsx": ["기하", ["Conic", "Vector", "Space"]],
@@ -34,5 +34,5 @@ for (const [file, [title, engines]] of Object.entries(bundles)) {
     assert.ok(engine.includes("            return null;") && !late, file + ": constant declared after return null: " + late);
   }
 }
-assert.strictEqual(seen.size, 21);
+assert.strictEqual(seen.size, 22);
 console.log("high-school bundle checks passed");
