@@ -2375,7 +2375,7 @@ try {
     // ==== 경우의 수 ====
     // 경우의 수 도식: 도로망(마을을 한 줄로 놓고 A-B:3처럼 준 도로 수만큼 곡선, 건너뛰는 도로는 가운데 마을 위로)과
     // 색칠 지도(가로 4칸, 가운데 원 + 네 조각, 위 한 칸 + 아래 세 칸), 격자 최단 경로(A 왼쪽 아래 → B 오른쪽 위, 지나는 점 P,
-    // 막힌 길 ×, 교차점마다 A에서 오는 경로 수)를 그린다. 선 0.8pt. 선택은 필요 없다.
+    // 막힌 길 ×, 교차점마다 A에서 오는 경로 수), 원순열(원탁·정사각형·직사각형 탁자에 둘러앉기)을 그린다. 선 0.8pt. 선택은 필요 없다.
     function makeCountEngine() {
         var api = {label: "경우의 수", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
@@ -2392,7 +2392,8 @@ try {
             var MAIN_PT = 0.8;
             var DOT_RADIUS_MM = 0.8;
             var LABEL_GAP_MM = 1;
-            var MODES = ["도로망", "색칠 지도", "격자 최단 경로"];
+            var MODES = ["도로망", "색칠 지도", "격자 최단 경로", "원순열 (둘러앉기)"];
+            var TABLES = ["원탁", "정사각형 탁자", "직사각형 탁자"];
             var MAPS = ["가로 4칸 (A~D)", "가운데 원 + 네 조각 (A~E)", "위 한 칸 + 아래 세 칸 (A~D)"];
 
             var doc = app.activeDocument;
@@ -2412,6 +2413,9 @@ try {
             var passText = "";
             var blockedText = "";
             var gridNumbers = true;
+            var tableShape = 0, seatCount = 5, sideA = 2, sideB = 1, tableMm = 30;
+            var seatNames = "";
+            var rotationArrow = false;
             var fontPt = 8;
             var offsetXmm = 0;
             var offsetYmm = 0;
@@ -2464,6 +2468,26 @@ try {
             var gridMessage = gridPanel.add("statictext", undefined, " ");
             gridMessage.preferredSize.width = 360;
 
+            var seatPanel = addPanel(win, "원순열 (둘러앉기)");
+            var tableRow = seatPanel.add("group");
+            tableRow.add("statictext", undefined, "탁자:");
+            var tableList = tableRow.add("dropdownlist", undefined, TABLES);
+            tableList.selection = tableShape;
+            var arrowCheck = tableRow.add("checkbox", undefined, "회전 화살표");
+            arrowCheck.value = rotationArrow;
+            var seatControls = addValueRow(seatPanel, "원탁 인원", "명", seatCount, 3, 10, 1, 0);
+            var sideAControls = addValueRow(seatPanel, "긴 변 인원", "명", sideA, 1, 4, 1, 0);
+            sideAControls.input.helpTip = "정사각형 탁자는 모든 변이 이 인원";
+            var sideBControls = addValueRow(seatPanel, "짧은 변 인원", "명", sideB, 0, 4, 1, 0);
+            var tableControls = addValueRow(seatPanel, "탁자 크기", "mm", tableMm, 10, 80, 1, 0);
+            var namesRow = seatPanel.add("group");
+            namesRow.add("statictext", undefined, "이름:");
+            var namesInput = namesRow.add("edittext", undefined, seatNames);
+            namesInput.preferredSize.width = 280;
+            namesInput.helpTip = "위 가운데 자리부터 시계 방향으로 쉼표로 (A, B, 엄마, 아빠). 비우면 A, B, C …, 모자라면 빈 자리";
+            var seatMessage = seatPanel.add("statictext", undefined, " ");
+            seatMessage.preferredSize.width = 360;
+
             var sizePanel = addPanel(win, "글자 · 위치");
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var offsetXControls = addValueRow(sizePanel, "가로 이동", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -2486,6 +2510,13 @@ try {
             passInput.onChanging = function() { passText = passInput.text; updatePreview(); };
             blockedInput.onChanging = function() { blockedText = blockedInput.text; updatePreview(); };
             gridNumbersCheck.onClick = function() { gridNumbers = gridNumbersCheck.value; updatePreview(); };
+            tableList.onChange = function() { tableShape = tableList.selection ? tableList.selection.index : 0; refreshEnabled(); updatePreview(); };
+            arrowCheck.onClick = function() { rotationArrow = arrowCheck.value; updatePreview(); };
+            bindValueRow(seatControls, function(value) { seatCount = value; });
+            bindValueRow(sideAControls, function(value) { sideA = value; });
+            bindValueRow(sideBControls, function(value) { sideB = value; });
+            bindValueRow(tableControls, function(value) { tableMm = value; });
+            namesInput.onChanging = function() { seatNames = namesInput.text; updatePreview(); };
             bindValueRow(fontControls, function(value) { fontPt = value; });
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true);
@@ -2518,6 +2549,10 @@ try {
                 roadPanel.enabled = mode === 0;
                 mapPanel.enabled = mode === 1;
                 gridPanel.enabled = mode === 2;
+                seatPanel.enabled = mode === 3;
+                seatControls.input.parent.enabled = tableShape === 0;
+                sideAControls.input.parent.enabled = tableShape !== 0;
+                sideBControls.input.parent.enabled = tableShape === 2;
             }
 
             // -------------------------------------------------------
@@ -2548,7 +2583,7 @@ try {
                     drawing = buildRoads(roads, townGapMm * MM_TO_PT, roadGapMm * MM_TO_PT);
                 } else if (mode === 1) {
                     drawing = buildMap(mapIndex, mapMm * MM_TO_PT);
-                } else {
+                } else if (mode === 2) {
                     var pass = String(passText).replace(/\s/g, "") === "" ? null : parseLatticePoint(passText);
                     var blocked = parseBlocked(blockedText);
                     if ((pass === null && String(passText).replace(/\s/g, "") !== "") || blocked === null) {
@@ -2557,6 +2592,9 @@ try {
                     }
                     drawing = buildGrid(Math.round(gridCols), Math.round(gridRows), gridCellMm * MM_TO_PT, pass, blocked, gridNumbers);
                     gridMessage.text = drawing.note;
+                } else {
+                    drawing = buildSeats(tableShape, Math.round(seatCount), Math.round(sideA), Math.round(sideB), tableMm * MM_TO_PT, seatNames, rotationArrow, fontPt);
+                    seatMessage.text = drawing.note;
                 }
                 previewGroup = layer.groupItems.add();
                 previewGroup.name = MODES[mode];
@@ -2756,6 +2794,72 @@ try {
 
             function plain(p) { return { anchor: p, left: p, right: p }; }
 
+            // 둘러앉기: 탁자(원·정사각형·직사각형)와 자리(흰 원 + 이름). 자리는 위 가운데부터 시계 방향.
+            // 경우의 수 = n! / (같은 배치가 되는 회전 수): 원탁 n, 정사각형 4, 직사각형 2
+            function buildSeats(shape, count, sideA, sideB, size, namesText, arrow, fontSize) {
+                var out = { lines: [], circles: [], dots: [], texts: [], note: "" };
+                var seatR = Math.max(fontSize * 0.9, size * 0.07), gap = seatR * 1.5;
+                var seats = [], turns;
+                if (shape === 0) {
+                    var R = size / 2;
+                    out.circles.push({ center: [0, 0], radius: R });
+                    for (var i = 0; i < count; i++) {
+                        var angle = Math.PI / 2 - 2 * Math.PI * i / count;
+                        seats.push([(R + gap) * Math.cos(angle), (R + gap) * Math.sin(angle)]);
+                    }
+                    turns = count;
+                } else {
+                    var perLong = sideA, perShort = shape === 1 ? sideA : sideB;
+                    var w = size, h = shape === 1 ? size : size * 0.55;
+                    out.lines.push({ points: [plain([-w / 2, -h / 2]), plain([w / 2, -h / 2]), plain([w / 2, h / 2]), plain([-w / 2, h / 2])], closed: true });
+                    // 위 변(왼→오), 오른쪽 변(위→아래), 아래 변(오→왼), 왼쪽 변(아래→위)
+                    function side(k, from, to, normal) {
+                        for (var j = 0; j < k; j++) {
+                            var t = (j + 0.5) / k;
+                            seats.push([from[0] + (to[0] - from[0]) * t + normal[0] * gap, from[1] + (to[1] - from[1]) * t + normal[1] * gap]);
+                        }
+                    }
+                    side(perLong, [-w / 2, h / 2], [w / 2, h / 2], [0, 1]);
+                    side(perShort, [w / 2, h / 2], [w / 2, -h / 2], [1, 0]);
+                    side(perLong, [w / 2, -h / 2], [-w / 2, -h / 2], [0, -1]);
+                    side(perShort, [-w / 2, -h / 2], [-w / 2, h / 2], [-1, 0]);
+                    // 정사각형은 90°마다, 직사각형은 180°마다 같은 배치
+                    turns = shape === 1 ? 4 : 2;
+                }
+                var names = String(namesText).replace(/^\s+|\s+$/g, "") === "" ? [] : String(namesText).split(",");
+                for (var s = 0; s < seats.length; s++) {
+                    out.circles.push({ center: seats[s], radius: seatR });
+                    var name = names.length === 0 ? String.fromCharCode(65 + s) : (s < names.length ? names[s].replace(/^\s+|\s+$/g, "") : "");
+                    if (name !== "") out.texts.push({ text: name, at: seats[s], dir: [0, 0] });
+                }
+                // 회전 화살표: 탁자 오른쪽 위 바깥에서 시계 방향으로 도는 호와 V자 화살촉
+                if (arrow) {
+                    var r = (shape === 0 ? size / 2 : Math.sqrt(size * size / 4 + (shape === 1 ? size * size / 4 : size * size * 0.0756))) + gap + seatR * 2.2;
+                    var a0 = Math.PI * 0.42, a1 = Math.PI * 0.08, k = 4 / 3 * Math.tan((a0 - a1) / 4);
+                    var p0 = [r * Math.cos(a0), r * Math.sin(a0)], p1 = [r * Math.cos(a1), r * Math.sin(a1)];
+                    out.lines.push({ points: [
+                        { anchor: p0, left: p0, right: [p0[0] + r * k * Math.sin(a0), p0[1] - r * k * Math.cos(a0)] },
+                        { anchor: p1, left: [p1[0] - r * k * Math.sin(a1), p1[1] + r * k * Math.cos(a1)], right: p1 }
+                    ], closed: false });
+                    var tangent = [Math.sin(a1), -Math.cos(a1)], normal = [Math.cos(a1), Math.sin(a1)], head = seatR * 0.8;
+                    out.lines.push({ points: [
+                        plain([p1[0] - tangent[0] * head + normal[0] * head * 0.6, p1[1] - tangent[1] * head + normal[1] * head * 0.6]),
+                        plain(p1),
+                        plain([p1[0] - tangent[0] * head - normal[0] * head * 0.6, p1[1] - tangent[1] * head - normal[1] * head * 0.6])
+                    ], closed: false });
+                }
+                var n = seats.length, total = factorial(n) / turns;
+                var how = shape === 0 ? "(" + n + "-1)! = " : n + "!/" + turns + " = ";
+                out.note = TABLES[shape] + " " + n + "명: " + how + total + "가지";
+                return out;
+            }
+
+            function factorial(n) {
+                var value = 1;
+                for (var i = 2; i <= n; i++) value *= i;
+                return value;
+            }
+
             // 격자 교차점 "2,1" 또는 "(2,1)" → [2, 1]. 못 읽으면 null
             function parseLatticePoint(text) {
                 var s = String(text).replace(/[\s()]/g, ""), comma = s.indexOf(",");
@@ -2932,8 +3036,9 @@ try {
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
-                var parts = ["v2", mode, encodeURIComponent(roadsText), townGapMm, roadGapMm, mapIndex, mapMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
-                    gridCols, gridRows, gridCellMm, encodeURIComponent(passText), encodeURIComponent(blockedText), gridNumbers ? "1" : "0"];
+                var parts = ["v3", mode, encodeURIComponent(roadsText), townGapMm, roadGapMm, mapIndex, mapMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
+                    gridCols, gridRows, gridCellMm, encodeURIComponent(passText), encodeURIComponent(blockedText), gridNumbers ? "1" : "0",
+                    tableShape, seatCount, sideA, sideB, tableMm, encodeURIComponent(seatNames), rotationArrow ? "1" : "0"];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -2942,7 +3047,7 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v2" || p.length !== 17) return;
+                if (p[0] !== "v3" || p.length !== 24) return;
                 try {
                     mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
                     roadsText = decodeURIComponent(p[2]);
@@ -2960,6 +3065,13 @@ try {
                     passText = decodeURIComponent(p[14]);
                     blockedText = decodeURIComponent(p[15]);
                     gridNumbers = p[16] === "1";
+                    tableShape = Math.round(restoreNumber(p[17], tableShape, 0, TABLES.length - 1));
+                    seatCount = Math.round(restoreNumber(p[18], seatCount, 3, 10));
+                    sideA = Math.round(restoreNumber(p[19], sideA, 1, 4));
+                    sideB = Math.round(restoreNumber(p[20], sideB, 0, 4));
+                    tableMm = restoreNumber(p[21], tableMm, 10, 80);
+                    seatNames = decodeURIComponent(p[22]);
+                    rotationArrow = p[23] === "1";
                 } catch (restoreError) {}
             }
 

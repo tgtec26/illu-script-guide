@@ -30,8 +30,8 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["parseRoads", "indexOf", "buildRoads", "bentRoad", "buildMap", "plain", "parseLatticePoint", "wholeNumber", "parseBlocked", "edgeKey", "countPaths", "buildGrid"];
-const g = new Function(`var DOT_RADIUS_MM = 0.8;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+const names = ["parseRoads", "indexOf", "buildRoads", "bentRoad", "buildMap", "plain", "parseLatticePoint", "wholeNumber", "parseBlocked", "edgeKey", "countPaths", "buildGrid", "buildSeats", "factorial"];
+const g = new Function(`var TABLES = ["원탁", "정사각형 탁자", "직사각형 탁자"];\nvar DOT_RADIUS_MM = 0.8;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
 // 도로 입력
@@ -76,7 +76,22 @@ assert.strictEqual(g.buildMap(1, 100).circles.length, 1);
   assert.strictEqual(g.parseLatticePoint("2"), null);
 }
 assert.ok(g.buildGrid(2, 2, 10, [3, 1], [], false).note.includes("격자 밖"));
-assert.ok(source.includes('p[0] !== "v2" || p.length !== 17'), "settings layout bumped to v2");
+// 원순열: 원탁 5명 (5-1)! = 24, 정사각형 탁자 변마다 2명 8!/4 = 10080, 직사각형 2·1명 6!/2 = 360
+{
+  const round = g.buildSeats(0, 5, 2, 1, 100, "", false, 8);
+  assert.strictEqual(round.note, "원탁 5명: (5-1)! = 24가지");
+  assert.strictEqual(round.circles.length, 1 + 5);
+  assert.deepStrictEqual(round.texts.map((t) => t.text), ["A", "B", "C", "D", "E"]);
+  assert.ok(Math.abs(round.circles[1].center[0]) < 1e-9 && round.circles[1].center[1] > 50, "first seat at the top");
+  assert.ok(round.circles[2].center[0] > 0, "clockwise: second seat to the right");
+  assert.strictEqual(g.buildSeats(1, 0, 2, 0, 100, "", false, 8).note, "정사각형 탁자 8명: 8!/4 = 10080가지");
+  const rect = g.buildSeats(2, 0, 2, 1, 100, "엄마, 아빠, A", true, 8);
+  assert.strictEqual(rect.note, "직사각형 탁자 6명: 6!/2 = 360가지");
+  assert.deepStrictEqual(rect.texts.map((t) => t.text), ["엄마", "아빠", "A"], "missing names leave seats empty");
+  assert.strictEqual(rect.lines.length, 1 + 2, "table outline + arrow arc + head");
+  assert.strictEqual(g.buildSeats(2, 0, 3, 3, 100, "", false, 8).note, "직사각형 탁자 12명: 12!/2 = 239500800가지");
+}
+assert.ok(source.includes('p[0] !== "v3" || p.length !== 24'), "settings layout bumped to v3");
 
 assert.ok(source.includes('var PREF_KEY = "HighMathCount/settings";'));
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
