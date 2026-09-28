@@ -3,8 +3,8 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-// 고등학교 수학 묶음(Object_HighMath.jsx)의 "UnitCircle" 탭 엔진만 잘라 읽는다
-const bundle = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_HighMath.jsx"), "utf8");
+// 수학Ⅰ 묶음(Object_HighMath1.jsx)의 "UnitCircle" 탭 엔진만 잘라 읽는다
+const bundle = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_HighMath1.jsx"), "utf8");
 const source = (() => {
   const start = bundle.indexOf("function makeUnitCircleEngine(");
   assert.ok(start >= 0, "missing engine: makeUnitCircleEngine");
@@ -94,5 +94,5 @@ for (const theta of [120, -45, 300]) {
 
 assert.ok(source.includes('var PREF_KEY = "HighMathUnitCircle/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
-assert.ok(bundle.includes('var TAB_PREF_KEY = "HighMath/tab";'));
+assert.ok(bundle.includes('var TAB_PREF_KEY = "HighMath1/tab";'));
 console.log("unit circle checks passed");

@@ -3,8 +3,8 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-// 고등학교 수학 묶음(Object_HighMath.jsx)의 "Venn" 탭 엔진만 잘라 읽는다
-const bundle = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_HighMath.jsx"), "utf8");
+// 공통수학 묶음(Object_HighCommon.jsx)의 "Venn" 탭 엔진만 잘라 읽는다
+const bundle = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_HighCommon.jsx"), "utf8");
 const source = (() => {
   const start = bundle.indexOf("function makeVennEngine(");
   assert.ok(start >= 0, "missing engine: makeVennEngine");
