@@ -557,6 +557,15 @@ try {
                     var glyphCenterX = (gb[0] + gb[2]) / 2;
                     var glyphCenterY = (gb[1] + gb[3]) / 2;
 
+                    // 음수(-2)는 빼기 기호를 빼고 숫자 가운데를 눈금에 맞춘다(평가원 그림). 숫자는 오른쪽 끝이 같으므로 빼기를 지운 사본의 너비만 잰다
+                    if (alignMode === "bottom" && /^[\-\u2212][0-9.]/.test(text)) {
+                        var digits = tf.duplicate();
+                        digits.textRange.characters[0].remove();
+                        var db = glyphBounds(digits);
+                        digits.remove();
+                        glyphCenterX = glyphRight - (db[2] - db[0]) / 2;
+                    }
+
                     if (alignMode === "bottom") {
                         tf.top = tf.top + (anchorY - xLabelOffset - glyphTop);
                         tf.left = tf.left + (anchorX - glyphCenterX);
