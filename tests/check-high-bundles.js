@@ -5,7 +5,7 @@ const assert = require("assert");
 // 고등학교 수학은 과목별 다섯 스크립트로 나뉜다. 탭(엔진)은 정확히 한 곳에 있고, 창마다 마지막 탭 저장 키가 다르다
 const dir = path.resolve(__dirname, "..", "스크립트", "07_수학");
 const bundles = {
-  "Object_HighCommon.jsx": ["공통수학", ["Quadratic", "Move", "CircleLine", "Inequality", "Venn"]],
+  "Object_HighCommon.jsx": ["공통수학", ["Quadratic", "Move", "CircleLine", "Inequality", "Venn", "Rational"]],
   "Object_HighMath1.jsx": ["수학Ⅰ", ["ExpLog", "Trig", "UnitCircle", "Triangle", "Sequence"]],
   "Object_HighMath2.jsx": ["수학Ⅱ", ["Piecewise", "Extrema", "Calculus", "Motion"]],
   "Object_HighStatistics.jsx": ["확률과 통계", ["Count", "ProbTree", "Distribution"]],
@@ -34,5 +34,5 @@ for (const [file, [title, engines]] of Object.entries(bundles)) {
     assert.ok(engine.includes("            return null;") && !late, file + ": constant declared after return null: " + late);
   }
 }
-assert.strictEqual(seen.size, 20);
+assert.strictEqual(seen.size, 21);
 console.log("high-school bundle checks passed");
