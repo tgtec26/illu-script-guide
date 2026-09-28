@@ -9,7 +9,7 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 고등학교 확률과 통계: 경우의 수(도로망·색칠·최단 경로·원순열), 확률분포(정규·이항) 그림을 한 창의 탭으로 묶는다 (중학교 수학 묶음과 같은 구조).
+// 고등학교 확률과 통계: 경우의 수(도로망·색칠·최단 경로·원순열), 확률 수형도(곱셈정리·베이즈), 확률분포(정규·이항) 그림을 한 창의 탭으로 묶는다 (중학교 수학 묶음과 같은 구조).
 // 고등학교 수학은 과목별 스크립트 다섯 개(공통수학·수학Ⅰ·수학Ⅱ·확률과 통계·기하)로 나뉘어 있고, 탭마다 저장 키는 예전 그대로다.
 // 탭마다 필요한 선택이 다르고, 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적는다.
 // 선 두께는 평가원 수능 그림 측정값에 맞춘 과학 기준(축 0.4pt, 메인 0.8pt, 보조 0.3pt)이다.
@@ -21,7 +21,7 @@ try {
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
-    var engines = [makeCountEngine(), makeDistributionEngine()];
+    var engines = [makeCountEngine(), makeProbTreeEngine(), makeDistributionEngine()];
 
     var win = new Window("dialog", "확률과 통계");
     win.orientation = "column";
@@ -1511,6 +1511,505 @@ try {
                     offsetXmm = restoreNumber(p[18], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[19], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[20] === "1";
+                } catch (restoreError) {}
+            }
+
+            function restoreNumber(text, fallback, minimum, maximum) {
+                var value = parseNumber(text);
+                return value === null ? fallback : clamp(value, minimum, maximum);
+            }
+        }
+        return api;
+    }
+
+    // ==== 확률 수형도 ====
+    // 확률 수형도: 두 단계 수형도의 가지마다 확률을 적고 끝에 곱(곱셈정리)을 붙인다.
+    // 1단계 "A 0.3, B 0.7", 2단계 "E 0.8, Eᶜ 0.2 | E 0.4, Eᶜ 0.6" (1단계 가지마다 |로 나눔, 하나면 모든 가지에 같게).
+    // 확률은 소수·분수(1/3) 모두 되고, 분수를 쓰면 곱도 기약분수로 적는다. 관심 사건(E)을 주면
+    // P(E) = 끝 확률의 합, P(A|E) = P(A∩E)/P(E) (베이즈)를 창에 보여 준다. 합이 1이 아닌 묶음은 알려 준다.
+    // 선 0.4pt. 선택은 필요 없다.
+    function makeProbTreeEngine() {
+        var api = {label: "확률 수형도", error: null, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        function addRows(page) {
+            var PREF_KEY = "HighStatisticsProbTree/settings";
+            var MM_TO_PT = 2.834645669;
+            var POSITION_LIMIT_MM = 100;
+            var LABEL_WIDTH = 100;
+            var INPUT_WIDTH = 50;
+            var SLIDER_WIDTH = 196;
+            var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
+            var ENG_FONT_NAME = "GSMediumB1";
+            var EQN_FONT_NAME = "HancomEQN";   // GSMediumB1에 없는 기호(ᶜ, × …)
+            var ENG_BASELINE_PT = 0.5;
+            var LINE_PT = 0.4;
+            var LABEL_GAP_MM = 0.8;
+
+            var doc = app.activeDocument;
+            var viewCenter = doc.activeView.centerPoint;
+            var layer = findEditableLayer();
+            var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
+            var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+            var eqnFont = findTextFont([EQN_FONT_NAME, ENG_FONT_NAME]);
+
+            // 옵션
+            var firstText = "A 0.3, B 0.7";
+            var secondText = "E 0.8, Eᶜ 0.2 | E 0.4, Eᶜ 0.6";
+            var eventText = "E";
+            var showProducts = true;
+            var stageMm = 22;
+            var rowMm = 8;
+            var fontPt = 8;
+            var offsetXmm = 0;
+            var offsetYmm = 0;
+            var previewEnabled = true;
+            applySettings();
+
+            var previewGroup = null;
+
+            var win = page;   // 탭 페이지에 그대로 쌓는다
+
+            var treePanel = addPanel(win, "가지와 확률");
+            var firstRow = treePanel.add("group");
+            firstRow.add("statictext", undefined, "1단계:").preferredSize.width = 44;
+            var firstInput = firstRow.add("edittext", undefined, firstText);
+            firstInput.preferredSize.width = 290;
+            firstInput.helpTip = "이름 확률을 쉼표로: A 0.3, B 0.7 또는 주머니1 1/2, 주머니2 1/2";
+            var secondRow = treePanel.add("group");
+            secondRow.add("statictext", undefined, "2단계:").preferredSize.width = 44;
+            var secondInput = secondRow.add("edittext", undefined, secondText);
+            secondInput.preferredSize.width = 290;
+            secondInput.helpTip = "1단계 가지마다 |로 나눈다 (E 0.8, Eᶜ 0.2 | E 0.4, Eᶜ 0.6). 묶음이 하나면 모든 가지에 같게. 비우면 1단계만";
+            var eventRow = treePanel.add("group");
+            eventRow.add("statictext", undefined, "관심 사건:").preferredSize.width = 60;
+            var eventInput = eventRow.add("edittext", undefined, eventText);
+            eventInput.preferredSize.width = 60;
+            eventInput.helpTip = "2단계 가지 이름. P(E)와 P(1단계|E)를 계산한다. 비우면 계산하지 않는다";
+            var productsCheck = eventRow.add("checkbox", undefined, "끝에 곱 적기");
+            productsCheck.value = showProducts;
+            var stageControls = addValueRow(treePanel, "단계 간격", "mm", stageMm, 10, 60, 0.5, 1);
+            var rowControls = addValueRow(treePanel, "줄 간격", "mm", rowMm, 4, 20, 0.5, 1);
+            var fontControls = addValueRow(treePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+
+            var messageText = win.add("statictext", undefined, " ", {multiline: true});
+            messageText.preferredSize = [380, 46];
+
+            var positionPanel = addPanel(win, "위치");
+            var offsetXControls = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+            var offsetYControls = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+
+            firstInput.onChanging = function() { firstText = firstInput.text; updatePreview(); };
+            secondInput.onChanging = function() { secondText = secondInput.text; updatePreview(); };
+            eventInput.onChanging = function() { eventText = eventInput.text; updatePreview(); };
+            productsCheck.onClick = function() { showProducts = productsCheck.value; updatePreview(); };
+            bindValueRow(stageControls, function(value) { stageMm = value; });
+            bindValueRow(rowControls, function(value) { rowMm = value; });
+            bindValueRow(fontControls, function(value) { fontPt = value; });
+            // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false);
+
+            // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다. 가지를 못 읽으면 확정하지 않는다
+            api.commit = function() {
+                if (previewGroup === null) buildPreview();
+                if (previewGroup === null) {
+                    alert(messageText.text);
+                    return false;
+                }
+                saveSettings();
+                doc.selection = null;
+                previewGroup.selected = true;
+                return true;
+            };
+            api.setPreview = function(on) {
+                previewEnabled = on;
+                updatePreview();
+            };
+            api.updatePreview = updatePreview;
+            api.clearPreview = function() {
+                clearPreview();
+                app.redraw();
+            };
+            return null;
+
+            // -------------------------------------------------------
+            // 미리보기
+            // -------------------------------------------------------
+            function updatePreview() {
+                clearPreview();
+                if (previewEnabled) buildPreview();
+                app.redraw();
+            }
+
+            function clearPreview() {
+                if (previewGroup !== null) {
+                    try { previewGroup.remove(); } catch (e) {}
+                }
+                previewGroup = null;
+            }
+
+            function buildPreview() {
+                var tree = parseTree(firstText, secondText);
+                if (tree.error) {
+                    messageText.text = tree.error;
+                    return;
+                }
+                var drawing = buildProbTree(tree, stageMm * MM_TO_PT, rowMm * MM_TO_PT, showProducts, eventText);
+                messageText.text = drawing.notes.length > 0 ? drawing.notes.join("\n") : " ";
+
+                previewGroup = layer.groupItems.add();
+                previewGroup.name = "확률 수형도";
+                for (var i = 0; i < drawing.lines.length; i++) addLine(drawing.lines[i]);
+                for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                var b = previewGroup.geometricBounds;
+                previewGroup.translate(viewCenter[0] - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT, viewCenter[1] - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
+            }
+
+            function addLine(points) {
+                var path = previewGroup.pathItems.add();
+                path.setEntirePath(points);
+                path.closed = false;
+                path.filled = false;
+                path.stroked = true;
+                path.strokeColor = makeGray(100);
+                path.strokeWidth = LINE_PT;
+                path.strokeCap = StrokeCap.BUTTENDCAP;
+            }
+
+            // at에서 dir 쪽으로 간격을 두고 글자의 가까운 가장자리가 오게 둔다. small: 80% 크기 (가지 위 확률)
+            function addLabel(label) {
+                var frame = previewGroup.textFrames.add();
+                frame.contents = label.text;
+                var range = frame.textRange;
+                var attributes = range.characterAttributes;
+                attributes.size = label.small ? fontPt * 0.85 : fontPt;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame);
+                var b = frame.geometricBounds;
+                var halfW = (b[2] - b[0]) / 2, halfH = (b[1] - b[3]) / 2;
+                var dir = label.dir;
+                var reach = LABEL_GAP_MM * MM_TO_PT * (label.small ? 0.5 : 1) + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
+                var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
+                frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+            }
+
+            // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 그 밖의 기호(ᶜ, ×)는 HancomEQN.
+            // 사건 이름·확률은 똑바로 쓴다 (교과서 수형도)
+            function applyTextFonts(frame) {
+                var text = frame.contents;
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    var character = frame.textRange.characters[i];
+                    var attributes = character.characterAttributes;
+                    if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
+                        attributes.textFont = korFont;
+                        attributes.baselineShift = 0;
+                    } else if (code > 126) {
+                        attributes.textFont = eqnFont;
+                        attributes.baselineShift = 0;
+                    } else {
+                        attributes.textFont = engFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    }
+                }
+            }
+
+            function findTextFont(names) {
+                for (var i = 0; i < names.length; i++) {
+                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
+                }
+                return app.textFonts[0];
+            }
+
+            // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
+            function findEditableLayer() {
+                var active = doc.activeLayer;
+                if (!active.locked && active.visible) return active;
+                for (var i = 0; i < doc.layers.length; i++) {
+                    if (!doc.layers[i].locked && doc.layers[i].visible) return doc.layers[i];
+                }
+                return doc.layers.add();
+            }
+
+            // K값(0~100)만 있는 회색. RGB 문서면 같은 밝기의 회색으로
+            function makeGray(k) {
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    cmyk.cyan = 0;
+                    cmyk.magenta = 0;
+                    cmyk.yellow = 0;
+                    cmyk.black = k;
+                    return cmyk;
+                }
+                var value = Math.round(255 * (1 - k / 100));
+                var rgb = new RGBColor();
+                rgb.red = value;
+                rgb.green = value;
+                rgb.blue = value;
+                return rgb;
+            }
+
+            // -------------------------------------------------------
+            // 계산 (일러 DOM을 쓰지 않는다 → tests/check-prob-tree.js). 확률은 분수 {n, d}로 계산한다
+            // -------------------------------------------------------
+            // "0.3" → {n:3, d:10}, "1/3" → {n:1, d:3}, "2" → {n:2, d:1}. 못 읽으면 null
+            function parseProbability(text) {
+                var s = String(text).replace(/\s/g, "");
+                var slash = s.indexOf("/");
+                if (slash >= 0) {
+                    var top = parseProbability(s.substring(0, slash)), bottom = parseProbability(s.substring(slash + 1));
+                    if (top === null || bottom === null || bottom.n === 0) return null;
+                    return reduce({ n: top.n * bottom.d, d: top.d * bottom.n });
+                }
+                if (s === "") return null;
+                var dot = s.indexOf("."), digits = s.replace(".", "");
+                if (digits === "" || s.indexOf(".", dot + 1) >= 0 && dot >= 0) return null;
+                for (var i = 0; i < digits.length; i++) if (digits.charAt(i) < "0" || digits.charAt(i) > "9") return null;
+                var d = dot < 0 ? 1 : Math.pow(10, s.length - dot - 1);
+                return reduce({ n: parseInt(digits, 10), d: d });
+            }
+
+            function gcd(a, b) {
+                a = Math.abs(a); b = Math.abs(b);
+                while (b) { var t = a % b; a = b; b = t; }
+                return a || 1;
+            }
+            function reduce(f) { var g = gcd(f.n, f.d); return { n: f.n / g, d: f.d / g }; }
+            function times(a, b) { return reduce({ n: a.n * b.n, d: a.d * b.d }); }
+            function plus(a, b) { return reduce({ n: a.n * b.d + b.n * a.d, d: a.d * b.d }); }
+            function divide(a, b) { return reduce({ n: a.n * b.d, d: a.d * b.n }); }
+            function isOne(f) { return f.n === f.d; }
+
+            // 분수로 적을지(입력에 /가 있으면) 소수로 적을지
+            function probText(f, asFraction) {
+                if (asFraction) return f.d === 1 ? String(f.n) : f.n + "/" + f.d;
+                var r = Math.round(f.n / f.d * 10000) / 10000;
+                return String(r);
+            }
+
+            // "A 0.3, B 0.7" → [{name, p, text}]. 이름과 확률 사이는 빈칸 또는 콜론. 못 읽으면 null
+            function parseGroup(text) {
+                var parts = String(text).split(","), list = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var part = parts[i].replace(/^\s+|\s+$/g, "");
+                    if (part === "") continue;
+                    var cut = Math.max(part.lastIndexOf(" "), part.lastIndexOf(":"));
+                    if (cut <= 0) return null;
+                    var name = part.substring(0, cut).replace(/[\s:]+$/, ""), valueText = part.substring(cut + 1);
+                    var p = parseProbability(valueText);
+                    if (name === "" || p === null) return null;
+                    list.push({ name: name, p: p, text: valueText.replace(/\s/g, "") });
+                }
+                return list.length > 0 ? list : null;
+            }
+
+            // 두 단계를 읽어 {first:[…], second:[[…] (1단계 가지마다)], fraction, error}
+            function parseTree(firstInput, secondInput) {
+                var first = parseGroup(firstInput);
+                if (first === null) return { error: "1단계를 읽지 못함 (예: A 0.3, B 0.7)" };
+                var second = [];
+                if (String(secondInput).replace(/\s/g, "") !== "") {
+                    var groups = String(secondInput).split("|");
+                    if (groups.length !== 1 && groups.length !== first.length) return { error: "2단계 묶음 수(|로 나눔)가 1단계 가지 수와 다름" };
+                    for (var g = 0; g < first.length; g++) {
+                        var group = parseGroup(groups[groups.length === 1 ? 0 : g]);
+                        if (group === null) return { error: "2단계 " + (g + 1) + "번 묶음을 읽지 못함 (예: E 0.8, Eᶜ 0.2)" };
+                        second.push(group);
+                    }
+                }
+                var fraction = String(firstInput + secondInput).indexOf("/") >= 0;
+                return { first: first, second: second, fraction: fraction };
+            }
+
+            // 뿌리는 왼쪽 가운데, 끝 가지를 한 줄씩 위에서 아래로. 가지 확률은 선 가운데 위, 곱은 끝 이름 오른쪽
+            function buildProbTree(tree, stageGap, rowGap, products, eventName) {
+                var out = { lines: [], texts: [], notes: [] };
+                var leaves = [], rows = 0;
+                var nameGap = rowGap * 0.9;   // 이름 글자와 선 사이
+                for (var i = 0; i < tree.first.length; i++) rows += tree.second.length > 0 ? tree.second[i].length : 1;
+                var y = (rows - 1) * rowGap / 2, root = [0, 0];
+                var sumChecks = [];
+                if (!isOne(sumOf(tree.first))) sumChecks.push("1단계 합이 1이 아님");
+                for (var a = 0; a < tree.first.length; a++) {
+                    var branch = tree.first[a], children = tree.second.length > 0 ? tree.second[a] : [];
+                    var count = Math.max(children.length, 1);
+                    var top = y, midY = y - (count - 1) * rowGap / 2;
+                    var node = [stageGap, midY];
+                    edge(out, root, node, branch.text);
+                    out.texts.push({ text: branch.name, at: node, dir: [1, 0] });
+                    if (children.length === 0) {
+                        leaves.push({ path: [branch], p: branch.p, at: node });
+                        y -= rowGap;
+                        continue;
+                    }
+                    if (!isOne(sumOf(children))) sumChecks.push("2단계 " + (a + 1) + "번 묶음 합이 1이 아님");
+                    var start = [node[0] + nameGap * 1.6, node[1]];
+                    for (var b = 0; b < children.length; b++) {
+                        var leaf = [stageGap * 2 + nameGap * 1.6, top - b * rowGap];
+                        edge(out, start, leaf, children[b].text);
+                        out.texts.push({ text: children[b].name, at: leaf, dir: [1, 0] });
+                        leaves.push({ path: [branch, children[b]], p: times(branch.p, children[b].p), at: leaf });
+                    }
+                    y -= count * rowGap;
+                }
+                if (products) {
+                    var column = 0;
+                    for (var c = 0; c < leaves.length; c++) column = Math.max(column, leaves[c].at[0]);
+                    for (var l = 0; l < leaves.length; l++) {
+                        var parts = [];
+                        for (var k = 0; k < leaves[l].path.length; k++) parts.push(leaves[l].path[k].text);
+                        var text = parts.join("×") + (parts.length > 1 ? " = " + probText(leaves[l].p, tree.fraction) : "");
+                        out.texts.push({ text: text, at: [column + nameGap * 2.4, leaves[l].at[1]], dir: [1, 0] });
+                    }
+                }
+                out.notes = sumChecks;
+                // 관심 사건: P(E) = 끝 확률의 합, P(첫 가지|E)
+                var target = String(eventName || "").replace(/^\s+|\s+$/g, "");
+                if (target !== "" && tree.second.length > 0) {
+                    var total = { n: 0, d: 1 }, terms = [], found = [];
+                    for (var m = 0; m < leaves.length; m++) {
+                        if (leaves[m].path[1].name !== target) continue;
+                        total = plus(total, leaves[m].p);
+                        terms.push(probText(leaves[m].p, tree.fraction));
+                        found.push(leaves[m]);
+                    }
+                    if (found.length === 0) out.notes.push("2단계에 '" + target + "' 가지가 없음");
+                    else {
+                        out.notes.push("P(" + target + ") = " + terms.join(" + ") + " = " + probText(total, tree.fraction));
+                        if (total.n > 0) {
+                            var bayes = [];
+                            for (var q = 0; q < found.length; q++) bayes.push("P(" + found[q].path[0].name + "|" + target + ") = " + probText(divide(found[q].p, total), tree.fraction));
+                            out.notes.push(bayes.join(", "));
+                        }
+                    }
+                }
+                return out;
+            }
+
+            function sumOf(list) {
+                var total = { n: 0, d: 1 };
+                for (var i = 0; i < list.length; i++) total = plus(total, list[i].p);
+                return total;
+            }
+
+            // 가지 선 (이름 글자 앞에서 끝나게)과 선 가운데 위의 확률
+            function edge(out, from, to, text) {
+                out.lines.push([from, to]);
+                var mid = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
+                var dx = to[0] - from[0], dy = to[1] - from[1], length = Math.sqrt(dx * dx + dy * dy);
+                var normal = [-dy / length, dx / length];
+                if (normal[1] < 0) normal = [-normal[0], -normal[1]];
+                out.texts.push({ text: text, at: mid, dir: normal, small: true });
+            }
+
+            // -------------------------------------------------------
+            // 다이얼로그 부품
+            // -------------------------------------------------------
+            function addPanel(parent, title) {
+                var panel = parent.add("panel", undefined, title);
+                panel.alignChildren = ["left", "top"];
+                panel.margins = [12, 16, 12, 12];
+                panel.spacing = 6;
+                return panel;
+            }
+
+            function addValueRow(parent, label, unitText, value, minimum, maximum, step, decimals) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.add("statictext", undefined, label + (unitText ? " (" + unitText + "):" : ":")).preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, formatNumber(value, decimals));
+                input.preferredSize.width = INPUT_WIDTH;
+                var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+                slider.stepdelta = step;
+                slider.jumpdelta = step * 10;
+                slider.preferredSize.width = SLIDER_WIDTH;
+                return { input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals };
+            }
+
+            function setRowValue(controls, value) {
+                controls.input.text = formatNumber(value, controls.decimals);
+                try { controls.slider.value = value; } catch (e) {}
+            }
+
+            function bindValueRow(controls, setter) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    setRowValue(controls, value);
+                    setter(value);
+                    updatePreview();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? controls.slider.value : value);
+                };
+            }
+
+            function bindPositionRow(controls, getter, setter, isX) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    var delta = (value - getter()) * MM_TO_PT;
+                    setter(value);
+                    setRowValue(controls, value);
+                    if (delta === 0 || previewGroup === null) return;
+                    previewGroup.translate(isX ? delta : 0, isX ? 0 : delta);
+                    app.redraw();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? getter() : value);
+                };
+            }
+
+            function parseNumber(text) {
+                var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+                return isNaN(value) ? null : value;
+            }
+
+            function clamp(value, minimum, maximum) {
+                if (value < minimum) return minimum;
+                if (value > maximum) return maximum;
+                return value;
+            }
+
+            function roundTo(value, step) {
+                return Math.round(value / step) * step;
+            }
+
+            function formatNumber(value, decimals) {
+                return (Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
+            }
+
+
+            // -------------------------------------------------------
+            // 설정 저장 · 복원
+            // -------------------------------------------------------
+            function saveSettings() {
+                var parts = ["v1", encodeURIComponent(firstText), encodeURIComponent(secondText), encodeURIComponent(eventText), showProducts ? "1" : "0",
+                    stageMm, rowMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+            }
+
+            function applySettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+                if (!raw) return;
+                var p = raw.split("|");
+                if (p[0] !== "v1" || p.length !== 11) return;
+                try {
+                    firstText = decodeURIComponent(p[1]);
+                    secondText = decodeURIComponent(p[2]);
+                    eventText = decodeURIComponent(p[3]);
+                    showProducts = p[4] === "1";
+                    stageMm = restoreNumber(p[5], stageMm, 10, 60);
+                    rowMm = restoreNumber(p[6], rowMm, 4, 20);
+                    fontPt = restoreNumber(p[7], fontPt, 5, 14);
+                    offsetXmm = restoreNumber(p[8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[10] === "1";
                 } catch (restoreError) {}
             }
 
