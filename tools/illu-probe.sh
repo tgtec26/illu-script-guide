@@ -12,7 +12,7 @@
 # 사용: tools/illu-probe.sh /경로/probe.jsx   → probe.jsx의 마지막 식 값, 걸린 시간, 일러 상태를 출력
 probe="$1"; wrap="${probe%.jsx}.wrap.jsx"; docfile="$(dirname "$probe")/illu-probe.ai"
 [ -f "$probe" ] || { echo "프로브 파일이 없음: $probe"; exit 1; }
-pid=$(pgrep -f "MacOS/Adobe Illustrator$") || { echo "일러가 꺼져 있음"; exit 1; }
+pid=$(pgrep -x "Adobe Illustrator") || { echo "일러가 꺼져 있음"; exit 1; }
 idle() { local c; c=$(ps -o %cpu= -p "$pid" | tr -d ' '); awk "BEGIN{exit !($c<8)}"; }
 for i in $(seq 1 30); do idle && break; sleep 2; done
 # 1분 넘게 바쁘면 원인을 본다: AIHangMonitor가 헛돌면(시계만 읽는 샘플이 많으면) 보내지 않고,
