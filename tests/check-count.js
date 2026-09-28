@@ -30,7 +30,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["parseRoads", "indexOf", "buildRoads", "bentRoad", "buildMap", "plain"];
+const names = ["parseRoads", "indexOf", "buildRoads", "bentRoad", "buildMap", "plain", "parseLatticePoint", "wholeNumber", "parseBlocked", "edgeKey", "countPaths", "buildGrid"];
 const g = new Function(`var DOT_RADIUS_MM = 0.8;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
@@ -53,6 +53,30 @@ for (const bad of ["A-B", "A-B:", "A:3", "A-A:2", "A-B:x", "A-B:0", "-B:2"]) ass
 // 색칠 지도: 영역 이름 수
 assert.deepStrictEqual([0, 1, 2].map((i) => g.buildMap(i, 100).texts.map((t) => t.text).join("")), ["ABCD", "ABCDE", "ABCD"]);
 assert.strictEqual(g.buildMap(1, 100).circles.length, 1);
+
+// 격자 최단 경로: 5×3 → C(8,3) = 56, P(2,1)을 지나면 C(3,1)·C(5,2) = 3·10 = 30
+{
+  const d = g.buildGrid(5, 3, 10, [2, 1], [], true);
+  assert.strictEqual(d.note, "A → B 최단 경로 56가지, P를 지나는 경로 3 × 10 = 30가지");
+  assert.strictEqual(d.lines.length, 6 + 4, "6 vertical + 4 horizontal streets");
+  assert.ok(d.texts.some((t) => t.text === "56" && t.small), "count at B");
+  assert.strictEqual(d.texts.filter((t) => t.small).length, 6 * 4 - 1);
+  assert.deepStrictEqual(d.dots[2], [20, 10], "P dot");
+}
+// 막힌 길: (0,0)-(1,0)이 막히면 첫걸음은 위로만 → C(7,2)=21... 5×3에서 위로 먼저 가면 (0,1)부터 5×2 격자 C(7,2)=21
+{
+  const blocked = g.parseBlocked("0,0-1,0");
+  assert.deepStrictEqual(blocked, ["0,0-1,0"]);
+  const d = g.buildGrid(5, 3, 10, null, blocked, false);
+  assert.strictEqual(d.note, "A → B 최단 경로 21가지");
+  assert.strictEqual(d.lines.length, 10 + 2, "× is two strokes");
+  assert.deepStrictEqual(g.parseBlocked("1,0 - 2,0; 3,3-3,2"), ["1,0-2,0", "3,2-3,3"]);
+  for (const bad of ["1,0-3,0", "1,0", "a,0-1,0", "1,0-2,1"]) assert.strictEqual(g.parseBlocked(bad), null, bad);
+  assert.deepStrictEqual(g.parseLatticePoint("(2, 1)"), [2, 1]);
+  assert.strictEqual(g.parseLatticePoint("2"), null);
+}
+assert.ok(g.buildGrid(2, 2, 10, [3, 1], [], false).note.includes("격자 밖"));
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 17'), "settings layout bumped to v2");
 
 assert.ok(source.includes('var PREF_KEY = "HighMathCount/settings";'));
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");

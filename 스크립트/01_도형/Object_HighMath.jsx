@@ -2374,7 +2374,8 @@ try {
 
     // ==== 경우의 수 ====
     // 경우의 수 도식: 도로망(마을을 한 줄로 놓고 A-B:3처럼 준 도로 수만큼 곡선, 건너뛰는 도로는 가운데 마을 위로)과
-    // 색칠 지도(가로 4칸, 가운데 원 + 네 조각, 위 한 칸 + 아래 세 칸)를 그린다. 선 0.8pt. 선택은 필요 없다.
+    // 색칠 지도(가로 4칸, 가운데 원 + 네 조각, 위 한 칸 + 아래 세 칸), 격자 최단 경로(A 왼쪽 아래 → B 오른쪽 위, 지나는 점 P,
+    // 막힌 길 ×, 교차점마다 A에서 오는 경로 수)를 그린다. 선 0.8pt. 선택은 필요 없다.
     function makeCountEngine() {
         var api = {label: "경우의 수", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
@@ -2391,7 +2392,7 @@ try {
             var MAIN_PT = 0.8;
             var DOT_RADIUS_MM = 0.8;
             var LABEL_GAP_MM = 1;
-            var MODES = ["도로망", "색칠 지도"];
+            var MODES = ["도로망", "색칠 지도", "격자 최단 경로"];
             var MAPS = ["가로 4칸 (A~D)", "가운데 원 + 네 조각 (A~E)", "위 한 칸 + 아래 세 칸 (A~D)"];
 
             var doc = app.activeDocument;
@@ -2407,6 +2408,10 @@ try {
             var roadGapMm = 4;
             var mapIndex = 1;
             var mapMm = 40;
+            var gridCols = 5, gridRows = 3, gridCellMm = 8;
+            var passText = "";
+            var blockedText = "";
+            var gridNumbers = true;
             var fontPt = 8;
             var offsetXmm = 0;
             var offsetYmm = 0;
@@ -2440,6 +2445,25 @@ try {
             mapList.selection = mapIndex;
             var mapControls = addValueRow(mapPanel, "크기", "mm", mapMm, 20, 100, 1, 0);
 
+            var gridPanel = addPanel(win, "격자 최단 경로 (A 왼쪽 아래 → B 오른쪽 위)");
+            var colsControls = addValueRow(gridPanel, "가로", "칸", gridCols, 1, 10, 1, 0);
+            var rowsControls = addValueRow(gridPanel, "세로", "칸", gridRows, 1, 10, 1, 0);
+            var cellControls = addValueRow(gridPanel, "칸 크기", "mm", gridCellMm, 4, 20, 0.5, 1);
+            var passRow = gridPanel.add("group");
+            passRow.add("statictext", undefined, "지나는 점 P:");
+            var passInput = passRow.add("edittext", undefined, passText);
+            passInput.preferredSize.width = 60;
+            passInput.helpTip = "A에서 가로로 2칸, 세로로 1칸이면 2,1. 비우면 없음";
+            var gridNumbersCheck = passRow.add("checkbox", undefined, "교차점에 경로 수");
+            gridNumbersCheck.value = gridNumbers;
+            var blockedRow = gridPanel.add("group");
+            blockedRow.add("statictext", undefined, "막힌 길:");
+            var blockedInput = blockedRow.add("edittext", undefined, blockedText);
+            blockedInput.preferredSize.width = 280;
+            blockedInput.helpTip = "이웃한 두 교차점을 잇는 길. 1,0-2,0; 3,2-3,3처럼 세미콜론으로. 길 위에 ×를 그린다";
+            var gridMessage = gridPanel.add("statictext", undefined, " ");
+            gridMessage.preferredSize.width = 360;
+
             var sizePanel = addPanel(win, "글자 · 위치");
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var offsetXControls = addValueRow(sizePanel, "가로 이동", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -2456,6 +2480,12 @@ try {
             bindValueRow(townControls, function(value) { townGapMm = value; });
             bindValueRow(roadControls, function(value) { roadGapMm = value; });
             bindValueRow(mapControls, function(value) { mapMm = value; });
+            bindValueRow(colsControls, function(value) { gridCols = value; });
+            bindValueRow(rowsControls, function(value) { gridRows = value; });
+            bindValueRow(cellControls, function(value) { gridCellMm = value; });
+            passInput.onChanging = function() { passText = passInput.text; updatePreview(); };
+            blockedInput.onChanging = function() { blockedText = blockedInput.text; updatePreview(); };
+            gridNumbersCheck.onClick = function() { gridNumbers = gridNumbersCheck.value; updatePreview(); };
             bindValueRow(fontControls, function(value) { fontPt = value; });
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true);
@@ -2465,7 +2495,7 @@ try {
             api.commit = function() {
                 if (previewGroup === null) buildPreview();
                 if (previewGroup === null) {
-                    alert(messageText.text);
+                    alert(mode === 2 ? gridMessage.text : messageText.text);
                     return false;
                 }
                 saveSettings();
@@ -2487,6 +2517,7 @@ try {
             function refreshEnabled() {
                 roadPanel.enabled = mode === 0;
                 mapPanel.enabled = mode === 1;
+                gridPanel.enabled = mode === 2;
             }
 
             // -------------------------------------------------------
@@ -2515,8 +2546,17 @@ try {
                     }
                     messageText.text = " ";
                     drawing = buildRoads(roads, townGapMm * MM_TO_PT, roadGapMm * MM_TO_PT);
-                } else {
+                } else if (mode === 1) {
                     drawing = buildMap(mapIndex, mapMm * MM_TO_PT);
+                } else {
+                    var pass = String(passText).replace(/\s/g, "") === "" ? null : parseLatticePoint(passText);
+                    var blocked = parseBlocked(blockedText);
+                    if ((pass === null && String(passText).replace(/\s/g, "") !== "") || blocked === null) {
+                        gridMessage.text = pass === null && String(passText).replace(/\s/g, "") !== "" ? "P를 읽지 못함 (예: 2,1)" : "막힌 길을 읽지 못함 (예: 1,0-2,0; 3,2-3,3)";
+                        return;
+                    }
+                    drawing = buildGrid(Math.round(gridCols), Math.round(gridRows), gridCellMm * MM_TO_PT, pass, blocked, gridNumbers);
+                    gridMessage.text = drawing.note;
                 }
                 previewGroup = layer.groupItems.add();
                 previewGroup.name = MODES[mode];
@@ -2573,7 +2613,7 @@ try {
                 frame.contents = label.text;
                 var range = frame.textRange;
                 var attributes = range.characterAttributes;
-                attributes.size = fontPt;
+                attributes.size = label.small ? fontPt * 0.8 : fontPt;
                 attributes.fillColor = makeGray(100);
                 applyTextFonts(frame);
                 var b = frame.geometricBounds;
@@ -2716,6 +2756,97 @@ try {
 
             function plain(p) { return { anchor: p, left: p, right: p }; }
 
+            // 격자 교차점 "2,1" 또는 "(2,1)" → [2, 1]. 못 읽으면 null
+            function parseLatticePoint(text) {
+                var s = String(text).replace(/[\s()]/g, ""), comma = s.indexOf(",");
+                if (comma <= 0 || comma === s.length - 1) return null;
+                var x = wholeNumber(s.substring(0, comma)), y = wholeNumber(s.substring(comma + 1));
+                return x === null || y === null ? null : [x, y];
+            }
+
+            function wholeNumber(text) {
+                if (text === "") return null;
+                for (var i = 0; i < text.length; i++) if (text.charAt(i) < "0" || text.charAt(i) > "9") return null;
+                return parseInt(text, 10);
+            }
+
+            // "1,0-2,0; 3,2-3,3" → ["1,0-2,0", "3,2-3,3"] (작은 쪽이 앞). 이웃한 두 교차점이 아니면 null, 빈 칸은 []
+            function parseBlocked(text) {
+                var parts = String(text).split(";"), list = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var part = parts[i].replace(/\s/g, "");
+                    if (part === "") continue;
+                    var dash = part.indexOf("-");
+                    if (dash < 0) return null;
+                    var p = parseLatticePoint(part.substring(0, dash)), q = parseLatticePoint(part.substring(dash + 1));
+                    if (p === null || q === null || Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) !== 1) return null;
+                    list.push(edgeKey(p, q));
+                }
+                return list;
+            }
+
+            function edgeKey(p, q) {
+                var first = p[0] + p[1] < q[0] + q[1] ? p : q, second = first === p ? q : p;
+                return first[0] + "," + first[1] + "-" + second[0] + "," + second[1];
+            }
+
+            // (x0, y0)에서 (x1, y1)까지 오른쪽·위로만 가는 최단 경로 수 (막힌 길 제외). 각 교차점의 수를 담은 표도 돌려준다
+            function countPaths(x0, y0, x1, y1, blocked) {
+                var ways = {};
+                function key(x, y) { return x + "," + y; }
+                function isBlocked(a, b) { for (var i = 0; i < blocked.length; i++) if (blocked[i] === edgeKey(a, b)) return true; return false; }
+                for (var x = x0; x <= x1; x++) {
+                    for (var y = y0; y <= y1; y++) {
+                        if (x === x0 && y === y0) { ways[key(x, y)] = 1; continue; }
+                        var total = 0;
+                        if (x > x0 && !isBlocked([x - 1, y], [x, y])) total += ways[key(x - 1, y)];
+                        if (y > y0 && !isBlocked([x, y - 1], [x, y])) total += ways[key(x, y - 1)];
+                        ways[key(x, y)] = total;
+                    }
+                }
+                return { total: ways[key(x1, y1)], ways: ways };
+            }
+
+            // 격자: 가로 cols칸, 세로 rows칸 (칸 크기 cell). 막힌 길에 ×, A·B(·P) 점과 이름, 교차점마다 A에서 오는 경로 수
+            function buildGrid(cols, rows, cell, pass, blocked, numbers) {
+                var out = { lines: [], circles: [], dots: [], texts: [], note: "" };
+                for (var gx = 0; gx <= cols; gx++) out.lines.push({ points: [plain([gx * cell, 0]), plain([gx * cell, rows * cell])], closed: false });
+                for (var gy = 0; gy <= rows; gy++) out.lines.push({ points: [plain([0, gy * cell]), plain([cols * cell, gy * cell])], closed: false });
+                var inside = [];
+                for (var b = 0; b < blocked.length; b++) {
+                    var ends = blocked[b].split("-"), p = ends[0].split(","), q = ends[1].split(",");
+                    var px = parseInt(p[0], 10), py = parseInt(p[1], 10), qx = parseInt(q[0], 10), qy = parseInt(q[1], 10);
+                    if (Math.max(px, qx) > cols || Math.max(py, qy) > rows) continue;
+                    inside.push(blocked[b]);
+                    var mx = (px + qx) / 2 * cell, my = (py + qy) / 2 * cell, s = cell * 0.14;
+                    out.lines.push({ points: [plain([mx - s, my - s]), plain([mx + s, my + s])], closed: false });
+                    out.lines.push({ points: [plain([mx - s, my + s]), plain([mx + s, my - s])], closed: false });
+                }
+                var all = countPaths(0, 0, cols, rows, inside);
+                out.dots.push([0, 0], [cols * cell, rows * cell]);
+                out.texts.push({ text: "A", at: [0, 0], dir: [-0.7071, -0.7071] }, { text: "B", at: [cols * cell, rows * cell], dir: [0.7071, 0.7071] });
+                if (numbers) {
+                    for (var x = 0; x <= cols; x++) {
+                        for (var y = 0; y <= rows; y++) {
+                            if ((x === 0 && y === 0)) continue;
+                            out.texts.push({ text: String(all.ways[x + "," + y]), at: [x * cell, y * cell], dir: [-0.7071, 0.7071], small: true });
+                        }
+                    }
+                }
+                var note = "A → B 최단 경로 " + all.total + "가지";
+                if (pass !== null) {
+                    if (pass[0] > cols || pass[1] > rows) note += " (P가 격자 밖)";
+                    else {
+                        var first = countPaths(0, 0, pass[0], pass[1], inside), second = countPaths(pass[0], pass[1], cols, rows, inside);
+                        out.dots.push([pass[0] * cell, pass[1] * cell]);
+                        out.texts.push({ text: "P", at: [pass[0] * cell, pass[1] * cell], dir: [0.7071, -0.7071] });
+                        note += ", P를 지나는 경로 " + first.total + " × " + second.total + " = " + first.total * second.total + "가지";
+                    }
+                }
+                out.note = note;
+                return out;
+            }
+
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
@@ -2801,7 +2932,8 @@ try {
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
-                var parts = ["v1", mode, encodeURIComponent(roadsText), townGapMm, roadGapMm, mapIndex, mapMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v2", mode, encodeURIComponent(roadsText), townGapMm, roadGapMm, mapIndex, mapMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
+                    gridCols, gridRows, gridCellMm, encodeURIComponent(passText), encodeURIComponent(blockedText), gridNumbers ? "1" : "0"];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -2810,7 +2942,7 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 11) return;
+                if (p[0] !== "v2" || p.length !== 17) return;
                 try {
                     mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
                     roadsText = decodeURIComponent(p[2]);
@@ -2822,6 +2954,12 @@ try {
                     offsetXmm = restoreNumber(p[8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[10] === "1";
+                    gridCols = Math.round(restoreNumber(p[11], gridCols, 1, 10));
+                    gridRows = Math.round(restoreNumber(p[12], gridRows, 1, 10));
+                    gridCellMm = restoreNumber(p[13], gridCellMm, 4, 20);
+                    passText = decodeURIComponent(p[14]);
+                    blockedText = decodeURIComponent(p[15]);
+                    gridNumbers = p[16] === "1";
                 } catch (restoreError) {}
             }
 
