@@ -4,7 +4,7 @@ const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
 // 확률과 통계 묶음(Object_HighStatistics.jsx)의 "ProbTree" 탭 엔진만 잘라 읽는다
-const bundle = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_HighStatistics.jsx"), "utf8");
+const bundle = fs.readFileSync(path.join(root, "스크립트", "07_수학", "Object_HighStatistics.jsx"), "utf8");
 const source = (() => {
   const start = bundle.indexOf("function makeProbTreeEngine(");
   assert.ok(start >= 0, "missing engine: makeProbTreeEngine");

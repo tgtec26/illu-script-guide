@@ -4,7 +4,7 @@ const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
 // 공통수학 묶음(Object_HighCommon.jsx)의 "Quadratic" 탭 엔진만 잘라 읽는다
-const bundle = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_HighCommon.jsx"), "utf8");
+const bundle = fs.readFileSync(path.join(root, "스크립트", "07_수학", "Object_HighCommon.jsx"), "utf8");
 const source = (() => {
   const start = bundle.indexOf("function makeQuadraticEngine(");
   assert.ok(start >= 0, "missing engine: makeQuadraticEngine");

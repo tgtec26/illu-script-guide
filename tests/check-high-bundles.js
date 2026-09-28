@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 // 고등학교 수학은 과목별 다섯 스크립트로 나뉜다. 탭(엔진)은 정확히 한 곳에 있고, 창마다 마지막 탭 저장 키가 다르다
-const dir = path.resolve(__dirname, "..", "스크립트", "01_도형");
+const dir = path.resolve(__dirname, "..", "스크립트", "07_수학");
 const bundles = {
   "Object_HighCommon.jsx": ["공통수학", ["Quadratic", "Move", "CircleLine", "Inequality", "Venn"]],
   "Object_HighMath1.jsx": ["수학Ⅰ", ["ExpLog", "Trig", "UnitCircle", "Triangle", "Sequence"]],

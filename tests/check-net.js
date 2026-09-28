@@ -4,7 +4,7 @@ const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
 // 중학교 수학 묶음(Object_MiddleMath.jsx)의 "Net" 탭 엔진만 잘라 읽는다. 탭마다 같은 이름의 함수가 있다
-const bundle = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_MiddleMath.jsx"), "utf8");
+const bundle = fs.readFileSync(path.join(root, "스크립트", "07_수학", "Object_MiddleMath.jsx"), "utf8");
 const source = (() => {
   const start = bundle.indexOf("function makeNetEngine(");
   assert.ok(start >= 0, "missing engine: makeNetEngine");
