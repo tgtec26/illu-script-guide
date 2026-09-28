@@ -1,5 +1,7 @@
 // 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
 try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 미리보기 라벨 겹침 풀기 (07_수학/math_label_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.fsName + "/math_label_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -318,6 +320,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -1108,6 +1111,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -1948,6 +1952,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -2010,6 +2015,7 @@ try {
             // vector인 조각(a, b) 위에 작은 화살표를 그린다. at에서 dir 쪽으로 간격을 두고 전체의 가까운 가장자리가 오게 둔다
             function addLabel(label) {
                 var parts = label.parts || [{ text: label.text, vector: false }];
+                var itemsBefore = previewGroup.pageItems.length;
                 var frames = [], x = 0;
                 for (var i = 0; i < parts.length; i++) {
                     var frame = previewGroup.textFrames.add();
@@ -2045,6 +2051,13 @@ try {
                     var scale = fontPt / 9;
                     addPath({ points: [plain([x0, y]), plain([x1 - OVER_ARROW.length * scale + OVER_ARROW.notch * scale, y])], kind: "mark" });
                     addArrow({ tip: [x1, y], dir: [1, 0], shape: "over", scale: scale });
+                }
+                // 글자 여러 개·화살표로 된 라벨은 한 그룹으로 묶어 겹침 풀기(untangleLabels)가 한 덩어리로 옮기게 한다
+                var made = previewGroup.pageItems.length - itemsBefore;
+                if (made > 1) {
+                    var holder = previewGroup.groupItems.add();
+                    for (var k = made; k >= 1; k--) previewGroup.pageItems[k].move(holder, ElementPlacement.PLACEATEND);
+                    label.item = holder;
                 }
             }
 
@@ -2588,6 +2601,7 @@ try {
                 for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 var b = previewGroup.geometricBounds;
                 previewGroup.translate(viewCenter[0] - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT, viewCenter[1] - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
             }

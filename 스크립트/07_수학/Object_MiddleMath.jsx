@@ -1,5 +1,7 @@
 // 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
 try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 미리보기 라벨 겹침 풀기 (07_수학/math_label_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.fsName + "/math_label_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -1595,6 +1597,7 @@ try {
                 for (var k = 0; k < drawing.arrows.length; k++) addArrow(drawing.arrows[k]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 // 칠한 영역은 격자보다 뒤로
                 for (var r = 0; r < drawing.fills.length; r++) addFill(drawing.fills[r]);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
@@ -2758,6 +2761,7 @@ try {
                 for (var k = 0; k < drawing.arrows.length; k++) addArrow(drawing.arrows[k]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] - size.width / 2 + offsetXmm * MM_TO_PT,
                     viewCenter[1] - size.height / 2 + offsetYmm * MM_TO_PT);
             }
@@ -3428,6 +3432,7 @@ try {
                 for (var j = 0; j < drawing.circles.length; j++) addCircle(drawing.circles[j]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 if (offsetXmm !== 0 || offsetYmm !== 0) previewGroup.translate(offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
             }
 
@@ -4624,6 +4629,7 @@ try {
                 for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 if (offsetXmm !== 0 || offsetYmm !== 0) previewGroup.translate(offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
             }
 
@@ -5202,6 +5208,7 @@ try {
                 for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 // 도형 가운데를 화면 가운데에
                 previewGroup.translate(viewCenter[0] - drawing.center[0] + offsetXmm * MM_TO_PT, viewCenter[1] - drawing.center[1] + offsetYmm * MM_TO_PT);
             }
@@ -5344,7 +5351,7 @@ try {
                     out.texts.push({ text: "C", at: C, dir: [0.7071, -0.7071], upright: true });
                     out.texts.push({ text: "D", at: D, dir: [0.7071, 0.7071], upright: true });
                 }
-                function sideLength() { if (o.lengthText) out.texts.push({ text: lengthLabel, at: [S / 2, 0], dir: [0, -1] }); }
+                function sideLength() { if (o.lengthText) out.texts.push({ text: lengthLabel, at: [S / 2, 0], dir: [0, -1], upright: true }); }
 
                 if (o.shape === 0) {
                     // 부채꼴 BCD(중심 C)에서 CD를 지름으로 하는 반원을 뺀 부분
@@ -5426,7 +5433,7 @@ try {
                         out.lines.push({ points: join([polyline([O6, polar(O6, S, b0)]), arc(O6, S, b0, b1), polyline([polar(O6, S, b1), O6])]), closed: true, kind: "main" });
                         out.lines.push(open(arc(O6, R2, b0, b1)));
                         angleMark(O6, b0, b1);
-                        if (o.lengthText) out.texts.push({ text: lengthLabel, at: polar(O6, S / 2, b0), dir: normalOf(b0, -1) });
+                        if (o.lengthText) out.texts.push({ text: lengthLabel, at: polar(O6, S / 2, b0), dir: normalOf(b0, -1), upright: true });
                         perimeter = [2 * (1 - t), deg / 360 * 2 * (1 + t)];
                     }
                     centerMark(O6);
@@ -5439,7 +5446,7 @@ try {
                     out.lines.push({ points: sector, closed: true, kind: "main" });
                     angleMark(O7, c0, c1);
                     centerMark(O7);
-                    if (o.lengthText) out.texts.push({ text: lengthLabel, at: polar(O7, S / 2, c0), dir: normalOf(c0, -1) });
+                    if (o.lengthText) out.texts.push({ text: lengthLabel, at: polar(O7, S / 2, c0), dir: normalOf(c0, -1), upright: true });
                     area = [0, deg / 360];
                     perimeter = [2, deg / 360 * 2];
                 } else {
@@ -5453,7 +5460,7 @@ try {
                         out.texts.push({ text: "C", at: C8, dir: [0, -1], upright: true });
                         out.texts.push({ text: "B", at: B8, dir: [0, -1], upright: true });
                     }
-                    if (o.lengthText) out.texts.push({ text: "AB = " + lengthLabel, at: [S / 2, S / 2], dir: [0, 1] });
+                    if (o.lengthText) out.texts.push({ text: "AB = " + lengthLabel, at: [S / 2, S / 2], dir: [0, 1], upright: true });
                     area = [0, t * (1 - t) / 4];
                     perimeter = [0, 1];
                     out.center = [S / 2, S / 4];
@@ -5473,7 +5480,7 @@ try {
                 }
                 function radiusLine(from, to) {
                     out.lines.push({ points: polyline([from, to]), closed: false, kind: "guide" });
-                    if (o.lengthText) out.texts.push({ text: lengthLabel, at: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], dir: [0, 1] });
+                    if (o.lengthText) out.texts.push({ text: lengthLabel, at: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], dir: [0, 1], upright: true });
                 }
                 function angleMark(at, a0, a1) {
                     var r = S * 0.18;
@@ -5939,6 +5946,7 @@ try {
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var q = 0; q < drawing.pips.length; q++) addPip(drawing.pips[q]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] - drawing.center[0] + offsetXmm * MM_TO_PT, viewCenter[1] - drawing.center[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -6909,6 +6917,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] - widthMm * MM_TO_PT / 2 + offsetXmm * MM_TO_PT, viewCenter[1] - heightMm * MM_TO_PT / 2 + offsetYmm * MM_TO_PT);
             }
 
@@ -7003,8 +7012,11 @@ try {
             // GSMediumB1에 없는 기호(π, √, θ, − 같은 ASCII 밖 글자)는 HancomEQN
             function applyTextFonts(frame, upright) {
                 var text = frame.contents;
+                var inUnit = false;   // y(m)처럼 괄호 안은 단위라 기울이지 않는다
                 for (var i = 0; i < text.length; i++) {
                     var code = text.charCodeAt(i);
+                    if (code === 40) inUnit = true;
+                    else if (code === 41) inUnit = false;
                     var character = frame.textRange.characters[i];
                     var attributes = character.characterAttributes;
                     if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
@@ -7013,7 +7025,7 @@ try {
                     } else if (code > 126) {
                         attributes.textFont = eqnFont;
                         attributes.baselineShift = 0;
-                    } else if (!upright && code >= 97 && code <= 122) {
+                    } else if (!upright && !inUnit && code >= 97 && code <= 122) {
                         attributes.textFont = italicFont;
                         attributes.baselineShift = ENG_BASELINE_PT;
                     } else {

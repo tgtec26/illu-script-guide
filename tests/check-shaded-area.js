@@ -97,7 +97,8 @@ assert.strictEqual(build({ shape: 3 }).fills[0].length, 2);
 // 글자: 꼭짓점 이름·중심·길이
 {
   const d = build({ shape: 0 });
-  assert.deepStrictEqual(d.texts.filter((t) => t.upright).map((t) => t.text), ["A", "B", "C", "D"]);
+  // 길이 글자(10 cm)도 단위라 기울이지 않는다
+  assert.deepStrictEqual(d.texts.filter((t) => t.upright).map((t) => t.text), ["A", "B", "C", "D", "10 cm"]);
   assert.ok(d.texts.some((t) => t.text === "10 cm"));
   const e = build({ shape: 7, names: false, center: false, lengthText: false });
   assert.deepStrictEqual(e.texts.map((t) => t.text), ["120°"]);

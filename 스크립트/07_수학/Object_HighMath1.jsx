@@ -1,5 +1,7 @@
 // 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
 try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 미리보기 라벨 겹침 풀기 (07_수학/math_label_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.fsName + "/math_label_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -258,7 +260,6 @@ try {
                     var check = row.add("checkbox", undefined, items[i][1]);
                     check.preferredSize.width = 120;
                     bindOption(check, items[i][0]);
-                    checks[items[i][0]] = check;
                 }
             }
 
@@ -267,42 +268,6 @@ try {
                 check.onClick = function() {
                     opt[key] = check.value;
                     updatePreview();
-                };
-            }
-
-            // 고칠 그래프를 바꾸면 함수·a·b·c·d 행을 그 그래프 값으로 채운다. 둘째를 고르면 두 번째 그래프를 켠다
-            function bindEditRadio(index) {
-                editRadios[index].onClick = function() {
-                    editing = index;
-                    var g = graphs[editing];
-                    syncing = true;
-                    kindList.selection = g.kind;
-                    syncing = false;
-                    setRowValue(aControls, g.a);
-                    setRowValue(bControls, g.b);
-                    setRowValue(cControls, g.c);
-                    setRowValue(dControls, g.d);
-                    if (index === 1 && !opt.second) {
-                        opt.second = true;
-                        checks.second.value = true;
-                    }
-                    updatePreview();
-                };
-            }
-
-            // k 행: 스크롤바는 0.05 단위, 입력창은 1/2·√3/2 같은 값을 그대로 받는다
-            function bindKRow(controls) {
-                function commit(value) {
-                    kValue = clamp(value, controls.min, controls.max);
-                    controls.input.text = kText(kValue);
-                    try { controls.slider.value = kValue; } catch (e) {}
-                    updatePreview();
-                }
-                controls.slider.onChanging = function() { commit(roundTo(controls.slider.value, controls.step)); };
-                controls.slider.onChange = function() { commit(roundTo(controls.slider.value, controls.step)); };
-                controls.input.onChange = function() {
-                    var value = parseSurd(controls.input.text);
-                    commit(value === null ? kValue : value);
                 };
             }
 
@@ -343,6 +308,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -1244,6 +1210,7 @@ try {
                     var check = row.add("checkbox", undefined, items[i][1]);
                     check.preferredSize.width = 120;
                     bindOption(check, items[i][0]);
+                    checks[items[i][0]] = check;
                 }
             }
 
@@ -1252,6 +1219,42 @@ try {
                 check.onClick = function() {
                     opt[key] = check.value;
                     updatePreview();
+                };
+            }
+
+            // 고칠 그래프를 바꾸면 함수·a·b·c·d 행을 그 그래프 값으로 채운다. 둘째를 고르면 두 번째 그래프를 켠다
+            function bindEditRadio(index) {
+                editRadios[index].onClick = function() {
+                    editing = index;
+                    var g = graphs[editing];
+                    syncing = true;
+                    kindList.selection = g.kind;
+                    syncing = false;
+                    setRowValue(aControls, g.a);
+                    setRowValue(bControls, g.b);
+                    setRowValue(cControls, g.c);
+                    setRowValue(dControls, g.d);
+                    if (index === 1 && !opt.second) {
+                        opt.second = true;
+                        checks.second.value = true;
+                    }
+                    updatePreview();
+                };
+            }
+
+            // k 행: 스크롤바는 0.05 단위, 입력창은 1/2·√3/2 같은 값을 그대로 받는다
+            function bindKRow(controls) {
+                function commit(value) {
+                    kValue = clamp(value, controls.min, controls.max);
+                    controls.input.text = kText(kValue);
+                    try { controls.slider.value = kValue; } catch (e) {}
+                    updatePreview();
+                }
+                controls.slider.onChanging = function() { commit(roundTo(controls.slider.value, controls.step)); };
+                controls.slider.onChange = function() { commit(roundTo(controls.slider.value, controls.step)); };
+                controls.input.onChange = function() {
+                    var value = parseSurd(controls.input.text);
+                    commit(value === null ? kValue : value);
                 };
             }
 
@@ -1293,6 +1296,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -2296,6 +2300,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -2848,6 +2853,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 // 원점이 아니라 그림 전체(원 왼쪽 끝 ~ 그래프 오른쪽 끝)의 가운데를 화면 가운데에 둔다
                 previewGroup.translate(viewCenter[0] - drawing.centerX + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
@@ -3609,6 +3615,7 @@ try {
                 for (var c = 0; c < drawing.circles.length; c++) addCircle(drawing.circles[c]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 var b = previewGroup.geometricBounds;
                 previewGroup.translate(viewCenter[0] - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT,
                     viewCenter[1] - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
@@ -4206,6 +4213,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 var bounds = previewGroup.geometricBounds;
                 previewGroup.translate(viewCenter[0] - (bounds[0] + bounds[2]) / 2 + offsetXmm * MM_TO_PT,
                     viewCenter[1] - (bounds[1] + bounds[3]) / 2 + offsetYmm * MM_TO_PT);

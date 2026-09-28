@@ -1,5 +1,7 @@
 // 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
 try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 미리보기 라벨 겹침 풀기 (07_수학/math_label_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.fsName + "/math_label_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -303,6 +305,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -894,6 +897,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -1804,6 +1808,7 @@ try {
                 for (var l = 0; l < drawing.lines.length; l++) addPath(drawing.lines[l]);
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -3375,6 +3380,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -4054,6 +4060,7 @@ try {
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 

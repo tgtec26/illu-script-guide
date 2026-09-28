@@ -1,5 +1,7 @@
 // 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
 try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 미리보기 라벨 겹침 풀기 (07_수학/math_label_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.fsName + "/math_label_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -351,6 +353,7 @@ try {
                 for (var c = 0; c < drawing.circles.length; c++) addCircle(drawing.circles[c]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 var b = previewGroup.geometricBounds;
                 previewGroup.translate(viewCenter[0] - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT,
                     viewCenter[1] - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
@@ -1056,6 +1059,7 @@ try {
                 for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
                 for (var a = 0; a < drawing.arrows.length; a++) addArrow(drawing.arrows[a]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] - o.width / 2 + offsetXmm * MM_TO_PT, viewCenter[1] - o.height / 2 + offsetYmm * MM_TO_PT);
             }
 
@@ -1676,6 +1680,7 @@ try {
                 previewGroup.name = "확률 수형도";
                 for (var i = 0; i < drawing.lines.length; i++) addLine(drawing.lines[i]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 var b = previewGroup.geometricBounds;
                 previewGroup.translate(viewCenter[0] - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT, viewCenter[1] - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
             }
@@ -1710,13 +1715,20 @@ try {
 
             // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 그 밖의 기호(ᶜ, ×)는 HancomEQN.
             // 사건 이름·확률은 똑바로 쓴다 (교과서 수형도)
+            // ᶜ는 HancomEQN에도 글리프가 없어 네모로 나온다 → 일반 c를 위첨자로 (벤다이어그램 탭과 같게)
             function applyTextFonts(frame) {
-                var text = frame.contents;
+                var original = frame.contents;
+                var text = original.replace(/ᶜ/g, "c");
+                if (text !== original) frame.contents = text;
                 for (var i = 0; i < text.length; i++) {
                     var code = text.charCodeAt(i);
                     var character = frame.textRange.characters[i];
                     var attributes = character.characterAttributes;
-                    if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
+                    if (original.charCodeAt(i) === 0x1D9C) {
+                        attributes.textFont = engFont;
+                        attributes.baselineShift = 0;
+                        attributes.baselinePosition = FontBaselineOption.SUPERSCRIPT;
+                    } else if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
                         attributes.textFont = korFont;
                         attributes.baselineShift = 0;
                     } else if (code > 126) {
