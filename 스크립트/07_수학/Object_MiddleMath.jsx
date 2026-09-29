@@ -4823,7 +4823,7 @@ try {
                         out.texts.push({ text: formatDegrees(chordSpan.sweep / rad), at: T2, dir: unitAt(chordSpan.start + chordSpan.sweep / 2), clear: markR });
                         out.texts.push({ text: formatDegrees(pSpan.sweep / rad), at: P, dir: unitAt(pSpan.start + pSpan.sweep / 2), clear: markR });
                     }
-                    name("A", A);
+                    if (!usesAB) name("A", A);
                     if (!o.inscribed) name("P", P);
                 }
                 if (o.external) {
