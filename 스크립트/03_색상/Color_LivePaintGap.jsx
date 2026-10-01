@@ -229,16 +229,15 @@ try {
 
     var row = win.add("group");
     row.alignChildren = ["left", "center"];
-    var label = row.add("statictext", undefined, "틈 허용치 (mm):");
-    label.preferredSize.width = 110;
+    row.add("statictext", undefined, "틈 허용치 (mm):");
     var input = row.add("edittext", undefined, String(saved ? saved.tol : 3));
     input.characters = 6;
-    var bar = row.add("scrollbar", undefined, Math.round((saved ? saved.tol : 3) / TOL_STEP), Math.round(TOL_MIN / TOL_STEP), Math.round(TOL_MAX / TOL_STEP));
-    bar.preferredSize.width = 196;
+    var bar = win.add("scrollbar", undefined, Math.round((saved ? saved.tol : 3) / TOL_STEP), Math.round(TOL_MIN / TOL_STEP), Math.round(TOL_MAX / TOL_STEP));
+    bar.preferredSize.width = 260;
     bar.stepdelta = 1;
     bar.jumpdelta = 10;
 
-    var expandCheck = win.add("checkbox", undefined, "면을 임의 색으로 채우기 (라이브 페인트 확장)");
+    var expandCheck = win.add("checkbox", undefined, "면을 임의 색으로 채우기");
     expandCheck.value = saved ? saved.expand : true;
     expandCheck.helpTip = "끄면 틈만 메운 라이브 페인트 개체로 남아 페인트 통으로 직접 칠할 수 있다.";
 
