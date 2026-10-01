@@ -12,7 +12,7 @@ try {
 
 // 열린 패스의 틈을 보이지 않는 선으로 메운 뒤 라이브 페인트로 만든다.
 // 라이브 페인트 자체의 틈 허용치(대형)보다 큰 틈도 닫을 수 있다.
-// 미리보기: 메워질 틈을 빨간 선으로 보여 준다. 위치는 원본 선에 붙으므로 옮기기 행은 두지 않는다.
+// 미리보기: 실제 결과(틈 메우기 + 임의 색)를 그대로 보여 준다. 원본은 숨기고 복제본으로 만든다. 위치는 원본에 붙으므로 옮기기 행은 두지 않는다.
 (function () {
     var PREF_KEY = "LivePaintGap/settings";
     var MM = 2.834645669;
@@ -21,7 +21,6 @@ try {
     var CURVE_STEPS = 12;  // 곡선 마디를 꺾은선으로 근사하는 조각 수
     var HAIR = 0.01;       // 틈을 잇는 선의 두께 (pt). 확장 뒤 이 두께의 선을 지운다
     var PAD = 20;          // 배경 사각형이 선택 영역보다 더 나가는 거리 (pt)
-    var PREVIEW_NAME = "__LivePaintGapPreview";
 
     if (app.documents.length === 0) { alert("문서를 먼저 열어주세요."); return; }
     var doc = app.activeDocument;
@@ -107,31 +106,7 @@ try {
     var geo = buildGeometry(sourcePaths);
     if (geo.ends.length === 0) { alert("선택한 것 중에 열린 패스가 없습니다."); return; }
 
-    var previewGroup = null, bridgeCount = 0;
-
-    function clearPreview() {
-        if (previewGroup) { try { previewGroup.remove(); } catch (e) {} }
-        previewGroup = null;
-    }
-
-    function drawBridges(tolMm, visible) {
-        clearPreview();
-        var bridges = findBridges(geo, tolMm * MM);
-        bridgeCount = bridges.length;
-        if (bridges.length === 0) return;
-        previewGroup = doc.activeLayer.groupItems.add();
-        previewGroup.name = PREVIEW_NAME;
-        var red = new RGBColor(); red.red = 255; red.green = 0; red.blue = 0;
-        for (var i = 0; i < bridges.length; i++) {
-            var p = previewGroup.pathItems.add();
-            p.setEntirePath(bridges[i]);
-            p.filled = false;
-            p.stroked = true; // 선이 없으면 라이브 페인트가 틈을 닫는 선으로 보지 않는다
-            p.strokeColor = red;
-            p.strokeWidth = visible ? 1 : HAIR;
-        }
-        app.redraw();
-    }
+    var result = [], bridgeCount = 0;
 
     // ---- 확정 ----
     function randomColor() {
@@ -169,29 +144,66 @@ try {
         else path.fillColor = randomColor();
     }
 
-    function commit(tolMm, expandFaces) {
-        drawBridges(tolMm, false);
-        var bg = null, back = null;
+    // 미리보기와 확정이 같은 과정을 쓴다: 원본은 숨기고 복제본으로 결과를 만든다.
+    // 확인하면 원본을 지우고 결과를 남기고, 취소하거나 미리보기를 끄면 결과를 지우고 원본을 되돌린다.
+    function setOriginalsHidden(hidden) {
+        for (var i = 0; i < picked.length; i++) { try { picked[i].hidden = hidden; } catch (e) {} }
+    }
+    function clearResult() {
+        for (var i = 0; i < result.length; i++) { try { result[i].remove(); } catch (e) {} }
+        result = [];
+    }
+
+    function build(tolMm, expandFaces) {
+        clearResult();
+        setOriginalsHidden(false);
+        var bridges = findBridges(geo, tolMm * MM);
+        bridgeCount = bridges.length;
+        var parts = [];
+        for (var i = 0; i < picked.length; i++) parts.push(picked[i].duplicate());
+        var grey = new GrayColor(); grey.gray = 50;
+        for (var k = 0; k < bridges.length; k++) {
+            var bp = doc.activeLayer.pathItems.add();
+            bp.setEntirePath(bridges[k]);
+            bp.filled = false;
+            bp.stroked = true; // 선이 없으면 라이브 페인트가 틈을 닫는 선으로 보지 않는다
+            bp.strokeColor = grey;
+            bp.strokeWidth = HAIR;
+            parts.push(bp);
+        }
+        var bg = null;
         if (expandFaces) {
             bg = selectionBounds();
-            back = doc.activeLayer.pathItems.rectangle(bg[1], bg[0], bg[2] - bg[0], bg[1] - bg[3]);
+            var back = doc.activeLayer.pathItems.rectangle(bg[1], bg[0], bg[2] - bg[0], bg[1] - bg[3]);
             back.stroked = false;
             var white = randomColor();
             if (white.typename === "RGBColor") { white.red = white.green = white.blue = 255; }
             else { white.cyan = white.magenta = white.yellow = white.black = 0; }
             back.fillColor = white;
             back.zOrder(ZOrderMethod.SENDTOBACK);
+            parts.push(back);
         }
+        setOriginalsHidden(true);
         doc.selection = null;
-        for (var i = 0; i < sourcePaths.length; i++) sourcePaths[i].selected = true;
-        if (previewGroup) previewGroup.selected = true;
-        if (back) back.selected = true;
+        for (var j = 0; j < parts.length; j++) parts[j].selected = true;
         app.executeMenuCommand("Make Planet X");
-        previewGroup = null; // 라이브 페인트 안으로 들어갔으니 지우지 않는다
         if (expandFaces) {
             app.executeMenuCommand("Expand Planet X");
-            for (var j = doc.selection.length - 1; j >= 0; j--) paintFaces(doc.selection[j], bg);
+            for (var m = doc.selection.length - 1; m >= 0; m--) paintFaces(doc.selection[m], bg);
         }
+        for (var n = 0; n < doc.selection.length; n++) result.push(doc.selection[n]);
+        app.redraw();
+    }
+
+    function discardPreview() {
+        clearResult();
+        setOriginalsHidden(false);
+    }
+
+    function acceptResult() {
+        for (var i = 0; i < picked.length; i++) { try { picked[i].remove(); } catch (e) {} }
+        doc.selection = null;
+        for (var j = 0; j < result.length; j++) result[j].selected = true;
     }
 
     // ---- 설정 저장 ----
@@ -250,7 +262,13 @@ try {
     function refresh() {
         var tol = currentTol();
         if (tol === null) return;
-        if (previewCheck.value) drawBridges(tol, true); else { clearPreview(); bridgeCount = findBridges(geo, tol * MM).length; }
+        if (previewCheck.value) {
+            try { build(tol, expandCheck.value); }
+            catch (e) { discardPreview(); previewCheck.value = false; alert("라이브 페인트로 만들지 못했습니다.\n" + e); }
+        } else {
+            discardPreview();
+            bridgeCount = findBridges(geo, tol * MM).length;
+        }
         info.text = "메울 틈: " + bridgeCount + "개";
     }
     var syncing = false;
@@ -269,6 +287,7 @@ try {
     };
     bar.onChange = bar.onChanging;
     previewCheck.onClick = refresh;
+    expandCheck.onClick = refresh;
     okBtn.onClick = function () { win.close(1); };
     cancelBtn.onClick = function () { win.close(0); };
 
@@ -276,13 +295,12 @@ try {
     win.layout.layout(true);
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     refresh();
-    var result = win.show();
-    clearPreview();
-    if (result === 1) {
-        var tolMm = currentTol();
-        if (tolMm === null) return;
-        saveSettings(tolMm, expandCheck.value);
-        try { commit(tolMm, expandCheck.value); }
-        catch (e) { alert("라이브 페인트로 만들지 못했습니다.\n" + e); }
-    }
+    var ok = win.show() === 1;
+    var tolMm = currentTol();
+    if (!ok || tolMm === null) { discardPreview(); return; }
+    saveSettings(tolMm, expandCheck.value);
+    try {
+        if (!previewCheck.value || result.length === 0) build(tolMm, expandCheck.value);
+        acceptResult();
+    } catch (e) { discardPreview(); alert("라이브 페인트로 만들지 못했습니다.\n" + e); }
 })();
