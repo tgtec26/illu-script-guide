@@ -19,8 +19,9 @@ try {
 //   - 유리관은 아래가 열리고 위가 둥글게 막힌 한 줄 선이다. 기울기(°)는 연직선에서 오른쪽(+)·왼쪽(−)으로 입구 가운데를 축으로 돌린 값이다.
 //     입구는 수은 깊이의 절반 높이에 두고, 기울이면 바닥에 가까워진다.
 //   - 수은 기둥 높이는 수조 수은 면에서 기둥 윗면까지의 연직 높이(mm)다. 기울여도 같고 유리관 안 수은 윗면은 수평이다.
-//   - 높이 표시: 기둥 윗면 높이의 붉은 점선과 수은 면까지의 치수선(화살촉 양쪽)과 값 글자(치수선을 끊고 가운데에 넣는다).
-//   - 기압 화살표: 수은 면 위 왼쪽·오른쪽의 B(기압), 유리관 안 수은 면 위의 A(붉은색)와 아래의 C. A·C는 관 안에 들어갈 때만 그린다.
+//   - 높이 표시: 기둥 윗면 높이의 점선과 수은 면까지의 치수선(화살촉 양쪽)과 값 글자(치수선을 끊고 가운데에 넣는다).
+//   - 기압 화살표: 수은 면 위 왼쪽·오른쪽의 B(기압), 유리관 안 수은 면 위의 A와 아래의 C. A·C는 관 안에 들어갈 때만 그린다.
+//     색은 모두 회색 음영이다: 수은 K 25, B·C 화살표 K 60, A 화살표와 선·점선·글자 K 100.
 //   - 글자 서체는 한글·공백 Spoqa, 영문·숫자·기호 GSMediumB1(기준선 +0.5pt)이고 지시선은 0.4pt 검정이다.
 //   - 확인하면 원본 사각형은 지워지고 수조·수은·유리관·표시가 든 그룹 하나가 남는다.
 
@@ -38,7 +39,7 @@ try {
     var ENG_BASELINE_PT = 0.5;
     var FONT_PT = 8;
     var LINE_PT = 0.4;
-    var DASH_RED = [2, 2];
+    var DASH = [2, 2];
     var MERCURY_K = 25;
     var CORNER_R_MM = 3;
     // 입구의 가장 높은 모서리가 수은 면보다 이만큼 아래에 있어야 한다
@@ -62,8 +63,8 @@ try {
     var DIM_GAP_MIN_MM = 8;
     var DIM_GAP_RATIO = 0.2;
     var LEVEL_EXTRA_MM = 4;
-    var RED = {cmyk: [0, 100, 100, 0], rgb: [237, 28, 36]};
-    var BLUE = {cmyk: [90, 55, 0, 0], rgb: [0, 114, 188]};
+    var ARROW_A_K = 100;
+    var ARROW_BC_K = 60;
 
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
@@ -360,8 +361,8 @@ try {
         // 기울어진 관이 B 화살표 쪽으로 눕는 만큼 화살표를 더 띄운다
         var bLeftX = tubeLeftSurf - lenB * Math.max(0, -tanT) - bGap - headW / 2;
         var bRightX = tubeRightSurf + lenB * Math.max(0, tanT) + bGap + headW / 2;
-        var red = makeColor(RED);
-        var blue = makeColor(BLUE);
+        var arrowA = makeGray(ARROW_A_K);
+        var arrowBC = makeGray(ARROW_BC_K);
 
         // 왼쪽 표시가 차지한 가장 왼쪽 x (수은 면 글자를 그 왼쪽에 둔다)
         var leftLimit = tubeLeftSurf;
@@ -369,13 +370,13 @@ try {
 
         var bTextTop = -Infinity;
 
-        // 높이 표시: 붉은 점선 + 치수선 + 값
+        // 높이 표시: 점선 + 치수선 + 값
         if (options.heightOn && colTop - surfY > 2 * DIM_HEAD_LEN_MM * MM) {
             var tubeLeftTop = g.axisX(colTop) - g.hw;
             var dimX = Math.min(Math.min(tubeLeftSurf, tubeLeftTop) - Math.max(DIM_GAP_MIN_MM * MM, DIM_GAP_RATIO * o.troughW * MM),
                 leftLimit - 3 * MM);
             leftLimit = Math.min(leftLimit, dimX);
-            var level = addLine(group, dimX - LEVEL_EXTRA_MM * MM, colTop, tubeLeftTop, colTop, LINE_PT, red, DASH_RED);
+            var level = addLine(group, dimX - LEVEL_EXTRA_MM * MM, colTop, tubeLeftTop, colTop, LINE_PT, black, DASH);
             level.name = "Level";
 
             var headLen = DIM_HEAD_LEN_MM * MM;
@@ -404,8 +405,8 @@ try {
         // 기압 화살표: 수은 면 위 B 두 개, 관 안 A(수은 기둥이 누르는 쪽)와 C(수은 면 아래에서 받치는 쪽)
         if (options.arrowsOn) {
             var tipTop = surfY + arrowGap;
-            addBlockArrow(group, bLeftX, tipTop + lenB, tipTop, headW, blue).name = "PressureB";
-            addBlockArrow(group, bRightX, tipTop + lenB, tipTop, headW, blue).name = "PressureB";
+            addBlockArrow(group, bLeftX, tipTop + lenB, tipTop, headW, arrowBC).name = "PressureB";
+            addBlockArrow(group, bRightX, tipTop + lenB, tipTop, headW, arrowBC).name = "PressureB";
             var bText = makeText(group, "기압(B)");
             bText.name = "LabelB";
             placeText(bText, bRightX, tipTop + lenB + TEXT_GAP_MM * MM, "c", "b");
@@ -421,7 +422,7 @@ try {
             if (lenIn >= MIN_ARROW_LEN_MM * MM && headIn >= MIN_ARROW_HEAD_MM * MM) {
                 var aTail = tipTop + lenIn;
                 var aX = g.axisX((tipTop + aTail) / 2);
-                addBlockArrow(group, aX, aTail, tipTop, headIn, red).name = "PressureA";
+                addBlockArrow(group, aX, aTail, tipTop, headIn, arrowA).name = "PressureA";
                 var aText = makeText(group, "A");
                 aText.name = "LabelA";
                 placeText(aText, g.axisX(aTail), aTail + TEXT_GAP_MM * MM, "c", "b");
@@ -429,7 +430,7 @@ try {
                 var cTip = surfY - arrowGap;
                 var cTail = cTip - lenIn;
                 var cX = g.axisX((cTip + cTail) / 2);
-                addBlockArrow(group, cX, cTail, cTip, headIn, blue).name = "PressureC";
+                addBlockArrow(group, cX, cTail, cTip, headIn, arrowBC).name = "PressureC";
                 addSideLabel(group, g, "C", (cTip + cTail) / 2, "l", cX - headIn * ARROW_SHAFT_RATIO / 2, "LabelC");
             }
         }
@@ -733,22 +734,6 @@ try {
         rgb.red = v;
         rgb.green = v;
         rgb.blue = v;
-        return rgb;
-    }
-
-    function makeColor(spec) {
-        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
-            var cmyk = new CMYKColor();
-            cmyk.cyan = spec.cmyk[0];
-            cmyk.magenta = spec.cmyk[1];
-            cmyk.yellow = spec.cmyk[2];
-            cmyk.black = spec.cmyk[3];
-            return cmyk;
-        }
-        var rgb = new RGBColor();
-        rgb.red = spec.rgb[0];
-        rgb.green = spec.rgb[1];
-        rgb.blue = spec.rgb[2];
         return rgb;
     }
 
