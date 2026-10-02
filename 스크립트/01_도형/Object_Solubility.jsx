@@ -33,7 +33,6 @@ try {
     var SLIDER_WIDTH = 196;
     var NAME_COLUMN_WIDTH = 120;
     var RADIO_COLUMN_WIDTH = 30;
-    var TOP_COUNT = 5;
 
     var AXIS_PT = 0.4;
     var TICK_PT = 0.4;
@@ -51,6 +50,7 @@ try {
     var AXIS_STEP = 20;
     var GRID_FINE_STEP = 10;
     var AXIS_TITLE_GAP_MM = 1;
+    var NAME_KOREAN = 0, NAME_FORMULA = 1, NAME_NONE = 2;
     var BEZIER_TOLERANCE_MM = 0.7;
     // ° 는 GSMediumB1의 U+02D8 글리프로 넣는다
     var X_TITLE = "온도(\u02D8C)";
@@ -65,7 +65,7 @@ try {
         { name: "4-1-1-1 1점 쇄선", dashes: [4, 1, 1, 1] }
     ];
 
-    // 위 5개(TOP_COUNT)가 다이얼로그 맨 위에 온다.
+    // 앞의 5개가 다이얼로그 맨 위에 온다.
     // points: [온도(℃), 용해도(g/물 100 g)] 측정점. labelT·side: 이름을 붙일 온도와 곡선의 위쪽(1)/아래쪽(-1)
     var SUBSTANCES = [
         { kor: "질산 나트륨", formula: "NaNO3", labelT: 20, side: 1,
@@ -76,7 +76,7 @@ try {
           points: [[0, 28], [10, 31.2], [20, 34.2], [30, 37.2], [40, 40.1], [50, 42.6], [60, 45.8], [80, 51.3], [90, 53.9], [100, 56.3]] },
         { kor: "염화 나트륨", formula: "NaCl", labelT: 92, side: -1,
           points: [[0, 35.65], [10, 35.72], [20, 35.89], [30, 36.09], [40, 36.37], [50, 36.69], [60, 37.04], [70, 37.46], [80, 37.93], [90, 38.47], [100, 38.99]] },
-        { kor: "황산 구리(II) 오수화물", formula: "CuSO4\u00B75H2O", labelT: 70, side: 1,
+        { kor: "황산 구리(II)", formula: "CuSO4\u00B75H2O", labelT: 70, side: 1,
           points: [[0, 23.1], [10, 27.5], [20, 32], [30, 37.8], [40, 44.6], [60, 61.8], [80, 83.8], [100, 114]] },
         { kor: "염화 칼슘", formula: "CaCl2", labelT: 48, side: 1,
           points: [[0, 59.5], [10, 64.7], [20, 74.5], [30, 100], [40, 128], [60, 137], [80, 147], [90, 154], [100, 159]] },
@@ -118,7 +118,7 @@ try {
     var gridFine = false;
     var simpleCurve = false;
     var tickOutside = false;
-    var nameKorean = true;
+    var nameMode = NAME_KOREAN;
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
@@ -186,7 +186,6 @@ try {
     var curveChecks = [];
     var curveRadios = [];
     for (var i = 0; i < SUBSTANCE_COUNT; i++) {
-        if (i === TOP_COUNT) curvePanel.add("group").preferredSize.height = 4;
         var row = curvePanel.add("group");
         row.alignChildren = ["left", "center"];
         row.spacing = 0;
@@ -207,6 +206,7 @@ try {
     var nameGroup = namePanel.add("group");
     var nameKorRadio = nameGroup.add("radiobutton", undefined, "한글 이름");
     var nameFormulaRadio = nameGroup.add("radiobutton", undefined, "화학식");
+    var nameNoneRadio = nameGroup.add("radiobutton", undefined, "넣지 않음");
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXControls = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm,
@@ -232,8 +232,9 @@ try {
     tickInRadio.value = !tickOutside;
     tickOutRadio.value = tickOutside;
     tickGroup.enabled = !gridOn;
-    nameKorRadio.value = nameKorean;
-    nameFormulaRadio.value = !nameKorean;
+    nameKorRadio.value = (nameMode === NAME_KOREAN);
+    nameFormulaRadio.value = (nameMode === NAME_FORMULA);
+    nameNoneRadio.value = (nameMode === NAME_NONE);
     previewCheck.value = previewEnabled;
     setRowValue(widthControls, widthMm);
     setRowValue(heightControls, heightMm);
@@ -262,10 +263,9 @@ try {
         tickOutside = tickOutRadio.value;
         updatePreview();
     };
-    nameKorRadio.onClick = nameFormulaRadio.onClick = function() {
-        nameKorean = nameKorRadio.value;
-        updatePreview();
-    };
+    nameKorRadio.onClick = function() { setNameMode(NAME_KOREAN); };
+    nameFormulaRadio.onClick = function() { setNameMode(NAME_FORMULA); };
+    nameNoneRadio.onClick = function() { setNameMode(NAME_NONE); };
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -303,6 +303,11 @@ try {
         clearPreview();
         restoreOriginal();
         app.redraw();
+    }
+
+    function setNameMode(mode) {
+        nameMode = mode;
+        updatePreview();
     }
 
     function bindCurveRow(index) {
@@ -454,11 +459,12 @@ try {
         styleStroke(path, CURVE_PT, grayK100, dashes);
 
         // 이름: 곡선에 나란히 기울여 위(1) 또는 아래(-1)에 붙인다
+        if (nameMode === NAME_NONE) return;
         var i = Math.max(1, Math.min(substance.labelT, points.length - 2));
         var tangentX = points[i + 1][0] - points[i - 1][0];
         var tangentY = points[i + 1][1] - points[i - 1][1];
         var length = Math.sqrt(tangentX * tangentX + tangentY * tangentY);
-        var label = addText(group, nameKorean ? substance.kor : substance.formula);
+        var label = addText(group, nameMode === NAME_KOREAN ? substance.kor : substance.formula);
         var lb = label.geometricBounds;
         var distance = NAME_GAP_MM * MM_TO_PT + (lb[1] - lb[3]) / 2;
         var centerX = points[i][0] - tangentY / length * substance.side * distance;
@@ -826,14 +832,14 @@ try {
             styles.push(curveStyle[i]);
         }
         var parts = [
-            "v3",
+            "v4",
             widthMm,
             heightMm,
             gridOn ? "1" : "0",
             gridFine ? "1" : "0",
             simpleCurve ? "1" : "0",
             tickOutside ? "1" : "0",
-            nameKorean ? "1" : "0",
+            nameMode,
             offsetXmm,
             offsetYmm,
             previewEnabled ? "1" : "0",
@@ -848,7 +854,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length !== 13) return;
+        if (p[0] !== "v4" || p.length !== 13) return;
         if (p[11].length !== SUBSTANCE_COUNT || p[12].length !== SUBSTANCE_COUNT) return;
         widthMm = restoreNumber(p[1], widthMm, SIZE_MIN_MM, SIZE_MAX_MM);
         heightMm = restoreNumber(p[2], heightMm, SIZE_MIN_MM, SIZE_MAX_MM);
@@ -856,7 +862,7 @@ try {
         gridFine = (p[4] === "1");
         simpleCurve = (p[5] === "1");
         tickOutside = (p[6] === "1");
-        nameKorean = (p[7] === "1");
+        nameMode = (p[7] === "1") ? NAME_FORMULA : (p[7] === "2") ? NAME_NONE : NAME_KOREAN;
         offsetXmm = restoreNumber(p[8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
         offsetYmm = restoreNumber(p[9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
         previewEnabled = (p[10] === "1");
