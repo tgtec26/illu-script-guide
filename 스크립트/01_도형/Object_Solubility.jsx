@@ -209,9 +209,9 @@ try {
     var nameNoneRadio = nameGroup.add("radiobutton", undefined, "넣지 않음");
 
     var positionPanel = addPanel(dlg, "위치");
-    var offsetXControls = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm,
+    var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-    var offsetYControls = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm,
+    var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
     var footer = dlg.add("group");

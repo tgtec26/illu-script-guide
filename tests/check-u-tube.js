@@ -173,8 +173,8 @@ const isCorner = (p) => p.left[0] === p.anchor[0] && p.left[1] === p.anchor[1] &
 
 // 다이얼로그 규칙: 설정 저장 키, 미리보기 이동 행, 탭 헬퍼, 마지막 실행 메모, 파선 막
 assert.ok(source.includes('var PREF_KEY = "ObjectUTube/settings";'));
-assert.ok(source.includes('addValueRow(positionPanel, "가로 이동", "mm"'));
-assert.ok(source.includes('addValueRow(positionPanel, "세로 이동", "mm"'));
+assert.ok(source.includes('addValueRow(positionPanel, "가로", "mm"'));
+assert.ok(source.includes('addValueRow(positionPanel, "세로", "mm"'));
 assert.ok(source.includes('if (typeof bindTabOrder === "function") bindTabOrder(dlg);'));
 assert.ok(source.includes('Folder.temp + "/illu_last_script.txt"'));
 assert.ok(source.includes("var MEMBRANE_DASH = [2, 1];"), "membrane is a 2pt/1pt dashed line");

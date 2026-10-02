@@ -68,7 +68,7 @@ assert.ok(source.includes('var PREF_KEY = "ObjectLensMirror/settings"'), "own pr
 assert.ok(source.includes('p[0] !== "v5"') && source.includes('var parts = ["v5"]'), "versioned settings string");
 assert.ok(/if \(typeof bindTabOrder === "function"\) bindTabOrder\(win\);/.test(source), "tab helper bound before show()");
 assert.ok(source.indexOf("bindTabOrder(win)") < source.indexOf("win.show()"), "bindTabOrder must run before win.show()");
-assert.ok(source.includes('addRow(positionPanel, "가로 이동", "offsetX"') && source.includes('addRow(positionPanel, "세로 이동", "offsetY"'), "movable preview rows");
+assert.ok(source.includes('addRow(positionPanel, "가로", "offsetX"') && source.includes('addRow(positionPanel, "세로", "offsetY"'), "movable preview rows");
 assert.ok(source.includes("previewGroup.translate(key === \"offsetX\" ? delta : 0, key === \"offsetY\" ? delta : 0)"), "position rows move the preview instead of rebuilding it");
 // 모양 ↔ 초점 거리 연동: 모양 행은 초점 거리를, 초점 거리 행은 두꺼운 쪽을 맞춘다
 assert.ok(source.includes("if (isCoupledKey(key)) coupleFocal(key);"), "shape and focal rows are coupled");

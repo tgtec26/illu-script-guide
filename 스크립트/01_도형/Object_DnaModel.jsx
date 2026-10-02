@@ -223,9 +223,9 @@ try {
             var strandGapField = addNumberField(sizePanel, "두 가닥 간격", "mm", strandGapMm, 0.1, -5, 20);
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
+            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-            var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1,
+            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
             // 위치는 모형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetField(offsetXField, true);
@@ -661,7 +661,7 @@ try {
                     [strandGapField, "두 가닥 간격"],
                     [phosphateKField, "인산 음영"], [sugarKField, "당 음영"],
                     [purineKField, "A·G 음영"], [pyrimidineKField, "T·C 음영"],
-                    [offsetXField, "가로 이동"], [offsetYField, "세로 이동"]
+                    [offsetXField, "가로"], [offsetYField, "세로"]
                 ];
                 var values = [];
                 for (var i = 0; i < fields.length; i++) {
@@ -928,8 +928,8 @@ try {
             var positionPanel = win.add("panel", undefined, "위치");
             positionPanel.alignChildren = "fill";
             positionPanel.spacing = 2;
-            addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", true);
-            addRow(positionPanel, "세로 이동", "offsetY", -100, 100, "mm", true);
+            addRow(positionPanel, "가로", "offsetX", -100, 100, "mm", true);
+            addRow(positionPanel, "세로", "offsetY", -100, 100, "mm", true);
 
             var status = win.add("statictext", undefined, " ");
             status.preferredSize.width = 380;

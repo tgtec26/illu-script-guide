@@ -132,8 +132,8 @@ try {
     addRow(textPanel, "숫자 크기", "fontSize", 4, 30, "pt", 0.5);
 
     var positionPanel = addPanel(win, "위치");
-    addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", 0.1, true);
-    addRow(positionPanel, "세로 이동", "offsetY", -100, 100, "mm", 0.1, true);
+    addRow(positionPanel, "가로", "offsetX", -100, 100, "mm", 0.1, true);
+    addRow(positionPanel, "세로", "offsetY", -100, 100, "mm", 0.1, true);
 
     var status = win.add("statictext", undefined, " ");
     status.alignment = ["fill", "top"];

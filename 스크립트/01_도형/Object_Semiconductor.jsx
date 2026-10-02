@@ -153,9 +153,9 @@ try {
     var surroundField = addNumberField(sizePanel, "주변 궤도 폭", "mm", surroundMm, 0.1, 0, 10);
 
     var positionPanel = addPanel(dlg, "위치");
-    var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
+    var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-    var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1,
+    var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
     // 위치는 모형을 다시 만들지 않고 미리보기 그룹만 옮긴다
     bindOffsetField(offsetXField, true);
@@ -542,7 +542,7 @@ try {
             [surroundField, "주변 궤도 폭"],
             [siliconKField, "규소 핵 음영"], [dopantKField, "불순물 핵 음영"],
             [electronKField, "전자 음영"],
-            [offsetXField, "가로 이동"], [offsetYField, "세로 이동"]
+            [offsetXField, "가로"], [offsetYField, "세로"]
         ];
         var values = [];
         for (var i = 0; i < fields.length; i++) {

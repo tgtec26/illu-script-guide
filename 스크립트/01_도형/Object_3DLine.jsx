@@ -267,11 +267,11 @@ try {
     var positionPanel = win.add("panel", undefined, "위치");
     positionPanel.orientation = "column";
     positionPanel.alignChildren = "fill";
-    var offsetXControl = addNumberRow(positionPanel, "가로 이동 (mm)", offsetXmm,
+    var offsetXControl = addNumberRow(positionPanel, "가로 (mm)", offsetXmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, OFFSET_STEP_MM, 1, "", function(value) {
             moveOffset(value, true);
         });
-    var offsetYControl = addNumberRow(positionPanel, "세로 이동 (mm)", offsetYmm,
+    var offsetYControl = addNumberRow(positionPanel, "세로 (mm)", offsetYmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, OFFSET_STEP_MM, 1, "", function(value) {
             moveOffset(value, false);
         });

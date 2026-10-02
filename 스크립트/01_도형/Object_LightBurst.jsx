@@ -161,8 +161,8 @@ try {
     var positionPanel = dlg.add("panel", undefined, "위치");
     positionPanel.orientation = "column";
     positionPanel.alignChildren = "left";
-    var offsetXControls = addOffsetControls(positionPanel, "가로 이동", offsetXmm);
-    var offsetYControls = addOffsetControls(positionPanel, "세로 이동", offsetYmm);
+    var offsetXControls = addOffsetControls(positionPanel, "가로", offsetXmm);
+    var offsetYControls = addOffsetControls(positionPanel, "세로", offsetYmm);
 
     var previewCheck = dlg.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;

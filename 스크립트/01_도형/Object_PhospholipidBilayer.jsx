@@ -97,9 +97,9 @@ try {
     countText.preferredSize.width = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
 
     var positionPanel = addPanel(dlg, "위치");
-    var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
+    var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-    var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1,
+    var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
     // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
     bindOffsetField(offsetXField, true);

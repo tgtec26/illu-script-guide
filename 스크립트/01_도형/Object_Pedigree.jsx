@@ -175,17 +175,17 @@ try {
     branchNote.preferredSize.width = 330;
 
     var positionPanel = addPanel(rightColumn, "위치");
-    var offsetXControls = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm,
+    var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-    var offsetYControls = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm,
+    var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
     var legendPanel = addPanel(rightColumn, "범례");
     var legendCheck = legendPanel.add("checkbox", undefined, "가계도 오른쪽에 범례 넣기 (가계도에 있는 표현만)");
     legendCheck.value = legendOn;
-    var legendXControls = addValueRow(legendPanel, "가로 이동", "mm", legendXmm,
+    var legendXControls = addValueRow(legendPanel, "가로", "mm", legendXmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-    var legendYControls = addValueRow(legendPanel, "세로 이동", "mm", legendYmm,
+    var legendYControls = addValueRow(legendPanel, "세로", "mm", legendYmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
     var footer = dlg.add("group");

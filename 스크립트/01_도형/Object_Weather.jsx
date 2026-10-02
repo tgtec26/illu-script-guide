@@ -479,8 +479,8 @@ try {
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
         var controls = spec.controls.concat([
             {panel: "위치"},
-            {key: "offsetX", label: "가로 이동", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 0},
-            {key: "offsetY", label: "세로 이동", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 1}
+            {key: "offsetX", label: "가로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 0},
+            {key: "offsetY", label: "세로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 1}
         ]);
         var o = {};
         var group = null, committed = false, previewOn = true, center = [0, 0];

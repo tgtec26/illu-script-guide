@@ -174,9 +174,9 @@ try {
 
             var layoutPanel = addPanel(dlg, "배치");
             var spacingControls = addValueRow(layoutPanel, "간격", "mm", spacingMm, 0, 120, 0.5, 1);
-            var offsetXControls = addValueRow(layoutPanel, "가로 이동", "mm", offsetXmm,
+            var offsetXControls = addValueRow(layoutPanel, "가로", "mm", offsetXmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-            var offsetYControls = addValueRow(layoutPanel, "세로 이동", "mm", offsetYmm,
+            var offsetYControls = addValueRow(layoutPanel, "세로", "mm", offsetYmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
             bindValueRow(spacingControls,
@@ -828,9 +828,9 @@ try {
 
             var layoutPanel = addPanel(dlg, "배치");
             var spacingControls = addValueRow(layoutPanel, "염색체 간격", "mm", spacingMm, 0, 120, 0.5, 1);
-            var offsetXControls = addValueRow(layoutPanel, "가로 이동", "mm", offsetXmm,
+            var offsetXControls = addValueRow(layoutPanel, "가로", "mm", offsetXmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-            var offsetYControls = addValueRow(layoutPanel, "세로 이동", "mm", offsetYmm,
+            var offsetYControls = addValueRow(layoutPanel, "세로", "mm", offsetYmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
             var locusPanel = addPanel(dlg, "유전자 좌");
@@ -1373,9 +1373,9 @@ try {
                 gapControls.push(addValueRow(gapPanel, GAP_NAMES[g], gapsMm[g], 1, 10, 0.5, 1));
             }
             var daughterStepControls = addValueRow(gapPanel, "딸세포 사이", daughterStepMm, 0.5, 10, 0.5, 1);
-            var offsetXControls = addValueRow(gapPanel, "전체 가로 이동", offsetXmm,
+            var offsetXControls = addValueRow(gapPanel, "전체 가로", offsetXmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-            var offsetYControls = addValueRow(gapPanel, "전체 세로 이동", offsetYmm,
+            var offsetYControls = addValueRow(gapPanel, "전체 세로", offsetYmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
             var sizePanel = addPanel(dlg, "세포 지름 (mm)");

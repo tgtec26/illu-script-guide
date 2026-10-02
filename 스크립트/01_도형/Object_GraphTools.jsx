@@ -284,8 +284,8 @@ try {
             var positionPanel = dlg.add("panel", undefined, "위치");
             positionPanel.orientation = "column";
             positionPanel.alignChildren = "left";
-            var offsetXControls = addOffsetControls(positionPanel, "가로 이동", offsetXmm);
-            var offsetYControls = addOffsetControls(positionPanel, "세로 이동", offsetYmm);
+            var offsetXControls = addOffsetControls(positionPanel, "가로", offsetXmm);
+            var offsetYControls = addOffsetControls(positionPanel, "세로", offsetYmm);
 
 
             function updateArrowEnabled() {
@@ -1351,9 +1351,9 @@ try {
             var strokeField = addNumberField(linePanel, "두께", "pt", strokeWidthPt, 0.1, 0.1, 3, false);
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
+            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, false);
-            var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1,
+            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, false);
             // 위치는 표를 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetField(offsetXField, true);
@@ -2422,8 +2422,8 @@ try {
             keepCheck.onClick = updatePreview;
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-            var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
             // 위치는 곡선을 다시 만들지 않고 미리보기만 옮긴다
             bindOffsetField(offsetXField, true);
             bindOffsetField(offsetYField, false);
@@ -3049,9 +3049,9 @@ try {
             tiltYControls.input.helpTip = tiltYControls.slider.helpTip = "+면 오른쪽 가장자리가 멀어진다";
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXControls = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm,
+            var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-            var offsetYControls = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm,
+            var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
             bindValueRow(leaderControls, function() { return leaderMaxPercent; }, function(value) { leaderMaxPercent = value; });
@@ -4151,8 +4151,8 @@ try {
             fillToEnvelopeRadio.helpTip = "지표면 곡선의 어깨끼리 이은 포락선까지만 채운다. 두 곡선 사이 흰 틈은 산란 손실";
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-            var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
             // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetField(offsetXField, true);
             bindOffsetField(offsetYField, false);

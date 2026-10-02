@@ -259,8 +259,8 @@ try {
             updateKDisplay();
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXControls = addOffsetRow(positionPanel, "가로 이동", offsetXmm);
-            var offsetYControls = addOffsetRow(positionPanel, "세로 이동", offsetYmm);
+            var offsetXControls = addOffsetRow(positionPanel, "가로", offsetXmm);
+            var offsetYControls = addOffsetRow(positionPanel, "세로", offsetYmm);
             // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetControls(offsetXControls, true);
             bindOffsetControls(offsetYControls, false);
@@ -1502,8 +1502,8 @@ try {
             updateKDisplay();
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXControls = addOffsetRow(positionPanel, "가로 이동", offsetXmm);
-            var offsetYControls = addOffsetRow(positionPanel, "세로 이동", offsetYmm);
+            var offsetXControls = addOffsetRow(positionPanel, "가로", offsetXmm);
+            var offsetYControls = addOffsetRow(positionPanel, "세로", offsetYmm);
             // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetControls(offsetXControls, true);
             bindOffsetControls(offsetYControls, false);
@@ -2352,8 +2352,8 @@ try {
             var positionPanel = dlg.add("panel", undefined, "위치");
             positionPanel.orientation = "column";
             positionPanel.alignChildren = "left";
-            var offsetXControls = addOffsetControls(positionPanel, "가로 이동", offsetXmm);
-            var offsetYControls = addOffsetControls(positionPanel, "세로 이동", offsetYmm);
+            var offsetXControls = addOffsetControls(positionPanel, "가로", offsetXmm);
+            var offsetYControls = addOffsetControls(positionPanel, "세로", offsetYmm);
 
             longitudeSlider.onChanging = function() {
                 longitudeCount = Math.round(longitudeSlider.value);

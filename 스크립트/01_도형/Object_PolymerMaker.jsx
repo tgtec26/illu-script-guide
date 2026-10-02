@@ -130,9 +130,9 @@ try {
     panelPosition.alignChildren = ["left", "top"];
     panelPosition.margins = 15;
     panelPosition.spacing = 10;
-    var fieldOffsetX = addNumberField(panelPosition, "가로 이동 (mm):", 120, offsetXmm,
+    var fieldOffsetX = addNumberField(panelPosition, "가로 (mm):", 120, offsetXmm,
         OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-    var fieldOffsetY = addNumberField(panelPosition, "세로 이동 (mm):", 120, offsetYmm,
+    var fieldOffsetY = addNumberField(panelPosition, "세로 (mm):", 120, offsetYmm,
         OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
     // 위치는 도형을 다시 만들지 않고 미리보기만 옮긴다
     bindOffsetField(fieldOffsetX, true);

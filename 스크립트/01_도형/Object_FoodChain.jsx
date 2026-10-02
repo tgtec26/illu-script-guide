@@ -133,8 +133,8 @@ try {
         var fontRow = addValueRow(shapePanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
 
         var positionPanel = addPanel(dlg, "위치");
-        var offsetXRow = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-        var offsetYRow = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+        var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+        var offsetYRow = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
         var hint = dlg.add("statictext", undefined, "배치 → 위치 조정 → 그룹 선택 후 다시 실행하면 화살표 연결");
         hint.helpTip = "생물을 옮기려면 그룹을 더블클릭해 격리 모드로 들어가거나 직접 선택 도구를 쓴다";

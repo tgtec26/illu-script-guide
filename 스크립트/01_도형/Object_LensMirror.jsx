@@ -243,8 +243,8 @@ try {
             var positionPanel = win.add("panel", undefined, objectMode ? "위치 (물체 작도에서는 도형이 기준)" : "위치");
             positionPanel.alignChildren = "fill";
             positionPanel.spacing = 2;
-            var offsetXRow = tip(addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", 0.1, true), "양수: 오른쪽");
-            var offsetYRow = tip(addRow(positionPanel, "세로 이동", "offsetY", -100, 100, "mm", 0.1, true), "양수: 위쪽");
+            var offsetXRow = tip(addRow(positionPanel, "가로", "offsetX", -100, 100, "mm", 0.1, true), "양수: 오른쪽");
+            var offsetYRow = tip(addRow(positionPanel, "세로", "offsetY", -100, 100, "mm", 0.1, true), "양수: 위쪽");
 
             var status = win.add("statictext", undefined, " ");
             status.preferredSize.width = 400;
@@ -1285,8 +1285,8 @@ try {
             var fontRow = addValueRow(markPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXRow = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-            var offsetYRow = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+            var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+            var offsetYRow = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
             topCheck.value = topRayOn;
             bottomCheck.value = bottomRayOn;

@@ -161,8 +161,8 @@ try {
     var positionPanel = win.add("panel", undefined, "위치");
     positionPanel.alignChildren = "fill";
     positionPanel.spacing = 2;
-    addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", true).helpTip = "양수: 오른쪽";
-    addRow(positionPanel, "세로 이동", "offsetY", -100, 100, "mm", true).helpTip = "양수: 위쪽";
+    addRow(positionPanel, "가로", "offsetX", -100, 100, "mm", true).helpTip = "양수: 오른쪽";
+    addRow(positionPanel, "세로", "offsetY", -100, 100, "mm", true).helpTip = "양수: 위쪽";
 
     var footer = win.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");

@@ -399,8 +399,8 @@ try {
         positionPanel.alignChildren = "left";
         var offsetXmmValue = startXmm;
         var offsetYmmValue = startYmm;
-        var offsetXControls = addOffsetControls(positionPanel, "가로 이동", offsetXmmValue);
-        var offsetYControls = addOffsetControls(positionPanel, "세로 이동", offsetYmmValue);
+        var offsetXControls = addOffsetControls(positionPanel, "가로", offsetXmmValue);
+        var offsetYControls = addOffsetControls(positionPanel, "세로", offsetYmmValue);
         bindOffsetControls(offsetXControls, true);
         bindOffsetControls(offsetYControls, false);
 

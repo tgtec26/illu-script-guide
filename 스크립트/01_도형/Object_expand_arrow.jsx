@@ -59,8 +59,8 @@ try {
         headLength: {label: "길이", unit: "pt", min: 0.5, max: 200, step: 0.5},
         headWidth: {label: "너비", unit: "pt", min: 0.5, max: 200, step: 0.5},
         whiteWidth: {label: "", unit: "pt", min: 0.1, max: 20, step: 0.1},
-        offsetX: {label: "가로 이동", unit: "mm", min: -POSITION_LIMIT_MM, max: POSITION_LIMIT_MM, step: 0.1},
-        offsetY: {label: "세로 이동", unit: "mm", min: -POSITION_LIMIT_MM, max: POSITION_LIMIT_MM, step: 0.1}
+        offsetX: {label: "가로", unit: "mm", min: -POSITION_LIMIT_MM, max: POSITION_LIMIT_MM, step: 0.1},
+        offsetY: {label: "세로", unit: "mm", min: -POSITION_LIMIT_MM, max: POSITION_LIMIT_MM, step: 0.1}
     };
 
     var values = {

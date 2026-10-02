@@ -188,9 +188,9 @@ try {
             ball3DCheck.value = ball3D;
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
+            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-            var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1,
+            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
             // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetField(offsetXField, true);
@@ -845,8 +845,8 @@ try {
             var fields = [
                 { key: "height", label: "높이", unit: "m", min: 0.1, max: 40, step: 0.1, initial: 20 },
                 { key: "speed", label: "수평 속도", unit: "m/s", min: 0, max: 20, step: 0.1, initial: 10 },
-                { key: "offsetX", label: "가로 이동", unit: "mm", min: -100, max: 100, step: 0.1, initial: 0 },
-                { key: "offsetY", label: "세로 이동", unit: "mm", min: -100, max: 100, step: 0.1, initial: 0 },
+                { key: "offsetX", label: "가로", unit: "mm", min: -100, max: 100, step: 0.1, initial: 0 },
+                { key: "offsetY", label: "세로", unit: "mm", min: -100, max: 100, step: 0.1, initial: 0 },
                 { key: "strokeWidth", label: "선 두께", unit: "pt", min: 0.3, max: 2, step: 0.1, initial: 0.3 }
             ];
             var options = readSettings();
@@ -1166,9 +1166,9 @@ try {
                 0, WIDTH_SLIDER_MAX, 0, WIDTH_MAX);
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, OFFSET_STEP_MM,
+            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, OFFSET_STEP_MM,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-            var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, OFFSET_STEP_MM,
+            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, OFFSET_STEP_MM,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
             // 위치는 곡선을 다시 만들지 않고 미리보기만 옮긴다
             bindOffsetField(offsetXField, true);
@@ -1824,8 +1824,8 @@ try {
             var positionPanel = dlg.add("panel", undefined, "위치");
             positionPanel.orientation = "column";
             positionPanel.alignChildren = "left";
-            var offsetXControls = addOffsetControls(positionPanel, "가로 이동", offsetXmm);
-            var offsetYControls = addOffsetControls(positionPanel, "세로 이동", offsetYmm);
+            var offsetXControls = addOffsetControls(positionPanel, "가로", offsetXmm);
+            var offsetYControls = addOffsetControls(positionPanel, "세로", offsetYmm);
             // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetControls(offsetXControls, true);
             bindOffsetControls(offsetYControls, false);
@@ -2376,8 +2376,8 @@ try {
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
         var controls = spec.controls.concat([
             {panel: "위치"},
-            {key: "offsetX", label: "가로 이동", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 0},
-            {key: "offsetY", label: "세로 이동", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 1}
+            {key: "offsetX", label: "가로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 0},
+            {key: "offsetY", label: "세로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 1}
         ]);
         var o = {};
         var group = null, committed = false, previewOn = true, center = [0, 0];

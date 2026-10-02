@@ -74,8 +74,8 @@ try {
     flip.onClick = function() { options.flip = flip.value; updatePreview(); };
     var positionPanel = win.add("panel", undefined, "위치");
     positionPanel.alignChildren = "fill";
-    addRow(positionPanel, "가로 이동", "offsetX", -100, 100, "mm", true);
-    addRow(positionPanel, "세로 이동", "offsetY", -100, 100, "mm", true);
+    addRow(positionPanel, "가로", "offsetX", -100, 100, "mm", true);
+    addRow(positionPanel, "세로", "offsetY", -100, 100, "mm", true);
     positionPanel.add("statictext", undefined, "양수: 오른쪽 / 위쪽 · 텍스트와 말풍선을 함께 이동");
     var footer = win.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");

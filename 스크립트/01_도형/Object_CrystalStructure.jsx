@@ -147,8 +147,8 @@ try {
     var pnlPosition = win.add("panel", undefined, "위치");
     pnlPosition.alignChildren = "left";
     pnlPosition.spacing = 2;
-    var sldOffsetX = addSliderRow(pnlPosition, "가로 이동", 90, -100, 100, 0, "mm", 0.1);
-    var sldOffsetY = addSliderRow(pnlPosition, "세로 이동", 90, -100, 100, 0, "mm", 0.1);
+    var sldOffsetX = addSliderRow(pnlPosition, "가로", 90, -100, 100, 0, "mm", 0.1);
+    var sldOffsetY = addSliderRow(pnlPosition, "세로", 90, -100, 100, 0, "mm", 0.1);
     var offsetXmm = 0;
     var offsetYmm = 0;
     sldOffsetX.onChanging = function() { sldOffsetX.syncLabel(); moveOffset(sldOffsetX.value, true); };

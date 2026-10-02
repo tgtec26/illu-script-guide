@@ -482,7 +482,7 @@ assert.ok(source.includes("ui_tab_helper.jsxinc"), "tab helper loader");
 assert.ok(source.includes("bindTabOrder(win)"), "tab order bound before show");
 assert.ok(source.includes("win.defaultElement = null"), "no default button");
 assert.ok(/"미리보기"/.test(source), "preview checkbox");
-assert.ok(source.includes("가로 이동 (mm)") && source.includes("세로 이동 (mm)"), "position rows");
+assert.ok(source.includes("가로 (mm)") && source.includes("세로 (mm)"), "position rows");
 
 // 12. 잘린 정육면체: 꼭짓점 7, 면 7 (사각형 3, 삼각형 4), 모서리 12. 자른 면은 세 이웃 꼭짓점을 지난다
 {

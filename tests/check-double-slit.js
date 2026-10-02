@@ -120,8 +120,8 @@ assert.strictEqual(stops(1, 0).length, lib.MAX_STOPS_PER_BAND + 1, "single band 
 
 // 다이얼로그 규칙: 설정 저장 키, 미리보기 이동 행, 탭 헬퍼, 마지막 실행 메모
 assert.ok(source.includes('var PREF_KEY = "DoubleSlit/settings";'));
-assert.ok(source.includes('addValueRow(positionPanel, "가로 이동", "mm"'));
-assert.ok(source.includes('addValueRow(positionPanel, "세로 이동", "mm"'));
+assert.ok(source.includes('addValueRow(positionPanel, "가로", "mm"'));
+assert.ok(source.includes('addValueRow(positionPanel, "세로", "mm"'));
 assert.ok(source.includes('if (typeof bindTabOrder === "function") bindTabOrder(dlg);'));
 assert.ok(source.includes('Folder.temp + "/illu_last_script.txt"'));
 assert.ok(source.includes("path.rotate(angle - stamped, false, false, true, false, Transformation.CENTER)"),

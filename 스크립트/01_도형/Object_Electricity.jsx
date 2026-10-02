@@ -698,9 +698,9 @@ try {
             var viewField = addNumberField(rodPanel, "시점 각도", "°", viewAngleDeg, 1, -60, 60);
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXField = addNumberField(positionPanel, "가로 이동", "mm", offsetXmm, 0.1,
+            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-            var offsetYField = addNumberField(positionPanel, "세로 이동", "mm", offsetYmm, 0.1,
+            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
             // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetField(offsetXField, true);
@@ -1310,9 +1310,9 @@ try {
             arrowTabs.selection = 0;
 
             var positionPanel = addPanel(shapeTab, "위치 이동");
-            var offsetXControls = addValueRow(positionPanel, "가로 이동", "mm", offsetXmm,
+            var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-            var offsetYControls = addValueRow(positionPanel, "세로 이동", "mm", offsetYmm,
+            var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
             // ---- 하단 ----
