@@ -1,0 +1,998 @@
+// Object_ReactionModel.jsx
+// 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
+// 화학 반응 채움 모형: 분자를 공간 채움 모형(하이라이트가 있는 색 구)으로 그린다. 선택 없이 화면 가운데에 그린다.
+// 화학 반응 탭: 반응물 + 반응물 → 생성물을 분자 모형으로 늘어놓고 +·화살표로 잇고 이름을 단다 (이온 반응 포함).
+// 기체 반응 탭: 분자를 정육면체 안에 담는다. 계수만큼 칸을 이어 붙이고 화학식·부피비·분자 수비 표를 붙인다.
+// 반응식은 "2H2+O2=2H2O"처럼 적는다. 화살표는 =, >, ->, → 모두 되고, ;로 이으면 반응 여러 개(기체 반응 탭은 표로 쌓음).
+// 쓸 수 있는 물질: H2 O2 N2 Cl2 H2O H2O2 NH3 HCl CH4 CO2 CO NO NO2 C NaCl AgCl AgNO3 NaNO3
+
+(function() {
+    if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
+
+    var doc = app.activeDocument;
+    var FORM_MM = 2.834645669;
+    var FORM_KOR_FONT = formFindFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
+    var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
+    var FORM_MATH_FONT = formFindFont(["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular", "GSMediumB1"]);
+    var TAB_PREF_KEY = "ObjectReactionModel/tab";
+    var MINUS = "−";
+    var GAS_ROW_NAMES = ["화학 반응식", "부피비", "분자 수비"];
+    var gradientCache = {};
+
+    // ==== 표 ====
+    // 원자: d = 지름(산소 = 1), pal = 색 이름, text·sup = 원자에 쓰는 기호와 전하
+    var ELEMENTS = {
+        H: {d: 0.64, pal: "H", text: "H"},
+        C: {d: 1.12, pal: "C", text: "C"},
+        N: {d: 1, pal: "N", text: "N"},
+        O: {d: 1, pal: "O", text: "O"},
+        Cl: {d: 1.3, pal: "Cl", text: "Cl"},
+        "Na+": {d: 0.7, pal: "Na", text: "Na", sup: "+"},
+        "Cl-": {d: 1.3, pal: "Cl", text: "Cl", sup: MINUS},
+        "Ag+": {d: 1.25, pal: "Ag", text: "Ag", sup: "+"}
+    };
+    // 구 색: [하이라이트, 본색, 가장자리] (RGB)
+    var SPHERE_COLORS = {
+        H: [[255, 255, 255], [228, 228, 228], [145, 145, 145]],
+        C: [[135, 142, 145], [66, 74, 78], [28, 32, 35]],
+        N: [[185, 222, 248], [62, 152, 218], [24, 92, 158]],
+        O: [[255, 185, 155], [255, 62, 32], [175, 26, 10]],
+        Cl: [[205, 240, 170], [92, 188, 72], [38, 118, 34]],
+        Na: [[255, 252, 210], [252, 228, 84], [205, 168, 30]],
+        Ag: [[190, 235, 225], [64, 164, 164], [24, 104, 110]]
+    };
+    // 분자 모형: 원자는 [종류, x, y] (산소 지름 = 1, y는 위쪽이 +). 앞에 적은 원자가 뒤에 그려진다
+    var NITRATE = [["O", 0.5, 0.9], ["O", 0.5, -0.9], ["O", 1.4, 0], ["N", 0.5, 0]];
+    var BRACKET = {x0: -0.12, x1: 2.02, y0: -1.52, y1: 1.52};
+    var MOLECULES = {
+        H2: {name: "수소", atoms: [["H", -0.27, 0], ["H", 0.27, 0]]},
+        O2: {name: "산소", atoms: [["O", -0.4, 0], ["O", 0.4, 0]]},
+        N2: {name: "질소", atoms: [["N", -0.4, 0], ["N", 0.4, 0]]},
+        Cl2: {name: "염소", atoms: [["Cl", -0.5, 0], ["Cl", 0.5, 0]]},
+        H2O: {name: "물", atoms: [["H", -0.55, -0.42], ["H", 0.55, -0.42], ["O", 0, 0.1]]},
+        H2O2: {name: "과산화 수소", atoms: [["H", -0.9, -0.38], ["H", 0.9, 0.38], ["O", -0.4, 0], ["O", 0.4, 0]]},
+        NH3: {name: "암모니아", atoms: [["H", -0.56, -0.1], ["H", 0.56, -0.1], ["N", 0, 0.12], ["H", 0, -0.5]]},
+        HCl: {name: "염화 수소", atoms: [["H", -0.78, 0], ["Cl", 0, 0]]},
+        CH4: {name: "메테인", atoms: [["H", 0, 0.72], ["H", -0.72, -0.12], ["H", 0.72, -0.12], ["C", 0, 0.02], ["H", 0, -0.64]]},
+        CO2: {name: "이산화 탄소", atoms: [["O", -0.92, 0], ["O", 0.92, 0], ["C", 0, 0]]},
+        CO: {name: "일산화 탄소", atoms: [["C", -0.42, 0], ["O", 0.42, 0]]},
+        NO: {name: "일산화 질소", atoms: [["N", -0.4, 0], ["O", 0.4, 0]]},
+        NO2: {name: "이산화 질소", atoms: [["O", 0.6, 0.27], ["N", 0, 0], ["O", -0.38, -0.58]]},
+        C: {name: "탄소", atoms: [["C", 0, 0]]},
+        NaCl: {name: "염화 나트륨", ionic: true, atoms: [["Cl-", 0.455, 0], ["Na+", -0.455, 0]]},
+        AgCl: {name: "염화 은", ionic: true, atoms: [["Cl-", 0.6, 0], ["Ag+", -0.6, 0]]},
+        AgNO3: {name: "질산 은", ionic: true, bracket: BRACKET, atoms: NITRATE.concat([["Ag+", -0.85, 0]])},
+        NaNO3: {name: "질산 나트륨", ionic: true, bracket: BRACKET, atoms: NITRATE.concat([["Na+", -0.55, 0]])}
+    };
+    // 반응 목록: eq는 입력창에 들어가는 반응식, 마지막은 직접 입력
+    var REACT_PRESETS = [
+        {title: "과산화 수소 분해 (2H₂O₂ → 2H₂O + O₂)", eq: "2H2O2=2H2O+O2"},
+        {title: "암모니아 생성 (N₂ + 3H₂ → 2NH₃)", eq: "N2+3H2=2NH3"},
+        {title: "메테인 연소 (CH₄ + 2O₂ → CO₂ + 2H₂O)", eq: "CH4+2O2=CO2+2H2O"},
+        {title: "물 생성 (2H₂ + O₂ → 2H₂O)", eq: "2H2+O2=2H2O"},
+        {title: "염화 은 침전 (NaCl + AgNO₃ → AgCl + NaNO₃)", eq: "NaCl+AgNO3=AgCl+NaNO3"},
+        {title: "염화 수소 생성 (H₂ + Cl₂ → 2HCl)", eq: "H2+Cl2=2HCl"},
+        {title: "일산화 탄소 연소 (2CO + O₂ → 2CO₂)", eq: "2CO+O2=2CO2"},
+        {title: "이산화 질소 생성 (N₂ + 2O₂ → 2NO₂)", eq: "N2+2O2=2NO2"},
+        {title: "직접 입력", eq: null}
+    ];
+    var GAS_PRESETS = [
+        {title: "물 생성 (2H₂ + O₂ → 2H₂O)", eq: "2H2+O2=2H2O"},
+        {title: "암모니아 생성 (N₂ + 3H₂ → 2NH₃)", eq: "N2+3H2=2NH3"},
+        {title: "염화 수소 생성 (H₂ + Cl₂ → 2HCl)", eq: "H2+Cl2=2HCl"},
+        {title: "이산화 질소 생성 (N₂ + 2O₂ → 2NO₂)", eq: "N2+2O2=2NO2"},
+        {title: "일산화 탄소 연소 (2CO + O₂ → 2CO₂)", eq: "2CO+O2=2CO2"},
+        {title: "일산화 질소 산화 (2NO + O₂ → 2NO₂)", eq: "2NO+O2=2NO2"},
+        {title: "네 반응 모두 (표)", eq: "2H2+O2=2H2O;N2+3H2=2NH3;H2+Cl2=2HCl;N2+2O2=2NO2"},
+        {title: "직접 입력", eq: null}
+    ];
+    // 화살표 색(위·아래 RGB, null이면 검정)과 더하기 색(RGB, null이면 검정)
+    var ARROW_COLORS = [
+        {id: "blue", top: [190, 212, 242], bottom: [84, 128, 198]},
+        {id: "red", top: [255, 165, 145], bottom: [226, 52, 40]},
+        null
+    ];
+    var PLUS_COLORS = [[108, 152, 214], [181, 172, 128], null];
+    // 정육면체 면 색(RGB)
+    var CUBE = {
+        back: [196, 224, 238], left: [178, 212, 232], floor: [160, 200, 224],
+        front: [222, 239, 248], top: [236, 247, 252], right: [138, 188, 216],
+        edge: [92, 152, 188], edgeSoft: [140, 184, 208]
+    };
+    // 칸당 분자 수별 자리(칸 크기 대비 비율)
+    var CELL_OFFSETS = {
+        1: [[0, 0]],
+        2: [[-0.2, 0.12], [0.2, -0.12]],
+        3: [[0, 0.2], [-0.22, -0.2], [0.22, -0.2]],
+        4: [[-0.22, 0.2], [0.22, 0.2], [-0.22, -0.2], [0.22, -0.2]]
+    };
+
+    runFormHost("화학 반응 채움 모형", [makeReactEngine(), makeGasEngine()], TAB_PREF_KEY);
+
+    // ==== 화학 반응 탭 ====
+    function makeReactEngine() {
+        return makeFormEngine({
+            label: "화학 반응", name: "ReactionModel", prefKey: "ObjectReactionModel/react",
+            presets: REACT_PRESETS,
+            controls: [
+                {panel: "반응"},
+                {key: "reaction", label: "반응", items: presetTitles(REACT_PRESETS), value: 3},
+                {key: "formula", label: "반응식", text: true, value: REACT_PRESETS[3].eq},
+                {key: "arrange", label: "분자 배치", items: ["한 줄", "모아서"], value: 0},
+                {panel: "크기·간격"},
+                {key: "size", label: "원자 크기", unit: "mm", min: 2, max: 15, step: 0.5, value: 7},
+                {key: "tilt", label: "기울임", unit: "°", min: 0, max: 45, step: 5, value: 0},
+                {key: "molGap", label: "분자 간격", unit: "mm", min: 0, max: 8, step: 0.5, value: 1},
+                {key: "gap", label: "항 간격", unit: "mm", min: 1, max: 15, step: 0.5, value: 4},
+                {key: "arrowLen", label: "화살표 길이", unit: "mm", min: 6, max: 40, step: 1, value: 14},
+                {panel: "표시"},
+                {key: "label", label: "이름표", items: ["이름", "화학식", "이름(화학식)", "없음"], value: 0},
+                {key: "symbols", check: "원소 기호", value: false},
+                {key: "coef", check: "화학식에 계수", value: false},
+                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
+                {key: "labelGap", label: "이름표 간격", unit: "mm", min: 0, max: 10, step: 0.5, value: 2.5},
+                {key: "arrowColor", label: "화살표 색", items: ["파랑", "빨강", "검정"], value: 0},
+                {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 0}
+            ],
+            draw: drawReact
+        });
+    }
+
+    function drawReact(t, o) {
+        var parsed = parseEquations(o.formula);
+        if (typeof parsed === "string") { t.text(parsed, 0, 0, o.font, "center", 100); return; }
+        var reaction = parsed[0];
+        var mm = t.mm, F = o.font, unit = o.size * mm;
+        var molGap = o.molGap * mm, gap = o.gap * mm, plusW = unit * 0.8, arrowL = o.arrowLen * mm;
+        var sides = [reaction.left, reaction.right];
+        var groups = [], plusX = [], arrowSpan = null, x = 0, lowest = 0;
+
+        for (var s = 0; s < 2; s++) {
+            for (var j = 0; j < sides[s].length; j++) {
+                if (j > 0) {
+                    x += gap;
+                    plusX.push(x + plusW / 2);
+                    x += plusW + gap;
+                }
+                var group = arrangeSpecies(sides[s][j][1], sides[s][j][0], o.arrange, o.tilt, unit, molGap);
+                group.cx = x + group.w / 2;
+                group.formula = sides[s][j][1];
+                group.coef = sides[s][j][0];
+                x += group.w;
+                groups.push(group);
+                lowest = Math.min(lowest, -group.h / 2);
+            }
+            if (s === 0) {
+                x += gap;
+                arrowSpan = [x, x + arrowL];
+                x += arrowL + gap;
+            }
+        }
+
+        for (var g = 0; g < groups.length; g++) {
+            for (var i = 0; i < groups[g].items.length; i++) {
+                var item = groups[g].items[i];
+                paintMolecule(t, item.lay, groups[g].cx + item.x, item.y, unit, o.symbols, F);
+            }
+        }
+        for (var p = 0; p < plusX.length; p++) t.plus(plusX[p], 0, plusW, o.plusColor);
+        t.blockArrow(arrowSpan[0], arrowSpan[1], 0, o.arrowColor);
+
+        if (o.label < 3) {
+            var baseline = lowest - o.labelGap * mm - F * 0.72;
+            for (var n = 0; n < groups.length; n++) {
+                var info = molLabel(o.label, groups[n].formula, groups[n].coef, o.coef);
+                t.text(info, groups[n].cx, baseline, F, "center", 100, {sub: true});
+            }
+        }
+    }
+
+    // 이름표 글: 0 이름, 1 화학식, 2 이름(화학식)
+    function molLabel(kind, formula, coef, withCoef) {
+        var name = MOLECULES[formula].name;
+        var text = (withCoef && coef > 1 ? coef : "") + formula;
+        if (kind === 0) return name;
+        if (kind === 1) return text;
+        return name + "(" + text + ")";
+    }
+
+    // ==== 기체 반응 탭 ====
+    function makeGasEngine() {
+        return makeFormEngine({
+            label: "기체 반응", name: "GasReactionModel", prefKey: "ObjectReactionModel/gas",
+            presets: GAS_PRESETS,
+            controls: [
+                {panel: "반응"},
+                {key: "reaction", label: "반응", items: presetTitles(GAS_PRESETS), value: 0},
+                {key: "formula", label: "반응식", text: true, value: GAS_PRESETS[0].eq},
+                {panel: "정육면체·분자"},
+                {key: "cell", label: "칸 크기", unit: "mm", min: 8, max: 30, step: 0.5, value: 16},
+                {key: "depth", label: "깊이", unit: "mm", min: 2, max: 15, step: 0.5, value: 5},
+                {key: "angle", label: "깊이 각도", unit: "°", min: 10, max: 80, step: 5, value: 45},
+                {key: "size", label: "원자 크기", unit: "mm", min: 2, max: 10, step: 0.1, value: 6.2},
+                {key: "perCell", label: "칸당 분자 수", unit: "개", min: 1, max: 4, step: 1, value: 1},
+                {key: "tilt", label: "기울임", unit: "°", min: 0, max: 45, step: 5, value: 0},
+                {panel: "간격·색"},
+                {key: "gap", label: "항 간격", unit: "mm", min: 1, max: 15, step: 0.5, value: 4},
+                {key: "arrowLen", label: "화살표 길이", unit: "mm", min: 6, max: 40, step: 1, value: 14},
+                {key: "arrowColor", label: "화살표 색", items: ["파랑", "빨강", "검정"], value: 1},
+                {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 1},
+                {panel: "표시"},
+                {key: "formulaRow", check: "화학식", value: true},
+                {key: "volume", check: "부피비", value: true},
+                {key: "count", check: "분자 수비", value: true},
+                {key: "lines", check: "표 선", value: true},
+                {key: "rowNames", check: "행 이름", value: true},
+                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
+            ],
+            draw: drawGas
+        });
+    }
+
+    function drawGas(t, o) {
+        var parsed = parseEquations(o.formula);
+        if (typeof parsed === "string") { t.text(parsed, 0, 0, o.font, "center", 100); return; }
+        var mm = t.mm, F = o.font, cell = o.cell * mm, rad = o.angle * Math.PI / 180;
+        var dx = o.depth * mm * Math.cos(rad), dy = o.depth * mm * Math.sin(rad);
+        var unit = o.size * mm, gap = o.gap * mm, arrowL = o.arrowLen * mm, plusW = cell * 0.45;
+        var boxH = cell + dy, padV = 2.5 * mm, padX = 4 * mm, rowH = F * 2.4, thin = 0.4, thick = 0.8;
+        var r, s, j, k, i;
+
+        // 반응 하나(블록)의 가로 배치. x는 블록 왼쪽 끝이 0
+        var blocks = [], maxW = 0;
+        for (r = 0; r < parsed.length; r++) {
+            var sides = [parsed[r].left, parsed[r].right], items = [], x = 0;
+            for (s = 0; s < 2; s++) {
+                for (j = 0; j < sides[s].length; j++) {
+                    if (j > 0) {
+                        x += gap;
+                        items.push({type: "plus", cx: x + plusW / 2});
+                        x += plusW + gap;
+                    }
+                    var w = sides[s][j][0] * cell + dx;
+                    items.push({type: "box", x0: x, cx: x + w / 2, n: sides[s][j][0], formula: sides[s][j][1]});
+                    x += w;
+                }
+                if (s === 0) {
+                    x += gap;
+                    items.push({type: "arrow", x0: x, x1: x + arrowL});
+                    x += arrowL + gap;
+                }
+            }
+            blocks.push({items: items, w: x});
+            maxW = Math.max(maxW, x);
+        }
+
+        var labelW = o.rowNames ? F * 5.5 + 3 * mm : 0;
+        var contentW = maxW + padX * 2;
+        var left = -contentW / 2 - labelW, right = contentW / 2;
+        var ratioRows = [];
+        if (o.volume) ratioRows.push(1);
+        if (o.count) ratioRows.push(2);
+
+        var y = 0;
+        if (o.lines) t.line([left, y], [right, y], thick, 100);
+        for (r = 0; r < blocks.length; r++) {
+            var block = blocks[r], offX = -block.w / 2, top = y;
+            var frontBottom = top - padV - boxH, centerY = frontBottom + boxH / 2;
+            var rowBottom = frontBottom - padV, formulaBase = 0;
+            if (o.formulaRow) {
+                formulaBase = frontBottom - 1.8 * mm - F * 0.72;
+                rowBottom = formulaBase - F * 0.3 - padV;
+            }
+            var boxes = [];
+            for (i = 0; i < block.items.length; i++) {
+                var it = block.items[i];
+                if (it.type === "box") {
+                    drawBox(offX + it.x0, frontBottom, it.n, it.formula);
+                    boxes.push(it);
+                    if (o.formulaRow) t.text((it.n > 1 ? it.n : "") + it.formula, offX + it.cx, formulaBase, F, "center", 100, {sub: true});
+                } else if (it.type === "plus") {
+                    t.plus(offX + it.cx, centerY, plusW, o.plusColor);
+                    if (o.formulaRow) t.text("+", offX + it.cx, formulaBase, F, "center", 100);
+                } else {
+                    t.blockArrow(offX + it.x0, offX + it.x1, centerY, o.arrowColor);
+                    if (o.formulaRow) {
+                        var mid = offX + (it.x0 + it.x1) / 2, half = (it.x1 - it.x0) * 0.35;
+                        t.arrow([mid - half, formulaBase + F * 0.3], [mid + half, formulaBase + F * 0.3], 0.5, 100, 1.6 * mm);
+                    }
+                }
+            }
+            if (o.rowNames) t.text(GAS_ROW_NAMES[0], left + 2 * mm, (top + rowBottom) / 2 - F * 0.35, F, "left", 100);
+
+            y = rowBottom;
+            for (k = 0; k < ratioRows.length; k++) {
+                if (o.lines) t.line([left, y], [right, y], thin, 100);
+                var base = y - rowH / 2 - F * 0.35;
+                if (o.rowNames) t.text(GAS_ROW_NAMES[ratioRows[k]], left + 2 * mm, base, F, "left", 100);
+                for (i = 0; i < boxes.length; i++) {
+                    t.text(String(boxes[i].n), offX + boxes[i].cx, base, F, "center", 100);
+                    if (i > 0) t.text(":", offX + (boxes[i - 1].cx + boxes[i].cx) / 2, base, F, "center", 100);
+                }
+                y -= rowH;
+            }
+            if (o.lines) t.line([left, y], [right, y], thick, 100);
+            else y -= 2 * mm;
+        }
+
+        // 정육면체 하나(계수만큼 칸을 이어 붙임). (x0, y0)은 앞면 왼쪽 아래
+        function drawBox(x0, y0, n, formula) {
+            t.cubeBack(x0, y0, n * cell, cell, dx, dy);
+            var offsets = CELL_OFFSETS[o.perCell], index = 0;
+            for (var c = 0; c < n; c++) {
+                for (var m = 0; m < offsets.length; m++) {
+                    var lay = molLayout(formula, o.tilt * (index % 2 === 0 ? 1 : -1));
+                    index++;
+                    paintMolecule(t, lay, x0 + (c + 0.5) * cell + dx / 2 + offsets[m][0] * cell,
+                        y0 + cell / 2 + dy / 2 + offsets[m][1] * cell, unit, false, F);
+                }
+            }
+            t.cubeFront(x0, y0, n * cell, cell, dx, dy, n);
+        }
+    }
+
+    // ==== 분자 ====
+    // 반응식 "2H2+O2=2H2O;..." → [{left: [[계수, 식], ...], right: [...]}, ...] 또는 오류문
+    function parseEquations(text) {
+        var out = [];
+        var parts = String(text).replace(/\s+/g, "").replace(/(→|⟶|->|=>|>)/g, "=").split(";");
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i] === "") continue;
+            var sides = parts[i].split("=");
+            if (sides.length !== 2) return "반응식은 '왼쪽=오른쪽'으로 적어 주세요";
+            var left = parseSide(sides[0]), right = parseSide(sides[1]);
+            if (typeof left === "string") return left;
+            if (typeof right === "string") return right;
+            out.push({left: left, right: right});
+        }
+        if (out.length === 0) return "반응식을 적어 주세요";
+        return out;
+    }
+
+    function parseSide(text) {
+        var terms = text.split("+"), list = [];
+        if (terms.length > 5) return "한쪽 항은 5개까지입니다";
+        for (var i = 0; i < terms.length; i++) {
+            var m = /^(\d*)([A-Za-z0-9]+)$/.exec(terms[i]);
+            if (!m) return "읽을 수 없는 항: " + terms[i];
+            var coef = m[1] === "" ? 1 : parseInt(m[1], 10);
+            if (coef < 1 || coef > 8) return "계수는 1~8입니다: " + terms[i];
+            if (!MOLECULES.hasOwnProperty(m[2])) return "목록에 없는 물질: " + m[2];
+            list.push([coef, m[2]]);
+        }
+        return list;
+    }
+
+    function presetTitles(presets) {
+        var titles = [];
+        for (var i = 0; i < presets.length; i++) titles.push(presets[i].title);
+        return titles;
+    }
+
+    // 분자를 angle(°)만큼 돌려 경계 가운데가 원점이 되게 한 배치 (산소 지름 = 1). 이온·괄호 분자는 돌리지 않는다
+    function molLayout(formula, angle) {
+        var mol = MOLECULES[formula];
+        var rad = mol.ionic ? 0 : angle * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);
+        var atoms = [], l = 1e9, t = -1e9, r = -1e9, b = 1e9;
+        for (var i = 0; i < mol.atoms.length; i++) {
+            var a = mol.atoms[i], d = ELEMENTS[a[0]].d;
+            var x = a[1] * cos - a[2] * sin, y = a[1] * sin + a[2] * cos;
+            atoms.push({key: a[0], x: x, y: y, d: d});
+            l = Math.min(l, x - d / 2);
+            r = Math.max(r, x + d / 2);
+            t = Math.max(t, y + d / 2);
+            b = Math.min(b, y - d / 2);
+        }
+        var br = mol.bracket;
+        if (br) {
+            l = Math.min(l, br.x0);
+            r = Math.max(r, br.x1 + 0.4);
+            t = Math.max(t, br.y1 + 0.25);
+            b = Math.min(b, br.y0);
+        }
+        var cx = (l + r) / 2, cy = (t + b) / 2;
+        for (var k = 0; k < atoms.length; k++) {
+            atoms[k].x -= cx;
+            atoms[k].y -= cy;
+        }
+        var shifted = br ? {x0: br.x0 - cx, x1: br.x1 - cx, y0: br.y0 - cy, y1: br.y1 - cy} : null;
+        return {atoms: atoms, bracket: shifted, labeled: !!mol.ionic, w: r - l, h: t - b};
+    }
+
+    // 개수 → 모아 놓을 때 줄별 개수(위에서 아래로, 아래 줄이 가득 찬다). 3개는 [1, 2]
+    function clusterRows(count) {
+        var cols = Math.ceil(Math.sqrt(count)), rows = Math.ceil(count / cols), lens = [], left = count;
+        for (var r = rows - 1; r >= 0; r--) {
+            lens[r] = Math.min(cols, left);
+            left -= lens[r];
+        }
+        return lens;
+    }
+
+    // 같은 분자 count개를 한 줄(mode 0) 또는 모아서(mode 1) 놓는다. 좌표는 pt, 묶음 경계 가운데가 원점
+    function arrangeSpecies(formula, count, mode, tilt, unit, gapPt) {
+        var lays = [], maxW = 0, maxH = 0, i;
+        for (i = 0; i < count; i++) {
+            var lay = molLayout(formula, tilt * (i % 2 === 0 ? 1 : -1));
+            lays.push(lay);
+            maxW = Math.max(maxW, lay.w * unit);
+            maxH = Math.max(maxH, lay.h * unit);
+        }
+        var items = [], w, h;
+        if (mode === 0) {
+            var x = 0;
+            for (i = 0; i < count; i++) {
+                items.push({lay: lays[i], x: x + lays[i].w * unit / 2, y: 0});
+                x += lays[i].w * unit + gapPt;
+            }
+            w = x - gapPt;
+            h = maxH;
+            for (i = 0; i < items.length; i++) items[i].x -= w / 2;
+        } else {
+            var lens = clusterRows(count), rows = lens.length, cols = 0, index = 0;
+            var cw = maxW + gapPt, ch = maxH + gapPt;
+            for (var r = 0; r < rows; r++) {
+                cols = Math.max(cols, lens[r]);
+                for (var c = 0; c < lens[r]; c++) {
+                    items.push({lay: lays[index], x: (c - (lens[r] - 1) / 2) * cw, y: ((rows - 1) / 2 - r) * ch});
+                    index++;
+                }
+            }
+            w = maxW + (cols - 1) * cw;
+            h = maxH + (rows - 1) * ch;
+        }
+        return {items: items, w: w, h: h};
+    }
+
+    // 분자 하나를 (cx, cy)에 그린다. 원자마다 구를 그린 뒤 기호를 얹어, 앞 원자가 뒤 원자의 기호를 가린다
+    function paintMolecule(t, lay, cx, cy, unit, showSymbols, F) {
+        for (var i = 0; i < lay.atoms.length; i++) {
+            var a = lay.atoms[i], el = ELEMENTS[a.key];
+            var x = cx + a.x * unit, y = cy + a.y * unit, radius = a.d * unit / 2;
+            t.sphere(x, y, radius, el.pal);
+            if (showSymbols || lay.labeled) {
+                var size = Math.max(4.5, Math.min(F, radius * 2 * 0.55));
+                t.text(el.text + (el.sup || ""), x, y - size * 0.35, size, "center", 100, el.sup ? {supLast: 1} : null);
+            }
+        }
+        var br = lay.bracket;
+        if (br) {
+            var x0 = cx + br.x0 * unit, x1 = cx + br.x1 * unit, y0 = cy + br.y0 * unit, y1 = cy + br.y1 * unit, prong = 0.2 * unit;
+            t.path([[x0 + prong, y1], [x0, y1], [x0, y0], [x0 + prong, y0]], false, null, 100, 0.5);
+            t.path([[x1 - prong, y1], [x1, y1], [x1, y0], [x1 - prong, y0]], false, null, 100, 0.5);
+            t.text(MINUS, x1 + 0.1 * unit, y1 - F * 0.5, F * 1.2, "left", 100);
+        }
+    }
+
+    // ==== 창 ====
+    // 엔진 인터페이스: label / addRows(page)→오류문 또는 null / setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
+    // 엔진이 하나면 탭 없이 창에 바로 행을 단다
+    function runFormHost(title, engines, tabPrefKey) {
+        var win = new Window("dialog", title);
+        win.orientation = "column";
+        win.alignChildren = "fill";
+        win.spacing = 4;
+        win.margins = 12;
+
+        var tabs = null;
+        if (engines.length === 1) {
+            engines[0].error = engines[0].addRows(win);
+            if (engines[0].error) { alert(engines[0].error); return; }
+        } else {
+            tabs = win.add("tabbedpanel");
+            tabs.alignChildren = "fill";
+            for (var i = 0; i < engines.length; i++) {
+                var page = tabs.add("tab", undefined, engines[i].label);
+                page.orientation = "column";
+                page.alignChildren = "fill";
+                page.spacing = 4;
+                engines[i].error = engines[i].addRows(page);
+                if (engines[i].error) {
+                    page.enabled = false;
+                    page.helpTip = engines[i].error;
+                }
+            }
+        }
+
+        var footer = win.add("group");
+        var previewCheck = footer.add("checkbox", undefined, "미리보기");
+        previewCheck.value = true;
+        var footerSpacer = footer.add("group");
+        footerSpacer.alignment = ["fill", "center"];
+        // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+        var okButton = footer.add("button", undefined, "확인");
+        try { win.defaultElement = null; } catch (defaultError) {}
+        var cancelButton = footer.add("button", undefined, "취소", {name: "cancel"});
+
+        var tabIndex = 0;
+        if (tabs !== null) {
+            try {
+                var savedTab = parseInt(app.preferences.getStringPreference(tabPrefKey), 10);
+                if (isFinite(savedTab) && savedTab >= 0 && savedTab < engines.length) tabIndex = savedTab;
+            } catch (tabError) {}
+            if (engines[tabIndex].error) {
+                for (var j = 0; j < engines.length; j++) if (!engines[j].error) { tabIndex = j; break; }
+            }
+            if (engines[tabIndex].error) { alert(engines[tabIndex].error); return; }
+            tabs.selection = tabIndex;
+            tabs.onChange = function() {
+                // Tab에는 index가 없어 제목으로 찾는다
+                var next = tabIndex;
+                for (var k = 0; k < engines.length; k++) {
+                    if (tabs.selection && tabs.selection.text === engines[k].label) next = k;
+                }
+                if (next === tabIndex) return;
+                if (engines[next].error) {
+                    tabs.selection = tabIndex;
+                    alert(engines[next].error);
+                    return;
+                }
+                engines[tabIndex].clearPreview();
+                tabIndex = next;
+                engines[tabIndex].setPreview(previewCheck.value);
+            };
+        }
+        previewCheck.onClick = function() { engines[tabIndex].setPreview(previewCheck.value); };
+        okButton.onClick = function() {
+            if (!engines[tabIndex].commit()) return;
+            if (tabs !== null) {
+                try { app.preferences.setStringPreference(tabPrefKey, String(tabIndex)); } catch (saveError) {}
+            }
+            win.close(1);
+        };
+        cancelButton.onClick = function() { win.close(0); };
+
+        // 초기 미리보기는 표시 시점(onShow)에 그려야 화면에 보인다
+        win.onShow = function() { engines[tabIndex].setPreview(previewCheck.value); };
+        if (typeof bindTabOrder === "function") bindTabOrder(win);
+        if (win.show() !== 1) engines[tabIndex].clearPreview();
+        try { app.redraw(); } catch (redrawError) {}
+    }
+
+    // ==== 폼 탭 공용 부품 ====
+    // spec: label(탭 이름), name(그룹 이름), prefKey, controls[], draw(tools, o), presets(선택, 반응 목록)
+    // 컨트롤: {panel: "제목"} 새 패널 / {key, label, unit, min, max, step, value} 숫자 행 /
+    //         {key, check: "라벨", value: true} 체크(이어진 것은 한 행에 셋까지) / {key, label, items: [...], value} 드롭다운 /
+    //         {key, label, text: true, value: "글"} 글 입력
+    // presets가 있으면 key "reaction" 드롭다운을 고를 때 key "formula" 글 입력을 그 반응식으로 바꾸고,
+    // 글 입력을 고치면 드롭다운이 마지막 항목(직접 입력)으로 간다.
+    // 위치 패널(가로·세로 이동)은 끝에 저절로 붙고, 이동은 다시 그리지 않고 그룹만 옮긴다.
+    // draw는 어디에 그려도 된다. 그린 뒤 그룹을 화면 가운데로 옮긴다.
+    function makeFormEngine(spec) {
+        var api = {label: spec.label, error: null, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        var controls = spec.controls.concat([
+            {panel: "위치"},
+            {key: "offsetX", label: "가로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 0},
+            {key: "offsetY", label: "세로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 1}
+        ]);
+        var o = {};
+        var group = null, committed = false, previewOn = true, center = [0, 0], ui = {};
+
+        function addRows(page) {
+            try { center = doc.activeView.centerPoint; } catch (viewError) {}
+            for (var i = 0; i < controls.length; i++) if (controls[i].key) o[controls[i].key] = controls[i].value;
+            loadSettings();
+            var panel = page, checkRow = null;
+            for (var c = 0; c < controls.length; c++) {
+                var ctl = controls[c];
+                if (ctl.panel) {
+                    panel = page.add("panel", undefined, ctl.panel);
+                    panel.alignChildren = ["left", "top"];
+                    panel.margins = [12, 16, 12, 10];
+                    panel.spacing = 4;
+                    checkRow = null;
+                } else if (ctl.check) {
+                    if (checkRow === null || checkRow.children.length >= 3) checkRow = panel.add("group");
+                    addCheck(checkRow, ctl);
+                } else {
+                    checkRow = null;
+                    if (ctl.items) addChoice(panel, ctl);
+                    else if (ctl.text) addText(panel, ctl);
+                    else addNumber(panel, ctl);
+                }
+            }
+            api.setPreview = function(on) { previewOn = on; redraw(); };
+            api.updatePreview = redraw;
+            api.clearPreview = function() { if (!committed) removeGroup(); };
+            api.commit = function() {
+                if (group === null) build();
+                if (group === null) return false;
+                saveSettings();
+                committed = true;
+                doc.selection = null;
+                group.selected = true;
+                return true;
+            };
+            return null;
+        }
+
+        function addNumber(panel, ctl) {
+            var decimals = ctl.step < 0.1 ? 2 : (ctl.step < 1 ? 1 : 0);
+            var row = panel.add("group");
+            row.alignChildren = ["left", "center"];
+            row.add("statictext", undefined, ctl.label + (ctl.unit ? " (" + ctl.unit + "):" : ":")).preferredSize.width = 100;
+            var input = row.add("edittext", undefined, formFormat(o[ctl.key], decimals));
+            input.characters = 6;
+            var bar = row.add("scrollbar", undefined, o[ctl.key], ctl.min, ctl.max);
+            bar.stepdelta = ctl.step;
+            bar.jumpdelta = ctl.step * 10;
+            bar.preferredSize.width = 196;
+            function apply(value) {
+                if (isNaN(value)) value = o[ctl.key];
+                value = Math.round(value / ctl.step) * ctl.step;
+                value = Math.max(ctl.min, Math.min(ctl.max, Number(value.toFixed(decimals))));
+                var delta = value - o[ctl.key];
+                o[ctl.key] = value;
+                input.text = formFormat(value, decimals);
+                try { bar.value = value; } catch (e) {}
+                if (delta === 0) return;
+                if (ctl.move !== undefined) {
+                    if (group !== null) {
+                        try { group.translate(ctl.move === 0 ? delta * FORM_MM : 0, ctl.move === 1 ? delta * FORM_MM : 0, true, true, true, true); } catch (e2) {}
+                        app.redraw();
+                    }
+                } else redraw();
+            }
+            bar.onChanging = function() { apply(bar.value); };
+            bar.onChange = function() { apply(bar.value); };
+            input.onChange = function() { apply(parseFloat(String(input.text).replace(",", "."))); };
+        }
+
+        function addChoice(panel, ctl) {
+            var row = panel.add("group");
+            row.alignChildren = ["left", "center"];
+            row.add("statictext", undefined, ctl.label + ":").preferredSize.width = 100;
+            var list = row.add("dropdownlist", undefined, ctl.items);
+            list.selection = o[ctl.key];
+            ui[ctl.key] = list;
+            list.onChange = function() {
+                if (list.selection === null) { list.selection = o[ctl.key]; return; }
+                o[ctl.key] = list.selection.index;
+                if (spec.presets && ctl.key === "reaction" && spec.presets[o.reaction].eq) {
+                    o.formula = spec.presets[o.reaction].eq;
+                    if (ui.formula) ui.formula.text = o.formula;
+                }
+                redraw();
+            };
+        }
+
+        function addText(panel, ctl) {
+            var row = panel.add("group");
+            row.alignChildren = ["left", "center"];
+            row.add("statictext", undefined, ctl.label + ":").preferredSize.width = 100;
+            var input = row.add("edittext", undefined, o[ctl.key]);
+            input.characters = 34;
+            ui[ctl.key] = input;
+            input.onChange = function() {
+                o[ctl.key] = String(input.text).replace(/\|/g, "");
+                if (spec.presets && ctl.key === "formula" && ui.reaction) {
+                    o.reaction = spec.presets.length - 1;
+                    ui.reaction.selection = o.reaction;
+                }
+                redraw();
+            };
+        }
+
+        function addCheck(row, ctl) {
+            var box = row.add("checkbox", undefined, ctl.check);
+            box.value = o[ctl.key];
+            box.onClick = function() { o[ctl.key] = box.value; redraw(); };
+        }
+
+        function redraw() {
+            removeGroup();
+            if (previewOn) build();
+            app.redraw();
+        }
+
+        function build() {
+            var layer = doc.activeLayer;
+            if (layer.locked || !layer.visible) {
+                for (var i = 0; i < doc.layers.length; i++) {
+                    if (!doc.layers[i].locked && doc.layers[i].visible) { layer = doc.layers[i]; break; }
+                }
+            }
+            group = layer.groupItems.add();
+            group.name = spec.name;
+            try {
+                spec.draw(makeFormTools(group), o);
+                var b = group.geometricBounds;
+                group.translate(center[0] - (b[0] + b[2]) / 2 + o.offsetX * FORM_MM,
+                    center[1] - (b[1] + b[3]) / 2 + o.offsetY * FORM_MM, true, true, true, true);
+            } catch (e) {
+                removeGroup();
+                alert("그리지 못했습니다: " + e);
+            }
+        }
+
+        function removeGroup() {
+            if (group === null) return;
+            try { group.remove(); } catch (e) {}
+            group = null;
+        }
+
+        function saveSettings() {
+            var parts = ["v1"];
+            for (var i = 0; i < controls.length; i++) {
+                var ctl = controls[i];
+                if (!ctl.key) continue;
+                parts.push(ctl.check ? (o[ctl.key] ? "1" : "0") : String(o[ctl.key]));
+            }
+            try { app.preferences.setStringPreference(spec.prefKey, parts.join("|")); } catch (e) {}
+        }
+
+        // 태그·개수가 맞고 모든 값이 범위 안일 때만 복원한다
+        function loadSettings() {
+            var raw = "";
+            try { raw = app.preferences.getStringPreference(spec.prefKey); } catch (e) { return; }
+            if (!raw) return;
+            var p = String(raw).split("|");
+            var keyed = [];
+            for (var i = 0; i < controls.length; i++) if (controls[i].key) keyed.push(controls[i]);
+            if (p[0] !== "v1" || p.length !== keyed.length + 1) return;
+            var values = [];
+            for (var k = 0; k < keyed.length; k++) {
+                var ctl = keyed[k], text = p[k + 1];
+                if (ctl.check) {
+                    if (text !== "0" && text !== "1") return;
+                    values.push(text === "1");
+                } else if (ctl.text) {
+                    if (text.length > 200) return;
+                    values.push(text);
+                } else {
+                    var value = Number(text);
+                    if (text === "" || isNaN(value)) return;
+                    if (ctl.items ? (value !== Math.floor(value) || value < 0 || value >= ctl.items.length)
+                        : (value < ctl.min || value > ctl.max)) return;
+                    values.push(value);
+                }
+            }
+            for (var n = 0; n < keyed.length; n++) o[keyed[n].key] = values[n];
+        }
+        return api;
+    }
+
+    function formFormat(value, decimals) {
+        return Number(value).toFixed(decimals);
+    }
+
+    // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다. 색은 K값(숫자) 또는 [r, g, b]
+    function makeFormTools(g) {
+        var t = {mm: FORM_MM, group: g};
+        var spheres = {};
+        t.path = function(points, closed, fill, stroke, width, dashes) {
+            var p = g.pathItems.add();
+            p.setEntirePath(points);
+            p.closed = !!closed;
+            formPaint(p, fill, stroke, width, dashes);
+            return p;
+        };
+        t.poly = function(points, fill, stroke, width) {
+            return t.path(points, true, fill, stroke, width);
+        };
+        t.line = function(a, b, width, k, dashes) {
+            return t.path([a, b], false, null, k === undefined ? 100 : k, width, dashes);
+        };
+        // a → b 화살표. 선은 촉 뿌리까지, 촉은 채운 삼각형
+        t.arrow = function(a, b, width, k, headLength) {
+            if (k === undefined) k = 100;
+            var head = headLength || 1.6 * FORM_MM;
+            var dx = b[0] - a[0], dy = b[1] - a[1];
+            var len = Math.sqrt(dx * dx + dy * dy);
+            if (len < 0.01) return;
+            var ux = dx / len, uy = dy / len;
+            if (head > len) head = len;
+            var base = [b[0] - ux * head, b[1] - uy * head];
+            var half = head * 0.35;
+            if (len > head) t.line(a, [base[0] + ux * 0.2, base[1] + uy * 0.2], width, k);
+            t.path([b, [base[0] - uy * half, base[1] + ux * half], [base[0] + uy * half, base[1] - ux * half]], true, k, null, 0);
+        };
+        // 속 채운 화살표(위가 밝고 아래가 어두운 그라데이션). x0 → x1, 세로 가운데 y
+        t.blockArrow = function(x0, x1, y, colorIndex) {
+            var length = x1 - x0, headLength = length * 0.36, headHalf = length * 0.21, shaftHalf = length * 0.11;
+            var p = t.path([[x0, y + shaftHalf], [x1 - headLength, y + shaftHalf], [x1 - headLength, y + headHalf], [x1, y],
+                [x1 - headLength, y - headHalf], [x1 - headLength, y - shaftHalf], [x0, y - shaftHalf]], true, null, null, 0);
+            p.filled = true;
+            var color = ARROW_COLORS[colorIndex];
+            if (color === null) {
+                p.fillColor = formGray(100);
+                return;
+            }
+            var gradientColor = new GradientColor();
+            gradientColor.gradient = formGradient("RM_arrow_" + color.id, GradientType.LINEAR, [[0, color.top], [100, color.bottom]]);
+            p.fillColor = gradientColor;
+            // 새 채우기에는 마지막 그라데이션 각도가 붙으므로 읽어서 차이만큼만 돌린다 (위가 밝게 = -90)
+            p.rotate(-90 - p.fillColor.angle, false, false, true, false, Transformation.CENTER);
+        };
+        // 십자(더하기) 기호. 가운데 (cx, cy), 폭 size
+        t.plus = function(cx, cy, size, colorIndex) {
+            var h = size / 2, w = size * 0.13;
+            var p = t.path([[cx - w, cy + h], [cx + w, cy + h], [cx + w, cy + w], [cx + h, cy + w], [cx + h, cy - w], [cx + w, cy - w],
+                [cx + w, cy - h], [cx - w, cy - h], [cx - w, cy - w], [cx - h, cy - w], [cx - h, cy + w], [cx - w, cy + w]],
+                true, PLUS_COLORS[colorIndex] === null ? 100 : PLUS_COLORS[colorIndex], null, 0);
+            return p;
+        };
+        // 공간 채움 구: 왼쪽 위에 하이라이트. 같은 색·크기는 처음 것을 복제해 옮긴다
+        t.sphere = function(cx, cy, r, pal) {
+            var key = pal + "|" + r.toFixed(2);
+            var proto = spheres[key];
+            if (proto) {
+                var copy = proto.item.duplicate(g, ElementPlacement.PLACEATBEGINNING);
+                copy.translate(cx - proto.cx, cy - proto.cy, true, true, true, true);
+                return copy;
+            }
+            var clip = g.groupItems.add();
+            var radius = r * 1.5, hx = cx - r * 0.3, hy = cy + r * 0.3;
+            var big = clip.pathItems.ellipse(hy + radius, hx - radius, radius * 2, radius * 2);
+            big.stroked = false;
+            big.filled = true;
+            var gradientColor = new GradientColor();
+            var colors = SPHERE_COLORS[pal];
+            gradientColor.gradient = formGradient("RM_sphere_" + pal, GradientType.RADIAL, [[0, colors[0]], [30, colors[1]], [100, colors[2]]]);
+            big.fillColor = gradientColor;
+            var mask = clip.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
+            mask.filled = false;
+            mask.stroked = false;
+            clip.clipped = true;
+            spheres[key] = {item: clip, cx: cx, cy: cy};
+            return clip;
+        };
+        // 정육면체의 뒤쪽 면(뒷면·왼쪽 안쪽 벽·바닥). 분자를 그리기 전에
+        t.cubeBack = function(x0, y0, w, h, dx, dy) {
+            t.poly([[x0 + dx, y0 + dy], [x0 + w + dx, y0 + dy], [x0 + w + dx, y0 + h + dy], [x0 + dx, y0 + h + dy]], CUBE.back, CUBE.edgeSoft, 0.3);
+            t.poly([[x0, y0], [x0 + dx, y0 + dy], [x0 + dx, y0 + h + dy], [x0, y0 + h]], CUBE.left, CUBE.edgeSoft, 0.3);
+            t.poly([[x0, y0], [x0 + w, y0], [x0 + w + dx, y0 + dy], [x0 + dx, y0 + dy]], CUBE.floor, CUBE.edgeSoft, 0.3);
+        };
+        // 정육면체의 앞쪽 면(앞면·윗면·오른쪽 면은 반투명)과 모서리, n칸이면 칸막이. 분자를 그린 뒤에
+        t.cubeFront = function(x0, y0, w, h, dx, dy, n) {
+            var front = [[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]];
+            var top = [[x0, y0 + h], [x0 + w, y0 + h], [x0 + w + dx, y0 + h + dy], [x0 + dx, y0 + h + dy]];
+            var right = [[x0 + w, y0], [x0 + w + dx, y0 + dy], [x0 + w + dx, y0 + h + dy], [x0 + w, y0 + h]];
+            t.poly(front, CUBE.front, null, 0).opacity = 15;
+            t.poly(top, CUBE.top, null, 0).opacity = 75;
+            t.poly(right, CUBE.right, null, 0).opacity = 80;
+            t.poly(front, null, CUBE.edge, 0.4);
+            t.poly(top, null, CUBE.edge, 0.4);
+            t.poly(right, null, CUBE.edge, 0.4);
+            for (var k = 1; k < n; k++) {
+                var xk = x0 + w * k / n;
+                t.line([xk, y0], [xk, y0 + h], 0.4, CUBE.edge);
+                t.line([xk, y0 + h], [xk + dx, y0 + h + dy], 0.4, CUBE.edge);
+                t.line([xk + dx, y0 + dy], [xk + dx, y0 + h + dy], 0.4, CUBE.edgeSoft);
+                t.line([xk, y0], [xk + dx, y0 + dy], 0.4, CUBE.edgeSoft);
+            }
+        };
+        // (x, baseline)이 글자의 가로 기준(align 가운데·"left"면 왼쪽 끝·"right"면 오른쪽 끝)과 기준선.
+        // opts: sub 글자 뒤 숫자를 아래 첨자로 / supLast 끝에서 n글자를 위 첨자로
+        t.text = function(text, x, baseline, size, align, k, opts) {
+            var frame = g.textFrames.add();
+            frame.contents = String(text);
+            var range = frame.textRange;
+            var attributes = range.characterAttributes;
+            attributes.size = size;
+            attributes.fillColor = formGray(k === undefined ? 100 : k);
+            formFonts(frame, opts);
+            var b = frame.geometricBounds;
+            var anchorX = align === "left" ? b[0] : (align === "right" ? b[2] : (b[0] + b[2]) / 2);
+            var anchor = frame.anchor;
+            frame.translate(x - anchorX, baseline - anchor[1]);
+            return frame;
+        };
+        return t;
+    }
+
+    // 같은 이름 그라데이션이 문서에 있으면 다시 쓴다 (실행마다 견본이 늘지 않게). stops: [[위치%, [r, g, b]], ...]
+    function formGradient(name, type, stops) {
+        if (gradientCache[name]) return gradientCache[name];
+        var gradient = null;
+        try { gradient = doc.gradients.getByName(name); } catch (e) { gradient = null; }
+        if (gradient === null) {
+            gradient = doc.gradients.add();
+            gradient.name = name;
+            gradient.type = type;
+            for (var added = gradient.gradientStops.length; added < stops.length; added++) gradient.gradientStops.add();
+            for (var i = 0; i < stops.length; i++) {
+                var stop = gradient.gradientStops[i];
+                stop.rampPoint = stops[i][0];
+                stop.color = formRgb(stops[i][1]);
+            }
+        }
+        gradientCache[name] = gradient;
+        return gradient;
+    }
+
+    function formPaint(p, fill, stroke, width, dashes) {
+        p.filled = fill !== null && fill !== undefined;
+        if (p.filled) p.fillColor = formColor(fill);
+        p.stroked = stroke !== null && stroke !== undefined && width > 0;
+        if (p.stroked) {
+            p.strokeColor = formColor(stroke);
+            p.strokeWidth = width;
+            p.strokeDashes = dashes || [];
+        }
+    }
+
+    // 한글·공백은 Spoqa(기준선 0), 영문·숫자·기호는 GSMediumB1(기준선 +0.5pt), GSMediumB1에 없는 기호(−)는 HancomEQN — 02_문자/Text_koen.jsx 규칙
+    function formFonts(frame, opts) {
+        var text = frame.contents, range = frame.textRange, kinds = [], uniform = true, i;
+        for (i = 0; i < text.length; i++) {
+            var code = text.charCodeAt(i), kind = 1;
+            if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32) kind = 0;
+            else if (code > 126 && "°±·˘∞≈≠".indexOf(text.charAt(i)) < 0) kind = 2;
+            kinds.push(kind);
+            if (kind !== kinds[0]) uniform = false;
+        }
+        if (uniform) {
+            formSetFont(range.characterAttributes, kinds[0]);
+        } else {
+            for (i = 0; i < text.length; i++) {
+                var charAttributes = range.characters[i].characterAttributes;
+                formSetFont(charAttributes, kinds[i]);
+            }
+        }
+        var subFlags = opts && opts.sub ? formSubFlags(text) : null;
+        var supStart = opts && opts.supLast ? text.length - opts.supLast : text.length;
+        for (i = 0; i < text.length; i++) {
+            if (i >= supStart || (subFlags && subFlags[i])) {
+                var scriptAttributes = range.characters[i].characterAttributes;
+                scriptAttributes.baselinePosition = i >= supStart ? FontBaselineOption.SUPERSCRIPT : FontBaselineOption.SUBSCRIPT;
+            }
+        }
+    }
+
+    function formSetFont(attributes, kind) {
+        attributes.textFont = kind === 0 ? FORM_KOR_FONT : (kind === 2 ? FORM_MATH_FONT : FORM_ENG_FONT);
+        attributes.baselineShift = kind === 1 ? 0.5 : 0;
+    }
+
+    // 글자(또는 닫는 괄호) 뒤 숫자는 아래 첨자, 그 숫자에 이어진 숫자도 아래 첨자
+    function formSubFlags(text) {
+        var flags = [];
+        for (var i = 0; i < text.length; i++) {
+            var code = text.charCodeAt(i);
+            flags.push(code >= 48 && code <= 57 && i > 0 && (/[A-Za-z)]/.test(text.charAt(i - 1)) || flags[i - 1] === true));
+        }
+        return flags;
+    }
+
+    function formFindFont(names) {
+        for (var i = 0; i < names.length; i++) {
+            try { return app.textFonts.getByName(names[i]); } catch (e) {}
+        }
+        return app.textFonts[0];
+    }
+
+    function formColor(value) {
+        return typeof value === "number" ? formGray(value) : formRgb(value);
+    }
+
+    function formRgb(values) {
+        var rgb = new RGBColor();
+        rgb.red = values[0]; rgb.green = values[1]; rgb.blue = values[2];
+        return rgb;
+    }
+
+    // K값(0~100) 회색. RGB 문서면 같은 밝기의 회색으로
+    function formGray(k) {
+        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+            var cmyk = new CMYKColor();
+            cmyk.cyan = 0; cmyk.magenta = 0; cmyk.yellow = 0; cmyk.black = k;
+            return cmyk;
+        }
+        var value = Math.round(255 * (100 - k) / 100);
+        var rgb = new RGBColor();
+        rgb.red = value; rgb.green = value; rgb.blue = value;
+        return rgb;
+    }
+})();
