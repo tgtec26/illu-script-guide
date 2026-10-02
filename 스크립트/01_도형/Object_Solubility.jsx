@@ -31,8 +31,9 @@ try {
     var LABEL_WIDTH = 70;
     var INPUT_WIDTH = 50;
     var SLIDER_WIDTH = 196;
-    var NAME_COLUMN_WIDTH = 290;
-    var RADIO_COLUMN_WIDTH = 48;
+    var NAME_COLUMN_WIDTH = 120;
+    var RADIO_COLUMN_WIDTH = 30;
+    var TOP_COUNT = 5;
 
     var AXIS_PT = 0.4;
     var TICK_PT = 0.4;
@@ -50,6 +51,7 @@ try {
     var AXIS_STEP = 20;
     var GRID_FINE_STEP = 10;
     var AXIS_TITLE_GAP_MM = 1;
+    var BEZIER_TOLERANCE_MM = 0.7;
     // ° 는 GSMediumB1의 U+02D8 글리프로 넣는다
     var X_TITLE = "온도(\u02D8C)";
     var Y_TITLE = "용해도(g/물 100 g)";
@@ -63,28 +65,29 @@ try {
         { name: "4-1-1-1 1점 쇄선", dashes: [4, 1, 1, 1] }
     ];
 
+    // 위 5개(TOP_COUNT)가 다이얼로그 맨 위에 온다.
     // points: [온도(℃), 용해도(g/물 100 g)] 측정점. labelT·side: 이름을 붙일 온도와 곡선의 위쪽(1)/아래쪽(-1)
     var SUBSTANCES = [
         { kor: "질산 나트륨", formula: "NaNO3", labelT: 20, side: 1,
           points: [[0, 73], [10, 80.8], [20, 87.6], [30, 94.9], [40, 102], [60, 122], [80, 148], [100, 180]] },
-        { kor: "염화 칼슘", formula: "CaCl2", labelT: 48, side: 1,
-          points: [[0, 59.5], [10, 64.7], [20, 74.5], [30, 100], [40, 128], [60, 137], [80, 147], [90, 154], [100, 159]] },
-        { kor: "질산 납(II)", formula: "Pb(NO3)2", labelT: 16, side: 1,
-          points: [[0, 37.5], [10, 46.2], [20, 54.3], [30, 63.4], [40, 72.1], [60, 91.6], [80, 111], [100, 133]] },
         { kor: "질산 칼륨", formula: "KNO3", labelT: 55, side: -1,
           points: [[0, 13.3], [10, 20.9], [20, 31.6], [30, 45.8], [40, 63.9], [50, 85.5], [60, 110], [70, 138], [80, 169], [90, 202], [100, 246]] },
-        { kor: "다이크로뮴산 칼륨", formula: "K2Cr2O7", labelT: 80, side: -1,
-          points: [[0, 4.7], [10, 7], [20, 12.3], [30, 18.1], [40, 26.3], [50, 34], [60, 45.6], [80, 73], [100, 102]] },
         { kor: "염화 칼륨", formula: "KCl", labelT: 88, side: 1,
           points: [[0, 28], [10, 31.2], [20, 34.2], [30, 37.2], [40, 40.1], [50, 42.6], [60, 45.8], [80, 51.3], [90, 53.9], [100, 56.3]] },
         { kor: "염화 나트륨", formula: "NaCl", labelT: 92, side: -1,
           points: [[0, 35.65], [10, 35.72], [20, 35.89], [30, 36.09], [40, 36.37], [50, 36.69], [60, 37.04], [70, 37.46], [80, 37.93], [90, 38.47], [100, 38.99]] },
+        { kor: "황산 구리(II) 오수화물", formula: "CuSO4\u00B75H2O", labelT: 70, side: 1,
+          points: [[0, 23.1], [10, 27.5], [20, 32], [30, 37.8], [40, 44.6], [60, 61.8], [80, 83.8], [100, 114]] },
+        { kor: "염화 칼슘", formula: "CaCl2", labelT: 48, side: 1,
+          points: [[0, 59.5], [10, 64.7], [20, 74.5], [30, 100], [40, 128], [60, 137], [80, 147], [90, 154], [100, 159]] },
+        { kor: "질산 납(II)", formula: "Pb(NO3)2", labelT: 16, side: 1,
+          points: [[0, 37.5], [10, 46.2], [20, 54.3], [30, 63.4], [40, 72.1], [60, 91.6], [80, 111], [100, 133]] },
+        { kor: "다이크로뮴산 칼륨", formula: "K2Cr2O7", labelT: 80, side: -1,
+          points: [[0, 4.7], [10, 7], [20, 12.3], [30, 18.1], [40, 26.3], [50, 34], [60, 45.6], [80, 73], [100, 102]] },
         { kor: "염소산 칼륨", formula: "KClO3", labelT: 68, side: -1,
           points: [[0, 3.3], [10, 5.2], [20, 7.3], [30, 10.1], [40, 13.9], [60, 23.8], [80, 37.5], [90, 46], [100, 56.3]] },
         { kor: "황산 세륨(III)", formula: "Ce2(SO4)3", labelT: 42, side: 1,
-          points: [[0, 21.4], [20, 9.84], [30, 7.24], [40, 5.63], [60, 3.87]] },
-        { kor: "황산 구리(II) 오수화물", formula: "CuSO4\u00B75H2O", labelT: 70, side: 1,
-          points: [[0, 23.1], [10, 27.5], [20, 32], [30, 37.8], [40, 44.6], [60, 61.8], [80, 83.8], [100, 114]] }
+          points: [[0, 21.4], [20, 9.84], [30, 7.24], [40, 5.63], [60, 3.87]] }
     ];
     var SUBSTANCE_COUNT = SUBSTANCES.length;
 
@@ -113,6 +116,7 @@ try {
     var heightMm = 80;
     var gridOn = false;
     var gridFine = false;
+    var simpleCurve = false;
     var tickOutside = false;
     var nameKorean = true;
     var offsetXmm = 0;
@@ -124,9 +128,9 @@ try {
         curveOn.push(false);
         curveStyle.push(0);
     }
-    curveOn[3] = true; curveStyle[3] = 0;
-    curveOn[6] = true; curveStyle[6] = 1;
-    curveOn[5] = true; curveStyle[5] = 2;
+    curveOn[1] = true; curveStyle[1] = 0;
+    curveOn[3] = true; curveStyle[3] = 1;
+    curveOn[2] = true; curveStyle[2] = 2;
 
     applySettings();
 
@@ -168,8 +172,11 @@ try {
     var tickOutRadio = tickGroup.add("radiobutton", undefined, "바깥쪽");
 
     var curvePanel = addPanel(dlg, "용해도 곡선");
+    var simpleCheck = curvePanel.add("checkbox", undefined, "단순한 곡선 (베지어, 점 최소화)");
+    simpleCheck.helpTip = "측정점을 지나는 곡선을 점이 적은 베지어 곡선으로 근사한다 (오차 " + BEZIER_TOLERANCE_MM + " mm 이내)";
     var headerRow = curvePanel.add("group");
     headerRow.alignChildren = ["left", "center"];
+    headerRow.spacing = 0;
     headerRow.add("group").preferredSize.width = NAME_COLUMN_WIDTH;
     for (var h = 0; h < LINE_STYLES.length; h++) {
         var headerLabel = headerRow.add("statictext", undefined, "선 " + (h + 1));
@@ -179,9 +186,11 @@ try {
     var curveChecks = [];
     var curveRadios = [];
     for (var i = 0; i < SUBSTANCE_COUNT; i++) {
+        if (i === TOP_COUNT) curvePanel.add("group").preferredSize.height = 4;
         var row = curvePanel.add("group");
         row.alignChildren = ["left", "center"];
-        var check = row.add("checkbox", undefined, SUBSTANCES[i].kor + " (" + SUBSTANCES[i].formula + ")");
+        row.spacing = 0;
+        var check = row.add("checkbox", undefined, SUBSTANCES[i].formula);
         check.preferredSize.width = NAME_COLUMN_WIDTH;
         curveChecks.push(check);
         var radios = [];
@@ -216,6 +225,7 @@ try {
 
     // 저장된 값을 화면에 반영
     gridCheck.value = gridOn;
+    simpleCheck.value = simpleCurve;
     gridCoarseRadio.value = !gridFine;
     gridFineRadio.value = gridFine;
     gridStepGroup.enabled = gridOn;
@@ -238,6 +248,10 @@ try {
         gridOn = gridCheck.value;
         gridStepGroup.enabled = gridOn;
         tickGroup.enabled = !gridOn;
+        updatePreview();
+    };
+    simpleCheck.onClick = function() {
+        simpleCurve = simpleCheck.value;
         updatePreview();
     };
     gridCoarseRadio.onClick = gridFineRadio.onClick = function() {
@@ -435,7 +449,8 @@ try {
             points.push([px(t), py(value)]);
         }
         var path = group.pathItems.add();
-        path.setEntirePath(points);
+        if (simpleCurve) setBezierPath(path, fitBezier(points, BEZIER_TOLERANCE_MM * MM_TO_PT));
+        else path.setEntirePath(points);
         styleStroke(path, CURVE_PT, grayK100, dashes);
 
         // 이름: 곡선에 나란히 기울여 위(1) 또는 아래(-1)에 붙인다
@@ -458,6 +473,128 @@ try {
         styleStroke(path, width, color, dashes);
         return path;
     }
+
+    // 점 목록에 가장 가까운 베지어 곡선 마디들로 바꾼다 (Schneider 알고리즘, Graphics Gems "FitCurves").
+    // 허용 오차(pt) 안에서 마디(앵커)가 가장 적게 나오도록 오차가 큰 곳에서 나눈다
+    function setBezierPath(path, segments) {
+        var anchors = [segments[0][0]];
+        for (var i = 0; i < segments.length; i++) anchors.push(segments[i][3]);
+        path.setEntirePath(anchors);
+        for (var j = 0; j < segments.length; j++) {
+            path.pathPoints[j].rightDirection = segments[j][1];
+            path.pathPoints[j + 1].leftDirection = segments[j][2];
+        }
+    }
+
+    function fitBezier(points, tolerance) {
+        var n = points.length;
+        var segments = [];
+        fitCubic(points, 0, n - 1, vUnit(vSub(points[1], points[0])), vUnit(vSub(points[n - 2], points[n - 1])),
+            tolerance * tolerance, segments);
+        return segments;
+    }
+
+    function fitCubic(pts, first, last, tan1, tan2, errorSq, out) {
+        if (last - first === 1) {
+            var gap = vLen(vSub(pts[last], pts[first])) / 3;
+            out.push([pts[first], vAdd(pts[first], vMul(tan1, gap)), vAdd(pts[last], vMul(tan2, gap)), pts[last]]);
+            return;
+        }
+        var u = chordParameters(pts, first, last);
+        var bezier = generateBezier(pts, first, last, u, tan1, tan2);
+        var result = maxFitError(pts, first, last, bezier, u);
+        if (result.error < errorSq) {
+            out.push(bezier);
+            return;
+        }
+        if (result.error < errorSq * 4) {
+            for (var pass = 0; pass < 4; pass++) {
+                u = reparameterize(pts, first, last, u, bezier);
+                bezier = generateBezier(pts, first, last, u, tan1, tan2);
+                result = maxFitError(pts, first, last, bezier, u);
+                if (result.error < errorSq) {
+                    out.push(bezier);
+                    return;
+                }
+            }
+        }
+        var center = vUnit(vSub(pts[result.split - 1], pts[result.split + 1]));
+        fitCubic(pts, first, result.split, tan1, center, errorSq, out);
+        fitCubic(pts, result.split, last, vMul(center, -1), tan2, errorSq, out);
+    }
+
+    function generateBezier(pts, first, last, u, tan1, tan2) {
+        var p0 = pts[first], p3 = pts[last];
+        var c00 = 0, c01 = 0, c11 = 0, x0 = 0, x1 = 0;
+        for (var i = 0; i <= last - first; i++) {
+            var t = u[i], m = 1 - t;
+            var b1 = m * m * m, b2 = 3 * t * m * m, b3 = 3 * t * t * m, b4 = t * t * t;
+            var a1 = vMul(tan1, b2), a2 = vMul(tan2, b3);
+            c00 += vDot(a1, a1);
+            c01 += vDot(a1, a2);
+            c11 += vDot(a2, a2);
+            var rest = vSub(pts[first + i], vAdd(vMul(p0, b1 + b2), vMul(p3, b3 + b4)));
+            x0 += vDot(a1, rest);
+            x1 += vDot(a2, rest);
+        }
+        var det = c00 * c11 - c01 * c01;
+        var alpha1 = det === 0 ? 0 : (x0 * c11 - x1 * c01) / det;
+        var alpha2 = det === 0 ? 0 : (c00 * x1 - c01 * x0) / det;
+        var segment = vLen(vSub(p3, p0));
+        if (alpha1 < 1e-6 * segment || alpha2 < 1e-6 * segment) alpha1 = alpha2 = segment / 3;
+        return [p0, vAdd(p0, vMul(tan1, alpha1)), vAdd(p3, vMul(tan2, alpha2)), p3];
+    }
+
+    function bezierAt(b, t) {
+        var m = 1 - t;
+        return vAdd(vAdd(vMul(b[0], m * m * m), vMul(b[1], 3 * t * m * m)),
+            vAdd(vMul(b[2], 3 * t * t * m), vMul(b[3], t * t * t)));
+    }
+
+    function maxFitError(pts, first, last, bezier, u) {
+        var worst = 0;
+        var split = Math.floor((last - first + 1) / 2) + first;
+        for (var i = first + 1; i < last; i++) {
+            var d = vSub(bezierAt(bezier, u[i - first]), pts[i]);
+            var distSq = vDot(d, d);
+            if (distSq >= worst) {
+                worst = distSq;
+                split = i;
+            }
+        }
+        return { error: worst, split: split };
+    }
+
+    function chordParameters(pts, first, last) {
+        var u = [0];
+        for (var i = first + 1; i <= last; i++) u.push(u[i - first - 1] + vLen(vSub(pts[i], pts[i - 1])));
+        for (var j = 1; j <= last - first; j++) u[j] = u[j] / u[last - first];
+        return u;
+    }
+
+    // 뉴턴-랩슨으로 점마다 곡선 위 가장 가까운 매개변수를 다시 찾는다
+    function reparameterize(pts, first, last, u, bezier) {
+        var next = [];
+        var d1 = [], d2 = [];
+        for (var k = 0; k < 3; k++) d1.push(vMul(vSub(bezier[k + 1], bezier[k]), 3));
+        for (var l = 0; l < 2; l++) d2.push(vMul(vSub(d1[l + 1], d1[l]), 2));
+        for (var i = 0; i <= last - first; i++) {
+            var t = u[i], m = 1 - t;
+            var diff = vSub(bezierAt(bezier, t), pts[first + i]);
+            var slope = vAdd(vAdd(vMul(d1[0], m * m), vMul(d1[1], 2 * m * t)), vMul(d1[2], t * t));
+            var curve = vAdd(vMul(d2[0], m), vMul(d2[1], t));
+            var denominator = vDot(slope, slope) + vDot(diff, curve);
+            next.push(denominator === 0 ? t : t - vDot(diff, slope) / denominator);
+        }
+        return next;
+    }
+
+    function vAdd(a, b) { return [a[0] + b[0], a[1] + b[1]]; }
+    function vSub(a, b) { return [a[0] - b[0], a[1] - b[1]]; }
+    function vMul(a, k) { return [a[0] * k, a[1] * k]; }
+    function vDot(a, b) { return a[0] * b[0] + a[1] * b[1]; }
+    function vLen(a) { return Math.sqrt(a[0] * a[0] + a[1] * a[1]); }
+    function vUnit(a) { var l = vLen(a); return [a[0] / l, a[1] / l]; }
 
     function styleStroke(path, width, color, dashes) {
         path.filled = false;
@@ -689,11 +826,12 @@ try {
             styles.push(curveStyle[i]);
         }
         var parts = [
-            "v2",
+            "v3",
             widthMm,
             heightMm,
             gridOn ? "1" : "0",
             gridFine ? "1" : "0",
+            simpleCurve ? "1" : "0",
             tickOutside ? "1" : "0",
             nameKorean ? "1" : "0",
             offsetXmm,
@@ -710,20 +848,21 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length !== 12) return;
-        if (p[10].length !== SUBSTANCE_COUNT || p[11].length !== SUBSTANCE_COUNT) return;
+        if (p[0] !== "v3" || p.length !== 13) return;
+        if (p[11].length !== SUBSTANCE_COUNT || p[12].length !== SUBSTANCE_COUNT) return;
         widthMm = restoreNumber(p[1], widthMm, SIZE_MIN_MM, SIZE_MAX_MM);
         heightMm = restoreNumber(p[2], heightMm, SIZE_MIN_MM, SIZE_MAX_MM);
         gridOn = (p[3] === "1");
         gridFine = (p[4] === "1");
-        tickOutside = (p[5] === "1");
-        nameKorean = (p[6] === "1");
-        offsetXmm = restoreNumber(p[7], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-        offsetYmm = restoreNumber(p[8], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-        previewEnabled = (p[9] === "1");
+        simpleCurve = (p[5] === "1");
+        tickOutside = (p[6] === "1");
+        nameKorean = (p[7] === "1");
+        offsetXmm = restoreNumber(p[8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        offsetYmm = restoreNumber(p[9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        previewEnabled = (p[10] === "1");
         for (var i = 0; i < SUBSTANCE_COUNT; i++) {
-            curveOn[i] = (p[10].charAt(i) === "1");
-            var style = parseInt(p[11].charAt(i), 10);
+            curveOn[i] = (p[11].charAt(i) === "1");
+            var style = parseInt(p[12].charAt(i), 10);
             curveStyle[i] = (style >= 0 && style < LINE_STYLES.length) ? style : 0;
         }
     }
