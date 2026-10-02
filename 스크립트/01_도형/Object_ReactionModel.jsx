@@ -10,10 +10,11 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 화학 반응 채움 모형: 분자를 공간 채움 모형(하이라이트가 있는 색 구)으로 그린다. 선택 없이 화면 가운데에 그린다.
+// 화학 반응 채움 모형: 분자를 공간 채움 모형(하이라이트가 있는 구)으로 그린다. 선택 없이 화면 가운데에 그린다.
 // 화학 반응 탭: 반응물 + 반응물 → 생성물을 분자 모형으로 늘어놓고 +·화살표로 잇고 이름을 단다 (이온 반응 포함).
-// 기체 반응 탭: 분자를 정육면체 안에 담는다. 계수만큼 칸을 이어 붙이고 화학식·부피비·분자 수비 표를 붙인다.
-// 반응식은 "2H2+O2=2H2O"처럼 적는다. 화살표는 =, >, ->, → 모두 되고, ;로 이으면 반응 여러 개(기체 반응 탭은 표로 쌓음).
+// 기체 반응 탭: 분자를 정육면체 안에 담는다. 계수만큼 칸을 이어 붙이고(모서리는 경사 연결), 표 선·값은 그리지 않는다.
+// 두 탭 모두 컬러 / 회색 음영으로 바꿀 수 있다.
+// 반응식은 "2H2+O2=2H2O"처럼 적는다. 화살표는 =, >, ->, → 모두 되고, ;로 이으면 반응 여러 개(기체 반응 탭은 세로로 쌓음).
 // 쓸 수 있는 물질: H2 O2 N2 Cl2 H2O H2O2 NH3 HCl CH4 CO2 CO NO NO2 C NaCl AgCl AgNO3 NaNO3
 
 (function() {
@@ -26,7 +27,6 @@ try {
     var FORM_MATH_FONT = formFindFont(["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular", "GSMediumB1"]);
     var TAB_PREF_KEY = "ObjectReactionModel/tab";
     var MINUS = "−";
-    var GAS_ROW_NAMES = ["화학 반응식", "부피비", "분자 수비"];
     var gradientCache = {};
 
     // ==== 표 ====
@@ -50,6 +50,16 @@ try {
         Cl: [[205, 240, 170], [92, 188, 72], [38, 118, 34]],
         Na: [[255, 252, 210], [252, 228, 84], [205, 168, 30]],
         Ag: [[190, 235, 225], [64, 164, 164], [24, 104, 110]]
+    };
+    // 회색 음영 구 색: [하이라이트, 본색, 가장자리] K값(0~100). 원소마다 밝기가 달라 구별된다
+    var SPHERE_GRAYS = {
+        H: [0, 12, 48],
+        Na: [0, 25, 58],
+        Cl: [8, 38, 68],
+        Ag: [12, 48, 75],
+        N: [15, 58, 82],
+        O: [22, 70, 90],
+        C: [55, 90, 100]
     };
     // 분자 모형: 원자는 [종류, x, y] (산소 지름 = 1, y는 위쪽이 +). 앞에 적은 원자가 뒤에 그려진다
     var NITRATE = [["O", 0.5, 0.9], ["O", 0.5, -0.9], ["O", 1.4, 0], ["N", 0.5, 0]];
@@ -93,22 +103,25 @@ try {
         {title: "이산화 질소 생성 (N₂ + 2O₂ → 2NO₂)", eq: "N2+2O2=2NO2"},
         {title: "일산화 탄소 연소 (2CO + O₂ → 2CO₂)", eq: "2CO+O2=2CO2"},
         {title: "일산화 질소 산화 (2NO + O₂ → 2NO₂)", eq: "2NO+O2=2NO2"},
-        {title: "네 반응 모두 (표)", eq: "2H2+O2=2H2O;N2+3H2=2NH3;H2+Cl2=2HCl;N2+2O2=2NO2"},
+        {title: "네 반응 모두", eq: "2H2+O2=2H2O;N2+3H2=2NH3;H2+Cl2=2HCl;N2+2O2=2NO2"},
         {title: "직접 입력", eq: null}
     ];
-    // 화살표 색(위·아래 RGB, null이면 검정)과 더하기 색(RGB, null이면 검정)
+    // 화살표 색: 컬러(위·아래 RGB)와 회색 음영(위·아래 K값). null이면 검정
     var ARROW_COLORS = [
-        {id: "blue", top: [190, 212, 242], bottom: [84, 128, 198]},
-        {id: "red", top: [255, 165, 145], bottom: [226, 52, 40]},
+        {id: "blue", top: [190, 212, 242], bottom: [84, 128, 198], grayTop: 22, grayBottom: 55},
+        {id: "red", top: [255, 165, 145], bottom: [226, 52, 40], grayTop: 40, grayBottom: 75},
         null
     ];
-    var PLUS_COLORS = [[108, 152, 214], [181, 172, 128], null];
-    // 정육면체 면 색(RGB)
-    var CUBE = {
+    // 더하기 색: 컬러 RGB와 회색 음영 K값. null이면 검정
+    var PLUS_COLORS = [{rgb: [108, 152, 214], k: 40}, {rgb: [181, 172, 128], k: 58}, null];
+    // 정육면체 면 색: 컬러(RGB)와 회색 음영(K값)
+    var CUBE_COLORS = [{
         back: [196, 224, 238], left: [178, 212, 232], floor: [160, 200, 224],
         front: [222, 239, 248], top: [236, 247, 252], right: [138, 188, 216],
         edge: [92, 152, 188], edgeSoft: [140, 184, 208]
-    };
+    }, {
+        back: 10, left: 16, floor: 24, front: 6, top: 3, right: 32, edge: 60, edgeSoft: 40
+    }];
     // 칸당 분자 수별 자리(칸 크기 대비 비율)
     var CELL_OFFSETS = {
         1: [[0, 0]],
@@ -141,6 +154,7 @@ try {
                 {key: "coef", check: "화학식에 계수", value: false},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
                 {key: "labelGap", label: "이름표 간격", unit: "mm", min: 0, max: 10, step: 0.5, value: 2.5},
+                {key: "colorMode", label: "색상", items: ["컬러", "회색 음영"], value: 0},
                 {key: "arrowColor", label: "화살표 색", items: ["파랑", "빨강", "검정"], value: 0},
                 {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 0}
             ],
@@ -152,6 +166,7 @@ try {
         var parsed = parseEquations(o.formula);
         if (typeof parsed === "string") { t.text(parsed, 0, 0, o.font, "center", 100); return; }
         var reaction = parsed[0];
+        t.setMode(o.colorMode);
         var mm = t.mm, F = o.font, unit = o.size * mm;
         var molGap = o.molGap * mm, gap = o.gap * mm, plusW = unit * 0.8, arrowL = o.arrowLen * mm;
         var sides = [reaction.left, reaction.right];
@@ -222,17 +237,15 @@ try {
                 {key: "size", label: "원자 크기", unit: "mm", min: 2, max: 10, step: 0.1, value: 6.2},
                 {key: "perCell", label: "칸당 분자 수", unit: "개", min: 1, max: 4, step: 1, value: 1},
                 {key: "tilt", label: "기울임", unit: "°", min: 0, max: 45, step: 5, value: 0},
-                {panel: "간격·색"},
+                {panel: "간격·색상"},
                 {key: "gap", label: "항 간격", unit: "mm", min: 1, max: 15, step: 0.5, value: 4},
                 {key: "arrowLen", label: "화살표 길이", unit: "mm", min: 6, max: 40, step: 1, value: 14},
+                {key: "blockGap", label: "반응 간격", unit: "mm", min: 0, max: 30, step: 1, value: 8},
+                {key: "colorMode", label: "색상", items: ["컬러", "회색 음영"], value: 0},
                 {key: "arrowColor", label: "화살표 색", items: ["파랑", "빨강", "검정"], value: 1},
                 {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 1},
-                {panel: "표시"},
-                {key: "formulaRow", check: "화학식", value: true},
-                {key: "volume", check: "부피비", value: true},
-                {key: "count", check: "분자 수비", value: true},
-                {key: "lines", check: "표 선", value: true},
-                {key: "rowNames", check: "행 이름", value: true},
+                {panel: "화학식"},
+                {key: "formulaRow", check: "화학식 표시", value: false},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
             ],
             draw: drawGas
@@ -242,18 +255,18 @@ try {
     function drawGas(t, o) {
         var parsed = parseEquations(o.formula);
         if (typeof parsed === "string") { t.text(parsed, 0, 0, o.font, "center", 100); return; }
+        t.setMode(o.colorMode);
         var mm = t.mm, F = o.font, cell = o.cell * mm, rad = o.angle * Math.PI / 180;
         var dx = o.depth * mm * Math.cos(rad), dy = o.depth * mm * Math.sin(rad);
         var unit = o.size * mm, gap = o.gap * mm, arrowL = o.arrowLen * mm, plusW = cell * 0.45;
-        var boxH = cell + dy, padV = 2.5 * mm, padX = 4 * mm, rowH = F * 2.4, thin = 0.4, thick = 0.8;
-        var r, s, j, k, i;
+        var boxH = cell + dy;
 
-        // 반응 하나(블록)의 가로 배치. x는 블록 왼쪽 끝이 0
-        var blocks = [], maxW = 0;
-        for (r = 0; r < parsed.length; r++) {
+        // 반응 하나를 왼쪽 끝 0에서 가로로 늘어놓고 가운데(0)에 맞춰 세로로 쌓는다
+        var y = 0;
+        for (var r = 0; r < parsed.length; r++) {
             var sides = [parsed[r].left, parsed[r].right], items = [], x = 0;
-            for (s = 0; s < 2; s++) {
-                for (j = 0; j < sides[s].length; j++) {
+            for (var s = 0; s < 2; s++) {
+                for (var j = 0; j < sides[s].length; j++) {
                     if (j > 0) {
                         x += gap;
                         items.push({type: "plus", cx: x + plusW / 2});
@@ -269,33 +282,12 @@ try {
                     x += arrowL + gap;
                 }
             }
-            blocks.push({items: items, w: x});
-            maxW = Math.max(maxW, x);
-        }
 
-        var labelW = o.rowNames ? F * 5.5 + 3 * mm : 0;
-        var contentW = maxW + padX * 2;
-        var left = -contentW / 2 - labelW, right = contentW / 2;
-        var ratioRows = [];
-        if (o.volume) ratioRows.push(1);
-        if (o.count) ratioRows.push(2);
-
-        var y = 0;
-        if (o.lines) t.line([left, y], [right, y], thick, 100);
-        for (r = 0; r < blocks.length; r++) {
-            var block = blocks[r], offX = -block.w / 2, top = y;
-            var frontBottom = top - padV - boxH, centerY = frontBottom + boxH / 2;
-            var rowBottom = frontBottom - padV, formulaBase = 0;
-            if (o.formulaRow) {
-                formulaBase = frontBottom - 1.8 * mm - F * 0.72;
-                rowBottom = formulaBase - F * 0.3 - padV;
-            }
-            var boxes = [];
-            for (i = 0; i < block.items.length; i++) {
-                var it = block.items[i];
+            var offX = -x / 2, frontBottom = y - boxH, centerY = frontBottom + boxH / 2, formulaBase = frontBottom - 1.8 * mm - F * 0.72;
+            for (var i = 0; i < items.length; i++) {
+                var it = items[i];
                 if (it.type === "box") {
                     drawBox(offX + it.x0, frontBottom, it.n, it.formula);
-                    boxes.push(it);
                     if (o.formulaRow) t.text((it.n > 1 ? it.n : "") + it.formula, offX + it.cx, formulaBase, F, "center", 100, {sub: true});
                 } else if (it.type === "plus") {
                     t.plus(offX + it.cx, centerY, plusW, o.plusColor);
@@ -308,21 +300,7 @@ try {
                     }
                 }
             }
-            if (o.rowNames) t.text(GAS_ROW_NAMES[0], left + 2 * mm, (top + rowBottom) / 2 - F * 0.35, F, "left", 100);
-
-            y = rowBottom;
-            for (k = 0; k < ratioRows.length; k++) {
-                if (o.lines) t.line([left, y], [right, y], thin, 100);
-                var base = y - rowH / 2 - F * 0.35;
-                if (o.rowNames) t.text(GAS_ROW_NAMES[ratioRows[k]], left + 2 * mm, base, F, "left", 100);
-                for (i = 0; i < boxes.length; i++) {
-                    t.text(String(boxes[i].n), offX + boxes[i].cx, base, F, "center", 100);
-                    if (i > 0) t.text(":", offX + (boxes[i - 1].cx + boxes[i].cx) / 2, base, F, "center", 100);
-                }
-                y -= rowH;
-            }
-            if (o.lines) t.line([left, y], [right, y], thick, 100);
-            else y -= 2 * mm;
+            y = (o.formulaRow ? formulaBase - F * 0.3 : frontBottom) - o.blockGap * mm;
         }
 
         // 정육면체 하나(계수만큼 칸을 이어 붙임). (x0, y0)은 앞면 왼쪽 아래
@@ -342,6 +320,18 @@ try {
     }
 
     // ==== 분자 ====
+    // 구 위에 쓰는 글자의 K값: 본색이 어두우면 흰색(0), 아니면 검정(100)
+    function sphereTextK(pal, mode) {
+        var luminance;
+        if (mode === 1) {
+            luminance = 255 * (100 - SPHERE_GRAYS[pal][1]) / 100;
+        } else {
+            var c = SPHERE_COLORS[pal][1];
+            luminance = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+        }
+        return luminance < 90 ? 0 : 100;
+    }
+
     // 반응식 "2H2+O2=2H2O;..." → [{left: [[계수, 식], ...], right: [...]}, ...] 또는 오류문
     function parseEquations(text) {
         var out = [];
@@ -462,7 +452,7 @@ try {
             t.sphere(x, y, radius, el.pal);
             if (showSymbols || lay.labeled) {
                 var size = Math.max(4.5, Math.min(F, radius * 2 * 0.55));
-                t.text(el.text + (el.sup || ""), x, y - size * 0.35, size, "center", 100, el.sup ? {supLast: 1} : null);
+                t.text(el.text + (el.sup || ""), x, y - size * 0.35, size, "center", sphereTextK(el.pal, t.mode), el.sup ? {supLast: 1} : null);
             }
         }
         var br = lay.bracket;
@@ -723,7 +713,7 @@ try {
         }
 
         function saveSettings() {
-            var parts = ["v1"];
+            var parts = ["v2"];
             for (var i = 0; i < controls.length; i++) {
                 var ctl = controls[i];
                 if (!ctl.key) continue;
@@ -740,7 +730,7 @@ try {
             var p = String(raw).split("|");
             var keyed = [];
             for (var i = 0; i < controls.length; i++) if (controls[i].key) keyed.push(controls[i]);
-            if (p[0] !== "v1" || p.length !== keyed.length + 1) return;
+            if (p[0] !== "v2" || p.length !== keyed.length + 1) return;
             var values = [];
             for (var k = 0; k < keyed.length; k++) {
                 var ctl = keyed[k], text = p[k + 1];
@@ -769,18 +759,24 @@ try {
 
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다. 색은 K값(숫자) 또는 [r, g, b]
     function makeFormTools(g) {
-        var t = {mm: FORM_MM, group: g};
+        var t = {mm: FORM_MM, group: g, mode: 0};
         var spheres = {};
-        t.path = function(points, closed, fill, stroke, width, dashes) {
+        // 0 컬러 / 1 회색 음영. 그리기 전에 한 번 정한다
+        t.setMode = function(mode) { t.mode = mode; };
+        t.path = function(points, closed, fill, stroke, width, dashes, join) {
             var p = g.pathItems.add();
             p.setEntirePath(points);
             p.closed = !!closed;
-            formPaint(p, fill, stroke, width, dashes);
+            formPaint(p, fill, stroke, width, dashes, join);
             return p;
         };
         t.poly = function(points, fill, stroke, width) {
             return t.path(points, true, fill, stroke, width);
         };
+        // 정육면체 면: 선 모퉁이는 각진(마이터) 연결이 아니라 경사(베벨) 연결
+        function cubePoly(points, fill, stroke, width) {
+            return t.path(points, true, fill, stroke, width, null, StrokeJoin.BEVELENDJOIN);
+        }
         t.line = function(a, b, width, k, dashes) {
             return t.path([a, b], false, null, k === undefined ? 100 : k, width, dashes);
         };
@@ -810,7 +806,9 @@ try {
                 return;
             }
             var gradientColor = new GradientColor();
-            gradientColor.gradient = formGradient("RM_arrow_" + color.id, GradientType.LINEAR, [[0, color.top], [100, color.bottom]]);
+            var gray = t.mode === 1;
+            gradientColor.gradient = formGradient("RM_arrow_" + color.id + (gray ? "_gray" : ""), GradientType.LINEAR,
+                gray ? [[0, color.grayTop], [100, color.grayBottom]] : [[0, color.top], [100, color.bottom]]);
             p.fillColor = gradientColor;
             // 새 채우기에는 마지막 그라데이션 각도가 붙으므로 읽어서 차이만큼만 돌린다 (위가 밝게 = -90)
             p.rotate(-90 - p.fillColor.angle, false, false, true, false, Transformation.CENTER);
@@ -820,7 +818,7 @@ try {
             var h = size / 2, w = size * 0.13;
             var p = t.path([[cx - w, cy + h], [cx + w, cy + h], [cx + w, cy + w], [cx + h, cy + w], [cx + h, cy - w], [cx + w, cy - w],
                 [cx + w, cy - h], [cx - w, cy - h], [cx - w, cy - w], [cx - h, cy - w], [cx - h, cy + w], [cx - w, cy + w]],
-                true, PLUS_COLORS[colorIndex] === null ? 100 : PLUS_COLORS[colorIndex], null, 0);
+                true, PLUS_COLORS[colorIndex] === null ? 100 : (t.mode === 1 ? PLUS_COLORS[colorIndex].k : PLUS_COLORS[colorIndex].rgb), null, 0);
             return p;
         };
         // 공간 채움 구: 왼쪽 위에 하이라이트. 같은 색·크기는 처음 것을 복제해 옮긴다
@@ -838,8 +836,9 @@ try {
             big.stroked = false;
             big.filled = true;
             var gradientColor = new GradientColor();
-            var colors = SPHERE_COLORS[pal];
-            gradientColor.gradient = formGradient("RM_sphere_" + pal, GradientType.RADIAL, [[0, colors[0]], [30, colors[1]], [100, colors[2]]]);
+            var gray = t.mode === 1, colors = gray ? SPHERE_GRAYS[pal] : SPHERE_COLORS[pal];
+            gradientColor.gradient = formGradient("RM_sphere_" + pal + (gray ? "_gray" : ""), GradientType.RADIAL,
+                [[0, colors[0]], [30, colors[1]], [100, colors[2]]]);
             big.fillColor = gradientColor;
             var mask = clip.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
             mask.filled = false;
@@ -850,27 +849,29 @@ try {
         };
         // 정육면체의 뒤쪽 면(뒷면·왼쪽 안쪽 벽·바닥). 분자를 그리기 전에
         t.cubeBack = function(x0, y0, w, h, dx, dy) {
-            t.poly([[x0 + dx, y0 + dy], [x0 + w + dx, y0 + dy], [x0 + w + dx, y0 + h + dy], [x0 + dx, y0 + h + dy]], CUBE.back, CUBE.edgeSoft, 0.3);
-            t.poly([[x0, y0], [x0 + dx, y0 + dy], [x0 + dx, y0 + h + dy], [x0, y0 + h]], CUBE.left, CUBE.edgeSoft, 0.3);
-            t.poly([[x0, y0], [x0 + w, y0], [x0 + w + dx, y0 + dy], [x0 + dx, y0 + dy]], CUBE.floor, CUBE.edgeSoft, 0.3);
+            var c = CUBE_COLORS[t.mode];
+            cubePoly([[x0 + dx, y0 + dy], [x0 + w + dx, y0 + dy], [x0 + w + dx, y0 + h + dy], [x0 + dx, y0 + h + dy]], c.back, c.edgeSoft, 0.3);
+            cubePoly([[x0, y0], [x0 + dx, y0 + dy], [x0 + dx, y0 + h + dy], [x0, y0 + h]], c.left, c.edgeSoft, 0.3);
+            cubePoly([[x0, y0], [x0 + w, y0], [x0 + w + dx, y0 + dy], [x0 + dx, y0 + dy]], c.floor, c.edgeSoft, 0.3);
         };
         // 정육면체의 앞쪽 면(앞면·윗면·오른쪽 면은 반투명)과 모서리, n칸이면 칸막이. 분자를 그린 뒤에
         t.cubeFront = function(x0, y0, w, h, dx, dy, n) {
+            var c = CUBE_COLORS[t.mode];
             var front = [[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]];
             var top = [[x0, y0 + h], [x0 + w, y0 + h], [x0 + w + dx, y0 + h + dy], [x0 + dx, y0 + h + dy]];
             var right = [[x0 + w, y0], [x0 + w + dx, y0 + dy], [x0 + w + dx, y0 + h + dy], [x0 + w, y0 + h]];
-            t.poly(front, CUBE.front, null, 0).opacity = 15;
-            t.poly(top, CUBE.top, null, 0).opacity = 75;
-            t.poly(right, CUBE.right, null, 0).opacity = 80;
-            t.poly(front, null, CUBE.edge, 0.4);
-            t.poly(top, null, CUBE.edge, 0.4);
-            t.poly(right, null, CUBE.edge, 0.4);
+            cubePoly(front, c.front, null, 0).opacity = 15;
+            cubePoly(top, c.top, null, 0).opacity = 75;
+            cubePoly(right, c.right, null, 0).opacity = 80;
+            cubePoly(front, null, c.edge, 0.4);
+            cubePoly(top, null, c.edge, 0.4);
+            cubePoly(right, null, c.edge, 0.4);
             for (var k = 1; k < n; k++) {
                 var xk = x0 + w * k / n;
-                t.line([xk, y0], [xk, y0 + h], 0.4, CUBE.edge);
-                t.line([xk, y0 + h], [xk + dx, y0 + h + dy], 0.4, CUBE.edge);
-                t.line([xk + dx, y0 + dy], [xk + dx, y0 + h + dy], 0.4, CUBE.edgeSoft);
-                t.line([xk, y0], [xk + dx, y0 + dy], 0.4, CUBE.edgeSoft);
+                t.line([xk, y0], [xk, y0 + h], 0.4, c.edge);
+                t.line([xk, y0 + h], [xk + dx, y0 + h + dy], 0.4, c.edge);
+                t.line([xk + dx, y0 + dy], [xk + dx, y0 + h + dy], 0.4, c.edgeSoft);
+                t.line([xk, y0], [xk + dx, y0 + dy], 0.4, c.edgeSoft);
             }
         };
         // (x, baseline)이 글자의 가로 기준(align 가운데·"left"면 왼쪽 끝·"right"면 오른쪽 끝)과 기준선.
@@ -892,7 +893,7 @@ try {
         return t;
     }
 
-    // 같은 이름 그라데이션이 문서에 있으면 다시 쓴다 (실행마다 견본이 늘지 않게). stops: [[위치%, [r, g, b]], ...]
+    // 같은 이름 그라데이션이 문서에 있으면 다시 쓴다 (실행마다 견본이 늘지 않게). stops: [[위치%, K값 또는 [r, g, b]], ...]
     function formGradient(name, type, stops) {
         if (gradientCache[name]) return gradientCache[name];
         var gradient = null;
@@ -905,14 +906,14 @@ try {
             for (var i = 0; i < stops.length; i++) {
                 var stop = gradient.gradientStops[i];
                 stop.rampPoint = stops[i][0];
-                stop.color = formRgb(stops[i][1]);
+                stop.color = formColor(stops[i][1]);
             }
         }
         gradientCache[name] = gradient;
         return gradient;
     }
 
-    function formPaint(p, fill, stroke, width, dashes) {
+    function formPaint(p, fill, stroke, width, dashes, join) {
         p.filled = fill !== null && fill !== undefined;
         if (p.filled) p.fillColor = formColor(fill);
         p.stroked = stroke !== null && stroke !== undefined && width > 0;
@@ -920,6 +921,7 @@ try {
             p.strokeColor = formColor(stroke);
             p.strokeWidth = width;
             p.strokeDashes = dashes || [];
+            if (join !== undefined && join !== null) p.strokeJoin = join;
         }
     }
 

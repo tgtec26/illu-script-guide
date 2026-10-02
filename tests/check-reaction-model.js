@@ -41,8 +41,8 @@ function extractVar(name) {
   return source.slice(start, end + 1);
 }
 
-const tables = ["MINUS", "ELEMENTS", "SPHERE_COLORS", "NITRATE", "BRACKET", "MOLECULES", "REACT_PRESETS", "GAS_PRESETS"];
-const functions = ["parseEquations", "parseSide", "molLayout", "clusterRows", "arrangeSpecies", "formSubFlags"];
+const tables = ["MINUS", "ELEMENTS", "SPHERE_COLORS", "SPHERE_GRAYS", "NITRATE", "BRACKET", "MOLECULES", "REACT_PRESETS", "GAS_PRESETS"];
+const functions = ["parseEquations", "parseSide", "molLayout", "clusterRows", "arrangeSpecies", "formSubFlags", "sphereTextK"];
 const names = tables.concat(functions);
 const lib = new Function(`${tables.map(extractVar).join("\n")}\n${functions.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
@@ -64,6 +64,7 @@ for (const [formula, mol] of Object.entries(lib.MOLECULES)) {
   for (const atom of mol.atoms) {
     assert.ok(lib.ELEMENTS[atom[0]], `${formula} unknown atom ${atom[0]}`);
     assert.ok(lib.SPHERE_COLORS[lib.ELEMENTS[atom[0]].pal], `${formula} no color for ${atom[0]}`);
+    assert.ok(lib.SPHERE_GRAYS[lib.ELEMENTS[atom[0]].pal], `${formula} no gray for ${atom[0]}`);
   }
 }
 
@@ -77,6 +78,23 @@ for (const presets of [lib.REACT_PRESETS, lib.GAS_PRESETS]) {
       assert.deepStrictEqual(countAtoms(reaction.left), countAtoms(reaction.right), `${preset.title} not balanced`);
     }
   }
+}
+
+// 회색 음영: 원소마다 본색 밝기가 달라 구별되고, 하이라이트 < 본색 < 가장자리(K 증가)
+{
+  const bases = [];
+  for (const [pal, [hi, base, edge]] of Object.entries(lib.SPHERE_GRAYS)) {
+    assert.ok(hi < base && base < edge && hi >= 0 && edge <= 100, `${pal} gray order`);
+    bases.push(base);
+  }
+  assert.strictEqual(new Set(bases).size, bases.length, "gray bases must differ");
+  // 구 위 글자: 어두운 구(탄소·회색의 산소)는 흰 글자, 밝은 구는 검정 글자
+  for (const mode of [0, 1]) {
+    assert.strictEqual(lib.sphereTextK("C", mode), 0, `C text white mode ${mode}`);
+    assert.strictEqual(lib.sphereTextK("H", mode), 100, `H text black mode ${mode}`);
+  }
+  assert.strictEqual(lib.sphereTextK("O", 0), 100);
+  assert.strictEqual(lib.sphereTextK("O", 1), 0);
 }
 
 // 반응식 읽기
