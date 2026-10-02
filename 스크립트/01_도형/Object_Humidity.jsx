@@ -168,8 +168,9 @@ try {
             var POINT_VALUE_WIDTH = 60;
             var POINT_NAMES = ["A", "B", "C", "D", "E"];
             var POINT_COUNT = POINT_NAMES.length;
-            var POINT_DIAMETER_MM = 1.5;
-            var POINT_LABEL_GAP_MM = 0.6;
+            var POINT_SIZE_MIN_MM = 0.5;
+            var POINT_SIZE_MAX_MM = 5;
+            var POINT_LABEL_GAP_MM = 0.3;   // 점 가장자리와 글자 윤곽 사이
             var X_MAX = 35;
             var Y_MAX = 40;
             var X_STEP = 5;
@@ -190,6 +191,8 @@ try {
             var tickOutside = false;
             var satTicks = false;
             var curveHidden = false;
+            var pointSizeMm = 1.5;
+            var glyphOffsetCache = {};
             var pointOn = [false, false, false, false, false];
             var pointSat = [true, true, false, true, true];
             var pointT = [15, 25, 25, 5, 30];
@@ -241,6 +244,8 @@ try {
             for (var pointIndex = 0; pointIndex < POINT_COUNT; pointIndex++) {
                 addPointRow(pointIndex);
             }
+            var pointSizeControls = addValueRow(pointPanel, "점 크기", "mm", pointSizeMm,
+                POINT_SIZE_MIN_MM, POINT_SIZE_MAX_MM, 0.1, 1);
 
             var positionPanel = addPanel(page, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm,
@@ -257,6 +262,7 @@ try {
             curveHideCheck.value = curveHidden;
             setRowValue(widthControls, widthMm);
             setRowValue(heightControls, heightMm);
+            setRowValue(pointSizeControls, pointSizeMm);
             setRowValue(offsetXControls, offsetXmm);
             setRowValue(offsetYControls, offsetYmm);
 
@@ -281,6 +287,7 @@ try {
             // 크기는 다시 그리고, 위치는 미리보기 그룹만 옮긴다
             bindSizeRow(widthControls, function(v) { widthMm = v; }, updatePreview);
             bindSizeRow(heightControls, function(v) { heightMm = v; }, updatePreview);
+            bindSizeRow(pointSizeControls, function(v) { pointSizeMm = v; }, updatePreview);
             bindPositionRow(offsetXControls, function() { return offsetXmm; },
                 function(v) { offsetXmm = v; }, function(delta) { movePreview(delta, 0); });
             bindPositionRow(offsetYControls, function() { return offsetYmm; },
@@ -440,40 +447,69 @@ try {
                 // 보조선은 맨 아래에 깔린다
                 if (gridOn) drawGrid(group, spec);
 
-                // 곡선
+                // 곡선. 곡선은 식에서 구한 점을 오차 안에서 근사한 베지어라, 포화 점은 그려진 곡선 위에 얹는다
+                var points = [];
+                for (var n = 0; n < curvePoints.length; n++) {
+                    points.push([px(curvePoints[n][0]), py(curvePoints[n][1])]);
+                }
+                var segments = fitBezier(points, CURVE_TOLERANCE_MM * MM_TO_PT);
                 if (!curveHidden) {
-                    var points = [];
-                    for (var n = 0; n < curvePoints.length; n++) {
-                        points.push([px(curvePoints[n][0]), py(curvePoints[n][1])]);
-                    }
                     var curve = group.pathItems.add();
-                    setBezierPath(curve, fitBezier(points, CURVE_TOLERANCE_MM * MM_TO_PT));
+                    setBezierPath(curve, segments);
                     styleStroke(curve, CURVE_PT, grayK100, null);
                 }
 
                 drawAxes(group, spec);
 
-                // 점 A~E (포화면 곡선 위의 정확한 값 자리에 찍는다)
+                // 점 A~E
                 for (var p = 0; p < POINT_COUNT; p++) {
                     if (!pointOn[p]) continue;
-                    var amount = pointSat[p] ? saturationMixingRatio(pointT[p]) : pointV[p];
-                    drawPoint(group, px(pointT[p]), py(amount), POINT_NAMES[p], pointSat[p]);
+                    var x = px(pointT[p]);
+                    var y = py(pointV[p]);
+                    if (pointSat[p]) {
+                        var onCurveY = curveYAt(segments, x);
+                        y = onCurveY !== null ? onCurveY : py(saturationMixingRatio(pointT[p]));
+                    }
+                    drawPoint(group, x, y, POINT_NAMES[p], pointSat[p]);
                 }
                 return group;
             }
 
-            // 점과 글자. 곡선 위의 점은 곡선이 올라가는 반대쪽인 왼쪽 위에, 곡선 아래의 점은 오른쪽에 글자를 붙인다
+            // 점과 글자. 곡선 위의 점은 곡선이 올라가는 반대쪽인 왼쪽 위에, 곡선 아래의 점은 오른쪽에 글자를 붙인다.
+            // 간격은 점 가장자리에서 글자 윤곽까지 잰다 (왼쪽 위는 윤곽 상자의 오른쪽 아래 모서리를 점 중심에서 대각선으로 둔다)
             function drawPoint(group, x, y, name, onCurve) {
-                var radius = POINT_DIAMETER_MM * MM_TO_PT / 2;
+                var radius = pointSizeMm * MM_TO_PT / 2;
                 var dot = group.pathItems.ellipse(y + radius, x - radius, radius * 2, radius * 2);
                 dot.filled = true;
                 dot.fillColor = grayK100;
                 dot.stroked = false;
-                var gap = POINT_LABEL_GAP_MM * MM_TO_PT;
+                var distance = radius + POINT_LABEL_GAP_MM * MM_TO_PT;
                 var label = addText(group, name);
                 var b = label.geometricBounds;
-                if (onCurve) label.translate(x - radius - gap - b[2], y + radius + gap - b[3]);
-                else label.translate(x + radius + gap - b[0], y - (b[1] + b[3]) / 2);
+                var o = glyphOffsets(label, name);
+                var glyphLeft = b[0] + o[0], glyphTop = b[1] + o[1], glyphRight = b[2] + o[2], glyphBottom = b[3] + o[3];
+                if (onCurve) {
+                    var corner = distance / Math.SQRT2;
+                    label.translate(x - corner - glyphRight, y + corner - glyphBottom);
+                } else {
+                    label.translate(x + distance - glyphLeft, y - (glyphTop + glyphBottom) / 2);
+                }
+            }
+
+            // 글자 틀 경계(geometricBounds)는 글자 윤곽보다 커서(윗줄·아랫줄 여백) 그대로 쓰면 점과 글자가 떨어져 보인다.
+            // 윤곽선을 만들어 윤곽 경계와 틀 경계의 차이 [왼쪽, 위, 오른쪽, 아래]를 글자마다 한 번만 재 둔다
+            function glyphOffsets(label, name) {
+                if (glyphOffsetCache[name]) return glyphOffsetCache[name];
+                var offsets = [0, 0, 0, 0];
+                try {
+                    var frameBounds = label.geometricBounds;
+                    var outline = label.duplicate().createOutline();
+                    var glyph = outline.geometricBounds;
+                    outline.remove();
+                    for (var i = 0; i < 4; i++) offsets[i] = glyph[i] - frameBounds[i];
+                } catch (e) {}
+                glyphOffsetCache[name] = offsets;
+                return offsets;
             }
 
             // -------------------------------------------------------
@@ -487,13 +523,14 @@ try {
                     sat.push(pointSat[i] ? "1" : "0");
                 }
                 var parts = [
-                    "v3",
+                    "v4",
                     widthMm,
                     heightMm,
                     gridOn ? "1" : "0",
                     tickOutside ? "1" : "0",
                     satTicks ? "1" : "0",
                     curveHidden ? "1" : "0",
+                    pointSizeMm,
                     offsetXmm,
                     offsetYmm,
                     on.join(""),
@@ -509,10 +546,10 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v3" || p.length !== 13) return;
-                var temperatures = p[11].split(",");
-                var amounts = p[12].split(",");
-                if (p[9].length !== POINT_COUNT || p[10].length !== POINT_COUNT
+                if (p[0] !== "v4" || p.length !== 14) return;
+                var temperatures = p[12].split(",");
+                var amounts = p[13].split(",");
+                if (p[10].length !== POINT_COUNT || p[11].length !== POINT_COUNT
                     || temperatures.length !== POINT_COUNT || amounts.length !== POINT_COUNT) return;
                 widthMm = restoreNumber(p[1], widthMm, SIZE_MIN_MM, SIZE_MAX_MM);
                 heightMm = restoreNumber(p[2], heightMm, SIZE_MIN_MM, SIZE_MAX_MM);
@@ -520,11 +557,12 @@ try {
                 tickOutside = (p[4] === "1");
                 satTicks = (p[5] === "1");
                 curveHidden = (p[6] === "1");
-                offsetXmm = restoreNumber(p[7], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-                offsetYmm = restoreNumber(p[8], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                pointSizeMm = round1(restoreNumber(p[7], pointSizeMm, POINT_SIZE_MIN_MM, POINT_SIZE_MAX_MM));
+                offsetXmm = restoreNumber(p[8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                offsetYmm = restoreNumber(p[9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 for (var i = 0; i < POINT_COUNT; i++) {
-                    pointOn[i] = (p[9].charAt(i) === "1");
-                    pointSat[i] = (p[10].charAt(i) === "1");
+                    pointOn[i] = (p[10].charAt(i) === "1");
+                    pointSat[i] = (p[11].charAt(i) === "1");
                     pointT[i] = round1(restoreNumber(temperatures[i], pointT[i], 0, X_MAX));
                     pointV[i] = round1(restoreNumber(amounts[i], pointV[i], 0, Y_MAX));
                 }
@@ -1074,6 +1112,22 @@ try {
         var segment = vLen(vSub(p3, p0));
         if (alpha1 < 1e-6 * segment || alpha2 < 1e-6 * segment) alpha1 = alpha2 = segment / 3;
         return [p0, vAdd(p0, vMul(tan1, alpha1)), vAdd(p3, vMul(tan2, alpha2)), p3];
+    }
+
+    // 베지어 마디들(x가 왼쪽에서 오른쪽으로 커진다)로 그린 곡선의 x 위치 높이. 곡선 범위 밖이면 null
+    function curveYAt(segments, x) {
+        for (var i = 0; i < segments.length; i++) {
+            var segment = segments[i];
+            if (x < segment[0][0] - 1e-6 || x > segment[3][0] + 1e-6) continue;
+            var low = 0, high = 1;
+            for (var n = 0; n < 40; n++) {
+                var middle = (low + high) / 2;
+                if (bezierAt(segment, middle)[0] < x) low = middle;
+                else high = middle;
+            }
+            return bezierAt(segment, (low + high) / 2)[1];
+        }
+        return null;
     }
 
     function bezierAt(b, t) {
