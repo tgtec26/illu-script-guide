@@ -658,7 +658,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     'var LINE_WIDTH_PT = 0.3',
     'path.strokeWidth = lineWidthPt',
     'path.strokeColor = formGray(shadeK)',
-    'var ellipseHeight = pitch * loopPct / 100',
+    'var ellipseHeight = loopMm * MM_TO_PT',
     'if (source === null && doc.selection && doc.selection.length > 0) return',
     'var MIN_TURNS = 5',
     'var MAX_TURNS = 30',
