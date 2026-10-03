@@ -14,11 +14,13 @@ try {
 //   - 방향은 가로(왼쪽 → 오른쪽) 또는 세로(위 → 아래). 운동은 등속(속도) 또는 정지에서 출발하는 가속(가속도).
 //     i번째 사진의 위치는 등속이면 v·t, 가속이면 ½·a·t² (t = i × 촬영 간격). 속도·가속도는 그림 위의 길이(mm) 기준이다.
 //   - 물체: 테두리 없는 구형 그라데이션(왼쪽 위 하이라이트) 또는 테두리가 있는 단색. 색은 K 값(10 단위)이고 모두 회색 음영.
+//     '지난 위치는 반투명'을 켜면 마지막 사진만 그대로 두고 앞선 사진은 반투명(단색은 파선 테두리 + 반투명)으로 그린다.
 //   - 배경(검은 띠)은 켜고 끌 수 있고 K 값을 10 단위로 고른다. 뒤쪽 사진이 앞쪽 사진 위에 놓인다.
 //   - 거리 표시: 이웃한 사진 중심 사이에 양쪽 화살표를 긋고 값을 쓴다. 입력한 값이 숫자로 시작하면(예: "10 cm")
 //     가속에서는 구간마다 1, 3, 5배…로 늘려 쓰고(출발에서 정지 상태이므로 구간 거리는 1:3:5…), "d"처럼 글자면 d, 3d, 5d…로 쓴다.
-//   - 출발 지점은 첫 사진 중심을 지나는 점선, 지표면은 세로일 때만(맨 아래 사진 밑에 위쪽 선 + 아래로 옅어지는 그라데이션).
-//   - 확인하면 점선·배경·지표면·표시선·글자·사진이 든 그룹 하나가 남는다.
+//   - 출발 지점은 첫 사진 중심을 지나는 파선, 거리 표시의 연장선(사진 중심에서 내리는 보조선)도 파선(2-1). 지표면은 세로일 때만
+//     (맨 아래 사진 밑에 위쪽 선 + 아래로 옅어지는 그라데이션, 오른쪽 위에 '지표면' 글자).
+//   - 확인하면 파선·배경·지표면·표시선·글자·사진이 든 그룹 하나가 남는다.
 
 (function() {
     if (app.documents.length === 0) {
@@ -43,7 +45,12 @@ try {
     var BALL_DARK_K = 30;
     // 지표면 그라데이션 위쪽 K (아래는 흰색)
     var GROUND_TOP_K = 25;
-    var DASHES = [2, 2];
+    // 파선 2-1 (선 2pt, 틈 1pt): 출발 지점선, 거리 표시 연장선, 지난 위치의 단색 테두리
+    var DASHES = [2, 1];
+    // 지난 위치 물체의 불투명도(%)
+    var GHOST_OPACITY = 50;
+    var GROUND_TEXT = "지표면";
+    var GROUND_TEXT_GAP_MM = 1.5;
     // 거리 표시 화살촉(pt): 평가원식 (07_수학, MotionGraph와 같은 치수)
     var ARROW = {length: 4, halfWidth: 1.3, notch: 1};
     // 띠 가장자리 여백, 점선이 띠 밖으로 나오는 길이, 띠에서 표시선까지, 연장선이 표시선을 넘는 길이, 표시선과 글자 사이, 글자끼리
@@ -68,7 +75,7 @@ try {
 
     // 저장 순서: 라디오, 체크박스, 숫자(NUMBER_KEYS)
     var RADIO_KEYS = ["direction", "motion", "ball"];
-    var CHECK_KEYS = ["bgOn", "startOn", "surfaceOn", "distOn"];
+    var CHECK_KEYS = ["bgOn", "startOn", "surfaceOn", "distOn", "ghostOn"];
 
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
     var NUMBER_KEYS = ["speed", "accel", "interval", "count", "size", "ballK", "bgK", "offsetX", "offsetY"];
@@ -95,7 +102,7 @@ try {
 
     var options = {
         direction: 0, motion: 0, ball: 0,
-        bgOn: true, startOn: true, surfaceOn: false, distOn: true,
+        bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false,
         speed: 100, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90,
         distText: "d",
         offsetX: 0, offsetY: 0,
@@ -130,6 +137,7 @@ try {
     addRadioRow(ballPanel, "모양:", "ball", BALLS);
     addRow(ballPanel, "size", "지름", "mm");
     addRow(ballPanel, "ballK", "색", "K");
+    addCheck(ballPanel, "지난 위치는 반투명 (마지막 사진만 그대로)", "ghostOn");
 
     var showPanel = addPanel(dlg, "배경·표시");
     addCheck(showPanel, "배경", "bgOn");
@@ -276,9 +284,14 @@ try {
         previewGroup.name = "MotionPhoto";
         var group = previewGroup;
 
+        // 거리 표시가 놓이는 쪽(가로: 아래, 세로: 오른쪽)
+        var labelSign = vertical ? 1 : -1;
+        var showDist = o.distOn && trimText(o.distText) !== "";
         if (o.startOn) {
-            var reach = half + EXT_MM * MM;
-            var startLine = drawLine(group, at(0, -reach), at(0, reach), LINE_PT, black);
+            // 거리 표시가 있으면 그쪽은 표시선 연장선 끝까지만 (글자를 가로지르지 않게)
+            var otherReach = half + EXT_MM * MM;
+            var labelReach = showDist ? half + (DIM_GAP_MM + DIM_OVERSHOOT_MM) * MM : otherReach;
+            var startLine = drawLine(group, at(0, labelSign * labelReach), at(0, -labelSign * otherReach), LINE_PT, black);
             startLine.name = "StartLine";
             try { startLine.strokeDashes = DASHES; } catch (dashError) {}
         }
@@ -304,15 +317,22 @@ try {
             ground.rotate(-90 - ground.fillColor.angle, false, false, true, false, Transformation.CENTER);
             var groundLine = drawLine(group, at(sMax, -wide), at(sMax, wide), GROUND_PT, black);
             groundLine.name = "GroundLine";
+            var groundTag = makeLabel(group, {text: GROUND_TEXT, italicFrom: GROUND_TEXT.length});
+            groundTag.name = "GroundLabel";
+            var corner = at(sMax, wide);
+            placeText(groundTag, corner[0] - GROUND_TEXT_GAP_MM * MM, corner[1] - TEXT_GAP_MM * MM, "r", "t");
         }
 
-        if (o.distOn && trimText(o.distText) !== "") {
-            var dimC = (vertical ? 1 : -1) * (half + DIM_GAP_MM * MM);   // 표시선 자리 (가로: 아래, 세로: 오른쪽)
-            var extFrom = (vertical ? 1 : -1) * half;
-            var extTo = dimC + (vertical ? 1 : -1) * DIM_OVERSHOOT_MM * MM;
+        if (showDist) {
+            var dimC = labelSign * (half + DIM_GAP_MM * MM);   // 표시선 자리
+            var extFrom = labelSign * half;
+            var extTo = dimC + labelSign * DIM_OVERSHOOT_MM * MM;
             for (var e = 0; e < count; e++) {
+                // 출발 지점 파선이 이미 이 자리를 지난다
+                if (e === 0 && o.startOn) continue;
                 var extension = drawLine(group, at(pos[e] * MM, extFrom), at(pos[e] * MM, extTo), AUX_PT, black);
                 extension.name = "Extension";
+                try { extension.strokeDashes = DASHES; } catch (extensionDashError) {}
             }
             var rowEnds = [];   // 글자 줄마다 마지막 글자가 끝나는 s 위치
             for (var k = 0; k < count - 1; k++) {
@@ -349,9 +369,14 @@ try {
         var balls = group.groupItems.add();
         balls.name = "Balls";
         var origin = at(0, 0);
-        var proto = drawBall(balls, origin[0], origin[1], radius, o);
+        // 지난 위치를 흐리게 하면 마지막 사진만 따로 그린다
+        var proto = drawBall(balls, origin[0], origin[1], radius, o, o.ghostOn);
         for (var b = 1; b < count; b++) {
             var spot = at(pos[b] * MM, 0);
+            if (o.ghostOn && b === count - 1) {
+                drawBall(balls, spot[0], spot[1], radius, o, false);
+                continue;
+            }
             var copy = proto.duplicate(balls, ElementPlacement.PLACEATBEGINNING);
             copy.translate(spot[0] - origin[0], spot[1] - origin[1], true, true, true, true);
         }
@@ -453,8 +478,9 @@ try {
     }
 
     // 중심 (cx, cy), 반지름 r인 물체. 구는 하이라이트(왼쪽 위)가 치우친 큰 원을 구 모양으로 잘라 만든다
-    // (GradientColor의 origin·length는 무시되므로). 마스크가 그룹 맨 위의 패스여야 한다
-    function drawBall(container, cx, cy, r, o) {
+    // (GradientColor의 origin·length는 무시되므로). 마스크가 그룹 맨 위의 패스여야 한다.
+    // faded이면 지난 위치: 반투명, 단색은 파선 테두리
+    function drawBall(container, cx, cy, r, o, faded) {
         if (o.ball === 1) {
             var disc = container.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
             disc.filled = true;
@@ -462,6 +488,10 @@ try {
             disc.stroked = true;
             disc.strokeColor = makeGray(LINE_K);
             disc.strokeWidth = BALL_STROKE_PT;
+            if (faded) {
+                try { disc.strokeDashes = DASHES; } catch (ballDashError) {}
+                disc.opacity = GHOST_OPACITY;
+            }
             return disc;
         }
         var clip = container.groupItems.add();
@@ -477,6 +507,7 @@ try {
         mask.filled = false;
         mask.stroked = false;
         clip.clipped = true;
+        if (faded) clip.opacity = GHOST_OPACITY;
         return clip;
     }
 
@@ -701,10 +732,10 @@ try {
     }
 
     // -------------------------------------------------------
-    // 설정 저장 · 복원 ("v1" + 라디오 3 + 체크 4 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
+    // 설정 저장 · 복원 ("v2" + 라디오 3 + 체크 5 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1"];
+        var parts = ["v2"];
         for (var r = 0; r < RADIO_KEYS.length; r++) parts.push(options[RADIO_KEYS[r]]);
         for (var c = 0; c < CHECK_KEYS.length; c++) parts.push(options[CHECK_KEYS[c]] ? "1" : "0");
         for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
@@ -720,7 +751,7 @@ try {
         var p = raw.split("|");
         var radioCount = RADIO_KEYS.length;
         var checkCount = CHECK_KEYS.length;
-        if (p[0] !== "v1" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
+        if (p[0] !== "v2" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
         var radioLimits = [DIRECTIONS.length, MOTIONS.length, BALLS.length];
         for (var r = 0; r < radioCount; r++) {
             var index = parseInt(p[1 + r], 10);

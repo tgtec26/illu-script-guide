@@ -38,7 +38,7 @@ const make = (options, prefs) => new Function("app", "options", `${constants.map
   {preferences: {setStringPreference: (k, v) => { prefs[k] = v; }, getStringPreference: (k) => prefs[k] || ""}}, options);
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
-const base = {direction: 0, motion: 0, ball: 0, bgOn: true, startOn: true, surfaceOn: false, distOn: true,
+const base = {direction: 0, motion: 0, ball: 0, bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false,
   speed: 100, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, distText: "d", offsetX: 0, offsetY: 0, previewOn: true};
 const lib = make({...base}, {});
 
@@ -85,10 +85,10 @@ const lib = make({...base}, {});
 // 설정 저장·복원
 {
   const prefs = {};
-  const saved = {...base, direction: 1, motion: 1, ball: 1, bgOn: false, surfaceOn: true, speed: 250, accel: 1200, interval: 0.05,
+  const saved = {...base, direction: 1, motion: 1, ball: 1, bgOn: false, surfaceOn: true, ghostOn: true, speed: 250, accel: 1200, interval: 0.05,
     count: 9, size: 6.5, ballK: 50, bgK: 70, distText: "12 cm", offsetX: -2, offsetY: 4.5, previewOn: false};
   make({...saved}, prefs).saveSettings();
-  assert.ok(prefs["ObjectMotionPhoto/settings"].startsWith("v1|1|1|1|0|"), "settings start with the version tag and radios");
+  assert.ok(prefs["ObjectMotionPhoto/settings"].startsWith("v2|1|1|1|0|"), "settings start with the version tag and radios");
   const restored = {...base};
   make(restored, prefs).applySettings();
   assert.deepStrictEqual(restored, saved, "saved options come back");
@@ -99,12 +99,12 @@ const lib = make({...base}, {});
   make(back, prefs).applySettings();
   assert.strictEqual(back.distText, "ab", "separator is stripped from the text");
   // 필드 수가 다르면 무시
-  prefs["ObjectMotionPhoto/settings"] = "v1|1|1";
+  prefs["ObjectMotionPhoto/settings"] = "v2|1|1";
   const untouched = {...base};
   make(untouched, prefs).applySettings();
   assert.deepStrictEqual(untouched, base, "a different field count is ignored");
   // 범위를 벗어난 값은 줄인다
-  prefs["ObjectMotionPhoto/settings"] = "v1|9|9|9|1|1|1|1|99999|99999|99|99|99|999|999|999|999|x|1";
+  prefs["ObjectMotionPhoto/settings"] = "v2|9|9|9|1|1|1|1|1|99999|99999|99|99|99|999|999|999|999|x|1";
   const clamped = {...base};
   make(clamped, prefs).applySettings();
   assert.strictEqual(clamped.direction, 0, "out-of-range radio is ignored");
