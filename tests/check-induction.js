@@ -13,7 +13,7 @@ const start = source.indexOf("// ==== 순수 기하 시작");
 const end = source.indexOf("// ==== 순수 기하 끝");
 assert.ok(start > 0 && end > start, "pure geometry markers");
 const lib = new Function(`${source.slice(start, end)}
-return {MM, TILT, WIRE_MM, DEPTH, HAND, SCALE_SPAN, coilLayout, frontHalfTurn, cylinderFront, project, faceMapper, scaleTicks, smoothPoints, fingerPoints};`)();
+return {MM, TILT, WIRE_MM, DEPTH, HAND, HAND_SCALE, SCALE_SPAN, coilLayout, frontHalfTurn, cylinderFront, project, faceMapper, scaleTicks, smoothPoints, fingertipPoints};`)();
 const {MM, TILT} = lib;
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
 
@@ -75,18 +75,26 @@ const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: 
   near(ticks[0][0][0], -100 * Math.sin(50 * Math.PI / 180), 1e-9, "left end at -50°");
 }
 
-// 손: 손가락 넷이 위에서 아래로 맞붙어 쌓이고, 점 모양 함수는 꺾인 점을 지킨다
+// 손: 자석 뒤로 감긴 손끝 넷이 위에서 아래로 맞붙어 쌓이고, 엄지 뿌리에는 선이 없다
 {
-  const f = lib.HAND.fingers;
-  assert.strictEqual(f.length, 4);
-  for (let i = 1; i < f.length; i++) near(f[i][0], f[i - 1][1], 1e-9, `finger ${i} touches the one above`);
-  const pts = lib.fingerPoints(0, -3, 5, -7);
-  assert.strictEqual(pts.length, 9);
-  assert.strictEqual(pts[0][2], "c", "left top is a corner");
+  const tips = lib.HAND.tips;
+  assert.strictEqual(tips.length, 4);
+  // 위 손끝의 아래보다 조금(0.3 이하) 높게 시작해 틈 없이 겹친다
+  for (let i = 1; i < tips.length; i++) {
+    const overlap = tips[i][0] - tips[i - 1][1];
+    assert.ok(overlap >= 0 && overlap <= 0.3, `fingertip ${i} overlaps the one above by ${overlap}`);
+  }
+  const pts = lib.fingertipPoints(10, 0, -4, 3);
+  assert.strictEqual(pts.length, 5);
+  assert.strictEqual(pts[0][2], "c", "starts hidden behind the magnet as a corner");
+  assert.ok(pts[0][0] < 10, "start is behind the magnet edge");
+  near(Math.max(...pts.map((p) => p[0])), 13, 1e-9, "tip reaches edge + out");
   const smooth = lib.smoothPoints(pts, true);
   assert.deepStrictEqual(smooth[0].left, smooth[0].anchor, "corner keeps no handles");
-  assert.ok(smooth[4].left[1] !== smooth[4].anchor[1] || smooth[4].left[0] !== smooth[4].anchor[0], "rounded fingertip is smooth");
   assert.ok(lib.HAND.thumbLine < lib.HAND.thumb.length, "thumb outline leaves its root open");
+  assert.ok(lib.HAND_SCALE > 0.5 && lib.HAND_SCALE <= 1, "hand scale");
+  // 손은 자석 왼쪽 모서리(x=0)에서 잰다: 손등 채움의 오른쪽 경계가 모서리에 있다
+  assert.ok(lib.HAND.body.some((p) => p[0] === 0), "body meets the magnet's left edge");
 }
 
 // 설정 저장·복원 (라디오 2, 체크 1, 숫자 6, 미리보기)

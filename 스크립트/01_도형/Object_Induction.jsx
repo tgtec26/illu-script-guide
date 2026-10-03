@@ -12,11 +12,14 @@ try {
 
 // 전자기 유도 실험 장치: 받침판 두 장 사이의 원통에 도선을 감은 코일, 그 위의 막대자석, 코일 단자와 도선으로 이은 검류계.
 //   - 앞에서 조금 위로 내려다본 모습. 둥근 것은 세로로 눌린 타원, 상자(검류계·자석)는 깊이를 오른쪽 위로 비껴 그린다.
+//   - 검류계와 도선은 교과서(완자 중3 266쪽) 그림을 따른다: 눈금판이 뒤로 기운 쐐기 모양 상자, 앞쪽 오목한 받침에 검정(−)·빨강(+) 단자,
+//     코일 쪽은 아래 받침판의 나사 단자 둘. 도선 양 끝은 악어 집게. 검류계는 위 받침판 높이에 떠 있다.
 //   - 사진처럼 보이도록 원통·도선·금속에 그라데이션을 쓰고, 코일 전체에 투명도 그라데이션 음영을 덧씌운다.
 //   - 컬러(빨강 N·파랑 S, 구리 도선, 청회색 검류계) 또는 회색 음영.
 //   - 코일: 두께(바깥 지름)·높이·감은 횟수. 도선 굵기는 0.75mm이고, 감은 간격이 더 좁으면 간격에 맞춘다(촘촘히 감김).
 //     간격이 넓으면 도선 사이로 원통이 보인다. 앞쪽 반바퀴만 보이며 나선이라 오른쪽 끝이 반 간격 높다.
-//   - 자석: 아래쪽 극(N/S)을 고른다. 손(선 그림, 흰 채움)으로 위쪽을 잡은 모습을 켜고 끌 수 있다.
+//   - 자석: 아래쪽 극(N/S)을 고른다. 손(선 그림, 흰 채움)으로 잡은 모습을 켜고 끌 수 있다. 교과서 사진처럼 왼쪽에서 온 손의 엄지가
+//     자석 앞 왼쪽을 누르고, 네 손가락은 자석 뒤로 감겨 오른쪽 모서리 밖으로 손끝만 보인다.
 //   - 검류계 바늘 각도(°, 오른쪽 +)를 정한다.
 //   - 확인하면 장치 전체가 든 그룹 하나가 남는다.
 
@@ -35,8 +38,11 @@ try {
     var PLATE_MARGIN_MM = 7;     // 받침판이 코일보다 양옆으로 나오는 길이
     var PLATE_T_MM = 2.5;        // 받침판 두께
     var PLATE_BACK = 0.9;        // 받침판 윗면의 뒤쪽 폭 비율 (원근)
-    var MAGNET = {w: 8, len: 40, depth: 5, gap: 6};                    // mm. gap: 위 받침판에서 자석 아래 끝까지
-    var GALV = {gap: 16, w: 34, baseH: 9, baseD: 20, housingH: 26, zFront: 4, zTop: 11, side: 1.5, inset: 2.2}; // mm
+    var MAGNET = {w: 8, len: 40, depth: 5, gap: 6, handGap: 5};        // mm. gap: 위 받침판에서 자석 아래 끝까지, handGap: 자석 위끝에서 손 위끝까지
+    // 검류계(mm): 옆에서 본 단면이 쐐기 모양. 앞 턱(높이 lipH, 앞면이 비스듬히 lipZ까지) 뒤에 단자가 서는 오목한 받침(바닥 trayY, 깊이 trayZ까지),
+    // 그 뒤로 눈금판이 뒤로 기울어 높이 h(깊이 faceTopZ)까지 오른다. 코일 위 받침판 높이에 떠 있다 (교과서 그림 배치)
+    var GALV = {gap: 8, w: 36, depth: 18, h: 26, lipH: 4, lipZ: 1.6, rimZ: 2.4, trayY: 2.6, trayZ: 9, faceTopZ: 14.5, wall: 1.2, frame: 2.2};
+    var CLIP_MM = 8;             // 악어 집게 길이 (고무 5 + 쇠 집게 3)
     var SCALE_SPAN = 50;         // 눈금 양쪽 끝 각도(°)
     var SCALE_STEP = 5;
     var SCALE_MAJOR = 25;
@@ -120,27 +126,29 @@ try {
         return out;
     }
 
-    // 손(선 그림): 자석 앞면 가운데 x=0, 잡은 곳 위끝 y=0, 단위 mm(자석 폭 8mm 기준). 왼쪽에서 와서 주먹으로 쥔다.
-    // fills: 흰 채움(선 없음), lines: 선. 그리는 순서대로
+    // 손(선 그림, 교과서 사진을 본뜸): 자석 앞면 왼쪽 모서리 x=0, 손 위끝(집게손가락 마디) y=0, 단위 mm(자석 폭 8mm 기준, HAND_SCALE배로 그림).
+    // 왼쪽 모서리에서 재므로 크기를 줄여도 손이 자석 모서리에 붙어 있다
+    // 팔이 왼쪽에서 오고 손등이 보인다. 엄지는 자석 앞 왼쪽을 누르고, 네 손가락은 자석 뒤로 감겨 오른쪽 모서리 밖으로 손끝만 보인다.
+    // back: 자석보다 먼저 그리는 손끝 [위, 아래, 자석 오른쪽 면에서 나온 길이]. 나머지는 자석 위에 그린다
+    var HAND_SCALE = 0.85;
     var HAND = {
-        palm: [[-6.2, 1.0], [-10, 2.0], [-15, 2.6], [-27, 4.6, "c"], [-27, -8.2, "c"], [-15, -10.2], [-10, -11.2], [-5.0, -11.5]],
-        palmTop: [[-5.6, 0.6], [-10, 2.0], [-15, 2.6], [-27, 4.6]],
-        palmBottom: [[-5.0, -11.5], [-10, -11.2], [-15, -10.2], [-27, -8.2]],
-        // 손가락: [위, 아래, 오른쪽 끝] 집게 → 새끼
-        fingers: [[0.2, -3.0, 5.0], [-3.0, -6.1, 5.6], [-6.1, -9.0, 5.3], [-9.0, -11.5, 4.4]],
-        fingerLeft: -7.2,
-        // 엄지: 채움은 전체, 선은 앞 thumbLine개 점만(손등에 붙은 뿌리에는 선이 없다)
-        thumb: [[-13, 2.45], [-6.5, 2.2], [-1.5, -0.6], [2.6, -3.6], [3.4, -4.8], [2.4, -5.8], [0.4, -5.6], [-3.5, -3.6], [-8, -1.6], [-13, -1.0]],
+        tips: [[-9.6, -14.6, 3.6], [-14.4, -20.8, 4.2], [-20.6, -26.8, 3.9], [-26.6, -31.6, 3.0]],
+        body: [[-26, -2.5, "c"], [-20, -1.7], [-14, -0.9], [-7, 0], [-3, -0.6], [-0.8, -2.6], [0, -5.2, "c"], [0, -12, "c"],
+            [-2.5, -14], [-11, -21.3], [-17, -21.2], [-22, -19.6], [-26, -17.4, "c"]],
+        topLine: [[-26, -2.5], [-20, -1.7], [-14, -0.9], [-7, 0], [-3, -0.6], [-0.8, -2.6], [0, -5.2]],
+        bottomLine: [[-26, -17.4], [-22, -19.6], [-17, -21.2], [-12, -21.5], [-10.5, -21.4]],
+        // 왼쪽에 보이는 굽은 집게·가운뎃손가락의 아래 가장자리
+        folds: [[[-8, -3.2], [-3.5, -4.6], [0, -7.5]], [[-9, -7.2], [-4, -9], [0, -11.2]]],
+        // 엄지: 채움은 전체, 선은 앞 thumbLine개 점만(손바닥에 붙은 뿌리에는 선이 없다)
+        thumb: [[-13, -13.5], [-8, -15.2], [-3.5, -18.5], [-0.6, -21.5], [0.8, -23.6], [-0.2, -25.2], [-3, -25.4], [-7, -23.2], [-11, -21.3], [-15, -19]],
         thumbLine: 9,
-        nail: [[0.9, -3.4], [2.3, -4.2], [2.5, -5.0]]
+        nail: [[-1.3, -21.6], [0, -22.6], [-0.1, -23.8]]
     };
 
-    // 손가락 하나: 왼쪽에서 오른쪽 끝까지 가로로 지나고 오른쪽 끝(마디)이 둥글다. 위는 살짝 볼록.
-    // 채움은 전체, 선은 1~7번 점만(손바닥에 붙은 왼쪽 끝에는 선이 없다)
-    function fingerPoints(top, bottom, right, left) {
-        var r = (top - bottom) / 2, mid = (top + bottom) / 2, x0 = right - r;
-        return [[left, top, "c"], [left + 2.2, top + 0.1], [(left + x0) / 2, top + 0.25], [x0, top], [right, mid], [x0, bottom],
-            [(left + x0) / 2, bottom - 0.15], [left + 2.2, bottom], [left, bottom, "c"]];
+    // 자석 뒤에서 오른쪽으로 나온 손끝 하나: 자석 오른쪽 면 x=edge에서 둥글게 나왔다가 돌아간다 (단위는 그림 좌표)
+    function fingertipPoints(edge, top, bottom, out) {
+        var mid = (top + bottom) / 2, h = top - bottom, hidden = edge - out * 0.3;
+        return [[hidden, top, "c"], [edge + out * 0.55, top - h * 0.05], [edge + out, mid], [edge + out * 0.6, bottom + h * 0.08], [hidden, bottom, "c"]];
     }
     // ==== 순수 기하 끝 ====
 
@@ -182,6 +190,7 @@ try {
         holeBack: {c: [10, 6, 6, 45], k: 45}, holeDeep: {c: [30, 25, 25, 90], k: 92},
         bodyLight: {c: [20, 5, 4, 6], k: 10}, body: {c: [32, 10, 8, 20], k: 26}, bodyDark: {c: [45, 20, 15, 42], k: 46},
         faceTop: {c: [0, 0, 0, 0], k: 0}, faceBottom: {c: [18, 3, 0, 0], k: 7}, scale: {c: [0, 0, 0, 90], k: 90},
+        panelLight: {c: [22, 3, 0, 0], k: 10}, panel: {c: [40, 10, 3, 3], k: 22}, trayBack: {c: [8, 4, 4, 30], k: 32}, trayFront: {c: [4, 2, 2, 12], k: 14},
         redLight: {c: [0, 70, 55, 0], k: 35}, red: {c: [0, 95, 85, 5], k: 55}, redDark: {c: [15, 100, 95, 40], k: 72},
         blackLight: {c: [0, 0, 0, 50], k: 50}, blackPost: {c: [20, 15, 15, 85], k: 85},
         cableRed: {c: [0, 90, 80, 5], k: 50}, cableRedLight: {c: [0, 45, 35, 0], k: 25},
@@ -310,13 +319,25 @@ try {
         var hp = plate / 2 * TILT;
 
         drawPlate(g, 0, plate, t, false, coil.rc);
-        var posts = drawCoil(g, d, h, coil);
+        drawCoil(g, d, h, coil);
         drawPlate(g, h + t, plate, t, true, coil.rc);
 
-        var galvLeft = plate / 2 + GALV.gap * MM;
-        var galvPosts = drawGalvanometer(g, galvLeft, -hp - t);
-        drawCable(g, posts[0], galvPosts[0], "cableBlack", "cableBlackLight");
-        drawCable(g, posts[1], galvPosts[1], "cableRed", "cableRedLight");
+        // 코일 단자: 아래 받침판 오른쪽 앞 (뒤 하나, 앞 하나)
+        var grip1 = drawScrewTerminal(g, d / 2 + 2.6 * MM, -hp * 0.3);
+        var grip2 = drawScrewTerminal(g, d / 2 + 4.8 * MM, -hp * 0.75);
+        var galvPosts = drawGalvanometer(g, plate / 2 + GALV.gap * MM, h + t - hp);
+
+        // 도선: 코일 단자를 오른쪽에서 문 집게 → 검류계 단자에 아래에서 매달린 집게. 검정(−)이 뒤 단자, 빨강(+)이 앞 단자
+        var toLeft = unit([-1, 0.15]), up = unit([0.15, 1]);
+        var ends = [[grip1, galvPosts[0], "black", "cableBlack", "cableBlackLight"], [grip2, galvPosts[1], "red", "cableRed", "cableRedLight"]];
+        for (var c = 0; c < ends.length; c++) {
+            var coilEnd = clipTail(ends[c][0], toLeft), galvEnd = clipTail(ends[c][1], up);
+            drawCable(g, coilEnd, [-toLeft[0], -toLeft[1]], galvEnd, [-up[0], -up[1]], ends[c][3], ends[c][4]);
+        }
+        for (var k = 0; k < ends.length; k++) {
+            drawClip(g, ends[k][0], toLeft, ends[k][2]);
+            drawClip(g, ends[k][1], up, ends[k][2]);
+        }
 
         var magnetBottom = h + t + MAGNET.gap * MM;
         drawMagnet(g, magnetBottom);
@@ -375,84 +396,113 @@ try {
         var shade = bez(g, cylinderFront(d / 2, 0, h), true);
         paintLinear(shade, "coilShade", [[0, "black", 60], [16, "black", 20], [30, "white", 25], [42, "white", 0], [70, "black", 10], [100, "black", 65]], 0);
 
-        // 단자: 코일 오른쪽 앞, 받침판 윗면 위
-        var hp = (d / 2 + PLATE_MARGIN_MM * MM) * TILT;
-        var postY = -hp * 0.45;
-        var x1 = d / 2 + 2.5 * MM, x2 = d / 2 + 5.5 * MM;
-        var wire = Math.max(coil.wire, 0.6);
-        // 끌어낸 도선: 맨 아래 바퀴 오른쪽 끝 → 단자 1, 맨 위에서 코일 옆을 따라 내려와 → 단자 2
-        drawCopperWire(g, [[coil.rw, coil.wire / 2 + coil.pitch / 2], [x1 - 1.2 * MM, 0.4 * MM], [x1, postY + 1.6 * MM]], wire);
-        var sideX = d / 2 + wire * 0.6;
-        drawCopperWire(g, [[coil.rw, h - coil.pitch / 2], [sideX, h - coil.pitch], [sideX, 2.2 * MM], [x2, postY + 1.6 * MM]], wire);
-        var top1 = drawPost(g, x1, postY, 0.9 * MM, 2 * MM, "metal");
-        var top2 = drawPost(g, x2, postY, 0.9 * MM, 2 * MM, "metal");
-        return [top1, top2];
     }
 
-    function drawCopperWire(g, pts, width) {
-        var path = bez(g, smoothPoints(pts, false), false);
-        strokeRound(path, "copper", width);
-        var light = bez(g, smoothPoints(pts, false), false);
-        strokeRound(light, "copperLight", width * 0.35);
-        light.translate(-width * 0.15, width * 0.15);
-    }
-
-    // 세운 원통 단자: 아래 중심 (x, y), 반지름 r, 높이 h. 꼭대기 점을 돌려준다
-    function drawPost(g, x, y, r, h, colorName) {
-        var body = bez(g, cylinderFront(r, y, y + h), true);
-        var stops = colorName === "metal" ? [[0, "metalDark"], [35, "metalLight"], [100, "metalDark"]] :
-            colorName === "red" ? [[0, "redDark"], [35, "redLight"], [100, "redDark"]] : [[0, "blackPost"], [35, "blackLight"], [100, "blackPost"]];
-        paintLinear(body, "post_" + colorName, stops, 0);
+    // 세운 원통 (x 가운데, 아래 y0 ~ 위 y1, 반지름 r): 몸통(가로 그라데이션) + 윗면 타원
+    function cylinder(g, x, y0, y1, r, key, stops, topColor) {
+        var points = cylinderFront(r, y0, y1);
+        for (var i = 0; i < points.length; i++) {
+            points[i] = {anchor: [points[i].anchor[0] + x, points[i].anchor[1]], left: [points[i].left[0] + x, points[i].left[1]],
+                right: [points[i].right[0] + x, points[i].right[1]]};
+        }
+        var body = bez(g, points, true);
+        paintLinear(body, key, stops, 0);
         edge(body);
-        var cap = ellipse(g, x, y + h, r, r * TILT);
+        var cap = ellipse(g, x, y1, r, r * TILT);
         cap.filled = true;
-        cap.fillColor = solid(colorName === "metal" ? "metalLight" : (colorName === "red" ? "redLight" : "blackLight"));
+        cap.fillColor = solid(topColor);
         edge(cap);
-        body.translate(x, 0);
-        return [x, y + h * 0.6];
+        return cap;
     }
 
-    // 검류계: 받침 상자 + 비스듬히 선 눈금판 상자. 왼쪽 아래 앞 모서리 (x0, y0). 단자(검정 −, 빨강 +)의 연결점을 돌려준다
+    // 코일 단자(나사): 와셔 + 가는 축 + 머리(홈). 집게가 무는 점을 돌려준다
+    function drawScrewTerminal(g, x, y) {
+        var metalStops = [[0, "metalDark"], [35, "metalLight"], [100, "metalDark"]];
+        var washer = ellipse(g, x, y, 1.4 * MM, 1.4 * MM * TILT);
+        washer.filled = true;
+        washer.fillColor = solid("metal");
+        edge(washer);
+        cylinder(g, x, y, y + 1.8 * MM, 0.5 * MM, "screw", metalStops, "metalLight");
+        cylinder(g, x, y + 1.8 * MM, y + 2.4 * MM, 1.0 * MM, "screw", metalStops, "metalLight");
+        var slot = poly(g, [[x - 0.7 * MM, y + 2.4 * MM], [x + 0.7 * MM, y + 2.4 * MM]], false);
+        strokeLine(slot, "metalDark", 0.4);
+        return [x + 0.35 * MM, y + 0.9 * MM];
+    }
+
+    // 검류계 단자: 쇠 너트 위에 색 손잡이(윗면 가운데 구멍). 집게가 무는 점을 돌려준다
+    function drawBindingPost(g, x, y, colorName) {
+        var dark = colorName === "red" ? "redDark" : "blackPost", light = colorName === "red" ? "redLight" : "blackLight";
+        cylinder(g, x, y, y + 0.9 * MM, 1.9 * MM, "nut", [[0, "metalDark"], [35, "metalLight"], [100, "metalDark"]], "metal");
+        cylinder(g, x, y + 0.9 * MM, y + 3.9 * MM, 1.45 * MM, "post_" + colorName, [[0, dark], [35, light], [100, dark]], light);
+        var hole = ellipse(g, x, y + 3.9 * MM, 0.5 * MM, 0.5 * MM * TILT);
+        hole.filled = true;
+        hole.fillColor = solid("holeDeep");
+        return [x, y + 1.7 * MM];
+    }
+
+    // 악어 집게: 끝(tip)이 dir 쪽을 향한다. 쇠 집게(위·아래 턱) 위에 고무 덮개. 도선이 붙는 꼬리 점은 clipTail
+    function drawClip(g, tip, dir, colorName) {
+        var n = [-dir[1], dir[0]];
+        function at(list) {
+            var out = [];
+            for (var i = 0; i < list.length; i++) {
+                var p = [tip[0] + (list[i][0] * dir[0] + list[i][1] * n[0]) * MM, tip[1] + (list[i][0] * dir[1] + list[i][1] * n[1]) * MM];
+                if (list[i].length > 2) p.push(list[i][2]);
+                out.push(p);
+            }
+            return out;
+        }
+        var across = Math.atan2(n[1], n[0]) * 180 / Math.PI;
+        var jaws = [[[-3.3, 0.75], [-0.3, 0.38], [0, 0.12], [-3.3, 0.08]], [[-3.3, -0.08], [0, -0.12], [-0.3, -0.38], [-3.3, -0.75]]];
+        for (var j = 0; j < 2; j++) {
+            var jaw = poly(g, at(jaws[j]), true);
+            paintLinear(jaw, "jaw", [[0, "metalDark"], [50, "metalLight"], [100, "metalDark"]], across);
+            edge(jaw);
+        }
+        var dark = colorName === "red" ? "redDark" : "blackPost", light = colorName === "red" ? "redLight" : "blackLight";
+        var boot = bez(g, smoothPoints(at([[-3, 0.95, "c"], [-5.5, 1.1], [-7.6, 0.95], [-8.3, 0], [-7.6, -0.95], [-5.5, -1.1], [-3, -0.95, "c"]]), true), true);
+        paintLinear(boot, "boot_" + colorName, [[0, dark], [40, light], [100, dark]], across);
+        edge(boot);
+    }
+
+    function clipTail(tip, dir) {
+        return [tip[0] - dir[0] * (CLIP_MM - 0.2) * MM, tip[1] - dir[1] * (CLIP_MM - 0.2) * MM];
+    }
+
+    function unit(v) {
+        var length = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
+        return [v[0] / length, v[1] / length];
+    }
+
+    // 검류계(교과서 그림처럼): 옆면(쐐기) → 윗면 → 기운 눈금판 → 오목한 받침과 단자 → 앞 턱.
+    // 왼쪽 아래 앞 모서리 (x0, y0). 단자(검정 −, 빨강 +)에서 집게가 무는 점을 돌려준다
     function drawGalvanometer(g, x0, y0) {
-        var w = GALV.w * MM, bh = GALV.baseH * MM, bd = GALV.baseD * MM;
-        var x1 = x0 + w, yb = y0 + bh;
-        var bodyStops = [[0, "bodyLight"], [100, "body"]];
+        var w = GALV.w * MM, x1 = x0 + w, wall = GALV.wall * MM;
+        function P(x, y, z) { return project(x, y0 + y * MM, z * MM); }
+        var H = GALV.h, D = GALV.depth, lip = GALV.lipH, tray = GALV.trayY;
 
-        var baseRight = poly(g, [project(x1, y0, 0), project(x1, y0, bd), project(x1, yb, bd), project(x1, yb, 0)], true);
-        paintLinear(baseRight, "galvSide", [[0, "body"], [100, "bodyDark"]], -90);
-        edge(baseRight);
-        var baseTop = poly(g, [project(x0, yb, 0), project(x1, yb, 0), project(x1, yb, bd), project(x0, yb, bd)], true);
-        paintLinear(baseTop, "galvTop", [[0, "body"], [100, "bodyLight"]], -90);
-        edge(baseTop);
-        var baseFront = poly(g, [[x0, y0], [x1, y0], [x1, yb], [x0, yb]], true);
-        paintLinear(baseFront, "galvFront", bodyStops, -90);
-        edge(baseFront);
+        var side = poly(g, [P(x1, 0, 0), P(x1, lip, GALV.lipZ), P(x1, lip, GALV.trayZ), P(x1, H, GALV.faceTopZ), P(x1, H, D), P(x1, 0, D)], true);
+        paintLinear(side, "galvSide", [[0, "body"], [100, "bodyDark"]], -90);
+        edge(side);
+        var top = poly(g, [P(x0, H, GALV.faceTopZ), P(x1, H, GALV.faceTopZ), P(x1, H, D), P(x0, H, D)], true);
+        paintLinear(top, "galvTop", [[0, "bodyLight"], [100, "body"]], -90);
+        edge(top);
 
-        // 눈금판 상자: 앞면이 뒤로 기울어 있다 (아래 깊이 zFront, 위 깊이 zTop)
-        var hx0 = x0 + GALV.side * MM, hx1 = x1 - GALV.side * MM, hh = GALV.housingH * MM;
-        var zf = GALV.zFront * MM, zt = GALV.zTop * MM;
-        var bl = project(hx0, yb, zf), br = project(hx1, yb, zf), tl = project(hx0, yb + hh, zt), tr = project(hx1, yb + hh, zt);
-        var hRight = poly(g, [br, project(hx1, yb, bd), project(hx1, yb + hh, bd), tr], true);
-        paintLinear(hRight, "galvSide", [[0, "body"], [100, "bodyDark"]], -90);
-        edge(hRight);
-        var hTop = poly(g, [tl, tr, project(hx1, yb + hh, bd), project(hx0, yb + hh, bd)], true);
-        paintLinear(hTop, "galvTop", [[0, "body"], [100, "bodyLight"]], -90);
-        edge(hTop);
-        var hFront = poly(g, [bl, br, tr, tl], true);
-        paintLinear(hFront, "galvFront", bodyStops, -90);
-        edge(hFront);
-
-        // 눈금판: 앞면 위의 좌표 (u 가로, v 비스듬한 세로, pt)
-        var fw = hx1 - hx0, ins = GALV.inset * MM;
-        var map = faceMapper(bl, [(br[0] - bl[0]) / fw, (br[1] - bl[1]) / fw], [(tl[0] - bl[0]) / hh, (tl[1] - bl[1]) / hh]);
-        var faceW = fw - 2 * ins, faceH = hh - 2 * ins;
-        var face = bez(g, mapPoints(roundedRect(ins, ins, faceW, faceH, 1.5 * MM), map), true);
+        // 눈금판: 기운 면 위의 좌표 (u 가로, v 기운 길이를 따라, pt)
+        var bl = P(x0, lip, GALV.trayZ), br = P(x1, lip, GALV.trayZ), tl = P(x0, H, GALV.faceTopZ), tr = P(x1, H, GALV.faceTopZ);
+        var panelLen = Math.sqrt(Math.pow(GALV.faceTopZ - GALV.trayZ, 2) + Math.pow(H - lip, 2)) * MM;
+        var panel = poly(g, [bl, br, tr, tl], true);
+        paintLinear(panel, "galvPanel", [[0, "panelLight"], [100, "panel"]], -90);
+        edge(panel);
+        var map = faceMapper(bl, [(br[0] - bl[0]) / w, (br[1] - bl[1]) / w], [(tl[0] - bl[0]) / panelLen, (tl[1] - bl[1]) / panelLen]);
+        var frame = GALV.frame * MM, faceW = w - 2 * frame, faceH = panelLen - 2 * frame;
+        var face = bez(g, mapPoints(roundedRect(frame, frame, faceW, faceH, 1.5 * MM), map), true);
         paintLinear(face, "galvFace", [[0, "faceTop"], [100, "faceBottom"]], -90);
         face.stroked = true;
         face.strokeColor = solid("bodyDark");
-        face.strokeWidth = 0.6;
+        face.strokeWidth = 0.4;
 
-        var cx = ins + faceW / 2, cy = ins + faceH * 0.14, r = Math.min(faceW * 0.44, faceH * 0.78);
+        var cx = frame + faceW / 2, cy = frame + faceH * 0.16, r = Math.min(faceW * 0.42, faceH * 0.74);
         var arcPath = bez(g, mapPoints(arcPoints(cx, cy, r, -SCALE_SPAN, SCALE_SPAN), map), false);
         strokeLine(arcPath, "scale", 0.3);
         var ticks = scaleTicks(cx, cy, r, 2.2 * MM, 1.3 * MM);
@@ -463,7 +513,6 @@ try {
         var label = makeMark(g, "G", 8, "scale");
         var labelAt = map(cx - r * 0.22, cy + r * 0.42);
         placeText(label, labelAt[0], labelAt[1]);
-
         var a = options.needle * Math.PI / 180;
         var needle = poly(g, [map(cx, cy), map(cx + r * 0.95 * Math.sin(a), cy + r * 0.95 * Math.cos(a))], false);
         strokeLine(needle, "black", NEEDLE_PT);
@@ -471,20 +520,48 @@ try {
         paintLinear(dome, "dome", [[0, "metalLight"], [100, "metal"]], -90);
         edge(dome);
 
-        // 단자: 받침 윗면 앞쪽
-        var py = yb + DEPTH[1] * 3 * MM;
-        var blackTop = drawPost(g, x0 + w * 0.28 + DEPTH[0] * 3 * MM, py, 1.6 * MM, 3.5 * MM, "black");
-        var redTop = drawPost(g, x0 + w * 0.72 + DEPTH[0] * 3 * MM, py, 1.6 * MM, 3.5 * MM, "red");
-        return [blackTop, redTop];
+        // 오목한 받침: 뒤 턱(눈금판 아래) → 바닥 → 왼쪽 안벽 → 오른쪽 벽 윗면
+        var back = poly(g, [P(x0 + wall, tray, GALV.trayZ), P(x1 - wall, tray, GALV.trayZ), P(x1 - wall, lip, GALV.trayZ), P(x0 + wall, lip, GALV.trayZ)], true);
+        back.filled = true;
+        back.fillColor = solid("bodyDark");
+        edge(back);
+        var floor = poly(g, [P(x0 + wall, tray, GALV.rimZ), P(x1 - wall, tray, GALV.rimZ), P(x1 - wall, tray, GALV.trayZ), P(x0 + wall, tray, GALV.trayZ)], true);
+        paintLinear(floor, "galvTray", [[0, "trayBack"], [100, "trayFront"]], -90);
+        edge(floor);
+        var inner = poly(g, [P(x0 + wall, tray, GALV.rimZ), P(x0 + wall, tray, GALV.trayZ), P(x0 + wall, lip, GALV.trayZ), P(x0 + wall, lip, GALV.rimZ)], true);
+        inner.filled = true;
+        inner.fillColor = solid("body");
+        edge(inner);
+        var leftRim = poly(g, [P(x0, lip, GALV.lipZ), P(x0 + wall, lip, GALV.rimZ), P(x0 + wall, lip, GALV.trayZ), P(x0, lip, GALV.trayZ)], true);
+        leftRim.filled = true;
+        leftRim.fillColor = solid("bodyLight");
+        edge(leftRim);
+        var rightRim = poly(g, [P(x1 - wall, lip, GALV.rimZ), P(x1, lip, GALV.lipZ), P(x1, lip, GALV.trayZ), P(x1 - wall, lip, GALV.trayZ)], true);
+        rightRim.filled = true;
+        rightRim.fillColor = solid("bodyLight");
+        edge(rightRim);
+
+        var postZ = (GALV.rimZ + GALV.trayZ) / 2;
+        var blackBase = P(x0 + w * 0.28, tray, postZ), redBase = P(x0 + w * 0.72, tray, postZ);
+        var blackGrip = drawBindingPost(g, blackBase[0], blackBase[1], "black");
+        var redGrip = drawBindingPost(g, redBase[0], redBase[1], "red");
+
+        // 앞 턱: 비스듬한 앞면과 좁은 윗면
+        var lipFront = poly(g, [P(x0, 0, 0), P(x1, 0, 0), P(x1, lip, GALV.lipZ), P(x0, lip, GALV.lipZ)], true);
+        paintLinear(lipFront, "galvLip", [[0, "bodyLight"], [100, "bodyDark"]], -90);
+        edge(lipFront);
+        var rim = poly(g, [P(x0, lip, GALV.lipZ), P(x1, lip, GALV.lipZ), P(x1 - wall, lip, GALV.rimZ), P(x0 + wall, lip, GALV.rimZ)], true);
+        rim.filled = true;
+        rim.fillColor = solid("bodyLight");
+        edge(rim);
+        return [blackGrip, redGrip];
     }
 
-    // 도선(케이블): 두 단자 사이에 아래로 처진 곡선 + 밝은 줄
-    function drawCable(g, from, to, colorName, lightName) {
-        var dx = to[0] - from[0];
-        var sag = 14 * MM;
+    // 도선(케이블): from에서 fromDir 쪽으로 나가 to에 toDir 쪽에서 들어오는 곡선 + 밝은 줄
+    function drawCable(g, from, fromDir, to, toDir, colorName, lightName) {
         var pts = [
-            {anchor: from, left: from, right: [from[0] + dx * 0.15, from[1] - sag]},
-            {anchor: to, left: [to[0] - dx * 0.25, to[1] - sag * 1.1], right: to}
+            {anchor: from, left: from, right: [from[0] + fromDir[0] * 12 * MM, from[1] + fromDir[1] * 12 * MM]},
+            {anchor: to, left: [to[0] + toDir[0] * 16 * MM, to[1] + toDir[1] * 16 * MM], right: to}
         ];
         var cable = bez(g, pts, false);
         strokeRound(cable, colorName, CABLE_PT);
@@ -493,11 +570,14 @@ try {
         light.translate(-CABLE_PT * 0.15, CABLE_PT * 0.2);
     }
 
-    // 막대자석: 앞면(두 극), 오른쪽 옆면, 윗면, 글자 N·S. 손을 켜면 위쪽을 잡은 손
+    // 막대자석: 앞면(두 극), 오른쪽 옆면, 윗면, 글자 N·S. 손을 켜면 자석 뒤 손끝 → 자석 → 손등·엄지 순서로 그린다
     function drawMagnet(g, bottom) {
         var w = MAGNET.w * MM, len = MAGNET.len * MM, dz = MAGNET.depth * MM;
         var x0 = -w / 2 - DEPTH[0] * dz / 2, x1 = x0 + w, mid = bottom + len / 2, top = bottom + len;
+        var cx = (x0 + x1) / 2, handTop = top - MAGNET.handGap * MM, unit = HAND_SCALE * w / 8;
         var lower = options.pole === 0 ? "n" : "s", upper = options.pole === 0 ? "s" : "n";
+        if (options.hand) drawFingertips(g, x1 + DEPTH[0] * dz, handTop, unit);
+
         var halves = [[lower, bottom, mid], [upper, mid, top]];
         for (var i = 0; i < 2; i++) {
             var pole = halves[i][0], y0 = halves[i][1], y1 = halves[i][2];
@@ -511,47 +591,57 @@ try {
         cap.filled = true;
         cap.fillColor = solid(upper + "Top");
 
-        // 글자는 각 반쪽 가운데. 손이 위쪽을 가리면 위 글자는 손 아래 남은 곳 가운데
-        var gripTop = top - 2 * MM, gripBottom = gripTop - 11.6 * MM;
-        var upperY = options.hand ? (mid + gripBottom) / 2 : (mid + top) / 2;
-        var letters = [[lower, (bottom + mid) / 2], [upper, upperY]];
+        // 글자는 각 반쪽 가운데 (손은 자석 왼쪽 모서리 언저리만 가린다)
+        var letters = [[lower, (bottom + mid) / 2], [upper, (mid + top) / 2]];
         for (var k = 0; k < 2; k++) {
             var letter = makeMark(g, letters[k][0].toUpperCase(), 12, "white");
-            placeText(letter, (x0 + x1) / 2, letters[k][1]);
+            placeText(letter, cx, letters[k][1]);
         }
-        if (options.hand) drawHand(g, (x0 + x1) / 2, gripTop, w / (8 * MM));
+        if (options.hand) drawHandFront(g, x0, handTop, unit);
     }
 
-    // 손(선 그림): HAND 좌표(mm)를 자석 앞면 가운데 x, 잡은 곳 위끝 y에 놓는다
-    function drawHand(g, x, y, scale) {
-        var s = scale * MM;
-        function at(list) {
-            var out = [];
-            for (var i = 0; i < list.length; i++) out.push(list[i].length > 2 ? [x + list[i][0] * s, y + list[i][1] * s, list[i][2]] : [x + list[i][0] * s, y + list[i][1] * s]);
-            return out;
+    // HAND 좌표(손 단위) → 그림 좌표. 꺾인 점 표시("c")는 그대로 둔다
+    function handAt(list, x, y, unit) {
+        var out = [];
+        for (var i = 0; i < list.length; i++) {
+            var p = [x + list[i][0] * unit, y + list[i][1] * unit];
+            if (list[i].length > 2) p.push(list[i][2]);
+            out.push(p);
         }
+        return out;
+    }
+
+    // 자석 뒤로 감긴 손가락의 손끝: 자석 오른쪽 면(edge) 밖으로 둥글게 나온다
+    function drawFingertips(g, edge, y, unit) {
+        var tips = g.groupItems.add();
+        tips.name = "Fingertips";
+        for (var i = 0; i < HAND.tips.length; i++) {
+            var spec = HAND.tips[i];
+            var tip = bez(tips, smoothPoints(fingertipPoints(edge, y + spec[0] * unit, y + spec[1] * unit, spec[2] * unit), true), true);
+            tip.filled = true;
+            tip.fillColor = solid("white");
+            strokeRound(tip, "black", HAND_PT);
+        }
+    }
+
+    // 손등·엄지(자석 앞): 흰 채움 위에 윤곽선. 엄지 뿌리와 손바닥에 붙은 곳에는 선이 없다
+    function drawHandFront(g, x, y, unit) {
         var hand = g.groupItems.add();
         hand.name = "Hand";
-        var palm = bez(hand, smoothPoints(at(HAND.palm), true), true);
-        palm.filled = true;
-        palm.fillColor = solid("white");
-        for (var f = HAND.fingers.length - 1; f >= 0; f--) {
-            var spec = HAND.fingers[f];
-            var outline = at(fingerPoints(spec[0], spec[1], spec[2], HAND.fingerLeft));
-            var finger = bez(hand, smoothPoints(outline, true), true);
-            finger.filled = true;
-            finger.fillColor = solid("white");
-            strokeRound(bez(hand, smoothPoints(outline.slice(1, 8), false), false), "black", HAND_PT);
+        var body = bez(hand, smoothPoints(handAt(HAND.body, x, y, unit), true), true);
+        body.filled = true;
+        body.fillColor = solid("white");
+        strokeRound(bez(hand, smoothPoints(handAt(HAND.topLine, x, y, unit), false), false), "black", HAND_PT);
+        strokeRound(bez(hand, smoothPoints(handAt(HAND.bottomLine, x, y, unit), false), false), "black", HAND_PT);
+        for (var f = 0; f < HAND.folds.length; f++) {
+            strokeRound(bez(hand, smoothPoints(handAt(HAND.folds[f], x, y, unit), false), false), "black", HAND_PT);
         }
-        // 손등 윤곽은 손가락 위에 (새끼손가락 채움이 아래 윤곽 끝을 덮지 않게), 엄지 아래에
-        strokeRound(bez(hand, smoothPoints(at(HAND.palmTop), false), false), "black", HAND_PT);
-        strokeRound(bez(hand, smoothPoints(at(HAND.palmBottom), false), false), "black", HAND_PT);
-        var thumbPoints = at(HAND.thumb);
+        var thumbPoints = handAt(HAND.thumb, x, y, unit);
         var thumb = bez(hand, smoothPoints(thumbPoints, true), true);
         thumb.filled = true;
         thumb.fillColor = solid("white");
         strokeRound(bez(hand, smoothPoints(thumbPoints.slice(0, HAND.thumbLine), false), false), "black", HAND_PT);
-        strokeRound(bez(hand, smoothPoints(at(HAND.nail), false), false), "black", HAND_PT * 0.7);
+        strokeRound(bez(hand, smoothPoints(handAt(HAND.nail, x, y, unit), false), false), "black", HAND_PT * 0.7);
     }
 
     // -------------------------------------------------------
