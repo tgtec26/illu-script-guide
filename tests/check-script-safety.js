@@ -656,7 +656,10 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
   const required = [
     'label: "코일 스프링"',
     'var LINE_WIDTH_PT = 0.3',
-    'path.strokeWidth = LINE_WIDTH_PT',
+    'path.strokeWidth = lineWidthPt',
+    'path.strokeColor = formGray(shadeK)',
+    'var ellipseHeight = pitch * loopPct / 100',
+    'if (source === null && doc.selection && doc.selection.length > 0) return',
     'var MIN_TURNS = 5',
     'var MAX_TURNS = 30',
     'widthRow.add("statictext", undefined, "좌우 폭 (mm):")',

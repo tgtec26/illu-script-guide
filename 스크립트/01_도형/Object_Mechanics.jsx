@@ -10,7 +10,7 @@ try {
 } catch (e) {}
 
 // 역학: 진자 운동·수평 던지기·사인 곡선·코일 스프링·다중 섬광·역학적 에너지를 한 창의 탭으로 묶었다.
-// 탭마다 필요한 선택이 다르다 (진자: 수평선, 수평 던지기: 없음, 사인 곡선: 패스 하나, 코일 스프링: 원 하나, 다중 섬광·역학적 에너지: 없음).
+// 탭마다 필요한 선택이 다르다 (진자: 수평선, 수평 던지기: 없음, 사인 곡선: 패스 하나, 코일 스프링: 원 하나 또는 없음, 다중 섬광·역학적 에너지: 없음).
 // 다중 섬광·역학적 에너지 탭은 파일 끝의 '폼 탭 공용 부품'(makeFormEngine)으로 만든다.
 // 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적는다. 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
 (function() {
@@ -1784,20 +1784,28 @@ try {
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
         function addRows(page) {
             var doc = app.activeDocument;
+            // 원을 선택하면 그 크기에 맞춘다. 선택이 없으면 지난번 크기로 대지 가운데에 만든다
             var source = getSelectedCircle(doc.selection);
-            if (source === null) return "원 패스 하나만 선택해주세요.";
+            if (source === null && doc.selection && doc.selection.length > 0) return "원 패스 하나만 선택하거나 선택을 비워주세요.";
 
-            var bounds = source.geometricBounds;
-            var sourceWidth = bounds[2] - bounds[0];
-            var sourceHeight = bounds[1] - bounds[3];
-            if (sourceWidth <= 0 ||
-                    Math.abs(sourceWidth - sourceHeight) > Math.max(0.1, sourceWidth * 0.01) ||
-                    !hasCircularPathPoints(source)) return "가로와 세로 크기가 같은 원을 선택해주세요.";
+            var bounds, sourceWidth = 0;
+            if (source !== null) {
+                bounds = source.geometricBounds;
+                sourceWidth = bounds[2] - bounds[0];
+                var sourceHeight = bounds[1] - bounds[3];
+                if (sourceWidth <= 0 ||
+                        Math.abs(sourceWidth - sourceHeight) > Math.max(0.1, sourceWidth * 0.01) ||
+                        !hasCircularPathPoints(source)) return "가로와 세로 크기가 같은 원을 선택해주세요.";
+            } else {
+                bounds = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+            }
 
             // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
             var MM_TO_PT = 2.83464567;
             var SIZE_STEP_MM = 0.05;
             var LINE_WIDTH_PT = 0.3;
+            var LINE_MIN_PT = 0.1, LINE_MAX_PT = 3, LINE_STEP_PT = 0.05;
+            var LOOP_MIN_PCT = 10, LOOP_MAX_PCT = 300;   // 고리 높이: 감는 간격에 대한 비율
             var POSITION_LIMIT_MM = 100;
             var OFFSET_STEP_MM = 0.1;
             var offsetXmm = 0;
@@ -1807,21 +1815,25 @@ try {
             var centerX = (bounds[0] + bounds[2]) / 2;
             var centerY = (bounds[1] + bounds[3]) / 2;
             var sourceDiameterMm = sourceWidth / MM_TO_PT;
-            var coilWidthMm = roundTo(sourceDiameterMm, SIZE_STEP_MM);
-            var maxCoilWidthMm = Math.max(SIZE_STEP_MM, roundTo(sourceDiameterMm * 5, SIZE_STEP_MM));
-            var coilHeightMm = roundTo(sourceDiameterMm * 2, SIZE_STEP_MM);
-            var maxCoilHeightMm = Math.max(SIZE_STEP_MM, roundTo(sourceDiameterMm * 8, SIZE_STEP_MM));
+            // 원이 없으면 지난번 폭·높이를 쓴다 (저장값이 없으면 10×20mm)
+            var coilWidthMm = source !== null ? roundTo(sourceDiameterMm, SIZE_STEP_MM) : 10;
+            var maxCoilWidthMm = source !== null ? Math.max(SIZE_STEP_MM, roundTo(sourceDiameterMm * 5, SIZE_STEP_MM)) : 100;
+            var coilHeightMm = source !== null ? roundTo(sourceDiameterMm * 2, SIZE_STEP_MM) : 20;
+            var maxCoilHeightMm = source !== null ? Math.max(SIZE_STEP_MM, roundTo(sourceDiameterMm * 8, SIZE_STEP_MM)) : 200;
             var turnCount = 6;
-            // 폭·높이는 선택한 원에서 계산하므로 저장하지 않는다. 감는 횟수만 기억한다.
+            var lineWidthPt = LINE_WIDTH_PT;
+            var shadeK = 100;           // 선 회색의 K값
+            var loopPct = 82;           // 고리(타원) 높이 = 감는 간격 × 이 비율. 클수록 선이 더 내려갔다 올라온다
+            // 폭·높이도 저장하지만 원을 선택했을 때는 원에서 계산한 값을 쓴다
             var PREF_KEY = "ObjectCoilSpring/settings";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var defaults = {coilWidthMm: coilWidthMm, coilHeightMm: coilHeightMm, turnCount: turnCount,
-                offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+                offsetXmm: offsetXmm, offsetYmm: offsetYmm, lineWidthPt: lineWidthPt, shadeK: shadeK, loopPct: loopPct};
             var RESET_BUTTON_WIDTH = 34;
             applySavedSettings();
             var previewEnabled = true;
             var previewGroup = null;
-            var sourceWasHidden = source.hidden;
+            var sourceWasHidden = source !== null ? source.hidden : false;
 
             var dlg = page;
 
@@ -1857,6 +1869,34 @@ try {
             turnsInput.characters = 6;
             var turnsSlider = addSliderWithSteps(turnsRow, turnCount, MIN_TURNS, MAX_TURNS, 1);
             addResetButton(turnsRow, turnsInput, String(defaults.turnCount));
+
+            var loopRow = turnsPanel.add("group");
+            loopRow.alignChildren = ["left", "center"];
+            var loopLabel = loopRow.add("statictext", undefined, "고리 높이 (%):");
+            loopLabel.preferredSize.width = 90;
+            loopLabel.helpTip = "감는 간격에 대한 고리(타원) 높이. 클수록 선이 더 내려갔다 올라온다";
+            var loopInput = loopRow.add("edittext", undefined, String(loopPct));
+            loopInput.characters = 6;
+            var loopSlider = addSliderWithSteps(loopRow, loopPct, LOOP_MIN_PCT, LOOP_MAX_PCT, 1);
+            addResetButton(loopRow, loopInput, String(defaults.loopPct));
+
+            var lineRow = turnsPanel.add("group");
+            lineRow.alignChildren = ["left", "center"];
+            lineRow.add("statictext", undefined, "선 굵기 (pt):").preferredSize.width = 90;
+            var lineInput = lineRow.add("edittext", undefined, formatNumber(lineWidthPt, 2));
+            lineInput.characters = 6;
+            var lineSlider = addSliderWithSteps(lineRow, lineWidthPt, LINE_MIN_PT, LINE_MAX_PT, LINE_STEP_PT);
+            addResetButton(lineRow, lineInput, formatNumber(defaults.lineWidthPt, 2));
+
+            var shadeRow = turnsPanel.add("group");
+            shadeRow.alignChildren = ["left", "center"];
+            var shadeLabel = shadeRow.add("statictext", undefined, "진하기 (%):");
+            shadeLabel.preferredSize.width = 90;
+            shadeLabel.helpTip = "선 회색의 K값. 100이 검정";
+            var shadeInput = shadeRow.add("edittext", undefined, String(shadeK));
+            shadeInput.characters = 6;
+            var shadeSlider = addSliderWithSteps(shadeRow, shadeK, 0, 100, 1);
+            addResetButton(shadeRow, shadeInput, String(defaults.shadeK));
 
             var positionPanel = dlg.add("panel", undefined, "위치");
             positionPanel.orientation = "column";
@@ -1923,19 +1963,53 @@ try {
                 updatePreview();
             };
 
+            loopSlider.onChanging = function() {
+                loopPct = Math.round(loopSlider.value);
+                loopInput.text = String(loopPct);
+                updatePreview();
+            };
+            loopInput.onChange = function() {
+                loopPct = normalizeIntegerInput(loopInput, loopSlider, loopPct, LOOP_MIN_PCT, LOOP_MAX_PCT);
+                updatePreview();
+            };
+
+            lineSlider.onChanging = function() {
+                lineWidthPt = roundTo(lineSlider.value, LINE_STEP_PT);
+                lineInput.text = formatNumber(lineWidthPt, 2);
+                updatePreview();
+            };
+            lineInput.onChange = function() {
+                lineWidthPt = normalizeStepInput(lineInput, lineSlider, lineWidthPt, LINE_MIN_PT, LINE_MAX_PT, LINE_STEP_PT, 2);
+                updatePreview();
+            };
+
+            shadeSlider.onChanging = function() {
+                shadeK = Math.round(shadeSlider.value);
+                shadeInput.text = String(shadeK);
+                updatePreview();
+            };
+            shadeInput.onChange = function() {
+                shadeK = normalizeIntegerInput(shadeInput, shadeSlider, shadeK, 0, 100);
+                updatePreview();
+            };
+
 
             // 탭 호스트가 부르는 훅. 이 탭이 켜져 있는 동안만 원본 원을 숨긴다
             api.setPreview = function(on) {
                 previewEnabled = on;
-                source.hidden = true;
-                source.selected = false;
+                if (source !== null) {
+                    source.hidden = true;
+                    source.selected = false;
+                }
                 updatePreview();
             };
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
                 clearPreview();
-                source.hidden = sourceWasHidden;
-                source.selected = true;
+                if (source !== null) {
+                    source.hidden = sourceWasHidden;
+                    source.selected = true;
+                }
             };
             api.commit = function() {
                 var validWidth = parseNumber(widthInput.text);
@@ -1958,23 +2032,29 @@ try {
                 coilWidthMm = roundTo(validWidth, SIZE_STEP_MM);
                 coilHeightMm = roundTo(validHeight, SIZE_STEP_MM);
                 turnCount = Math.round(validTurns);
+                loopPct = normalizeIntegerInput(loopInput, loopSlider, loopPct, LOOP_MIN_PCT, LOOP_MAX_PCT);
+                lineWidthPt = normalizeStepInput(lineInput, lineSlider, lineWidthPt, LINE_MIN_PT, LINE_MAX_PT, LINE_STEP_PT, 2);
+                shadeK = normalizeIntegerInput(shadeInput, shadeSlider, shadeK, 0, 100);
                 saveSettings();
                 clearPreview();
-                source.hidden = false;
+                if (source !== null) source.hidden = false;
                 var finalGroup = createCoilSpring();
                 moveItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
                 finalGroup.name = "Coil Spring";
-                try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
-                source.remove();
+                if (source !== null) {
+                    try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
+                    source.remove();
+                }
                 doc.selection = null;
                 finalGroup.selected = true;
                 return true;
             };
 
+            // v3: 횟수 · 가로 · 세로 · 폭 · 높이 · 선 굵기 · 진하기 · 고리 높이. v1/v2(횟수·위치)도 읽는다
             function saveSettings() {
                 try {
                     app.preferences.setStringPreference(PREF_KEY,
-                        ["v2", turnCount, offsetXmm, offsetYmm].join("|"));
+                        ["v3", turnCount, offsetXmm, offsetYmm, coilWidthMm, coilHeightMm, lineWidthPt, shadeK, loopPct].join("|"));
                 } catch (e) {}
             }
 
@@ -1983,14 +2063,24 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if ((p[0] !== "v1" && p[0] !== "v2") || p.length < 2) return;
+                if ((p[0] !== "v1" && p[0] !== "v2" && p[0] !== "v3") || p.length < 2) return;
                 var turns = parseInt(p[1], 10);
                 if (turns >= MIN_TURNS && turns <= MAX_TURNS) turnCount = turns;
-                if (p[0] === "v2" && p.length >= 4) {
+                if (p[0] !== "v1" && p.length >= 4) {
                     var offX = parseFloat(p[2]);
                     var offY = parseFloat(p[3]);
                     if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
                     if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
+                }
+                if (p[0] === "v3" && p.length >= 9) {
+                    // 폭·높이는 원이 없을 때만 되살린다. 원이 있으면 원 크기가 우선
+                    var width = parseFloat(p[4]), height = parseFloat(p[5]);
+                    if (source === null && width >= SIZE_STEP_MM && width <= maxCoilWidthMm) coilWidthMm = roundTo(width, SIZE_STEP_MM);
+                    if (source === null && height >= SIZE_STEP_MM && height <= maxCoilHeightMm) coilHeightMm = roundTo(height, SIZE_STEP_MM);
+                    var line = parseFloat(p[6]), shade = parseInt(p[7], 10), loop = parseInt(p[8], 10);
+                    if (line >= LINE_MIN_PT && line <= LINE_MAX_PT) lineWidthPt = roundTo(line, LINE_STEP_PT);
+                    if (shade >= 0 && shade <= 100) shadeK = shade;
+                    if (loop >= LOOP_MIN_PCT && loop <= LOOP_MAX_PCT) loopPct = loop;
                 }
             }
 
@@ -2004,7 +2094,9 @@ try {
                 previewGroup = createCoilSpring();
                 moveItem(previewGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
                 previewGroup.name = "Coil Spring Preview";
-                try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
+                if (source !== null) {
+                    try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch(e) {}
+                }
                 app.redraw();
             }
 
@@ -2083,13 +2175,14 @@ try {
             }
 
             function createCoilSpring() {
-                var group = source.layer.groupItems.add();
+                var group = (source !== null ? source.layer : doc.activeLayer).groupItems.add();
                 var width = coilWidthMm * MM_TO_PT;
                 var height = coilHeightMm * MM_TO_PT;
                 var radiusX = width / 2;
                 var pitch = height / turnCount;
-                var ellipseHeight = Math.min(width * 0.32, pitch * 0.82);
-                var radiusY = Math.max(LINE_WIDTH_PT * 3, ellipseHeight / 2);
+                // 고리 높이 = 간격 × 비율. 100 %를 넘으면 고리끼리 겹쳐 교재 기호처럼 보인다
+                var ellipseHeight = pitch * loopPct / 100;
+                var radiusY = Math.max(lineWidthPt * 3, ellipseHeight / 2);
                 var topY = centerY + height / 2;
                 var bottomY = centerY - height / 2;
                 var startY = topY - radiusY;
@@ -2164,20 +2257,21 @@ try {
                 point.pointType = PointType.SMOOTH;
             }
 
+            // 굵기·색은 옵션(회색 K)으로 정한다. 원에 선이 있으면 파선·끝 모양·불투명도는 그대로 가져온다
             function applyStroke(path) {
                 path.stroked = true;
-                path.strokeWidth = LINE_WIDTH_PT;
-                if (source.stroked) {
-                    try { path.strokeColor = source.strokeColor; } catch(e) {}
+                path.strokeWidth = lineWidthPt;
+                path.strokeColor = formGray(shadeK);
+                if (source !== null && source.stroked) {
                     try { path.strokeDashes = source.strokeDashes; } catch(e2) {}
                     try { path.strokeDashOffset = source.strokeDashOffset; } catch(e3) {}
                     try { path.strokeCap = source.strokeCap; } catch(e4) {}
                     try { path.strokeJoin = source.strokeJoin; } catch(e5) {}
                     try { path.strokeMiterLimit = source.strokeMiterLimit; } catch(e6) {}
-                } else {
-                    try { path.strokeColor = doc.defaultStrokeColor; } catch(e7) {}
                 }
-                try { path.opacity = source.opacity; } catch(e8) {}
+                if (source !== null) {
+                    try { path.opacity = source.opacity; } catch(e8) {}
+                }
             }
 
             function normalizeSizeInput(input, slider, fallback, minimum, maximum) {
@@ -2185,6 +2279,15 @@ try {
                 if (value === null) value = fallback;
                 value = clamp(roundTo(value, SIZE_STEP_MM), minimum, maximum);
                 input.text = formatNumber(value, 2);
+                slider.value = value;
+                return value;
+            }
+
+            function normalizeStepInput(input, slider, fallback, minimum, maximum, step, decimals) {
+                var value = parseNumber(input.text);
+                if (value === null) value = fallback;
+                value = clamp(roundTo(value, step), minimum, maximum);
+                input.text = formatNumber(value, decimals);
                 slider.value = value;
                 return value;
             }
