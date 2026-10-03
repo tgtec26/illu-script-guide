@@ -176,7 +176,7 @@ try {
     addCheck(markRow, "출발 지점 표시", "startOn");
     addCheck(markRow, "지표면 표시 (세로)", "surfaceOn");
     addCheck(markRow, "지표면에 닿기", "touchOn");
-    checks.touchOn.helpTip = "마지막 사진이 지표면에 닿는다. 보조선이 원 아래이면 마지막 보조선은 지표면이 대신한다";
+    checks.touchOn.helpTip = "마지막 사진이 지표면에 닿는다. 켜면 원의 아래 기준도 같이 켜지고(다시 끌 수 있다), 아래 기준이면 마지막 보조선은 지표면이 대신한다";
     var guideRow = showPanel.add("group");
     guideRow.alignChildren = ["left", "center"];
     addCheck(guideRow, "눈금자", "rulerOn");
@@ -795,6 +795,8 @@ try {
         var check = parent.add("checkbox", undefined, text);
         check.onClick = function() {
             options[key] = check.value;
+            // 지표면에 닿으면 보조선은 원의 아래 기준이 자연스럽다 (켠 뒤에 다시 끌 수는 있다)
+            if (key === "touchOn" && check.value) options.bottomOn = true;
             syncUi();
             updatePreview();
         };
