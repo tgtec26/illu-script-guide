@@ -13,7 +13,7 @@ const end = source.indexOf("// ==== 순수 기하 끝 ====");
 assert.ok(start > 0 && end > start, "pure geometry markers not found");
 const core = new Function(`${source.slice(start, end)}
 return { KARYO_ORDER, KARYO_DATA, SHAPE_STYLES, parseChromList, chromCopies, chromVariant, effectiveSex,
-  buildCells, chromGeom, chromOutline, chromBands, chromWidth, chromAxis, chromHalf, SPLAY_PRESET, layoutKaryotype };`)();
+  buildCells, chromGeom, chromOutline, chromBands, chromWidth, chromAxis, chromHalf, centromereCircles, SPLAY_PRESET, layoutKaryotype };`)();
 
 function close(actual, expected, tolerance, label) {
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: expected ${expected}, got ${actual}`);
@@ -101,7 +101,7 @@ assert.ok(core.KARYO_DATA["1"][0] > core.KARYO_DATA["2"][0] && core.KARYO_DATA["
 assert.ok(core.KARYO_DATA["X"][0] > core.KARYO_DATA["8"][0] && core.KARYO_DATA["Y"][0] < core.KARYO_DATA["16"][0]);
 
 // ---- 기하: p/q 비율은 데이터 그대로, 외곽선은 닫힌 도형
-const base = { style: 2, wc: 7, chromatids: 1, splay: 0 };
+const base = { style: 2, wc: 7, chromatids: 1, splay: 0, centromere: "one" };
 const g1 = core.chromGeom("1", "", base);
 close(g1.T, 100, 0.0001, "chr1 length = 100 units");
 close(g1.pLen / g1.T, 4.43 / 9.11, 0.0001, "chr1 p ratio");
@@ -113,12 +113,10 @@ close(core.chromGeom("21", "", base).T, 100 * 1.70 / 9.11, 0.0001, "chr21 length
 assert.ok(!/stalk|knob/.test(source.slice(start, end).replace(/\/\/.*$/gm, "").replace(/"6"/g, "")), "no stalk/satellite geometry in the core");
 ALL.forEach((id) => {
   [0, 1, 2].forEach((style) => {
-    const g = core.chromGeom(id, "", { style, wc: 7, chromatids: 1, splay: 0 });
+    const g = core.chromGeom(id, "", { style, wc: 7, chromatids: 1, splay: 0, centromere: "one" });
     let widest = 0;
-    let previous = null;
-    core.chromOutline(g, { style, wc: 7, chromatids: 1, splay: 0 }, 1).forEach((pt) => {
+    core.chromOutline(g, { style, wc: 7, chromatids: 1, splay: 0, centromere: "one" }, 1).forEach((pt) => {
       widest = Math.max(widest, Math.abs(pt[0]));
-      previous = pt;
     });
     assert.ok(widest <= g.a * 1.1 + 1e-6, `arm of ${id} (style ${style}) never gets wider than the shaft: ${widest} vs ${g.a}`);
   });
@@ -131,7 +129,7 @@ close(del.qLen, full5.qLen, 0.0001, "5p- keeps the q arm");
 
 for (let style = 0; style < 3; style++) {
   for (let chromatids = 1; chromatids <= 2; chromatids++) {
-    const o = { style, wc: 7, chromatids, splay: 4, gap: 0.8 };
+    const o = { style, wc: 7, chromatids, splay: 4, centromere: "one" };
     ALL.forEach((id) => {
       const g = core.chromGeom(id, "", o);
       [-1, 1].forEach((sign) => {
@@ -156,7 +154,7 @@ for (let style = 0; style < 3; style++) {
 }
 // 분체 둘은 같은 모양의 거울상이다
 {
-  const o = { style: 2, wc: 7, chromatids: 2, splay: 0, gap: 0.8 };
+  const o = { style: 2, wc: 7, chromatids: 2, splay: 0, centromere: "one" };
   const g = core.chromGeom("7", "", o);
   const left = core.chromOutline(g, o, -1);
   const right = core.chromOutline(g, o, 1);
@@ -169,30 +167,56 @@ for (let style = 0; style < 3; style++) {
 // 모양 3종: 기하학적 = 둥근 사각형 팔 + 동원체 원(Sadava), 중간 = 목 0.69(Brown), 실제 = 분체 사이가 벌어진 X자
 {
   assert.deepStrictEqual(core.SHAPE_STYLES.map((s) => s.name), ["기하학적", "중간", "실제"]);
-  const geo = core.chromGeom("1", "", { style: 0, wc: 7, chromatids: 1, splay: 0 });
-  assert.ok(geo.beads, "geometric style is built from arms and a centromere circle");
-  close(geo.beads.rc / geo.a, 0.654, 0.0001, "circle radius / arm half width");
+  const one = { style: 0, wc: 7, chromatids: 1, splay: 0, centromere: "one" };
+  const geo = core.chromGeom("1", "", one);
+  assert.ok(geo.beads, "geometric style is built from two arms with a gap");
   close((geo.beads.qStart - geo.beads.pEnd) / (2 * geo.a), 0.39, 0.0001, "gap between the arms / arm width");
-  close(geo.beads.rc * 2 / (2 * geo.a), 0.654, 0.0001, "circle diameter / arm width");
-  // 팔 사이 틈 한가운데(동원체 자리)의 너비는 원 지름이다
-  close(core.chromOutline(geo, { style: 0, wc: 7, chromatids: 1, splay: 0 }, 1).reduce((w, pt) => (Math.abs(pt[1] - geo.yc) < 0.05 ? Math.max(w, 2 * Math.abs(pt[0])) : w), 0), 2 * geo.beads.rc, 0.05, "width at the centromere = circle diameter");
-  close(core.chromGeom("1", "", { style: 1, wc: 7, chromatids: 1, splay: 0 }).style.neck, 0.69, 1e-9, "intermediate neck from Brown");
+  // 동원체 원은 팔 사이 틈에 따로 그린다 (Sadava: 지름 0.654 × 팔 너비)
+  const disc = core.centromereCircles(geo, one, "one");
+  assert.strictEqual(disc.length, 1);
+  close(disc[0].r / geo.a, 0.654, 0.0001, "circle radius / arm half width");
+  close(disc[0].y, geo.yc, 1e-9, "circle at the centromere");
+  assert.deepStrictEqual(core.centromereCircles(geo, one, "none"), []);
+  assert.strictEqual(core.centromereCircles(geo, one, "each").length, 1, "one chromatid: 'each' is one circle too");
+  // 팔 사이 틈에는 외곽선 점이 없다 (원이 메운다)
+  assert.ok(core.chromOutline(geo, one, 1).every((pt) => Math.abs(pt[1] - geo.yc) > 0.3 * geo.a || Math.abs(pt[0]) < 1e-6), "no outline inside the gap");
+  close(core.chromGeom("1", "", { style: 1, wc: 7, chromatids: 1, splay: 0, centromere: "one" }).style.neck, 0.69, 1e-9, "intermediate neck from Brown");
   // 기하학적 밴드는 한 색 줄(단계 4)만, 다른 모양은 단계가 섞인다
   const geoLevels = {};
   const realLevels = {};
   ALL.forEach((id) => {
-    core.chromBands(core.chromGeom(id, "", { style: 0, wc: 7, chromatids: 1, splay: 0 })).forEach((b) => { geoLevels[b.lev] = true; });
-    core.chromBands(core.chromGeom(id, "", { style: 2, wc: 7, chromatids: 1, splay: 0 })).forEach((b) => { realLevels[b.lev] = true; });
+    core.chromBands(core.chromGeom(id, "", one)).forEach((b) => { geoLevels[b.lev] = true; });
+    core.chromBands(core.chromGeom(id, "", base)).forEach((b) => { realLevels[b.lev] = true; });
   });
   assert.deepStrictEqual(Object.keys(geoLevels), ["4"]);
   assert.ok(Object.keys(realLevels).length >= 4);
   // 실제 모양의 두 분체는 서로 떨어져 서다가 동원체에서 합쳐진다
-  const two = { style: 2, wc: 7, chromatids: 2, splay: 0 };
+  const two = { style: 2, wc: 7, chromatids: 2, splay: 0, centromere: "one" };
   const g7 = core.chromGeom("7", "", two);
   const inner = (y) => core.chromAxis(g7, y, two) - core.chromHalf(g7, y);
-  assert.ok(inner(g7.yc * 0.1) > 0.4 * g7.a, "apart on the p arm");
+  assert.ok(inner(g7.yc * 0.1) > 0.2 * g7.a, "apart on the p arm");
   assert.ok(inner(g7.yc) < 0.05 * g7.a, "touching at the centromere");
-  assert.deepStrictEqual(core.SPLAY_PRESET, [0, 0, 3]);
+  assert.deepStrictEqual(core.SPLAY_PRESET, [0, 0, 10]);
+  // 동원체 원: 두 분체일 때 "one"은 양쪽 목을 덮는 원 하나, "each"는 서로 맞닿는 원 둘
+  const oneDisc = core.centromereCircles(g7, two, "one");
+  assert.strictEqual(oneDisc.length, 1);
+  assert.ok(oneDisc[0].x === 0 && oneDisc[0].r >= core.chromAxis(g7, g7.yc, two), "one circle spans both necks");
+  const each = core.centromereCircles(g7, two, "each");
+  assert.strictEqual(each.length, 2);
+  close(each[0].x, -each[1].x, 1e-9, "mirrored");
+  assert.ok(each[1].r >= each[1].x, "the two circles touch or overlap at the middle");
+  // 벌림: 동원체에서 비스듬히 나가다 수직으로 꺾인다 → 먼 곳에서는 축이 더 벌어지지 않는다
+  const splayed = { style: 2, wc: 7, chromatids: 2, splay: 15, centromere: "one" };
+  const g1 = core.chromGeom("1", "", splayed);
+  const L = 4 * g1.a;
+  const ax = (u) => core.chromAxis(g1, g1.yc + u, splayed);
+  assert.ok(ax(0.5 * L) - ax(0) > 0.3 * Math.tan(15 * Math.PI / 180) * 0.5 * L, "diverges near the centromere");
+  close(ax(2 * L), ax(1.5 * L), 1e-6, "vertical beyond the knee");
+  // 벌림이 더하는 가로 이동은 무릎 길이 L에서 포화한다: tan(벌림) × L × 2/3
+  const straight = { style: 2, wc: 7, chromatids: 2, splay: 0, centromere: "one" };
+  const ax0 = (u) => core.chromAxis(g1, g1.yc + u, straight);
+  close(ax(2 * L) - ax0(2 * L), Math.tan(15 * Math.PI / 180) * L * 2 / 3, 1e-6, "saturated bend");
+  close(ax(0.5 * L) - ax0(0.5 * L), Math.tan(15 * Math.PI / 180) * L * (0.5 - 0.125 / 3), 1e-6, "bend inside the knee");
 }
 // 밴드 단계가 모두 쓰이는 염색체가 있다 (G 밴드 패턴이 비어 있지 않다)
 {
@@ -205,7 +229,7 @@ for (let style = 0; style < 3; style++) {
 [[520, 380], [300, 300], [200, 420], [700, 180]].forEach(([W, H]) => {
   [["normal", "M"], ["down", "F"], ["klinefelter", "M"], ["turner", "F"], ["cridu", "F"]].forEach(([kary, sex]) => {
     [1, 2].forEach((chromatids) => {
-      const o = { style: 2, wc: 7, chromatids, splay: 3, gap: 0.8, pairGap: 3, labelGap: 4, fontSize: 8, margin: 10 };
+      const o = { style: 2, wc: 7, chromatids, splay: 10, centromere: "each", pairGap: 3, labelGap: 4, fontSize: 8, margin: 10 };
       const rows = core.buildCells(ALL, kary, sex);
       const lay = core.layoutKaryotype(rows, o, W, H);
       assert.ok(lay.s > 0, "positive scale");
@@ -231,15 +255,24 @@ for (let style = 0; style < 3; style++) {
 });
 // 한 칸(21번 삼염색체)도 가운데에 놓인다
 {
-  const o = { style: 1, wc: 7, chromatids: 2, splay: 0, gap: 0.8, pairGap: 3, labelGap: 4, fontSize: 8, margin: 10 };
+  const o = { style: 1, wc: 7, chromatids: 2, splay: 0, centromere: "one", pairGap: 3, labelGap: 4, fontSize: 8, margin: 10 };
   const lay = core.layoutKaryotype(core.buildCells(["21"], "down", "F"), o, 300, 200);
   assert.strictEqual(lay.cells.length, 1);
   close(lay.cells[0].cx, 150, 0.0001, "single cell centred horizontally");
   assert.strictEqual(lay.cells[0].items.length, 3);
 }
 
+// 벌림·두께를 바꿔도 세로가 꽉 차는(가로가 남는) 사각형에서는 염색체 크기(배율)가 그대로다.
+// 벌림은 무릎 길이에서 포화하므로 가로가 조금만 넓어진다 (예전 직선 X자는 긴 팔 끝에서 크게 벌어져 가로에 걸렸다)
+{
+  const scaleAt = (splay, wc) => core.layoutKaryotype(core.buildCells(ALL, "normal", "M"),
+    { style: 2, wc, chromatids: 2, splay, centromere: "one", pairGap: 3, labelGap: 4, fontSize: 8, margin: 10 }, 600, 300).s;
+  close(scaleAt(15, 7), scaleAt(0, 7), 1e-9, "splay keeps the scale");
+  close(scaleAt(0, 10), scaleAt(0, 7), 1e-9, "thickness keeps the scale");
+}
+
 // ---- 스크립트 규약 (AGENTS.md)
-assert.ok(source.indexOf('var SETTINGS_TAG = "v3"') < source.indexOf("readSettings();"), "settings constants before readSettings()");
+assert.ok(source.indexOf('var SETTINGS_TAG = "v4"') < source.indexOf("readSettings();"), "settings constants before readSettings()");
 assert.ok(/p\.length !== SETTINGS_LENGTH/.test(source), "settings length check");
 assert.strictEqual(source.split("saveSettings();").length - 1, 1, "saveSettings is called only on confirm");
 assert.ok(/okButton\.onClick = function\(\) \{[^}]*saveSettings\(\);/.test(source), "settings saved in the OK handler");
@@ -249,8 +282,9 @@ assert.ok(source.indexOf("illu_last_script.txt") > 0, "last-script memo");
 assert.ok(source.indexOf('"scrollbar"') > 0 && source.indexOf("stepdelta") > 0, "scrollbar rows");
 assert.ok(source.indexOf("movePreview(offsetXmm * MM, offsetYmm * MM)") > 0, "movable preview");
 assert.ok(source.indexOf("path.opacity = shadePct") > 0 && /var SHADE_STOPS = \[\[0, 0, 80\]/.test(source), "shade strength scales the overlay opacity");
-assert.ok(/p\[19\] === "1"/.test(source) && source.indexOf("var SETTINGS_LENGTH = 20") > 0, "settings layout v3 has 20 fields");
-assert.ok(source.indexOf("var K_RANGE = [0, 100]") > 0 && /kPct = restoreNumber\(p\[9\], kPct, K_RANGE, 10\)/.test(source), "K density in steps of 10");
+assert.ok(/p\[20\] === "1"/.test(source) && source.indexOf("var SETTINGS_LENGTH = 21") > 0, "settings layout v4 has 21 fields");
+assert.ok(/cenIdx = restoreNumber\(p\[7\]/.test(source) && source.indexOf('var CEN_CODES = ["one", "each", "none"]') > 0, "centromere option is saved");
+assert.ok(source.indexOf("var K_RANGE = [0, 100]") > 0 && /kPct = restoreNumber\(p\[10\], kPct, K_RANGE, 10\)/.test(source), "K density in steps of 10");
 assert.ok(source.indexOf("function strokeEdge") > 0 && source.indexOf("var renderIdx = 0") > 0, "outline (white fill + edge) render mode");
 assert.ok(source.indexOf("path.rotate(0 - path.fillColor.angle, false, false, true, false, Transformation.CENTER)") > 0, "gradient angle read back");
 assert.ok(source.indexOf("ENG_FONT_NAME") > 0 && source.indexOf("GSMediumB1") > 0, "label font rule");
