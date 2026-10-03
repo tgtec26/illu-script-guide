@@ -83,6 +83,7 @@ try {
     var POLES = ["N극이 아래", "S극이 아래"];
     var LABEL_WIDTH = 110;
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 100;
     var NUMBER_KEYS = ["magnetY", "turns", "wire", "shade", "needle", "offsetX", "offsetY"];
     var SPECS = {
@@ -101,6 +102,9 @@ try {
     var centerY = (artboardRect[1] + artboardRect[3]) / 2;
 
     var options = {pole: 0, magnetY: 0, turns: 20, wire: 0.75, shade: 62, needle: 0, offsetX: 0, offsetY: 0, previewOn: true};
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {};
+    for (var d = 0; d < NUMBER_KEYS.length; d++) DEFAULTS[NUMBER_KEYS[d]] = options[NUMBER_KEYS[d]];
     applySettings();
 
     var previewGroup = loadTemplate();
@@ -510,9 +514,13 @@ try {
         slider.stepdelta = spec.step;
         slider.jumpdelta = spec.step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
         input.enabled = enabled;
         slider.enabled = enabled;
-        rows[key] = {input: input, slider: slider, min: spec.range[0], max: spec.range[1], step: spec.step, decimals: spec.decimals};
+        reset.enabled = enabled;
+        rows[key] = {input: input, slider: slider, reset: reset, min: spec.range[0], max: spec.range[1], step: spec.step, decimals: spec.decimals};
         return rows[key];
     }
 
@@ -532,6 +540,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(DEFAULTS[key]); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? options[key] : value);
@@ -550,6 +559,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(DEFAULTS[key]); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? options[key] : value);
