@@ -2627,12 +2627,41 @@ try {
             var b = 3 * f0 - 6 * f1 + 3 * f2;
             var c = -3 * f0 + 3 * f1;
             var d = f0;
-            var roots = solveCubic(a, b, c, d);
-            var inRange = [];
-            for (var i = 0; i < roots.length; i++) {
-                if (roots[i] >= -1e-9 && roots[i] <= 1 + 1e-9) inRange.push(clamp(roots[i], 0, 1));
+            // 거의 2차인 곡선에 3차 근의 공식을 쓰면 큰 수끼리 빼면서 [0, 1]의 근이 사라진다.
+            // 필요한 구간만 극값에서 나눠 이분법으로 푼다. 계수 크기는 먼저 정규화한다.
+            var magnitude = Math.max(Math.abs(a), Math.abs(b), Math.abs(c), Math.abs(d));
+            if (magnitude === 0) return [];
+            a /= magnitude; b /= magnitude; c /= magnitude; d /= magnitude;
+            var cuts = [0];
+            var critical = solveQuadratic(3 * a, 2 * b, c);
+            critical.sort(function(x, y) { return x - y; });
+            var i;
+            for (i = 0; i < critical.length; i++) {
+                if (critical[i] > 0 && critical[i] < 1 && critical[i] - cuts[cuts.length - 1] > 1e-12) cuts.push(critical[i]);
             }
-            return inRange;
+            cuts.push(1);
+            var roots = [];
+            function valueAt(t) { return ((a * t + b) * t + c) * t + d; }
+            function addRoot(t) {
+                if (roots.length === 0 || Math.abs(t - roots[roots.length - 1]) > 1e-9) roots.push(t);
+            }
+            for (i = 0; i < cuts.length; i++) {
+                var low = cuts[i];
+                var lowValue = valueAt(low);
+                if (Math.abs(lowValue) <= 1e-12) addRoot(low);
+                if (i + 1 === cuts.length) break;
+                var high = cuts[i + 1];
+                var highValue = valueAt(high);
+                if (Math.abs(lowValue) <= 1e-12 || Math.abs(highValue) <= 1e-12 || (lowValue > 0) === (highValue > 0)) continue;
+                for (var j = 0; j < 40; j++) {
+                    var mid = (low + high) / 2;
+                    var midValue = valueAt(mid);
+                    if ((midValue > 0) === (lowValue > 0)) low = mid;
+                    else high = mid;
+                }
+                addRoot((low + high) / 2);
+            }
+            return roots;
         }
 
         // 3차방정식 실근. 최고차항이 없으면 2차·1차로 내려간다
@@ -2672,7 +2701,10 @@ try {
             var disc = b * b - 4 * a * c;
             if (disc < 0) return [];
             var root = Math.sqrt(disc);
-            return [(-b - root) / (2 * a), (-b + root) / (2 * a)];
+            // 작은 근도 큰 수끼리 빼면서 정밀도를 잃지 않도록 계산한다.
+            var q = -0.5 * (b + (b >= 0 ? root : -root));
+            if (q === 0) return [-b / (2 * a)];
+            return [q / a, c / q];
         }
 
         function cubeRoot(value) {
@@ -2688,10 +2720,34 @@ try {
                 for (var s = 0; s < contour.segCount; s++) {
                     var ctrl = segControls(contour, s);
                     var roots = bernsteinRoots(ctrl[0][1] - y, ctrl[1][1] - y, ctrl[2][1] - y, ctrl[3][1] - y);
-                    for (var k = 0; k < roots.length; k++) {
-                        var t = roots[k];
-                        if (t >= 1 - 1e-9) continue; // 구간 끝은 다음 구간의 시작으로 한 번만 센다
-                        if (bezierPoint(ctrl[0], ctrl[1], ctrl[2], ctrl[3], t)[0] > x) crossings++;
+                    if (roots.length === 0) continue;
+                    // 구멍의 위·아래 끝을 스친 것은 경계를 통과한 것이 아니다.
+                    // Y가 단조인 조각으로 나누고 반열린 범위를 쓰면 극점·앵커에서도 홀짝이 맞는다.
+                    if (!contour.yCuts) contour.yCuts = [];
+                    var cuts = contour.yCuts[s];
+                    if (!cuts) {
+                        var y0 = ctrl[0][1], y1 = ctrl[1][1], y2 = ctrl[2][1], y3 = ctrl[3][1];
+                        var critical = solveQuadratic(3 * (-y0 + 3 * y1 - 3 * y2 + y3),
+                            2 * (3 * y0 - 6 * y1 + 3 * y2), -3 * y0 + 3 * y1);
+                        critical.sort(function(a, b) { return a - b; });
+                        cuts = [0];
+                        for (var j = 0; j < critical.length; j++) {
+                            if (critical[j] > 0 && critical[j] < 1 && critical[j] - cuts[cuts.length - 1] > 1e-12) cuts.push(critical[j]);
+                        }
+                        cuts.push(1);
+                        contour.yCuts[s] = cuts;
+                    }
+                    for (var interval = 0; interval + 1 < cuts.length; interval++) {
+                        var low = cuts[interval], high = cuts[interval + 1];
+                        var lowY = bezierPoint(ctrl[0], ctrl[1], ctrl[2], ctrl[3], low)[1];
+                        var highY = bezierPoint(ctrl[0], ctrl[1], ctrl[2], ctrl[3], high)[1];
+                        if ((lowY > y) === (highY > y)) continue;
+                        for (var k = 0; k < roots.length; k++) {
+                            var t = roots[k];
+                            if (t < low - 1e-9 || t > high + 1e-9) continue;
+                            if (bezierPoint(ctrl[0], ctrl[1], ctrl[2], ctrl[3], t)[0] > x) crossings++;
+                            break;
+                        }
                     }
                 }
             }

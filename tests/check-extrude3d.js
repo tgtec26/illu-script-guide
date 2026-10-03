@@ -55,7 +55,7 @@ function loadEngine(state) {
     ${Object.keys(s).map((k) => `${k} = ${JSON.stringify(s[k])};`).join("\n")}
     return { prepareContours, flattenContour, polygonArea, buildModel, beginView, collectParts, collectRulings,
       collectFills, createSolid, projectModel, occluded, insideProfile, probeInside, contourCurve, rulingCurve,
-      splitCurve, mergeShortSpans, normalAtU, pointAtU, facingModel, solveCubic, paths,
+      splitCurve, mergeShortSpans, normalAtU, pointAtU, facingModel, solveCubic, bernsteinRoots, paths,
       setState(next) { ${Object.keys(s).map((k) => `if ("${k}" in next) ${k} = next.${k};`).join(" ")} } };`
   )({ redraw() {} }, { SMOOTH: "smooth", CORNER: "corner" }, { BUTTENDCAP: 1 }, { MITERENDJOIN: 1 }, { CMYK: "CMYK" }, function () {}, function () {});
   return api;
@@ -385,6 +385,33 @@ function prepare(engine, items) {
   assert.ok(lit.createSolid(false, false) !== null);
   assert.ok(lit.paths.filter((p) => p.filled).every((p) => !p.stroked), "광원 자동 면에는 획이 없다");
   assert.ok(lit.paths.some((p) => !p.filled && p.stroked && p.strokeDashes.length === 0), "보이는 실선이 따로 있다");
+}
+
+// 구멍의 극점을 스치는 수평 광선은 단면을 통과하지 않는다. 바깥점을 내부로 오판하면 보이는 선이 숨는다.
+{
+  const engine = loadEngine({ rotX: -72.9 });
+  prepare(engine, [rectPath(0, 0, 180, 125), circlePath(0, 0, 31)]);
+  const model = engine.buildModel();
+  for (const y of [-31.001, -31, -30.999, 30.999, 31, 31.001]) {
+    assert.strictEqual(engine.insideProfile(model, -100, y), false, `구멍 접선 y=${y}에서도 왼쪽 바깥점은 외부`);
+    assert.strictEqual(engine.insideProfile(model, -40, y), true, `구멍 왼쪽 재료는 내부 y=${y}`);
+  }
+  engine.beginView(model);
+  const h = model.halfDepth;
+  // 뒷면으로 들어가는 광선이 뚜껑의 구멍 극점을 지나도 단면 바깥 X에서는 가려지지 않는다.
+  const rayStartY = -31 + 2 * h * Math.tan(72.9 * Math.PI / 180);
+  assert.strictEqual(engine.occluded(model, [-100, rayStartY, -h], [-1, 0, 0]), false);
+}
+
+// 아주 작은 3차항을 가진 곡선: 기존 3차 근 공식은 유효한 두 교점을 구간 밖으로 보내거나 잃었다.
+{
+  const engine = loadEngine({});
+  for (const cubic of [1e-8, 1e-9, 1e-10, 1e-11]) {
+    // cubic*t³ + t² - t + 0.16의 번스타인 계수
+    const roots = engine.bernsteinRoots(0.16, 0.16 - 1 / 3, 0.16 - 1 / 3, 0.16 + cubic);
+    assert.strictEqual(roots.length, 2, `작은 3차항 ${cubic}의 교점 두 개`);
+    assert.ok(near(roots[0], 0.2, 1e-6) && near(roots[1], 0.8, 1e-6));
+  }
 }
 
 console.log("check-extrude3d: 통과");
