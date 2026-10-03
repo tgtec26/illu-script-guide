@@ -124,7 +124,8 @@ console.log('3dline preview: duplicate renders skipped, lighting reuses geometry
   c.tabIndex = 4; c.previewEnabled = false; c.saveSettings();
   assert.ok(saved.startsWith('v4|4|'));
   raw = saved; c.previewEnabled = true; c.tabIndex = 0; c.applySavedSettings();
-  assert.strictEqual(c.tabIndex, 4); assert.strictEqual(c.previewEnabled, false);
+  assert.strictEqual(c.tabIndex, 4);
+  assert.strictEqual(c.previewEnabled, true, 'saved preview flag is not restored: dialog always opens with preview off');
   raw = saved.replace('v4|', 'v3|').split('|').slice(0, 18).join('|');
   c.rotX = 99; c.previewEnabled = true; c.applySavedSettings();
   assert.strictEqual(c.rotX, 35.3, 'legacy fields restored at old offsets');

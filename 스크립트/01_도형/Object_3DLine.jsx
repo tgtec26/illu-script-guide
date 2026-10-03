@@ -70,7 +70,7 @@ try {
     var lightElevation = 50;   // 광원 높이 (°). 90 = 바로 위
     var offsetXmm = 0;
     var offsetYmm = 0;
-    var previewEnabled = true;
+    var previewEnabled = false; // 복잡한 선택은 첫 그리기가 오래 걸린다. 탭·옵션을 고른 뒤 미리보기를 켜면 그린다
 
     var previewGroup = null;
     var previewEngine = null;
@@ -707,7 +707,7 @@ try {
         angleR = restoreNumber(p[15], angleR, 91, 179);
         angleL = restoreNumber(p[16], angleL, 91, 179);
         depthPercent = restoreNumber(p[17], depthPercent, 40, 160);
-        if (p[0] === "v4" && (p[18] === "0" || p[18] === "1")) previewEnabled = p[18] === "1";
+        // p[18](미리보기)은 저장만 하고 되살리지 않는다. 열 때는 항상 꺼진 상태로 시작한다
         var at = sharedCount;
         for (i = 0; i < engines.length; i++) {
             engines[i].restoreFields(p.slice(at, at + engines[i].fieldCount));
