@@ -16,13 +16,15 @@ try {
 //     가속도가 음수(감속)이면 속도가 0이 되는 순간까지만 찍는다. 처음 속도 0 + 양의 가속도가 정지에서 출발하는 가속이다.
 //   - 물체: 테두리 없는 구형 그라데이션(왼쪽 위 하이라이트), 테두리가 있는 단색, 또는 시간기록 테이프(흰 종이띠 + 점).
 //     색은 K 값(10 단위)이고 모두 회색 음영.
-//     '지난 위치는 반투명'을 켜면 마지막 사진만 그대로 두고 앞선 사진은 반투명(단색은 파선 테두리 + 반투명)으로 그린다.
+//     '지난 위치는 흐리게'를 켜면 마지막 사진만 그대로 두고 앞선 사진은 흐리게 그린다. 구는 반투명, 단색은 투명도 없이 흰 속 + 파선 테두리.
 //   - 배경(검은 띠)은 켜고 끌 수 있고 K 값을 10 단위로 고른다. 뒤쪽 사진이 앞쪽 사진 위에 놓인다. 테이프는 종이띠가 배경을 대신한다.
 //   - 거리 표시: 이웃한 사진 중심 사이에 양쪽 화살표를 긋고 값을 쓴다. 입력한 값이 숫자로 시작하면(예: "10 cm")
 //     가장 짧은 구간 대비 구간 거리의 비를 곱해 쓰고(정지에서 출발한 가속은 1:3:5…), "d"처럼 글자면 d, 3d, 5d…로 쓴다.
 //   - 출발 지점은 첫 사진 중심을 지나는 파선, 거리 표시의 연장선(사진 중심에서 내리는 보조선)도 파선(2-1). 지표면은 세로일 때만
 //     (맨 아래 사진 밑에 위쪽 선 + 아래로 옅어지는 그라데이션, 오른쪽 위에 '지표면' 글자).
-//   - 거리 표시의 맞은편에 시간 표시(0초, 0.1초… 촬영 간격 기준), 눈금자(첫 사진이 0, 5칸마다 긴 눈금), 운동 방향 화살표를
+//     세로일 때 '원의 아래 기준'을 켜면 보조선·거리 표시·눈금자가 원의 중심 대신 원의 아래를 지난다. '지표면에 닿기'를 켜면
+//     마지막 사진이 지표면에 닿고(띠도 거기서 끝), 아래 기준이면 마지막 보조선은 지표면 선이 대신해 그리지 않는다.
+//   - 거리 표시의 맞은편에 시간 표시(0초, 0.1초… 촬영 간격 기준), 눈금자(첫 사진이 0, 5칸마다 긴 눈금 + 칸 수 0·5·10…), 운동 방향 화살표를
 //     띠에서 가까운 순서로 쌓는다.
 //   - 확인하면 파선·배경·지표면·표시선·글자·사진이 든 그룹 하나가 남는다.
 
@@ -41,7 +43,7 @@ try {
     var FONT_PT = 8;
     var LINE_PT = 0.4;
     var AUX_PT = 0.3;
-    var GROUND_PT = 0.8;
+    var GROUND_PT = 0.5;
     var BALL_STROKE_PT = 0.4;
     var LINE_K = 100;
     // 구 그라데이션: 하이라이트·가장자리가 기본 색 K보다 이만큼 밝고 어둡다
@@ -60,7 +62,7 @@ try {
     // 띠 가장자리 여백, 점선이 띠 밖으로 나오는 길이, 띠에서 표시선까지, 연장선이 표시선을 넘는 길이, 표시선과 글자 사이, 글자끼리
     var PAD_MM = 2;
     var EXT_MM = 6;
-    var DIM_GAP_MM = 4;
+    var DIM_GAP_MM = 2;
     var DIM_OVERSHOOT_MM = 1;
     var TEXT_GAP_MM = 0.8;
     var LABEL_SPACE_MM = 0.5;   // 글자끼리 최소 간격
@@ -95,7 +97,7 @@ try {
 
     // 저장 순서: 라디오, 체크박스, 숫자(NUMBER_KEYS)
     var RADIO_KEYS = ["direction", "motion", "ball"];
-    var CHECK_KEYS = ["bgOn", "startOn", "surfaceOn", "distOn", "ghostOn", "rulerOn", "timeOn", "arrowOn"];
+    var CHECK_KEYS = ["bgOn", "startOn", "surfaceOn", "distOn", "ghostOn", "rulerOn", "timeOn", "arrowOn", "bottomOn", "touchOn"];
 
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
     var NUMBER_KEYS = ["speed", "startSpeed", "accel", "interval", "count", "size", "ballK", "bgK", "tick", "offsetX", "offsetY"];
@@ -124,7 +126,7 @@ try {
 
     var options = {
         direction: 0, motion: 0, ball: 0,
-        bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false, rulerOn: false, timeOn: false, arrowOn: false,
+        bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false, rulerOn: false, timeOn: false, arrowOn: false, bottomOn: false, touchOn: false,
         speed: 100, startSpeed: 0, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, tick: 5,
         distText: "d",
         offsetX: 0, offsetY: 0,
@@ -164,7 +166,7 @@ try {
     addRadioRow(ballPanel, "모양:", "ball", BALLS);
     addRow(ballPanel, "size", "지름", "mm");
     addRow(ballPanel, "ballK", "색", "K");
-    addCheck(ballPanel, "지난 위치는 반투명 (마지막 사진만 그대로)", "ghostOn");
+    addCheck(ballPanel, "지난 위치는 흐리게 (구: 반투명, 단색: 흰 속 + 파선)", "ghostOn");
 
     var showPanel = addPanel(dlg, "배경·표시");
     addCheck(showPanel, "배경", "bgOn");
@@ -173,6 +175,8 @@ try {
     markRow.alignChildren = ["left", "center"];
     addCheck(markRow, "출발 지점 표시", "startOn");
     addCheck(markRow, "지표면 표시 (세로)", "surfaceOn");
+    addCheck(markRow, "지표면에 닿기", "touchOn");
+    checks.touchOn.helpTip = "마지막 사진이 지표면에 닿는다. 보조선이 원 아래이면 마지막 보조선은 지표면이 대신한다";
     var guideRow = showPanel.add("group");
     guideRow.alignChildren = ["left", "center"];
     addCheck(guideRow, "눈금자", "rulerOn");
@@ -187,6 +191,8 @@ try {
     distInput.characters = 12;
     distInput.helpTip = "숫자로 시작하면(예: 10 cm) 가속에서 구간마다 1, 3, 5배…로, 글자면(예: d) d, 3d, 5d…로 쓴다";
     distInput.onChange = function() { commitDistText(); };
+    addCheck(distRow, "원의 아래 기준 (세로)", "bottomOn");
+    checks.bottomOn.helpTip = "보조선·거리 표시·눈금자의 기준을 원의 중심이 아니라 원의 아래(운동 방향 끝)로 한다";
 
     var positionPanel = addPanel(dlg, "위치");
     addRow(positionPanel, "offsetX", "가로", "mm");
@@ -255,6 +261,8 @@ try {
         checks.bgOn.enabled = !tape;
         checks.ghostOn.enabled = !tape;
         checks.surfaceOn.enabled = options.direction === 1;
+        checks.touchOn.enabled = options.direction === 1 && options.surfaceOn;
+        checks.bottomOn.enabled = options.direction === 1;
         distInput.enabled = options.distOn;
     }
 
@@ -317,7 +325,11 @@ try {
         // 띠의 양 끝 여백: 사진은 물체 반지름 + 여백, 테이프는 처음 간격(최소 TAPE_MARGIN_MM)
         var endGap = tape ? Math.max(TAPE_MARGIN_MM, count > 1 ? pos[1] - pos[0] : 0) * MM : radius + pad;
         var sMin = -endGap;
-        var sMax = pos[count - 1] * MM + endGap;
+        // 지표면에 닿으면 띠는 마지막 물체의 아래에서 끝난다 (지표면 선이 띠의 끝)
+        var touch = vertical && o.surfaceOn && o.touchOn;
+        var sMax = pos[count - 1] * MM + (touch ? radius : endGap);
+        // 보조선·거리 표시·눈금자의 기준: 원의 중심, 또는 원의 아래(세로의 운동 방향 끝)
+        var shift = vertical && o.bottomOn ? radius : 0;
         var sMid = (sMin + sMax) / 2;
         // s: 운동 방향 거리(첫 사진 중심이 0), c: 운동에 수직인 방향(가로: 위, 세로: 오른쪽) → 쪽 좌표
         function at(s, c) {
@@ -354,7 +366,7 @@ try {
             // 시간 글자가 있는 쪽은 띠 가장자리에서 끝낸다 (글자를 가로지르지 않게)
             var otherReach = half + (o.timeOn ? 0 : EXT_MM * MM);
             var labelReach = showDist ? half + (DIM_GAP_MM + DIM_OVERSHOOT_MM) * MM : otherReach;
-            var startLine = drawLine(group, at(0, labelSign * labelReach), at(0, -labelSign * otherReach), LINE_PT, black);
+            var startLine = drawLine(group, at(shift, labelSign * labelReach), at(shift, -labelSign * otherReach), LINE_PT, black);
             startLine.name = "StartLine";
             try { startLine.strokeDashes = DASHES; } catch (dashError) {}
         }
@@ -397,14 +409,16 @@ try {
             for (var e = 0; e < count; e++) {
                 // 출발 지점 파선이 이미 이 자리를 지난다
                 if (e === 0 && o.startOn) continue;
-                var extension = drawLine(group, at(pos[e] * MM, extFrom), at(pos[e] * MM, extTo), AUX_PT, black);
+                // 지표면 선이 마지막 보조선 자리를 지난다
+                if (touch && shift > 0 && e === count - 1) continue;
+                var extension = drawLine(group, at(pos[e] * MM + shift, extFrom), at(pos[e] * MM + shift, extTo), AUX_PT, black);
                 extension.name = "Extension";
                 try { extension.strokeDashes = DASHES; } catch (extensionDashError) {}
             }
             var rowEnds = [];   // 글자 줄마다 마지막 글자가 끝나는 s 위치
             for (var k = 0; k < count - 1; k++) {
-                var s0 = pos[k] * MM;
-                var s1 = pos[k + 1] * MM;
+                var s0 = pos[k] * MM + shift;
+                var s1 = pos[k + 1] * MM + shift;
                 var scale = Math.min(1, (s1 - s0) / (2 * ARROW.length));
                 var inset = (ARROW.length - ARROW.notch) * scale;
                 var from = at(s0, dimC);
@@ -440,13 +454,25 @@ try {
         if (o.rulerOn) {
             var ruler = rulerMarks(pos[count - 1], o.tick);
             var rulerC = sideB * (stack + RULER_GAP_MM * MM);
-            drawLine(group, at(ruler.from * MM, rulerC), at(ruler.to * MM, rulerC), AUX_PT, black).name = "Ruler";
+            var numberC = rulerC + sideB * (RULER_LONG_MM + TEXT_GAP_MM) * MM;
+            var numberThick = 0;
+            drawLine(group, at(ruler.from * MM + shift, rulerC), at(ruler.to * MM + shift, rulerC), AUX_PT, black).name = "Ruler";
             for (var q = 0; q < ruler.marks.length; q++) {
                 var mark = ruler.marks[q];
                 var tickEnd = rulerC + sideB * (mark.major ? RULER_LONG_MM : RULER_SHORT_MM) * MM;
-                drawLine(group, at(mark.s * MM, rulerC), at(mark.s * MM, tickEnd), AUX_PT, black).name = "RulerTick";
+                drawLine(group, at(mark.s * MM + shift, rulerC), at(mark.s * MM + shift, tickEnd), AUX_PT, black).name = "RulerTick";
+                if (!mark.major) continue;
+                // 5칸마다 긴 눈금 끝에 칸 수(0, 5, 10…)
+                var numberText = String(mark.k);
+                var numberTag = makeLabel(group, {text: numberText, italicFrom: numberText.length});
+                numberTag.name = "RulerNumber";
+                var numberAt = at(mark.s * MM + shift, numberC);
+                if (vertical) placeText(numberTag, numberAt[0], numberAt[1], "r", "m");
+                else placeText(numberTag, numberAt[0], numberAt[1], "c", "b");
+                var numberBox = numberTag.geometricBounds;
+                numberThick = Math.max(numberThick, vertical ? numberBox[2] - numberBox[0] : numberBox[1] - numberBox[3]);
             }
-            stack += (RULER_GAP_MM + RULER_LONG_MM) * MM;
+            stack += (RULER_GAP_MM + RULER_LONG_MM + TEXT_GAP_MM) * MM + numberThick;
         }
         if (o.arrowOn) {
             // 출발 지점 파선이 이쪽으로 나와 있으면 그 바깥에 놓는다
@@ -518,12 +544,12 @@ try {
         return Math.round((positions[k + 1] - positions[k]) / shortest * 1e6) / 1e6;
     }
 
-    // 눈금자: 첫 사진이 0, tick(mm) 간격으로 마지막 사진 너머 한 칸까지. 5칸마다 major. 눈금이 너무 많으면 간격을 넓힌다
+    // 눈금자: 첫 사진이 0, tick(mm) 간격으로 마지막 사진 너머 한 칸까지. 5칸마다 major(k가 칸 수). 눈금이 너무 많으면 간격을 넓힌다
     function rulerMarks(lastMm, tick) {
         var step = Math.max(tick, lastMm / RULER_MAX_TICKS);
         var last = Math.ceil(lastMm / step - 1e-9) + 1;
         var marks = [];
-        for (var k = -1; k <= last; k++) marks.push({s: k * step, major: k % 5 === 0});
+        for (var k = -1; k <= last; k++) marks.push({s: k * step, major: k % 5 === 0, k: k});
         return {from: -step, to: last * step, marks: marks};
     }
 
@@ -604,7 +630,7 @@ try {
 
     // 중심 (cx, cy), 반지름 r인 물체. 구는 하이라이트(왼쪽 위)가 치우친 큰 원을 구 모양으로 잘라 만든다
     // (GradientColor의 origin·length는 무시되므로). 마스크가 그룹 맨 위의 패스여야 한다. 테이프는 검은 점.
-    // faded이면 지난 위치: 반투명, 단색은 파선 테두리
+    // faded이면 지난 위치: 구는 반투명, 단색은 흰 속 + 파선 테두리
     function drawBall(container, cx, cy, r, o, faded) {
         if (o.ball === 2) {
             var dot = container.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
@@ -621,8 +647,9 @@ try {
             disc.strokeColor = makeGray(LINE_K);
             disc.strokeWidth = BALL_STROKE_PT;
             if (faded) {
+                // 단색은 투명도를 쓰지 않고 흰 속 + 파선 테두리
+                disc.fillColor = makeGray(0);
                 try { disc.strokeDashes = DASHES; } catch (ballDashError) {}
-                disc.opacity = GHOST_OPACITY;
             }
             return disc;
         }
@@ -869,10 +896,10 @@ try {
     }
 
     // -------------------------------------------------------
-    // 설정 저장 · 복원 ("v3" + 라디오 3 + 체크 8 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
+    // 설정 저장 · 복원 ("v4" + 라디오 3 + 체크 10 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v3"];
+        var parts = ["v4"];
         for (var r = 0; r < RADIO_KEYS.length; r++) parts.push(options[RADIO_KEYS[r]]);
         for (var c = 0; c < CHECK_KEYS.length; c++) parts.push(options[CHECK_KEYS[c]] ? "1" : "0");
         for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
@@ -888,7 +915,7 @@ try {
         var p = raw.split("|");
         var radioCount = RADIO_KEYS.length;
         var checkCount = CHECK_KEYS.length;
-        if (p[0] !== "v3" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
+        if (p[0] !== "v4" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
         var radioLimits = [DIRECTIONS.length, MOTIONS.length, BALLS.length];
         for (var r = 0; r < radioCount; r++) {
             var index = parseInt(p[1 + r], 10);
