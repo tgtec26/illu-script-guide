@@ -152,7 +152,7 @@ try {
     addRow(coilPanel, "turns", "감은 횟수 (회):", !!parts["원통"]);
     addRow(coilPanel, "wire", "굵기 (mm):", !!parts["원통"]);
     addRow(coilPanel, "shade", "진하기 (%):", !!parts["원통"]);
-    rows.shade.input.helpTip = "도선 회색의 K값. 클수록 진하다. 밝은 줄은 그 45 %";
+    rows.shade.input.helpTip = "도선 회색의 K값. 클수록 진하다. 밝은 줄은 그 65 %";
 
     var meterPanel = addPanel(dlg, "검류계");
     addRow(meterPanel, "needle", "바늘 각도 (°):", !!parts["바늘"]);
@@ -344,7 +344,7 @@ try {
         var base = bez(turnsGroup, offsetPoints(frontHalfTurn(plan.rw, plan.e, plan.pitch, plan.y0), plan.cx, 0), false);
         strokeRound(base, options.shade, plan.wire);
         var shine = bez(turnsGroup, offsetPoints(frontHalfTurn(plan.rw, plan.e, plan.pitch, plan.y0 + plan.wire * 0.2), plan.cx, 0), false);
-        strokeRound(shine, Math.round(options.shade * 0.45), plan.wire * 0.35);
+        strokeRound(shine, Math.round(options.shade * 0.65), plan.wire * 0.35);
         for (var i = 1; i < options.turns; i++) {
             base.duplicate(turnsGroup, ElementPlacement.PLACEATBEGINNING).translate(0, i * plan.pitch);
             shine.duplicate(turnsGroup, ElementPlacement.PLACEATBEGINNING).translate(0, i * plan.pitch);
