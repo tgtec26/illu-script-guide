@@ -27,6 +27,12 @@ function load(file, names) {
   assert.deepStrictEqual(h.strobePositions(6, 3, -1), [0, 3, 5, 6], "stops before interval hits zero");
   assert.deepStrictEqual(h.energyFractions(3), [1, 0.5, 0]);
   assert.ok(source.includes("makeStrobeEngine(), makeEnergyEngine()]"), "tabs registered");
+  // 수평 던지기 물체: 같은 시간 간격 → 가로 균등, 세로는 제곱
+  const ballPositions = load("Object_Mechanics.jsx", ["ballPositions"]).h.ballPositions;
+  const motion = { time: 2, width: 40, height: 20 };
+  assert.deepStrictEqual(ballPositions(motion, 3), [[0, -0], [20, -5], [40, -20]]);
+  assert.deepStrictEqual(ballPositions(motion, 1), [[0, -0]]);
+  assert.deepStrictEqual(ballPositions(motion, 0), []);
   assert.ok(!/\bvar long\b/.test(source), "long is reserved in ExtendScript");
 }
 

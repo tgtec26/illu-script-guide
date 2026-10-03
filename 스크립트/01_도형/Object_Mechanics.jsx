@@ -860,8 +860,12 @@ try {
                 { key: "speed", label: "수평 속도", unit: "m/s", min: 0, max: 20, step: 0.1, initial: 10 },
                 { key: "offsetX", label: "가로", unit: "mm", min: -100, max: 100, step: 0.1, initial: 0 },
                 { key: "offsetY", label: "세로", unit: "mm", min: -100, max: 100, step: 0.1, initial: 0 },
-                { key: "strokeWidth", label: "선 두께", unit: "pt", min: 0.3, max: 2, step: 0.1, initial: 0.3 }
+                { key: "strokeWidth", label: "선 두께", unit: "pt", min: 0.3, max: 2, step: 0.1, initial: 0.3 },
+                // 물체: 같은 시간 간격으로 궤적 위에 놓는다 (섬광 사진처럼). 0이면 선만 그린다
+                { key: "count", label: "물체 수", unit: "개", min: 0, max: 20, step: 1, initial: 0 },
+                { key: "diameter", label: "지름", unit: "mm", min: 0.5, max: 20, step: 0.1, initial: 4 }
             ];
+            var BALL_K = 30;             // 물체 회색. 구는 밝은 쪽 0, 어두운 쪽 +45
             var options = readSettings();
             var view = doc.activeView ? doc.activeView : doc.views[0];
             var viewCenter = view.centerPoint;
@@ -871,6 +875,7 @@ try {
             var originY = viewCenter[1] + initial.height / 2;
             var previewGroup = null;
             var previewPath = null;
+            var ballsGroup = null;
             var appliedX = 0;
             var appliedY = 0;
             var pending = false;
@@ -889,6 +894,17 @@ try {
             var strokePanel = win.add("panel", undefined, "선");
             strokePanel.alignChildren = "fill";
             addRow(strokePanel, fields[4], false);
+            var ballPanel = win.add("panel", undefined, "물체");
+            ballPanel.alignChildren = "fill";
+            addRow(ballPanel, fields[5], false);
+            addRow(ballPanel, fields[6], false);
+            var sphereCheck = ballPanel.add("checkbox", undefined, "입체(구)로 그리기 (끄면 평면 원)");
+            sphereCheck.value = options.sphere;
+            sphereCheck.onClick = function() {
+                options.sphere = sphereCheck.value;
+                updatePreview(false, false);
+            };
+            ballPanel.add("statictext", undefined, "같은 시간 간격으로 궤적 위에 놓는다 (처음과 끝 포함)");
             var positionPanel = win.add("panel", undefined, "위치");
             positionPanel.alignChildren = "fill";
             addRow(positionPanel, fields[2], true);
@@ -924,6 +940,7 @@ try {
                 reset.helpTip = "처음 값으로 되돌리기";
                 function apply(value, dragging) {
                     if (field.key === "strokeWidth") value = Math.round(value * 10) / 10;
+                    if (field.key === "count") value = Math.round(value);
                     value = Math.round(value * 100) / 100;
                     if (!isFinite(value) || value < field.min || value > field.max) {
                         input.text = String(options[field.key]);
@@ -989,6 +1006,7 @@ try {
                         movePreview();
                         writeTrajectory(previewPath, originX + appliedX, originY + appliedY, motion);
                         applyUniformStroke(previewPath);
+                        drawBalls(originX + appliedX, originY + appliedY, motion);
                     }
                     pending = false;
                     app.redraw();
@@ -1044,6 +1062,87 @@ try {
                 }
             }
 
+            // 궤적 위 물체 위치 (시작점 기준 pt). 같은 시간 간격: 가로는 고르게, 세로는 시간의 제곱으로 벌어진다
+            function ballPositions(motion, count) {
+                var out = [];
+                for (var i = 0; i < count; i++) {
+                    var f = count > 1 ? i / (count - 1) : 0;
+                    out.push([motion.width * f, -motion.height * f * f]);
+                }
+                return out;
+            }
+
+            // 물체는 매번 지우고 다시 그린다 (20개 이하라 빠르다). 선 위에 쌓인다
+            function drawBalls(x, y, motion) {
+                if (ballsGroup) { try { ballsGroup.remove(); } catch (e) {} }
+                ballsGroup = null;
+                if (options.count < 1) return;
+                ballsGroup = previewGroup.groupItems.add();
+                ballsGroup.name = "ProjectileBalls";
+                var r = options.diameter * MM_TO_PT / 2;
+                var spots = ballPositions(motion, options.count);
+                for (var i = 0; i < spots.length; i++) drawBall(ballsGroup, x + spots[i][0], y + spots[i][1], r);
+            }
+
+            // 구: 왼쪽 위로 치우친 큰 원형 그라데이션을 공 모양으로 잘라 쓴다 (Object_MotionPhoto 방식). 평면: 흰 원에 검은 테두리
+            function drawBall(container, cx, cy, r) {
+                if (!options.sphere) {
+                    var disc = container.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
+                    disc.filled = true;
+                    disc.fillColor = grayColor(0);
+                    disc.stroked = true;
+                    disc.strokeColor = blackColor();
+                    disc.strokeWidth = options.strokeWidth;
+                    return disc;
+                }
+                var clip = container.groupItems.add();
+                var big = r * 1.5;
+                var light = clip.pathItems.ellipse(cy + r * 0.3 + big, cx - r * 0.3 - big, big * 2, big * 2);
+                light.stroked = false;
+                light.filled = true;
+                var gradientColor = new GradientColor();
+                gradientColor.gradient = ballGradient();
+                light.fillColor = gradientColor;
+                var mask = clip.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
+                mask.filled = false;
+                mask.stroked = false;
+                clip.clipped = true;
+                return clip;
+            }
+
+            // 같은 이름 그라데이션이 문서에 있으면 다시 쓴다 (실행마다 견본이 늘지 않게). 정지점은 CMYK만 받는다
+            function ballGradient() {
+                var name = "HP_ball_" + BALL_K;
+                var gradient = null;
+                try { gradient = doc.gradients.getByName(name); } catch (e) { gradient = null; }
+                if (gradient !== null) return gradient;
+                var stops = [[0, 0], [30, BALL_K], [100, Math.min(100, BALL_K + 45)]];
+                gradient = doc.gradients.add();
+                gradient.name = name;
+                gradient = doc.gradients.getByName(name);
+                gradient.type = GradientType.RADIAL;
+                while (gradient.gradientStops.length < stops.length) gradient.gradientStops.add();
+                for (var i = 0; i < stops.length; i++) {
+                    var color = new CMYKColor();
+                    color.cyan = 0; color.magenta = 0; color.yellow = 0; color.black = stops[i][1];
+                    gradient.gradientStops[i].rampPoint = stops[i][0];
+                    gradient.gradientStops[i].color = color;
+                }
+                return gradient;
+            }
+
+            function grayColor(k) {
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    cmyk.cyan = 0; cmyk.magenta = 0; cmyk.yellow = 0; cmyk.black = k;
+                    return cmyk;
+                }
+                var value = Math.round(255 * (100 - k) / 100);
+                var rgb = new RGBColor();
+                rgb.red = value; rgb.green = value; rgb.blue = value;
+                return rgb;
+            }
+
             function movePreview() {
                 if (!previewGroup) return;
                 var x = options.offsetX * MM_TO_PT;
@@ -1057,6 +1156,7 @@ try {
                 if (previewGroup) previewGroup.remove();
                 previewGroup = null;
                 previewPath = null;
+                ballsGroup = null;
                 pending = false;
                 doc.selection = null;
                 for (var i = 0; i < originalSelection.length; i++) {
@@ -1064,27 +1164,31 @@ try {
                 }
             }
 
+            // v5: 숫자 7개(높이·속도·가로·세로·선 두께·물체 수·지름) + 구 여부 + 미리보기
             function readSettings() {
-                var result = { preview: true };
+                var result = { preview: true, sphere: true };
                 for (var i = 0; i < fields.length; i++) result[fields[i].key] = fields[i].initial;
                 try {
                     var parts = app.preferences.getStringPreference(PREF_KEY).split("|");
-                    if (parts[0] !== "v4" || parts.length !== 7 || !/^[01]$/.test(parts[6])) return result;
+                    if (parts[0] !== "v5" || parts.length !== fields.length + 3 || !/^[01]$/.test(parts[8]) || !/^[01]$/.test(parts[9])) return result;
                     for (var j = 0; j < fields.length; j++) {
                         var value = Number(parts[j + 1]);
                         if (!/\S/.test(parts[j + 1]) || !isFinite(value) || value < fields[j].min || value > fields[j].max) return result;
                         if (fields[j].key === "strokeWidth" && Math.abs(value * 10 - Math.round(value * 10)) > 0.000001) return result;
+                        if (fields[j].key === "count" && value !== Math.round(value)) return result;
                     }
                     for (var k = 0; k < fields.length; k++) result[fields[k].key] = Number(parts[k + 1]);
-                    result.preview = parts[6] === "1";
+                    result.sphere = parts[8] === "1";
+                    result.preview = parts[9] === "1";
                 } catch (e) {}
                 return result;
             }
 
             function saveSettings() {
                 try {
-                    app.preferences.setStringPreference(PREF_KEY, ["v4", options.height, options.speed,
-                        options.offsetX, options.offsetY, options.strokeWidth, options.preview ? 1 : 0].join("|"));
+                    app.preferences.setStringPreference(PREF_KEY, ["v5", options.height, options.speed,
+                        options.offsetX, options.offsetY, options.strokeWidth, options.count, options.diameter,
+                        options.sphere ? 1 : 0, options.preview ? 1 : 0].join("|"));
                 } catch (e) {}
             }
 
