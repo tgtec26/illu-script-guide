@@ -12,7 +12,7 @@ function loadEngine(state) {
   const sharedStart = source.indexOf("// ==== 공통 기하");
   const sharedEnd = source.indexOf("// ==== 입체 도형 엔진");
   const engineStart = source.indexOf("function makeRevolveEngine() {");
-  const engineEnd = source.indexOf("})();", engineStart);
+  const engineEnd = source.indexOf("// ==== 평면 회전 엔진", engineStart);
   assert.ok(sharedStart > 0 && sharedEnd > sharedStart && engineStart > sharedEnd && engineEnd > engineStart, "engine section not found");
   let body = source.slice(engineStart + "function makeRevolveEngine() {".length, engineEnd);
   body = body.slice(0, body.lastIndexOf("return api;"));
@@ -357,6 +357,18 @@ function circleAnchors(cx, cy, R) {
   engine.beginView(model);
   fills = engine.collectFills(model);
   assert.strictEqual(fills.length, 2, "open cone shell: outside front half + inside back half");
+}
+
+
+// Each revolve view must set projection mode, independent of previously active tab.
+{
+  const engine = loadEngine({ rotX: 0, rotZ: 0, perspectiveOn: true, perspectiveMm: 300 });
+  const profile = engine.flattenProfile([corner(0, -15), corner(20, -15), corner(20, 15), corner(0, 15)], true);
+  engine.setState({ profilePoints: profile.points });
+  const model = engine.buildModel(); engine.beginView(model);
+  assert.ok(engine.projectModel([10, 0, 10])[0] > 10, 'revolve must enable requested perspective');
+  engine.setState({ perspectiveOn: false }); engine.beginView(model);
+  assert.ok(near(engine.projectModel([10, 0, 10])[0], 10), 'revolve must disable perspective independently');
 }
 
 console.log("check-revolve3d: ok");
