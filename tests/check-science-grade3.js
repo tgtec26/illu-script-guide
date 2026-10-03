@@ -1,4 +1,4 @@
-// 3학년 교재 기반 탭·스크립트: 다중 섬광·역학적 에너지(역학), 날씨, 화학 반응 모형, 뉴런
+// 3학년 교재 기반 탭·스크립트: 역학적 에너지(역학), 날씨, 화학 반응 모형, 뉴런
 const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
@@ -19,14 +19,12 @@ function load(file, names) {
   return { source, h: new Function(`${names.map(pick).join("\n")}\nreturn {${names.join(",")}};`)() };
 }
 
-// 역학: 다중 섬광·역학적 에너지
+// 역학: 역학적 에너지·수평 던지기 물체
 {
-  const { source, h } = load("Object_Mechanics.jsx", ["strobePositions", "energyFractions"]);
-  assert.deepStrictEqual(h.strobePositions(4, 5, 0), [0, 5, 10, 15], "uniform motion");
-  assert.deepStrictEqual(h.strobePositions(4, 2, 2), [0, 2, 6, 12], "speeding up");
-  assert.deepStrictEqual(h.strobePositions(6, 3, -1), [0, 3, 5, 6], "stops before interval hits zero");
+  const { source, h } = load("Object_Mechanics.jsx", ["energyFractions"]);
   assert.deepStrictEqual(h.energyFractions(3), [1, 0.5, 0]);
-  assert.ok(source.includes("makeStrobeEngine(), makeEnergyEngine()]"), "tabs registered");
+  assert.ok(source.includes("makeEnergyEngine()]"), "tabs registered");
+  assert.ok(!source.includes("makeStrobeEngine"), "multi-flash lives in Object_MotionPhoto now");
   // 수평 던지기 물체: 같은 시간 간격 → 가로 균등, 세로는 제곱
   const ballPositions = load("Object_Mechanics.jsx", ["ballPositions"]).h.ballPositions;
   const motion = { time: 2, width: 40, height: 20 };

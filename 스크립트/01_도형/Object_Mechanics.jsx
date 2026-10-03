@@ -9,9 +9,9 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 역학: 진자 운동·수평 던지기·사인 곡선·코일 스프링·다중 섬광·역학적 에너지를 한 창의 탭으로 묶었다.
-// 탭마다 필요한 선택이 다르다 (진자: 수평선, 수평 던지기: 없음, 사인 곡선: 패스 하나, 코일 스프링: 원 하나 또는 없음, 다중 섬광·역학적 에너지: 없음).
-// 다중 섬광·역학적 에너지 탭은 파일 끝의 '폼 탭 공용 부품'(makeFormEngine)으로 만든다.
+// 역학: 진자 운동·수평 던지기·사인 곡선·코일 스프링·역학적 에너지를 한 창의 탭으로 묶었다.
+// 탭마다 필요한 선택이 다르다 (진자: 수평선, 수평 던지기: 없음, 사인 곡선: 패스 하나, 코일 스프링: 원 하나 또는 없음, 역학적 에너지: 없음).
+// 역학적 에너지 탭은 파일 끝의 '폼 탭 공용 부품'(makeFormEngine)으로 만든다. (다중 섬광은 Object_MotionPhoto.jsx로 합쳤다.)
 // 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적는다. 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
 (function() {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
@@ -29,7 +29,7 @@ try {
     var FORM_KOR_FONT = formFindFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
     var engines = [makePendulumEngine(), makeProjectileEngine(), makeSineWaveEngine(), makeCoilSpringEngine(),
-        makeStrobeEngine(), makeEnergyEngine()];
+        makeEnergyEngine()];
 
     var win = new Window("dialog", "역학");
     win.orientation = "column";
@@ -2455,101 +2455,6 @@ try {
         return api;
     }
 
-    // ==== 다중 섬광 ====
-    // 같은 시간 간격으로 찍은 물체 위치. 간격이 '처음 간격'에서 한 번에 '간격 변화'씩 늘거나 준다
-    // (0이면 등속, 양수면 빨라짐·자유 낙하, 음수면 느려짐). 섬광 사진은 공과 눈금자, 시간기록 테이프는 종이띠와 점.
-    function makeStrobeEngine() {
-        return makeFormEngine({
-            label: "다중 섬광", name: "MultiFlash", prefKey: "ObjectMultiFlash/settings",
-            controls: [
-                {panel: "운동"},
-                {key: "kind", label: "모양", items: ["섬광 사진", "시간기록 테이프"], value: 0},
-                {key: "dir", label: "방향", items: ["가로 (오른쪽)", "세로 (아래)"], value: 0},
-                {key: "count", label: "찍힌 수", unit: "개", min: 3, max: 20, step: 1, value: 8},
-                {key: "gap", label: "처음 간격", unit: "mm", min: 0.5, max: 30, step: 0.1, value: 6},
-                {key: "change", label: "간격 변화", unit: "mm", min: -5, max: 5, step: 0.1, value: 0},
-                {panel: "표시"},
-                {key: "ruler", check: "눈금자", value: true},
-                {key: "time", check: "시간", value: false},
-                {key: "arrow", check: "운동 방향", value: true},
-                {key: "ball", label: "공 지름", unit: "mm", min: 1, max: 15, step: 0.1, value: 4},
-                {key: "tick", label: "눈금 간격", unit: "mm", min: 1, max: 20, step: 0.5, value: 2},
-                {key: "dt", label: "시간 간격", unit: "s", min: 0.01, max: 1, step: 0.01, value: 0.1},
-                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
-            ],
-            draw: drawStrobe
-        });
-    }
-
-    // 첫 위치를 0으로 한 거리(mm). 간격이 0 이하가 되면 거기서 멈춘다
-    function strobePositions(count, gap, change) {
-        var list = [0];
-        for (var i = 1; i < count; i++) {
-            var step = gap + change * (i - 1);
-            if (step <= 0) break;
-            list.push(list[i - 1] + step);
-        }
-        return list;
-    }
-
-    function drawStrobe(t, o) {
-        var mm = t.mm;
-        var at = strobePositions(o.count, o.gap, o.change);
-        var vertical = (o.dir === 1);
-        var end = at[at.length - 1];
-        // 운동 축 위 거리 s(mm), 옆으로 d(mm) → 점
-        function pt(s, d) { return vertical ? [d * mm, -s * mm] : [s * mm, d * mm]; }
-        var radius = o.ball / 2;
-        var tape = (o.kind === 1);
-        var side = tape ? 3 : radius;   // 운동 축에서 물체 가장자리까지
-
-        if (tape) {
-            var margin = Math.max(3, o.gap);
-            var a = pt(-margin, -3), b = pt(end + margin, 3);
-            t.rect(Math.min(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[0], b[0]), Math.min(a[1], b[1]), 0, 100, 0.3);
-            for (var i = 0; i < at.length; i++) {
-                var dot = pt(at[i], 0);
-                t.circle(dot[0], dot[1], 0.4 * mm, 100, null, 0);
-            }
-        } else {
-            if (o.ruler) {
-                var r0 = -side - 1.5;   // 공 아래(세로면 왼쪽)
-                var from = -o.tick, to = end + o.tick;
-                t.line(pt(from, r0), pt(to, r0), 0.3);
-                var n = 0;
-                for (var s = 0; s <= to - from + 0.001; s += o.tick, n++) {
-                    var tickLength = (n % 5 === 0) ? 2 : 1;
-                    t.line(pt(from + s, r0), pt(from + s, r0 - tickLength), 0.3);
-                }
-            }
-            for (var j = 0; j < at.length; j++) {
-                var c = pt(at[j], 0);
-                t.circle(c[0], c[1], radius * mm, 40, 100, 0.3);
-            }
-        }
-
-        var labelSide = side + 1 + o.font * 0.2;
-        if (o.time) {
-            for (var k = 0; k < at.length; k++) {
-                var tp = pt(at[k], vertical ? side + 1.5 : labelSide);
-                t.text(formatSeconds(k * o.dt) + "초", tp[0], tp[1], o.font, vertical ? "left" : "center");
-            }
-        }
-        if (o.arrow) {
-            var lift = labelSide + (o.time && !vertical ? o.font * 0.45 : 0) + 1.5;
-            if (vertical) lift = -(side + 2 + (o.ruler && !tape ? 3 : 0));
-            var from2 = pt(0, lift), to2 = pt(Math.max(end * 0.6, 8), lift);
-            t.arrow(from2, to2, 0.5);
-            var label = vertical ? pt(end * 0.3, lift - 1.5) : pt(0, lift);
-            t.text("운동 방향", vertical ? label[0] : label[0] - 1.5 * mm, label[1], o.font, "right");
-        }
-    }
-
-    function formatSeconds(value) {
-        var text = String(Math.round(value * 100) / 100);
-        return text;
-    }
-
     // ==== 역학적 에너지 ====
     // 자유 낙하하는 물체의 위치 에너지와 운동 에너지. 막대는 지점마다 쌓은 막대, 삼각형은 교과서식 비율 그림.
     function makeEnergyEngine() {
@@ -2855,20 +2760,6 @@ try {
             p.closed = !!closed;
             formPaint(p, fillK, strokeK, width);
             return p;
-        };
-        // a → b 화살표. 선은 촉 뿌리까지, 촉은 채운 삼각형
-        t.arrow = function(a, b, width, k, headLength) {
-            if (k === undefined) k = 100;
-            var head = headLength || 1.6 * FORM_MM;
-            var dx = b[0] - a[0], dy = b[1] - a[1];
-            var len = Math.sqrt(dx * dx + dy * dy);
-            if (len < 0.01) return;
-            var ux = dx / len, uy = dy / len;
-            if (head > len) head = len;
-            var base = [b[0] - ux * head, b[1] - uy * head];
-            var half = head * 0.35;
-            if (len > head) t.line(a, [base[0] + ux * 0.2, base[1] + uy * 0.2], width, k);
-            t.path([b, [base[0] - uy * half, base[1] + ux * half], [base[0] + uy * half, base[1] - ux * half]], true, k, null, 0);
         };
         // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). sub: 글자 뒤 숫자를 아래 첨자로
         t.text = function(text, x, y, size, align, k, sub) {

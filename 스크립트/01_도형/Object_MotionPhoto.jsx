@@ -11,15 +11,19 @@ try {
 } catch (e) {}
 
 // 연속 촬영(스트로보) 운동 사진: 같은 간격으로 찍은 사진을 한 장에 겹쳐 놓은 모습을 그린다.
-//   - 방향은 가로(왼쪽 → 오른쪽) 또는 세로(위 → 아래). 운동은 등속(속도) 또는 정지에서 출발하는 가속(가속도).
-//     i번째 사진의 위치는 등속이면 v·t, 가속이면 ½·a·t² (t = i × 촬영 간격). 속도·가속도는 그림 위의 길이(mm) 기준이다.
-//   - 물체: 테두리 없는 구형 그라데이션(왼쪽 위 하이라이트) 또는 테두리가 있는 단색. 색은 K 값(10 단위)이고 모두 회색 음영.
+//   - 방향은 가로(왼쪽 → 오른쪽) 또는 세로(위 → 아래). 운동은 등속(속도) 또는 가속·감속(처음 속도 + 가속도).
+//     i번째 사진의 위치는 등속이면 v·t, 가속이면 v0·t + ½·a·t² (t = i × 촬영 간격). 속도·가속도는 그림 위의 길이(mm) 기준이다.
+//     가속도가 음수(감속)이면 속도가 0이 되는 순간까지만 찍는다. 처음 속도 0 + 양의 가속도가 정지에서 출발하는 가속이다.
+//   - 물체: 테두리 없는 구형 그라데이션(왼쪽 위 하이라이트), 테두리가 있는 단색, 또는 시간기록 테이프(흰 종이띠 + 점).
+//     색은 K 값(10 단위)이고 모두 회색 음영.
 //     '지난 위치는 반투명'을 켜면 마지막 사진만 그대로 두고 앞선 사진은 반투명(단색은 파선 테두리 + 반투명)으로 그린다.
-//   - 배경(검은 띠)은 켜고 끌 수 있고 K 값을 10 단위로 고른다. 뒤쪽 사진이 앞쪽 사진 위에 놓인다.
+//   - 배경(검은 띠)은 켜고 끌 수 있고 K 값을 10 단위로 고른다. 뒤쪽 사진이 앞쪽 사진 위에 놓인다. 테이프는 종이띠가 배경을 대신한다.
 //   - 거리 표시: 이웃한 사진 중심 사이에 양쪽 화살표를 긋고 값을 쓴다. 입력한 값이 숫자로 시작하면(예: "10 cm")
-//     가속에서는 구간마다 1, 3, 5배…로 늘려 쓰고(출발에서 정지 상태이므로 구간 거리는 1:3:5…), "d"처럼 글자면 d, 3d, 5d…로 쓴다.
+//     가장 짧은 구간 대비 구간 거리의 비를 곱해 쓰고(정지에서 출발한 가속은 1:3:5…), "d"처럼 글자면 d, 3d, 5d…로 쓴다.
 //   - 출발 지점은 첫 사진 중심을 지나는 파선, 거리 표시의 연장선(사진 중심에서 내리는 보조선)도 파선(2-1). 지표면은 세로일 때만
 //     (맨 아래 사진 밑에 위쪽 선 + 아래로 옅어지는 그라데이션, 오른쪽 위에 '지표면' 글자).
+//   - 거리 표시의 맞은편에 시간 표시(0초, 0.1초… 촬영 간격 기준), 눈금자(첫 사진이 0, 5칸마다 긴 눈금), 운동 방향 화살표를
+//     띠에서 가까운 순서로 쌓는다.
 //   - 확인하면 파선·배경·지표면·표시선·글자·사진이 든 그룹 하나가 남는다.
 
 (function() {
@@ -64,10 +68,25 @@ try {
     var SURFACE_HEIGHT_MM = 8;
     // 첫 사진에서 마지막 사진까지의 최대 길이(mm). 넘으면 속도·가속도를 줄인다
     var SPAN_MAX_MM = 1000;
+    // 시간기록 테이프: 종이띠 폭의 절반, 양 끝 여백의 최소값(처음 간격이 더 크면 그만큼), 점 반지름
+    var TAPE_HALF_MM = 3;
+    var TAPE_MARGIN_MM = 3;
+    var TAPE_DOT_R_MM = 0.4;
+    // 눈금자: 앞선 표시에서 눈금선까지, 눈금 길이(5칸마다 긴 것), 눈금 수 상한(넘으면 간격을 넓힌다)
+    var RULER_GAP_MM = 1.5;
+    var RULER_LONG_MM = 2;
+    var RULER_SHORT_MM = 1;
+    var RULER_MAX_TICKS = 60;
+    // 운동 방향 화살표: 앞선 표시에서 떨어진 거리, 최소 길이, 마지막 사진까지 거리에 대한 비율, 글자와의 간격
+    var MOTION_GAP_MM = 2;
+    var MOTION_MIN_MM = 8;
+    var MOTION_RATIO = 0.6;
+    var MOTION_TEXT = "운동 방향";
+    var MOTION_TEXT_GAP_MM = 1.5;
 
     var DIRECTIONS = ["가로", "세로 (아래로 운동)"];
-    var MOTIONS = ["등속 운동", "가속 운동 (정지에서 출발)"];
-    var BALLS = ["구 (그라데이션)", "테두리 + 단색"];
+    var MOTIONS = ["등속 운동", "가속·감속 운동"];
+    var BALLS = ["구 (그라데이션)", "테두리 + 단색", "시간기록 테이프"];
 
     var LABEL_WIDTH = 120;
     var SLIDER_WIDTH = 196;
@@ -76,18 +95,20 @@ try {
 
     // 저장 순서: 라디오, 체크박스, 숫자(NUMBER_KEYS)
     var RADIO_KEYS = ["direction", "motion", "ball"];
-    var CHECK_KEYS = ["bgOn", "startOn", "surfaceOn", "distOn", "ghostOn"];
+    var CHECK_KEYS = ["bgOn", "startOn", "surfaceOn", "distOn", "ghostOn", "rulerOn", "timeOn", "arrowOn"];
 
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
-    var NUMBER_KEYS = ["speed", "accel", "interval", "count", "size", "ballK", "bgK", "offsetX", "offsetY"];
+    var NUMBER_KEYS = ["speed", "startSpeed", "accel", "interval", "count", "size", "ballK", "bgK", "tick", "offsetX", "offsetY"];
     var SPECS = {
         speed: {range: [5, 1000], step: 5, decimals: 0},
-        accel: {range: [10, 5000], step: 10, decimals: 0},
+        startSpeed: {range: [0, 1000], step: 5, decimals: 0},
+        accel: {range: [-5000, 5000], step: 10, decimals: 0},
         interval: {range: [0.01, 2], step: 0.01, decimals: 2},
         count: {range: [2, 30], step: 1, decimals: 0},
         size: {range: [2, 30], step: 0.5, decimals: 1},
         ballK: {range: [0, 100], step: 10, decimals: 0},
         bgK: {range: [0, 100], step: 10, decimals: 0},
+        tick: {range: [1, 20], step: 0.5, decimals: 1},
         offsetX: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
         offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1}
     };
@@ -103,8 +124,8 @@ try {
 
     var options = {
         direction: 0, motion: 0, ball: 0,
-        bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false,
-        speed: 100, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90,
+        bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false, rulerOn: false, timeOn: false, arrowOn: false,
+        speed: 100, startSpeed: 0, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, tick: 5,
         distText: "d",
         offsetX: 0, offsetY: 0,
         previewOn: true
@@ -133,7 +154,9 @@ try {
     addRadioRow(motionPanel, "방향:", "direction", DIRECTIONS);
     addRadioRow(motionPanel, "운동:", "motion", MOTIONS);
     addRow(motionPanel, "speed", "속도", "mm/s");
+    addRow(motionPanel, "startSpeed", "처음 속도", "mm/s");
     addRow(motionPanel, "accel", "가속도", "mm/s²");
+    rows.accel.input.helpTip = "음수이면 감속: 속도가 0이 되는 순간까지만 찍는다";
     addRow(motionPanel, "interval", "촬영 간격", "s");
     addRow(motionPanel, "count", "촬영 횟수", "회");
 
@@ -150,6 +173,13 @@ try {
     markRow.alignChildren = ["left", "center"];
     addCheck(markRow, "출발 지점 표시", "startOn");
     addCheck(markRow, "지표면 표시 (세로)", "surfaceOn");
+    var guideRow = showPanel.add("group");
+    guideRow.alignChildren = ["left", "center"];
+    addCheck(guideRow, "눈금자", "rulerOn");
+    addCheck(guideRow, "시간 표시", "timeOn");
+    addCheck(guideRow, "운동 방향", "arrowOn");
+    checks.timeOn.helpTip = "사진마다 0초, 촬영 간격, 2×간격… 을 거리 표시의 맞은편에 쓴다";
+    addRow(showPanel, "tick", "눈금 간격", "mm");
     var distRow = showPanel.add("group");
     distRow.alignChildren = ["left", "center"];
     addCheck(distRow, "중심 거리 표시:", "distOn");
@@ -213,9 +243,17 @@ try {
             for (var i = 0; i < radioSets[key].length; i++) radioSets[key][i].value = (options[key] === i);
         }
         for (var checkKey in checks) checks[checkKey].value = options[checkKey];
+        // 테이프는 종이띠와 점이라 지름·색·배경·반투명을 쓰지 않는다
+        var tape = options.ball === 2;
         setRowEnabled(rows.speed, options.motion === 0);
+        setRowEnabled(rows.startSpeed, options.motion === 1);
         setRowEnabled(rows.accel, options.motion === 1);
-        setRowEnabled(rows.bgK, options.bgOn);
+        setRowEnabled(rows.size, !tape);
+        setRowEnabled(rows.ballK, !tape);
+        setRowEnabled(rows.bgK, options.bgOn && !tape);
+        setRowEnabled(rows.tick, options.rulerOn);
+        checks.bgOn.enabled = !tape;
+        checks.ghostOn.enabled = !tape;
         checks.surfaceOn.enabled = options.direction === 1;
         distInput.enabled = options.distOn;
     }
@@ -270,17 +308,36 @@ try {
         }
 
         var vertical = o.direction === 1;
+        var tape = o.ball === 2;
         var pos = framePositions(o);
         var count = pos.length;
-        var radius = o.size * MM / 2;
         var pad = PAD_MM * MM;
-        var half = radius + pad;                     // 띠의 폭의 절반
-        var sMin = -radius - pad;
-        var sMax = pos[count - 1] * MM + radius + pad;
+        var radius = tape ? TAPE_DOT_R_MM * MM : o.size * MM / 2;
+        var half = tape ? TAPE_HALF_MM * MM : radius + pad;                     // 띠의 폭의 절반
+        // 띠의 양 끝 여백: 사진은 물체 반지름 + 여백, 테이프는 처음 간격(최소 TAPE_MARGIN_MM)
+        var endGap = tape ? Math.max(TAPE_MARGIN_MM, count > 1 ? pos[1] - pos[0] : 0) * MM : radius + pad;
+        var sMin = -endGap;
+        var sMax = pos[count - 1] * MM + endGap;
         var sMid = (sMin + sMax) / 2;
         // s: 운동 방향 거리(첫 사진 중심이 0), c: 운동에 수직인 방향(가로: 위, 세로: 오른쪽) → 쪽 좌표
         function at(s, c) {
             return vertical ? [centerX + c, centerY - (s - sMid)] : [centerX + (s - sMid), centerY + c];
+        }
+        // 글자를 s의 가운데에 두고 c 쪽(c의 부호 방향)으로 놓는다. 앞 글자와 겹치면 한 줄씩 바깥으로 민다. 쓴 두께를 돌려준다
+        function placeInRows(frame, s, c, rowEnds) {
+            var box = frame.geometricBounds;   // [left, top, right, bottom]
+            var width = box[2] - box[0];
+            var height = box[1] - box[3];
+            var along = vertical ? height : width;
+            var thick = vertical ? width : height;
+            var row = 0;
+            while (rowEnds[row] !== undefined && rowEnds[row] > s - along / 2 - LABEL_SPACE_MM * MM) row++;
+            rowEnds[row] = s + along / 2;
+            var side = c > 0 ? 1 : -1;
+            var spot = at(s, c + side * row * (thick + LABEL_SPACE_MM * MM));
+            if (vertical) placeText(frame, spot[0], spot[1], side > 0 ? "l" : "r", "m");
+            else placeText(frame, spot[0], spot[1], "c", side > 0 ? "b" : "t");
+            return row * (thick + LABEL_SPACE_MM * MM) + thick;
         }
         var forward = vertical ? [0, -1] : [1, 0];
         var black = makeGray(LINE_K);
@@ -294,19 +351,24 @@ try {
         var showDist = o.distOn && trimText(o.distText) !== "";
         if (o.startOn) {
             // 거리 표시가 있으면 그쪽은 표시선 연장선 끝까지만 (글자를 가로지르지 않게)
-            var otherReach = half + EXT_MM * MM;
+            // 시간 글자가 있는 쪽은 띠 가장자리에서 끝낸다 (글자를 가로지르지 않게)
+            var otherReach = half + (o.timeOn ? 0 : EXT_MM * MM);
             var labelReach = showDist ? half + (DIM_GAP_MM + DIM_OVERSHOOT_MM) * MM : otherReach;
             var startLine = drawLine(group, at(0, labelSign * labelReach), at(0, -labelSign * otherReach), LINE_PT, black);
             startLine.name = "StartLine";
             try { startLine.strokeDashes = DASHES; } catch (dashError) {}
         }
 
-        if (o.bgOn) {
+        if (tape || o.bgOn) {
             var back = drawRect(group, at(sMin, half), at(sMax, -half));
-            back.name = "Background";
-            back.stroked = false;
+            back.name = tape ? "Tape" : "Background";
             back.filled = true;
-            back.fillColor = makeGray(o.bgK);
+            back.fillColor = makeGray(tape ? 0 : o.bgK);
+            back.stroked = tape;
+            if (tape) {
+                back.strokeColor = black;
+                back.strokeWidth = AUX_PT;
+            }
         }
 
         if (vertical && o.surfaceOn) {
@@ -354,31 +416,64 @@ try {
                 drawHead(group, from, [-forward[0], -forward[1]], scale, black);
                 drawHead(group, to, forward, scale, black);
 
-                var frame = makeLabel(group, distanceLabel(o.distText, o.motion === 1 ? 2 * k + 1 : 1));
+                var frame = makeLabel(group, distanceLabel(o.distText, gapRatio(pos, k)));
                 frame.name = "Distance";
-                var mid = at((s0 + s1) / 2, dimC);
-                var box = frame.geometricBounds;   // [left, top, right, bottom]
-                var width = box[2] - box[0];
-                var height = box[1] - box[3];
                 // 앞 글자와 겹치면 한 줄 더 바깥으로 민다 (가속 운동 처음의 좁은 구간)
-                var along = vertical ? height : width;
-                var row = 0;
-                while (rowEnds[row] !== undefined && rowEnds[row] > (s0 + s1) / 2 - along / 2 - LABEL_SPACE_MM * MM) row++;
-                rowEnds[row] = (s0 + s1) / 2 + along / 2;
-                if (vertical) placeText(frame, mid[0] + TEXT_GAP_MM * MM + row * (width + LABEL_SPACE_MM * MM), mid[1], "l", "m");
-                else placeText(frame, mid[0], mid[1] - TEXT_GAP_MM * MM - row * (height + LABEL_SPACE_MM * MM), "c", "t");
+                placeInRows(frame, (s0 + s1) / 2, dimC + labelSign * TEXT_GAP_MM * MM, rowEnds);
             }
+        }
+
+        // 거리 표시의 맞은편: 띠에서 가까운 순서로 시간 글자 → 눈금자 → 운동 방향 화살표. stack은 띠 가운데에서 지금까지 쓴 거리
+        var sideB = -labelSign;
+        var stack = half;
+        if (o.timeOn) {
+            var timeEnds = [];
+            var used = 0;
+            for (var m = 0; m < count; m++) {
+                var seconds = formatSeconds(m * o.interval) + "초";
+                var tag = makeLabel(group, {text: seconds, italicFrom: seconds.length});
+                tag.name = "Time";
+                used = Math.max(used, placeInRows(tag, pos[m] * MM, sideB * (stack + TEXT_GAP_MM * MM), timeEnds));
+            }
+            stack += TEXT_GAP_MM * MM + used;
+        }
+        if (o.rulerOn) {
+            var ruler = rulerMarks(pos[count - 1], o.tick);
+            var rulerC = sideB * (stack + RULER_GAP_MM * MM);
+            drawLine(group, at(ruler.from * MM, rulerC), at(ruler.to * MM, rulerC), AUX_PT, black).name = "Ruler";
+            for (var q = 0; q < ruler.marks.length; q++) {
+                var mark = ruler.marks[q];
+                var tickEnd = rulerC + sideB * (mark.major ? RULER_LONG_MM : RULER_SHORT_MM) * MM;
+                drawLine(group, at(mark.s * MM, rulerC), at(mark.s * MM, tickEnd), AUX_PT, black).name = "RulerTick";
+            }
+            stack += (RULER_GAP_MM + RULER_LONG_MM) * MM;
+        }
+        if (o.arrowOn) {
+            // 출발 지점 파선이 이쪽으로 나와 있으면 그 바깥에 놓는다
+            var clear = Math.max(stack, o.startOn && !o.timeOn ? half + EXT_MM * MM : 0);
+            var arrowC = sideB * (clear + MOTION_GAP_MM * MM);
+            var arrowLength = Math.max(pos[count - 1] * MM * MOTION_RATIO, MOTION_MIN_MM * MM);
+            var tail = at(0, arrowC);
+            var tip = at(arrowLength, arrowC);
+            var shaftInset = ARROW.length - ARROW.notch;
+            drawLine(group, tail, [tip[0] - forward[0] * shaftInset, tip[1] - forward[1] * shaftInset], LINE_PT, black).name = "MotionArrow";
+            drawHead(group, tip, forward, 1, black);
+            var motionTag = makeLabel(group, {text: MOTION_TEXT, italicFrom: MOTION_TEXT.length});
+            motionTag.name = "MotionLabel";
+            var tagAt = vertical ? at(arrowLength / 2, arrowC) : tail;
+            placeText(motionTag, tagAt[0] - MOTION_TEXT_GAP_MM * MM, tagAt[1], "r", "m");
         }
 
         // 첫 사진만 그리고 나머지는 복제해 옮긴다. 새로 놓는 복제가 맨 앞이라 뒤쪽 사진이 위에 온다
         var balls = group.groupItems.add();
         balls.name = "Balls";
         var origin = at(0, 0);
-        // 지난 위치를 흐리게 하면 마지막 사진만 따로 그린다
-        var proto = drawBall(balls, origin[0], origin[1], radius, o, o.ghostOn);
+        // 지난 위치를 흐리게 하면 마지막 사진만 따로 그린다 (테이프의 점은 흐리게 하지 않는다)
+        var ghost = o.ghostOn && !tape;
+        var proto = drawBall(balls, origin[0], origin[1], radius, o, ghost);
         for (var b = 1; b < count; b++) {
             var spot = at(pos[b] * MM, 0);
-            if (o.ghostOn && b === count - 1) {
+            if (ghost && b === count - 1) {
                 drawBall(balls, spot[0], spot[1], radius, o, false);
                 continue;
             }
@@ -392,24 +487,48 @@ try {
     // -------------------------------------------------------
     // 기하 · 글자 내용
     // -------------------------------------------------------
-    // 사진마다 첫 사진에서 떨어진 거리(mm): 등속은 v·t, 가속은 ½·a·t² (t = 번호 × 촬영 간격)
+    // 사진마다 첫 사진에서 떨어진 거리(mm): 등속은 v·t, 가속은 v0·t + ½·a·t² (t = 번호 × 촬영 간격).
+    // 감속으로 속도가 0 아래로 내려가면(또는 움직이지 않으면) 거기서 멈춘다
     function framePositions(o) {
         var positions = [];
         for (var i = 0; i < o.count; i++) {
             var t = i * o.interval;
-            positions.push(o.motion === 0 ? o.speed * t : 0.5 * o.accel * t * t);
+            var s = o.motion === 0 ? o.speed * t : o.startSpeed * t + 0.5 * o.accel * t * t;
+            if (i > 0 && (s <= positions[i - 1] + 1e-9 || (o.motion === 1 && o.startSpeed + o.accel * t < -1e-9))) break;
+            positions.push(s);
         }
         return positions;
     }
 
-    // 첫 사진에서 마지막 사진까지가 SPAN_MAX_MM을 넘지 않도록 속도·가속도를 줄인다
+    // 첫 사진에서 마지막 사진까지가 SPAN_MAX_MM을 넘지 않도록 속도·가속도를 줄인다 (감속은 처음 속도 × 시간을 넘지 않는다)
     function clampOptions(o) {
         var out = {};
         for (var key in o) out[key] = o[key];
         var total = (o.count - 1) * o.interval;
         out.speed = Math.min(o.speed, SPAN_MAX_MM / total);
-        out.accel = Math.min(o.accel, 2 * SPAN_MAX_MM / (total * total));
+        out.startSpeed = Math.min(o.startSpeed, SPAN_MAX_MM / total);
+        if (o.accel > 0) out.accel = Math.min(o.accel, 2 * (SPAN_MAX_MM - out.startSpeed * total) / (total * total));
         return out;
+    }
+
+    // k번째 구간 거리가 가장 짧은 구간의 몇 배인지 (등속 1, 정지에서 출발한 가속 1·3·5…, 정지까지 감속 …5·3·1)
+    function gapRatio(positions, k) {
+        var shortest = positions[1] - positions[0];
+        for (var i = 1; i < positions.length - 1; i++) shortest = Math.min(shortest, positions[i + 1] - positions[i]);
+        return Math.round((positions[k + 1] - positions[k]) / shortest * 1e6) / 1e6;
+    }
+
+    // 눈금자: 첫 사진이 0, tick(mm) 간격으로 마지막 사진 너머 한 칸까지. 5칸마다 major. 눈금이 너무 많으면 간격을 넓힌다
+    function rulerMarks(lastMm, tick) {
+        var step = Math.max(tick, lastMm / RULER_MAX_TICKS);
+        var last = Math.ceil(lastMm / step - 1e-9) + 1;
+        var marks = [];
+        for (var k = -1; k <= last; k++) marks.push({s: k * step, major: k % 5 === 0});
+        return {from: -step, to: last * step, marks: marks};
+    }
+
+    function formatSeconds(value) {
+        return String(Math.round(value * 100) / 100);
     }
 
     // 거리 표시값 → 구간 글자. 숫자로 시작하면 coef배한 숫자 + 나머지(단위), 아니면 계수(1이면 생략) + 입력 그대로(변수).
@@ -423,7 +542,8 @@ try {
             var scaled = String(Math.round(number * coef * 1e6) / 1e6) + s.substring(end);
             return {text: scaled, italicFrom: scaled.length};
         }
-        var prefix = coef === 1 ? "" : String(coef);
+        var rounded = Math.round(coef * 100) / 100;   // 변수 앞 계수는 소수 둘째 자리까지
+        var prefix = rounded === 1 ? "" : String(rounded);
         return {text: prefix + s, italicFrom: prefix.length};
     }
 
@@ -483,9 +603,16 @@ try {
     }
 
     // 중심 (cx, cy), 반지름 r인 물체. 구는 하이라이트(왼쪽 위)가 치우친 큰 원을 구 모양으로 잘라 만든다
-    // (GradientColor의 origin·length는 무시되므로). 마스크가 그룹 맨 위의 패스여야 한다.
+    // (GradientColor의 origin·length는 무시되므로). 마스크가 그룹 맨 위의 패스여야 한다. 테이프는 검은 점.
     // faded이면 지난 위치: 반투명, 단색은 파선 테두리
     function drawBall(container, cx, cy, r, o, faded) {
+        if (o.ball === 2) {
+            var dot = container.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
+            dot.filled = true;
+            dot.fillColor = makeGray(LINE_K);
+            dot.stroked = false;
+            return dot;
+        }
         if (o.ball === 1) {
             var disc = container.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
             disc.filled = true;
@@ -742,10 +869,10 @@ try {
     }
 
     // -------------------------------------------------------
-    // 설정 저장 · 복원 ("v2" + 라디오 3 + 체크 5 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
+    // 설정 저장 · 복원 ("v3" + 라디오 3 + 체크 8 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v2"];
+        var parts = ["v3"];
         for (var r = 0; r < RADIO_KEYS.length; r++) parts.push(options[RADIO_KEYS[r]]);
         for (var c = 0; c < CHECK_KEYS.length; c++) parts.push(options[CHECK_KEYS[c]] ? "1" : "0");
         for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
@@ -761,7 +888,7 @@ try {
         var p = raw.split("|");
         var radioCount = RADIO_KEYS.length;
         var checkCount = CHECK_KEYS.length;
-        if (p[0] !== "v2" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
+        if (p[0] !== "v3" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
         var radioLimits = [DIRECTIONS.length, MOTIONS.length, BALLS.length];
         for (var r = 0; r < radioCount; r++) {
             var index = parseInt(p[1 + r], 10);
