@@ -13,7 +13,7 @@ const end = source.indexOf("// ==== 순수 기하 끝 ====");
 assert.ok(start > 0 && end > start, "pure geometry markers not found");
 const core = new Function(`${source.slice(start, end)}
 return { KARYO_ORDER, KARYO_DATA, SHAPE_STYLES, parseChromList, chromCopies, chromVariant, effectiveSex,
-  buildCells, chromGeom, chromOutline, chromBands, chromWidth, layoutKaryotype };`)();
+  buildCells, chromGeom, chromOutline, chromBands, chromWidth, chromAxis, chromHalf, SPLAY_PRESET, layoutKaryotype };`)();
 
 function close(actual, expected, tolerance, label) {
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: expected ${expected}, got ${actual}`);
@@ -101,7 +101,7 @@ assert.ok(core.KARYO_DATA["1"][0] > core.KARYO_DATA["2"][0] && core.KARYO_DATA["
 assert.ok(core.KARYO_DATA["X"][0] > core.KARYO_DATA["8"][0] && core.KARYO_DATA["Y"][0] < core.KARYO_DATA["16"][0]);
 
 // ---- 기하: p/q 비율은 데이터 그대로, 외곽선은 닫힌 도형
-const base = { style: 2, wc: 7, chromatids: 1, splay: 0, gap: 0.8 };
+const base = { style: 2, wc: 7, chromatids: 1, splay: 0 };
 const g1 = core.chromGeom("1", "", base);
 close(g1.T, 100, 0.0001, "chr1 length = 100 units");
 close(g1.pLen / g1.T, 4.43 / 9.11, 0.0001, "chr1 p ratio");
@@ -109,8 +109,20 @@ const g13 = core.chromGeom("13", "", base);
 close(g13.pLen / g13.T, 0.64 / 3.87, 0.0001, "chr13 p ratio");
 close(core.chromGeom("X", "", base).T, 100 * 5.16 / 9.11, 0.0001, "X length from the RERF table");
 close(core.chromGeom("21", "", base).T, 100 * 1.70 / 9.11, 0.0001, "chr21 length from the RERF table");
-assert.ok(g13.stalk && g13.stalk[0] > 0 && g13.stalk[1] < g13.pLen, "chr13 has a stalk inside the p arm");
-assert.strictEqual(core.chromGeom("1", "", base).stalk, null);
+// 중등 교재용: 달린 염색체의 p팔도 위성·자루(더듬이) 없이 짧은 팔로만 그린다
+assert.ok(!/stalk|knob/.test(source.slice(start, end).replace(/\/\/.*$/gm, "").replace(/"6"/g, "")), "no stalk/satellite geometry in the core");
+ALL.forEach((id) => {
+  [0, 1, 2].forEach((style) => {
+    const g = core.chromGeom(id, "", { style, wc: 7, chromatids: 1, splay: 0 });
+    let widest = 0;
+    let previous = null;
+    core.chromOutline(g, { style, wc: 7, chromatids: 1, splay: 0 }, 1).forEach((pt) => {
+      widest = Math.max(widest, Math.abs(pt[0]));
+      previous = pt;
+    });
+    assert.ok(widest <= g.a * 1.1 + 1e-6, `arm of ${id} (style ${style}) never gets wider than the shaft: ${widest} vs ${g.a}`);
+  });
+});
 
 const del = core.chromGeom("5", "del5p", base);
 const full5 = core.chromGeom("5", "", base);
@@ -135,7 +147,7 @@ for (let style = 0; style < 3; style++) {
         assert.ok(Math.abs(area) > 1, `outline of ${id} encloses an area`);
       });
       const w = core.chromWidth(g, o);
-      assert.ok(w >= 7 - 0.01 && w < 60, `width of ${id} (${w})`);
+      assert.ok(w >= g.a * 2 - 0.01 && w < 60, `width of ${id} (${w})`);
       core.chromBands(g).forEach((b) => {
         assert.ok(b.y0 >= -0.0001 && b.y1 <= g.T + 0.0001 && b.y1 > b.y0 && b.lev >= 1 && b.lev <= 5, `band of ${id}`);
       });
@@ -153,6 +165,34 @@ for (let style = 0; style < 3; style++) {
   close(lMin, -rMax, 0.0001, "mirror min/max");
   close(lMax, -rMin, 0.0001, "mirror max/min");
   assert.ok(lMax > 0 || rMin < 0, "sister chromatids touch or overlap at the centromere");
+}
+// 모양 3종: 기하학적 = 둥근 사각형 팔 + 동원체 원(Sadava), 중간 = 목 0.69(Brown), 실제 = 분체 사이가 벌어진 X자
+{
+  assert.deepStrictEqual(core.SHAPE_STYLES.map((s) => s.name), ["기하학적", "중간", "실제"]);
+  const geo = core.chromGeom("1", "", { style: 0, wc: 7, chromatids: 1, splay: 0 });
+  assert.ok(geo.beads, "geometric style is built from arms and a centromere circle");
+  close(geo.beads.rc / geo.a, 0.654, 0.0001, "circle radius / arm half width");
+  close((geo.beads.qStart - geo.beads.pEnd) / (2 * geo.a), 0.39, 0.0001, "gap between the arms / arm width");
+  close(geo.beads.rc * 2 / (2 * geo.a), 0.654, 0.0001, "circle diameter / arm width");
+  // 팔 사이 틈 한가운데(동원체 자리)의 너비는 원 지름이다
+  close(core.chromOutline(geo, { style: 0, wc: 7, chromatids: 1, splay: 0 }, 1).reduce((w, pt) => (Math.abs(pt[1] - geo.yc) < 0.05 ? Math.max(w, 2 * Math.abs(pt[0])) : w), 0), 2 * geo.beads.rc, 0.05, "width at the centromere = circle diameter");
+  close(core.chromGeom("1", "", { style: 1, wc: 7, chromatids: 1, splay: 0 }).style.neck, 0.69, 1e-9, "intermediate neck from Brown");
+  // 기하학적 밴드는 한 색 줄(단계 4)만, 다른 모양은 단계가 섞인다
+  const geoLevels = {};
+  const realLevels = {};
+  ALL.forEach((id) => {
+    core.chromBands(core.chromGeom(id, "", { style: 0, wc: 7, chromatids: 1, splay: 0 })).forEach((b) => { geoLevels[b.lev] = true; });
+    core.chromBands(core.chromGeom(id, "", { style: 2, wc: 7, chromatids: 1, splay: 0 })).forEach((b) => { realLevels[b.lev] = true; });
+  });
+  assert.deepStrictEqual(Object.keys(geoLevels), ["4"]);
+  assert.ok(Object.keys(realLevels).length >= 4);
+  // 실제 모양의 두 분체는 서로 떨어져 서다가 동원체에서 합쳐진다
+  const two = { style: 2, wc: 7, chromatids: 2, splay: 0 };
+  const g7 = core.chromGeom("7", "", two);
+  const inner = (y) => core.chromAxis(g7, y, two) - core.chromHalf(g7, y);
+  assert.ok(inner(g7.yc * 0.1) > 0.4 * g7.a, "apart on the p arm");
+  assert.ok(inner(g7.yc) < 0.05 * g7.a, "touching at the centromere");
+  assert.deepStrictEqual(core.SPLAY_PRESET, [0, 0, 3]);
 }
 // 밴드 단계가 모두 쓰이는 염색체가 있다 (G 밴드 패턴이 비어 있지 않다)
 {
@@ -199,7 +239,7 @@ for (let style = 0; style < 3; style++) {
 }
 
 // ---- 스크립트 규약 (AGENTS.md)
-assert.ok(source.indexOf('var SETTINGS_TAG = "v2"') < source.indexOf("readSettings();"), "settings constants before readSettings()");
+assert.ok(source.indexOf('var SETTINGS_TAG = "v3"') < source.indexOf("readSettings();"), "settings constants before readSettings()");
 assert.ok(/p\.length !== SETTINGS_LENGTH/.test(source), "settings length check");
 assert.strictEqual(source.split("saveSettings();").length - 1, 1, "saveSettings is called only on confirm");
 assert.ok(/okButton\.onClick = function\(\) \{[^}]*saveSettings\(\);/.test(source), "settings saved in the OK handler");
@@ -209,7 +249,9 @@ assert.ok(source.indexOf("illu_last_script.txt") > 0, "last-script memo");
 assert.ok(source.indexOf('"scrollbar"') > 0 && source.indexOf("stepdelta") > 0, "scrollbar rows");
 assert.ok(source.indexOf("movePreview(offsetXmm * MM, offsetYmm * MM)") > 0, "movable preview");
 assert.ok(source.indexOf("path.opacity = shadePct") > 0 && /var SHADE_STOPS = \[\[0, 0, 80\]/.test(source), "shade strength scales the overlay opacity");
-assert.ok(/p\[18\] === "1"/.test(source) && source.indexOf("var SETTINGS_LENGTH = 19") > 0, "settings layout v2 has 19 fields");
+assert.ok(/p\[19\] === "1"/.test(source) && source.indexOf("var SETTINGS_LENGTH = 20") > 0, "settings layout v3 has 20 fields");
+assert.ok(source.indexOf("var K_RANGE = [0, 100]") > 0 && /kPct = restoreNumber\(p\[9\], kPct, K_RANGE, 10\)/.test(source), "K density in steps of 10");
+assert.ok(source.indexOf("function strokeEdge") > 0 && source.indexOf("var renderIdx = 0") > 0, "outline (white fill + edge) render mode");
 assert.ok(source.indexOf("path.rotate(0 - path.fillColor.angle, false, false, true, false, Transformation.CENTER)") > 0, "gradient angle read back");
 assert.ok(source.indexOf("ENG_FONT_NAME") > 0 && source.indexOf("GSMediumB1") > 0, "label font rule");
 // ExtendScript 함정: 게으른 정규식, /= 로 시작하는 정규식 리터럴

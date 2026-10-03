@@ -13,10 +13,12 @@ try {
 // 사람의 핵형: 사각형을 선택하고 실행하면 그 안에 데버(Denver) 배치로 22쌍의 상염색체와 성염색체를 그린다.
 //   - 표시: 비우면 전체. "1, 2, 3~8, X, Y"처럼 쉼표로 나누고 연속은 ~ 로 쓴다.
 //   - 핵형: 정상 / 다운(21번 3개) / 클라인펠터(XXY) / 터너(X0) / 고양이 울음(5번 한 쪽 5p15.2 끝까지 결실).
-//   - 모양: 기하학적(둥근 사각형) · 중간 · 실제에 가까운 모양. 염색 분체 1개 또는 2개(벌림 가능). G 밴드 유무.
-//   - 표현: 평면 단색 또는 입체(투명도 그라데이션 음영).
+//   - 모양: 기하학적(Sadava 교재: 둥근 사각형 팔 + 동원체 원, 밴드는 한 색 줄) / 중간(Brown 교재: 부드러운 목으로 이어진 막대) /
+//     실제(두 분체가 떨어져 서다 동원체에서 합쳐지는 X자). 염색 분체 1개 또는 2개(벌림 조절). G 밴드 유무.
+//     달린 염색체(13~15·21·22)의 p팔은 위성·자루 없이 짧은 팔로 그린다(중등 교재용).
+//   - 표현: 평면 단색(K 10단위) / 윤곽선(흰 바탕 + 선) / 입체(투명도 그라데이션 음영, 강도 조절).
 //   - 크기와 p/q 비율: RERF(방사선영향연구소) Giemsa 핵형 표 2의 상대 길이(p:q). 1번 염색체 길이를 100으로 둔다.
-//     G 밴드 무늬: UCSC hg38 cytoBand의 밴드 단계(gpos25~100·gvar·stalk)를 각 팔 길이의 1/64 칸으로 모은 것.
+//     G 밴드 무늬: UCSC hg38 cytoBand의 밴드 단계(gpos25~100·gvar)를 각 팔 길이의 1/64 칸으로 모은 것.
 //   - 사각형 크기에 맞춰 배치하고, 남는 가로·세로는 열·줄 간격으로 나눠 사각형을 채운다.
 
 (function() {
@@ -58,14 +60,23 @@ try {
     var KARYO_UNIT = 100;
     var CRI_CUT_FRAC = 0.307;    // 5p15.2 끝(hg38 15.0 Mb)이 p팔(48.8 Mb)에서 차지하는 비율. 고양이 울음 증후군(5p-)은 여기까지 잘려 나간다
 
-    // cap: 끝 모서리 가로 반지름 비율(1 = 반원), capY: 세로 반지름 배율, neck: 동원체 목 너비 비율
-    // cusp: 알약 두 개를 겹친 V자 홈, notchLen: 부드러운 홈의 반 길이(a 배), bell: 홈 곡선 지수, bulge: 팔 가운데 부풂
-    // stalk·knob: 달린 염색체 짧은 팔의 자루·위성 너비 비율
+    // 모양 3종은 사용자가 준 참고 그림을 쟀다. widthScale: 분체 너비 배율(기본 7 = 1번 길이의 7%), chromGap: 두 분체 사이(분체 너비 배)
+    //   기하학적(Sadava): 둥근 사각형 팔 + 동원체 원 (beads). 바깥 끝 세로 0.81, 팔 끝 반원, 원 지름 0.65w, 팔 사이 틈 0.39w. 밴드는 한 색 줄(binaryBands)
+    //   중간(Brown): 알약 두 개가 부드러운 목(0.69, 길이 1.2w)으로 이어진 막대
+    //   실제(사람의 핵형.ai): 두 분체가 분체 너비의 0.6배쯤 떨어져 나란히 서다 동원체에서 합쳐지는 X자
+    // cap·capY: 끝 모서리 가로 반지름 비율(1 = 반원)·세로 배율, neck: 동원체 목 너비 비율, notchLen: 목 홈의 반 길이(a 배),
+    // bell: 홈 곡선 지수, bulge: 팔 가운데 부풂
     var SHAPE_STYLES = [
-        { name: "기하학적", cap: 1.0, capY: 1.0, neck: 0.64, cusp: true, notchLen: 1.0, bell: 1, bulge: 0, stalk: 0.55, knob: 0.92 },
-        { name: "중간", cap: 1.0, capY: 1.1, neck: 0.58, cusp: false, notchLen: 1.0, bell: 1, bulge: 0, stalk: 0.45, knob: 0.88 },
-        { name: "실제", cap: 1.0, capY: 1.4, neck: 0.38, cusp: false, notchLen: 1.4, bell: 1.5, bulge: 0.06, stalk: 0.30, knob: 0.74 }
+        { name: "기하학적", beads: true, widthScale: 0.95, chromGap: 0.11, binaryBands: true, neck: 0.654, cap: 1.0, capY: 1.0, notchLen: 1.0, bell: 1, bulge: 0 },
+        { name: "중간", beads: false, widthScale: 0.65, chromGap: 0.11, binaryBands: false, neck: 0.69, cap: 1.0, capY: 1.0, notchLen: 1.2, bell: 1, bulge: 0 },
+        { name: "실제", beads: false, widthScale: 1.25, chromGap: 0.6, binaryBands: false, neck: 0.6, cap: 1.0, capY: 1.25, notchLen: 1.3, bell: 1.3, bulge: 0.04 }
     ];
+    // 모양을 바꾸면 분체 벌림도 그 모양의 기본값으로 돌아간다 (실제 모양은 살짝 벌어져 X자로 보인다)
+    var SPLAY_PRESET = [0, 0, 3];
+    // 기하학적 모양의 치수 (팔 너비의 반 a 기준)
+    var BEAD_RADIUS = 0.654;
+    var BEAD_GAP = 0.39;
+    var BEAD_OUTER_CAP = 0.81;
 
     // 데버 배치: 줄 > 묶음 > 염색체. DENVER_GAPS[줄][g-1]은 g번째 묶음 앞의 빈 칸(열 단위)
     var DENVER_ROWS = [
@@ -210,7 +221,7 @@ try {
     }
 
     // 염색체 한 가닥(분체)의 치수와 밴드. 단위: 1번 염색체 길이 = 100
-    // o: { style, wc(분체 너비), chromatids(1|2), splay(도), gap(두 분체 사이) }
+    // o: { style, wc(분체 너비 기준값), chromatids(1|2), splay(도) }
     function chromGeom(id, variant, o) {
         var d = KARYO_DATA[id];
         var st = SHAPE_STYLES[o.style];
@@ -224,33 +235,70 @@ try {
             pLen = pLen * (1 - drop / pStr.length);
             pStr = pStr.substring(drop);
         }
-        var a = o.wc / 2;
+        var wc = o.wc * st.widthScale;
+        var a = wc / 2;
         var g = {
             id: id, style: st, a: a, pLen: pLen, qLen: qLen, T: pLen + qLen, yc: pLen,
-            pStr: pStr, qStr: qStr, stalk: null
+            pStr: pStr, qStr: qStr, gap: wc * st.chromGap, beads: null
         };
-        g.reach = st.cusp ? a * Math.sqrt(1 - st.neck * st.neck) : a * st.notchLen;
-        g.reachP = Math.min(g.reach, pLen * 0.5);
-        g.reachQ = Math.min(g.reach, qLen * 0.5);
-        var s0 = pStr.indexOf("6");
-        if (s0 >= 0) {
-            var s1 = pStr.lastIndexOf("6");
-            g.stalk = [s0 / pStr.length * pLen, (s1 + 1) / pStr.length * pLen];
+        if (st.beads) {
+            g.reach = a;
+            g.beads = beadParts(g);
+        } else {
+            g.reach = a * st.notchLen;
+            g.reachP = Math.min(g.reach, pLen * 0.3);
+            g.reachQ = Math.min(g.reach, qLen * 0.5);
+            g.ryT = Math.min(st.cap * a * st.capY, Math.max(0.3 * a, g.yc - g.reachP));
+            g.ryB = Math.min(st.cap * a * st.capY, Math.max(0.3 * a, g.qLen - g.reachQ));
         }
-        g.ryT = Math.min(st.cap * a * st.capY, Math.max(0.3 * a, g.yc - g.reachP));
-        g.ryB = Math.min(st.cap * a * st.capY, Math.max(0.3 * a, g.qLen - g.reachQ));
         return g;
     }
 
+    // 기하학적 모양: 위·아래 팔(둥근 사각형)과 동원체 원. 짧은 팔은 끝 둥글기를 같은 비율로 줄여 타원으로 만든다
+    function beadParts(g) {
+        var a = g.a;
+        var pEnd = g.yc - BEAD_GAP * a;
+        var qStart = g.yc + BEAD_GAP * a;
+        var sp = Math.min(1, Math.max(0.05, pEnd) / ((BEAD_OUTER_CAP + 1) * a));
+        var sq = Math.min(1, Math.max(0.05, g.T - qStart) / ((BEAD_OUTER_CAP + 1) * a));
+        return {
+            pEnd: pEnd, qStart: qStart, rc: BEAD_RADIUS * a,
+            pOuter: BEAD_OUTER_CAP * a * sp, pInner: a * sp,
+            qOuter: BEAD_OUTER_CAP * a * sq, qInner: a * sq
+        };
+    }
+
+    function capFactor(t) {
+        return t <= 0 ? 1 : Math.sqrt(Math.max(0, 1 - t * t));
+    }
+
+    function beadHalf(g, y) {
+        var b = g.beads;
+        var a = g.a;
+        var h = 0;
+        var t;
+        if (y >= 0 && y <= b.pEnd) {
+            t = 1;
+            if (y < b.pOuter) t = capFactor((b.pOuter - y) / b.pOuter);
+            if (y > b.pEnd - b.pInner) t = Math.min(t, capFactor((y - (b.pEnd - b.pInner)) / b.pInner));
+            h = Math.max(h, a * t);
+        }
+        if (y >= b.qStart && y <= g.T) {
+            t = 1;
+            if (y > g.T - b.qOuter) t = capFactor((y - (g.T - b.qOuter)) / b.qOuter);
+            if (y < b.qStart + b.qInner) t = Math.min(t, capFactor((b.qStart + b.qInner - y) / b.qInner));
+            h = Math.max(h, a * t);
+        }
+        var dy = y - g.yc;
+        if (Math.abs(dy) < b.rc) h = Math.max(h, Math.sqrt(b.rc * b.rc - dy * dy));
+        return h;
+    }
+
     function chromHalf(g, y) {
+        if (g.beads) return beadHalf(g, y);
         var a = g.a;
         var st = g.style;
         var w = 1;
-        if (g.stalk) {
-            var e = Math.min(a * 0.5, (g.stalk[1] - g.stalk[0]) / 3);
-            w = st.knob + (st.stalk - st.knob) * smoothstep((y - (g.stalk[0] - e / 2)) / e)
-                + (1 - st.stalk) * smoothstep((y - (g.stalk[1] - e / 2)) / e);
-        }
         var t;
         if (st.bulge > 0) {
             t = y < g.yc ? y / g.yc : (y - g.yc) / g.qLen;
@@ -268,13 +316,8 @@ try {
         var u = Math.abs(y - g.yc);
         var reach = y < g.yc ? g.reachP : g.reachQ;
         if (u < reach) {
-            if (st.cusp) {
-                t = (reach - u) / a;
-                w *= Math.sqrt(1 - t * t);
-            } else {
-                t = (1 + Math.cos(Math.PI * u / reach)) / 2;
-                w *= 1 - (1 - st.neck) * Math.pow(t, st.bell);
-            }
+            t = (1 + Math.cos(Math.PI * u / reach)) / 2;
+            w *= 1 - (1 - st.neck) * Math.pow(t, st.bell);
         }
         return Math.max(0, a * w);
     }
@@ -283,7 +326,9 @@ try {
     function chromAxis(g, y, o) {
         if (o.chromatids === 1) return 0;
         var a = g.a;
-        var offArm = a + o.gap / 2;
+        var offArm = a + g.gap / 2;
+        // 기하학적 모양은 막대 두 개가 나란히 선다 (동원체 원도 따로)
+        if (g.beads) return offArm + Math.abs(y - g.yc) * Math.tan(o.splay * Math.PI / 180);
         var offCen = a * g.style.neck * 0.9;
         var u = Math.abs(y - g.yc);
         // 짧은 팔(달린 염색체 p, Y p)에서는 끝까지 수렴하지 않게 팔 길이의 절반 남짓으로 줄인다
@@ -295,17 +340,25 @@ try {
         var ys = [0, g.T];
         var a = g.a;
         var k;
-        for (k = 1; k <= 8; k++) {
-            var th = k / 8 * Math.PI / 2;
-            ys.push(g.ryT * (1 - Math.cos(th)));
-            ys.push(g.T - g.ryB * (1 - Math.cos(th)));
-        }
-        for (k = -6; k <= 6; k++) ys.push(g.yc + k / 6 * (k < 0 ? g.reachP : g.reachQ));
-        if (g.stalk) {
-            var e = Math.min(a * 0.5, (g.stalk[1] - g.stalk[0]) / 3);
-            for (var edge = 0; edge < 2; edge++) {
-                for (k = -3; k <= 3; k++) ys.push(g.stalk[edge] + k / 3 * e);
+        var th;
+        if (g.beads) {
+            var b = g.beads;
+            for (k = 1; k <= 8; k++) {
+                th = k / 8 * Math.PI / 2;
+                ys.push(b.pOuter * (1 - Math.cos(th)));
+                ys.push(g.T - b.qOuter * (1 - Math.cos(th)));
+                ys.push(b.pEnd - b.pInner * (1 - Math.sin(th)));
+                ys.push(b.qStart + b.qInner * (1 - Math.sin(th)));
             }
+            for (k = -12; k <= 12; k++) ys.push(g.yc + b.rc * Math.sin(k / 12 * Math.PI / 2));
+            for (var yy = b.pEnd - b.pInner; yy < b.qStart + b.qInner; yy += a / 8) ys.push(yy);
+        } else {
+            for (k = 1; k <= 8; k++) {
+                th = k / 8 * Math.PI / 2;
+                ys.push(g.ryT * (1 - Math.cos(th)));
+                ys.push(g.T - g.ryB * (1 - Math.cos(th)));
+            }
+            for (k = -6; k <= 6; k++) ys.push(g.yc + k / 6 * (k < 0 ? g.reachP : g.reachQ));
         }
         if (g.style.bulge > 0 || o.chromatids === 2) {
             for (var y = a * 0.8; y < g.T; y += a * 0.8) ys.push(y);
@@ -344,16 +397,23 @@ try {
         return pts;
     }
 
-    // 밴드 단계: 1~4 gpos25~100, 5 변이 이질염색질. 0(밝음)·6(자루)·7(동원체)는 칠하지 않는다
+    // 밴드 단계: 1~4 gpos25~100, 5 변이 이질염색질. 0(밝음)·6(자루)·7(동원체)는 칠하지 않는다.
+    // 기하학적 모양은 진한 띠(gpos75·100)만 한 색 줄로 그린다 (단계 4로 통일)
     function chromBands(g) {
         var runs = [];
+        var binary = g.style.binaryBands;
+        function level(ch) {
+            var lev = ch.charCodeAt(0) - 48;
+            if (binary) return (lev === 3 || lev === 4) ? 4 : 0;
+            return lev;
+        }
         function addArm(str, y0, len) {
             var n = str.length;
             var i = 0;
             while (i < n) {
                 var j = i;
-                while (j + 1 < n && str.charAt(j + 1) === str.charAt(i)) j++;
-                var lev = str.charCodeAt(i) - 48;
+                var lev = level(str.charAt(i));
+                while (j + 1 < n && level(str.charAt(j + 1)) === lev) j++;
                 if (lev >= 1 && lev <= 5) runs.push({ y0: y0 + len * i / n, y1: y0 + len * (j + 1) / n, lev: lev });
                 i = j + 1;
             }
@@ -443,21 +503,21 @@ try {
 
 
     var PREF_KEY = "ObjectKaryotype/settings";
-    var SETTINGS_TAG = "v2";
-    var SETTINGS_LENGTH = 19;
+    var SETTINGS_TAG = "v3";
+    var SETTINGS_LENGTH = 20;
     var MM = 2.834645669;
     var ENG_FONT_NAME = "GSMediumB1";
     var ENG_BASELINE_PT = 0.5;
     var PREVIEW_NAME = "Karyotype_Preview";
     var LABEL_WIDTH = 120;
     var SLIDER_WIDTH = 196;
-    var BASE_WIDTH = 7;            // 분체 너비 (단위: 1번 염색체 길이 100)
-    var CHROMATID_GAP = 0.8;       // 두 분체 사이 (같은 단위)
+    var BASE_WIDTH = 7;            // 분체 너비 기준값 (단위: 1번 염색체 길이 100). 모양마다 widthScale을 곱한다
+    var OUTLINE_PT = 0.5;          // 윤곽선 판의 선 두께
     var KARY_CODES = ["normal", "down", "klinefelter", "turner", "cridu"];
     var KARY_NAMES = ["정상", "다운 증후군 (21번 3개)", "클라인펠터 증후군 (XXY)", "터너 증후군 (X0)", "고양이 울음 증후군 (5p−)"];
     var SHAPE_NAMES = ["기하학적 (둥근 사각형)", "중간", "실제에 가까운 모양"];
     var COLORS = [
-        { name: "검정", cmyk: [0, 0, 0, 100], rgb: [35, 31, 32] },
+        { name: "K (검정·회색)", cmyk: [0, 0, 0, 100], rgb: [35, 31, 32], gray: true },
         { name: "파랑", cmyk: [85, 65, 30, 10], rgb: [58, 88, 130] },
         { name: "청록", cmyk: [80, 15, 25, 0], rgb: [20, 160, 185] },
         { name: "보라", cmyk: [65, 75, 10, 0], rgb: [115, 80, 150] }
@@ -470,6 +530,8 @@ try {
     var SHADE_STOPS = [[0, 0, 80], [20, 0, 35], [42, 1, 25], [50, 1, 35], [58, 1, 25], [80, 0, 35], [100, 0, 80]];
     var SHADE_NAME = "Karyotype shade";
     var SHADE_RANGE = [0, 100];
+    var K_RANGE = [0, 100];
+    var RENDER_NAMES = ["평면 (단색)", "윤곽선 (흰 바탕)", "입체"];
     var THICK_RANGE = [50, 200];
     var SPLAY_RANGE = [0, 15];
     var MARGIN_RANGE = [0, 30];
@@ -500,10 +562,11 @@ try {
     var shapeIdx = 2;
     var gbandOn = false;
     var chromatidCount = 2;
-    var shadeOn = false;
+    var renderIdx = 0;
     var shadePct = 70;
     var colorIdx = 0;
-    var splayDeg = 0;
+    var kPct = 100;
+    var splayDeg = SPLAY_PRESET[shapeIdx];
     var thickPct = 100;
     var marginMm = 4;
     var pairGapMm = 1.5;
@@ -557,15 +620,18 @@ try {
     var renderRow = shapePanel.add("group");
     renderRow.alignChildren = ["left", "center"];
     renderRow.add("statictext", undefined, "표현:").preferredSize.width = LABEL_WIDTH;
-    var renderRadios = [renderRow.add("radiobutton", undefined, "평면 (단색)"), renderRow.add("radiobutton", undefined, "입체")];
-    var shadeRow = addValueRow(shapePanel, "입체 강도", "%", shadePct, SHADE_RANGE[0], SHADE_RANGE[1], 5, 0);
-    shadeRow.input.helpTip = "입체 음영의 진하기 (입체일 때). 100이 가장 진하다";
+    var renderRadios = [];
+    for (var rn = 0; rn < RENDER_NAMES.length; rn++) renderRadios.push(renderRow.add("radiobutton", undefined, RENDER_NAMES[rn]));
     var colorRow = shapePanel.add("group");
     colorRow.alignChildren = ["left", "center"];
     colorRow.add("statictext", undefined, "색:").preferredSize.width = LABEL_WIDTH;
     var colorNames = [];
     for (var cn = 0; cn < COLORS.length; cn++) colorNames.push(COLORS[cn].name);
     var colorList = colorRow.add("dropdownlist", undefined, colorNames);
+    var kRow = addValueRow(shapePanel, "농도 K", "%", kPct, K_RANGE[0], K_RANGE[1], 10, 0);
+    kRow.input.helpTip = "K 색일 때 채움(윤곽선 판은 선) 농도. 100 = 검정";
+    var shadeRow = addValueRow(shapePanel, "입체 강도", "%", shadePct, SHADE_RANGE[0], SHADE_RANGE[1], 5, 0);
+    shadeRow.input.helpTip = "입체 음영의 진하기 (입체일 때). 100이 가장 진하다";
     var splayRow = addValueRow(shapePanel, "분체 벌림", "°", splayDeg, SPLAY_RANGE[0], SPLAY_RANGE[1], 0.5, 1);
     splayRow.input.helpTip = "0이면 나란히, 키우면 X자로 벌어진다 (분체 2개일 때)";
     var thickRow = addValueRow(shapePanel, "굵기", "%", thickPct, THICK_RANGE[0], THICK_RANGE[1], 5, 0);
@@ -595,7 +661,7 @@ try {
     shapeList.selection = shapeIdx;
     colorList.selection = colorIdx;
     chromatidRadios[chromatidCount - 1].value = true;
-    renderRadios[shadeOn ? 1 : 0].value = true;
+    renderRadios[renderIdx].value = true;
     gbandCheck.value = gbandOn;
     previewCheck.value = previewEnabled;
     syncSex();
@@ -622,6 +688,9 @@ try {
     shapeList.onChange = function() {
         if (shapeList.selection === null) return;
         shapeIdx = shapeList.selection.index;
+        // 모양마다 어울리는 분체 벌림으로 되돌린다 (실제 모양은 살짝 벌어진 X자)
+        splayDeg = SPLAY_PRESET[shapeIdx];
+        setRowValue(splayRow, splayDeg);
         updatePreview();
     };
     for (var cr = 0; cr < chromatidRadios.length; cr++) {
@@ -632,15 +701,17 @@ try {
     gbandCheck.onClick = function() { gbandOn = gbandCheck.value; updatePreview(); };
     for (var rr = 0; rr < renderRadios.length; rr++) {
         renderRadios[rr].onClick = (function(index) {
-            return function() { shadeOn = index === 1; syncEnabled(); updatePreview(); };
+            return function() { renderIdx = index; syncEnabled(); updatePreview(); };
         })(rr);
     }
     colorList.onChange = function() {
         if (colorList.selection === null) return;
         colorIdx = colorList.selection.index;
+        syncEnabled();
         updatePreview();
     };
     bindValueRow(splayRow, function() { return splayDeg; }, function(v) { splayDeg = v; });
+    bindValueRow(kRow, function() { return kPct; }, function(v) { kPct = v; });
     bindValueRow(shadeRow, function() { return shadePct; }, function(v) { shadePct = v; });
     bindValueRow(thickRow, function() { return thickPct; }, function(v) { thickPct = v; });
     bindValueRow(marginRow, function() { return marginMm; }, function(v) { marginMm = v; });
@@ -688,8 +759,10 @@ try {
     function syncEnabled() {
         splayRow.input.enabled = chromatidCount === 2;
         splayRow.slider.enabled = chromatidCount === 2;
-        shadeRow.input.enabled = shadeOn;
-        shadeRow.slider.enabled = shadeOn;
+        shadeRow.input.enabled = renderIdx === 2;
+        shadeRow.slider.enabled = renderIdx === 2;
+        kRow.input.enabled = COLORS[colorIdx].gray === true;
+        kRow.slider.enabled = COLORS[colorIdx].gray === true;
     }
 
     function showListNote() {
@@ -734,7 +807,7 @@ try {
         var thick = thickPct / 100;
         return {
             style: shapeIdx, wc: BASE_WIDTH * thick, chromatids: chromatidCount, splay: splayDeg,
-            gap: CHROMATID_GAP * thick, pairGap: pairGapMm * MM, labelGap: labelGapMm * MM,
+            pairGap: pairGapMm * MM, labelGap: labelGapMm * MM,
             fontSize: fontPt, margin: marginMm * MM
         };
     }
@@ -794,14 +867,17 @@ try {
             if (pts[i][0] < minX) minX = pts[i][0];
             if (pts[i][0] > maxX) maxX = pts[i][0];
         }
-        if (!gbandOn && !shadeOn) {
+        var outlineMode = renderIdx === 1;
+        var shadeMode = renderIdx === 2;
+        if (!gbandOn && !shadeMode) {
             var flat = parent.pathItems.add();
-            writePoly(flat, pts, paint.tint(1));
+            writePoly(flat, pts, paint.tint(outlineMode ? 0 : 1));
+            if (outlineMode) strokeEdge(flat, paint.tint(1));
             return flat;
         }
         var box = parent.groupItems.add();
         var base = box.pathItems.add();
-        writePoly(base, pts, paint.tint(gbandOn ? BASE_TINT : 1));
+        writePoly(base, pts, paint.tint(outlineMode ? 0 : (gbandOn ? BASE_TINT : 1)));
         if (gbandOn) {
             var runs = chromBands(g);
             for (var r = 0; r < runs.length; r++) {
@@ -810,7 +886,7 @@ try {
                 band.fillColor = paint.tint(BASE_TINT + (1 - BASE_TINT) * BAND_DARK[runs[r].lev]);
             }
         }
-        if (shadeOn) {
+        if (shadeMode) {
             var shade = base.duplicate(box, ElementPlacement.PLACEATBEGINNING);
             applyShade(shade);
         }
@@ -818,7 +894,21 @@ try {
             base.duplicate(box, ElementPlacement.PLACEATBEGINNING);
             box.clipped = true;
         }
+        if (outlineMode) {
+            // 클리핑 그룹 밖에 선만 있는 윤곽을 얹는다 (그룹 안에서는 선이 바깥 절반 잘린다)
+            var edge = parent.pathItems.add();
+            writePoly(edge, pts, paint.tint(0));
+            edge.filled = false;
+            strokeEdge(edge, paint.tint(1));
+        }
         return box;
+    }
+
+    function strokeEdge(path, color) {
+        path.stroked = true;
+        path.strokeColor = color;
+        path.strokeWidth = OUTLINE_PT;
+        path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
     }
 
     function writePoly(path, pts, color) {
@@ -832,6 +922,11 @@ try {
     // 색은 문서 색상 모드에 맞춘다. t = 진하기(0~1, 흰색 → 본색)
     function makePaint() {
         var main = COLORS[colorIdx];
+        if (main.gray === true) {
+            // K 색은 농도(K %)로 회색~검정을 만든다. RGB 문서에서는 같은 밝기의 회색
+            var k = kPct / 100;
+            main = { cmyk: [0, 0, 0, kPct], rgb: [255 - (255 - 35) * k, 255 - (255 - 31) * k, 255 - (255 - 32) * k] };
+        }
         var cmyk = doc.documentColorSpace === DocumentColorSpace.CMYK;
         var cache = {};
         return {
@@ -1008,6 +1103,12 @@ try {
         };
     }
 
+    function setRowValue(controls, value) {
+        value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+        controls.input.text = formatNumber(value, controls.decimals);
+        try { controls.slider.value = value; } catch (e) {}
+    }
+
     function parseNumber(text) {
         var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
         return isNaN(value) ? null : value;
@@ -1048,8 +1149,8 @@ try {
             karyIdx, sexIdx, shapeIdx,
             gbandOn ? "1" : "0",
             chromatidCount,
-            shadeOn ? "1" : "0",
-            colorIdx, shadePct, splayDeg, thickPct, marginMm, pairGapMm, labelGapMm, fontPt,
+            renderIdx,
+            colorIdx, kPct, shadePct, splayDeg, thickPct, marginMm, pairGapMm, labelGapMm, fontPt,
             offsetXmm, offsetYmm,
             previewEnabled ? "1" : "0"
         ];
@@ -1068,18 +1169,19 @@ try {
         shapeIdx = restoreNumber(p[4], shapeIdx, [0, SHAPE_NAMES.length - 1], 1);
         gbandOn = p[5] === "1";
         chromatidCount = restoreNumber(p[6], chromatidCount, [1, 2], 1);
-        shadeOn = p[7] === "1";
+        renderIdx = restoreNumber(p[7], renderIdx, [0, RENDER_NAMES.length - 1], 1);
         colorIdx = restoreNumber(p[8], colorIdx, [0, COLORS.length - 1], 1);
-        shadePct = restoreNumber(p[9], shadePct, SHADE_RANGE, 5);
-        splayDeg = restoreNumber(p[10], splayDeg, SPLAY_RANGE, 0.5);
-        thickPct = restoreNumber(p[11], thickPct, THICK_RANGE, 5);
-        marginMm = restoreNumber(p[12], marginMm, MARGIN_RANGE, 0.5);
-        pairGapMm = restoreNumber(p[13], pairGapMm, GAP_RANGE, 0.1);
-        labelGapMm = restoreNumber(p[14], labelGapMm, GAP_RANGE, 0.1);
-        fontPt = restoreNumber(p[15], fontPt, FONT_RANGE, 0.5);
-        offsetXmm = restoreNumber(p[16], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
-        offsetYmm = restoreNumber(p[17], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
-        previewEnabled = p[18] === "1";
+        kPct = restoreNumber(p[9], kPct, K_RANGE, 10);
+        shadePct = restoreNumber(p[10], shadePct, SHADE_RANGE, 5);
+        splayDeg = restoreNumber(p[11], splayDeg, SPLAY_RANGE, 0.5);
+        thickPct = restoreNumber(p[12], thickPct, THICK_RANGE, 5);
+        marginMm = restoreNumber(p[13], marginMm, MARGIN_RANGE, 0.5);
+        pairGapMm = restoreNumber(p[14], pairGapMm, GAP_RANGE, 0.1);
+        labelGapMm = restoreNumber(p[15], labelGapMm, GAP_RANGE, 0.1);
+        fontPt = restoreNumber(p[16], fontPt, FONT_RANGE, 0.5);
+        offsetXmm = restoreNumber(p[17], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
+        offsetYmm = restoreNumber(p[18], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
+        previewEnabled = p[19] === "1";
     }
 
     function restoreNumber(text, fallback, range, step) {
