@@ -15,8 +15,8 @@ try {
 //   - 핵형: 정상 / 다운(21번 3개) / 클라인펠터(XXY) / 터너(X0) / 고양이 울음(5번 한 쪽 5p15.2 끝까지 결실).
 //   - 모양: 기하학적(둥근 사각형) · 중간 · 실제에 가까운 모양. 염색 분체 1개 또는 2개(벌림 가능). G 밴드 유무.
 //   - 표현: 평면 단색 또는 입체(투명도 그라데이션 음영).
-//   - 크기·p/q 비율·G 밴드는 UCSC hg38(GRCh38) cytoBand: 염색체 길이, 동원체 위치, 밴드 단계(gpos25~100·gvar).
-//     1번 염색체 길이를 100으로 두고 나머지는 염기쌍 길이에 비례한다. 밴드는 염색체 길이의 1/64 칸으로 모았다.
+//   - 크기와 p/q 비율: RERF(방사선영향연구소) Giemsa 핵형 표 2의 상대 길이(p:q). 1번 염색체 길이를 100으로 둔다.
+//     G 밴드 무늬: UCSC hg38 cytoBand의 밴드 단계(gpos25~100·gvar·stalk)를 각 팔 길이의 1/64 칸으로 모은 것.
 //   - 사각형 크기에 맞춰 배치하고, 남는 가로·세로는 열·줄 간격으로 나눠 사각형을 채운다.
 
 (function() {
@@ -27,35 +27,36 @@ try {
 
     // ==== 순수 기하 시작 (tests/check-karyotype.js 가 이 구간을 그대로 읽는다) ====
     var KARYO_ORDER = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"];
+    // 염색체: [상대 길이, p팔 상대 길이(RERF Giemsa 표 2), p팔 밴드, q팔 밴드(UCSC hg38, 팔을 1/64 칸으로 나눈 단계)]
     var KARYO_DATA = {
-        "1": [248.96, 123.4, "01020101101030112244441222230210", "55555020111021104141010343011320"],
-        "2": [242.19, 93.9, "0102131122201424120144007", "702102112114241130320012313010430233010"],
-        "3": [198.3, 90.9, "21100342222113001110120131127", "75503112221001010440211440221301300"],
-        "4": [190.21, 50, "00002031024410207", "70144113111123231220023112144311010441441324101"],
-        "5": [181.54, 48.8, "00012024240010027", "70013322202234430142431144004101003302024420100"],
-        "6": [170.81, 59.8, "0112113331210110044240", "744200222210343340001344422211312202002100"],
-        "7": [159.35, 60.1, "010442241022331331323207", "7002200344322231000233022130012101320100"],
-        "8": [145.14, 45.2, "03200144201213331107", "70102222211143333044300100231442210121013100"],
-        "9": [138.39, 43, "01002320134404420110", "75555555501102211202110110343011033101100000"],
-        "10": [133.8, 39.8, "0003320023212201007", "700102444204440021024413221121144303301002100"],
-        "11": [135.09, 53.4, "0122211200342320044410037", "733110102212444214400443444110001101200"],
-        "12": [133.28, 35.5, "00101304424422107", "74444010011330210330034422410332122001212002200"],
-        "13": [114.36, 17.7, "5556665557", "700101002133100022001440132034302044443044300024124100"],
-        "14": [107.04, 17.2, "5566655557", "700034444211344201440010232012012100044224410102221100"],
-        "15": [101.99, 19, "555666555557", "7000210103333000333003333111001110010220022100022100"],
-        "16": [90.34, 36.8, "00000121021022200222000007", "75555550000221244444410021233300210010"],
-        "17": [83.26, 25.1, "0012200023331000077", "770000122221110001100333332331120033300000000"],
-        "18": [80.37, 18.5, "001222011000777", "7700000344444100133332000133330022004444001110000"],
-        "19": [58.62, 26.2, "00000000111111011100005555577", "77555500001111111100111000011000111"],
-        "20": [64.44, 28.1, "0000033331003333330001000077", "770001110013333111110003333301210000"],
-        "21": [46.71, 12, "5555666665555557", "700034444444443000133333310000022100122210000000"],
-        "22": [50.82, 15, "5555566666665555577", "777000001100022222000222222200002222000001200"],
-        "X": [156.04, 61, "0010222120340442023201007", "702001244414413201003330044411003143000"],
-        "Y": [57.23, 10.4, "100000000000", "0022222100222220005555555555555555555555555555555555"]
+        "1": [9.11, 4.43, "01020101101030112244441222230210", "55555020111021104141010343011320"],
+        "2": [8.61, 3.35, "0102131122201424120144007", "702102112114241130320012313010430233010"],
+        "3": [6.97, 3.30, "21100342222113001110120131127", "75503112221001010440211440221301300"],
+        "4": [6.49, 1.80, "00002031024410207", "70144113111123231220023112144311010441441324101"],
+        "5": [6.21, 1.66, "00012024240010027", "70013322202234430142431144004101003302024420100"],
+        "6": [6.07, 2.30, "0112113331210110044240", "744200222210343340001344422211312202002100"],
+        "7": [5.43, 2.01, "010442241022331331323207", "7002200344322231000233022130012101320100"],
+        "8": [4.94, 1.62, "03200144201213331107", "70102222211143333044300100231442210121013100"],
+        "9": [4.78, 1.56, "01002320134404420110", "75555555501102211202110110343011033101100000"],
+        "10": [4.80, 1.55, "0003320023212201007", "700102444204440021024413221121144303301002100"],
+        "11": [4.82, 1.95, "0122211200342320044410037", "733110102212444214400443444110001101200"],
+        "12": [4.50, 1.23, "00101304424422107", "74444010011330210330034422410332122001212002200"],
+        "13": [3.87, 0.64, "5556665557", "700101002133100022001440132034302044443044300024124100"],
+        "14": [3.74, 0.69, "5566655557", "700034444211344201440010232012012100044224410102221100"],
+        "15": [3.30, 0.58, "555666555557", "7000210103333000333003333111001110010220022100022100"],
+        "16": [3.14, 1.33, "00000121021022200222000007", "75555550000221244444410021233300210010"],
+        "17": [2.97, 0.94, "0012200023331000077", "770000122221110001100333332331120033300000000"],
+        "18": [2.78, 0.74, "001222011000777", "7700000344444100133332000133330022004444001110000"],
+        "19": [2.46, 1.10, "00000000111111011100005555577", "77555500001111111100111000011000111"],
+        "20": [2.25, 1.03, "0000033331003333330001000077", "770001110013333111110003333301210000"],
+        "21": [1.70, 0.49, "5555666665555557", "700034444444443000133333310000022100122210000000"],
+        "22": [1.80, 0.51, "5555566666665555577", "777000001100022222000222222200002222000001200"],
+        "X": [5.16, 1.94, "0010222120340442023201007", "702001244414413201003330044411003143000"],
+        "Y": [2.21, 0.51, "100000000000", "0022222100222220005555555555555555555555555555555555"]
     };
-    var KARYO_L1 = 248.96;       // 1번 염색체 길이(Mb) = 기준 길이 100 단위
+    var KARYO_L1 = 9.11;         // 1번 염색체 상대 길이 = 기준 길이 100 단위
     var KARYO_UNIT = 100;
-    var CRI_CUT_MB = 15.0;       // 5p15.2 끝(hg38). 고양이 울음 증후군(5p-)은 여기까지 잘려 나간다
+    var CRI_CUT_FRAC = 0.307;    // 5p15.2 끝(hg38 15.0 Mb)이 p팔(48.8 Mb)에서 차지하는 비율. 고양이 울음 증후군(5p-)은 여기까지 잘려 나간다
 
     // cap: 끝 모서리 가로 반지름 비율(1 = 반원), capY: 세로 반지름 배율, neck: 동원체 목 너비 비율
     // cusp: 알약 두 개를 겹친 V자 홈, notchLen: 부드러운 홈의 반 길이(a 배), bell: 홈 곡선 지수, bulge: 팔 가운데 부풂
@@ -219,7 +220,7 @@ try {
         var pLen = d[1] * f;
         var qLen = (d[0] - d[1]) * f;
         if (variant === "del5p") {
-            var drop = Math.round(pStr.length * Math.min(CRI_CUT_MB / d[1], 0.9));
+            var drop = Math.round(pStr.length * Math.min(CRI_CUT_FRAC, 0.9));
             pLen = pLen * (1 - drop / pStr.length);
             pStr = pStr.substring(drop);
         }
@@ -442,8 +443,8 @@ try {
 
 
     var PREF_KEY = "ObjectKaryotype/settings";
-    var SETTINGS_TAG = "v1";
-    var SETTINGS_LENGTH = 18;
+    var SETTINGS_TAG = "v2";
+    var SETTINGS_LENGTH = 19;
     var MM = 2.834645669;
     var ENG_FONT_NAME = "GSMediumB1";
     var ENG_BASELINE_PT = 0.5;
@@ -464,9 +465,11 @@ try {
     // 밴드 단계(1~4 = gpos25~100, 5 = 변이 이질염색질)별 진하기와 밑바탕 진하기
     var BAND_DARK = [0, 0.30, 0.52, 0.76, 1.0, 0.62];
     var BASE_TINT = 0.16;
-    // 입체 음영: [위치%, 검정(0)/흰색(1), 불투명도%]. 좌우 대칭이라 오른쪽 분체를 그대로 따라 그려도 일관된다
-    var SHADE_STOPS = [[0, 0, 55], [20, 0, 20], [42, 1, 14], [50, 1, 20], [58, 1, 14], [80, 0, 20], [100, 0, 55]];
+    // 입체 음영: [위치%, 검정(0)/흰색(1), 불투명도%]. 좌우 대칭이라 오른쪽 분체를 그대로 따라 그려도 일관된다.
+    // 가장 센 값으로 만들어 두고 입체 강도(%)는 덮는 경로의 불투명도로 줄인다 (그라데이션을 강도마다 만들지 않으려고)
+    var SHADE_STOPS = [[0, 0, 80], [20, 0, 35], [42, 1, 25], [50, 1, 35], [58, 1, 25], [80, 0, 35], [100, 0, 80]];
     var SHADE_NAME = "Karyotype shade";
+    var SHADE_RANGE = [0, 100];
     var THICK_RANGE = [50, 200];
     var SPLAY_RANGE = [0, 15];
     var MARGIN_RANGE = [0, 30];
@@ -498,6 +501,7 @@ try {
     var gbandOn = false;
     var chromatidCount = 2;
     var shadeOn = false;
+    var shadePct = 70;
     var colorIdx = 0;
     var splayDeg = 0;
     var thickPct = 100;
@@ -554,6 +558,8 @@ try {
     renderRow.alignChildren = ["left", "center"];
     renderRow.add("statictext", undefined, "표현:").preferredSize.width = LABEL_WIDTH;
     var renderRadios = [renderRow.add("radiobutton", undefined, "평면 (단색)"), renderRow.add("radiobutton", undefined, "입체")];
+    var shadeRow = addValueRow(shapePanel, "입체 강도", "%", shadePct, SHADE_RANGE[0], SHADE_RANGE[1], 5, 0);
+    shadeRow.input.helpTip = "입체 음영의 진하기 (입체일 때). 100이 가장 진하다";
     var colorRow = shapePanel.add("group");
     colorRow.alignChildren = ["left", "center"];
     colorRow.add("statictext", undefined, "색:").preferredSize.width = LABEL_WIDTH;
@@ -626,7 +632,7 @@ try {
     gbandCheck.onClick = function() { gbandOn = gbandCheck.value; updatePreview(); };
     for (var rr = 0; rr < renderRadios.length; rr++) {
         renderRadios[rr].onClick = (function(index) {
-            return function() { shadeOn = index === 1; updatePreview(); };
+            return function() { shadeOn = index === 1; syncEnabled(); updatePreview(); };
         })(rr);
     }
     colorList.onChange = function() {
@@ -635,6 +641,7 @@ try {
         updatePreview();
     };
     bindValueRow(splayRow, function() { return splayDeg; }, function(v) { splayDeg = v; });
+    bindValueRow(shadeRow, function() { return shadePct; }, function(v) { shadePct = v; });
     bindValueRow(thickRow, function() { return thickPct; }, function(v) { thickPct = v; });
     bindValueRow(marginRow, function() { return marginMm; }, function(v) { marginMm = v; });
     bindValueRow(pairGapRow, function() { return pairGapMm; }, function(v) { pairGapMm = v; });
@@ -681,6 +688,8 @@ try {
     function syncEnabled() {
         splayRow.input.enabled = chromatidCount === 2;
         splayRow.slider.enabled = chromatidCount === 2;
+        shadeRow.input.enabled = shadeOn;
+        shadeRow.slider.enabled = shadeOn;
     }
 
     function showListNote() {
@@ -888,6 +897,7 @@ try {
         path.filled = true;
         path.fillColor = gradientColor;
         path.rotate(0 - path.fillColor.angle, false, false, true, false, Transformation.CENTER);
+        path.opacity = shadePct;
     }
 
     // 번호는 영문·숫자라 GSMediumB1(기준선 +0.5pt). 글자 가운데를 x, 기준선을 baseline에 맞춘다
@@ -1039,7 +1049,7 @@ try {
             gbandOn ? "1" : "0",
             chromatidCount,
             shadeOn ? "1" : "0",
-            colorIdx, splayDeg, thickPct, marginMm, pairGapMm, labelGapMm, fontPt,
+            colorIdx, shadePct, splayDeg, thickPct, marginMm, pairGapMm, labelGapMm, fontPt,
             offsetXmm, offsetYmm,
             previewEnabled ? "1" : "0"
         ];
@@ -1060,15 +1070,16 @@ try {
         chromatidCount = restoreNumber(p[6], chromatidCount, [1, 2], 1);
         shadeOn = p[7] === "1";
         colorIdx = restoreNumber(p[8], colorIdx, [0, COLORS.length - 1], 1);
-        splayDeg = restoreNumber(p[9], splayDeg, SPLAY_RANGE, 0.5);
-        thickPct = restoreNumber(p[10], thickPct, THICK_RANGE, 5);
-        marginMm = restoreNumber(p[11], marginMm, MARGIN_RANGE, 0.5);
-        pairGapMm = restoreNumber(p[12], pairGapMm, GAP_RANGE, 0.1);
-        labelGapMm = restoreNumber(p[13], labelGapMm, GAP_RANGE, 0.1);
-        fontPt = restoreNumber(p[14], fontPt, FONT_RANGE, 0.5);
-        offsetXmm = restoreNumber(p[15], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
-        offsetYmm = restoreNumber(p[16], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
-        previewEnabled = p[17] === "1";
+        shadePct = restoreNumber(p[9], shadePct, SHADE_RANGE, 5);
+        splayDeg = restoreNumber(p[10], splayDeg, SPLAY_RANGE, 0.5);
+        thickPct = restoreNumber(p[11], thickPct, THICK_RANGE, 5);
+        marginMm = restoreNumber(p[12], marginMm, MARGIN_RANGE, 0.5);
+        pairGapMm = restoreNumber(p[13], pairGapMm, GAP_RANGE, 0.1);
+        labelGapMm = restoreNumber(p[14], labelGapMm, GAP_RANGE, 0.1);
+        fontPt = restoreNumber(p[15], fontPt, FONT_RANGE, 0.5);
+        offsetXmm = restoreNumber(p[16], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
+        offsetYmm = restoreNumber(p[17], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
+        previewEnabled = p[18] === "1";
     }
 
     function restoreNumber(text, fallback, range, step) {

@@ -80,11 +80,15 @@ assert.strictEqual(subset[2][0].col, 0);
 assert.strictEqual(subset[2][1].col, 1);
 assert.strictEqual(core.buildCells(["Y"], "normal", "F").length, 0, "no Y in a female karyotype");
 
-// ---- 데이터: UCSC hg38 값과 밴드 문자열
+// ---- 데이터: RERF Giemsa 표 2(상대 길이·p:q)와 UCSC hg38 밴드 문자열
 assert.strictEqual(Object.keys(core.KARYO_DATA).length, 24);
-close(core.KARYO_DATA["1"][0], 248.96, 0.001, "chr1 length");
-close(core.KARYO_DATA["1"][1], 123.4, 0.001, "chr1 centromere");
-close(core.KARYO_DATA["Y"][0], 57.23, 0.001, "chrY length");
+close(core.KARYO_DATA["1"][0], 9.11, 0.001, "chr1 relative length");
+close(core.KARYO_DATA["1"][1], 4.43, 0.001, "chr1 p arm");
+close(core.KARYO_DATA["Y"][0], 2.21, 0.001, "chrY relative length");
+close(core.KARYO_DATA["Y"][1], 0.51, 0.001, "chrY p arm");
+// RERF 표의 CI는 개체별 평균이라 p/전체와 0.3%p 안에서 맞는다
+close(core.KARYO_DATA["13"][1] / core.KARYO_DATA["13"][0], 0.166, 0.003, "chr13 CI 16.6");
+close(core.KARYO_DATA["16"][1] / core.KARYO_DATA["16"][0], 0.425, 0.003, "chr16 CI 42.5");
 const ACRO = ["13", "14", "15", "21", "22"];
 ALL.forEach((id) => {
   const d = core.KARYO_DATA[id];
@@ -100,15 +104,17 @@ assert.ok(core.KARYO_DATA["X"][0] > core.KARYO_DATA["8"][0] && core.KARYO_DATA["
 const base = { style: 2, wc: 7, chromatids: 1, splay: 0, gap: 0.8 };
 const g1 = core.chromGeom("1", "", base);
 close(g1.T, 100, 0.0001, "chr1 length = 100 units");
-close(g1.pLen / g1.T, 123.4 / 248.96, 0.0001, "chr1 p ratio");
+close(g1.pLen / g1.T, 4.43 / 9.11, 0.0001, "chr1 p ratio");
 const g13 = core.chromGeom("13", "", base);
-close(g13.pLen / g13.T, 17.7 / 114.36, 0.0001, "chr13 p ratio");
+close(g13.pLen / g13.T, 0.64 / 3.87, 0.0001, "chr13 p ratio");
+close(core.chromGeom("X", "", base).T, 100 * 5.16 / 9.11, 0.0001, "X length from the RERF table");
+close(core.chromGeom("21", "", base).T, 100 * 1.70 / 9.11, 0.0001, "chr21 length from the RERF table");
 assert.ok(g13.stalk && g13.stalk[0] > 0 && g13.stalk[1] < g13.pLen, "chr13 has a stalk inside the p arm");
 assert.strictEqual(core.chromGeom("1", "", base).stalk, null);
 
 const del = core.chromGeom("5", "del5p", base);
 const full5 = core.chromGeom("5", "", base);
-assert.ok(del.pLen < full5.pLen * 0.75 && del.pLen > full5.pLen * 0.55, "5p- loses about p15.2-pter (15 of 48.8 Mb)");
+assert.ok(del.pLen < full5.pLen * 0.75 && del.pLen > full5.pLen * 0.65, "5p- loses about p15.2-pter (15 of 48.8 Mb = 31% of the p arm)");
 close(del.qLen, full5.qLen, 0.0001, "5p- keeps the q arm");
 
 for (let style = 0; style < 3; style++) {
@@ -193,7 +199,7 @@ for (let style = 0; style < 3; style++) {
 }
 
 // ---- 스크립트 규약 (AGENTS.md)
-assert.ok(source.indexOf('var SETTINGS_TAG = "v1"') < source.indexOf("readSettings();"), "settings constants before readSettings()");
+assert.ok(source.indexOf('var SETTINGS_TAG = "v2"') < source.indexOf("readSettings();"), "settings constants before readSettings()");
 assert.ok(/p\.length !== SETTINGS_LENGTH/.test(source), "settings length check");
 assert.strictEqual(source.split("saveSettings();").length - 1, 1, "saveSettings is called only on confirm");
 assert.ok(/okButton\.onClick = function\(\) \{[^}]*saveSettings\(\);/.test(source), "settings saved in the OK handler");
@@ -202,6 +208,8 @@ assert.ok(source.indexOf("bindTabOrder(dlg)") > 0 && source.indexOf("ui_tab_help
 assert.ok(source.indexOf("illu_last_script.txt") > 0, "last-script memo");
 assert.ok(source.indexOf('"scrollbar"') > 0 && source.indexOf("stepdelta") > 0, "scrollbar rows");
 assert.ok(source.indexOf("movePreview(offsetXmm * MM, offsetYmm * MM)") > 0, "movable preview");
+assert.ok(source.indexOf("path.opacity = shadePct") > 0 && /var SHADE_STOPS = \[\[0, 0, 80\]/.test(source), "shade strength scales the overlay opacity");
+assert.ok(/p\[18\] === "1"/.test(source) && source.indexOf("var SETTINGS_LENGTH = 19") > 0, "settings layout v2 has 19 fields");
 assert.ok(source.indexOf("path.rotate(0 - path.fillColor.angle, false, false, true, false, Transformation.CENTER)") > 0, "gradient angle read back");
 assert.ok(source.indexOf("ENG_FONT_NAME") > 0 && source.indexOf("GSMediumB1") > 0, "label font rule");
 // ExtendScript 함정: 게으른 정규식, /= 로 시작하는 정규식 리터럴
