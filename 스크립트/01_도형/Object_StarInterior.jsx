@@ -65,11 +65,14 @@ try {
     var previewGroup = null;
     var sourceWasHidden = source.hidden;
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {shellCount: shellCount, cutDeg: cutDeg, rotationDeg: rotationDeg, contrastK: contrastK, viewX: viewX, viewY: viewY, viewZ: viewZ, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     applySavedSettings();
 
     var LABEL_WIDTH = 66;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
 
     var dlg = new Window("dialog", "별 내부 구조");
     dlg.orientation = "column";
@@ -78,27 +81,27 @@ try {
     dlg.margins = 12;
 
     var optionPanel = addPanel(dlg, "구조");
-    var shellField = addNumberField(optionPanel, "껍질 수", "개", shellCount, 1, 2, 9);
-    var cutField = addNumberField(optionPanel, "절단 각도", "°", cutDeg, 5, 0, 180);
-    var rotationField = addNumberField(optionPanel, "회전", "°", rotationDeg, 5, -180, 180);
+    var shellField = addNumberField(optionPanel, "껍질 수", "개", shellCount, 1, 2, 9, DEFAULTS.shellCount);
+    var cutField = addNumberField(optionPanel, "절단 각도", "°", cutDeg, 5, 0, 180, DEFAULTS.cutDeg);
+    var rotationField = addNumberField(optionPanel, "회전", "°", rotationDeg, 5, -180, 180, DEFAULTS.rotationDeg);
     var axisLineCheck = optionPanel.add("checkbox", undefined, "중심 축 선 표시");
     axisLineCheck.value = axisLineOn;
     // 축 선을 감추면 두 절단면이 붙어 보이므로 왼쪽 면을 어둡게 해 대비를 준다
-    var contrastField = addNumberField(optionPanel, "왼쪽 대비", "K", contrastK, 5, 0, 50);
+    var contrastField = addNumberField(optionPanel, "왼쪽 대비", "K", contrastK, 5, 0, 50, DEFAULTS.contrastK);
     contrastField.row.enabled = !axisLineOn;
 
     var viewPanel = addPanel(dlg, "구를 바라보는 시점");
-    var viewXField = addNumberField(viewPanel, "X축", "°", viewX, 5, -180, 180);
-    var viewYField = addNumberField(viewPanel, "Y축", "°", viewY, 5, -180, 180);
-    var viewZField = addNumberField(viewPanel, "Z축", "°", viewZ, 5, -180, 180);
+    var viewXField = addNumberField(viewPanel, "X축", "°", viewX, 5, -180, 180, DEFAULTS.viewX);
+    var viewYField = addNumberField(viewPanel, "Y축", "°", viewY, 5, -180, 180, DEFAULTS.viewY);
+    var viewZField = addNumberField(viewPanel, "Z축", "°", viewZ, 5, -180, 180, DEFAULTS.viewZ);
     var resetViewButton = viewPanel.add("button", undefined, "시점 리셋");
     resetViewButton.alignment = "right";
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
-        -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetXmm);
     var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
-        -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetYmm);
     // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
     bindOffsetField(offsetXField, true);
     bindOffsetField(offsetYField, false);
@@ -637,7 +640,7 @@ try {
         return panel;
     }
 
-    function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+    function addNumberField(parent, labelText, unit, value, step, minimum, maximum, defaultValue) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
@@ -668,6 +671,13 @@ try {
             slider.value = parsed;
             field.syncing = false;
             commitField(field);
+        };
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        reset.onClick = function() {
+            input.text = formatValue(defaultValue);
+            input.onChange();
         };
         return field;
     }

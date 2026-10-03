@@ -58,6 +58,7 @@ try {
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 100;
     var WIDTH_RANGE = [15, 200];
     // 세로로 쌓은 이동거리(4줄)가 y축 안에 들어오는 높이부터
@@ -100,10 +101,16 @@ try {
         offsetX: 0, offsetY: 0,
         previewOn: true
     };
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {};
+    for (var d = 0; d < NUMBER_KEYS.length; d++) DEFAULTS[NUMBER_KEYS[d]] = options[NUMBER_KEYS[d]];
     applySettings();
     if (rect) {
         options.width = clamp(Math.round((bounds[2] - bounds[0]) / MM * 2) / 2, WIDTH_RANGE[0], WIDTH_RANGE[1]);
         options.height = clamp(Math.round((bounds[1] - bounds[3]) / MM * 2) / 2, HEIGHT_RANGE[0], HEIGHT_RANGE[1]);
+        // 선택한 사각형이 있으면 그 크기가 처음 값이다
+        DEFAULTS.width = options.width;
+        DEFAULTS.height = options.height;
     }
 
     var previewGroup = null;
@@ -203,6 +210,7 @@ try {
         for (var j = 0; j < yKindRadios.length; j++) yKindRadios[j].value = (options.yKind === j);
         rows.yValue.input.enabled = options.pattern === 0;
         rows.yValue.slider.enabled = options.pattern === 0;
+        rows.yValue.reset.enabled = options.pattern === 0;
     }
 
     function bindPatternRadio(radio, index) {
@@ -521,7 +529,10 @@ try {
         slider.stepdelta = spec.step;
         slider.jumpdelta = spec.step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        rows[key] = {input: input, slider: slider, min: spec.range[0], max: spec.range[1], step: spec.step, decimals: spec.decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        rows[key] = {input: input, slider: slider, reset: reset, min: spec.range[0], max: spec.range[1], step: spec.step, decimals: spec.decimals};
         return rows[key];
     }
 
@@ -542,6 +553,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(DEFAULTS[key]); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? options[key] : value);
@@ -561,6 +573,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(DEFAULTS[key]); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? options[key] : value);

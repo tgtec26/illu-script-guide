@@ -97,6 +97,8 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {orbitMm: orbitMm, distanceMm: distanceMm, flatten: flatten, backgroundMm: backgroundMm, stepMm: stepMm, screenMm: screenMm, screenCount: screenCount, sunMm: sunMm, earthMm: earthMm, starMm: starMm, bgCount: bgCount, sourceMm: sourceMm, rotYDeg: rotYDeg, rotXDeg: rotXDeg, rotZDeg: rotZDeg, perspectiveMm: perspectiveMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var layer = findEditableLayer();
@@ -153,12 +155,6 @@ try {
     var rotXRow = addValueRow(viewPanel, "위아래 기울기", "°", rotXDeg, VIEW_RANGE[0], VIEW_RANGE[1], 1, 1);
     rotXRow.input.helpTip = "+면 위에서 내려다본다";
     var rotZRow = addValueRow(viewPanel, "화면 회전", "°", rotZDeg, VIEW_RANGE[0], VIEW_RANGE[1], 1, 1);
-    var viewRows = [rotYRow, rotXRow, rotZRow];
-    for (var vr = 0; vr < viewRows.length; vr++) {
-        var zero = viewRows[vr].input.parent.add("button", undefined, "0");
-        zero.preferredSize.width = RESET_BUTTON_WIDTH;
-        viewRows[vr].reset = zero;
-    }
     var presetRow = viewPanel.add("group");
     presetRow.add("statictext", undefined, "시점 프리셋:").preferredSize.width = LABEL_WIDTH;
     var presetButtons = [];
@@ -218,25 +214,22 @@ try {
     gridCheck.onClick = function() { gridOn = gridCheck.value; updatePreview(); };
     labelsCheck.onClick = function() { labelsOn = labelsCheck.value; updatePreview(); };
     perspectiveCheck.onClick = function() { perspectiveOn = perspectiveCheck.value; syncEnabled(); updatePreview(); };
-    bindValueRow(orbitRow, function() { return orbitMm; }, function(v) { orbitMm = v; });
-    bindValueRow(distanceRow, function() { return distanceMm; }, function(v) { distanceMm = v; });
-    bindValueRow(flattenRow, function() { return flatten; }, function(v) { flatten = v; });
-    bindValueRow(backgroundRow, function() { return backgroundMm; }, function(v) { backgroundMm = v; });
-    bindValueRow(stepRow, function() { return stepMm; }, function(v) { stepMm = v; });
-    bindValueRow(screenRow, function() { return screenMm; }, function(v) { screenMm = v; });
-    bindValueRow(screensRow, function() { return screenCount; }, function(v) { screenCount = v; });
-    bindValueRow(bgCountRow, function() { return bgCount; }, function(v) { bgCount = v; });
-    bindValueRow(starRow, function() { return starMm; }, function(v) { starMm = v; });
-    bindValueRow(sunRow, function() { return sunMm; }, function(v) { sunMm = v; });
-    bindValueRow(earthRow, function() { return earthMm; }, function(v) { earthMm = v; });
-    bindValueRow(sourceRow, function() { return sourceMm; }, function(v) { sourceMm = v; });
-    bindValueRow(rotYRow, function() { return rotYDeg; }, function(v) { rotYDeg = v; });
-    bindValueRow(rotXRow, function() { return rotXDeg; }, function(v) { rotXDeg = v; });
-    bindValueRow(rotZRow, function() { return rotZDeg; }, function(v) { rotZDeg = v; });
-    bindValueRow(perspectiveRow, function() { return perspectiveMm; }, function(v) { perspectiveMm = v; });
-    rotYRow.reset.onClick = function() { setView(0, rotXDeg, rotZDeg, perspectiveOn, perspectiveMm); };
-    rotXRow.reset.onClick = function() { setView(rotYDeg, 0, rotZDeg, perspectiveOn, perspectiveMm); };
-    rotZRow.reset.onClick = function() { setView(rotYDeg, rotXDeg, 0, perspectiveOn, perspectiveMm); };
+    bindValueRow(orbitRow, function() { return orbitMm; }, function(v) { orbitMm = v; }, DEFAULTS.orbitMm);
+    bindValueRow(distanceRow, function() { return distanceMm; }, function(v) { distanceMm = v; }, DEFAULTS.distanceMm);
+    bindValueRow(flattenRow, function() { return flatten; }, function(v) { flatten = v; }, DEFAULTS.flatten);
+    bindValueRow(backgroundRow, function() { return backgroundMm; }, function(v) { backgroundMm = v; }, DEFAULTS.backgroundMm);
+    bindValueRow(stepRow, function() { return stepMm; }, function(v) { stepMm = v; }, DEFAULTS.stepMm);
+    bindValueRow(screenRow, function() { return screenMm; }, function(v) { screenMm = v; }, DEFAULTS.screenMm);
+    bindValueRow(screensRow, function() { return screenCount; }, function(v) { screenCount = v; }, DEFAULTS.screenCount);
+    bindValueRow(bgCountRow, function() { return bgCount; }, function(v) { bgCount = v; }, DEFAULTS.bgCount);
+    bindValueRow(starRow, function() { return starMm; }, function(v) { starMm = v; }, DEFAULTS.starMm);
+    bindValueRow(sunRow, function() { return sunMm; }, function(v) { sunMm = v; }, DEFAULTS.sunMm);
+    bindValueRow(earthRow, function() { return earthMm; }, function(v) { earthMm = v; }, DEFAULTS.earthMm);
+    bindValueRow(sourceRow, function() { return sourceMm; }, function(v) { sourceMm = v; }, DEFAULTS.sourceMm);
+    bindValueRow(rotYRow, function() { return rotYDeg; }, function(v) { rotYDeg = v; }, DEFAULTS.rotYDeg);
+    bindValueRow(rotXRow, function() { return rotXDeg; }, function(v) { rotXDeg = v; }, DEFAULTS.rotXDeg);
+    bindValueRow(rotZRow, function() { return rotZDeg; }, function(v) { rotZDeg = v; }, DEFAULTS.rotZDeg);
+    bindValueRow(perspectiveRow, function() { return perspectiveMm; }, function(v) { perspectiveMm = v; }, DEFAULTS.perspectiveMm);
     for (var pb = 0; pb < presetButtons.length; pb++) {
         presetButtons[pb].onClick = (function(preset) {
             return function() { setView(preset.y, preset.x, preset.z, perspectiveOn, perspectiveMm); };
@@ -270,9 +263,9 @@ try {
         bgSeed = Math.floor(Math.random() * SEED_MAX) + 1;
         updatePreview();
     };
-    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
-    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
-    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
+    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, DEFAULTS.fontPt);
+    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
+    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -363,6 +356,7 @@ try {
     function setRowEnabled(controls, enabled) {
         controls.input.enabled = enabled;
         controls.slider.enabled = enabled;
+        controls.reset.enabled = enabled;
     }
 
     // -------------------------------------------------------
@@ -828,11 +822,14 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
     }
 
     // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
-    function bindValueRow(controls, getter, setter) {
+    function bindValueRow(controls, getter, setter, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             controls.input.text = formatNumber(value, controls.decimals);
@@ -843,6 +840,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -850,7 +848,7 @@ try {
     }
 
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM;
@@ -863,6 +861,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

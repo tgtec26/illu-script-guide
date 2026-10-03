@@ -357,6 +357,9 @@ try {
             bar.stepdelta = ctl.step;
             bar.jumpdelta = ctl.step * 10;
             bar.preferredSize.width = 196;
+            var reset = row.add("button", undefined, "R");
+            reset.preferredSize.width = 34;
+            reset.helpTip = "처음 값으로 되돌리기";
             function apply(value) {
                 if (isNaN(value)) value = o[ctl.key];
                 value = Math.round(value / ctl.step) * ctl.step;
@@ -375,6 +378,8 @@ try {
             }
             bar.onChanging = function() { apply(bar.value); };
             bar.onChange = function() { apply(bar.value); };
+            // ctl.value는 저장값을 복원하기 전의 처음 값이다 (복원은 o에만 쓴다)
+            reset.onClick = function() { apply(ctl.value); };
             input.onChange = function() { apply(parseFloat(String(input.text).replace(",", "."))); };
         }
 

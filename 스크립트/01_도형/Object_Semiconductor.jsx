@@ -83,9 +83,12 @@ try {
     // 그라데이션은 종류마다 하나만 만들어 재사용한다(미리보기 반복 시 스와치 폭증 방지)
     var _gradients = {};
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {siliconK: siliconK, dopantK: dopantK, electronK: electronK, siliconMm: siliconMm, dopantMm: dopantMm, electronMm: electronMm, distanceMm: distanceMm, surroundMm: surroundMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     applySavedSettings();
 
     var LABEL_WIDTH = 74;
+    var RESET_BUTTON_WIDTH = 34;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
 
@@ -136,9 +139,9 @@ try {
     surroundCheck.value = showSurround;
 
     var shadePanel = addPanel(dlg, "음영");
-    var siliconKField = addNumberField(shadePanel, "규소 핵", "K", siliconK, 10, 0, 100);
-    var dopantKField = addNumberField(shadePanel, "불순물 핵", "K", dopantK, 10, 0, 100);
-    var electronKField = addNumberField(shadePanel, "전자", "K", electronK, 10, 0, 100);
+    var siliconKField = addNumberField(shadePanel, "규소 핵", "K", siliconK, 10, 0, 100, DEFAULTS.siliconK);
+    var dopantKField = addNumberField(shadePanel, "불순물 핵", "K", dopantK, 10, 0, 100, DEFAULTS.dopantK);
+    var electronKField = addNumberField(shadePanel, "전자", "K", electronK, 10, 0, 100, DEFAULTS.electronK);
     var litRow = shadePanel.add("group");
     var litNucleusCheck = litRow.add("checkbox", undefined, "핵 3D 조명 효과");
     litNucleusCheck.value = lit3DNucleus;
@@ -146,17 +149,17 @@ try {
     litElectronCheck.value = lit3DElectron;
 
     var sizePanel = addPanel(dlg, "크기");
-    var siliconField = addNumberField(sizePanel, "규소 핵 지름", "mm", siliconMm, 0.1, 0.5, 20);
-    var dopantField = addNumberField(sizePanel, "불순물 핵 지름", "mm", dopantMm, 0.1, 0.5, 20);
-    var electronField = addNumberField(sizePanel, "전자 지름", "mm", electronMm, 0.1, 0.2, 6);
-    var distanceField = addNumberField(sizePanel, "핵·전자 거리", "mm", distanceMm, 0.1, 1, 30);
-    var surroundField = addNumberField(sizePanel, "주변 궤도 폭", "mm", surroundMm, 0.1, 0, 10);
+    var siliconField = addNumberField(sizePanel, "규소 핵 지름", "mm", siliconMm, 0.1, 0.5, 20, DEFAULTS.siliconMm);
+    var dopantField = addNumberField(sizePanel, "불순물 핵 지름", "mm", dopantMm, 0.1, 0.5, 20, DEFAULTS.dopantMm);
+    var electronField = addNumberField(sizePanel, "전자 지름", "mm", electronMm, 0.1, 0.2, 6, DEFAULTS.electronMm);
+    var distanceField = addNumberField(sizePanel, "핵·전자 거리", "mm", distanceMm, 0.1, 1, 30, DEFAULTS.distanceMm);
+    var surroundField = addNumberField(sizePanel, "주변 궤도 폭", "mm", surroundMm, 0.1, 0, 10, DEFAULTS.surroundMm);
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
-        -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetXmm);
     var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
-        -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetYmm);
     // 위치는 모형을 다시 만들지 않고 미리보기 그룹만 옮긴다
     bindOffsetField(offsetXField, true);
     bindOffsetField(offsetYField, false);
@@ -633,7 +636,7 @@ try {
         for (var i = 0; i < radios.length; i++) radios[i].onClick = updatePreview;
     }
 
-    function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+    function addNumberField(parent, labelText, unit, value, step, minimum, maximum, defaultValue) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
@@ -645,6 +648,9 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
 
         var field = {row: row, input: input, slider: slider, step: step,
             minimum: minimum, maximum: maximum, syncing: false};
@@ -665,6 +671,10 @@ try {
             slider.value = parsed;
             field.syncing = false;
             commitField(field);
+        };
+        reset.onClick = function() {
+            input.text = formatValue(defaultValue);
+            input.onChange();
         };
         return field;
     }

@@ -38,6 +38,9 @@ try {
         maximum: [0.01, 10000], divisions: [2, 20, true], subdivisions: [1, 20, true],
         tickLength: [0.2, 20], stroke: [0.1, 5], fontSize: [3, 72], numberGap: [0, 20], x: [-500, 500], y: [-500, 500]
     };
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {};
+    for (var defaultKey in settings) DEFAULTS[defaultKey] = settings[defaultKey];
     loadSettings();
     var previewGroup = null;
     var committed = false;
@@ -129,7 +132,10 @@ try {
         var input = row.add("edittext", undefined, String(settings[key])); input.characters = 6;
         var bar = row.add("scrollbar", undefined, settings[key], range[0], range[1]);
         bar.preferredSize.width = 196; bar.stepdelta = step; bar.jumpdelta = step * 10;
-        rows[key] = {input: input, bar: bar};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = 34;
+        reset.helpTip = "처음 값으로 되돌리기";
+        rows[key] = {input: input, bar: bar, reset: reset};
         function apply(value, typing) {
             var n = Number(String(value).replace(",", "."));
             if (!isFinite(n) || String(value).replace(/\s/g, "") === "") { if (!typing) setRow(key); return; }
@@ -150,12 +156,13 @@ try {
         input.onChanging = function() { apply(input.text, true); };
         bar.onChanging = function() { apply(bar.value); };
         bar.onChange = bar.onChanging;
+        reset.onClick = function() { apply(DEFAULTS[key]); };
     }
     function setRow(key) { rows[key].input.text = String(settings[key]); rows[key].bar.value = settings[key]; }
     function syncTextControls() {
         tiltCheck.enabled = settings.numbers;
-        rows.fontSize.input.enabled = rows.fontSize.bar.enabled = settings.numbers;
-        rows.numberGap.input.enabled = rows.numberGap.bar.enabled = settings.numbers;
+        rows.fontSize.input.enabled = rows.fontSize.bar.enabled = rows.fontSize.reset.enabled = settings.numbers;
+        rows.numberGap.input.enabled = rows.numberGap.bar.enabled = rows.numberGap.reset.enabled = settings.numbers;
     }
     function updatePreview() {
         clearPreview();

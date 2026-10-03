@@ -63,6 +63,8 @@ try {
     var black = makeGray(100);
     var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
     var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = defaultOptions();
     var options = readSettings();
     var previewGroup = null;
     var boxes = [];             // {group, frame, path} 순서대로
@@ -80,6 +82,7 @@ try {
 
     var LABEL_WIDTH = 130;   // Object_isometric.jsx와 같은 행 구성. "박스·화살표 간격 (mm):"이 잘리지 않는 폭
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var win = new Window("dialog", "단계 흐름도 만들기");
     win.alignChildren = "fill";
     win.spacing = 4;
@@ -264,6 +267,9 @@ try {
         slider.preferredSize.width = SLIDER_WIDTH;
         slider.stepdelta = 1;
         slider.jumpdelta = 10;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
         function apply(value, dragging) {
             value = (key === "arrowK") ? Math.round(value / 10) * 10 : Math.round(value * 100) / 100;
             if (!isFinite(value) || value < min || value > max) {
@@ -295,6 +301,7 @@ try {
         }
         slider.onChanging = function() { apply(slider.value * step, true); };
         slider.onChange = function() { apply(slider.value * step); };
+        reset.onClick = function() { apply(DEFAULTS[key]); };
         input.onChange = function() {
             if (!/\S/.test(input.text)) { input.text = String(options[key]); return; }
             apply(Number(input.text));
@@ -617,10 +624,14 @@ try {
         };
     }
 
-    function readSettings() {
-        var result = { count: 4, fontSize: 8, boxWidth: 20, boxHeight: 8, paddingX: 2, paddingY: 1.5,
+    function defaultOptions() {
+        return { count: 4, fontSize: 8, boxWidth: 20, boxHeight: 8, paddingX: 2, paddingY: 1.5,
             radius: 1, arrowLength: 4, arrowWidth: 1, arrowScale: 100, arrowK: 100, gap: 1.5,
             offsetX: 0, offsetY: 0, symbolSet: 1, sameSize: false, preview: true };
+    }
+
+    function readSettings() {
+        var result = defaultOptions();
         try {
             var spec = settingKeys();
             var p = app.preferences.getStringPreference(PREF_KEY).split("|");

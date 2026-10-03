@@ -44,6 +44,7 @@ try {
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 50;
     var MARGIN_RANGE = [0, 30];
     var ROUND_RANGE = [0, 100];
@@ -92,6 +93,10 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다. 너비·높이는 선택한 사각형 크기다
+    var DEFAULTS = {widthMm: widthMm, heightMm: heightMm, levelPct: levelPct, glassMm: glassMm, marginMm: marginMm,
+        roundPct: roundPct, gapMm: gapMm, breakPct: breakPct, spacingMm: spacingMm, lineWidth: lineWidth,
+        headScale: headScale, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var previewGroup = null;
@@ -157,9 +162,9 @@ try {
 
     heatRadios[heatAt].value = true;
     countRadios[loopCount].value = true;
-    spacingRow.input.enabled = spacingRow.slider.enabled = loopCount === 1;
+    spacingRow.input.enabled = spacingRow.slider.enabled = spacingRow.reset.enabled = loopCount === 1;
     heatCheck.value = heatMark;
-    fontRow.input.enabled = fontRow.slider.enabled = heatMark;
+    fontRow.input.enabled = fontRow.slider.enabled = fontRow.reset.enabled = heatMark;
 
     for (var hr = 0; hr < heatRadios.length; hr++) {
         heatRadios[hr].onClick = (function(index) {
@@ -170,32 +175,32 @@ try {
         countRadios[cr].onClick = (function(index) {
             return function() {
                 loopCount = index;
-                spacingRow.input.enabled = spacingRow.slider.enabled = loopCount === 1;
+                spacingRow.input.enabled = spacingRow.slider.enabled = spacingRow.reset.enabled = loopCount === 1;
                 updatePreview();
             };
         })(cr);
     }
     heatCheck.onClick = function() {
         heatMark = heatCheck.value;
-        fontRow.input.enabled = fontRow.slider.enabled = heatMark;
+        fontRow.input.enabled = fontRow.slider.enabled = fontRow.reset.enabled = heatMark;
         updatePreview();
     };
-    bindValueRow(marginRow, function() { return marginMm; }, function(v) { marginMm = v; });
-    bindValueRow(roundRow, function() { return roundPct; }, function(v) { roundPct = v; });
-    bindValueRow(gapRow, function() { return gapMm; }, function(v) { gapMm = v; });
-    bindValueRow(breakRow, function() { return breakPct; }, function(v) { breakPct = v; });
-    bindValueRow(lineWidthRow, function() { return lineWidth; }, function(v) { lineWidth = v; });
-    bindValueRow(spacingRow, function() { return spacingMm; }, function(v) { spacingMm = v; });
+    bindValueRow(marginRow, function() { return marginMm; }, function(v) { marginMm = v; }, DEFAULTS.marginMm);
+    bindValueRow(roundRow, function() { return roundPct; }, function(v) { roundPct = v; }, DEFAULTS.roundPct);
+    bindValueRow(gapRow, function() { return gapMm; }, function(v) { gapMm = v; }, DEFAULTS.gapMm);
+    bindValueRow(breakRow, function() { return breakPct; }, function(v) { breakPct = v; }, DEFAULTS.breakPct);
+    bindValueRow(lineWidthRow, function() { return lineWidth; }, function(v) { lineWidth = v; }, DEFAULTS.lineWidth);
+    bindValueRow(spacingRow, function() { return spacingMm; }, function(v) { spacingMm = v; }, DEFAULTS.spacingMm);
     if (rect !== null) {
-        bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; });
-        bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; });
-        bindValueRow(levelRow, function() { return levelPct; }, function(v) { levelPct = v; });
-        bindValueRow(glassRow, function() { return glassMm; }, function(v) { glassMm = v; });
+        bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; }, DEFAULTS.widthMm);
+        bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; }, DEFAULTS.heightMm);
+        bindValueRow(levelRow, function() { return levelPct; }, function(v) { levelPct = v; }, DEFAULTS.levelPct);
+        bindValueRow(glassRow, function() { return glassMm; }, function(v) { glassMm = v; }, DEFAULTS.glassMm);
     }
-    bindValueRow(headRow, function() { return headScale; }, function(v) { headScale = v; });
-    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
-    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
-    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
+    bindValueRow(headRow, function() { return headScale; }, function(v) { headScale = v; }, DEFAULTS.headScale);
+    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, DEFAULTS.fontPt);
+    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
+    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -840,11 +845,14 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
     }
 
     // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
-    function bindValueRow(controls, getter, setter) {
+    function bindValueRow(controls, getter, setter, defaultValue) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             controls.input.text = formatNumber(value, controls.decimals);
@@ -855,6 +863,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -862,7 +871,7 @@ try {
     }
 
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, defaultValue) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM;
@@ -875,6 +884,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

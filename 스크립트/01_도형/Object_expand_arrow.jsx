@@ -76,10 +76,14 @@ try {
     var previewEnabled = true;
     var previewItems = [];
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {};
+    for (var defaultKey in values) DEFAULTS[defaultKey] = values[defaultKey];
     applySavedSettings();
 
     var LABEL_WIDTH = 92;
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
 
     var dlg = new Window("dialog", "확장 화살표");
     dlg.orientation = "column";
@@ -122,10 +126,12 @@ try {
         addWhiteLine = whiteCheck.value;
         whiteControls.input.enabled = addWhiteLine;
         whiteControls.slider.enabled = addWhiteLine;
+        whiteControls.reset.enabled = addWhiteLine;
         updatePreview();
     };
     whiteControls.input.enabled = addWhiteLine;
     whiteControls.slider.enabled = addWhiteLine;
+    whiteControls.reset.enabled = addWhiteLine;
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -347,7 +353,10 @@ try {
         slider.stepdelta = spec.step;
         slider.jumpdelta = spec.step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {key: key, spec: spec, input: input, slider: slider};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {key: key, spec: spec, input: input, slider: slider, reset: reset};
     }
 
     // 화살표 계산은 가벼워서 드래그 중에도 바로 다시 그린다
@@ -358,6 +367,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(DEFAULTS[controls.key]); };
         controls.input.onChange = function() {
             var parsed = parseNumber(controls.input.text);
             commit(parsed === null ? values[controls.key] : parsed);
@@ -379,6 +389,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(DEFAULTS[controls.key]); };
         controls.input.onChange = function() {
             var parsed = parseNumber(controls.input.text);
             commit(parsed === null ? values[controls.key] : parsed);

@@ -204,7 +204,9 @@ try {
         var offsetInput = offsetRow.add("edittext", undefined, saved.offsetMm.toFixed(2));
         offsetInput.characters = 8;
 
-        var offsetControl = offsetPanel.add(
+        var offsetBarRow = offsetPanel.add("group");
+        offsetBarRow.alignChildren = ["left", "center"];
+        var offsetControl = offsetBarRow.add(
             "scrollbar",
             undefined,
             Math.max(offsetToStep(-maxOffsetMm), Math.min(offsetToStep(maxOffsetMm), offsetToStep(saved.offsetMm))),
@@ -214,6 +216,9 @@ try {
         offsetControl.preferredSize.width = 252;
         offsetControl.stepdelta = 1;
         offsetControl.jumpdelta = 10;
+        var offsetReset = offsetBarRow.add("button", undefined, "R");
+        offsetReset.preferredSize.width = 34;
+        offsetReset.helpTip = "처음 값으로 되돌리기";
 
         var rotationPanel = dialog.add("panel", undefined, "회전 (큰 개체 중심 기준)");
         rotationPanel.orientation = "column";
@@ -225,10 +230,15 @@ try {
         var rotationInput = rotationRow.add("edittext", undefined, String(saved.rotationDeg));
         rotationInput.characters = 8;
 
-        var rotationControl = rotationPanel.add("scrollbar", undefined, Math.max(-180, Math.min(180, Math.round(saved.rotationDeg))), -180, 180);
+        var rotationBarRow = rotationPanel.add("group");
+        rotationBarRow.alignChildren = ["left", "center"];
+        var rotationControl = rotationBarRow.add("scrollbar", undefined, Math.max(-180, Math.min(180, Math.round(saved.rotationDeg))), -180, 180);
         rotationControl.preferredSize.width = 252;
         rotationControl.stepdelta = 1;
         rotationControl.jumpdelta = 15;
+        var rotationReset = rotationBarRow.add("button", undefined, "R");
+        rotationReset.preferredSize.width = 34;
+        rotationReset.helpTip = "처음 값으로 되돌리기";
 
         var previewCheck = dialog.add("checkbox", undefined, "미리보기");
         previewCheck.value = true;
@@ -345,6 +355,12 @@ try {
             offsetInput.text = formatOffset(stepToOffset(offsetControl.value));
             updatePreview();
         };
+        // 중심 이동의 처음 값은 0이다
+        offsetReset.onClick = function() {
+            offsetInput.text = formatOffset(0);
+            syncOffsetControl(0);
+            updatePreview();
+        };
         rotationInput.onChanging = updatePreview;
         rotationInput.onChange = function() {
             syncRotationControl(readRotation());
@@ -355,6 +371,12 @@ try {
             }
 
             rotationInput.text = String(rotationControl.value);
+            updatePreview();
+        };
+        // 회전 각도의 처음 값은 0이다
+        rotationReset.onClick = function() {
+            rotationInput.text = "0";
+            syncRotationControl(0);
             updatePreview();
         };
         previewCheck.onClick = updatePreview;

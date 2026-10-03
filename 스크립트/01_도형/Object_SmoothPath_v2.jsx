@@ -81,12 +81,16 @@ try {
     var activeTab = 0;             // 0: 앵커 제거, 1: 부드럽게
     var applied = false;
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {removeMm: removeMm, simplifyStrength: simplifyStrength, smoothStrength: smoothStrength,
+        cornerAngle: cornerAngle, sharpPercent: sharpPercent};
     applySavedSettings();
 
     var LABEL_WIDTH = 108;
     var INPUT_WIDTH = 54;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var HINT_WIDTH = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
 
     var dlg = new Window("dialog", "패스 정리 v2");
@@ -104,7 +108,7 @@ try {
     removeTab.alignChildren = "left";
     removeTab.spacing = 6;
     removeTab.margins = [10, 12, 10, 10];
-    var removeField = addNumberField(removeTab, "허용 오차", "mm", removeMm, 0.01, 0, MAX_REMOVE_MM);
+    var removeField = addNumberField(removeTab, "허용 오차", "mm", removeMm, 0.01, 0, MAX_REMOVE_MM, DEFAULTS.removeMm);
     var removeHint = removeTab.add("statictext", undefined,
         "원본 핸들을 그대로 두고, 빼도 이 오차 안에 맞는 앵커만 지웁니다.\n" +
         "수만 개 앵커를 다루므로 미리보기 없이 확인을 누를 때 한 번에 적용합니다.\n" +
@@ -175,18 +179,18 @@ try {
     smoothTab.margins = [10, 12, 10, 10];
 
     var simplifyPanel = addPanel(smoothTab, "앵커 줄이기");
-    var simplifyField = addNumberField(simplifyPanel, "정리 강도", "0~100", simplifyStrength, 1, 0, 100);
+    var simplifyField = addNumberField(simplifyPanel, "정리 강도", "0~100", simplifyStrength, 1, 0, 100, DEFAULTS.simplifyStrength);
 
     var smoothPanel = addPanel(smoothTab, "곡선 다듬기");
-    var smoothField = addNumberField(smoothPanel, "부드럽기 강도", "0~100", smoothStrength, 1, 0, 100);
-    var cornerField = addNumberField(smoothPanel, "모서리 유지 각도", "°", cornerAngle, 5, 0, 180);
+    var smoothField = addNumberField(smoothPanel, "부드럽기 강도", "0~100", smoothStrength, 1, 0, 100, DEFAULTS.smoothStrength);
+    var cornerField = addNumberField(smoothPanel, "모서리 유지 각도", "°", cornerAngle, 5, 0, 180, DEFAULTS.cornerAngle);
     var cornerHint = smoothPanel.add("statictext", undefined, "이 각도보다 급하게 꺾인 점은 모서리로 남깁니다. 0이면 모두 부드럽게.");
     cornerHint.preferredSize.width = HINT_WIDTH;
 
     var sharpPanel = addPanel(smoothTab, "급한 곳만 다듬기");
     var sharpCheck = sharpPanel.add("checkbox", undefined, "곡률이 가장 큰 구간만 다듬기 (나머지는 원본 그대로)");
     sharpCheck.value = sharpOnly;
-    var sharpField = addNumberField(sharpPanel, "다듬을 범위", "%", sharpPercent, 1, 1, 100);
+    var sharpField = addNumberField(sharpPanel, "다듬을 범위", "%", sharpPercent, 1, 1, 100, DEFAULTS.sharpPercent);
     var sharpHint = sharpPanel.add("statictext", undefined,
         "패스 길이 중 곡률 상위 몇 %를 다듬을지. 이 모드에서는 앵커 줄이기를 쓰지 않습니다.\n" +
         "급한 곳이 모서리 유지 각도에 걸리면 다듬어지지 않으니 그때는 각도를 올리세요.", {multiline: true});
@@ -227,8 +231,10 @@ try {
     function applySharpMode() {
         simplifyField.input.enabled = !sharpOnly;
         simplifyField.slider.enabled = !sharpOnly;
+        simplifyField.reset.enabled = !sharpOnly;
         sharpField.input.enabled = sharpOnly;
         sharpField.slider.enabled = sharpOnly;
+        sharpField.reset.enabled = sharpOnly;
     }
     applySharpMode();
     okButton.onClick = function() {
@@ -1318,7 +1324,7 @@ try {
     }
 
     // 라벨 · 입력칸 · 스크롤바를 한 줄에 배치.
-    function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+    function addNumberField(parent, labelText, unit, value, step, minimum, maximum, initial) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         row.spacing = 6;
@@ -1331,8 +1337,11 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
 
-        var field = {row: row, input: input, slider: slider, step: step, minimum: minimum, maximum: maximum, syncing: false};
+        var field = {row: row, input: input, slider: slider, reset: reset, step: step, minimum: minimum, maximum: maximum, syncing: false};
 
         slider.onChanging = function() {
             if (field.syncing) return;
@@ -1351,6 +1360,10 @@ try {
             slider.value = parsed;
             field.syncing = false;
             updatePreview();
+        };
+        reset.onClick = function() {
+            input.text = formatValue(initial);
+            input.onChange();
         };
         return field;
     }

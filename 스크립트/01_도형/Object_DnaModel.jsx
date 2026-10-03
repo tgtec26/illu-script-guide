@@ -158,11 +158,17 @@ try {
             var previewEnabled = true;
             var previewGroup = null;
 
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var DEFAULTS = {purineLenMm: purineLenMm, pyrimidineLenMm: pyrimidineLenMm, baseThickMm: baseThickMm,
+                sugarMm: sugarMm, phosphateMm: phosphateMm, spacingMm: spacingMm, linkMm: linkMm, strandGapMm: strandGapMm,
+                phosphateK: phosphateK, sugarK: sugarK, purineK: purineK, pyrimidineK: pyrimidineK,
+                offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySavedSettings();
 
             var LABEL_WIDTH = 82;       // "당·인산 간격"이 잘리지 않는 너비
             // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
             var SLIDER_WIDTH = 196;
+            var RESET_BUTTON_WIDTH = 34;
 
             var dlg = page;
 
@@ -207,26 +213,26 @@ try {
             legendCheck.value = showLegend;
 
             var shadePanel = addPanel(dlg, "음영");
-            var phosphateKField = addNumberField(shadePanel, "인산", "K", phosphateK, 10, 0, 100);
-            var sugarKField = addNumberField(shadePanel, "당", "K", sugarK, 10, 0, 100);
-            var purineKField = addNumberField(shadePanel, "A·G", "K", purineK, 10, 0, 100);
-            var pyrimidineKField = addNumberField(shadePanel, "T·C", "K", pyrimidineK, 10, 0, 100);
+            var phosphateKField = addNumberField(shadePanel, "인산", "K", phosphateK, 10, 0, 100, DEFAULTS.phosphateK);
+            var sugarKField = addNumberField(shadePanel, "당", "K", sugarK, 10, 0, 100, DEFAULTS.sugarK);
+            var purineKField = addNumberField(shadePanel, "A·G", "K", purineK, 10, 0, 100, DEFAULTS.purineK);
+            var pyrimidineKField = addNumberField(shadePanel, "T·C", "K", pyrimidineK, 10, 0, 100, DEFAULTS.pyrimidineK);
 
             var sizePanel = addPanel(dlg, "크기");
-            var purineLenField = addNumberField(sizePanel, "A·G 길이", "mm", purineLenMm, 0.1, 1, 30);
-            var pyrimidineLenField = addNumberField(sizePanel, "T·C 길이", "mm", pyrimidineLenMm, 0.1, 1, 30);
-            var baseThickField = addNumberField(sizePanel, "염기 두께", "mm", baseThickMm, 0.1, 0.5, 15);
-            var sugarField = addNumberField(sizePanel, "당 크기", "mm", sugarMm, 0.1, 1, 20);
-            var phosphateField = addNumberField(sizePanel, "인산 크기", "mm", phosphateMm, 0.1, 1, 20);
-            var spacingField = addNumberField(sizePanel, "당·인산 간격", "mm", spacingMm, 0.1, 1, 30);
-            var linkField = addNumberField(sizePanel, "당·염기 간격", "mm", linkMm, 0.1, 0, 15);
-            var strandGapField = addNumberField(sizePanel, "두 가닥 간격", "mm", strandGapMm, 0.1, -5, 20);
+            var purineLenField = addNumberField(sizePanel, "A·G 길이", "mm", purineLenMm, 0.1, 1, 30, DEFAULTS.purineLenMm);
+            var pyrimidineLenField = addNumberField(sizePanel, "T·C 길이", "mm", pyrimidineLenMm, 0.1, 1, 30, DEFAULTS.pyrimidineLenMm);
+            var baseThickField = addNumberField(sizePanel, "염기 두께", "mm", baseThickMm, 0.1, 0.5, 15, DEFAULTS.baseThickMm);
+            var sugarField = addNumberField(sizePanel, "당 크기", "mm", sugarMm, 0.1, 1, 20, DEFAULTS.sugarMm);
+            var phosphateField = addNumberField(sizePanel, "인산 크기", "mm", phosphateMm, 0.1, 1, 20, DEFAULTS.phosphateMm);
+            var spacingField = addNumberField(sizePanel, "당·인산 간격", "mm", spacingMm, 0.1, 1, 30, DEFAULTS.spacingMm);
+            var linkField = addNumberField(sizePanel, "당·염기 간격", "mm", linkMm, 0.1, 0, 15, DEFAULTS.linkMm);
+            var strandGapField = addNumberField(sizePanel, "두 가닥 간격", "mm", strandGapMm, 0.1, -5, 20, DEFAULTS.strandGapMm);
 
             var positionPanel = addPanel(dlg, "위치");
             var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetXmm);
             var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetYmm);
             // 위치는 모형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetField(offsetXField, true);
             bindOffsetField(offsetYField, false);
@@ -712,7 +718,7 @@ try {
                 return panel;
             }
 
-            function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+            function addNumberField(parent, labelText, unit, value, step, minimum, maximum, initial) {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
@@ -724,6 +730,9 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
 
                 var field = {row: row, input: input, slider: slider, step: step,
                     minimum: minimum, maximum: maximum, syncing: false};
@@ -744,6 +753,11 @@ try {
                     slider.value = parsed;
                     field.syncing = false;
                     commitField(field);
+                };
+                // 입력창에 처음 값을 친 것과 같은 경로로 되돌린다
+                reset.onClick = function() {
+                    input.text = formatValue(initial);
+                    input.onChange();
                 };
                 return field;
             }
@@ -863,6 +877,8 @@ try {
             var viewCenter = doc.activeView.centerPoint;
             var engFont = findTextFont([ENG_FONT_NAME]);
             var symbolFont = findTextFont([SYMBOL_FONT_NAME, ENG_FONT_NAME]);
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var DEFAULTS = defaultOptions();
             var options = readSettings();
             var previewGroup = null;
             var previewPending = false;
@@ -995,6 +1011,9 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = 196;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = 34;
+                reset.helpTip = "처음 값으로 되돌리기";
                 function apply(value, dragging) {
                     value = Math.round(value * 100) / 100;
                     if (!isFinite(value) || value < min || value > max) {
@@ -1027,6 +1046,11 @@ try {
                 input.onChange = function() {
                     if (!/\S/.test(input.text)) { input.text = String(options[key]); return; }
                     apply(Number(input.text));
+                };
+                // 입력창에 처음 값을 친 것과 같은 경로로 되돌린다
+                reset.onClick = function() {
+                    input.text = String(DEFAULTS[key]);
+                    input.onChange();
                 };
             }
 
@@ -1219,10 +1243,14 @@ try {
             // -------------------------------------------------------
             // 설정 기억
             // -------------------------------------------------------
-            function readSettings() {
-                var result = { seq: "", masks: ["", "", ""], labels: [0, 1, 4],
+            function defaultOptions() {
+                return { seq: "", masks: ["", "", ""], labels: [0, 1, 4],
                     backboneWidth: 1, tickWidth: 0.3, tickLength: 3, fontSize: 10,
                     baseGap: 6, strandGap: 16, rnaGap: 14, offsetX: 0, offsetY: 0, preview: true };
+            }
+
+            function readSettings() {
+                var result = defaultOptions();
                 try {
                     var p = app.preferences.getStringPreference(PREF_KEY).split("|");
                     if (p[0] !== "v1" || p.length !== 18) return result;

@@ -55,6 +55,7 @@ try {
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 100;
     var DIAMETER_RANGE = [10, 150];
     // 86.6%를 넘으면 세 원이 모두 겹치는 곳이 사라진다
@@ -87,6 +88,9 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {diameterMm: diameterMm, spacing: spacing, sideMm: sideMm, incidence: incidence, spread: spread,
+        rayMm: rayMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var layer = findEditableLayer();
@@ -150,15 +154,15 @@ try {
     colorCheck.onClick = function() { colorOn = colorCheck.value; syncEnabled(); updatePreview(); };
     backgroundCheck.onClick = function() { backgroundOn = backgroundCheck.value; updatePreview(); };
     namesCheck.onClick = function() { namesOn = namesCheck.value; updatePreview(); };
-    bindValueRow(diameterRow, function() { return diameterMm; }, function(v) { diameterMm = v; });
-    bindValueRow(spacingRow, function() { return spacing; }, function(v) { spacing = v; });
-    bindValueRow(sideRow, function() { return sideMm; }, function(v) { sideMm = v; });
-    bindValueRow(incidenceRow, function() { return incidence; }, function(v) { incidence = v; });
-    bindValueRow(spreadRow, function() { return spread; }, function(v) { spread = v; });
-    bindValueRow(rayRow, function() { return rayMm; }, function(v) { rayMm = v; });
-    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
-    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
-    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
+    bindValueRow(diameterRow, function() { return diameterMm; }, function(v) { diameterMm = v; }, DEFAULTS.diameterMm);
+    bindValueRow(spacingRow, function() { return spacing; }, function(v) { spacing = v; }, DEFAULTS.spacing);
+    bindValueRow(sideRow, function() { return sideMm; }, function(v) { sideMm = v; }, DEFAULTS.sideMm);
+    bindValueRow(incidenceRow, function() { return incidence; }, function(v) { incidence = v; }, DEFAULTS.incidence);
+    bindValueRow(spreadRow, function() { return spread; }, function(v) { spread = v; }, DEFAULTS.spread);
+    bindValueRow(rayRow, function() { return rayMm; }, function(v) { rayMm = v; }, DEFAULTS.rayMm);
+    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, DEFAULTS.fontPt);
+    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
+    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -195,6 +199,7 @@ try {
     function setRowEnabled(controls, enabled) {
         controls.input.enabled = enabled;
         controls.slider.enabled = enabled;
+        controls.reset.enabled = enabled;
     }
 
     // -------------------------------------------------------
@@ -547,11 +552,14 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
     }
 
     // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
-    function bindValueRow(controls, getter, setter) {
+    function bindValueRow(controls, getter, setter, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             controls.input.text = formatNumber(value, controls.decimals);
@@ -562,6 +570,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -569,7 +578,7 @@ try {
     }
 
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM;
@@ -582,6 +591,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

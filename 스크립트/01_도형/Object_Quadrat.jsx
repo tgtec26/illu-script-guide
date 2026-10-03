@@ -41,6 +41,9 @@ try {
     var OFFSET_STEP_MM = 0.1;
     var offsetXmm = 0;
     var offsetYmm = 0;
+    var RESET_BUTTON_WIDTH = 34;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {offsetXmm: offsetXmm, offsetYmm: offsetYmm};
 
     loadSettings();
 
@@ -246,7 +249,10 @@ try {
         slider.stepdelta = OFFSET_STEP_MM;
         slider.jumpdelta = OFFSET_STEP_MM * 10;
         slider.preferredSize.width = 196;
-        return {input: input, slider: slider};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset};
     }
 
     // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -268,6 +274,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(isX ? DEFAULTS.offsetXmm : DEFAULTS.offsetYmm); };
         controls.input.onChange = function() {
             var value = parseFloat(String(controls.input.text).replace(",", "."));
             commit(isNaN(value) ? current() : value);

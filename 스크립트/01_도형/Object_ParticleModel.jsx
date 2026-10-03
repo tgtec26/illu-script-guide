@@ -470,6 +470,9 @@ try {
         s.stepdelta = step;
         s.jumpdelta = step * 10;
         s.preferredSize.width = 196;
+        var reset = g.add("button", undefined, "R");
+        reset.preferredSize.width = 34;
+        reset.helpTip = "처음 값으로 되돌리기";
         var decimals = step < 1 ? 1 : 0;
         s.syncLabel = function() { input.text = s.value.toFixed(decimals); };
         s.syncLabel();
@@ -484,6 +487,8 @@ try {
             s.onChanging();
             s.onChange();
         }
+        // 처음 값(저장값 복원 전의 initV)을 입력창에 쳤을 때와 같은 경로로 넣는다
+        reset.onClick = function() { setValue(initV); };
         input.onChange = function() {
             var typed = Number(input.text);
             if (!isFinite(typed) || !/\S/.test(input.text)) { s.syncLabel(); return; }

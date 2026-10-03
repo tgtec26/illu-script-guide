@@ -94,6 +94,10 @@ try {
     var children = [];
     for (var c = 0; c < CHILD_MAX; c++) children.push({kind: 0, gender: 0, pheno: 0, mark: 0});
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {sizeMm: sizeMm, hatchCount: hatchCount, coupleGapMm: coupleGapMm, siblingGapMm: siblingGapMm,
+        upperGapMm: upperGapMm, lowerGapMm: lowerGapMm, branchPct: branchPct,
+        offsetXmm: offsetXmm, offsetYmm: offsetYmm, legendXmm: legendXmm, legendYmm: legendYmm};
     applySavedSettings();
 
     var previewGroup = null;
@@ -112,6 +116,7 @@ try {
     var GENDER_WIDTH = 118;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
 
     var dlg = new Window("dialog", "가계도");
     dlg.orientation = "column";
@@ -198,21 +203,21 @@ try {
     try { dlg.defaultElement = null; } catch (defaultError) {}
     var cancelButton = footer.add("button", undefined, "취소", {name: "cancel"});
 
-    bindValueRow(sizeControls, function() { return sizeMm; }, function(v) { sizeMm = v; });
-    bindValueRow(hatchControls, function() { return hatchCount; }, function(v) { hatchCount = v; });
-    bindValueRow(coupleControls, function() { return coupleGapMm; }, function(v) { coupleGapMm = v; });
-    bindValueRow(siblingControls, function() { return siblingGapMm; }, function(v) { siblingGapMm = v; });
-    bindValueRow(upperGapControls, function() { return upperGapMm; }, function(v) { upperGapMm = v; });
-    bindValueRow(lowerGapControls, function() { return lowerGapMm; }, function(v) { lowerGapMm = v; });
-    bindValueRow(branchControls, function() { return branchPct; }, function(v) { branchPct = v; });
+    bindValueRow(sizeControls, function() { return sizeMm; }, function(v) { sizeMm = v; }, DEFAULTS.sizeMm);
+    bindValueRow(hatchControls, function() { return hatchCount; }, function(v) { hatchCount = v; }, DEFAULTS.hatchCount);
+    bindValueRow(coupleControls, function() { return coupleGapMm; }, function(v) { coupleGapMm = v; }, DEFAULTS.coupleGapMm);
+    bindValueRow(siblingControls, function() { return siblingGapMm; }, function(v) { siblingGapMm = v; }, DEFAULTS.siblingGapMm);
+    bindValueRow(upperGapControls, function() { return upperGapMm; }, function(v) { upperGapMm = v; }, DEFAULTS.upperGapMm);
+    bindValueRow(lowerGapControls, function() { return lowerGapMm; }, function(v) { lowerGapMm = v; }, DEFAULTS.lowerGapMm);
+    bindValueRow(branchControls, function() { return branchPct; }, function(v) { branchPct = v; }, DEFAULTS.branchPct);
     bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true,
-        function() { return previewGroup; });
+        function() { return previewGroup; }, DEFAULTS.offsetXmm);
     bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false,
-        function() { return previewGroup; });
+        function() { return previewGroup; }, DEFAULTS.offsetYmm);
     bindPositionRow(legendXControls, function() { return legendXmm; }, function(v) { legendXmm = v; }, true,
-        function() { return previewLegend; });
+        function() { return previewLegend; }, DEFAULTS.legendXmm);
     bindPositionRow(legendYControls, function() { return legendYmm; }, function(v) { legendYmm = v; }, false,
-        function() { return previewLegend; });
+        function() { return previewLegend; }, DEFAULTS.legendYmm);
     legendCheck.onClick = function() {
         legendOn = legendCheck.value;
         updatePreview();
@@ -799,13 +804,16 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
         return {
-            row: row, input: input, slider: slider,
+            row: row, input: input, slider: slider, reset: reset,
             min: minimum, max: maximum, step: step, decimals: decimals
         };
     }
 
-    function bindValueRow(controls, getter, setter) {
+    function bindValueRow(controls, getter, setter, defaultValue) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             setter(value);
@@ -815,6 +823,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -822,7 +831,7 @@ try {
     }
 
     // 위치 변경은 도형을 다시 만들지 않고 target()이 돌려주는 미리보기 그룹만 이동한다.
-    function bindPositionRow(controls, getter, setter, isX, target) {
+    function bindPositionRow(controls, getter, setter, isX, target, defaultValue) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM_TO_PT;
@@ -838,6 +847,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

@@ -52,6 +52,7 @@ try {
     var K_STEP = 10;
     var LABEL_WIDTH = 96;
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var PREF_KEY = "ObjectCloud/settings";
     var PREVIEW_NAME = "Cloud Preview";
     var K_LIMIT = [0, 100];
@@ -71,6 +72,8 @@ try {
     var documentIsCmyk = false;
     try { documentIsCmyk = doc.documentColorSpace === DocumentColorSpace.CMYK; } catch (e) {}
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {cloudK: cloudK, shadow1K: shadow1K, shadow2K: shadow2K};
     applySavedSettings();
 
     // -------------------------------------------------------
@@ -125,9 +128,9 @@ try {
         fitToRect = fitCheck.value;
         updatePreview();
     };
-    bindNumberRow(cloudKRow, function(value) { cloudK = value; });
-    bindNumberRow(shadow1KRow, function(value) { shadow1K = value; });
-    bindNumberRow(shadow2KRow, function(value) { shadow2K = value; });
+    bindNumberRow(cloudKRow, function(value) { cloudK = value; }, DEFAULTS.cloudK);
+    bindNumberRow(shadow1KRow, function(value) { shadow1K = value; }, DEFAULTS.shadow1K);
+    bindNumberRow(shadow2KRow, function(value) { shadow2K = value; }, DEFAULTS.shadow2K);
     linesCheck.onClick = function() {
         linesOn = linesCheck.value;
         updatePreview();
@@ -212,11 +215,14 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {label: label.replace(/\s*\(.*$/, "").replace(/:$/, ""), input: input, slider: slider,
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {label: label.replace(/\s*\(.*$/, "").replace(/:$/, ""), input: input, slider: slider, reset: reset,
             min: limit[0], max: limit[1], step: step, decimals: decimals, setter: null};
     }
 
-    function bindNumberRow(row, setter) {
+    function bindNumberRow(row, setter, initial) {
         row.setter = setter;
         function commit(value, fromSlider) {
             value = snap(clamp(value, row.min, row.max), row.step);
@@ -227,6 +233,7 @@ try {
         }
         row.slider.onChanging = function() { commit(row.slider.value, true); };
         row.slider.onChange = function() { commit(row.slider.value, true); };
+        row.reset.onClick = function() { commit(initial, false); };
         // 타이핑 중에는 입력창 글자를 건드리지 않는다. 범위 안 값일 때만 즉시 반영한다
         row.input.onChanging = function() {
             var value = parseNumber(row.input.text);

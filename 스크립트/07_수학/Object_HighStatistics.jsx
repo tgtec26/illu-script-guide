@@ -137,6 +137,7 @@ try {
             var LABEL_WIDTH = 100;
             var INPUT_WIDTH = 50;
             var SLIDER_WIDTH = 196;
+            var RESET_BUTTON_WIDTH = 34;
             var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
             var ENG_FONT_NAME = "GSMediumB1";
             var ENG_BASELINE_PT = 0.5;
@@ -171,6 +172,8 @@ try {
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {townGapMm: townGapMm, roadGapMm: roadGapMm, mapMm: mapMm, gridCols: gridCols, gridRows: gridRows, gridCellMm: gridCellMm, seatCount: seatCount, sideA: sideA, sideB: sideB, tableMm: tableMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
 
             var previewGroup = null;
@@ -252,26 +255,26 @@ try {
             };
             roadsInput.onChanging = function() { roadsText = roadsInput.text; updatePreview(); };
             mapList.onChange = function() { mapIndex = mapList.selection ? mapList.selection.index : 0; updatePreview(); };
-            bindValueRow(townControls, function(value) { townGapMm = value; });
-            bindValueRow(roadControls, function(value) { roadGapMm = value; });
-            bindValueRow(mapControls, function(value) { mapMm = value; });
-            bindValueRow(colsControls, function(value) { gridCols = value; });
-            bindValueRow(rowsControls, function(value) { gridRows = value; });
-            bindValueRow(cellControls, function(value) { gridCellMm = value; });
+            bindValueRow(townControls, function(value) { townGapMm = value; }, defaults.townGapMm);
+            bindValueRow(roadControls, function(value) { roadGapMm = value; }, defaults.roadGapMm);
+            bindValueRow(mapControls, function(value) { mapMm = value; }, defaults.mapMm);
+            bindValueRow(colsControls, function(value) { gridCols = value; }, defaults.gridCols);
+            bindValueRow(rowsControls, function(value) { gridRows = value; }, defaults.gridRows);
+            bindValueRow(cellControls, function(value) { gridCellMm = value; }, defaults.gridCellMm);
             passInput.onChanging = function() { passText = passInput.text; updatePreview(); };
             blockedInput.onChanging = function() { blockedText = blockedInput.text; updatePreview(); };
             gridNumbersCheck.onClick = function() { gridNumbers = gridNumbersCheck.value; updatePreview(); };
             tableList.onChange = function() { tableShape = tableList.selection ? tableList.selection.index : 0; refreshEnabled(); updatePreview(); };
             arrowCheck.onClick = function() { rotationArrow = arrowCheck.value; updatePreview(); };
-            bindValueRow(seatControls, function(value) { seatCount = value; });
-            bindValueRow(sideAControls, function(value) { sideA = value; });
-            bindValueRow(sideBControls, function(value) { sideB = value; });
-            bindValueRow(tableControls, function(value) { tableMm = value; });
+            bindValueRow(seatControls, function(value) { seatCount = value; }, defaults.seatCount);
+            bindValueRow(sideAControls, function(value) { sideA = value; }, defaults.sideA);
+            bindValueRow(sideBControls, function(value) { sideB = value; }, defaults.sideB);
+            bindValueRow(tableControls, function(value) { tableMm = value; }, defaults.tableMm);
             namesInput.onChanging = function() { seatNames = namesInput.text; updatePreview(); };
-            bindValueRow(fontControls, function(value) { fontPt = value; });
+            bindValueRow(fontControls, function(value) { fontPt = value; }, defaults.fontPt);
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true);
-            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false);
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, defaults.offsetXmm);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, defaults.offsetYmm);
 
             // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다. 도로를 못 읽으면 확정하지 않는다
             api.commit = function() {
@@ -724,7 +727,10 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
-                return { input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals };
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
+                return { input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals };
             }
 
             function setRowValue(controls, value) {
@@ -732,7 +738,7 @@ try {
                 try { controls.slider.value = value; } catch (e) {}
             }
 
-            function bindValueRow(controls, setter) {
+            function bindValueRow(controls, setter, defaultValue) {
                 function commit(value) {
                     value = clamp(roundTo(value, controls.step), controls.min, controls.max);
                     setRowValue(controls, value);
@@ -741,13 +747,14 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(defaultValue); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? controls.slider.value : value);
                 };
             }
 
-            function bindPositionRow(controls, getter, setter, isX) {
+            function bindPositionRow(controls, getter, setter, isX, defaultValue) {
                 function commit(value) {
                     value = clamp(roundTo(value, controls.step), controls.min, controls.max);
                     var delta = (value - getter()) * MM_TO_PT;
@@ -759,6 +766,7 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(defaultValue); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? getter() : value);
@@ -849,6 +857,7 @@ try {
             var LABEL_WIDTH = 100;
             var INPUT_WIDTH = 50;
             var SLIDER_WIDTH = 196;
+            var RESET_BUTTON_WIDTH = 34;
             var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
             var ENG_FONT_NAME = "GSMediumB1";
             var ITALIC_FONT_NAME = "GSMediItaC1";
@@ -894,6 +903,8 @@ try {
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {mean: mean, sigma: sigma, mean2: mean2, sigma2: sigma2, trials: trials, chance: chance, aValue: aValue, bValue: bValue, shadeK: shadeK, widthMm: widthMm, heightMm: heightMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
 
             var previewGroup = null;
@@ -957,23 +968,23 @@ try {
                 updatePreview();
             };
             axisList.onChange = function() { axisName = axisList.selection ? axisList.selection.index : 0; updatePreview(); };
-            bindValueRow(meanControls, function(value) { mean = value; });
-            bindValueRow(sigmaControls, function(value) { sigma = value; });
-            bindValueRow(mean2Controls, function(value) { mean2 = value; });
-            bindValueRow(sigma2Controls, function(value) { sigma2 = value; });
-            bindValueRow(trialsControls, function(value) { trials = value; });
-            bindValueRow(chanceControls, function(value) { chance = value; });
+            bindValueRow(meanControls, function(value) { mean = value; }, defaults.mean);
+            bindValueRow(sigmaControls, function(value) { sigma = value; }, defaults.sigma);
+            bindValueRow(mean2Controls, function(value) { mean2 = value; }, defaults.mean2);
+            bindValueRow(sigma2Controls, function(value) { sigma2 = value; }, defaults.sigma2);
+            bindValueRow(trialsControls, function(value) { trials = value; }, defaults.trials);
+            bindValueRow(chanceControls, function(value) { chance = value; }, defaults.chance);
             shadeList.onChange = function() { shade = shadeList.selection ? shadeList.selection.index : 0; refreshEnabled(); updatePreview(); };
             labelList.onChange = function() { labelKind = labelList.selection ? labelList.selection.index : 0; updatePreview(); };
-            bindValueRow(aControls, function(value) { aValue = value; });
-            bindValueRow(bControls, function(value) { bValue = value; });
-            bindValueRow(shadeControls, function(value) { shadeK = value; });
-            bindValueRow(widthControls, function(value) { widthMm = value; });
-            bindValueRow(heightControls, function(value) { heightMm = value; });
-            bindValueRow(fontControls, function(value) { fontPt = value; });
+            bindValueRow(aControls, function(value) { aValue = value; }, defaults.aValue);
+            bindValueRow(bControls, function(value) { bValue = value; }, defaults.bValue);
+            bindValueRow(shadeControls, function(value) { shadeK = value; }, defaults.shadeK);
+            bindValueRow(widthControls, function(value) { widthMm = value; }, defaults.widthMm);
+            bindValueRow(heightControls, function(value) { heightMm = value; }, defaults.heightMm);
+            bindValueRow(fontControls, function(value) { fontPt = value; }, defaults.fontPt);
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true);
-            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false);
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, defaults.offsetXmm);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, defaults.offsetYmm);
 
             // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다
             api.commit = function() {
@@ -1431,7 +1442,10 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
-                return { input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals };
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
+                return { input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals };
             }
 
             function setRowValue(controls, value) {
@@ -1439,7 +1453,7 @@ try {
                 try { controls.slider.value = value; } catch (e) {}
             }
 
-            function bindValueRow(controls, setter) {
+            function bindValueRow(controls, setter, defaultValue) {
                 function commit(value) {
                     value = clamp(roundTo(value, controls.step), controls.min, controls.max);
                     setRowValue(controls, value);
@@ -1448,13 +1462,14 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(defaultValue); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? controls.slider.value : value);
                 };
             }
 
-            function bindPositionRow(controls, getter, setter, isX) {
+            function bindPositionRow(controls, getter, setter, isX, defaultValue) {
                 function commit(value) {
                     value = clamp(roundTo(value, controls.step), controls.min, controls.max);
                     var delta = (value - getter()) * MM_TO_PT;
@@ -1466,6 +1481,7 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(defaultValue); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? getter() : value);
@@ -1557,6 +1573,7 @@ try {
             var LABEL_WIDTH = 100;
             var INPUT_WIDTH = 50;
             var SLIDER_WIDTH = 196;
+            var RESET_BUTTON_WIDTH = 34;
             var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
             var ENG_FONT_NAME = "GSMediumB1";
             var EQN_FONT_NAME = "HancomEQN";   // GSMediumB1에 없는 기호(ᶜ, × …)
@@ -1582,6 +1599,8 @@ try {
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {stageMm: stageMm, rowMm: rowMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
 
             var previewGroup = null;
@@ -1621,12 +1640,12 @@ try {
             secondInput.onChanging = function() { secondText = secondInput.text; updatePreview(); };
             eventInput.onChanging = function() { eventText = eventInput.text; updatePreview(); };
             productsCheck.onClick = function() { showProducts = productsCheck.value; updatePreview(); };
-            bindValueRow(stageControls, function(value) { stageMm = value; });
-            bindValueRow(rowControls, function(value) { rowMm = value; });
-            bindValueRow(fontControls, function(value) { fontPt = value; });
+            bindValueRow(stageControls, function(value) { stageMm = value; }, defaults.stageMm);
+            bindValueRow(rowControls, function(value) { rowMm = value; }, defaults.rowMm);
+            bindValueRow(fontControls, function(value) { fontPt = value; }, defaults.fontPt);
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true);
-            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false);
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, defaults.offsetXmm);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, defaults.offsetYmm);
 
             // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다. 가지를 못 읽으면 확정하지 않는다
             api.commit = function() {
@@ -1950,7 +1969,10 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
-                return { input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals };
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
+                return { input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals };
             }
 
             function setRowValue(controls, value) {
@@ -1958,7 +1980,7 @@ try {
                 try { controls.slider.value = value; } catch (e) {}
             }
 
-            function bindValueRow(controls, setter) {
+            function bindValueRow(controls, setter, defaultValue) {
                 function commit(value) {
                     value = clamp(roundTo(value, controls.step), controls.min, controls.max);
                     setRowValue(controls, value);
@@ -1967,13 +1989,14 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(defaultValue); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? controls.slider.value : value);
                 };
             }
 
-            function bindPositionRow(controls, getter, setter, isX) {
+            function bindPositionRow(controls, getter, setter, isX, defaultValue) {
                 function commit(value) {
                     value = clamp(roundTo(value, controls.step), controls.min, controls.max);
                     var delta = (value - getter()) * MM_TO_PT;
@@ -1985,6 +2008,7 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(defaultValue); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? getter() : value);

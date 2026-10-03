@@ -29,6 +29,7 @@ try {
     var PREF_KEY = "SpectrumGray/settings";
     var MM = 2.834645669;
     var LABEL_WIDTH = 90;
+    var RESET_BUTTON_WIDTH = 34;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
     var WAVE_RANGE = [300, 1000];
@@ -119,6 +120,10 @@ try {
     var previewGroup = null;
     var gradient = null;
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {waveMin: waveMin, waveMax: waveMax, brightness: brightness, emissionBackK: emissionBackK,
+        emissionLineK: emissionLineK, absorptionLineK: absorptionLineK, lineWidthPt: lineWidthPt,
+        mergeNm: mergeNm, gapMm: gapMm, labelGapMm: labelGapMm};
     applySavedSettings();
 
     var black = makeGray(100);
@@ -194,6 +199,17 @@ try {
     var weakCheck = linePanel.add("checkbox", undefined, "약한 선 포함");
     weakCheck.value = includeWeak;
     weakCheck.helpTip = "끄면 교과서·도표에 흔히 실리는 주요 선만, 켜면 NIST 상대 세기 순의 약한 선까지 넣는다";
+
+    gapField.defaultValue = DEFAULTS.gapMm;
+    labelGapField.defaultValue = DEFAULTS.labelGapMm;
+    waveMinField.defaultValue = DEFAULTS.waveMin;
+    waveMaxField.defaultValue = DEFAULTS.waveMax;
+    brightField.defaultValue = DEFAULTS.brightness;
+    emissionBackField.defaultValue = DEFAULTS.emissionBackK;
+    emissionLineField.defaultValue = DEFAULTS.emissionLineK;
+    absorptionLineField.defaultValue = DEFAULTS.absorptionLineK;
+    lineWidthField.defaultValue = DEFAULTS.lineWidthPt;
+    mergeField.defaultValue = DEFAULTS.mergeNm;
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -760,6 +776,9 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
 
         var field = {row: row, input: input, slider: slider, step: step, minimum: minimum, maximum: maximum, syncing: false};
 
@@ -779,6 +798,10 @@ try {
             slider.value = parsed;
             field.syncing = false;
             updatePreview();
+        };
+        reset.onClick = function() {
+            input.text = formatValue(field.defaultValue);
+            input.onChange();
         };
         return field;
     }

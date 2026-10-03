@@ -327,8 +327,9 @@ try {
 
     // ---- 다이얼로그 도우미 ------------------------------------------------
 
-    // 숫자 조절 행: 라벨(단위) | 입력창 | 스크롤바(‹ › 내장)
+    // 숫자 조절 행: 라벨(단위) | 입력창 | 스크롤바(‹ › 내장) | R(처음 값으로)
     // 입력창은 드래그와 같은 순서로 onChanging → onChange를 부른다(뒤에 바꿔 단 핸들러도 그대로 탄다)
+    // R은 만들 때 받은 initV(저장값 복원 전 값)를 입력창에 쳐 넣은 것과 같은 경로로 되돌린다
     function addSliderRow(parent, labelText, labelWidth, minV, maxV, initV, unit, step) {
         var row = parent.add("group");
         row.spacing = 3;
@@ -340,6 +341,9 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = 196;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = 34;
+        reset.helpTip = "처음 값으로 되돌리기";
         var decimals = step < 1 ? 1 : 0;
         slider.syncLabel = function() { input.text = slider.value.toFixed(decimals); };
         slider.syncLabel();
@@ -357,8 +361,10 @@ try {
             if (!isFinite(typed) || !/\S/.test(input.text)) { slider.syncLabel(); return; }
             setValue(typed);
         };
+        reset.onClick = function() { setValue(initV); };
         slider.caption = label;
         slider.row = row;
+        slider.reset = reset;
         sliderSyncers.push(slider.syncLabel);
         return slider;
     }
@@ -999,6 +1005,11 @@ try {
             var packed = chkMode[1].value || chkMode[2].value;
             sldCornerPack.enabled = packed;
             sldOtherPack.enabled = packed;
+            // R 버튼도 슬라이더와 같은 활성 상태로 맞춘다
+            sldCornerSphere.reset.enabled = sldCornerSphere.enabled;
+            sldOtherSphere.reset.enabled = sldOtherSphere.enabled;
+            sldCornerPack.reset.enabled = sldCornerPack.enabled;
+            sldOtherPack.reset.enabled = sldOtherPack.enabled;
             var selected = getSelectedLattices();
             var naclOnly = selected.length === 1 && selected[0] === "nacl";
             sldCornerPack.caption.text = (naclOnly ? "Na⁺ 구 배율" : "꼭짓점 구 배율") + " (%):";

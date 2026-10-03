@@ -29,6 +29,7 @@ try {
     var LABEL_WIDTH = 70;
     var INPUT_WIDTH = 50;
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
 
     var doc = app.activeDocument;
 
@@ -91,6 +92,8 @@ try {
     try { dlg.defaultElement = null; } catch (defaultError) {}
     footer.add("button", undefined, "취소", { name: "cancel" });
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     applySettings();
     flipHorizontalCheck.value = flipHorizontalLine;
     flipVerticalCheck.value = flipVerticalLine;
@@ -113,9 +116,9 @@ try {
 
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
     bindPositionRow(offsetXControls, function() { return offsetXmm; },
-        function(v) { offsetXmm = v; }, true);
+        function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
     bindPositionRow(offsetYControls, function() { return offsetYmm; },
-        function(v) { offsetYmm = v; }, false);
+        function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
 
     okButton.onClick = function() {
         if (previewGroups.length === 0) {
@@ -294,8 +297,11 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
         return {
-            input: input, slider: slider,
+            input: input, slider: slider, reset: reset,
             min: minimum, max: maximum, step: step, decimals: decimals
         };
     }
@@ -306,7 +312,7 @@ try {
         try { controls.slider.value = value; } catch (e) {}
     }
 
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM_TO_PT;
@@ -319,6 +325,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

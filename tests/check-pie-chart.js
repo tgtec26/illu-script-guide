@@ -38,7 +38,7 @@ assert.ok(wholeSource.indexOf("makeModelCurvesEngine(), makePieChartEngine(), ma
 assert.ok(source.indexOf('label: "원"') > 0, "tab label");
 assert.ok(source.indexOf('var PREF_KEY = "ObjectPieChart/settings"') > 0, "own preference key");
 // 외경 행: 선택한 원의 지름에서 시작하고 내경보다 1mm 이상 크게 유지한다. 선택에서 오는 값이라 저장하지 않는다
-assert.ok(source.indexOf('addValueRow(shapePanel, "외경", "mm", outerMm, OUTER_RANGE_MM[0], OUTER_RANGE_MM[1], 0.5, 1)') > 0, "outer diameter row");
+assert.ok(source.indexOf('addValueRow(shapePanel, "외경", "mm", outerMm, OUTER_RANGE_MM[0], OUTER_RANGE_MM[1], 0.5, 1, DEFAULTS.outerMm)') > 0, "outer diameter row");
 assert.ok(source.indexOf("var maxInner = Math.max(0.5, outerMm - 1);") > 0, "inner diameter capped by outer");
 assert.ok(source.indexOf('var parts = ["v2", count, symbolSet, leaderMaxPercent, innerMm, spinDeg,') > 0, "outer diameter not persisted");
 

@@ -48,6 +48,7 @@ try {
     var ORGANELLE_SCALE = {"핵": 0.3, "마이토콘드리아": 0.18, "엽록체": 0.15};
     var SCATTER_TRIES = 400;
     var LABEL_WIDTH = 100;
+    var RESET_BUTTON_WIDTH = 34;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
     var POSITION_LIMIT_MM = 100;
@@ -85,6 +86,8 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {widthMm: widthMm, heightMm: heightMm, wallMm: wallMm, cytoplasmK: cytoplasmK, mitoCount: mitoCount, chloroCount: chloroCount, seed: seed, fontPt: fontPt, leaderMm: leaderMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var layer = findEditableLayer();
@@ -174,17 +177,17 @@ try {
             return function() { symbolSet = index; updatePreview(); };
         })(sr);
     }
-    bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; });
-    bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; });
-    bindValueRow(wallRow, function() { return wallMm; }, function(v) { wallMm = v; });
-    bindValueRow(kRow, function() { return cytoplasmK; }, function(v) { cytoplasmK = v; });
-    bindValueRow(mitoRow, function() { return mitoCount; }, function(v) { mitoCount = v; syncEnabled(); });
-    bindValueRow(chloroRow, function() { return chloroCount; }, function(v) { chloroCount = v; syncEnabled(); });
-    bindValueRow(seedRow, function() { return seed; }, function(v) { seed = v; });
-    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
-    bindValueRow(leaderRow, function() { return leaderMm; }, function(v) { leaderMm = v; });
-    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
-    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
+    bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; }, function() { return DEFAULTS.widthMm; });
+    bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; }, function() { return DEFAULTS.heightMm; });
+    bindValueRow(wallRow, function() { return wallMm; }, function(v) { wallMm = v; }, function() { return DEFAULTS.wallMm; });
+    bindValueRow(kRow, function() { return cytoplasmK; }, function(v) { cytoplasmK = v; }, function() { return DEFAULTS.cytoplasmK; });
+    bindValueRow(mitoRow, function() { return mitoCount; }, function(v) { mitoCount = v; syncEnabled(); }, function() { return DEFAULTS.mitoCount; });
+    bindValueRow(chloroRow, function() { return chloroCount; }, function(v) { chloroCount = v; syncEnabled(); }, function() { return DEFAULTS.chloroCount; });
+    bindValueRow(seedRow, function() { return seed; }, function(v) { seed = v; }, function() { return DEFAULTS.seed; });
+    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, function() { return DEFAULTS.fontPt; });
+    bindValueRow(leaderRow, function() { return leaderMm; }, function(v) { leaderMm = v; }, function() { return DEFAULTS.leaderMm; });
+    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, function() { return DEFAULTS.offsetXmm; });
+    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, function() { return DEFAULTS.offsetYmm; });
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -230,6 +233,7 @@ try {
     function setRowEnabled(controls, enabled) {
         controls.input.enabled = enabled;
         controls.slider.enabled = enabled;
+        controls.reset.enabled = enabled;
     }
 
     // -------------------------------------------------------
@@ -682,11 +686,14 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
     }
 
     // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
-    function bindValueRow(controls, getter, setter) {
+    function bindValueRow(controls, getter, setter, getDefault) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             controls.input.text = formatNumber(value, controls.decimals);
@@ -697,6 +704,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(getDefault()); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -704,7 +712,7 @@ try {
     }
 
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, getDefault) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM;
@@ -717,6 +725,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(getDefault()); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

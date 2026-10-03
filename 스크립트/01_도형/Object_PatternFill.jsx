@@ -34,6 +34,7 @@ try {
     var LABEL_WIDTH = 80;
     var INPUT_WIDTH = 50;
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var MAX_DOTS = 4000;
     var PATTERN_NAMES = ["점 무늬", "사선 무늬", "모눈 무늬"];
 
@@ -58,6 +59,12 @@ try {
     // targets[i]에 대응하는 미리보기 그룹. 점이 너무 많아 건너뛴 도형은 null
     var previewGroups = [];
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {
+        dotDiameterMm: dotDiameterMm, dotSpacingMm: dotSpacingMm,
+        hatchAngle: hatchAngle, hatchDivisions: hatchDivisions, hatchWeightPt: hatchWeightPt,
+        gridColumns: gridColumns, gridRows: gridRows, gridWeightPt: gridWeightPt
+    };
     applySettings();
 
     // -------------------------------------------------------
@@ -128,14 +135,14 @@ try {
         updatePreview();
     };
 
-    bindValueRow(dotDiameterControls, function() { return dotDiameterMm; }, function(v) { dotDiameterMm = v; });
-    bindValueRow(dotSpacingControls, function() { return dotSpacingMm; }, function(v) { dotSpacingMm = v; });
-    bindValueRow(hatchAngleControls, function() { return hatchAngle; }, function(v) { hatchAngle = v; });
-    bindValueRow(hatchDivisionControls, function() { return hatchDivisions; }, function(v) { hatchDivisions = v; });
-    bindValueRow(hatchWeightControls, function() { return hatchWeightPt; }, function(v) { hatchWeightPt = v; });
-    bindValueRow(gridColumnControls, function() { return gridColumns; }, function(v) { gridColumns = v; });
-    bindValueRow(gridRowControls, function() { return gridRows; }, function(v) { gridRows = v; });
-    bindValueRow(gridWeightControls, function() { return gridWeightPt; }, function(v) { gridWeightPt = v; });
+    bindValueRow(dotDiameterControls, function() { return dotDiameterMm; }, function(v) { dotDiameterMm = v; }, DEFAULTS.dotDiameterMm);
+    bindValueRow(dotSpacingControls, function() { return dotSpacingMm; }, function(v) { dotSpacingMm = v; }, DEFAULTS.dotSpacingMm);
+    bindValueRow(hatchAngleControls, function() { return hatchAngle; }, function(v) { hatchAngle = v; }, DEFAULTS.hatchAngle);
+    bindValueRow(hatchDivisionControls, function() { return hatchDivisions; }, function(v) { hatchDivisions = v; }, DEFAULTS.hatchDivisions);
+    bindValueRow(hatchWeightControls, function() { return hatchWeightPt; }, function(v) { hatchWeightPt = v; }, DEFAULTS.hatchWeightPt);
+    bindValueRow(gridColumnControls, function() { return gridColumns; }, function(v) { gridColumns = v; }, DEFAULTS.gridColumns);
+    bindValueRow(gridRowControls, function() { return gridRows; }, function(v) { gridRows = v; }, DEFAULTS.gridRows);
+    bindValueRow(gridWeightControls, function() { return gridWeightPt; }, function(v) { gridWeightPt = v; }, DEFAULTS.gridWeightPt);
 
     okButton.onClick = function() {
         if (previewGroups.length === 0) {
@@ -457,13 +464,16 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
         return {
-            input: input, slider: slider,
+            input: input, slider: slider, reset: reset,
             min: minimum, max: maximum, step: step, decimals: decimals
         };
     }
 
-    function bindValueRow(controls, getter, setter) {
+    function bindValueRow(controls, getter, setter, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             setter(value);
@@ -473,6 +483,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

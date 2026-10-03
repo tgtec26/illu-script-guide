@@ -41,6 +41,7 @@ try {
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 100;
     var WIDTH_RANGE = [40, 250];
     var THICK_RANGE = [3, 40];
@@ -69,6 +70,8 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {widthMm: widthMm, thickMm: thickMm, dip: dip, reliefMm: reliefMm, mantleMm: mantleMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var layer = findEditableLayer();
@@ -85,22 +88,22 @@ try {
 
     var shapePanel = addPanel(dlg, "모양");
     addRadioRow(shapePanel, "종류", KINDS, kind, function(i) { kind = i; syncEnabled(); updatePreview(); });
-    var widthRow = addValueRow(shapePanel, "너비", "mm", widthMm, WIDTH_RANGE[0], WIDTH_RANGE[1], 1, 0);
-    var thickRow = addValueRow(shapePanel, "판 두께", "mm", thickMm, THICK_RANGE[0], THICK_RANGE[1], 0.5, 1);
-    var dipRow = addValueRow(shapePanel, "섭입 각", "°", dip, DIP_RANGE[0], DIP_RANGE[1], 1, 0);
-    var reliefRow = addValueRow(shapePanel, "지형 높이", "mm", reliefMm, RELIEF_RANGE[0], RELIEF_RANGE[1], 0.5, 1);
+    var widthRow = addValueRow(shapePanel, "너비", "mm", widthMm, WIDTH_RANGE[0], WIDTH_RANGE[1], 1, 0, DEFAULTS.widthMm);
+    var thickRow = addValueRow(shapePanel, "판 두께", "mm", thickMm, THICK_RANGE[0], THICK_RANGE[1], 0.5, 1, DEFAULTS.thickMm);
+    var dipRow = addValueRow(shapePanel, "섭입 각", "°", dip, DIP_RANGE[0], DIP_RANGE[1], 1, 0, DEFAULTS.dip);
+    var reliefRow = addValueRow(shapePanel, "지형 높이", "mm", reliefMm, RELIEF_RANGE[0], RELIEF_RANGE[1], 0.5, 1, DEFAULTS.reliefMm);
     reliefRow.input.helpTip = "해령·화산·습곡 산맥 높이";
-    var mantleRow = addValueRow(shapePanel, "맨틀 두께", "mm", mantleMm, MANTLE_RANGE[0], MANTLE_RANGE[1], 1, 0);
+    var mantleRow = addValueRow(shapePanel, "맨틀 두께", "mm", mantleMm, MANTLE_RANGE[0], MANTLE_RANGE[1], 1, 0, DEFAULTS.mantleMm);
 
     var markPanel = addPanel(dlg, "표시");
     var checkRow = markPanel.add("group");
     var convectionCheck = checkRow.add("checkbox", undefined, "맨틀 대류 화살표");
     var labelsCheck = checkRow.add("checkbox", undefined, "이름");
-    var fontRow = addValueRow(markPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
+    var fontRow = addValueRow(markPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1, DEFAULTS.fontPt);
 
     var positionPanel = addPanel(dlg, "위치");
-    var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-    var offsetYRow = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+    var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1, DEFAULTS.offsetXmm);
+    var offsetYRow = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1, DEFAULTS.offsetYmm);
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -379,6 +382,7 @@ try {
         function setRowEnabled(controls, enabled) {
         controls.input.enabled = enabled;
         controls.slider.enabled = enabled;
+        controls.reset.enabled = enabled;
     }
 
         // 점 목록을 캣멀–롬 곡선으로 잇는 베지어 점 (양 끝 손잡이는 없음)
@@ -588,7 +592,7 @@ try {
         return radios;
     }
 
-        function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals) {
+        function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals, defaultValue) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":")).preferredSize.width = LABEL_WIDTH;
@@ -599,7 +603,10 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, defaultValue: defaultValue, min: minimum, max: maximum, step: step, decimals: decimals};
     }
 
         // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
@@ -614,6 +621,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(controls.defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -634,6 +642,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(controls.defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

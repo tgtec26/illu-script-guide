@@ -34,6 +34,7 @@ try {
     var LABEL_WIDTH = 70;
     var INPUT_WIDTH = 50;
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var NAME_COLUMN_WIDTH = 120;
     var RADIO_COLUMN_WIDTH = 30;
     var POINT_CHECK_WIDTH = 44;
@@ -153,6 +154,8 @@ try {
     var pointT = [20, 40, 40, 60, 80];
     var pointV = [0, 0, 30, 0, 0];
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다. 사각형을 선택했으면 크기는 사각형을 따른다
+    var DEFAULTS = {widthMm: widthMm, heightMm: heightMm, pointSizeMm: pointSizeMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     applySettings();
     for (var z = 0; z < POINT_COUNT; z++) {
         if (pointSat[z]) pointV[z] = saturatedValue(pointSub[z], pointT[z]);
@@ -166,6 +169,8 @@ try {
         originTop = rb[1];
         widthMm = clamp(Math.round((rb[2] - rb[0]) / MM_TO_PT), SIZE_MIN_MM, SIZE_MAX_MM);
         heightMm = clamp(Math.round((rb[1] - rb[3]) / MM_TO_PT), SIZE_MIN_MM, SIZE_MAX_MM);
+        DEFAULTS.widthMm = widthMm;
+        DEFAULTS.heightMm = heightMm;
     } else {
         var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
         originLeft = (ab[0] + ab[2]) / 2 - widthMm * MM_TO_PT / 2;
@@ -317,13 +322,13 @@ try {
     }
 
     // 크기는 다시 그리고, 위치는 미리보기 그룹만 옮긴다
-    bindSizeRow(widthControls, function(v) { widthMm = v; });
-    bindSizeRow(heightControls, function(v) { heightMm = v; });
-    bindSizeRow(pointSizeControls, function(v) { pointSizeMm = v; });
+    bindSizeRow(widthControls, function(v) { widthMm = v; }, DEFAULTS.widthMm);
+    bindSizeRow(heightControls, function(v) { heightMm = v; }, DEFAULTS.heightMm);
+    bindSizeRow(pointSizeControls, function(v) { pointSizeMm = v; }, DEFAULTS.pointSizeMm);
     bindPositionRow(offsetXControls, function() { return offsetXmm; },
-        function(v) { offsetXmm = v; }, true);
+        function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
     bindPositionRow(offsetYControls, function() { return offsetYmm; },
-        function(v) { offsetYmm = v; }, false);
+        function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
 
     okButton.onClick = function() {
         // 입력창에서 바로 확인을 눌러 onChange가 오지 않은 값도 반영한다
@@ -975,8 +980,11 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
         return {
-            input: input, slider: slider,
+            input: input, slider: slider, reset: reset,
             min: minimum, max: maximum, step: step, decimals: decimals
         };
     }
@@ -987,7 +995,7 @@ try {
         try { controls.slider.value = value; } catch (e) {}
     }
 
-    function bindSizeRow(controls, setter) {
+    function bindSizeRow(controls, setter, initial) {
         var current = parseNumber(controls.input.text);
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
@@ -1000,13 +1008,14 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? current : value);
         };
     }
 
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM_TO_PT;
@@ -1019,6 +1028,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

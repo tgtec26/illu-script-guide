@@ -150,6 +150,10 @@ try {
             var white = makeGray(0);
             var labelFont = findTextFont([ITALIC_FONT_NAME, ENG_FONT_NAME]);   // F
             var nameFont = findTextFont([ENG_FONT_NAME]);                      // 물체·실상·허상
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다. 초점 거리는 처음 모양에서 계산한 값이다
+            var DEFAULTS = defaultOptions();
+            DEFAULTS.focalLength = Math.min(1000, Math.max(1, Math.round(lensFocalLength(DEFAULTS.height, DEFAULTS.centerThickness,
+                DEFAULTS.edgeThickness, DEFAULTS.index) * 100) / 100));
             var options = readSettings();
             var rows = {};                  // key → {row, set}: 다른 행 값을 프로그램이 바꿀 때 씀
             var objectItems = collectSelection();   // 선택한 도형 = 물체. 비어 있으면 평행 광선 그림
@@ -170,6 +174,7 @@ try {
 
             var LABEL_WIDTH = 130;   // Object_isometric.jsx와 같은 행 구성
             var SLIDER_WIDTH = 196;
+            var RESET_BUTTON_WIDTH = 34;
             var win = page;
             win.add("statictext", undefined, objectMode ? "선택한 도형을 물체로 상을 작도합니다" : "평행 광선 그림 (도형을 선택하고 실행하면 상 작도)");
 
@@ -353,6 +358,9 @@ try {
                 slider.preferredSize.width = SLIDER_WIDTH;
                 slider.stepdelta = 1;
                 slider.jumpdelta = 10;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
                 rows[key] = { row: row, set: function(value) {
                     input.text = shown(value);
                     slider.value = Math.round(value / step);
@@ -391,6 +399,7 @@ try {
                     if (!/\S/.test(input.text)) { input.text = shown(options[key]); return; }
                     apply(Number(input.text));
                 };
+                reset.onClick = function() { apply(DEFAULTS[key]); };
                 return row;
             }
 
@@ -1169,12 +1178,16 @@ try {
                 };
             }
 
-            function readSettings() {
-                var result = { kind: 0, height: 24, centerThickness: 8, edgeThickness: 1, bulge: 2.5, index: 1.5, outlineWidth: 0.5,
+            function defaultOptions() {
+                return { kind: 0, height: 24, centerThickness: 8, edgeThickness: 1, bulge: 2.5, index: 1.5, outlineWidth: 0.5,
                     hatchMm: 1.5, reach: 40, focalLength: 20, labelSize: 8, rayCount: 5, raySpacing: 4, objectDistance: 45,
                     rayWidth: 0.3, arrowMm: 1.5, arrowPos: 12, offsetX: 0, offsetY: 0,
                     hatch: true, axis: true, centerLine: true, focus: true, focusLabel: true, nameLabels: true,
                     rays: true, rayDashed: false, rayArrows: true, showImage: true, preview: true };
+            }
+
+            function readSettings() {
+                var result = defaultOptions();
                 try {
                     var spec = settingKeys();
                     var p = app.preferences.getStringPreference(PREF_KEY).split("|");
@@ -1229,6 +1242,7 @@ try {
             var LABEL_WIDTH = 100;
             // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
             var SLIDER_WIDTH = 196;
+            var RESET_BUTTON_WIDTH = 34;
             var POSITION_LIMIT_MM = 100;
             var MIRROR_RANGE = [10, 200];
             var DISTANCE_RANGE = [5, 150];
@@ -1257,6 +1271,9 @@ try {
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var DEFAULTS = {mirrorMm: mirrorMm, objectDistMm: objectDistMm, objectHeightMm: objectHeightMm, eyeDistMm: eyeDistMm,
+                eyeHeightMm: eyeHeightMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             readSettings();
 
             var layer = findEditableLayer();
@@ -1296,14 +1313,14 @@ try {
             bottomCheck.onClick = function() { bottomRayOn = bottomCheck.value; updatePreview(); };
             normalCheck.onClick = function() { normalOn = normalCheck.value; updatePreview(); };
             labelsCheck.onClick = function() { labelsOn = labelsCheck.value; updatePreview(); };
-            bindValueRow(mirrorRow, function() { return mirrorMm; }, function(v) { mirrorMm = v; });
-            bindValueRow(objectDistRow, function() { return objectDistMm; }, function(v) { objectDistMm = v; });
-            bindValueRow(objectHeightRow, function() { return objectHeightMm; }, function(v) { objectHeightMm = v; });
-            bindValueRow(eyeDistRow, function() { return eyeDistMm; }, function(v) { eyeDistMm = v; });
-            bindValueRow(eyeHeightRow, function() { return eyeHeightMm; }, function(v) { eyeHeightMm = v; });
-            bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
-            bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
-            bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
+            bindValueRow(mirrorRow, function() { return mirrorMm; }, function(v) { mirrorMm = v; }, DEFAULTS.mirrorMm);
+            bindValueRow(objectDistRow, function() { return objectDistMm; }, function(v) { objectDistMm = v; }, DEFAULTS.objectDistMm);
+            bindValueRow(objectHeightRow, function() { return objectHeightMm; }, function(v) { objectHeightMm = v; }, DEFAULTS.objectHeightMm);
+            bindValueRow(eyeDistRow, function() { return eyeDistMm; }, function(v) { eyeDistMm = v; }, DEFAULTS.eyeDistMm);
+            bindValueRow(eyeHeightRow, function() { return eyeHeightMm; }, function(v) { eyeHeightMm = v; }, DEFAULTS.eyeHeightMm);
+            bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, DEFAULTS.fontPt);
+            bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
+            bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
             // 탭 호스트가 부르는 훅. 미리보기 체크는 호스트 것을 쓴다
             api.setPreview = function(on) { previewEnabled = on; updatePreview(); };
             api.updatePreview = updatePreview;
@@ -1679,11 +1696,14 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
-                return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
+                return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
             }
 
                 // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
-            function bindValueRow(controls, getter, setter) {
+            function bindValueRow(controls, getter, setter, initial) {
                 function commit(value) {
                     value = clamp(roundTo(value, controls.step), controls.min, controls.max);
                     controls.input.text = formatNumber(value, controls.decimals);
@@ -1694,6 +1714,7 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(initial); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? getter() : value);
@@ -1701,7 +1722,7 @@ try {
             }
 
                 // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-            function bindPositionRow(controls, getter, setter, isX) {
+            function bindPositionRow(controls, getter, setter, isX, initial) {
                 function commit(value) {
                     value = clamp(roundTo(value, controls.step), controls.min, controls.max);
                     var delta = (value - getter()) * MM;
@@ -1714,6 +1735,7 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(initial); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? getter() : value);

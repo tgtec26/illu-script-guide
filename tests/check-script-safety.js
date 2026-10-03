@@ -535,7 +535,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
     'slider.stepdelta = step',
     'var viewAngle = 70',
     'var divisionRotation = 90',
-    'addAngleRow(viewPanel, "X축", viewAngle, true)',
+    'addAngleRow(viewPanel, "X축", viewAngle)',
     'directionRow.add("radiobutton", undefined, "상하")',
     'directionRow.add("radiobutton", undefined, "좌우")',
     'directionRow.add("checkbox", undefined, "분할선")',
@@ -2050,11 +2050,11 @@ for (const file of updaterFiles) {
     };
     const fakeParent = {add() { return fakeRow; }};
     const addValueRow = new Function(
-      "LABEL_WIDTH", "STEP_BUTTON_WIDTH", "SLIDER_WIDTH", "UNIT_WIDTH", "formatNumber",
+      "LABEL_WIDTH", "STEP_BUTTON_WIDTH", "SLIDER_WIDTH", "UNIT_WIDTH", "RESET_BUTTON_WIDTH", "formatNumber",
       `${extractFunction(source, "addValueRow")}; return addValueRow;`
     )(
       numberConstant("LABEL_WIDTH"), numberConstant("STEP_BUTTON_WIDTH"),
-      numberConstant("SLIDER_WIDTH"), numberConstant("UNIT_WIDTH"), String
+      numberConstant("SLIDER_WIDTH"), numberConstant("UNIT_WIDTH"), numberConstant("RESET_BUTTON_WIDTH"), String
     );
     const rowControls = addValueRow(fakeParent, "외경", "mm", 40, 5, 200, 0.5, 2);
     const labelElement = rowElements.filter((element) => element.type === "statictext")[0];
@@ -2062,7 +2062,7 @@ for (const file of updaterFiles) {
     assert.strictEqual(rowControls.slider.type, "scrollbar", "cell cycle numeric rows use a scrollbar with built-in arrows");
     assert.strictEqual(rowControls.slider.stepdelta, 0.5, "scrollbar arrows move one step");
     assert.strictEqual(labelElement.text, "외경 (mm):", "unit is folded into the label");
-    assert.deepStrictEqual(rowElements.map((e) => e.type), ["statictext", "edittext", "scrollbar"], "row order is label | input | scrollbar");
+    assert.deepStrictEqual(rowElements.map((e) => e.type), ["statictext", "edittext", "scrollbar", "button"], "row order is label | input | scrollbar | R");
 
     const startBoundaryRadians = new Function(
       `${extractFunction(source, "startBoundaryRadians")}; return startBoundaryRadians;`
@@ -2670,7 +2670,7 @@ for (const file of cabinetFiles) {
   const previewHarness = new Function('options', 'cells', `
     var mmToPt = 2.83464567, originX = -50, originY = 100;
     var cellGeomKeys = {}, cellIndex = {}, previewPending = false;
-    var STEP_BUTTON_WIDTH = 34, CORNER_LABEL_SCALE = 0.9;
+    var STEP_BUTTON_WIDTH = 34, RESET_BUTTON_WIDTH = 34, DEFAULTS = {}, CORNER_LABEL_SCALE = 0.9;
     var doc = {}, lineColor = {}, status = {}, app = {redraw: function() {}};
     var StrokeCap = {BUTTENDCAP: 0}, ElementPlacement = {PLACEATEND: 'end'};
     function makeGray() { return {}; }

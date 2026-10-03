@@ -46,12 +46,15 @@ try {
     var previewEnabled = true;
     var previewItems = [];
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULT_OFFSET_MM = offsetMm;
     applySavedSettings();
 
     var LABEL_WIDTH = 46;
     var INPUT_WIDTH = 54;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
 
     var dlg = new Window("dialog", "오프셋 안내선");
     dlg.orientation = "column";
@@ -60,7 +63,7 @@ try {
     dlg.margins = 12;
 
     var offsetPanel = addPanel(dlg, "오프셋");
-    var offsetField = addNumberField(offsetPanel, "간격", "mm", offsetMm, 0.1, MIN_OFFSET_MM, MAX_OFFSET_MM);
+    var offsetField = addNumberField(offsetPanel, "간격", "mm", offsetMm, 0.1, MIN_OFFSET_MM, MAX_OFFSET_MM, DEFAULT_OFFSET_MM);
     var infoText = offsetPanel.add("statictext", undefined, "");
     infoText.preferredSize.width = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
 
@@ -327,7 +330,7 @@ try {
     }
 
     // 라벨 · 입력칸 · 단위 · 슬라이더를 한 줄에 배치.
-    function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+    function addNumberField(parent, labelText, unit, value, step, minimum, maximum, initial) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         row.spacing = 6;
@@ -340,6 +343,9 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
 
         var field = {row: row, input: input, slider: slider, step: step, minimum: minimum, maximum: maximum, syncing: false};
 
@@ -359,6 +365,10 @@ try {
             slider.value = parsed;
             field.syncing = false;
             updatePreview();
+        };
+        reset.onClick = function() {
+            input.text = formatValue(initial);
+            input.onChange();
         };
         return field;
     }

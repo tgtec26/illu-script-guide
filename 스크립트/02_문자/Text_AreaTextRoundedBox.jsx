@@ -34,6 +34,8 @@ try {
     var lastPreviewTime = 0;
     var PREVIEW_INTERVAL_MS = 40;
     var options = readSettings();
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = defaultOptions();
     var lineColor = makeBlackColor(doc);
     for (var i = 0; i < targets.length; i++) {
         var bounds = getTargetBounds(targets[i]);
@@ -129,6 +131,9 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = 196;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = 34;
+        reset.helpTip = "처음 값으로 되돌리기";
         function apply(value, dragging) {
             value = Math.round(value * 100) / 100;
             if (!isFinite(value) || value < min || value > max) {
@@ -155,6 +160,7 @@ try {
         }
         slider.onChanging = function() { apply(slider.value, true); };
         slider.onChange = function() { apply(slider.value); };
+        reset.onClick = function() { apply(DEFAULTS[key]); };
         input.onChange = function() {
             if (!/\S/.test(input.text)) { input.text = String(options[key]); return; }
             apply(Number(input.text));
@@ -252,9 +258,13 @@ try {
         }
     }
 
-    function readSettings() {
-        var result = { paddingX: 2, paddingY: 1.5, radius: 1.5, tailPosition: "bottom",
+    function defaultOptions() {
+        return { paddingX: 2, paddingY: 1.5, radius: 1.5, tailPosition: "bottom",
             tailOffset: 68, flip: false, offsetX: 0, offsetY: 0, preview: true, tailBend: 100, tailSize: 100 };
+    }
+
+    function readSettings() {
+        var result = defaultOptions();
         try {
             var p = app.preferences.getStringPreference(PREF_KEY).split("|");
             if (p[0] !== "v4" || p.length !== 12) return result;

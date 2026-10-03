@@ -547,6 +547,7 @@ try {
     var PREVIEW_NAME = "Karyotype_Preview";
     var LABEL_WIDTH = 120;
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var BASE_WIDTH = 7;            // 분체 너비 기준값 (단위: 1번 염색체 길이 100). 모양마다 widthScale을 곱한다
     var OUTLINE_PT = 0.5;          // 윤곽선 판의 선 두께
     var KARY_CODES = ["normal", "down", "klinefelter", "turner", "cridu"];
@@ -614,6 +615,8 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = { kPct: kPct, shadePct: shadePct, splayDeg: splayDeg, thickPct: thickPct, marginMm: marginMm, pairGapMm: pairGapMm, labelGapMm: labelGapMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm };
     readSettings();
 
     var previewGroup = null;
@@ -671,27 +674,27 @@ try {
     var colorNames = [];
     for (var cn = 0; cn < COLORS.length; cn++) colorNames.push(COLORS[cn].name);
     var colorList = colorRow.add("dropdownlist", undefined, colorNames);
-    var kRow = addValueRow(shapePanel, "농도 K", "%", kPct, K_RANGE[0], K_RANGE[1], 10, 0);
+    var kRow = addValueRow(shapePanel, "농도 K", "%", kPct, K_RANGE[0], K_RANGE[1], 10, 0, DEFAULTS.kPct);
     kRow.input.helpTip = "K 색일 때 채움(윤곽선 판은 선) 농도. 100 = 검정";
-    var shadeRow = addValueRow(shapePanel, "입체 강도", "%", shadePct, SHADE_RANGE[0], SHADE_RANGE[1], 5, 0);
+    var shadeRow = addValueRow(shapePanel, "입체 강도", "%", shadePct, SHADE_RANGE[0], SHADE_RANGE[1], 5, 0, DEFAULTS.shadePct);
     shadeRow.input.helpTip = "입체 음영의 진하기 (입체일 때). 100이 가장 진하다";
-    var splayRow = addValueRow(shapePanel, "분체 벌림", "°", splayDeg, SPLAY_RANGE[0], SPLAY_RANGE[1], 0.5, 1);
+    var splayRow = addValueRow(shapePanel, "분체 벌림", "°", splayDeg, SPLAY_RANGE[0], SPLAY_RANGE[1], 0.5, 1, DEFAULTS.splayDeg);
     splayRow.input.helpTip = "동원체에서 이 각도로 벌어지다 수직으로 꺾인다 (분체 2개일 때). 짧은 팔은 끝까지 비스듬하다";
-    var thickRow = addValueRow(shapePanel, "두께", "%", thickPct, THICK_RANGE[0], THICK_RANGE[1], 5, 0);
+    var thickRow = addValueRow(shapePanel, "두께", "%", thickPct, THICK_RANGE[0], THICK_RANGE[1], 5, 0, DEFAULTS.thickPct);
     thickRow.input.helpTip = "염색 분체의 너비. 100 = 1번 염색체 길이의 7% (모양마다 배율이 다르다)";
 
     var layoutPanel = addPanel(dlg, "배치");
-    var marginRow = addValueRow(layoutPanel, "안쪽 여백", "mm", marginMm, MARGIN_RANGE[0], MARGIN_RANGE[1], 0.5, 1);
+    var marginRow = addValueRow(layoutPanel, "안쪽 여백", "mm", marginMm, MARGIN_RANGE[0], MARGIN_RANGE[1], 0.5, 1, DEFAULTS.marginMm);
     marginRow.input.helpTip = "선택한 사각형 가장자리와 염색체 사이";
-    var pairGapRow = addValueRow(layoutPanel, "상동 간격", "mm", pairGapMm, GAP_RANGE[0], GAP_RANGE[1], 0.1, 1);
+    var pairGapRow = addValueRow(layoutPanel, "상동 간격", "mm", pairGapMm, GAP_RANGE[0], GAP_RANGE[1], 0.1, 1, DEFAULTS.pairGapMm);
     pairGapRow.input.helpTip = "상동 염색체(짝) 사이 거리. 이웃 번호와는 이보다 2배 이상 띄운다";
-    var labelGapRow = addValueRow(layoutPanel, "번호 간격", "mm", labelGapMm, GAP_RANGE[0], GAP_RANGE[1], 0.1, 1);
+    var labelGapRow = addValueRow(layoutPanel, "번호 간격", "mm", labelGapMm, GAP_RANGE[0], GAP_RANGE[1], 0.1, 1, DEFAULTS.labelGapMm);
     labelGapRow.input.helpTip = "염색체 아래끝과 번호(X, Y 포함) 사이";
-    var fontRow = addValueRow(layoutPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
+    var fontRow = addValueRow(layoutPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1, DEFAULTS.fontPt);
 
     var positionPanel = addPanel(dlg, "위치");
-    var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-    var offsetYRow = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+    var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1, DEFAULTS.offsetXmm);
+    var offsetYRow = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1, DEFAULTS.offsetYmm);
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -811,10 +814,13 @@ try {
     function syncEnabled() {
         splayRow.input.enabled = chromatidCount === 2;
         splayRow.slider.enabled = chromatidCount === 2;
+        splayRow.reset.enabled = chromatidCount === 2;
         shadeRow.input.enabled = renderIdx === 2;
         shadeRow.slider.enabled = renderIdx === 2;
+        shadeRow.reset.enabled = renderIdx === 2;
         kRow.input.enabled = COLORS[colorIdx].gray === true;
         kRow.slider.enabled = COLORS[colorIdx].gray === true;
+        kRow.reset.enabled = COLORS[colorIdx].gray === true;
     }
 
     function showListNote() {
@@ -1114,7 +1120,7 @@ try {
         return panel;
     }
 
-    function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals) {
+    function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals, initial) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":")).preferredSize.width = LABEL_WIDTH;
@@ -1125,7 +1131,10 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return { input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals };
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return { input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals, initial: initial };
     }
 
     // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
@@ -1140,6 +1149,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(controls.initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -1159,6 +1169,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(controls.initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

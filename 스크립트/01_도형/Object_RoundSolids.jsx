@@ -161,6 +161,13 @@ try {
 
             // 외경은 선택한 원에서 오므로 저장하지 않는다. 내경·높이는 새 원 크기에 맞춰 잘라서 복원한다.
             var PREF_KEY = "ObjectCylinder/settings";
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {
+                innerDiameterMm: innerDiameterMm, heightMm: heightMm, waterPercent: waterPercent,
+                viewAngle: viewAngle, viewY: viewY, viewZ: viewZ,
+                divisionCount: divisionCount, divisionRotation: divisionRotation,
+                faceK: faceK.slice(), offsetXmm: offsetXmm, offsetYmm: offsetYmm
+            };
             applySavedSettings();
 
             // 0 버튼이 붙는 줄도 라벨이 잘리지 않도록 넓힌다.
@@ -197,9 +204,9 @@ try {
             waterControls.input.helpTip = "그릇에 담긴 물의 높이 (밑면 0% ~ 윗면 100%). 0이면 물을 그리지 않는다. 내경이 있으면 쓰지 않는다";
 
             var viewPanel = addPanel(dlg, "시점");
-            var xControls = addAngleRow(viewPanel, "X축", viewAngle, true);
-            var yControls = addAngleRow(viewPanel, "Y축", viewY, true);
-            var zControls = addAngleRow(viewPanel, "Z축", viewZ, true);
+            var xControls = addAngleRow(viewPanel, "X축", viewAngle);
+            var yControls = addAngleRow(viewPanel, "Y축", viewY);
+            var zControls = addAngleRow(viewPanel, "Z축", viewZ);
 
             var shapePanel = addPanel(dlg, "방향 · 분할선");
 
@@ -222,6 +229,9 @@ try {
             countSlider.stepdelta = 1;
             countSlider.jumpdelta = 1 * 10;
             countSlider.preferredSize.width = 77;
+            var countReset = countGroup.add("button", undefined, "R");
+            countReset.preferredSize.width = RESET_BUTTON_WIDTH;
+            countReset.helpTip = "처음 값으로 되돌리기";
 
             var rotationControls = addAngleRow(shapePanel, "분할 회전", divisionRotation);
             var rotationInput = rotationControls.input;
@@ -254,6 +264,13 @@ try {
             kSlider.stepdelta = K_STEP;
             kSlider.jumpdelta = K_STEP;
             kSlider.onChanging = function() { setK(Math.round(kSlider.value / K_STEP) * K_STEP); };
+            var kReset = colorRow.add("button", undefined, "R");
+            kReset.preferredSize.width = RESET_BUTTON_WIDTH;
+            kReset.helpTip = "처음 값으로 되돌리기";
+            kReset.onClick = function() {
+                setK(defaults.faceK[activeFace]);
+                updateKDisplay();
+            };
 
             setInnerFaceEnabled(innerDiameterMm > 0);
             updateKDisplay();
@@ -297,6 +314,11 @@ try {
                 updatePreview();
             };
 
+            innerControls.reset.onClick = function() {
+                innerDiameterInput.text = formatNumber(defaults.innerDiameterMm, 2);
+                innerDiameterInput.onChange();
+            };
+
             waterControls.slider.onChanging = function() {
                 waterPercent = clamp(Math.round(waterControls.slider.value), 0, 100);
                 waterControls.input.text = String(waterPercent);
@@ -309,6 +331,11 @@ try {
                 waterControls.input.text = String(waterPercent);
                 waterControls.slider.value = waterPercent;
                 updatePreview();
+            };
+
+            waterControls.reset.onClick = function() {
+                waterControls.input.text = String(defaults.waterPercent);
+                waterControls.input.onChange();
             };
 
             heightSlider.onChanging = function() {
@@ -339,9 +366,14 @@ try {
                 updatePreview();
             };
 
-            bindAngleControls(xControls, function(value) { viewAngle = value; }, function() { return viewAngle; });
-            bindAngleControls(yControls, function(value) { viewY = value; }, function() { return viewY; });
-            bindAngleControls(zControls, function(value) { viewZ = value; }, function() { return viewZ; });
+            heightControls.reset.onClick = function() {
+                heightInput.text = formatNumber(defaults.heightMm, 2);
+                heightInput.onChange();
+            };
+
+            bindAngleControls(xControls, function(value) { viewAngle = value; }, function() { return viewAngle; }, defaults.viewAngle);
+            bindAngleControls(yControls, function(value) { viewY = value; }, function() { return viewY; }, defaults.viewY);
+            bindAngleControls(zControls, function(value) { viewZ = value; }, function() { return viewZ; }, defaults.viewZ);
 
             verticalRadio.onClick = function() {
                 isVertical = true;
@@ -376,6 +408,11 @@ try {
                 updatePreview();
             };
 
+            countReset.onClick = function() {
+                countInput.text = String(defaults.divisionCount);
+                countInput.onChange();
+            };
+
             ratioInput.onChanging = updatePreview;
             countSlider.onChanging = function() {
                 divisionCount = clamp(Math.round(countSlider.value), 2, 24);
@@ -405,6 +442,11 @@ try {
                 rotationSlider.value = divisionRotation;
                 rotationInput.text = formatSignedAngle(divisionRotation);
                 updatePreview();
+            };
+
+            rotationControls.reset.onClick = function() {
+                rotationInput.text = formatSignedAngle(defaults.divisionRotation);
+                rotationInput.onChange();
             };
 
             topFaceRadio.onClick = function() {
@@ -636,18 +678,12 @@ try {
                 return panel;
             }
 
-            // 라벨 · (0 버튼) · 입력칸 · 단위 · 슬라이더를 한 줄에 배치
-            function addValueRow(parent, label, unit, value, minimum, maximum, step, hasReset) {
+            // 라벨 · 입력칸 · 단위 · 슬라이더 · R 버튼을 한 줄에 배치
+            function addValueRow(parent, label, unit, value, minimum, maximum, step) {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 var labelText = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
-                // 0 버튼이 붙는 줄은 라벨을 줄여서 다른 줄과 폭을 맞춘다
-                labelText.preferredSize.width = hasReset ? (LABEL_WIDTH - RESET_BUTTON_WIDTH - 10) : LABEL_WIDTH;
-                var reset = null;
-                if (hasReset) {
-                    reset = row.add("button", undefined, "0");
-                    reset.preferredSize.width = RESET_BUTTON_WIDTH;
-                }
+                labelText.preferredSize.width = LABEL_WIDTH;
                 var input = row.add("edittext", undefined, value);
                 input.characters = 6;
                 input.justify = "right";
@@ -655,13 +691,16 @@ try {
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
                 slider.stepdelta = step;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
                 return {row: row, input: input, slider: slider, reset: reset};
             }
 
-            // 위치 행은 다른 줄과 같은 모양(0 버튼 포함)을 쓴다
+            // 위치 행도 같은 모양(R 버튼 포함)을 쓴다
             function addOffsetRow(parent, label, value) {
                 return addValueRow(parent, label, "mm", formatNumber(value, 1),
-                    -POSITION_LIMIT_MM, POSITION_LIMIT_MM, OFFSET_STEP_MM, true);
+                    -POSITION_LIMIT_MM, POSITION_LIMIT_MM, OFFSET_STEP_MM);
             }
 
             // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -685,7 +724,7 @@ try {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? current() : value);
                 };
-                if (controls.reset) controls.reset.onClick = function() { commit(0); };
+                if (controls.reset) controls.reset.onClick = function() { commit(isX ? defaults.offsetXmm : defaults.offsetYmm); };
             }
 
             function moveItem(item, deltaX, deltaY) {
@@ -693,11 +732,11 @@ try {
                 try { item.translate(deltaX, deltaY); } catch (e) {}
             }
 
-            function addAngleRow(parent, label, value, hasReset) {
-                return addValueRow(parent, label, "°", formatSignedAngle(value), -180, 180, 1, hasReset);
+            function addAngleRow(parent, label, value) {
+                return addValueRow(parent, label, "°", formatSignedAngle(value), -180, 180, 1);
             }
 
-            function bindAngleControls(controls, setter, getter) {
+            function bindAngleControls(controls, setter, getter, initial) {
                 controls.slider.onChanging = function() {
                     var value = Math.round(controls.slider.value);
                     setter(value);
@@ -723,9 +762,9 @@ try {
                 };
                 if (controls.reset) {
                     controls.reset.onClick = function() {
-                        setter(0);
-                        controls.input.text = formatSignedAngle(0);
-                        controls.slider.value = 0;
+                        setter(initial);
+                        controls.input.text = formatSignedAngle(initial);
+                        controls.slider.value = initial;
                         updatePreview();
                     };
                 }
@@ -1444,6 +1483,12 @@ try {
 
             // 크기는 선택한 원에서 계산하므로 저장하지 않는다. 시점·분할선·컬러만 기억한다.
             var PREF_KEY = "ObjectCone/settings";
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {
+                baseDiameterMm: baseDiameterMm, topDiameterMm: topDiameterMm, heightMm: heightMm,
+                viewX: viewX, viewY: viewY, viewZ: viewZ, divisionCount: divisionCount,
+                faceK: faceK.slice(), offsetXmm: offsetXmm, offsetYmm: offsetYmm
+            };
             applySavedSettings();
 
             // 0 버튼이 붙는 줄도 라벨이 잘리지 않도록 넓힌다.
@@ -1482,6 +1527,9 @@ try {
             divisionSlider.stepdelta = 1;
             divisionSlider.jumpdelta = 1 * 10;
             divisionSlider.preferredSize.width = SLIDER_WIDTH;
+            var divisionReset = divisionRow.add("button", undefined, "R");
+            divisionReset.preferredSize.width = RESET_BUTTON_WIDTH;
+            divisionReset.helpTip = "처음 값으로 되돌리기";
 
             var colorRow = extraPanel.add("group");
             colorRow.alignChildren = ["left", "center"];
@@ -1499,6 +1547,13 @@ try {
             kSlider.stepdelta = K_STEP;
             kSlider.jumpdelta = K_STEP;
             kSlider.onChanging = function() { setK(Math.round(kSlider.value / K_STEP) * K_STEP); };
+            var kReset = colorRow.add("button", undefined, "R");
+            kReset.preferredSize.width = RESET_BUTTON_WIDTH;
+            kReset.helpTip = "처음 값으로 되돌리기";
+            kReset.onClick = function() {
+                setK(defaults.faceK[activeFace]);
+                updateKDisplay();
+            };
             updateKDisplay();
 
             var positionPanel = addPanel(dlg, "위치");
@@ -1533,6 +1588,11 @@ try {
                 updatePreview();
             };
 
+            baseControls.reset.onClick = function() {
+                baseInput.text = formatNumber(defaults.baseDiameterMm, 2);
+                baseInput.onChange();
+            };
+
             topSlider.onChanging = function() {
                 topDiameterMm = roundTo(topSlider.value, SIZE_STEP_MM);
                 topInput.text = formatNumber(topDiameterMm, 2);
@@ -1553,6 +1613,11 @@ try {
                 topInput.text = formatNumber(topDiameterMm, 2);
                 topSlider.value = topDiameterMm;
                 updatePreview();
+            };
+
+            topControls.reset.onClick = function() {
+                topInput.text = formatNumber(defaults.topDiameterMm, 2);
+                topInput.onChange();
             };
 
             heightSlider.onChanging = function() {
@@ -1577,6 +1642,11 @@ try {
                 updatePreview();
             };
 
+            heightControls.reset.onClick = function() {
+                heightInput.text = formatNumber(defaults.heightMm, 2);
+                heightInput.onChange();
+            };
+
             divisionInput.onChanging = function() {
                 var value = parseNumber(divisionInput.text);
                 if (value !== null && value >= 0 && value <= 24) {
@@ -1598,9 +1668,14 @@ try {
                 updatePreview();
             };
 
-            bindViewControls(xControls, function(value) { viewX = value; }, function() { return viewX; });
-            bindViewControls(yControls, function(value) { viewY = value; }, function() { return viewY; });
-            bindViewControls(zControls, function(value) { viewZ = value; }, function() { return viewZ; });
+            divisionReset.onClick = function() {
+                divisionInput.text = String(defaults.divisionCount);
+                divisionInput.onChange();
+            };
+
+            bindViewControls(xControls, function(value) { viewX = value; }, function() { return viewX; }, defaults.viewX);
+            bindViewControls(yControls, function(value) { viewY = value; }, function() { return viewY; }, defaults.viewY);
+            bindViewControls(zControls, function(value) { viewZ = value; }, function() { return viewZ; }, defaults.viewZ);
 
             topFaceRadio.onClick = function() {
                 activeFace = FACE_TOP;
@@ -1706,10 +1781,10 @@ try {
                 return value;
             }
 
-            // 위치 행은 다른 줄과 같은 모양(0 버튼 포함)을 쓴다
+            // 위치 행도 같은 모양(R 버튼 포함)을 쓴다
             function addOffsetRow(parent, label, value) {
                 return addValueRow(parent, label, "mm", formatNumber(value, 1),
-                    -POSITION_LIMIT_MM, POSITION_LIMIT_MM, OFFSET_STEP_MM, true);
+                    -POSITION_LIMIT_MM, POSITION_LIMIT_MM, OFFSET_STEP_MM);
             }
 
             // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -1732,7 +1807,7 @@ try {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? (isX ? offsetXmm : offsetYmm) : value);
                 };
-                if (controls.reset) controls.reset.onClick = function() { commit(0); };
+                if (controls.reset) controls.reset.onClick = function() { commit(isX ? defaults.offsetXmm : defaults.offsetYmm); };
             }
 
             function moveItem(item, deltaX, deltaY) {
@@ -1749,18 +1824,12 @@ try {
                 return panel;
             }
 
-            // 라벨 · 입력칸 · 단위 · 슬라이더를 한 줄에 배치
-            function addValueRow(parent, label, unit, value, minimum, maximum, step, hasReset) {
+            // 라벨 · 입력칸 · 단위 · 슬라이더 · R 버튼을 한 줄에 배치
+            function addValueRow(parent, label, unit, value, minimum, maximum, step) {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 var labelText = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
-                // 0 버튼이 붙는 줄은 라벨을 줄여서 다른 줄과 폭을 맞춘다
-                labelText.preferredSize.width = hasReset ? (LABEL_WIDTH - RESET_BUTTON_WIDTH - 10) : LABEL_WIDTH;
-                var reset = null;
-                if (hasReset) {
-                    reset = row.add("button", undefined, "0");
-                    reset.preferredSize.width = RESET_BUTTON_WIDTH;
-                }
+                labelText.preferredSize.width = LABEL_WIDTH;
                 var input = row.add("edittext", undefined, value);
                 input.characters = 6;
                 input.justify = "right";
@@ -1768,6 +1837,9 @@ try {
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
                 slider.stepdelta = step;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
                 return {input: input, slider: slider, reset: reset};
             }
 
@@ -1776,10 +1848,10 @@ try {
             }
 
             function addAngleControls(parent, label, value) {
-                return addValueRow(parent, label, "°", formatSignedAngle(value), -180, 180, 1, true);
+                return addValueRow(parent, label, "°", formatSignedAngle(value), -180, 180, 1);
             }
 
-            function bindViewControls(controls, setter, getter) {
+            function bindViewControls(controls, setter, getter, initial) {
                 controls.slider.onChanging = function() {
                     var value = Math.round(controls.slider.value);
                     setter(value);
@@ -1801,9 +1873,9 @@ try {
                 };
                 if (controls.reset) {
                     controls.reset.onClick = function() {
-                        setter(0);
-                        controls.input.text = formatSignedAngle(0);
-                        controls.slider.value = 0;
+                        setter(initial);
+                        controls.input.text = formatSignedAngle(initial);
+                        controls.slider.value = initial;
                         updatePreview();
                     };
                 }
@@ -2293,6 +2365,7 @@ try {
             var previewEnabled = true;
             var previewGroup = null;
             // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+            var RESET_BUTTON_WIDTH = 34;
             var MM_TO_PT = 2.834645669;
             var POSITION_LIMIT_MM = 100;
             var OFFSET_STEP_MM = 0.1;
@@ -2301,6 +2374,11 @@ try {
             var sourceWasHidden = source.hidden;
 
             var PREF_KEY = "ObjectSphere/settings";
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {
+                longitudeCount: longitudeCount, latitudeCount: latitudeCount, gridRotation: gridRotation,
+                viewX: viewX, viewY: viewY, viewZ: viewZ, offsetXmm: offsetXmm, offsetYmm: offsetYmm
+            };
             applySavedSettings();
 
             var dlg = page;
@@ -2317,6 +2395,7 @@ try {
             var longitudeInput = longitudeRow.add("edittext", undefined, String(longitudeCount));
             longitudeInput.characters = 6;
             var longitudeSlider = addSliderWithSteps(longitudeRow, longitudeCount, 0, 24, 1);
+            var longitudeReset = addResetButton(longitudeRow);
 
             var latitudeRow = gridPanel.add("group");
             latitudeRow.alignChildren = ["left", "center"];
@@ -2326,6 +2405,7 @@ try {
             var latitudeInput = latitudeRow.add("edittext", undefined, String(latitudeCount));
             latitudeInput.characters = 6;
             var latitudeSlider = addSliderWithSteps(latitudeRow, latitudeCount, 0, 11, 1);
+            var latitudeReset = addResetButton(latitudeRow);
             gridPanel.add("statictext", undefined,
                 "순서: 적도 → 북15° → 남15° → 북30° → 남30° → 북45°");
             gridPanel.add("statictext", undefined,
@@ -2339,6 +2419,7 @@ try {
             var rotationInput = rotationRow.add("edittext", undefined, formatSignedAngle(gridRotation));
             rotationInput.characters = 6;
             var rotationSlider = addSliderWithSteps(rotationRow, gridRotation, -180, 180, 1);
+            var rotationReset = addResetButton(rotationRow);
 
             var viewPanel = dlg.add("panel", undefined, "구를 바라보는 시점");
             viewPanel.orientation = "column";
@@ -2373,6 +2454,11 @@ try {
                 updatePreview();
             };
 
+            longitudeReset.onClick = function() {
+                longitudeInput.text = String(defaults.longitudeCount);
+                longitudeInput.onChange();
+            };
+
             latitudeSlider.onChanging = function() {
                 latitudeCount = Math.round(latitudeSlider.value);
                 latitudeInput.text = String(latitudeCount);
@@ -2389,6 +2475,11 @@ try {
             latitudeInput.onChange = function() {
                 latitudeCount = normalizeIntegerInput(latitudeInput, latitudeSlider, latitudeCount, 0, 11);
                 updatePreview();
+            };
+
+            latitudeReset.onClick = function() {
+                latitudeInput.text = String(defaults.latitudeCount);
+                latitudeInput.onChange();
             };
 
             rotationSlider.onChanging = function() {
@@ -2409,9 +2500,14 @@ try {
                 updatePreview();
             };
 
-            bindViewControls(xControls, function(value) { viewX = value; }, function() { return viewX; });
-            bindViewControls(yControls, function(value) { viewY = value; }, function() { return viewY; });
-            bindViewControls(zControls, function(value) { viewZ = value; }, function() { return viewZ; });
+            rotationReset.onClick = function() {
+                rotationInput.text = formatSignedAngle(defaults.gridRotation);
+                rotationInput.onChange();
+            };
+
+            bindViewControls(xControls, function(value) { viewX = value; }, function() { return viewX; }, defaults.viewX);
+            bindViewControls(yControls, function(value) { viewY = value; }, function() { return viewY; }, defaults.viewY);
+            bindViewControls(zControls, function(value) { viewZ = value; }, function() { return viewZ; }, defaults.viewZ);
             resetViewButton.onClick = resetViewControls;
 
             // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -2507,6 +2603,14 @@ try {
                 return slider;
             }
 
+            // 행 끝에 붙이는 R 버튼. 눌렀을 때 하는 일은 각 행을 묶는 곳에서 건다
+            function addResetButton(row) {
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
+                return reset;
+            }
+
             // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
             function addOffsetControls(parent, label, value) {
                 var row = parent.add("group");
@@ -2519,7 +2623,7 @@ try {
                 slider.stepdelta = OFFSET_STEP_MM;
                 slider.jumpdelta = OFFSET_STEP_MM * 10;
                 slider.preferredSize.width = 196;
-                return {input: input, slider: slider};
+                return {input: input, slider: slider, reset: addResetButton(row)};
             }
 
             // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -2541,6 +2645,7 @@ try {
                 function current() { return isX ? offsetXmm : offsetYmm; }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(isX ? defaults.offsetXmm : defaults.offsetYmm); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? current() : value);
@@ -2565,10 +2670,10 @@ try {
                 var input = row.add("edittext", undefined, formatSignedAngle(value));
                 input.characters = 6;
                 var slider = addSliderWithSteps(row, value, -180, 180, 1);
-                return {input: input, slider: slider};
+                return {input: input, slider: slider, reset: addResetButton(row)};
             }
 
-            function bindViewControls(controls, setter, getter) {
+            function bindViewControls(controls, setter, getter, initial) {
                 controls.slider.onChanging = function() {
                     var value = Math.round(controls.slider.value);
                     setter(value);
@@ -2587,6 +2692,10 @@ try {
                     var value = normalizeAngleInput(controls.input, controls.slider, getter());
                     setter(value);
                     updatePreview();
+                };
+                controls.reset.onClick = function() {
+                    controls.input.text = formatSignedAngle(initial);
+                    controls.input.onChange();
                 };
             }
 

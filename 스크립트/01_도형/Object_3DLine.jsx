@@ -107,6 +107,8 @@ try {
     }
 
     var PREF_KEY = "Object3DLine/settings";
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {rotY: rotY, rotX: rotX, rotZ: rotZ, perspectiveMm: perspectiveMm, angleR: angleR, angleL: angleL, depthPercent: depthPercent, brightness: brightness, contrast: contrast, lightAzimuth: lightAzimuth, lightElevation: lightElevation, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     applySavedSettings();
     // 저장된 탭이 선택에 맞지 않으면 선택을 가장 구체적으로 쓰는 탭(회전체 > 돌출 > 입체 도형)으로 연다
     if (engines[tabIndex].error) {
@@ -161,17 +163,17 @@ try {
         "물체를 세로축 둘레로 돌린다. +면 앞면이 오른쪽으로 돌아간다 (회전체는 축 둘레 회전이 뜻이 없어 쓰지 않는다)", function(value, live) {
             rotY = value;
             updatePreview(live);
-        }, true);
+        }, DEFAULTS.rotY);
     var rotXControl = addNumberRow(rotationGroup, "위아래 기울기 (°)", rotX, -180, 180, ANGLE_STEP, 1,
         "앞뒤로 눕힌다. +면 위에서 내려다본다", function(value, live) {
             rotX = value;
             updatePreview(live);
-        }, true);
+        }, DEFAULTS.rotX);
     var rotZControl = addNumberRow(rotationGroup, "화면 회전 (°)", rotZ, -180, 180, ANGLE_STEP, 1,
         "화면을 보는 채로 그림을 돌린다", function(value, live) {
             rotZ = value;
             updatePreview(live);
-        }, true);
+        }, DEFAULTS.rotZ);
 
     var presetRow = rotationGroup.add("group");
     presetRow.alignChildren = ["left", "center"];
@@ -201,7 +203,7 @@ try {
         "가까울수록 원근이 강해진다", function(value, live) {
             perspectiveMm = value;
             updatePreview(live);
-        });
+        }, DEFAULTS.perspectiveMm);
 
     // 관찰 각도 (결정 구조와 같은 제도 방식). 오른쪽 + 왼쪽 + 상단 = 360°
     var angleRControl = addNumberRow(anglesGroup, "오른쪽 각도 (°)", angleR, 91, 179, 1, 0,
@@ -209,18 +211,18 @@ try {
             angleR = value;
             updateTopAngleText();
             updatePreview(live);
-        });
+        }, DEFAULTS.angleR);
     var angleLControl = addNumberRow(anglesGroup, "왼쪽 각도 (°)", angleL, 91, 179, 1, 0,
         "세로 모서리와 왼쪽 아래 모서리 사이의 화면 각도", function(value, live) {
             angleL = value;
             updateTopAngleText();
             updatePreview(live);
-        });
+        }, DEFAULTS.angleL);
     var depthControlRow = addNumberRow(anglesGroup, "앞·뒤 면 거리 (%)", depthPercent, 40, 160, 1, 0,
         "깊이축만 늘리고 줄인다. 100이면 세 축 길이가 같은 제도식 그림", function(value, live) {
             depthPercent = value;
             updatePreview(live);
-        });
+        }, DEFAULTS.depthPercent);
     var topAngleRow = anglesGroup.add("group");
     topAngleRow.alignChildren = ["left", "center"];
     topAngleRow.add("statictext", undefined, "상단 각도(자동):").preferredSize.width = LABEL_WIDTH;
@@ -258,22 +260,22 @@ try {
         "면 K값의 중간. 100이면 K0(흰색), 0이면 K100", function(value, live) {
             brightness = value;
             updateLighting(live);
-        });
+        }, DEFAULTS.brightness);
     var contrastControl = addNumberRow(linePanel, "대비 (%)", contrast, 0, 100, 1, 0,
         "밝은 면과 어두운 면의 K 차이", function(value, live) {
             contrast = value;
             updateLighting(live);
-        });
+        }, DEFAULTS.contrast);
     var lightAzimuthControl = addNumberRow(linePanel, "광원 방위 (°)", lightAzimuth, -90, 90, 1, 0,
         "화면 기준 광원 좌우 위치. 음수 = 왼쪽, 0 = 정면", function(value, live) {
             lightAzimuth = value;
             updateLighting(live);
-        });
+        }, DEFAULTS.lightAzimuth);
     var lightElevationControl = addNumberRow(linePanel, "광원 높이 (°)", lightElevation, 0, 90, 1, 0,
         "화면 기준 광원 높이. 90 = 바로 위", function(value, live) {
             lightElevation = value;
             updateLighting(live);
-        });
+        }, DEFAULTS.lightElevation);
 
     var positionPanel = win.add("panel", undefined, "위치");
     positionPanel.orientation = "column";
@@ -281,11 +283,11 @@ try {
     var offsetXControl = addNumberRow(positionPanel, "가로 (mm)", offsetXmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, OFFSET_STEP_MM, 1, "", function(value) {
             moveOffset(value, true);
-        });
+        }, DEFAULTS.offsetXmm);
     var offsetYControl = addNumberRow(positionPanel, "세로 (mm)", offsetYmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, OFFSET_STEP_MM, 1, "", function(value) {
             moveOffset(value, false);
-        });
+        }, DEFAULTS.offsetYmm);
 
     var buttonRow = win.add("group");
     buttonRow.alignment = "right";
@@ -340,9 +342,6 @@ try {
     isoButton.onClick = function() { setView(45, 35.3, 0); };
     sideButton.onClick = function() { setView(90, 0, 0); };
     topButton.onClick = function() { setView(0, 90, 0); };
-    rotYControl.reset.onClick = function() { rotYControl.set(0); };
-    rotXControl.reset.onClick = function() { rotXControl.set(0); };
-    rotZControl.reset.onClick = function() { rotZControl.set(0); };
     presetSaveButton.onClick = function() { setPresetSaveMode(!presetSaveMode); };
     for (presetIndex = 0; presetIndex < CUSTOM_PRESET_COUNT; presetIndex++) {
         customButtons[presetIndex].onClick = makeCustomPresetHandler(presetIndex);
@@ -388,7 +387,7 @@ try {
     // ---- 다이얼로그 도우미 ------------------------------------------------
 
     // 숫자 조절 행: 라벨 (단위): | 입력창 | 스크롤바
-    function addNumberRow(parent, labelText, value, minimum, maximum, step, decimals, tip, onCommit, hasReset) {
+    function addNumberRow(parent, labelText, value, minimum, maximum, step, decimals, tip, onCommit, initial) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         var caption = row.add("statictext", undefined, labelText + ":");
@@ -401,13 +400,10 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        // 슬라이더 오른쪽의 0 버튼. 값을 0으로 되돌린다
-        var reset = null;
-        if (hasReset) {
-            reset = row.add("button", undefined, "0");
-            reset.preferredSize.width = RESET_BUTTON_WIDTH;
-            reset.helpTip = "0으로 초기화";
-        }
+        // 슬라이더 오른쪽의 R 버튼. 값을 처음 값으로 되돌린다
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
 
         var control = {row: row, caption: caption, input: input, slider: slider, reset: reset, value: value};
 
@@ -433,6 +429,7 @@ try {
             onCommit(parsed, true);
         };
         input.onChange = function() { commit(input.text); };
+        reset.onClick = function() { commit(initial); };
         control.set = function(newValue, silent) { commit(newValue, silent); };
         return control;
     }
@@ -1114,6 +1111,8 @@ try {
         var sideCount = 6;
         var baseRotation = 0;
         var topRatio = 50;
+        // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+        var ENGINE_DEFAULTS = {baseRotation: baseRotation, topRatio: topRatio, widthMm: widthMm, depthMm: depthMm, heightMm: heightMm};
         var showNames = false;   // 꼭짓점 이름 (A, B, C …)
         var NAME_FONT_NAME = "GSMediumB1";
         var NAME_SIZE_PT = 8;
@@ -1191,12 +1190,12 @@ try {
                 "밑면 다각형만 제자리에서 돌린다 (도형의 모양). 시점 프리셋을 눌러도 유지된다", function(value, live) {
                     baseRotation = value;
                     updatePreview(live);
-                });
+                }, ENGINE_DEFAULTS.baseRotation);
             topRatioControl = addNumberRow(shapePanel, "윗면 비율 (%)", topRatio, 0, 100, 1, 0,
                 "밑면 대비 윗면 크기. 0이면 뿔이 된다", function(value, live) {
                     topRatio = value;
                     updatePreview(live);
-                });
+                }, ENGINE_DEFAULTS.topRatio);
 
             var sizePanel = shapePanel;
             widthControl = addNumberRow(sizePanel, "가로 (mm)", widthMm, SIZE_STEP_MM, MAX_SIZE_MM,
@@ -1207,7 +1206,7 @@ try {
                         depthControl.set(value, true);
                     }
                     updatePreview(live);
-                });
+                }, ENGINE_DEFAULTS.widthMm);
             depthControl = addNumberRow(sizePanel, "세로 (mm)", depthMm, SIZE_STEP_MM, MAX_SIZE_MM,
                 SIZE_STEP_MM, 1, "밑면의 세로 지름(안쪽 깊이)", function(value, live) {
                     depthMm = value;
@@ -1216,12 +1215,12 @@ try {
                         widthControl.set(value, true);
                     }
                     updatePreview(live);
-                });
+                }, ENGINE_DEFAULTS.depthMm);
             heightControl = addNumberRow(sizePanel, "높이 (mm)", heightMm, SIZE_STEP_MM, MAX_SIZE_MM,
                 SIZE_STEP_MM, 1, "세로축(Y) 방향 높이", function(value, live) {
                     heightMm = value;
                     updatePreview(live);
-                });
+                }, ENGINE_DEFAULTS.heightMm);
             linkCheck = sizePanel.add("checkbox", undefined, "가로·세로 같게 (정원·정다각형 유지)");
             linkCheck.value = linkWidthDepth;
             namesCheck = sizePanel.add("checkbox", undefined, "꼭짓점 이름 (A, B, C …)");
@@ -2287,6 +2286,8 @@ try {
         var CAP_DEPTH_BIAS = 1e9;       // 뚜껑은 옆면을 모두 그린 뒤에 그린다 (화가 알고리즘 정렬값)
 
         var depthMm = 20;   // 돌출 깊이
+        // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+        var ENGINE_DEFAULTS = {depthMm: depthMm};
         var mergeFaces = false;    // 단일 음영일 때 보이는 선을 면의 획으로 붙인다 (셰이프 빌더로 합친 구조)
         var stablePreviewFills = false; // 광원 미리보기는 띠 경계를 고정하고 색만 바꾼다
         var setPointType = false;   // 확정 출력만 앵커 종류(모서리/매끄러움)를 넣는다. 미리보기는 생략해 DOM 호출을 줄인다
@@ -2338,7 +2339,7 @@ try {
                 "패스를 앞뒤로 미는 거리. 원본 자리는 가운데", function(value, live) {
                     depthMm = value;
                     updatePreview(live);
-                });
+                }, ENGINE_DEFAULTS.depthMm);
             mergeCheck = solidPanel.add("checkbox", undefined, "면에 선 합치기 (단일 음영)");
             mergeCheck.value = mergeFaces;
             mergeCheck.helpTip = "보이는 선을 따로 두지 않고 면마다 획으로 붙인다 (셰이프 빌더로 합친 것과 같은 구조). 숨은선은 그대로 따로 둔다. " +

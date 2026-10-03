@@ -25,6 +25,7 @@ function drawIsometricBox() {
     var offsetStepMm = 0.2;
     var labelWidth = 90;   // 옵션 이름 열 폭 (세로 정렬용)
     var sliderWidth = 196; // 슬라이더 폭 (프리셋 버튼 행 오른쪽 끝에 맞춤)
+    var resetButtonWidth = 34;
     var previewGroup = null;
     var settingFile = new File(Folder.myDocuments + "/Object_isometric__settings.txt");
 
@@ -241,6 +242,7 @@ function drawIsometricBox() {
         control.scrollbar.preferredSize.width = sliderWidth;
         control.scrollbar.stepdelta = 1;
         control.scrollbar.jumpdelta = 10;
+        addResetButton(row, control, String(defaultPct));
         control.isSyncing = false;
 
         control.input.onChange = function() {
@@ -261,6 +263,17 @@ function drawIsometricBox() {
         };
 
         return control;
+    }
+
+    // 입력창에 처음 값을 친 것과 같은 경로로 되돌린다
+    function addResetButton(row, control, initialText) {
+        control.reset = row.add("button", undefined, "R");
+        control.reset.preferredSize.width = resetButtonWidth;
+        control.reset.helpTip = "처음 값으로 되돌리기";
+        control.reset.onClick = function() {
+            control.input.text = initialText;
+            control.input.onChange();
+        };
     }
 
     function syncCompressScrollbar(control, value) {
@@ -323,6 +336,7 @@ function drawIsometricBox() {
         compressPanel.enabled = (kind === 0);
         depthControl.input.enabled = (kind !== 2);
         depthControl.scrollbar.enabled = (kind !== 2);
+        depthControl.reset.enabled = (kind !== 2);
     }
 
     function readCutInput() {
@@ -348,6 +362,7 @@ function drawIsometricBox() {
         control.scrollbar.preferredSize.width = sliderWidth;
         control.scrollbar.stepdelta = 1;
         control.scrollbar.jumpdelta = 10;
+        addResetButton(row, control, String(defaultMm));
         control.isSyncing = false;
 
         control.input.onChange = function() {
@@ -501,6 +516,7 @@ function drawIsometricBox() {
         control.scrollbar.preferredSize.width = sliderWidth;
         control.scrollbar.stepdelta = 1;
         control.scrollbar.jumpdelta = 10;
+        addResetButton(row, control, String(defaultDeg));
         control.isSyncing = false;
 
         control.input.onChange = function() {
@@ -595,6 +611,7 @@ function drawIsometricBox() {
         control.scrollbar.preferredSize.width = sliderWidth;
         control.scrollbar.stepdelta = 1;
         control.scrollbar.jumpdelta = 10;
+        addResetButton(row, control, String(defaultValue));
         control.isSyncing = false;
 
         control.input.onChange = function() {

@@ -94,6 +94,11 @@ try {
     var tintedKey = "";
 
     var PREF_KEY = "LightBurst/settings";
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {rayCount: rayCount, rayLength: rayLength, lengthVar: lengthVar, rayWidth: rayWidth, widthVar: widthVar,
+        rotation: rotation, haloRatio: haloRatio, brightness: brightness, coreRatio: coreRatio,
+        offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    var RESET_BUTTON_WIDTH = 34;
     applySavedSettings();
 
     var dlg = new Window("dialog", "빛 번짐");
@@ -218,19 +223,19 @@ try {
         updatePreview();
     };
 
-    bindNumberRow(countRow, function(value) { rayCount = value; });
-    bindNumberRow(lengthRow, function(value) { rayLength = value; });
-    bindNumberRow(varRow, function(value) { lengthVar = value; });
-    bindNumberRow(widthRow, function(value) { rayWidth = value; });
-    bindNumberRow(widthVarRow, function(value) { widthVar = value; });
-    bindNumberRow(rotationRow, function(value) { rotation = value; });
-    bindNumberRow(haloRow, function(value) { haloRatio = value; });
-    bindNumberRow(brightnessRow, function(value) { brightness = value; });
-    bindNumberRow(coreRow, function(value) { coreRatio = value; });
+    bindNumberRow(countRow, function(value) { rayCount = value; }, DEFAULTS.rayCount);
+    bindNumberRow(lengthRow, function(value) { rayLength = value; }, DEFAULTS.rayLength);
+    bindNumberRow(varRow, function(value) { lengthVar = value; }, DEFAULTS.lengthVar);
+    bindNumberRow(widthRow, function(value) { rayWidth = value; }, DEFAULTS.rayWidth);
+    bindNumberRow(widthVarRow, function(value) { widthVar = value; }, DEFAULTS.widthVar);
+    bindNumberRow(rotationRow, function(value) { rotation = value; }, DEFAULTS.rotation);
+    bindNumberRow(haloRow, function(value) { haloRatio = value; }, DEFAULTS.haloRatio);
+    bindNumberRow(brightnessRow, function(value) { brightness = value; }, DEFAULTS.brightness);
+    bindNumberRow(coreRow, function(value) { coreRatio = value; }, DEFAULTS.coreRatio);
 
     // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
-    bindOffsetControls(offsetXControls, true);
-    bindOffsetControls(offsetYControls, false);
+    bindOffsetControls(offsetXControls, true, DEFAULTS.offsetXmm);
+    bindOffsetControls(offsetYControls, false, DEFAULTS.offsetYmm);
 
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
@@ -355,11 +360,14 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = 196;
-        return {label: label.replace(/\s*\(.*$/, ""), input: input, slider: slider,
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {label: label.replace(/\s*\(.*$/, ""), input: input, slider: slider, reset: reset,
             min: limit[0], max: limit[1], step: step, decimals: decimals, setter: null};
     }
 
-    function bindNumberRow(row, setter) {
+    function bindNumberRow(row, setter, initial) {
         row.setter = setter;
         function commit(value, fromSlider) {
             value = snap(clamp(value, row.min, row.max), row.step);
@@ -370,6 +378,7 @@ try {
         }
         row.slider.onChanging = function() { commit(row.slider.value, true); };
         row.slider.onChange = function() { commit(row.slider.value, true); };
+        row.reset.onClick = function() { commit(initial, false); };
         row.input.onChanging = function() {
             var value = parseNumber(row.input.text);
             if (value === null || value < row.min || value > row.max) return;
@@ -409,11 +418,14 @@ try {
         slider.stepdelta = OFFSET_STEP_MM;
         slider.jumpdelta = OFFSET_STEP_MM * 10;
         slider.preferredSize.width = 196;
-        return {input: input, slider: slider};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset};
     }
 
     // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
-    function bindOffsetControls(controls, isX) {
+    function bindOffsetControls(controls, isX, initial) {
         function commit(value) {
             if (value === null || !isFinite(value)) return;
             value = snap(clamp(value, -POSITION_LIMIT_MM, POSITION_LIMIT_MM), OFFSET_STEP_MM);
@@ -429,6 +441,7 @@ try {
         function current() { return isX ? offsetXmm : offsetYmm; }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? current() : value);

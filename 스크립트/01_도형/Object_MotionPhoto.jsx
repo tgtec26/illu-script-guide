@@ -71,6 +71,7 @@ try {
 
     var LABEL_WIDTH = 120;
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 100;
 
     // 저장 순서: 라디오, 체크박스, 숫자(NUMBER_KEYS)
@@ -108,6 +109,9 @@ try {
         offsetX: 0, offsetY: 0,
         previewOn: true
     };
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {};
+    for (var d = 0; d < NUMBER_KEYS.length; d++) DEFAULTS[NUMBER_KEYS[d]] = options[NUMBER_KEYS[d]];
     applySettings();
 
     var previewGroup = null;
@@ -219,6 +223,7 @@ try {
     function setRowEnabled(controls, enabled) {
         controls.input.enabled = enabled;
         controls.slider.enabled = enabled;
+        controls.reset.enabled = enabled;
     }
 
     function commitDistText() {
@@ -655,7 +660,10 @@ try {
         slider.stepdelta = spec.step;
         slider.jumpdelta = spec.step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        rows[key] = {input: input, slider: slider, min: spec.range[0], max: spec.range[1], step: spec.step, decimals: spec.decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        rows[key] = {input: input, slider: slider, reset: reset, min: spec.range[0], max: spec.range[1], step: spec.step, decimals: spec.decimals};
         return rows[key];
     }
 
@@ -676,6 +684,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(DEFAULTS[key]); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? options[key] : value);
@@ -695,6 +704,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(DEFAULTS[key]); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? options[key] : value);

@@ -73,6 +73,8 @@ try {
     var lineWasHidden = linePath.hidden;
     var unitWasHidden = unitItem.hidden;
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {gapMm: gapMm, spacingMm: spacingMm, curvatureFixPercent: curvatureFixPercent, startRadiusMm: startRadiusMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     applySavedSettings();
 
     // 가장 긴 라벨("보정 시작 반지름")이 잘리지 않는 너비.
@@ -80,6 +82,7 @@ try {
     var INPUT_WIDTH = 54;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
 
     var dlg = new Window("dialog", "인지질 2중층");
     dlg.orientation = "column";
@@ -104,6 +107,12 @@ try {
     // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
     bindOffsetField(offsetXField, true);
     bindOffsetField(offsetYField, false);
+    addResetButton(gapField, DEFAULTS.gapMm);
+    addResetButton(spacingField, DEFAULTS.spacingMm);
+    addResetButton(curvatureField, DEFAULTS.curvatureFixPercent);
+    addResetButton(radiusField, DEFAULTS.startRadiusMm);
+    addResetButton(offsetXField, DEFAULTS.offsetXmm);
+    addResetButton(offsetYField, DEFAULTS.offsetYmm);
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -590,6 +599,17 @@ try {
             commitField(field);
         };
         return field;
+    }
+
+    // 행 오른쪽에 R 버튼을 붙인다. 입력칸에 처음 값을 친 것과 같은 경로로 되돌린다
+    function addResetButton(field, defaultValue) {
+        var reset = field.row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        reset.onClick = function() {
+            field.input.text = formatValue(defaultValue);
+            field.input.onChange();
+        };
     }
 
     // 위치 필드는 도형을 다시 만들지 않고 미리보기만 옮기도록 갈아끼운다

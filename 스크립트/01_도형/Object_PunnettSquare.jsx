@@ -37,6 +37,7 @@ try {
     var INPUT_WIDTH = 50;
     var GENO_WIDTH = 100;
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 100;
     var CELL_RANGE = [5, 30];
     var FONT_RANGE = [5, 20];
@@ -61,6 +62,8 @@ try {
 
     var previewGroup = null;
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {cellMm: cellMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     applySettings();
 
     // -------------------------------------------------------
@@ -119,11 +122,11 @@ try {
     circleCheck.onClick = function() { circleOn = circleCheck.value; updatePreview(); };
     shadeCheck.onClick = function() { shadeOn = shadeCheck.value; updatePreview(); };
     previewCheck.onClick = function() { previewEnabled = previewCheck.value; updatePreview(); };
-    bindValueRow(cellRow, function(v) { cellMm = v; });
-    bindValueRow(fontRow, function(v) { fontPt = v; });
+    bindValueRow(cellRow, function(v) { cellMm = v; }, DEFAULTS.cellMm);
+    bindValueRow(fontRow, function(v) { fontPt = v; }, DEFAULTS.fontPt);
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
-    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
+    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
+    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
 
     okButton.onClick = function() {
         var cross = buildCross(parent1, parent2, mergeOn);
@@ -453,10 +456,13 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return { input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals };
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return { input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals };
     }
 
-    function bindValueRow(controls, setter) {
+    function bindValueRow(controls, setter, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             setter(value);
@@ -465,13 +471,14 @@ try {
             updatePreview();
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? controls.slider.value : value);
         };
     }
 
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM;
@@ -484,6 +491,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

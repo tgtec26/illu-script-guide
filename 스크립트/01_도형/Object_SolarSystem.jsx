@@ -92,6 +92,8 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {earthMm: earthMm, gapMm: gapMm, orbitGapMm: orbitGapMm, tiltDeg: tiltDeg, spinDeg: spinDeg, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var layer = findEditableLayer();
@@ -126,12 +128,6 @@ try {
     var tiltRow = addValueRow(viewPanel, "위아래 기울기", "°", tiltDeg, TILT_RANGE[0], TILT_RANGE[1], 1, 0);
     tiltRow.input.helpTip = "0이면 위에서 본 원, 올릴수록 납작한 타원";
     var spinRow = addValueRow(viewPanel, "화면 회전", "°", spinDeg, SPIN_RANGE[0], SPIN_RANGE[1], 1, 0);
-    var viewRows = [tiltRow, spinRow];
-    for (var vr = 0; vr < viewRows.length; vr++) {
-        var zero = viewRows[vr].input.parent.add("button", undefined, "0");
-        zero.preferredSize.width = RESET_BUTTON_WIDTH;
-        viewRows[vr].reset = zero;
-    }
     var presetRow = viewPanel.add("group");
     presetRow.add("statictext", undefined, "시점 프리셋:").preferredSize.width = LABEL_WIDTH;
     var presetButtons = [];
@@ -214,13 +210,11 @@ try {
     };
     markCheck.onClick = function() { groupMark = markCheck.value; updatePreview(); };
     labelCheck.onClick = function() { labelsOn = labelCheck.value; syncEnabled(); updatePreview(); };
-    bindValueRow(earthRow, function() { return earthMm; }, function(v) { earthMm = v; });
-    bindValueRow(gapRow, function() { return gapMm; }, function(v) { gapMm = v; });
-    bindValueRow(orbitRow, function() { return orbitGapMm; }, function(v) { orbitGapMm = v; });
-    bindValueRow(tiltRow, function() { return tiltDeg; }, function(v) { tiltDeg = v; });
-    bindValueRow(spinRow, function() { return spinDeg; }, function(v) { spinDeg = v; });
-    tiltRow.reset.onClick = function() { setView(0, spinDeg); };
-    spinRow.reset.onClick = function() { setView(tiltDeg, 0); };
+    bindValueRow(earthRow, function() { return earthMm; }, function(v) { earthMm = v; }, DEFAULTS.earthMm);
+    bindValueRow(gapRow, function() { return gapMm; }, function(v) { gapMm = v; }, DEFAULTS.gapMm);
+    bindValueRow(orbitRow, function() { return orbitGapMm; }, function(v) { orbitGapMm = v; }, DEFAULTS.orbitGapMm);
+    bindValueRow(tiltRow, function() { return tiltDeg; }, function(v) { tiltDeg = v; }, DEFAULTS.tiltDeg);
+    bindValueRow(spinRow, function() { return spinDeg; }, function(v) { spinDeg = v; }, DEFAULTS.spinDeg);
     for (var pb = 0; pb < presetButtons.length; pb++) {
         presetButtons[pb].onClick = (function(preset) {
             return function() { setView(preset.tilt, preset.spin); };
@@ -231,6 +225,9 @@ try {
             return function() { return planetAngles[index]; };
         })(ab), (function(index) {
             return function(v) { planetAngles[index] = v; if (index === 0 && sameAngle) syncAngleRows(); };
+        })(ab), (function(index) {
+            // 처음 각도는 전체 궤도 기준. 반원이면 켤 때와 같이 절반
+            return function() { return halfOrbit ? DEFAULT_ANGLES[index] / 2 : DEFAULT_ANGLES[index]; };
         })(ab));
     }
     shuffleButton.onClick = function() {
@@ -240,9 +237,9 @@ try {
         }
         updatePreview();
     };
-    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
-    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
-    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
+    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, DEFAULTS.fontPt);
+    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
+    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -298,7 +295,7 @@ try {
     function setRowEnabled(controls, enabled) {
         controls.input.enabled = enabled;
         controls.slider.enabled = enabled;
-        if (controls.reset) controls.reset.enabled = enabled;
+        controls.reset.enabled = enabled;
     }
 
     function setView(tilt, spin) {
@@ -721,11 +718,14 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
     }
 
     // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
-    function bindValueRow(controls, getter, setter) {
+    function bindValueRow(controls, getter, setter, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             controls.input.text = formatNumber(value, controls.decimals);
@@ -736,6 +736,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(typeof initial === "function" ? initial() : initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -743,7 +744,7 @@ try {
     }
 
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM;
@@ -756,6 +757,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

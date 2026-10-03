@@ -16,7 +16,7 @@ try {
 (function () {
     var PREF_KEY = "LivePaintGap/settings";
     var MM = 2.834645669;
-    var TOL_MIN = 0.1, TOL_MAX = 30, TOL_STEP = 0.1;
+    var TOL_MIN = 0.1, TOL_MAX = 30, TOL_STEP = 0.1, TOL_DEFAULT = 3;
     var TOUCH = 0.05;      // 이 거리 안이면 이미 붙은 것으로 본다 (pt)
     var CURVE_STEPS = 12;  // 곡선 마디를 꺾은선으로 근사하는 조각 수
     var HAIR = 0.01;       // 틈을 잇는 선의 두께 (pt). 확장 뒤 이 두께의 선을 지운다
@@ -230,12 +230,17 @@ try {
     var row = win.add("group");
     row.alignChildren = ["left", "center"];
     row.add("statictext", undefined, "틈 허용치 (mm):");
-    var input = row.add("edittext", undefined, String(saved ? saved.tol : 3));
+    var input = row.add("edittext", undefined, String(saved ? saved.tol : TOL_DEFAULT));
     input.characters = 6;
-    var bar = win.add("scrollbar", undefined, Math.round((saved ? saved.tol : 3) / TOL_STEP), Math.round(TOL_MIN / TOL_STEP), Math.round(TOL_MAX / TOL_STEP));
+    var barRow = win.add("group");
+    barRow.alignChildren = ["left", "center"];
+    var bar = barRow.add("scrollbar", undefined, Math.round((saved ? saved.tol : TOL_DEFAULT) / TOL_STEP), Math.round(TOL_MIN / TOL_STEP), Math.round(TOL_MAX / TOL_STEP));
     bar.preferredSize.width = 260;
     bar.stepdelta = 1;
     bar.jumpdelta = 10;
+    var resetBtn = barRow.add("button", undefined, "R");
+    resetBtn.preferredSize.width = 34;
+    resetBtn.helpTip = "처음 값으로 되돌리기";
 
     var expandCheck = win.add("checkbox", undefined, "면을 임의 색으로 채우기");
     expandCheck.value = saved ? saved.expand : true;
@@ -285,6 +290,7 @@ try {
         refresh();
     };
     bar.onChange = bar.onChanging;
+    resetBtn.onClick = function () { input.text = String(TOL_DEFAULT); input.onChange(); };
     previewCheck.onClick = refresh;
     expandCheck.onClick = refresh;
     okBtn.onClick = function () { win.close(1); };

@@ -41,6 +41,7 @@ try {
     var LABEL_WIDTH = 110;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 50;
     var LENGTH_RANGE = [1, 60];
     var WIDTH_RANGE = [0.1, 3];
@@ -72,6 +73,8 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다 (힘 길이는 FORCES[i].length)
+    var DEFAULTS = {lineWidth: lineWidth, headScale: headScale, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var previewGroup = null;
@@ -133,11 +136,11 @@ try {
         })(ar);
     }
     labelCheck.onClick = function() { labelsOn = labelCheck.value; syncEnabled(); updatePreview(); };
-    bindValueRow(widthRow, function() { return lineWidth; }, function(v) { lineWidth = v; });
-    bindValueRow(headRow, function() { return headScale; }, function(v) { headScale = v; });
-    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
-    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
-    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
+    bindValueRow(widthRow, function() { return lineWidth; }, function(v) { lineWidth = v; }, DEFAULTS.lineWidth);
+    bindValueRow(headRow, function() { return headScale; }, function(v) { headScale = v; }, DEFAULTS.headScale);
+    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, DEFAULTS.fontPt);
+    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
+    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -162,9 +165,10 @@ try {
         for (var i = 0; i < forceRows.length; i++) {
             forceRows[i].input.enabled = enabled[i];
             forceRows[i].slider.enabled = enabled[i];
+            forceRows[i].reset.enabled = enabled[i];
         }
         for (var j = 0; j < appliedRadios.length; j++) appliedRadios[j].enabled = enabled[4];
-        fontRow.input.enabled = fontRow.slider.enabled = labelsOn;
+        fontRow.input.enabled = fontRow.slider.enabled = fontRow.reset.enabled = labelsOn;
     }
 
     // -------------------------------------------------------
@@ -476,7 +480,10 @@ try {
         slider.stepdelta = 0.5;
         slider.jumpdelta = 5;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {check: check, input: input, slider: slider, min: LENGTH_RANGE[0], max: LENGTH_RANGE[1], step: 0.5, decimals: 1};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {check: check, input: input, slider: slider, reset: reset, min: LENGTH_RANGE[0], max: LENGTH_RANGE[1], step: 0.5, decimals: 1};
     }
 
     function bindForceRow(controls, index) {
@@ -485,7 +492,7 @@ try {
             syncEnabled();
             updatePreview();
         };
-        bindValueRow(controls, function() { return lengths[index]; }, function(v) { lengths[index] = v; });
+        bindValueRow(controls, function() { return lengths[index]; }, function(v) { lengths[index] = v; }, FORCES[index].length);
     }
 
     function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals) {
@@ -499,11 +506,14 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
     }
 
     // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
-    function bindValueRow(controls, getter, setter) {
+    function bindValueRow(controls, getter, setter, defaultValue) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             controls.input.text = formatNumber(value, controls.decimals);
@@ -514,6 +524,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -521,7 +532,7 @@ try {
     }
 
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, defaultValue) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM;
@@ -534,6 +545,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

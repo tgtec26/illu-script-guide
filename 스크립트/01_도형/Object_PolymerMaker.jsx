@@ -39,20 +39,22 @@ try {
 
     // ── 1-5. 저장된 환경설정 불러오기 ────────────────────────
     var PREF_PREFIX = "PolymerMaker_";
+    // 처음 값: R 버튼이 되돌아가는 값이자 저장값이 없을 때 쓰는 값
+    var DEFAULTS = {width: 6, gap: 1, shapeStroke: 1, connStroke: 1, innerK: 0, offsetX: 0, offsetY: 0};
     var savedShape = app.preferences.getStringPreference(PREF_PREFIX + "Shape") || "circle";
-    var savedWidth = app.preferences.getStringPreference(PREF_PREFIX + "Width") || "6";
-    var savedGap = app.preferences.getStringPreference(PREF_PREFIX + "Gap") || "1";
-    var savedShapeStroke = app.preferences.getStringPreference(PREF_PREFIX + "ShapeStroke") || "1";
-    var savedConnStroke = app.preferences.getStringPreference(PREF_PREFIX + "ConnStroke") || "1";
-    var savedInnerK = app.preferences.getStringPreference(PREF_PREFIX + "InnerK") || "0";
+    var savedWidth = app.preferences.getStringPreference(PREF_PREFIX + "Width") || String(DEFAULTS.width);
+    var savedGap = app.preferences.getStringPreference(PREF_PREFIX + "Gap") || String(DEFAULTS.gap);
+    var savedShapeStroke = app.preferences.getStringPreference(PREF_PREFIX + "ShapeStroke") || String(DEFAULTS.shapeStroke);
+    var savedConnStroke = app.preferences.getStringPreference(PREF_PREFIX + "ConnStroke") || String(DEFAULTS.connStroke);
+    var savedInnerK = app.preferences.getStringPreference(PREF_PREFIX + "InnerK") || String(DEFAULTS.innerK);
     // 헥사 코드는 특수한 경우에만 쓰므로 기본은 빈 값(= K값 사용)
     var savedHexColor = app.preferences.getStringPreference(PREF_PREFIX + "InnerHex") || "";
     var savedShade = app.preferences.getStringPreference(PREF_PREFIX + "Shade") === "true";
 
     var MM = 2.834645; // mm to points conversion
     var SAMPLES = 2000;
-    var savedOffsetX = app.preferences.getStringPreference(PREF_PREFIX + "OffsetX") || "0";
-    var savedOffsetY = app.preferences.getStringPreference(PREF_PREFIX + "OffsetY") || "0";
+    var savedOffsetX = app.preferences.getStringPreference(PREF_PREFIX + "OffsetX") || String(DEFAULTS.offsetX);
+    var savedOffsetY = app.preferences.getStringPreference(PREF_PREFIX + "OffsetY") || String(DEFAULTS.offsetY);
 
     var POSITION_LIMIT_MM = 100;
     var OFFSET_STEP_MM = 0.1;
@@ -93,10 +95,10 @@ try {
     panelSize.margins = 15;
     panelSize.spacing = 10;
 
-    var fieldW = addNumberField(panelSize, "단위체 가로 폭 (mm):", 120, savedWidth, 0.2, 1, 100);
-    var fieldSW = addNumberField(panelSize, "단위체 선 굵기 (pt):", 120, savedShapeStroke, 0.1, 0, 20);
-    var fieldG = addNumberField(panelSize, "연결선 길이 (mm):", 120, savedGap, 0.1, 0, 50);
-    var fieldCSW = addNumberField(panelSize, "연결선 굵기 (pt):", 120, savedConnStroke, 0.1, 0, 20);
+    var fieldW = addNumberField(panelSize, "단위체 가로 폭 (mm):", 120, savedWidth, 0.2, 1, 100, DEFAULTS.width);
+    var fieldSW = addNumberField(panelSize, "단위체 선 굵기 (pt):", 120, savedShapeStroke, 0.1, 0, 20, DEFAULTS.shapeStroke);
+    var fieldG = addNumberField(panelSize, "연결선 길이 (mm):", 120, savedGap, 0.1, 0, 50, DEFAULTS.gap);
+    var fieldCSW = addNumberField(panelSize, "연결선 굵기 (pt):", 120, savedConnStroke, 0.1, 0, 20, DEFAULTS.connStroke);
 
     var inW = fieldW.input;
     var inSW = fieldSW.input;
@@ -110,7 +112,7 @@ try {
     panelOpt.margins = 15;
 
     var groupColor = panelOpt.add("group");
-    var fieldK = addNumberField(groupColor, "내부 컬러 (K):", 90, savedInnerK, 10, 0, 100);
+    var fieldK = addNumberField(groupColor, "내부 컬러 (K):", 90, savedInnerK, 10, 0, 100, DEFAULTS.innerK);
 
     var groupHex = groupColor.add("group");
     groupHex.margins = [15, 0, 0, 0];
@@ -131,9 +133,9 @@ try {
     panelPosition.margins = 15;
     panelPosition.spacing = 10;
     var fieldOffsetX = addNumberField(panelPosition, "가로 (mm):", 120, offsetXmm,
-        OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetX);
     var fieldOffsetY = addNumberField(panelPosition, "세로 (mm):", 120, offsetYmm,
-        OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetY);
     // 위치는 도형을 다시 만들지 않고 미리보기만 옮긴다
     bindOffsetField(fieldOffsetX, true);
     bindOffsetField(fieldOffsetY, false);
@@ -168,7 +170,7 @@ try {
     };
 
     // 라벨 · 입력칸 · 슬라이더를 한 줄에 배치. 슬라이더를 끌면 step 단위로 값이 바뀐다.
-    function addNumberField(parent, labelText, labelWidth, initialValue, step, minimum, maximum) {
+    function addNumberField(parent, labelText, labelWidth, initialValue, step, minimum, maximum, defaultValue) {
         // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
         var group = parent.add("group");
         group.orientation = "row";
@@ -205,6 +207,13 @@ try {
             slider.value = value;
             field.syncing = false;
             commitField(field);
+        };
+        var reset = group.add("button", undefined, "R");
+        reset.preferredSize.width = 34;
+        reset.helpTip = "처음 값으로 되돌리기";
+        reset.onClick = function () {
+            input.text = formatValue(defaultValue);
+            input.onChange();
         };
         return field;
     }

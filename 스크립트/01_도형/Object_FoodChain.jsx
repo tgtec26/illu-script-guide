@@ -69,6 +69,7 @@ try {
     var LABEL_GAP_MM = 1;
     var CHECK_COLUMNS = 3;
     var LABEL_WIDTH = 100;
+    var RESET_BUTTON_WIDTH = 34;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
     var POSITION_LIMIT_MM = 100;
@@ -102,6 +103,8 @@ try {
         var offsetXmm = 0;
         var offsetYmm = 0;
         var previewEnabled = true;
+        // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+        var defaults = {sizeMm: sizeMm, hGapMm: hGapMm, vGapMm: vGapMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
         readPlaceSettings();
 
         var layer = findEditableLayer();
@@ -150,18 +153,18 @@ try {
         footer.add("button", undefined, "취소", {name: "cancel"});
 
         labelCheck.value = showLabel;
-        fontRow.input.enabled = fontRow.slider.enabled = showLabel;
+        fontRow.input.enabled = fontRow.slider.enabled = fontRow.reset.enabled = showLabel;
         labelCheck.onClick = function() {
             showLabel = labelCheck.value;
-            fontRow.input.enabled = fontRow.slider.enabled = showLabel;
+            fontRow.input.enabled = fontRow.slider.enabled = fontRow.reset.enabled = showLabel;
             updatePreview();
         };
-        bindValueRow(sizeRow, function() { return sizeMm; }, function(v) { sizeMm = v; }, updatePreview);
-        bindValueRow(hGapRow, function() { return hGapMm; }, function(v) { hGapMm = v; }, updatePreview);
-        bindValueRow(vGapRow, function() { return vGapMm; }, function(v) { vGapMm = v; }, updatePreview);
-        bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, updatePreview);
-        bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, movePreview);
-        bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, movePreview);
+        bindValueRow(sizeRow, function() { return sizeMm; }, function(v) { sizeMm = v; }, updatePreview, defaults.sizeMm);
+        bindValueRow(hGapRow, function() { return hGapMm; }, function(v) { hGapMm = v; }, updatePreview, defaults.hGapMm);
+        bindValueRow(vGapRow, function() { return vGapMm; }, function(v) { vGapMm = v; }, updatePreview, defaults.vGapMm);
+        bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, updatePreview, defaults.fontPt);
+        bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, movePreview, defaults.offsetXmm);
+        bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, movePreview, defaults.offsetYmm);
         previewCheck.onClick = function() {
             previewEnabled = previewCheck.value;
             updatePreview();
@@ -397,6 +400,8 @@ try {
         var bendDeg = 0;
         var lineK = 100;
         var previewEnabled = true;
+        // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+        var defaults = {lineWidthPt: lineWidthPt, headScale: headScale, clearMm: clearMm, bendDeg: bendDeg, lineK: lineK};
         readArrowSettings();
 
         var links = findLinks(organisms);
@@ -433,11 +438,11 @@ try {
         try { dlg.defaultElement = null; } catch (defaultError) {}
         footer.add("button", undefined, "취소", {name: "cancel"});
 
-        bindValueRow(lineRow, function() { return lineWidthPt; }, function(v) { lineWidthPt = v; }, updatePreview);
-        bindValueRow(headRow, function() { return headScale; }, function(v) { headScale = v; }, updatePreview);
-        bindValueRow(clearRow, function() { return clearMm; }, function(v) { clearMm = v; }, updatePreview);
-        bindValueRow(bendRow, function() { return bendDeg; }, function(v) { bendDeg = v; }, updatePreview);
-        bindValueRow(kRow, function() { return lineK; }, function(v) { lineK = v; }, updatePreview);
+        bindValueRow(lineRow, function() { return lineWidthPt; }, function(v) { lineWidthPt = v; }, updatePreview, defaults.lineWidthPt);
+        bindValueRow(headRow, function() { return headScale; }, function(v) { headScale = v; }, updatePreview, defaults.headScale);
+        bindValueRow(clearRow, function() { return clearMm; }, function(v) { clearMm = v; }, updatePreview, defaults.clearMm);
+        bindValueRow(bendRow, function() { return bendDeg; }, function(v) { bendDeg = v; }, updatePreview, defaults.bendDeg);
+        bindValueRow(kRow, function() { return lineK; }, function(v) { lineK = v; }, updatePreview, defaults.lineK);
         previewCheck.onClick = function() {
             previewEnabled = previewCheck.value;
             updatePreview();
@@ -887,11 +892,14 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
     }
 
     // 값이 바뀌면 상태에 쓰고 onChange(미리보기 다시 그리기)를 부른다
-    function bindValueRow(controls, getter, setter, onChange) {
+    function bindValueRow(controls, getter, setter, onChange, defaultValue) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             controls.input.text = formatNumber(value, controls.decimals);
@@ -902,6 +910,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -909,7 +918,7 @@ try {
     }
 
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-    function bindPositionRow(controls, getter, setter, isX, move) {
+    function bindPositionRow(controls, getter, setter, isX, move, defaultValue) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM;
@@ -922,6 +931,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

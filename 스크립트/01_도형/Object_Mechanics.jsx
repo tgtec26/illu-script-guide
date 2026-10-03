@@ -152,24 +152,29 @@ try {
             var _sphereGradient = null;
             var _sphereGradientReady = false;
 
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {lengthMm: lengthMm, angleDeg: angleDeg, ballMm: ballMm, bulgePercent: bulgePercent,
+                thetaRadiusPercent: thetaRadiusPercent, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+
             applySavedSettings();
 
             var LABEL_WIDTH = 66;
+            var RESET_BUTTON_WIDTH = 34;
             // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
             var SLIDER_WIDTH = 196;
 
             var dlg = page;
 
             var sizePanel = addPanel(dlg, "크기");
-            var lengthField = addNumberField(sizePanel, "진자 길이", "mm", lengthMm, 1, 1, 500);
-            var angleField = addNumberField(sizePanel, "진자 각도", "°", angleDeg, 1, 1, 89);
-            var ballField = addNumberField(sizePanel, "공 크기", "mm", ballMm, 0.5, 0.5, 100);
+            var lengthField = addNumberField(sizePanel, "진자 길이", "mm", lengthMm, 1, 1, 500, defaults.lengthMm);
+            var angleField = addNumberField(sizePanel, "진자 각도", "°", angleDeg, 1, 1, 89, defaults.angleDeg);
+            var ballField = addNumberField(sizePanel, "공 크기", "mm", ballMm, 0.5, 0.5, 100, defaults.ballMm);
 
             var markPanel = addPanel(dlg, "표시");
             var thetaCheck = markPanel.add("checkbox", undefined, "각도 θ 표시");
             thetaCheck.value = showTheta;
 
-            var thetaRadiusField = addNumberField(markPanel, "θ 호 거리", "%", thetaRadiusPercent, 1, 3, 95);
+            var thetaRadiusField = addNumberField(markPanel, "θ 호 거리", "%", thetaRadiusPercent, 1, 3, 95, defaults.thetaRadiusPercent);
 
             var lengthRow = markPanel.add("group");
             lengthRow.alignChildren = ["left", "center"];
@@ -178,7 +183,7 @@ try {
             var lengthLabelInput = lengthRow.add("edittext", undefined, lengthLabel);
             lengthLabelInput.characters = 4;
 
-            var bulgeField = addNumberField(markPanel, "묶음 부풀기", "%", bulgePercent, 1, 0, 60);
+            var bulgeField = addNumberField(markPanel, "묶음 부풀기", "%", bulgePercent, 1, 0, 60, defaults.bulgePercent);
 
             var trailCheck = markPanel.add("checkbox", undefined, "진자 궤적 표시");
             trailCheck.value = showTrail;
@@ -189,9 +194,9 @@ try {
 
             var positionPanel = addPanel(dlg, "위치");
             var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, defaults.offsetXmm);
             var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, defaults.offsetYmm);
             // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetField(offsetXField, true);
             bindOffsetField(offsetYField, false);
@@ -684,7 +689,7 @@ try {
 
             // 라벨 · 입력칸 · 단위 · 슬라이더를 한 줄에 배치.
             // 슬라이더를 끌면 단위에 맞춰 연속으로 값이 바뀐다.
-            function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+            function addNumberField(parent, labelText, unit, value, step, minimum, maximum, resetValue) {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
@@ -696,6 +701,9 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
 
 
                 var field = {row: row, input: input, slider: slider, step: step, minimum: minimum, maximum: maximum, syncing: false};
@@ -716,6 +724,11 @@ try {
                     slider.value = parsed;
                     field.syncing = false;
                     commitField(field);
+                };
+                // 입력창에 처음 값을 쳤을 때와 같은 경로
+                reset.onClick = function() {
+                    input.text = formatValue(resetValue);
+                    input.onChange();
                 };
                 return field;
             }
@@ -906,6 +919,9 @@ try {
                 slider.stepdelta = field.step;
                 slider.jumpdelta = field.step * 10;
                 slider.preferredSize.width = 196;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = 34;
+                reset.helpTip = "처음 값으로 되돌리기";
                 function apply(value, dragging) {
                     if (field.key === "strokeWidth") value = Math.round(value * 10) / 10;
                     value = Math.round(value * 100) / 100;
@@ -933,6 +949,7 @@ try {
                 }
                 slider.onChanging = function() { apply(slider.value, true); };
                 slider.onChange = function() { apply(slider.value, false); };
+                reset.onClick = function() { apply(field.initial, false); };
                 input.onChange = function() {
                     if (!/\S/.test(input.text)) { input.text = String(options[field.key]); return; }
                     apply(Number(input.text), false);
@@ -1139,23 +1156,28 @@ try {
             var previewItem = null;
             var sourceWasHidden = source.hidden;
 
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {amplitudeMm: amplitudeMm, wavelengthMm: wavelengthMm, shiftMm: shiftMm,
+                strokeWidthPt: strokeWidthPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+
             applySavedSettings();
 
             var LABEL_WIDTH = 62;
             var INPUT_WIDTH = 54;
             // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
             var SLIDER_WIDTH = 196;
+            var RESET_BUTTON_WIDTH = 34;
             var INFO_WIDTH = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
 
             var dlg = page;
 
             var wavePanel = addPanel(dlg, "파형");
             var amplitudeField = addNumberField(wavePanel, "진폭", "mm", amplitudeMm, AMPLITUDE_STEP,
-                0, AMPLITUDE_SLIDER_MAX, 0, AMPLITUDE_MAX);
+                0, AMPLITUDE_SLIDER_MAX, 0, AMPLITUDE_MAX, defaults.amplitudeMm);
             var wavelengthField = addNumberField(wavePanel, "파장", "mm", wavelengthMm, WAVELENGTH_STEP,
-                0, WAVELENGTH_SLIDER_MAX, 0, WAVELENGTH_MAX);
+                0, WAVELENGTH_SLIDER_MAX, 0, WAVELENGTH_MAX, defaults.wavelengthMm);
             var shiftField = addNumberField(wavePanel, "축 이동", "mm", shiftMm, SHIFT_STEP,
-                -SHIFT_SLIDER_MAX, SHIFT_SLIDER_MAX, -SHIFT_MAX, SHIFT_MAX);
+                -SHIFT_SLIDER_MAX, SHIFT_SLIDER_MAX, -SHIFT_MAX, SHIFT_MAX, defaults.shiftMm);
             var infoText = wavePanel.add("statictext", undefined, "");
             infoText.preferredSize.width = INFO_WIDTH;
             var warningText = wavePanel.add("statictext", undefined, "");
@@ -1163,13 +1185,13 @@ try {
 
             var strokePanel = addPanel(dlg, "선");
             var widthField = addNumberField(strokePanel, "두께", "pt", strokeWidthPt, WIDTH_STEP,
-                0, WIDTH_SLIDER_MAX, 0, WIDTH_MAX);
+                0, WIDTH_SLIDER_MAX, 0, WIDTH_MAX, defaults.strokeWidthPt);
 
             var positionPanel = addPanel(dlg, "위치");
             var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, OFFSET_STEP_MM,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, defaults.offsetXmm);
             var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, OFFSET_STEP_MM,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, defaults.offsetYmm);
             // 위치는 곡선을 다시 만들지 않고 미리보기만 옮긴다
             bindOffsetField(offsetXField, true);
             bindOffsetField(offsetYField, false);
@@ -1653,7 +1675,7 @@ try {
 
             // 라벨 · 입력칸 · 단위 · 슬라이더를 한 줄에 배치.
             // 슬라이더는 요청 범위(sliderMin~sliderMax)까지만, 입력칸은 hardMin~hardMax까지 받는다.
-            function addNumberField(parent, labelText, unit, value, step, sliderMin, sliderMax, hardMin, hardMax) {
+            function addNumberField(parent, labelText, unit, value, step, sliderMin, sliderMax, hardMin, hardMax, resetValue) {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 row.spacing = 6;
@@ -1666,6 +1688,9 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
 
                 var field = {
                     row: row, input: input, slider: slider, step: step,
@@ -1687,6 +1712,11 @@ try {
                     input.text = formatValue(parsed);
                     syncSlider(field, parsed);
                     commitField(field);
+                };
+                // 입력창에 처음 값을 쳤을 때와 같은 경로
+                reset.onClick = function() {
+                    input.text = formatValue(resetValue);
+                    input.onChange();
                 };
                 return field;
             }
@@ -1784,6 +1814,10 @@ try {
             var turnCount = 6;
             // 폭·높이는 선택한 원에서 계산하므로 저장하지 않는다. 감는 횟수만 기억한다.
             var PREF_KEY = "ObjectCoilSpring/settings";
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {coilWidthMm: coilWidthMm, coilHeightMm: coilHeightMm, turnCount: turnCount,
+                offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+            var RESET_BUTTON_WIDTH = 34;
             applySavedSettings();
             var previewEnabled = true;
             var previewGroup = null;
@@ -1801,6 +1835,7 @@ try {
             var widthInput = widthRow.add("edittext", undefined, formatNumber(coilWidthMm, 2));
             widthInput.characters = 6;
             var widthSlider = addSliderWithSteps(widthRow, coilWidthMm, SIZE_STEP_MM, maxCoilWidthMm, SIZE_STEP_MM);
+            addResetButton(widthRow, widthInput, formatNumber(defaults.coilWidthMm, 2));
 
             var heightRow = sizePanel.add("group");
             heightRow.alignChildren = ["left", "center"];
@@ -1808,6 +1843,7 @@ try {
             var heightInput = heightRow.add("edittext", undefined, formatNumber(coilHeightMm, 2));
             heightInput.characters = 6;
             var heightSlider = addSliderWithSteps(heightRow, coilHeightMm, SIZE_STEP_MM, maxCoilHeightMm, SIZE_STEP_MM);
+            addResetButton(heightRow, heightInput, formatNumber(defaults.coilHeightMm, 2));
 
             var turnsPanel = dlg.add("panel", undefined, "코일");
             turnsPanel.orientation = "column";
@@ -1820,6 +1856,7 @@ try {
             var turnsInput = turnsRow.add("edittext", undefined, String(turnCount));
             turnsInput.characters = 6;
             var turnsSlider = addSliderWithSteps(turnsRow, turnCount, MIN_TURNS, MAX_TURNS, 1);
+            addResetButton(turnsRow, turnsInput, String(defaults.turnCount));
 
             var positionPanel = dlg.add("panel", undefined, "위치");
             positionPanel.orientation = "column";
@@ -1980,6 +2017,17 @@ try {
                 return slider;
             }
 
+            // 입력창에 처음 값을 쳤을 때와 같은 경로로 되돌린다
+            function addResetButton(row, input, resetText) {
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
+                reset.onClick = function() {
+                    input.text = resetText;
+                    input.onChange();
+                };
+            }
+
             // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
             function addOffsetControls(parent, label, value) {
                 var row = parent.add("group");
@@ -1992,12 +2040,16 @@ try {
                 slider.stepdelta = OFFSET_STEP_MM;
                 slider.jumpdelta = OFFSET_STEP_MM * 10;
                 slider.preferredSize.width = 196;
-                return {input: input, slider: slider};
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
+                return {input: input, slider: slider, reset: reset};
             }
 
             // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             function bindOffsetControls(controls, isX) {
                 function current() { return isX ? offsetXmm : offsetYmm; }
+                var resetValue = isX ? defaults.offsetXmm : defaults.offsetYmm;
                 function commit(value) {
                     if (value === null || !isFinite(value)) return;
                     value = clamp(roundTo(value, OFFSET_STEP_MM), -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
@@ -2012,6 +2064,7 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(resetValue); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? current() : value);
@@ -2433,6 +2486,9 @@ try {
             bar.stepdelta = ctl.step;
             bar.jumpdelta = ctl.step * 10;
             bar.preferredSize.width = 196;
+            var reset = row.add("button", undefined, "R");
+            reset.preferredSize.width = 34;
+            reset.helpTip = "처음 값으로 되돌리기";
             function apply(value) {
                 if (isNaN(value)) value = o[ctl.key];
                 value = Math.round(value / ctl.step) * ctl.step;
@@ -2451,6 +2507,7 @@ try {
             }
             bar.onChanging = function() { apply(bar.value); };
             bar.onChange = function() { apply(bar.value); };
+            reset.onClick = function() { apply(ctl.value); };
             input.onChange = function() { apply(parseFloat(String(input.text).replace(",", "."))); };
         }
 

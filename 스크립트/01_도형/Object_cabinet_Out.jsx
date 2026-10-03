@@ -31,6 +31,9 @@ try {
     var PREF_KEY = "ObjectCabinetOut/settings";
     var POSITION_LIMIT_MM = 100;
     var OFFSET_STEP_MM = 0.1;
+    // R 버튼의 초기값. 저장된 값이 없을 때 쓰는 아래 loadSettings 인자와 같아야 한다
+    var DEFAULT_DEPTH_MM = 0.5;
+    var DEFAULT_ANGLE_DEG = 45;
     var settings = loadSettings(0.5, 1, 45);
     var savedOffset = loadOffset();
     var offsetXmm = savedOffset[0];
@@ -279,8 +282,8 @@ try {
         sizePanel.alignChildren = "left";
         var widthMmValue = startWmm;
         var heightMmValue = startHmm;
-        var widthControls = addMmRow(sizePanel, "너비", widthMmValue, SIZE_MIN_MM, SIZE_MAX_MM);
-        var heightControls = addMmRow(sizePanel, "높이", heightMmValue, SIZE_MIN_MM, SIZE_MAX_MM);
+        var widthControls = addMmRow(sizePanel, "너비", widthMmValue, SIZE_MIN_MM, SIZE_MAX_MM, startWmm);
+        var heightControls = addMmRow(sizePanel, "높이", heightMmValue, SIZE_MIN_MM, SIZE_MAX_MM, startHmm);
         bindSizeControls(widthControls, true);
         bindSizeControls(heightControls, false);
 
@@ -299,7 +302,8 @@ try {
         var hint = dialog.add("statictext", undefined, "키보드 ↑↓ 키를 누르고 있으면 연속 증감(Shift 는 1mm씩)");
         hint.alignment = "left";
 
-        var depthControl = dialog.add(
+        var depthRow = dialog.add("group");
+        var depthControl = depthRow.add(
             "scrollbar",
             undefined,
             depthToStep(Math.min(maxSliderDepthMm, Math.max(minDepthMm, defaultValue))),
@@ -308,6 +312,10 @@ try {
         );
         depthControl.stepdelta = 1;
         depthControl.jumpdelta = 10;
+        depthControl.alignment = ["fill", "center"];
+        var depthReset = depthRow.add("button", undefined, "R");
+        depthReset.preferredSize.width = 34;
+        depthReset.helpTip = "처음 값으로 되돌리기";
 
         var angleGroup = dialog.add("group");
         angleGroup.add("statictext", undefined, "사선 각도(°)");
@@ -317,6 +325,9 @@ try {
         angleControl.alignment = ["fill", "center"];
         angleControl.stepdelta = 1;
         angleControl.jumpdelta = 5;
+        var angleReset = angleGroup.add("button", undefined, "R");
+        angleReset.preferredSize.width = 34;
+        angleReset.helpTip = "처음 값으로 되돌리기";
 
         var cubeCheck = dialog.add("checkbox", undefined, "정육면체 (깊이 = 가로 폭 ÷ 2, 거리 입력 무시)");
         cubeCheck.value = defaultCube;
@@ -353,7 +364,7 @@ try {
 
         // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
         // mm 행: 라벨(단위) | 입력칸 | 스크롤바
-        function addMmRow(parent, label, value, minMm, maxMm) {
+        function addMmRow(parent, label, value, minMm, maxMm, defaultMm) {
             var row = parent.add("group");
             row.alignChildren = ["left", "center"];
             row.add("statictext", undefined, label + " (mm):").preferredSize.width = 70;
@@ -363,11 +374,14 @@ try {
             slider.stepdelta = OFFSET_STEP_MM;
             slider.jumpdelta = OFFSET_STEP_MM * 10;
             slider.preferredSize.width = 196;
-            return {input: mmInput, slider: slider};
+            var reset = row.add("button", undefined, "R");
+            reset.preferredSize.width = 34;
+            reset.helpTip = "처음 값으로 되돌리기";
+            return {input: mmInput, slider: slider, reset: reset, defaultValue: defaultMm};
         }
 
         function addOffsetControls(parent, label, value) {
-            return addMmRow(parent, label, value, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            return addMmRow(parent, label, value, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0);
         }
 
         // 크기가 바뀌면 원본 사각형을 다시 그리고 미리보기를 새로 만든다
@@ -386,6 +400,7 @@ try {
             }
             controls.slider.onChanging = function() { commit(controls.slider.value); };
             controls.slider.onChange = function() { commit(controls.slider.value); };
+            controls.reset.onClick = function() { commit(controls.defaultValue); };
             controls.input.onChange = function() {
                 var value = parseFloat(String(controls.input.text).replace(",", "."));
                 commit(isNaN(value) ? current() : value);
@@ -409,6 +424,7 @@ try {
             }
             controls.slider.onChanging = function() { commit(controls.slider.value); };
             controls.slider.onChange = function() { commit(controls.slider.value); };
+            controls.reset.onClick = function() { commit(controls.defaultValue); };
             controls.input.onChange = function() {
                 var value = parseFloat(String(controls.input.text).replace(",", "."));
                 commit(isNaN(value) ? current() : value);
@@ -534,6 +550,13 @@ try {
 
             setDepthValue(stepToDepth(depthControl.value));
         };
+        depthReset.onClick = function() {
+            setDepthValue(DEFAULT_DEPTH_MM);
+        };
+        angleReset.onClick = function() {
+            angleInput.text = String(DEFAULT_ANGLE_DEG);
+            angleInput.onChanging();
+        };
         minusButton.onClick = function() {
             changeValue(-depthStepMm);
         };
@@ -571,6 +594,7 @@ try {
             var manual = !cubeCheck.value;
             input.enabled = manual;
             depthControl.enabled = manual;
+            depthReset.enabled = manual;
             for (var i = 0; i < stepButtons.length; i++) {
                 stepButtons[i].enabled = manual;
             }

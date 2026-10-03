@@ -51,6 +51,7 @@ try {
     var STANDARD_PURPLE = "7030A0";
     var reversed = false;
     var POSITION_LIMIT_MM = 100;
+    var RESET_BUTTON_WIDTH = 34;
     var OFFSET_STEP_MM = 0.1;
     var offsetXmm = 0;
     var offsetYmm = 0;
@@ -61,6 +62,8 @@ try {
     var pathMetrics = buildPathMetrics(source, 200);
 
     var PREF_KEY = "ObjectFront/settings";
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {shapeSizeMm: shapeSizeMm, gapMm: gapMm, strokeWidthPt: strokeWidthPt, kValue: kValue, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     applySavedSettings();
 
     var dlg = new Window("dialog", "오브젝트 전선");
@@ -84,6 +87,8 @@ try {
     layoutPanel.alignChildren = "fill";
     var shapeSizeControl = addNumericControl(layoutPanel, "도형 크기", shapeSizeMm, 0.5, 20, 0.1, "mm");
     var gapControl = addNumericControl(layoutPanel, "빈 간격", gapMm, 0, 20, 0.1, "mm");
+    shapeSizeControl.defaultValue = DEFAULTS.shapeSizeMm;
+    gapControl.defaultValue = DEFAULTS.gapMm;
     var reversedCheck = layoutPanel.add("checkbox", undefined, "방향 반전");
     reversedCheck.value = reversed;
 
@@ -98,6 +103,9 @@ try {
     kLabel.preferredSize.width = 42;
     kLabel.helpTip = "50K ~ 100K, 10 단위";
     var kSlider = addSliderWithSteps(kRow, kValue, 50, 100, K_STEP);
+    var kReset = kRow.add("button", undefined, "R");
+    kReset.preferredSize.width = RESET_BUTTON_WIDTH;
+    kReset.helpTip = "처음 값으로 되돌리기";
     var hexColorRadio = colorPanel.add("radiobutton", undefined, "HEX");
     var hexInput = colorPanel.add("edittext", undefined, hexValue);
     hexInput.characters = 8;
@@ -111,6 +119,7 @@ try {
     linePanel.orientation = "column";
     linePanel.alignChildren = "fill";
     var strokeWidthControl = addNumericControl(linePanel, "라인 두께", strokeWidthPt, 0.1, 10, 0.1, "pt");
+    strokeWidthControl.defaultValue = DEFAULTS.strokeWidthPt;
 
     var positionPanel = dlg.add("panel", undefined, "위치");
     positionPanel.orientation = "column";
@@ -141,6 +150,7 @@ try {
     kColorRadio.onClick = function() { setColorMode("k"); };
     hexColorRadio.onClick = function() { setColorMode("hex"); };
     kSlider.onChanging = function() { setK(Math.round(kSlider.value / K_STEP) * K_STEP); };
+    kReset.onClick = function() { setK(DEFAULTS.kValue); kSlider.value = kValue; };
     hexInput.onChange = function() {
         var value = hexInput.text;
         if (!/^#?[0-9a-fA-F]{6}$/.test(value)) {
@@ -948,7 +958,10 @@ try {
         slider.stepdelta = OFFSET_STEP_MM;
         slider.jumpdelta = OFFSET_STEP_MM * 10;
         slider.preferredSize.width = 196;
-        return {input: input, slider: slider};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset};
     }
 
     // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -968,6 +981,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(isX ? DEFAULTS.offsetXmm : DEFAULTS.offsetYmm); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? current() : value);
@@ -990,9 +1004,13 @@ try {
         var input = row.add("edittext", undefined, formatNumber(value));
         input.characters = 6;
         var slider = addSliderWithSteps(row, value, minimum, maximum, step);
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
         return {
             input: input,
             slider: slider,
+            reset: reset,
             step: step,
             minimum: minimum,
             maximum: maximum,
@@ -1011,6 +1029,9 @@ try {
 
         control.slider.onChanging = function() {
             setValue(control.slider.value, true);
+        };
+        control.reset.onClick = function() {
+            setValue(control.defaultValue, true);
         };
         control.input.onChanging = function() {
             var value = parseNumber(control.input.text);

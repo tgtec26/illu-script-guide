@@ -41,6 +41,7 @@ try {
     var ENG_FONT_NAME = "GSMediumB1";
     var KINDS = ["혈액 순환", "네프론"];
     var LABEL_WIDTH = 100;
+    var RESET_BUTTON_WIDTH = 34;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
     var POSITION_LIMIT_MM = 100;
@@ -73,6 +74,8 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {sizeMm: sizeMm, vesselPt: vesselPt, cornerMm: cornerMm, arrowPt: arrowPt, headPct: headPct, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var layer = findEditableLayer();
@@ -130,14 +133,14 @@ try {
     labelsCheck.onClick = function() { labelsOn = labelsCheck.value; updatePreview(); };
     loopsCheck.onClick = function() { loopsOn = loopsCheck.value; updatePreview(); };
     transportCheck.onClick = function() { transportOn = transportCheck.value; updatePreview(); };
-    bindValueRow(sizeRow, function() { return sizeMm; }, function(v) { sizeMm = v; });
-    bindValueRow(vesselRow, function() { return vesselPt; }, function(v) { vesselPt = v; });
-    bindValueRow(cornerRow, function() { return cornerMm; }, function(v) { cornerMm = v; });
-    bindValueRow(arrowRow, function() { return arrowPt; }, function(v) { arrowPt = v; });
-    bindValueRow(headRow, function() { return headPct; }, function(v) { headPct = v; });
-    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
-    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
-    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
+    bindValueRow(sizeRow, function() { return sizeMm; }, function(v) { sizeMm = v; }, function() { return DEFAULTS.sizeMm; });
+    bindValueRow(vesselRow, function() { return vesselPt; }, function(v) { vesselPt = v; }, function() { return DEFAULTS.vesselPt; });
+    bindValueRow(cornerRow, function() { return cornerMm; }, function(v) { cornerMm = v; }, function() { return DEFAULTS.cornerMm; });
+    bindValueRow(arrowRow, function() { return arrowPt; }, function(v) { arrowPt = v; }, function() { return DEFAULTS.arrowPt; });
+    bindValueRow(headRow, function() { return headPct; }, function(v) { headPct = v; }, function() { return DEFAULTS.headPct; });
+    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, function() { return DEFAULTS.fontPt; });
+    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, function() { return DEFAULTS.offsetXmm; });
+    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, function() { return DEFAULTS.offsetYmm; });
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -163,6 +166,7 @@ try {
     function setRowEnabled(controls, enabled) {
         controls.input.enabled = enabled;
         controls.slider.enabled = enabled;
+        controls.reset.enabled = enabled;
     }
 
     function syncEnabled() {
@@ -716,11 +720,14 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
     }
 
         // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
-    function bindValueRow(controls, getter, setter) {
+    function bindValueRow(controls, getter, setter, getDefault) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             controls.input.text = formatNumber(value, controls.decimals);
@@ -731,6 +738,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(getDefault()); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -738,7 +746,7 @@ try {
     }
 
         // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, getDefault) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM;
@@ -751,6 +759,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(getDefault()); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

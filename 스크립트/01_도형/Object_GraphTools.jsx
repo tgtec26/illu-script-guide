@@ -274,6 +274,11 @@ try {
             legendGapSlider.preferredSize.width = 196;
             legendGapSlider.stepdelta = 0.1;
             legendGapSlider.jumpdelta = 1;
+            var legendGapReset = legendGapGroup.add("button", undefined, "R");
+            legendGapReset.preferredSize.width = 34;
+            legendGapReset.helpTip = "처음 값으로 되돌리기";
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var legendGapInitial = legendGapInput.text;
 
             var zeroCheck = legendPanel.add("checkbox", undefined, "원점에 0 넣기 (대각선 2mm)");
             zeroCheck.value = true;
@@ -329,6 +334,11 @@ try {
             legendGapInput.onChange = function() {
                 var value = parseNumber(legendGapInput.text);
                 if (value !== null) legendGapSlider.value = Math.max(0, Math.min(10, value));
+            };
+            legendGapReset.onClick = function() {
+                legendGapInput.text = legendGapInitial;
+                legendGapInput.onChange();
+                updatePreview();
             };
             zeroCheck.onClick = updatePreview;
             arrowCheck.onClick = updatePreview;
@@ -438,7 +448,11 @@ try {
                 slider.stepdelta = OFFSET_STEP_MM;
                 slider.jumpdelta = OFFSET_STEP_MM * 10;
                 slider.preferredSize.width = 196;
-                return {input: input, slider: slider};
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = 34;
+                reset.helpTip = "처음 값으로 되돌리기";
+                // addOffsetControls는 저장값을 덮기 전에 불리므로 value가 처음 값이다
+                return {input: input, slider: slider, reset: reset, initial: value};
             }
 
             // 값이 바뀌면 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -460,6 +474,7 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(controls.initial); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? current() : value);
@@ -980,6 +995,8 @@ try {
             var originalWidths = [];
             for (var w = 0; w < paths.length; w++) originalWidths.push(paths[w].strokeWidth);
 
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var DEFAULTS = defaultOptions();
             var options = readSettings();
             var previewGroup = null;
             var committed = false;
@@ -1071,6 +1088,9 @@ try {
                 slider.preferredSize.width = SLIDER_WIDTH;
                 slider.stepdelta = 1;
                 slider.jumpdelta = 1;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = 34;
+                reset.helpTip = "처음 값으로 되돌리기";
                 function apply(index, dragging) {
                     index = Math.max(0, Math.min(values.length - 1, Math.round(index)));
                     var value = values[index];
@@ -1090,6 +1110,7 @@ try {
                 }
                 slider.onChanging = function() { apply(slider.value, true); };
                 slider.onChange = function() { apply(slider.value); };
+                reset.onClick = function() { apply(nearestIndex(values, DEFAULTS[key])); };
                 input.onChange = function() {
                     var number = Number(input.text);
                     if (!/\S/.test(input.text) || !isFinite(number)) { input.text = String(options[key]); return; }
@@ -1242,8 +1263,12 @@ try {
             // -------------------------------------------------------
             // 설정 기억
             // -------------------------------------------------------
+            function defaultOptions() {
+                return { shape: 0, size: 1, fillK: 100, stroke: 0, lineWidth: 1, preview: true };
+            }
+
             function readSettings() {
-                var result = { shape: 0, size: 1, fillK: 100, stroke: 0, lineWidth: 1, preview: true };
+                var result = defaultOptions();
                 try {
                     var p = app.preferences.getStringPreference(PREF_KEY).split("|");
                     if (p[0] !== "v2" || p.length !== 7) return result;
@@ -1312,6 +1337,8 @@ try {
             var previewGroup = null;
             var sourceWasHidden = source.hidden;
 
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var DEFAULTS = {rowCount: rowCount, colCount: colCount, headerK: headerK, strokeWidthPt: strokeWidthPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySavedSettings();
 
             // 행 높이·열 너비는 선택한 사각형에서 나오는 값이라 저장하지 않고 매번 다시 나눈다
@@ -1325,15 +1352,15 @@ try {
             var dlg = page;
 
             var countPanel = addPanel(dlg, "표");
-            var rowCountField = addNumberField(countPanel, "행 수", "개", rowCount, 1, 1, MAX_ROWS, false);
-            var colCountField = addNumberField(countPanel, "열 수", "개", colCount, 1, 1, MAX_COLS, false);
-            var headerKField = addNumberField(countPanel, "1행 음영", "K", headerK, 10, 0, 100, false);
+            var rowCountField = addNumberField(countPanel, "행 수", "개", rowCount, 1, 1, MAX_ROWS, false, DEFAULTS.rowCount);
+            var colCountField = addNumberField(countPanel, "열 수", "개", colCount, 1, 1, MAX_COLS, false, DEFAULTS.colCount);
+            var headerKField = addNumberField(countPanel, "1행 음영", "K", headerK, 10, 0, 100, false, DEFAULTS.headerK);
 
             var rowPanel = addPanel(dlg, "행 높이 (체크한 줄은 위 줄을 따라감)");
             var rowFields = [];
             for (var r = 0; r < MAX_ROWS; r++) {
                 rowFields[r] = addNumberField(rowPanel, (r + 1) + "행", "mm", rowHeightsMm[r],
-                    SIZE_STEP_MM, SIZE_MIN_MM, SIZE_MAX_MM, true);
+                    SIZE_STEP_MM, SIZE_MIN_MM, SIZE_MAX_MM, true, function() { return clampSize(tableHeightMm / rowCount); });
                 rowFields[r].check.value = rowLinked[r];
                 bindSizeField(rowFields[r]);
             }
@@ -1342,19 +1369,19 @@ try {
             var colFields = [];
             for (var c = 0; c < MAX_COLS; c++) {
                 colFields[c] = addNumberField(colPanel, (c + 1) + "열", "mm", colWidthsMm[c],
-                    SIZE_STEP_MM, SIZE_MIN_MM, SIZE_MAX_MM, true);
+                    SIZE_STEP_MM, SIZE_MIN_MM, SIZE_MAX_MM, true, function() { return clampSize(tableWidthMm / colCount); });
                 colFields[c].check.value = colLinked[c];
                 bindSizeField(colFields[c]);
             }
 
             var linePanel = addPanel(dlg, "선");
-            var strokeField = addNumberField(linePanel, "두께", "pt", strokeWidthPt, 0.1, 0.1, 3, false);
+            var strokeField = addNumberField(linePanel, "두께", "pt", strokeWidthPt, 0.1, 0.1, 3, false, DEFAULTS.strokeWidthPt);
 
             var positionPanel = addPanel(dlg, "위치");
             var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, false);
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, false, DEFAULTS.offsetXmm);
             var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, false);
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, false, DEFAULTS.offsetYmm);
             // 위치는 표를 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetField(offsetXField, true);
             bindOffsetField(offsetYField, false);
@@ -1627,6 +1654,7 @@ try {
                 var editable = inUse && !follower;
                 field.input.enabled = editable;
                 field.slider.enabled = editable;
+                field.reset.enabled = editable;
                 if (field.check) field.check.enabled = inUse;
             }
 
@@ -1698,7 +1726,7 @@ try {
                 return panel;
             }
 
-            function addNumberField(parent, labelText, unit, value, step, minimum, maximum, withCheck) {
+            function addNumberField(parent, labelText, unit, value, step, minimum, maximum, withCheck, initial) {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 var check = null;
@@ -1712,8 +1740,11 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = 34;
+                reset.helpTip = "처음 값으로 되돌리기";
 
-                var field = {row: row, check: check, input: input, slider: slider, step: step,
+                var field = {row: row, check: check, input: input, slider: slider, reset: reset, step: step,
                     minimum: minimum, maximum: maximum, syncing: false};
 
                 slider.onChanging = function() {
@@ -1732,6 +1763,11 @@ try {
                     slider.value = parsed;
                     field.syncing = false;
                     commitField(field);
+                };
+                // 입력창에 처음 값을 친 것과 같은 경로. 크기 줄은 지금 행·열 수로 균등하게 나눈 값이다
+                reset.onClick = function() {
+                    input.text = formatValue(typeof initial === "function" ? initial() : initial);
+                    input.onChange();
                 };
                 return field;
             }
@@ -1845,6 +1881,8 @@ try {
             if (source === null) return "가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요.";
             var bounds = source.geometricBounds; // [left, top, right, bottom]
 
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var DEFAULTS = defaultOptions();
             var options = readSettings();
             var win = page;
 
@@ -1878,6 +1916,9 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = 196;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = 34;
+                reset.helpTip = "처음 값으로 되돌리기";
                 function apply(value) {
                     value = Math.round(value / step) * step;
                     if (!isFinite(value) || value < min || value > max) {
@@ -1890,6 +1931,7 @@ try {
                 }
                 slider.onChanging = function() { apply(slider.value); };
                 slider.onChange = function() { apply(slider.value); };
+                reset.onClick = function() { apply(DEFAULTS[key]); };
                 input.onChange = function() { apply(Number(input.text)); };
             }
 
@@ -1973,8 +2015,12 @@ try {
             // -------------------------------------------------------
             // 설정 기억
             // -------------------------------------------------------
+            function defaultOptions() {
+                return { rows: 2, cols: 2, k: 100 };
+            }
+
             function readSettings() {
-                var result = { rows: 2, cols: 2, k: 100 };
+                var result = defaultOptions();
                 try {
                     var p = app.preferences.getStringPreference(PREF_KEY).split("|");
                     if (p[0] !== "v2" || p.length !== 4) return result;
@@ -2387,6 +2433,8 @@ try {
             var previewEnabled = true;
             var previewGroup = null;
 
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다 (곡선 종류별 숫자 행의 처음 값은 TYPES의 initial)
+            var DEFAULTS = {strokeWidthPt: strokeWidthPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySavedSettings();
 
             var LABEL_WIDTH = 112;
@@ -2415,15 +2463,15 @@ try {
             }
 
             var strokePanel = addPanel(dlg, "선");
-            var widthField = addNumberField(strokePanel, "두께", "pt", strokeWidthPt, WIDTH_STEP, 0, WIDTH_SLIDER_MAX);
+            var widthField = addNumberField(strokePanel, "두께", "pt", strokeWidthPt, WIDTH_STEP, 0, WIDTH_SLIDER_MAX, DEFAULTS.strokeWidthPt);
             widthField.maximum = WIDTH_MAX;
             var keepCheck = strokePanel.add("checkbox", undefined, "사각형 유지 (끄면 확정할 때 지움)");
             keepCheck.value = keepRect;
             keepCheck.onClick = updatePreview;
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetXmm);
+            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetYmm);
             // 위치는 곡선을 다시 만들지 않고 미리보기만 옮긴다
             bindOffsetField(offsetXField, true);
             bindOffsetField(offsetYField, false);
@@ -2676,6 +2724,7 @@ try {
                     field.slider.maxvalue = p.max;
                     field.slider.stepdelta = p.step;
                     field.slider.jumpdelta = p.step * 10;
+                    field.initial = p.initial;
                     field.input.text = formatValue(values[typeIndex][i]);
                     syncSlider(field, values[typeIndex][i]);
                 }
@@ -2799,7 +2848,7 @@ try {
             }
 
             // 숫자 조절 행: 라벨 (단위): | 입력창 | 스크롤바(‹ › 내장)
-            function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+            function addNumberField(parent, labelText, unit, value, step, minimum, maximum, initial) {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 row.spacing = 6;
@@ -2812,9 +2861,12 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = 34;
+                reset.helpTip = "처음 값으로 되돌리기";
 
-                var field = {row: row, label: label, input: input, slider: slider, step: step,
-                    minimum: minimum, maximum: maximum, syncing: false};
+                var field = {row: row, label: label, input: input, slider: slider, reset: reset, step: step,
+                    minimum: minimum, maximum: maximum, syncing: false, initial: initial};
 
                 slider.onChanging = function() {
                     if (field.syncing) return;
@@ -2829,6 +2881,11 @@ try {
                     input.text = formatValue(parsed);
                     syncSlider(field, parsed);
                     commitField(field);
+                };
+                // 입력창에 처음 값을 친 것과 같은 경로
+                reset.onClick = function() {
+                    input.text = formatValue(field.initial);
+                    input.onChange();
                 };
                 return field;
             }
@@ -2958,6 +3015,8 @@ try {
             var previewGroup = null;
             var previewSignature = "";        // 마지막으로 그린 미리보기의 설정. 같으면 다시 그리지 않는다
 
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다 (외경은 선택한 원의 지름)
+            var DEFAULTS = {leaderMaxPercent: leaderMaxPercent, outerMm: outerMm, innerMm: innerMm, spinDeg: spinDeg, depthMm: depthMm, tiltXDeg: tiltXDeg, tiltYDeg: tiltYDeg, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySavedSettings();
             percents = normalizeShares(percents, count, MIN_SECTOR_PERCENT);
 
@@ -3030,29 +3089,29 @@ try {
                 moveDraggedBoundary(event.clientX);
                 dragBoundary = -1;
             });
-            var leaderControls = addValueRow(itemPanel, "지시선 기준", "%", leaderMaxPercent, 0, 50, 1, 0);
+            var leaderControls = addValueRow(itemPanel, "지시선 기준", "%", leaderMaxPercent, 0, 50, 1, 0, DEFAULTS.leaderMaxPercent);
             leaderControls.input.helpTip = leaderControls.slider.helpTip = "이 비율 미만인 항목은 바깥에 지시선으로 이름을 답니다";
 
             var shapePanel = addPanel(dlg, "모양");
-            var outerControls = addValueRow(shapePanel, "외경", "mm", outerMm, OUTER_RANGE_MM[0], OUTER_RANGE_MM[1], 0.5, 1);
+            var outerControls = addValueRow(shapePanel, "외경", "mm", outerMm, OUTER_RANGE_MM[0], OUTER_RANGE_MM[1], 0.5, 1, DEFAULTS.outerMm);
             outerControls.input.helpTip = outerControls.slider.helpTip = "선택한 원의 지름에서 시작합니다. 바꾸면 원의 가운데를 기준으로 커지거나 작아집니다";
-            var innerControls = addValueRow(shapePanel, "내경", "mm", innerMm, 0, Math.max(0.5, outerMm - 1), 0.5, 1);
+            var innerControls = addValueRow(shapePanel, "내경", "mm", innerMm, 0, Math.max(0.5, outerMm - 1), 0.5, 1, DEFAULTS.innerMm);
             innerControls.input.helpTip = innerControls.slider.helpTip = "0이면 파이, 크면 도넛";
-            var spinControls = addValueRow(shapePanel, "회전", "°", spinDeg, -180, 180, 1, 0);
+            var spinControls = addValueRow(shapePanel, "회전", "°", spinDeg, -180, 180, 1, 0, DEFAULTS.spinDeg);
             spinControls.input.helpTip = spinControls.slider.helpTip = "첫 항목이 시작하는 자리. 0이면 12시, +면 시계 방향";
             var solidCheck = shapePanel.add("checkbox", undefined, "입체 (돌출·기울기)");
             solidCheck.value = solidOn;
-            var depthControls = addValueRow(shapePanel, "돌출 깊이", "mm", depthMm, 0.5, 50, 0.5, 1);
-            var tiltXControls = addValueRow(shapePanel, "위아래 기울기", "°", tiltXDeg, -85, 85, 1, 0);
+            var depthControls = addValueRow(shapePanel, "돌출 깊이", "mm", depthMm, 0.5, 50, 0.5, 1, DEFAULTS.depthMm);
+            var tiltXControls = addValueRow(shapePanel, "위아래 기울기", "°", tiltXDeg, -85, 85, 1, 0, DEFAULTS.tiltXDeg);
             tiltXControls.input.helpTip = tiltXControls.slider.helpTip = "+면 위쪽 가장자리가 멀어지며 눕는다. 0이면 위에서 본 평면";
-            var tiltYControls = addValueRow(shapePanel, "좌우 기울기", "°", tiltYDeg, -85, 85, 1, 0);
+            var tiltYControls = addValueRow(shapePanel, "좌우 기울기", "°", tiltYDeg, -85, 85, 1, 0, DEFAULTS.tiltYDeg);
             tiltYControls.input.helpTip = tiltYControls.slider.helpTip = "+면 오른쪽 가장자리가 멀어진다";
 
             var positionPanel = addPanel(dlg, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1, DEFAULTS.offsetXmm);
             var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm,
-                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+                -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1, DEFAULTS.offsetYmm);
 
             bindValueRow(leaderControls, function() { return leaderMaxPercent; }, function(value) { leaderMaxPercent = value; });
             bindValueRow(outerControls, function() { return outerMm; }, function(value) {
@@ -3795,7 +3854,7 @@ try {
             }
 
             // 라벨(단위 병기) · 입력칸 · 스크롤바 를 한 줄에 배치
-            function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals) {
+            function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals, initial) {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 var labelText = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
@@ -3807,9 +3866,12 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = 34;
+                reset.helpTip = "처음 값으로 되돌리기";
                 return {
-                    row: row, input: input, slider: slider,
-                    min: minimum, max: maximum, step: step, decimals: decimals
+                    row: row, input: input, slider: slider, reset: reset,
+                    min: minimum, max: maximum, step: step, decimals: decimals, initial: initial
                 };
             }
 
@@ -3823,6 +3885,7 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(controls.initial); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? getter() : value);
@@ -3847,6 +3910,7 @@ try {
                 }
                 controls.slider.onChanging = function() { commit(controls.slider.value); };
                 controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(controls.initial); };
                 controls.input.onChange = function() {
                     var value = parseNumber(controls.input.text);
                     commit(value === null ? getter() : value);
@@ -4083,6 +4147,8 @@ try {
             var SIGMA_RANGE = [0, 60];
             var STROKE_RANGE = [0.2, 1.5];
 
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다 (폭·높이는 사각형이 정해 늘 꺼져 있으므로 사각형 크기를 쓴다)
+            var DEFAULTS = {maxUm: maxUm, sigmaNm: sigmaNm, strokePt: strokePt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySavedSettings();
             // 사각형이 크기를 정할 때도 저장되는 기본 크기는 그대로 둔다
             var defaultWidthMm = widthMm;
@@ -4108,20 +4174,20 @@ try {
 
             var sizePanel = addPanel(dlg, "크기");
             // 사각형이 있으면 크기는 사각형이 정한다. 값이 범위 밖이면 확인에서 걸린다
-            var widthField = addNumberField(sizePanel, "폭", "mm", widthMm, 1, WIDTH_RANGE[0], WIDTH_RANGE[1]);
-            var heightField = addNumberField(sizePanel, "높이", "mm", heightMm, 1, HEIGHT_RANGE[0], HEIGHT_RANGE[1]);
+            var widthField = addNumberField(sizePanel, "폭", "mm", widthMm, 1, WIDTH_RANGE[0], WIDTH_RANGE[1], widthMm);
+            var heightField = addNumberField(sizePanel, "높이", "mm", heightMm, 1, HEIGHT_RANGE[0], HEIGHT_RANGE[1], heightMm);
             if (rect !== null) {
                 widthField.row.enabled = false;
                 heightField.row.enabled = false;
                 widthField.input.helpTip = "선택한 사각형의 크기";
                 heightField.input.helpTip = "선택한 사각형의 크기";
             }
-            var maxUmField = addNumberField(sizePanel, "최대 파장", "µm", maxUm, 0.5, MAX_UM_RANGE[0], MAX_UM_RANGE[1]);
+            var maxUmField = addNumberField(sizePanel, "최대 파장", "µm", maxUm, 0.5, MAX_UM_RANGE[0], MAX_UM_RANGE[1], DEFAULTS.maxUm);
 
             var curvePanel = addPanel(dlg, "곡선");
-            var sigmaField = addNumberField(curvePanel, "단순화", "nm", sigmaNm, 1, SIGMA_RANGE[0], SIGMA_RANGE[1]);
+            var sigmaField = addNumberField(curvePanel, "단순화", "nm", sigmaNm, 1, SIGMA_RANGE[0], SIGMA_RANGE[1], DEFAULTS.sigmaNm);
             sigmaField.input.helpTip = "가우시안 평활 폭. 0이면 데이터 그대로, 클수록 잔 요철과 얕은 흡수 골이 사라진다";
-            var strokeField = addNumberField(curvePanel, "선 두께", "pt", strokePt, 0.1, STROKE_RANGE[0], STROKE_RANGE[1]);
+            var strokeField = addNumberField(curvePanel, "선 두께", "pt", strokePt, 0.1, STROKE_RANGE[0], STROKE_RANGE[1], DEFAULTS.strokePt);
 
             var showPanel = addPanel(dlg, "표시");
             var showRow1 = showPanel.add("group");
@@ -4151,8 +4217,8 @@ try {
             fillToEnvelopeRadio.helpTip = "지표면 곡선의 어깨끼리 이은 포락선까지만 채운다. 두 곡선 사이 흰 틈은 산란 손실";
 
             var positionPanel = addPanel(dlg, "위치");
-            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+            var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetXmm);
+            var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetYmm);
             // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindOffsetField(offsetXField, true);
             bindOffsetField(offsetYField, false);
@@ -4891,7 +4957,7 @@ try {
                 return panel;
             }
 
-            function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+            function addNumberField(parent, labelText, unit, value, step, minimum, maximum, initial) {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 var label = row.add("statictext", undefined, labelText + " (" + unit + "):");
@@ -4903,8 +4969,11 @@ try {
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
                 slider.preferredSize.width = SLIDER_WIDTH;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = 34;
+                reset.helpTip = "처음 값으로 되돌리기";
 
-                var field = {row: row, input: input, slider: slider, step: step, minimum: minimum, maximum: maximum, syncing: false};
+                var field = {row: row, input: input, slider: slider, reset: reset, step: step, minimum: minimum, maximum: maximum, syncing: false};
 
                 slider.onChanging = function() {
                     if (field.syncing) return;
@@ -4922,6 +4991,11 @@ try {
                     slider.value = parsed;
                     field.syncing = false;
                     commitField(field);
+                };
+                // 입력창에 처음 값을 친 것과 같은 경로
+                reset.onClick = function() {
+                    input.text = formatValue(initial);
+                    input.onChange();
                 };
                 return field;
             }

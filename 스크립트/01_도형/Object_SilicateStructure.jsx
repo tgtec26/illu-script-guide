@@ -68,11 +68,14 @@ try {
     // 그라데이션은 문서당 하나만 만들어 재사용한다(미리보기 반복 시 스와치 폭증 방지)
     var _oxygenGradient = null;
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {oxygenMm: oxygenMm, siliconMm: siliconMm, gapMm: gapMm, triangleMm: triangleMm, tetraOxygenMm: tetraOxygenMm, oxygenK: oxygenK, siliconK: siliconK, faceK: faceK, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     applySavedSettings();
 
     var LABEL_WIDTH = 62;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
 
     var dlg = new Window("dialog", "규산염 광물 결합 구조");
     dlg.orientation = "column";
@@ -116,25 +119,25 @@ try {
     // 원자 모형 행과 사면체 모형 행은 같은 자리에 겹쳐 두고 고른 쪽만 보인다
     var sizePanel = addPanel(dlg, "크기");
     var sizeStack = addModeStack(sizePanel);
-    var oxygenField = addNumberField(sizeStack.atom, "산소 지름", "mm", oxygenMm, 0.1, 0.5, 20);
-    var siliconField = addNumberField(sizeStack.atom, "규소 지름", "mm", siliconMm, 0.1, 0.2, 10);
-    var gapField = addNumberField(sizeStack.atom, "산소 간격", "mm", gapMm, 0.1, -2, 10);
-    var triangleField = addNumberField(sizeStack.tetra, "삼각형 변", "mm", triangleMm, 0.5, 1, 30);
-    var tetraOxygenField = addNumberField(sizeStack.tetra, "산소 지름", "mm", tetraOxygenMm, 0.1, 0.3, 10);
+    var oxygenField = addNumberField(sizeStack.atom, "산소 지름", "mm", oxygenMm, 0.1, 0.5, 20, DEFAULTS.oxygenMm);
+    var siliconField = addNumberField(sizeStack.atom, "규소 지름", "mm", siliconMm, 0.1, 0.2, 10, DEFAULTS.siliconMm);
+    var gapField = addNumberField(sizeStack.atom, "산소 간격", "mm", gapMm, 0.1, -2, 10, DEFAULTS.gapMm);
+    var triangleField = addNumberField(sizeStack.tetra, "삼각형 변", "mm", triangleMm, 0.5, 1, 30, DEFAULTS.triangleMm);
+    var tetraOxygenField = addNumberField(sizeStack.tetra, "산소 지름", "mm", tetraOxygenMm, 0.1, 0.3, 10, DEFAULTS.tetraOxygenMm);
 
     var shadePanel = addPanel(dlg, "음영");
-    var oxygenKField = addNumberField(shadePanel, "산소", "K", oxygenK, 10, 0, 100);
+    var oxygenKField = addNumberField(shadePanel, "산소", "K", oxygenK, 10, 0, 100, DEFAULTS.oxygenK);
     var shadeStack = addModeStack(shadePanel);
-    var siliconKField = addNumberField(shadeStack.atom, "규소", "K", siliconK, 10, 0, 100);
-    var faceKField = addNumberField(shadeStack.tetra, "면", "K", faceK, 10, 0, 100);
+    var siliconKField = addNumberField(shadeStack.atom, "규소", "K", siliconK, 10, 0, 100, DEFAULTS.siliconK);
+    var faceKField = addNumberField(shadeStack.tetra, "면", "K", faceK, 10, 0, 100, DEFAULTS.faceK);
     var lit3DCheck = shadePanel.add("checkbox", undefined, "산소 3D 조명 효과");
     lit3DCheck.value = lit3DOxygen;
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
-        -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetXmm);
     var offsetYField = addNumberField(positionPanel, "세로", "mm", offsetYmm, 0.1,
-        -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+        -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetYmm);
     // 위치는 구조를 다시 만들지 않고 미리보기 그룹만 옮긴다
     bindOffsetField(offsetXField, true);
     bindOffsetField(offsetYField, false);
@@ -623,7 +626,7 @@ try {
         return {atom: columns[0], tetra: columns[1]};
     }
 
-    function addNumberField(parent, labelText, unit, value, step, minimum, maximum) {
+    function addNumberField(parent, labelText, unit, value, step, minimum, maximum, defaultValue) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
@@ -655,6 +658,13 @@ try {
             slider.value = parsed;
             field.syncing = false;
             commitField(field);
+        };
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        reset.onClick = function() {
+            input.text = formatValue(defaultValue);
+            input.onChange();
         };
         return field;
     }

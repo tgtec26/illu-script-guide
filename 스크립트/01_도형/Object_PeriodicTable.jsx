@@ -36,6 +36,7 @@ try {
     var PREVIEW_NAME = "PeriodicTable_Preview";   // 확인 때 "PeriodicTable"로 바꾼다
     var MAX_PERIOD = 5;
     var MAX_GROUP = 18;
+    var RESET_BUTTON_WIDTH = 34;
     var CORNER_LABEL_SCALE = 0.9;   // 모서리 '족'·'주기'는 숫자 크기의 90%
     // 점 텍스트 프레임(em 박스) 안에서 한글 글자가 차지하는 자리. Spoqa를 8·10·12pt로 잰 값(Text_ChatBubbles와 같다).
     // 글자 아래 끝 = 프레임 아래 + 0.23, 글자 높이 0.896 (글자 크기 배수). 글자는 프레임 가운데보다 약 0.08 위에 있어
@@ -61,6 +62,7 @@ try {
     var lineColor = makeBlackColor(doc);
     var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
     var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+    var DEFAULTS = {};          // 저장된 값을 덮기 전의 값(R 버튼의 초기값). readSettings가 채운다
     var options = readSettings();
     var previewGroup = null;
     var bevelGradients = {};    // 종류×부위별 그라데이션. 문서에 한 번만 만들고 음영이 바뀌면 색만 고친다
@@ -213,6 +215,9 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = 196;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
         function apply(value, dragging) {
             value = Math.round(value * 100) / 100;
             if (!isFinite(value) || value < min || value > max) {
@@ -253,6 +258,7 @@ try {
         }
         slider.onChanging = function() { apply(Math.round(slider.value / step) * step, true); };
         slider.onChange = function() { apply(Math.round(slider.value / step) * step); };
+        reset.onClick = function() { apply(DEFAULTS[key]); };
         input.onChange = function() {
             if (!/\S/.test(input.text)) { input.text = String(options[key]); return; }
             apply(Number(String(input.text).replace(/,/g, ".")));
@@ -926,6 +932,7 @@ try {
             cellW: 15, cellH: 12, gap: 1, radius: 0.7, headRowH: 12, headColW: 15,
             raised: true, border: false, depth: 1.2, strokeW: 0.3, headK: 20, bodyK: 10,
             fontSize: 10, offsetX: 0, offsetY: 0, preview: true, bentDiagonal: false };
+        for (var d in result) DEFAULTS[d] = result[d];
         try {
             var p = app.preferences.getStringPreference(PREF_KEY).split("|");
             // v1은 19항목, v2는 뒤에 대각선 종류(0 사선, 1 사선·수평·사선)가 붙는다

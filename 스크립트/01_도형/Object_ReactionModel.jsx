@@ -874,6 +874,9 @@ try {
             bar.stepdelta = ctl.step;
             bar.jumpdelta = ctl.step * 10;
             bar.preferredSize.width = 196;
+            var reset = row.add("button", undefined, "R");
+            reset.preferredSize.width = 34;
+            reset.helpTip = "처음 값으로 되돌리기";
             function apply(value) {
                 if (isNaN(value)) value = o[ctl.key];
                 value = Math.round(value / ctl.step) * ctl.step;
@@ -893,6 +896,11 @@ try {
             bar.onChanging = function() { apply(bar.value); };
             bar.onChange = function() { apply(bar.value); };
             input.onChange = function() { apply(parseFloat(String(input.text).replace(",", "."))); };
+            // 입력창에 처음 값을 친 것과 같은 경로로 되돌린다. 처음 값은 저장값을 덮기 전의 ctl.value
+            reset.onClick = function() {
+                input.text = formFormat(ctl.value, decimals);
+                input.onChange();
+            };
         }
 
         function addChoice(panel, ctl) {

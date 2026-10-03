@@ -39,6 +39,7 @@ try {
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 100;
     var LENGTH_RANGE = [10, 150];
     var THICK_RANGE = [3, 60];
@@ -70,6 +71,8 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {lengthMm: lengthMm, thickMm: thickMm, cornerMm: cornerMm, turns: turns, lineCount: lineCount, rangePct: rangePct, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var layer = findEditableLayer();
@@ -86,28 +89,28 @@ try {
 
     var shapePanel = addPanel(dlg, "모양");
     addRadioRow(shapePanel, "종류", KINDS, kind, function(i) { kind = i; syncEnabled(); updatePreview(); });
-    var lengthRow = addValueRow(shapePanel, "길이", "mm", lengthMm, LENGTH_RANGE[0], LENGTH_RANGE[1], 1, 0);
+    var lengthRow = addValueRow(shapePanel, "길이", "mm", lengthMm, LENGTH_RANGE[0], LENGTH_RANGE[1], 1, 0, DEFAULTS.lengthMm);
     lengthRow.input.helpTip = "직선 도선에서는 가장 바깥 동심원의 반지름";
-    var thickRow = addValueRow(shapePanel, "두께", "mm", thickMm, THICK_RANGE[0], THICK_RANGE[1], 0.5, 1);
+    var thickRow = addValueRow(shapePanel, "두께", "mm", thickMm, THICK_RANGE[0], THICK_RANGE[1], 0.5, 1, DEFAULTS.thickMm);
     thickRow.input.helpTip = "막대 폭 / 코일 지름";
-    var cornerRow = addValueRow(shapePanel, "코너 둥글기", "mm", cornerMm, CORNER_RANGE[0], CORNER_RANGE[1], 0.5, 1);
+    var cornerRow = addValueRow(shapePanel, "코너 둥글기", "mm", cornerMm, CORNER_RANGE[0], CORNER_RANGE[1], 0.5, 1, DEFAULTS.cornerMm);
     cornerRow.input.helpTip = "막대자석 바깥 모서리만 둥글게. 최대 적용값은 길이·두께의 절반";
-    var turnsRow = addValueRow(shapePanel, "감은 수", "회", turns, TURNS_RANGE[0], TURNS_RANGE[1], 1, 0);
+    var turnsRow = addValueRow(shapePanel, "감은 수", "회", turns, TURNS_RANGE[0], TURNS_RANGE[1], 1, 0, DEFAULTS.turns);
     var currentRadios = addRadioRow(shapePanel, "전류", CURRENTS, current, function(i) { current = i; updatePreview(); });
     currentRadios[0].helpTip = "코일은 위 줄 도선의 전류 방향";
 
     var fieldPanel = addPanel(dlg, "자기력선");
-    var linesRow = addValueRow(fieldPanel, "선 수", "개", lineCount, LINES_RANGE[0], LINES_RANGE[1], 1, 0);
-    var rangeRow = addValueRow(fieldPanel, "그리는 범위", "%", rangePct, RANGE_RANGE[0], RANGE_RANGE[1], 10, 0);
+    var linesRow = addValueRow(fieldPanel, "선 수", "개", lineCount, LINES_RANGE[0], LINES_RANGE[1], 1, 0, DEFAULTS.lineCount);
+    var rangeRow = addValueRow(fieldPanel, "그리는 범위", "%", rangePct, RANGE_RANGE[0], RANGE_RANGE[1], 10, 0, DEFAULTS.rangePct);
     rangeRow.input.helpTip = "막대·코일 길이에 대한 %. 이 범위 밖으로 나가는 선은 잘린다";
     var checkRow = fieldPanel.add("group");
     var arrowsCheck = checkRow.add("checkbox", undefined, "화살촉");
     var labelsCheck = checkRow.add("checkbox", undefined, "N·S 글자");
-    var fontRow = addValueRow(fieldPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
+    var fontRow = addValueRow(fieldPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1, DEFAULTS.fontPt);
 
     var positionPanel = addPanel(dlg, "위치");
-    var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-    var offsetYRow = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+    var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1, DEFAULTS.offsetXmm);
+    var offsetYRow = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1, DEFAULTS.offsetYmm);
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -430,6 +433,7 @@ try {
         function setRowEnabled(controls, enabled) {
         controls.input.enabled = enabled;
         controls.slider.enabled = enabled;
+        controls.reset.enabled = enabled;
     }
 
         // 점 목록을 캣멀–롬 곡선으로 잇는 베지어 점 (양 끝 손잡이는 없음)
@@ -630,7 +634,7 @@ try {
         return radios;
     }
 
-        function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals) {
+        function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals, defaultValue) {
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":")).preferredSize.width = LABEL_WIDTH;
@@ -641,7 +645,10 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
-        return {input: input, slider: slider, min: minimum, max: maximum, step: step, decimals: decimals};
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, defaultValue: defaultValue, min: minimum, max: maximum, step: step, decimals: decimals};
     }
 
         // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
@@ -656,6 +663,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(controls.defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
@@ -676,6 +684,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(controls.defaultValue); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);

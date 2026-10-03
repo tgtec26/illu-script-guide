@@ -42,6 +42,7 @@ try {
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     var SLIDER_WIDTH = 196;
+    var RESET_BUTTON_WIDTH = 34;
     var SIZE_RANGE = [2, 500];
     var BORE_RANGE = [0.5, 100];
     var POSITION_LIMIT_MM = 50;
@@ -76,6 +77,8 @@ try {
 
     var previewGroup = null;
 
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다. 너비·높이는 선택한 사각형에서 온다
+    var DEFAULTS = {widthMm: widthMm, heightMm: heightMm, boreMm: boreMm, glassMm: glassMm, heightDiffMm: heightDiffMm, membraneWeightPt: membraneWeightPt, liquidK: liquidK, levelRightMm: levelRightMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm, levelLeftMm: levelLeftMm};
     applySettings();
 
     // -------------------------------------------------------
@@ -145,13 +148,13 @@ try {
         updatePreview();
     };
 
-    bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; });
-    bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; });
-    bindValueRow(boreRow, function() { return boreMm; }, function(v) { boreMm = v; });
-    bindValueRow(glassRow, function() { return glassMm; }, function(v) { glassMm = v; });
-    bindValueRow(diffRow, function() { return heightDiffMm; }, function(v) { heightDiffMm = v; });
-    bindValueRow(membraneWeightRow, function() { return membraneWeightPt; }, function(v) { membraneWeightPt = v; });
-    bindValueRow(liquidKRow, function() { return liquidK; }, function(v) { liquidK = v; });
+    bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; }, DEFAULTS.widthMm);
+    bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; }, DEFAULTS.heightMm);
+    bindValueRow(boreRow, function() { return boreMm; }, function(v) { boreMm = v; }, DEFAULTS.boreMm);
+    bindValueRow(glassRow, function() { return glassMm; }, function(v) { glassMm = v; }, DEFAULTS.glassMm);
+    bindValueRow(diffRow, function() { return heightDiffMm; }, function(v) { heightDiffMm = v; }, DEFAULTS.heightDiffMm);
+    bindValueRow(membraneWeightRow, function() { return membraneWeightPt; }, function(v) { membraneWeightPt = v; }, DEFAULTS.membraneWeightPt);
+    bindValueRow(liquidKRow, function() { return liquidK; }, function(v) { liquidK = v; }, DEFAULTS.liquidK);
     // 좌우 같은 높이면 왼쪽 값이 오른쪽에도 들어간다
     bindValueRow(leftRow, function() { return levelLeftMm; }, function(v) {
         levelLeftMm = v;
@@ -159,11 +162,11 @@ try {
             levelRightMm = v;
             setRowValue(rightRow, v);
         }
-    });
-    bindValueRow(rightRow, function() { return levelRightMm; }, function(v) { levelRightMm = v; });
+    }, DEFAULTS.levelLeftMm);
+    bindValueRow(rightRow, function() { return levelRightMm; }, function(v) { levelRightMm = v; }, DEFAULTS.levelRightMm);
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
-    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
-    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
+    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
+    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
 
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
@@ -202,6 +205,7 @@ try {
     function setRowEnabled(controls, enabled) {
         controls.input.enabled = enabled;
         controls.slider.enabled = enabled;
+        controls.reset.enabled = enabled;
     }
 
     // -------------------------------------------------------
@@ -497,8 +501,11 @@ try {
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
         slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
         return {
-            input: input, slider: slider,
+            input: input, slider: slider, reset: reset,
             min: minimum, max: maximum, step: step, decimals: decimals
         };
     }
@@ -510,7 +517,7 @@ try {
     }
 
     // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
-    function bindValueRow(controls, getter, setter) {
+    function bindValueRow(controls, getter, setter, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             controls.input.text = formatNumber(value, controls.decimals);
@@ -521,13 +528,14 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
         };
     }
 
-    function bindPositionRow(controls, getter, setter, isX) {
+    function bindPositionRow(controls, getter, setter, isX, initial) {
         function commit(value) {
             value = clamp(roundTo(value, controls.step), controls.min, controls.max);
             var delta = (value - getter()) * MM;
@@ -540,6 +548,7 @@ try {
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
         controls.input.onChange = function() {
             var value = parseNumber(controls.input.text);
             commit(value === null ? getter() : value);
