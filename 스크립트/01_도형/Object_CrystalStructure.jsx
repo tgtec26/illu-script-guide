@@ -230,7 +230,7 @@ try {
     // 공통 항목(탭·옵션·색상·각도·이동) 뒤에 탭별 항목을 순서대로 잇는다. 항목 수가 바뀌면 v를 올린다
     var PREF_KEY = "CrystalStructure/settings";
     function collectSettings() {
-        var parts = ["v1", tabIndex,
+        var parts = ["v2", tabIndex,
             chkLit3D.value ? "1" : "0",
             chkOutline.value ? "1" : "0",
             chkPreview.value ? "1" : "0",
@@ -255,8 +255,9 @@ try {
         if (!raw) return;
         var p = String(raw).split("|");
         var expected = 14;
-        for (var i = 0; i < engines.length; i++) expected += engines[i].fieldCount;
-        if (p[0] !== "v1" || p.length !== expected) return;
+        var legacy = p[0] === "v1";
+        for (var i = 0; i < engines.length; i++) expected += legacy && i < 2 ? 10 : engines[i].fieldCount;
+        if ((!legacy && p[0] !== "v2") || p.length !== expected) return;
         try {
             tabIndex = restoreInteger(p[1], 0, 0, engines.length - 1);
             chkLit3D.value = (p[2] === "1");
@@ -276,17 +277,18 @@ try {
             offsetYmm = sldOffsetY.value;
             var at = 14;
             for (i = 0; i < engines.length; i++) {
-                engines[i].restoreFields(p.slice(at, at + engines[i].fieldCount));
-                at += engines[i].fieldCount;
+                var count = legacy && i < 2 ? 10 : engines[i].fieldCount;
+                engines[i].restoreFields(p.slice(at, at + count));
+                at += count;
             }
             syncSliderLabels();
             updateTopAngleText();
         } catch (e) {}
     }
-    // 슬라이더는 [min,max]로 스스로 클램프하므로 숫자인지만 본다
+    // 저장값도 입력창과 같은 범위로 검사한다. 손상된 값은 기본값을 유지한다
     function restoreSlider(sld, text) {
         var value = parseFloat(text);
-        if (isFinite(value)) sld.value = value;
+        if (isFinite(value) && value >= sld.minvalue && value <= sld.maxvalue) sld.value = value;
     }
     function restoreInteger(text, fallback, minimum, maximum) {
         var value = parseInt(text, 10);
@@ -333,7 +335,7 @@ try {
         var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
         label.preferredSize.width = labelWidth;
         var input = row.add("edittext", undefined, "");
-        input.characters = 5;
+        input.characters = 6;
         var slider = row.add("scrollbar", undefined, initV, minV, maxV);
         slider.stepdelta = step;
         slider.jumpdelta = step * 10;
@@ -355,6 +357,8 @@ try {
             if (!isFinite(typed) || !/\S/.test(input.text)) { slider.syncLabel(); return; }
             setValue(typed);
         };
+        slider.caption = label;
+        slider.row = row;
         sliderSyncers.push(slider.syncLabel);
         return slider;
     }
@@ -466,6 +470,14 @@ try {
         function otherTouchRatio(key) {
             if (key === "co2") return 0.16;
             return touchRatio(key);
+        }
+
+        // 100%는 기존 접촉 조건이다. 라인용 mm 지름과 독립적으로 조절한다.
+        function packedDiameterRatio(key, o, isCorner) {
+            var value = isCorner ? o.cornerPackPercent : o.otherPackPercent;
+            var percent = value === undefined ? 100 : Number(value);
+            if (!isFinite(percent) || percent < 10 || percent > 150) percent = 100;
+            return (isCorner ? touchRatio(key) : otherTouchRatio(key)) * percent / 100;
         }
 
         function siteRoleAtPoint(key, p) {
@@ -821,6 +833,7 @@ try {
         var byRotation = variant === "rotation";
         var chkLattice, chkMode, radOneCell, radEightCells, chkHiddenDashed;
         var sldCell, sldCornerSphere, sldOtherSphere, sldCornerBrightness, sldOtherBrightness, sldGap;
+        var sldCornerPack, sldOtherPack;
         var prevCell = 20;
 
         // 그리기 직전에 투영을 정한다. 시점 방식은 3D 라인의 회전 행렬(가로 Y → 기울기 X → 화면 Z)에서
@@ -853,7 +866,7 @@ try {
         var api = {
             label: byRotation ? "입방정계2" : "입방정계1",
             usesViewAngles: !byRotation,
-            fieldCount: 10,
+            fieldCount: 12,
             addRows: addRows,
             validate: validate,
             syncEnabled: syncEnabled,
@@ -901,16 +914,23 @@ try {
             var pnlSize = page.add("panel", undefined, "크기·밝기 조절");
             pnlSize.alignChildren = "left";
             pnlSize.spacing = 2;
-            // 밀집·절단 모드의 구 지름은 접촉 조건에서 자동 계산되므로 슬라이더는 라인 모드에만 쓰인다.
+            // 라인은 mm 지름, 밀집·절단은 접촉 조건의 지름에 곱하는 배율을 쓴다.
             sldCell = addSliderRow(pnlSize, "셀 한 변", 135, 5, 80, 20, "mm", 0.1);
             sldCornerSphere = addSliderRow(pnlSize, "꼭짓점 구 지름(라인)", 135, 0.5, 20, 3, "mm", 0.1);
             sldOtherSphere = addSliderRow(pnlSize, "나머지 구 지름(라인)", 135, 0.5, 20, 3, "mm", 0.1);
+            sldCornerPack = addSliderRow(pnlSize, "꼭짓점 구 배율", 135, 10, 150, 100, "%", 1);
+            sldOtherPack = addSliderRow(pnlSize, "나머지 구 배율", 135, 10, 150, 100, "%", 1);
+            sldCornerPack.caption.helpTip = "밀집·절단 구 지름의 배율. 100%는 기존 크기. NaCl은 Na⁺ 60%, Cl⁻ 140%로 큰 구·작은 구가 맞닿게 표현할 수 있습니다.";
+            sldOtherPack.caption.helpTip = sldCornerPack.caption.helpTip;
             sldCornerBrightness = addSliderRow(pnlSize, "꼭짓점 밝기", 135, 40, 160, 100, "%", 1);
             sldOtherBrightness = addSliderRow(pnlSize, "나머지 밝기", 135, 40, 160, 100, "%", 1);
             sldGap = addSliderRow(pnlSize, "셀 간격", 135, 0, 40, 8, "mm", 0.1);
 
             linkIodineSliders(sldCornerSphere, sldOtherSphere);
             linkIodineSliders(sldCornerBrightness, sldOtherBrightness);
+            linkIodineSliders(sldCornerPack, sldOtherPack);
+            bindPackPreview(sldCornerPack);
+            bindPackPreview(sldOtherPack);
 
             // 셀 한 변을 바꾸면 구 지름과 간격이 같은 비율로 따라온다.
             prevCell = sldCell.value;
@@ -923,6 +943,11 @@ try {
                 sldCell.syncLabel();
             };
             sldCell.onChange = function() { sldCell.syncLabel(); updatePreview(); };
+        }
+
+        function bindPackPreview(slider) {
+            var sync = slider.onChanging;
+            slider.onChanging = function() { sync(); updatePreview(); };
         }
 
         function isIodineSelected() {
@@ -949,6 +974,8 @@ try {
             sldOtherBrightness.value = sldCornerBrightness.value;
             sldOtherSphere.syncLabel();
             sldOtherBrightness.syncLabel();
+            sldOtherPack.value = sldCornerPack.value;
+            sldOtherPack.syncLabel();
         }
 
         function getSelectedLattices() {
@@ -969,6 +996,13 @@ try {
         function syncEnabled() {
             sldCornerSphere.enabled = chkMode[0].value;
             sldOtherSphere.enabled = chkMode[0].value;
+            var packed = chkMode[1].value || chkMode[2].value;
+            sldCornerPack.enabled = packed;
+            sldOtherPack.enabled = packed;
+            var selected = getSelectedLattices();
+            var naclOnly = selected.length === 1 && selected[0] === "nacl";
+            sldCornerPack.caption.text = (naclOnly ? "Na⁺ 구 배율" : "꼭짓점 구 배율") + " (%):";
+            sldOtherPack.caption.text = (naclOnly ? "Cl⁻ 구 배율" : "나머지 구 배율") + " (%):";
             chkHiddenDashed.enabled = chkMode[0].value && radOneCell.value;
         }
         function drawWith(targetLayer) {
@@ -991,6 +1025,8 @@ try {
                 cellMM: sldCell.value,
                 cornerSphereMM: sldCornerSphere.value,
                 otherSphereMM: sldOtherSphere.value,
+                cornerPackPercent: sldCornerPack.value,
+                otherPackPercent: sldOtherPack.value,
                 cornerBrightness: sldCornerBrightness.value,
                 otherBrightness: sldOtherBrightness.value,
                 gapMM: sldGap.value
@@ -1003,7 +1039,8 @@ try {
             for (i = 0; i < chkMode.length; i++) mod += chkMode[i].value ? "1" : "0";
             return [lat, mod, radEightCells.value ? "2" : "1", chkHiddenDashed.value ? "1" : "0",
                 sldCell.value, sldCornerSphere.value, sldOtherSphere.value,
-                sldCornerBrightness.value, sldOtherBrightness.value, sldGap.value];
+                sldCornerBrightness.value, sldOtherBrightness.value, sldGap.value,
+                sldCornerPack.value, sldOtherPack.value];
         }
         function restoreFields(f) {
             var i;
@@ -1018,6 +1055,8 @@ try {
             restoreSlider(sldCornerBrightness, f[7]);
             restoreSlider(sldOtherBrightness, f[8]);
             restoreSlider(sldGap, f[9]);
+            restoreSlider(sldCornerPack, f[10]);
+            restoreSlider(sldOtherPack, f[11]);
             syncIodineControls();
             prevCell = sldCell.value;
         }
@@ -1324,8 +1363,8 @@ try {
 
         function drawCutCell(parent, key, o, ox, oy, edge, grads) {
             var atomRecords = [];
-            var cornerDiameterRatio = touchRatio(key);
-            var otherDiameterRatio = otherTouchRatio(key);
+            var cornerDiameterRatio = packedDiameterRatio(key, o, true);
+            var otherDiameterRatio = packedDiameterRatio(key, o, false);
             var sites = atomSites(key, o.cellSpan, cornerDiameterRatio, otherDiameterRatio);
             for (var i = 0; i < sites.length; i++) {
                 var point = sites[i].p;
@@ -1561,8 +1600,8 @@ try {
 
             // 카메라 깊이순으로 뒤에서 앞으로 그린다. z값만 비교하면 서로 다른
             // x/y 평면의 FCC 면심 원자가 잘못 포개진다.
-            var packCornerRatio = touchRatio(key);
-            var packOtherRatio = otherTouchRatio(key);
+            var packCornerRatio = packedDiameterRatio(key, o, true);
+            var packOtherRatio = packedDiameterRatio(key, o, false);
             var sites = atomSites(key, o.cellSpan, packCornerRatio, packOtherRatio);
             sites.sort(function(p, q) {
                 var d = viewDepth(p.p) - viewDepth(q.p);
