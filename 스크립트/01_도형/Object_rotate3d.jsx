@@ -81,19 +81,26 @@ try {
         grp.alignChildren = ["left", "center"];
         grp.add("statictext", undefined, label);
         control.input = grp.add("edittext", undefined, String(defaultVal));
-        control.input.characters = 7;
+        control.input.characters = 6;
 
-        control.scrollbar = parent.add(
+        control.scrollbar = grp.add(
             "scrollbar",
             undefined,
             angleToStep(clampAngle(parseAngle(control.input.text))),
             angleToStep(minAngle),
             angleToStep(maxAngle)
         );
-        control.scrollbar.preferredSize.width = 224;
+        control.scrollbar.preferredSize.width = 196;
         control.scrollbar.stepdelta = 1;
         control.scrollbar.jumpdelta = 15;
         control.isSyncing = false;
+
+        control.reset = grp.add("button", undefined, "초기화");
+        control.reset.helpTip = "이 축의 회전 각도만 0도로 되돌립니다.";
+        control.reset.onClick = function() {
+            setAngle(control, 0);
+            if (checkPreview.value) runTransform();
+        };
 
         control.input.onChange = function() {
             syncAngleScrollbar(control, parseAngle(control.input.text));
@@ -119,9 +126,9 @@ try {
         return txt;
     }
 
-    var controlX = addAngleInput(pnlInput, "X Axis (Tilt):", lastValues.x);
-    var controlY = addAngleInput(pnlInput, "Y Axis (Spin):", lastValues.y);
-    var controlZ = addAngleInput(pnlInput, "Z Axis (Roll):", lastValues.z);
+    var controlX = addAngleInput(pnlInput, "X Axis (°):", lastValues.x);
+    var controlY = addAngleInput(pnlInput, "Y Axis (°):", lastValues.y);
+    var controlZ = addAngleInput(pnlInput, "Z Axis (°):", lastValues.z);
     var inputX = controlX.input;
     var inputY = controlY.input;
     var inputZ = controlZ.input;
@@ -238,6 +245,7 @@ try {
     // 최초 실행 시 미리보기가 켜져있으면 즉시 실행
     if (checkPreview.value) runTransform();
 
+    win.defaultElement = null;
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     win.show();
 
