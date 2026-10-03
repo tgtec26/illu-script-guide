@@ -258,6 +258,7 @@ try {
                 {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 1},
                 {panel: "이름표"},
                 {key: "label", label: "이름표", items: ["이름", "화학식", "이름(화학식)", "없음"], value: 0},
+                {key: "labelPos", label: "이름표 위치", items: ["아래", "위"], value: 0},
                 {key: "coef", check: "화학식에 계수", value: true},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
                 {key: "labelGap", label: "이름표 간격", unit: "mm", min: 0, max: 10, step: 0.5, value: 2.5}
@@ -297,7 +298,11 @@ try {
                 }
             }
 
-            var offX = -x / 2, frontBottom = y - boxH, centerY = frontBottom + boxH / 2, labelBase = frontBottom - o.labelGap * mm - F * 0.72;
+            // 이름표가 위면 줄 맨 위에 이름표, 그 아래에 정육면체. 아래 첨자가 정육면체 쪽으로 내려오는 만큼(0.25 F) 더 띄운다
+            var above = o.label < 3 && o.labelPos === 1;
+            var frontBottom = (above ? y - F * 0.72 - F * 0.25 - o.labelGap * mm : y) - boxH;
+            var offX = -x / 2, centerY = frontBottom + boxH / 2;
+            var labelBase = above ? y - F * 0.72 : frontBottom - o.labelGap * mm - F * 0.72;
             for (var i = 0; i < items.length; i++) {
                 var it = items[i];
                 if (it.type === "box") {
@@ -314,7 +319,7 @@ try {
                     }
                 }
             }
-            y = (o.label < 3 ? labelBase - F * 0.3 : frontBottom) - o.blockGap * mm;
+            y = (o.label < 3 && !above ? labelBase - F * 0.3 : frontBottom) - o.blockGap * mm;
         }
 
         // 정육면체 하나(계수만큼 칸을 이어 붙임). (x0, y0)은 앞면 왼쪽 아래
@@ -961,7 +966,7 @@ try {
         }
 
         function saveSettings() {
-            var parts = ["v4"];
+            var parts = ["v5"];
             for (var i = 0; i < controls.length; i++) {
                 var ctl = controls[i];
                 if (!ctl.key) continue;
@@ -978,7 +983,7 @@ try {
             var p = String(raw).split("|");
             var keyed = [];
             for (var i = 0; i < controls.length; i++) if (controls[i].key) keyed.push(controls[i]);
-            if (p[0] !== "v4" || p.length !== keyed.length + 1) return;
+            if (p[0] !== "v5" || p.length !== keyed.length + 1) return;
             var values = [];
             for (var k = 0; k < keyed.length; k++) {
                 var ctl = keyed[k], text = p[k + 1];
