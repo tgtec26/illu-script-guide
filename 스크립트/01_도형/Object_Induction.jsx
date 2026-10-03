@@ -19,7 +19,7 @@ try {
 //     극_S · 극_N   자석 두 반쪽의 앞면(패스 하나씩이 가장 확실). 아래쪽 극을 바꾸면 두 면의 채움을 맞바꾼다
 //     글자_S · 글자_N 자석에 새긴 글자. 극을 바꾸면 자리를 맞바꾼다
 //   이름이 없는 부분은 그 옵션만 꺼진다. 자석·바늘·원통이 빠지면 알려준다.
-//   도선만 스크립트가 그린다(회색 음영): 감은 횟수·굵기·사이 틈. 확인하면 장치 전체가 든 그룹 하나가 남는다.
+//   도선만 스크립트가 그린다(회색 음영): 감은 횟수·굵기·진하기. 간격은 기둥 높이에 맞춰 자동. 확인하면 장치 전체가 든 그룹 하나가 남는다.
 
 (function() {
     if (app.documents.length === 0) {
@@ -50,13 +50,15 @@ try {
         return points;
     }
 
-    // 감을 영역(테두리 [왼, 위, 오른, 아래]), 도선 굵기·사이 틈(mm) → 가운데 x, 도선 중심 반지름, 타원 처짐 e, 간격, 굵기, 첫 바퀴 양 끝 높이.
+    // 감을 영역(테두리 [왼, 위, 오른, 아래]), 횟수, 도선 굵기(mm) → 가운데 x, 도선 중심 반지름, 타원 처짐 e, 간격, 굵기, 첫 바퀴 양 끝 높이.
     // 도선은 기둥 위에 감기므로 중심 반지름은 기둥 반지름 + 굵기 반(양옆으로 굵기 반만큼 나온다). 앞쪽이 e만큼 처지므로
-    // 첫 바퀴의 양 끝은 아래 테두리 + e 에서 시작하고, 바퀴는 간격(굵기 + 틈)만큼 위로 쌓인다 (위 바퀴가 앞)
-    function windingPlan(bounds, wireMm, gapMm) {
+    // 첫 바퀴의 양 끝은 아래 테두리 + e 에서 시작한다. 처짐과 굵기를 빼고 (횟수 − ½)로 나눈 간격이면 마지막 바퀴의
+    // 오른쪽 끝(반 간격 높다)도 위 테두리 안에 든다. 횟수가 많으면 간격이 굵기보다 좁아져 겹친다 (위 바퀴가 앞)
+    function windingPlan(bounds, turns, wireMm) {
         var d = bounds[2] - bounds[0], wire = wireMm * MM;
         var rw = d / 2 + wire / 2, e = rw * TILT;
-        return {cx: (bounds[0] + bounds[2]) / 2, rw: rw, e: e, pitch: wire + gapMm * MM, wire: wire, y0: bounds[3] + e + wire / 2};
+        var pitch = Math.max((bounds[1] - bounds[3] - e - wire) / (turns - 0.5), 0.1);
+        return {cx: (bounds[0] + bounds[2]) / 2, rw: rw, e: e, pitch: pitch, wire: wire, y0: bounds[3] + e + wire / 2};
     }
 
     function offsetPoints(points, dx, dy) {
@@ -79,16 +81,15 @@ try {
     var REQUIRED_PARTS = ["자석", "바늘", "원통"];
     var POLE_PARTS = ["극_S", "극_N", "글자_S", "글자_N"];
     var POLES = ["N극이 아래", "S극이 아래"];
-    var WIRE_K = 62, WIRE_LIGHT_K = 28;   // 도선 회색 (K %)
     var LABEL_WIDTH = 110;
     var SLIDER_WIDTH = 196;
     var POSITION_LIMIT_MM = 100;
-    var NUMBER_KEYS = ["magnetY", "turns", "wire", "gap", "needle", "offsetX", "offsetY"];
+    var NUMBER_KEYS = ["magnetY", "turns", "wire", "shade", "needle", "offsetX", "offsetY"];
     var SPECS = {
         magnetY: {range: [-60, 60], step: 0.5, decimals: 1},
         turns: {range: [1, 80], step: 1, decimals: 0},
         wire: {range: [0.2, 3], step: 0.05, decimals: 2},
-        gap: {range: [0, 5], step: 0.1, decimals: 1},
+        shade: {range: [0, 100], step: 1, decimals: 0},
         needle: {range: [-50, 50], step: 1, decimals: 0},
         offsetX: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
         offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1}
@@ -99,7 +100,7 @@ try {
     var centerX = (artboardRect[0] + artboardRect[2]) / 2;
     var centerY = (artboardRect[1] + artboardRect[3]) / 2;
 
-    var options = {pole: 0, magnetY: 0, turns: 20, wire: 0.75, gap: 0, needle: 0, offsetX: 0, offsetY: 0, previewOn: true};
+    var options = {pole: 0, magnetY: 0, turns: 20, wire: 0.75, shade: 62, needle: 0, offsetX: 0, offsetY: 0, previewOn: true};
     applySettings();
 
     var previewGroup = loadTemplate();
@@ -146,8 +147,8 @@ try {
     var coilPanel = addPanel(dlg, "코일");
     addRow(coilPanel, "turns", "감은 횟수 (회):", !!parts["원통"]);
     addRow(coilPanel, "wire", "굵기 (mm):", !!parts["원통"]);
-    addRow(coilPanel, "gap", "간격 (mm):", !!parts["원통"]);
-    rows.gap.input.helpTip = "도선 사이 틈. 0이면 빈틈없이 감긴다";
+    addRow(coilPanel, "shade", "진하기 (%):", !!parts["원통"]);
+    rows.shade.input.helpTip = "도선 회색의 K값. 클수록 진하다. 밝은 줄은 그 45 %";
 
     var meterPanel = addPanel(dlg, "검류계");
     addRow(meterPanel, "needle", "바늘 각도 (°):", !!parts["바늘"]);
@@ -169,7 +170,7 @@ try {
     bindValueRow(rows.magnetY, "magnetY");
     bindValueRow(rows.turns, "turns");
     bindValueRow(rows.wire, "wire");
-    bindValueRow(rows.gap, "gap");
+    bindValueRow(rows.shade, "shade");
     bindValueRow(rows.needle, "needle");
     bindPositionRow(rows.offsetX, "offsetX", true);
     bindPositionRow(rows.offsetY, "offsetY", false);
@@ -327,7 +328,7 @@ try {
     // 도선: 원통 바로 위에 그룹을 두고 앞쪽 반바퀴를 감은 횟수만큼. 첫 바퀴만 그리고 간격만큼 올려 복제한다 (위 바퀴가 앞)
     function applyTurns() {
         if (!parts["원통"]) return;
-        var coilKey = options.turns + "|" + options.wire + "|" + options.gap;
+        var coilKey = options.turns + "|" + options.wire + "|" + options.shade;
         if (turnsGroup !== null && state.coilKey === coilKey) return;
         if (turnsGroup !== null) {
             try { turnsGroup.remove(); } catch (removeError) {}
@@ -335,11 +336,11 @@ try {
         turnsGroup = previewGroup.groupItems.add();
         turnsGroup.name = "코일 도선";
         turnsGroup.move(parts["원통"], ElementPlacement.PLACEBEFORE);
-        var plan = windingPlan(parts["원통"].geometricBounds, options.wire, options.gap);
+        var plan = windingPlan(parts["원통"].geometricBounds, options.turns, options.wire);
         var base = bez(turnsGroup, offsetPoints(frontHalfTurn(plan.rw, plan.e, plan.pitch, plan.y0), plan.cx, 0), false);
-        strokeRound(base, WIRE_K, plan.wire);
+        strokeRound(base, options.shade, plan.wire);
         var shine = bez(turnsGroup, offsetPoints(frontHalfTurn(plan.rw, plan.e, plan.pitch, plan.y0 + plan.wire * 0.2), plan.cx, 0), false);
-        strokeRound(shine, WIRE_LIGHT_K, plan.wire * 0.35);
+        strokeRound(shine, Math.round(options.shade * 0.45), plan.wire * 0.35);
         for (var i = 1; i < options.turns; i++) {
             base.duplicate(turnsGroup, ElementPlacement.PLACEATBEGINNING).translate(0, i * plan.pitch);
             shine.duplicate(turnsGroup, ElementPlacement.PLACEATBEGINNING).translate(0, i * plan.pitch);
@@ -586,10 +587,10 @@ try {
     }
 
     // -------------------------------------------------------
-    // 설정 저장 · 복원 ("v3" + 극 + 숫자 7 + 미리보기. 확인할 때만 저장)
+    // 설정 저장 · 복원 ("v4" + 극 + 숫자 7 + 미리보기. 확인할 때만 저장)
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v3", options.pole];
+        var parts = ["v4", options.pole];
         for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
         parts.push(options.previewOn ? "1" : "0");
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
@@ -600,7 +601,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length !== 3 + NUMBER_KEYS.length) return;
+        if (p[0] !== "v4" || p.length !== 3 + NUMBER_KEYS.length) return;
         var pole = parseInt(p[1], 10);
         if (pole >= 0 && pole < POLES.length) options.pole = pole;
         for (var i = 0; i < NUMBER_KEYS.length; i++) {
