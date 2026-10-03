@@ -161,6 +161,7 @@ try {
                 {key: "arrowLen", label: "화살표 길이", unit: "mm", min: 6, max: 40, step: 1, value: 14},
                 {panel: "표시"},
                 {key: "label", label: "이름표", items: ["이름", "화학식", "이름(화학식)", "없음"], value: 0},
+                {key: "labelPos", label: "이름표 위치", items: ["아래", "위"], value: 0},
                 {key: "symbols", check: "원소 기호", value: false},
                 {key: "coef", check: "화학식에 계수", value: false},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
@@ -181,7 +182,7 @@ try {
         var mm = t.mm, F = o.font, unit = o.size * mm;
         var molGap = o.molGap * mm, gap = o.gap * mm, plusW = unit * 0.8, arrowL = o.arrowLen * mm;
         var sides = [reaction.left, reaction.right];
-        var groups = [], plusX = [], arrowSpan = null, x = 0, lowest = 0;
+        var groups = [], plusX = [], arrowSpan = null, x = 0, lowest = 0, highest = 0;
 
         for (var s = 0; s < 2; s++) {
             for (var j = 0; j < sides[s].length; j++) {
@@ -197,6 +198,7 @@ try {
                 x += group.w;
                 groups.push(group);
                 lowest = Math.min(lowest, -group.h / 2);
+                highest = Math.max(highest, group.h / 2);
             }
             if (s === 0) {
                 x += gap;
@@ -215,7 +217,8 @@ try {
         t.blockArrow(arrowSpan[0], arrowSpan[1], 0, o.arrowColor);
 
         if (o.label < 3) {
-            var baseline = lowest - o.labelGap * mm - F * 0.72;
+            // 위쪽이면 가장 높은 분자 위에, 아래 첨자가 분자 쪽으로 내려오는 만큼(0.25 F) 더 띄운다
+            var baseline = o.labelPos === 1 ? highest + o.labelGap * mm + F * 0.25 : lowest - o.labelGap * mm - F * 0.72;
             for (var n = 0; n < groups.length; n++) {
                 var info = molLabel(o.label, groups[n].formula, groups[n].coef, o.coef);
                 t.text(info, groups[n].cx, baseline, F, "center", 100, {sub: true});
@@ -966,7 +969,7 @@ try {
         }
 
         function saveSettings() {
-            var parts = ["v5"];
+            var parts = ["v6"];
             for (var i = 0; i < controls.length; i++) {
                 var ctl = controls[i];
                 if (!ctl.key) continue;
@@ -983,7 +986,7 @@ try {
             var p = String(raw).split("|");
             var keyed = [];
             for (var i = 0; i < controls.length; i++) if (controls[i].key) keyed.push(controls[i]);
-            if (p[0] !== "v5" || p.length !== keyed.length + 1) return;
+            if (p[0] !== "v6" || p.length !== keyed.length + 1) return;
             var values = [];
             for (var k = 0; k < keyed.length; k++) {
                 var ctl = keyed[k], text = p[k + 1];
