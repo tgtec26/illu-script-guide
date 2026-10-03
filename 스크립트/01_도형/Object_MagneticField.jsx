@@ -48,6 +48,10 @@ try {
     var RANGE_RANGE = [120, 400];
     var TURNS_RANGE = [2, 20];
     var FONT_RANGE = [5, 20];
+    var SPACING_RANGE = [40, 200];
+    var ARROW_RANGE = [10, 90];
+    var GAP_RANGE = [2, 100];
+    var PAIRS = ["하나", "N–S", "N–N", "S–S"];
 
     var doc = app.activeDocument;
     var viewCenter = doc.activeView.centerPoint;
@@ -71,6 +75,7 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    var spacingPct = 100, arrowPct = 50, pair = 0, gapMm = 15;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
     var DEFAULTS = {lengthMm: lengthMm, thickMm: thickMm, cornerMm: cornerMm, turns: turns, lineCount: lineCount, rangePct: rangePct, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
@@ -97,11 +102,17 @@ try {
     cornerRow.input.helpTip = "막대자석 바깥 모서리만 둥글게. 최대 적용값은 길이·두께의 절반";
     var turnsRow = addValueRow(shapePanel, "감은 수", "회", turns, TURNS_RANGE[0], TURNS_RANGE[1], 1, 0, DEFAULTS.turns);
     var currentRadios = addRadioRow(shapePanel, "전류", CURRENTS, current, function(i) { current = i; updatePreview(); });
+    var pairRadios = addRadioRow(shapePanel, "자석 배치", PAIRS, pair, function(i) { pair = i; syncEnabled(); updatePreview(); });
+    var gapRow = addValueRow(shapePanel, "자석 사이", "mm", gapMm, GAP_RANGE[0], GAP_RANGE[1], 0.5, 1, 15);
     currentRadios[0].helpTip = "코일은 위 줄 도선의 전류 방향";
 
     var fieldPanel = addPanel(dlg, "자기력선");
     var linesRow = addValueRow(fieldPanel, "선 수", "개", lineCount, LINES_RANGE[0], LINES_RANGE[1], 1, 0, DEFAULTS.lineCount);
     var rangeRow = addValueRow(fieldPanel, "그리는 범위", "%", rangePct, RANGE_RANGE[0], RANGE_RANGE[1], 10, 0, DEFAULTS.rangePct);
+    var spacingRow = addValueRow(fieldPanel, "선 간격", "%", spacingPct, SPACING_RANGE[0], SPACING_RANGE[1], 5, 0, 100);
+    spacingRow.input.helpTip = "100%는 기본 분포. 값을 높이면 안쪽 선들이 더 넓게 퍼집니다. 선 수와 함께 조절하세요.";
+    var arrowRow = addValueRow(fieldPanel, "화살표 위치", "%", arrowPct, ARROW_RANGE[0], ARROW_RANGE[1], 5, 0, 50);
+    arrowRow.input.helpTip = "자기력선 시작부터 잰 위치. 도선은 위쪽에서 전류 방향을 따라 이동합니다.";
     rangeRow.input.helpTip = "막대·코일 길이에 대한 %. 이 범위 밖으로 나가는 선은 잘린다";
     var checkRow = fieldPanel.add("group");
     var arrowsCheck = checkRow.add("checkbox", undefined, "화살촉");
@@ -125,7 +136,7 @@ try {
     arrowsCheck.value = arrowsOn;
     labelsCheck.value = labelsOn;
     syncEnabled();
-    arrowsCheck.onClick = function() { arrowsOn = arrowsCheck.value; updatePreview(); };
+    arrowsCheck.onClick = function() { arrowsOn = arrowsCheck.value; syncEnabled(); updatePreview(); };
     labelsCheck.onClick = function() { labelsOn = labelsCheck.value; updatePreview(); };
     bindValueRow(lengthRow, function() { return lengthMm; }, function(v) { lengthMm = v; });
     bindValueRow(thickRow, function() { return thickMm; }, function(v) { thickMm = v; });
@@ -133,6 +144,9 @@ try {
     bindValueRow(turnsRow, function() { return turns; }, function(v) { turns = v; });
     bindValueRow(linesRow, function() { return lineCount; }, function(v) { lineCount = v; });
     bindValueRow(rangeRow, function() { return rangePct; }, function(v) { rangePct = v; });
+    bindValueRow(spacingRow, function() { return spacingPct; }, function(v) { spacingPct = v; });
+    bindValueRow(arrowRow, function() { return arrowPct; }, function(v) { arrowPct = v; });
+    bindValueRow(gapRow, function() { return gapMm; }, function(v) { gapMm = v; });
     bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
     bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
     bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
@@ -150,6 +164,7 @@ try {
     updatePreview();
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
+    dlg.layout.layout(true);
     var confirmed = dlg.show() === 1;
     if (!confirmed) clearPreview();
     if (confirmed && previewGroup !== null) {
@@ -160,6 +175,9 @@ try {
 
     // 종류마다 쓰는 행만 켠다
     function syncEnabled() {
+        setRowEnabled(gapRow, kind === 0 && pair !== 0);
+        setRowEnabled(arrowRow, arrowsOn);
+        for (var r = 0; r < pairRadios.length; r++) pairRadios[r].enabled = kind === 0;
         setRowEnabled(thickRow, kind !== 1);
         setRowEnabled(cornerRow, kind === 0);
         setRowEnabled(turnsRow, kind === 2);
@@ -183,11 +201,16 @@ try {
         var length = lengthMm * MM, thick = thickMm * MM;
         if (kind === 1) {
             drawWire(length);
+        } else if (kind === 0 && pair !== 0) {
+            var paired = pairFieldLines(length, thick, gapMm * MM, pair, lineCount, rangePct / 100, spacingPct / 100);
+            for (var pi = 0; pi < paired.length; pi++) drawFieldLine(paired[pi]);
+            drawPlacedMagnet(length, thick, -(length + gapMm * MM) / 2, pair === 3);
+            drawPlacedMagnet(length, thick, (length + gapMm * MM) / 2, pair === 2);
         } else {
             // 코일은 위 줄이 ⊗이면 N극이 왼쪽 (오른손 법칙)
             var northLeft = kind === 0 ? true : current === 0;
             var body = [length / 2, thick / 2];
-            var lines = fieldLines(length, kind === 0 ? 0.8 : 1, lineCount, rangePct / 100, body, northLeft);
+            var lines = fieldLines(length, kind === 0 ? 0.8 : 1, lineCount, rangePct / 100, body, northLeft, spacingPct / 100);
             for (var i = 0; i < lines.length; i++) drawFieldLine(lines[i]);
             if (kind === 0) {
                 drawMagnet(length, thick);
@@ -203,8 +226,20 @@ try {
         styleLine(path, LINE_WIDTH_PT, null);
         path.name = "자기력선";
         if (!arrowsOn || points.length < 3) return;
-        var m = Math.floor(points.length / 2);
-        addHead(points[m], points[m + 1][0] - points[m - 1][0], points[m + 1][1] - points[m - 1][1]);
+        var arrow = pointAlongCurve(points, arrowPct / 100);
+        addHead(arrow.point, arrow.dx, arrow.dy);
+    }
+
+    function drawPlacedMagnet(length, thick, x, northLeft) {
+        var parent = previewGroup;
+        var magnet = parent.groupItems.add();
+        previewGroup = magnet;
+        drawMagnet(length, thick);
+        if (!northLeft) magnet.rotate(180);
+        // 글자는 회전시키지 않는다
+        if (!northLeft) for (var i = 0; i < magnet.textFrames.length; i++) magnet.textFrames[i].rotate(180);
+        magnet.translate(x, 0);
+        previewGroup = parent;
     }
 
     function drawMagnet(length, thick) {
@@ -252,7 +287,7 @@ try {
     // 도선 단면 줄 두 개(위·아래 반대 기호), 안쪽 나란한 자기력선, 양 끝 N·S
     function drawCoil(length, thick, northLeft) {
         var d = Math.min(thick * 0.35, length / turns * 0.8);
-        var inside = coilInsideLines(length, thick, Math.max(2, Math.round(lineCount / 3)), northLeft);
+        var inside = coilInsideLines(length, thick, Math.max(2, Math.round(lineCount / 3)), northLeft, spacingPct / 100);
         for (var i = 0; i < inside.length; i++) drawFieldLine(inside[i]);
         for (var t = 0; t < turns; t++) {
             var x = -length / 2 + length * (t + 0.5) / turns;
@@ -266,14 +301,15 @@ try {
     }
 
     function drawWire(outer) {
-        var radii = wireRadii(outer, lineCount);
+        var radii = wireRadii(outer, lineCount, spacingPct / 100);
         var outOfPage = current === 1;
         for (var i = 0; i < radii.length; i++) {
             var ring = previewGroup.pathItems.ellipse(radii[i], -radii[i], radii[i] * 2, radii[i] * 2);
             styleLine(ring, LINE_WIDTH_PT, null);
             ring.name = "자기력선";
             // 맨 위 점에서 나오는 전류면 왼쪽(시계 반대), 들어가는 전류면 오른쪽(시계 방향)으로
-            if (arrowsOn) addHead([0, radii[i]], outOfPage ? -1 : 1, 0);
+            var a = Math.PI / 2 + (outOfPage ? 1 : -1) * (arrowPct / 100 - 0.5) * 2 * Math.PI;
+            if (arrowsOn) addHead([radii[i] * Math.cos(a), radii[i] * Math.sin(a)], (outOfPage ? -1 : 1) * Math.sin(a), (outOfPage ? 1 : -1) * Math.cos(a));
         }
         drawWireSymbol([0, 0], Math.min(4 * MM, radii[0] * 1.2), !outOfPage);
     }
@@ -311,7 +347,7 @@ try {
         function dir(p) {
             var f = fieldAt(p, poles);
             var n = Math.sqrt(f[0] * f[0] + f[1] * f[1]);
-            return [f[0] / n, f[1] / n];
+            return n > 1e-12 ? [f[0] / n, f[1] / n] : [0, 0];
         }
         var points = [start];
         var p = start;
@@ -322,8 +358,12 @@ try {
             var k4 = dir([p[0] + k3[0] * h, p[1] + k3[1] * h]);
             p = [p[0] + (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) * h / 6, p[1] + (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) * h / 6];
             points.push(p);
-            var south = poles[1];
-            if (Math.sqrt((p[0] - south.x) * (p[0] - south.x) + (p[1] - south.y) * (p[1] - south.y)) < stopRadius) break;
+            var reached = false;
+            for (var si = 0; si < poles.length; si++) {
+                var south = poles[si];
+                if (south.q < 0 && Math.sqrt((p[0] - south.x) * (p[0] - south.x) + (p[1] - south.y) * (p[1] - south.y)) < stopRadius) reached = true;
+            }
+            if (reached || (k1[0] === 0 && k1[1] === 0)) break;
             if (Math.abs(p[0]) > box[0] || Math.abs(p[1]) > box[1]) break;
         }
         return points;
@@ -332,7 +372,7 @@ try {
     // N극에서 S극 반대쪽으로 고르게 퍼지는 시작 각(S 쪽 ±25°는 뺀다)으로 선을 따라가고, 몸체(|x| < body[0], |y| < body[1])
     // 밖으로 처음 나온 뒤 다시 들어가기 전까지만 남긴다. 몸체 밖에 나오지 않는 선은 버린다. 점은 몇 걸음마다 하나씩.
     // 두 극의 세기가 같아 그림이 좌우 대칭이므로, 상자 밖으로 나간 선은 뒤집어 S극 쪽에 한 번 더 넣는다
-    function fieldLines(length, poleRatio, count, range, body, northLeft) {
+    function fieldLines(length, poleRatio, count, range, body, northLeft, spacing) {
         var d = length / 2 * poleRatio;
         var sign = northLeft ? -1 : 1;
         var poles = [{x: sign * d, y: 0, q: 1}, {x: -sign * d, y: 0, q: -1}];
@@ -342,7 +382,7 @@ try {
         var margin = 25 * Math.PI / 180;
         var lines = [];
         for (var i = 0; i < count; i++) {
-            var angle = toSouth + margin + (2 * Math.PI - 2 * margin) * (count === 1 ? 0.5 : i / (count - 1));
+            var angle = toSouth + margin + (2 * Math.PI - 2 * margin) * spreadFraction(count === 1 ? 0.5 : i / (count - 1), spacing || 1);
             var start = [poles[0].x + h * Math.cos(angle), h * Math.sin(angle)];
             var trace = traceLine(start, poles, h * 1.5, h, box);
             var kept = [], state = 0;
@@ -366,10 +406,10 @@ try {
     }
 
     // 코일 안쪽 나란한 자기력선: S극 끝 → N극 끝
-    function coilInsideLines(length, thick, count, northLeft) {
+    function coilInsideLines(length, thick, count, northLeft, spacing) {
         var lines = [];
         for (var i = 0; i < count; i++) {
-            var y = thick * 0.7 * ((i + 0.5) / count - 0.5);
+            var y = thick * 0.7 * (spreadFraction((i + 0.5) / count, spacing || 1) - 0.5);
             var a = [length / 2, y], b = [-length / 2, y];
             var from = northLeft ? a : b, to = northLeft ? b : a;
             lines.push([from, [(from[0] + to[0]) / 2, y], to]);
@@ -378,19 +418,85 @@ try {
     }
 
     // 직선 도선 둘레 동심원 반지름: 바깥으로 갈수록 간격이 넓어진다 (k + k(k−1)/4 비례)
-    function wireRadii(outer, count) {
+    function wireRadii(outer, count, spacing) {
         var radii = [];
         var last = count + count * (count - 1) / 4;
-        for (var k = 1; k <= count; k++) radii.push(outer * (k + k * (k - 1) / 4) / last);
+        for (var k = 1; k <= count; k++) radii.push(outer * Math.pow((k + k * (k - 1) / 4) / last, 1 / (spacing || 1)));
         return radii;
+    }
+
+    function spreadFraction(t, spacing) {
+        var signed = 2 * t - 1;
+        return (1 + (signed < 0 ? -1 : 1) * Math.pow(Math.abs(signed), 1 / spacing)) / 2;
+    }
+
+    // 네 점 극의 합성장을 추적한다. S–S는 극을 반전해 추적한 뒤 점 순서를 뒤집는다.
+    function pairFieldLines(length, thick, gap, mode, count, range, spacing) {
+        var centers = [-(length + gap) / 2, (length + gap) / 2];
+        var leftNorth = mode === 3, rightNorth = mode === 2;
+        var orientations = [leftNorth, rightNorth], poles = [], lines = [];
+        var reverse = mode === 3;
+        for (var b = 0; b < 2; b++) {
+            var q = orientations[b] ? 1 : -1;
+            if (reverse) q = -q;
+            poles.push({x: centers[b] - length * 0.4, y: 0, q: q});
+            poles.push({x: centers[b] + length * 0.4, y: 0, q: -q});
+        }
+        var h = Math.min(length / 150, gap / 12, thick / 20);
+        var box = [(length + gap / 2) * range, length * range / 2];
+        for (var s = 0; s < poles.length; s++) {
+            if (poles[s].q < 0) continue;
+            for (var i = 0; i < count; i++) {
+                var angle = 2 * Math.PI * spreadFraction((i + 0.5) / count, spacing);
+                var trace = traceLine([poles[s].x + h * Math.cos(angle), h * Math.sin(angle)], poles, h * 1.5, h, box);
+                var kept = [], emerged = false;
+                for (var j = 0; j < trace.length; j++) {
+                    var p = trace[j];
+                    var inside = (Math.abs(p[0] - centers[0]) < length / 2 || Math.abs(p[0] - centers[1]) < length / 2) && Math.abs(p[1]) < thick / 2;
+                    if (inside && emerged) break;
+                    if (!inside) {
+                        emerged = true;
+                        if (j % 3 === 0 || j === trace.length - 1) kept.push(p);
+                    }
+                }
+                if (kept.length > 2) {
+                    if (reverse) kept.reverse();
+                    lines.push(kept);
+                }
+            }
+        }
+        return lines;
+    }
+
+    // 그린 베지어를 세분해 곡선 길이에 따른 위치와 접선을 구한다.
+    function pointAlongCurve(list, fraction) {
+        var curve = smoothPoints(list), samples = [], total = 0;
+        for (var i = 0; i < curve.length - 1; i++) {
+            var a = curve[i].anchor, b = curve[i].right, c = curve[i + 1].left, d = curve[i + 1].anchor;
+            for (var k = 0; k <= 8; k++) {
+                if (i > 0 && k === 0) continue;
+                var t = k / 8, u = 1 - t;
+                var p = [u*u*u*a[0]+3*u*u*t*b[0]+3*u*t*t*c[0]+t*t*t*d[0], u*u*u*a[1]+3*u*u*t*b[1]+3*u*t*t*c[1]+t*t*t*d[1]];
+                if (samples.length) {
+                    var prev = samples[samples.length - 1].point;
+                    total += Math.sqrt(Math.pow(p[0]-prev[0], 2)+Math.pow(p[1]-prev[1], 2));
+                }
+                samples.push({point: p, distance: total, dx: 3*u*u*(b[0]-a[0])+6*u*t*(c[0]-b[0])+3*t*t*(d[0]-c[0]), dy: 3*u*u*(b[1]-a[1])+6*u*t*(c[1]-b[1])+3*t*t*(d[1]-c[1])});
+            }
+        }
+        var target = total * fraction, best = samples[1];
+        for (var n = 1; n < samples.length - 1; n++) {
+            if (Math.abs(samples[n].distance - target) < Math.abs(best.distance - target)) best = samples[n];
+        }
+        return best;
     }
 
     // -------------------------------------------------------
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v2", kind, lengthMm, thickMm, cornerMm, lineCount, rangePct, turns, current, arrowsOn ? "1" : "0", labelsOn ? "1" : "0",
-            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+        var parts = ["v3", kind, lengthMm, thickMm, cornerMm, lineCount, rangePct, turns, current, arrowsOn ? "1" : "0", labelsOn ? "1" : "0",
+            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", spacingPct, arrowPct, pair, gapMm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -399,7 +505,11 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length !== 15) return;
+        if (p[0] !== "v3" || p.length !== 19) return;
+        spacingPct = restoreNumber(p[15], spacingPct, SPACING_RANGE, 5);
+        arrowPct = restoreNumber(p[16], arrowPct, ARROW_RANGE, 5);
+        pair = restoreNumber(p[17], pair, [0, 3], 1);
+        gapMm = restoreNumber(p[18], gapMm, GAP_RANGE, 0.5);
         kind = restoreNumber(p[1], kind, [0, KINDS.length - 1], 1);
         lengthMm = restoreNumber(p[2], lengthMm, LENGTH_RANGE, 1);
         thickMm = restoreNumber(p[3], thickMm, THICK_RANGE, 0.5);

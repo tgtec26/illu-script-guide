@@ -21,7 +21,7 @@ function extractFunction(name) {
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= (tol || 1e-9), `${label}: expected ${b}, got ${a}`);
 
-const names = ["fieldAt", "traceLine", "fieldLines", "coilInsideLines", "wireRadii", "magnetHalfPoints"];
+const names = ["fieldAt", "traceLine", "fieldLines", "coilInsideLines", "wireRadii", "magnetHalfPoints", "spreadFraction", "pairFieldLines", "smoothPoints", "pointAlongCurve"];
 const lib = new Function(`${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 막대자석: 선은 모두 막대 밖, 좌우 대칭 쌍이 있고 NaN 없음
@@ -57,5 +57,30 @@ assert.ok(south[1].right[0] > south[1].anchor[0] && south[4].left[0] > south[4].
 // 호출 결과에 바로 textRange를 대입하면 일러스트레이터가 종료된다
 assert.ok(!/addText\([^;]*\)\.textRange/.test(source), "no chained textRange assignment");
 assert.ok(source.includes('var PREF_KEY = "ObjectMagneticField/settings";'));
-assert.ok(source.includes('p[0] !== "v2" || p.length !== 15'), "settings field count");
+assert.ok(source.includes('p[0] !== "v3" || p.length !== 19'), "settings field count");
 console.log("magnetic field checks passed");
+
+// 모든 극 조합, 좁은 간격, 분포 양끝에서 유한한 좌표와 몸체 외부를 보장한다.
+for (const mode of [1, 2, 3]) for (const gap of [5.67, 42.5, 283]) for (const spacing of [0.4, 1, 2]) {
+  const result = lib.pairFieldLines(L, T, gap, mode, 10, 2, spacing);
+  assert.ok(result.length > 4, `pair ${mode} has lines`);
+  for (const line of result) for (const p of line) {
+    assert.ok(p.every(Number.isFinite));
+    const c = (L + gap) / 2;
+    assert.ok(Math.abs(p[1]) >= T / 2 || (Math.abs(p[0] - c) >= L / 2 && Math.abs(p[0] + c) >= L / 2));
+  }
+  const f = lib.pointAlongCurve(result[0], 0.5);
+  assert.ok(f.point.every(Number.isFinite) && Math.hypot(f.dx, f.dy) > 0);
+}
+const ns = lib.pairFieldLines(L, T, 42.5, 1, 16, 2, 1);
+assert.ok(ns.some(line => line[0][0] < 0 && line.at(-1)[0] > 0 && Math.abs(line[0][0]) < 30), 'N to facing S bridge');
+for (const mode of [2, 3]) {
+  const result = lib.pairFieldLines(L, T, 42.5, mode, 16, 2, 1);
+  assert.ok(!result.some(line => line[0][0] < 0 && line.at(-1)[0] > 0 && Math.abs(line[0][0]) < 30 && Math.abs(line.at(-1)[0]) < 30), 'like poles do not bridge');
+}
+const arrowStart = lib.pointAlongCurve([[0,0],[50,0],[100,0]], 0.1);
+const arrowEnd = lib.pointAlongCurve([[0,0],[50,0],[100,0]], 0.9);
+assert.ok(arrowStart.point[0] < 20 && arrowEnd.point[0] > 80 && arrowEnd.dx > 0);
+assert.notDeepStrictEqual(lib.wireRadii(50, 5, 0.4), lib.wireRadii(50, 5, 2));
+new Function(source);
+console.log('pair geometry and JSX syntax checks passed');
