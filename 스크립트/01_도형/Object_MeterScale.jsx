@@ -208,16 +208,30 @@ try {
         path.closed = false; strokePath(path);
     }
     function drawNumber(group, label) {
-        var text = group.textFrames.add(); text.contents = label.text;
+        var negative = label.text.charAt(0) === "-";
+        var text = group.textFrames.add(); text.contents = negative ? label.text.substring(1) : label.text;
         var attr = text.textRange.characterAttributes;
         attr.size = settings.fontSize; attr.fillColor = black; attr.strokeColor = new NoColor();
         attr.textFont = font;
-        if (label.text.charAt(0) === "-") {
+        var sign = null;
+        var signDelta = null;
+        if (negative) {
             if (!minusFont) {
                 try { minusFont = app.textFonts.getByName("Batang"); }
                 catch (fontError) { throw new Error("음수 기호에 사용할 바탕체(Batang)를 설치해주세요."); }
             }
-            text.textRange.characters[0].characterAttributes.textFont = minusFont;
+            // 숫자 프레임으로 정렬하고 부호는 같은 기준선의 왼쪽에 붙인다.
+            sign = group.textFrames.add(); sign.contents = "-";
+            var signAttr = sign.textRange.characterAttributes;
+            signAttr.size = settings.fontSize; signAttr.fillColor = black;
+            signAttr.strokeColor = new NoColor(); signAttr.textFont = minusFont;
+            sign.position = [text.position[0], text.position[1]];
+            var numberBounds = text.geometricBounds;
+            var signBounds = sign.geometricBounds;
+            var signCenterY = (signBounds[1] + signBounds[3]) / 2;
+            signDelta = [numberBounds[0] - (signBounds[2] - signBounds[0]) / 2 -
+                (numberBounds[0] + numberBounds[2]) / 2,
+                signCenterY - (numberBounds[1] + numberBounds[3]) / 2];
         }
         var initialBounds = text.geometricBounds;
         var halfHeight = (initialBounds[1] - initialBounds[3]) / 2;
@@ -227,6 +241,15 @@ try {
         var b = text.geometricBounds;
         text.translate(label.point[0] + label.normal[0] * extent - (b[0] + b[2]) / 2,
             label.point[1] + label.normal[1] * extent - (b[1] + b[3]) / 2);
+        if (sign) {
+            var angle = settings.tiltNumbers ? label.angle * Math.PI / 180 : 0;
+            if (settings.tiltNumbers) sign.rotate(label.angle);
+            var sb = sign.geometricBounds;
+            var dx = signDelta[0] * Math.cos(angle) - signDelta[1] * Math.sin(angle);
+            var dy = signDelta[0] * Math.sin(angle) + signDelta[1] * Math.cos(angle);
+            sign.translate(label.point[0] + label.normal[0] * extent + dx - (sb[0] + sb[2]) / 2,
+                label.point[1] + label.normal[1] * extent + dy - (sb[1] + sb[3]) / 2);
+        }
     }
     // 중심 위치는 그린 뒤 이동한다. 곡률 0은 직선, 100은 사용할 수 있는 높이까지 휜다.
     function buildScaleGeometry(s) {

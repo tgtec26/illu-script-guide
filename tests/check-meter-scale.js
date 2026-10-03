@@ -19,7 +19,7 @@ function run(show, saved, preferenceFailure = false) {
         }}; g.paths.push(p); return p;
       }},
       textFrames: {add() {
-        const t = {textRange: {characterAttributes: {}}, geometricBounds: [0, 8, 8, 0], rotate() {},
+        const t = {textRange: {characterAttributes: {}}, geometricBounds: [0, 8, 8, 0], position: [0, 0], rotate() {},
           translate(x, y) {this.position = [x, y];}};
         Object.defineProperty(t, 'contents', {get() {return this.value;}, set(value) {
           this.value = value;
@@ -63,10 +63,10 @@ const row = (log, label) => {
     assert.strictEqual(log.groups.length, 1);
     const g = log.groups[0];
     assert.strictEqual(g.paths.length, 62); // baseline + 6*10+1 ticks
-    assert.deepStrictEqual(g.labels.map(t => t.contents), ['-30', '-20', '-10', '0', '10', '20', '30']);
-    assert.ok(g.labels.slice(0, 3).every(t => t.textRange.characters[0].characterAttributes.textFont.name === 'Batang'));
-    assert.ok(g.labels.every(t => t.textRange.characterAttributes.textFont.name === 'GSMediumB1'));
-    assert.ok(g.labels.slice(3).every(t => !t.textRange.characters[0].characterAttributes.textFont));
+    assert.deepStrictEqual(g.labels.filter(t => t.contents !== '-').map(t => t.contents), ['30', '20', '10', '0', '10', '20', '30']);
+    assert.strictEqual(g.labels.filter(t => t.contents === '-').length, 3);
+    assert.ok(g.labels.filter(t => t.contents === '-').every(t => t.textRange.characterAttributes.textFont.name === 'Batang'));
+    assert.ok(g.labels.filter(t => t.contents !== '-').every(t => t.textRange.characterAttributes.textFont.name === 'GSMediumB1'));
     const x = row(log, '가로 (mm):'); x.bar.value = 5; x.bar.onChanging();
     assert.strictEqual(log.groups.length, 1);
     assert.ok(Math.abs(g.moves[1][0] - 5 * 2.834645669) < 1e-7);
@@ -115,13 +115,26 @@ run(log => {
   const gap = row(log, '숫자 간격 (mm):'); gap.input.text = '1.5'; gap.input.onChange();
   const after = log.groups[log.groups.length - 1];
   assert.deepStrictEqual(after.paths.map(p => p.pathPoints), before.paths.map(p => p.pathPoints));
-  const middle = Math.floor(after.labels.length / 2);
+  const middle = after.labels.findIndex(t => t.contents === '0');
   assert.ok(Math.abs(after.labels[middle].position[1] - before.labels[middle].position[1] - 2.834645669) < 1e-7);
-  assert.ok(after.labels.every(t => t.textRange.characterAttributes.textFont.name === 'GSMediumB1'));
+  assert.ok(after.labels.filter(t => t.contents !== '-').every(t => t.textRange.characterAttributes.textFont.name === 'GSMediumB1'));
   button(log, '확인').onClick(); gapSaved = log.writes[0][1];
 });
 run(log => assert.strictEqual(row(log, '숫자 간격 (mm):').input.text, '1.5'), gapSaved);
 run(log => assert.strictEqual(row(log, '최대값:').input.text, '30'), saved.replace(/^v2/, 'v1'));
+
+// Minus signs occupy space to the left; the digits themselves remain centered on each major tick.
+run(log => {
+  const curve = row(log, '곡률 (%):'); curve.input.text = '0'; curve.input.onChange();
+  const g = log.groups[log.groups.length - 1];
+  const digits = g.labels.filter(t => t.contents !== '-');
+  digits.forEach((text, i) => {
+    const tick = g.paths[1 + i * 10].pathPoints[1].anchor;
+    assert.ok(Math.abs(text.position[0] + 4 - tick[0]) < 1e-7, `digits ${i} center on the tick`);
+  });
+  const signs = g.labels.filter(t => t.contents === '-');
+  signs.forEach((sign, i) => assert.ok(sign.position[0] < digits[i].position[0]));
+});
 
 // Numeric limits are shared by loading and dialog, invalid input never creates nonfinite geometry.
 run(log => {
