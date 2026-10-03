@@ -490,7 +490,7 @@ try {
             var rising = true;
             if (pointSat[pn]) {
                 pointY = drawnCurveY(pointSub[pn], pointT[pn], px, py, fitCache);
-                rising = substanceValueAt(pointSub[pn], pointT[pn] + 1) >= substanceValueAt(pointSub[pn], pointT[pn] - 1);
+                rising = isRising(pointSub[pn], pointT[pn]);
             }
             drawPoint(group, px(pointT[pn]), pointY, POINT_NAMES[pn], pointSat[pn], rising);
         }
@@ -545,6 +545,13 @@ try {
         var low = Math.floor(offset);
         if (low >= samples.length - 1) return samples[samples.length - 1][1];
         return samples[low][1] + (offset - low) * (samples[low + 1][1] - samples[low][1]);
+    }
+
+    // 온도 t에서 곡선이 오르는 중인지 (±1 ℃ 값 비교, 측정 범위 끝에서는 범위 안으로 맞춘다)
+    function isRising(index, t) {
+        var samples = SUBSTANCES[index].samples;
+        var first = samples[0][0], last = samples[samples.length - 1][0];
+        return substanceValueAt(index, Math.min(last, t + 1)) >= substanceValueAt(index, Math.max(first, t - 1));
     }
 
     // 점 입력창에 넣을 포화 용해도(소수 첫째 자리). 측정 범위 밖이거나 그래프 위쪽을 넘으면 null
