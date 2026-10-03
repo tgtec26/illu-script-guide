@@ -30,6 +30,10 @@ try {
     var TAB_PREF_KEY = "ObjectReactionModel/tab";
     var MINUS = "−";
     var gradientCache = {};
+    var regionCache = {};
+    // 교재 비율: 결합한 두 구의 중심 간격 = 반지름 합 × 이 값, 수소 반지름 0.88 Å (참고 그림 실측: H 지름 ≈ O의 0.58배, 중심 간격 ≈ 반지름 합의 0.76배)
+    var TEXTBOOK_OVERLAP = 0.76;
+    var TEXTBOOK_H_RADIUS = 0.88;
 
     // ==== 표 ====
     // 공간 채움 모형의 구 지름 = 반데르발스 반지름(Bondi 1964)의 두 배. 이온 결합은 이온 반지름(Shannon). 산소 지름(2 × 1.52 Å = 3.04 Å)을 1로 둔다
@@ -66,26 +70,25 @@ try {
         C: [55, 90, 100]
     };
     // 분자 모형: 원자는 [종류, x, y, z] (Å, 위쪽 +y, 보는 쪽 +z). 중심 간격이 실제 결합 길이·각도(NIST CCCBDB)이고
-    // 보기 좋은 방향으로 돌려 놓았다. 앞(z가 큰) 원자가 뒤 원자를 가리도록 뒤에서 앞으로 그리며, z가 같으면 적은 순서.
-    // 5번째 값이 있으면 기호를 원점에서 바깥쪽으로 그만큼(Å) 옮겨 쓴다 (다른 원자에 덮인 원자의 기호가 보이도록)
-    var NITRATE = [["O", 0, 1.24, 0, 0.9], ["O", -1.074, -0.62, 0, 0.9], ["O", 1.074, -0.62, 0, 0.9], ["N", 0, 0, 0]];
+    // 보기 좋은 방향으로 돌려 놓았다. ref는 교재 비율에서 간격을 늘릴 기준 결합(원자 번호 둘)
+    var NITRATE = [["O", 0, 1.24, 0], ["O", -1.074, -0.62, 0], ["O", 1.074, -0.62, 0], ["N", 0, 0, 0]];
     var BRACKET = {x0: -2.9, x1: 2.9, y0: -2.45, y1: 3.05};
     var MOLECULES = {
-        H2: {name: "수소", atoms: [["H", -0.371, 0, 0], ["H", 0.371, 0, 0]]},
-        O2: {name: "산소", atoms: [["O", -0.604, 0, 0], ["O", 0.604, 0, 0]]},
-        N2: {name: "질소", atoms: [["N", -0.549, 0, 0], ["N", 0.549, 0, 0]]},
-        Cl2: {name: "염소", atoms: [["Cl", -0.994, 0, 0], ["Cl", 0.994, 0, 0]]},
-        H2O: {name: "물", atoms: [["H", -0.757, -0.567, -0.152], ["H", 0.757, -0.567, -0.152], ["O", 0, 0, 0]]},
-        H2O2: {name: "과산화 수소", atoms: [["H", -0.818, -0.789, -0.553], ["H", 0.818, 0.804, -0.532], ["O", -0.738, 0, 0], ["O", 0.738, 0, 0]]},
-        NH3: {name: "암모니아", atoms: [["H", -0.812, 0.198, -0.425], ["H", 0.812, 0.198, -0.425], ["N", 0, 0.345, 0.161], ["H", 0, -0.396, 0.85]]},
-        HCl: {name: "염화 수소", atoms: [["H", -1.198, 0, 0.436], ["Cl", 0, 0, 0]]},
-        CH4: {name: "메테인", atoms: [["H", -0.920, -0.570, -0.104], ["H", 0.828, -0.570, -0.413], ["C", 0.000, 0.000, 0.000], ["H", -0.094, 0.941, -0.535], ["H", 0.186, 0.199, 1.052]]},
-        CO2: {name: "이산화 탄소", atoms: [["O", -1.162, 0, 0], ["O", 1.162, 0, 0], ["C", 0, 0, 0]]},
-        CO: {name: "일산화 탄소", atoms: [["C", -0.564, 0, 0], ["O", 0.564, 0, 0]]},
-        NO: {name: "일산화 질소", atoms: [["N", -0.576, 0, 0], ["O", 0.576, 0, 0]]},
-        NO2: {name: "이산화 질소", atoms: [["O", -0.964, -0.387, 0.588], ["O", 0.23, 0.959, -0.673], ["N", 0, 0, 0]]},
+        H2: {name: "수소", ref: [0, 1], atoms: [["H", -0.371, 0, 0], ["H", 0.371, 0, 0]]},
+        O2: {name: "산소", ref: [0, 1], atoms: [["O", -0.604, 0, 0], ["O", 0.604, 0, 0]]},
+        N2: {name: "질소", ref: [0, 1], atoms: [["N", -0.549, 0, 0], ["N", 0.549, 0, 0]]},
+        Cl2: {name: "염소", ref: [0, 1], atoms: [["Cl", -0.994, 0, 0], ["Cl", 0.994, 0, 0]]},
+        H2O: {name: "물", ref: [0, 2], atoms: [["H", -0.757, -0.532, 0.248], ["H", 0.757, -0.532, 0.248], ["O", 0, 0, 0]]},
+        H2O2: {name: "과산화 수소", ref: [2, 3], atoms: [["H", -0.818, -0.789, -0.553], ["H", 0.818, 0.804, -0.532], ["O", -0.738, 0, 0], ["O", 0.738, 0, 0]]},
+        NH3: {name: "암모니아", ref: [2, 0], atoms: [["H", -0.812, 0.198, -0.425], ["H", 0.812, 0.198, -0.425], ["N", 0, 0.345, 0.161], ["H", 0, -0.396, 0.85]]},
+        HCl: {name: "염화 수소", ref: [0, 1], atoms: [["H", -1.198, 0, 0.436], ["Cl", 0, 0, 0]]},
+        CH4: {name: "메테인", ref: [2, 0], atoms: [["H", -0.888, -0.483, -0.401], ["H", 0.888, -0.483, -0.401], ["C", 0, 0, 0], ["H", 0, 1.05, -0.281], ["H", 0, -0.085, 1.084]]},
+        CO2: {name: "이산화 탄소", ref: [0, 2], atoms: [["O", -1.162, 0, 0], ["O", 1.162, 0, 0], ["C", 0, 0, 0]]},
+        CO: {name: "일산화 탄소", ref: [0, 1], atoms: [["C", -0.564, 0, 0], ["O", 0.564, 0, 0]]},
+        NO: {name: "일산화 질소", ref: [0, 1], atoms: [["N", -0.576, 0, 0], ["O", 0.576, 0, 0]]},
+        NO2: {name: "이산화 질소", ref: [0, 2], atoms: [["O", -0.964, -0.387, 0.588], ["O", 0.23, 0.959, -0.673], ["N", 0, 0, 0]]},
         C: {name: "탄소", atoms: [["C", 0, 0, 0]]},
-        // 이온 결합: 양이온·음이온 구가 맞닿는다(중심 간격 = 이온 반지름의 합)
+        // 이온 결합: 양이온·음이온 구가 맞닿는다(중심 간격 = 이온 반지름의 합). 비율 선택과 상관없이 같다
         NaCl: {name: "염화 나트륨", ionic: true, atoms: [["Cl-", 0, 0, 0], ["Na+", -2.83, 0, 0]]},
         AgCl: {name: "염화 은", ionic: true, atoms: [["Cl-", 0, 0, 0], ["Ag+", -2.96, 0, 0]]},
         AgNO3: {name: "질산 은", ionic: true, bracket: BRACKET, atoms: NITRATE.concat([["Ag+", -4.39, 0, 0]])},
@@ -150,6 +153,7 @@ try {
                 {key: "formula", label: "반응식", text: true, value: REACT_PRESETS[3].eq},
                 {key: "arrange", label: "분자 배치", items: ["한 줄", "모아서"], value: 0},
                 {panel: "크기·간격"},
+                {key: "proportion", label: "원자 비율", items: ["교재 비율", "실제(반데르발스)"], value: 0},
                 {key: "size", label: "원자 크기", unit: "mm", min: 2, max: 15, step: 0.5, value: 7},
                 {key: "tilt", label: "기울임", unit: "°", min: 0, max: 45, step: 5, value: 0},
                 {key: "molGap", label: "분자 간격", unit: "mm", min: 0, max: 8, step: 0.5, value: 1},
@@ -186,7 +190,7 @@ try {
                     plusX.push(x + plusW / 2);
                     x += plusW + gap;
                 }
-                var group = arrangeSpecies(sides[s][j][1], sides[s][j][0], o.arrange, o.tilt, unit, molGap);
+                var group = arrangeSpecies(sides[s][j][1], sides[s][j][0], o.arrange, o.tilt, unit, molGap, o.proportion === 0);
                 group.cx = x + group.w / 2;
                 group.formula = sides[s][j][1];
                 group.coef = sides[s][j][0];
@@ -238,6 +242,7 @@ try {
                 {key: "reaction", label: "반응", items: presetTitles(GAS_PRESETS), value: 0},
                 {key: "formula", label: "반응식", text: true, value: GAS_PRESETS[0].eq},
                 {panel: "정육면체·분자"},
+                {key: "proportion", label: "원자 비율", items: ["교재 비율", "실제(반데르발스)"], value: 0},
                 {key: "cell", label: "칸 크기", unit: "mm", min: 8, max: 30, step: 0.5, value: 16},
                 {key: "depth", label: "깊이", unit: "mm", min: 2, max: 15, step: 0.5, value: 5},
                 {key: "angle", label: "깊이 각도", unit: "°", min: 10, max: 80, step: 5, value: 45},
@@ -316,7 +321,7 @@ try {
             var offsets = CELL_OFFSETS[o.perCell], index = 0;
             for (var c = 0; c < n; c++) {
                 for (var m = 0; m < offsets.length; m++) {
-                    var lay = molLayout(formula, o.tilt * (index % 2 === 0 ? 1 : -1));
+                    var lay = molLayout(formula, o.tilt * (index % 2 === 0 ? 1 : -1), o.proportion === 0);
                     index++;
                     paintMolecule(t, lay, x0 + (c + 0.5) * cell + dx / 2 + offsets[m][0] * cell,
                         y0 + cell / 2 + dy / 2 + offsets[m][1] * cell, unit, false, F);
@@ -376,19 +381,29 @@ try {
         return titles;
     }
 
+    // 원자 반지름(Å). 교재 비율이면 수소만 작다
+    function atomRadius(key, textbook) {
+        return textbook && key === "H" ? TEXTBOOK_H_RADIUS : ELEMENTS[key].d * ANGSTROM / 2;
+    }
+
     // 분자를 화면 안에서 angle(°)만큼 돌려 경계 가운데가 원점이 되게 한 배치 (산소 지름 = 1). 원자는 뒤에서 앞(z 순)으로 정렬.
-    // 이온 결합 분자는 돌리지 않는다
-    function molLayout(formula, angle) {
+    // textbook이면 ref 결합의 중심 간격이 반지름 합의 TEXTBOOK_OVERLAP배가 되도록 분자 전체를 늘린다(각도는 그대로).
+    // 이온 결합 분자는 돌리지도 늘리지도 않는다
+    function molLayout(formula, angle, textbook) {
         var mol = MOLECULES[formula];
         var rad = mol.ionic ? 0 : angle * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);
+        var stretch = 1;
+        if (textbook && mol.ref && !mol.ionic) {
+            var p = mol.atoms[mol.ref[0]], q = mol.atoms[mol.ref[1]];
+            var bond = Math.sqrt((p[1] - q[1]) * (p[1] - q[1]) + (p[2] - q[2]) * (p[2] - q[2]) + (p[3] - q[3]) * (p[3] - q[3]));
+            stretch = TEXTBOOK_OVERLAP * (atomRadius(p[0], true) + atomRadius(q[0], true)) / bond;
+        }
         var atoms = [], l = 1e9, t = -1e9, r = -1e9, b = 1e9;
         for (var i = 0; i < mol.atoms.length; i++) {
-            var a = mol.atoms[i], d = ELEMENTS[a[0]].d;
-            var px = a[1] / ANGSTROM, py = a[2] / ANGSTROM;
+            var a = mol.atoms[i], d = atomRadius(a[0], textbook) * 2 / ANGSTROM;
+            var px = a[1] * stretch / ANGSTROM, py = a[2] * stretch / ANGSTROM;
             var x = px * cos - py * sin, y = px * sin + py * cos;
-            var len = Math.sqrt(px * px + py * py), shift = a[4] ? a[4] / ANGSTROM : 0;
-            atoms.push({key: a[0], x: x, y: y, z: a[3] / ANGSTROM, d: d, order: i,
-                lx: len > 0 ? x / Math.sqrt(x * x + y * y) * shift : 0, ly: len > 0 ? y / Math.sqrt(x * x + y * y) * shift : 0});
+            atoms.push({key: a[0], x: x, y: y, z: a[3] * stretch / ANGSTROM, d: d, order: i});
             l = Math.min(l, x - d / 2);
             r = Math.max(r, x + d / 2);
             t = Math.max(t, y + d / 2);
@@ -408,7 +423,198 @@ try {
             atoms[k].y -= cy;
         }
         var shifted = br ? {x0: br.x0 / ANGSTROM - cx, x1: br.x1 / ANGSTROM - cx, y0: br.y0 / ANGSTROM - cy, y1: br.y1 / ANGSTROM - cy} : null;
-        return {atoms: atoms, bracket: shifted, labeled: !!mol.ionic, w: r - l, h: t - b};
+        return {atoms: atoms, bracket: shifted, labeled: !!mol.ionic, w: r - l, h: t - b,
+            key: formula + "|" + (mol.ionic ? 0 : angle) + "|" + (textbook ? 1 : 0)};
+    }
+
+    // 분자의 원자마다 실제로 보이는 부분(점마다 표면이 가장 앞선 구)을 윤곽선으로 구한다. 좌표는 분자 가운데 기준 단위.
+    // 구 둘의 표면이 만나는 교차선이 경계가 되므로 겹친 구가 융합돼 보인다. 배치마다 한 번만 계산해 둔다.
+    // 결과: 원자마다 {loops: 보이는 부분 윤곽선들(구멍은 시계 방향, 전체가 다 보이면 null), label: 기호 자리 [x, y] 또는 null}
+    function molRegions(lay) {
+        if (regionCache[lay.key]) return regionCache[lay.key];
+        var atoms = lay.atoms, n = atoms.length, infos = [], overlapping = [], any = false, i, k;
+        for (i = 0; i < n; i++) {
+            overlapping[i] = false;
+            for (k = 0; k < n; k++) {
+                if (k === i) continue;
+                var ddx = atoms[i].x - atoms[k].x, ddy = atoms[i].y - atoms[k].y, rr = (atoms[i].d + atoms[k].d) / 2;
+                if (ddx * ddx + ddy * ddy < rr * rr - 1e-6) { overlapping[i] = true; any = true; }
+            }
+            infos.push({loops: null, label: [atoms[i].x, atoms[i].y]});
+        }
+        if (!any) { regionCache[lay.key] = infos; return infos; }
+
+        // 점 (px, py)에서 표면이 가장 앞선 구
+        function ownerAt(px, py) {
+            var best = -1, bestZ = -1e9;
+            for (var m = 0; m < n; m++) {
+                var a = atoms[m], dx = px - a.x, dy = py - a.y, rr2 = a.d * a.d / 4, d2 = dx * dx + dy * dy;
+                if (d2 <= rr2) {
+                    var h = a.z + Math.sqrt(rr2 - d2);
+                    if (h > bestZ) { bestZ = h; best = m; }
+                }
+            }
+            return best;
+        }
+
+        // 격자: 구마다 덮는 줄 구간만 훑으며 더 앞선 구가 나오면 주인을 바꾼다
+        var left = 1e9, right = -1e9, bottom = 1e9, top = -1e9;
+        for (i = 0; i < n; i++) {
+            left = Math.min(left, atoms[i].x - atoms[i].d / 2);
+            right = Math.max(right, atoms[i].x + atoms[i].d / 2);
+            bottom = Math.min(bottom, atoms[i].y - atoms[i].d / 2);
+            top = Math.max(top, atoms[i].y + atoms[i].d / 2);
+        }
+        var N = 80, step = Math.max(right - left, top - bottom) / N;
+        left -= step * 2; bottom -= step * 2; right += step * 2; top += step * 2;
+        var nx = Math.ceil((right - left) / step) + 1, ny = Math.ceil((top - bottom) / step) + 1, owner = [], bestZ = [], ix, iy, idx;
+        for (idx = 0; idx < nx * ny; idx++) { owner.push(-1); bestZ.push(-1e9); }
+        for (k = 0; k < n; k++) {
+            var ak = atoms[k], rk2 = ak.d * ak.d / 4;
+            var row0 = Math.max(0, Math.ceil((ak.y - ak.d / 2 - bottom) / step)), row1 = Math.min(ny - 1, Math.floor((ak.y + ak.d / 2 - bottom) / step));
+            for (iy = row0; iy <= row1; iy++) {
+                var dy = bottom + iy * step - ak.y, w2 = rk2 - dy * dy;
+                if (w2 < 0) continue;
+                var half = Math.sqrt(w2);
+                var col0 = Math.max(0, Math.ceil((ak.x - half - left) / step)), col1 = Math.min(nx - 1, Math.floor((ak.x + half - left) / step));
+                for (ix = col0; ix <= col1; ix++) {
+                    var dx = left + ix * step - ak.x, rest = rk2 - dx * dx - dy * dy;
+                    var h = ak.z + Math.sqrt(rest > 0 ? rest : 0);
+                    idx = iy * nx + ix;
+                    if (h > bestZ[idx]) { bestZ[idx] = h; owner[idx] = k; }
+                }
+            }
+        }
+        var count = [], sumX = [], sumY = [];
+        for (i = 0; i < n; i++) { count.push(0); sumX.push(0); sumY.push(0); }
+        for (iy = 0; iy < ny; iy++) {
+            for (ix = 0; ix < nx; ix++) {
+                var o = owner[iy * nx + ix];
+                if (o >= 0) { count[o]++; sumX[o] += left + ix * step; sumY[o] += bottom + iy * step; }
+            }
+        }
+
+        // 마칭 스퀘어: 경계 칸의 선분(안쪽이 왼쪽). 모서리 번호 0 아래, 1 오른쪽, 2 위, 3 왼쪽
+        var cases = {1: [[0, 3]], 2: [[1, 0]], 3: [[1, 3]], 4: [[2, 1]], 5: [[0, 3], [2, 1]], 6: [[2, 0]], 7: [[2, 3]],
+            8: [[3, 2]], 9: [[0, 2]], 10: [[1, 0], [3, 2]], 11: [[1, 2]], 12: [[3, 1]], 13: [[0, 1]], 14: [[3, 0]]};
+        var points = [], nexts = [];
+        for (i = 0; i < n; i++) { points.push({}); nexts.push({}); }
+        // 모서리 위 경계점(구 who의 안팎이 바뀌는 곳)을 이분법으로 찾는다. 같은 모서리는 한 번만 구한다
+        function edgePoint(who, edge, cellX, cellY) {
+            var horizontal = edge === 0 || edge === 2;
+            var ex = edge === 1 ? cellX + 1 : cellX, ey = edge === 2 ? cellY + 1 : cellY;
+            var key = (horizontal ? "h" : "v") + ex + "_" + ey;
+            if (points[who][key]) return key;
+            var ax = left + ex * step, ay = bottom + ey * step;
+            var bx = horizontal ? ax + step : ax, by = horizontal ? ay : ay + step;
+            var startInside = owner[ey * nx + ex] === who, lo = 0, hi = 1;
+            for (var it = 0; it < 12; it++) {
+                var mid = (lo + hi) / 2;
+                if ((ownerAt(ax + (bx - ax) * mid, ay + (by - ay) * mid) === who) === startInside) lo = mid; else hi = mid;
+            }
+            var tt = (lo + hi) / 2;
+            points[who][key] = [ax + (bx - ax) * tt, ay + (by - ay) * tt];
+            return key;
+        }
+        for (iy = 0; iy < ny - 1; iy++) {
+            for (ix = 0; ix < nx - 1; ix++) {
+                var o0 = owner[iy * nx + ix], o1 = owner[iy * nx + ix + 1], o2 = owner[(iy + 1) * nx + ix + 1], o3 = owner[(iy + 1) * nx + ix];
+                if (o0 === o1 && o1 === o2 && o2 === o3) continue;
+                var corners = [o0, o1, o2, o3];
+                for (var ci = 0; ci < 4; ci++) {
+                    var who = corners[ci];
+                    if (who < 0 || !overlapping[who]) continue;
+                    var first = true;
+                    for (var cj = 0; cj < ci; cj++) if (corners[cj] === who) first = false;
+                    if (!first) continue;
+                    var c = (o0 === who ? 1 : 0) | (o1 === who ? 2 : 0) | (o2 === who ? 4 : 0) | (o3 === who ? 8 : 0);
+                    var list = cases[c];
+                    for (var s2 = 0; s2 < list.length; s2++) {
+                        nexts[who][edgePoint(who, list[s2][0], ix, iy)] = edgePoint(who, list[s2][1], ix, iy);
+                    }
+                }
+            }
+        }
+
+        for (i = 0; i < n; i++) {
+            if (count[i] === 0) { infos[i].loops = []; infos[i].label = null; continue; }
+            if (!overlapping[i]) continue;
+            var radius = atoms[i].d / 2, area = Math.PI * radius * radius, loops = [], visited = {};
+            for (var startKey in nexts[i]) {
+                if (visited[startKey]) continue;
+                var loop = [], key = startKey;
+                while (key !== undefined && !visited[key]) {
+                    visited[key] = true;
+                    loop.push(points[i][key]);
+                    key = nexts[i][key];
+                }
+                if (loop.length >= 3) loops.push(loop);
+            }
+            infos[i].loops = mergeHoles(loops);
+            // 윤곽이 원 전체와 같으면 전체 원으로 본다
+            if (infos[i].loops.length === 1 && Math.abs(Math.abs(polygonArea(infos[i].loops[0])) - area) < area * 0.01) infos[i].loops = null;
+        }
+
+        // 기호 자리: 보이는 칸들의 무게중심에 가장 가까운 보이는 칸. 보이는 면적이 원의 10% 미만이면 기호를 달지 않는다
+        for (i = 0; i < n; i++) {
+            if (infos[i].label === null) continue;
+            if (infos[i].loops === null) continue;
+            var visibleArea = count[i] * step * step, circleArea = Math.PI * atoms[i].d * atoms[i].d / 4;
+            if (visibleArea < circleArea * 0.1) { infos[i].label = null; continue; }
+            var mx = sumX[i] / count[i], my = sumY[i] / count[i], bestD = 1e9, bestPoint = null;
+            for (iy = 0; iy < ny; iy++) {
+                for (ix = 0; ix < nx; ix++) {
+                    if (owner[iy * nx + ix] !== i) continue;
+                    var qx = left + ix * step, qy = bottom + iy * step, dd = (qx - mx) * (qx - mx) + (qy - my) * (qy - my);
+                    if (dd < bestD) { bestD = dd; bestPoint = [qx, qy]; }
+                }
+            }
+            infos[i].label = bestPoint;
+        }
+        regionCache[lay.key] = infos;
+        return infos;
+    }
+
+    // 반시계 바깥 윤곽(넓이 +)과 시계 방향 구멍(넓이 -)이 섞인 윤곽선들을, 구멍마다 가장 가까운 두 꼭짓점을 폭 0인 다리로 이어
+    // 바깥 윤곽에 합쳐 구멍 없는 경로들로 만든다 (일러의 클리핑 마스크는 복합 경로를 못 쓴다). 넓이의 합은 그대로다
+    function mergeHoles(loops) {
+        var outers = [], holes = [], i, j, k;
+        for (i = 0; i < loops.length; i++) (polygonArea(loops[i]) > 0 ? outers : holes).push(loops[i]);
+        for (i = 0; i < holes.length; i++) {
+            var hole = holes[i], host = -1;
+            for (j = 0; j < outers.length; j++) if (pointInPolygon(hole[0], outers[j])) { host = j; break; }
+            if (host < 0) continue;
+            var outer = outers[host], bestO = 0, bestH = 0, bestD = 1e9;
+            for (j = 0; j < outer.length; j++) {
+                for (k = 0; k < hole.length; k++) {
+                    var dx = outer[j][0] - hole[k][0], dy = outer[j][1] - hole[k][1], dd = dx * dx + dy * dy;
+                    if (dd < bestD) { bestD = dd; bestO = j; bestH = k; }
+                }
+            }
+            var merged = outer.slice(0, bestO + 1);
+            for (k = 0; k <= hole.length; k++) merged.push(hole[(bestH + k) % hole.length]);
+            outers[host] = merged.concat(outer.slice(bestO));
+        }
+        return outers;
+    }
+
+    function pointInPolygon(point, polygon) {
+        var inside = false;
+        for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            var a = polygon[i], b = polygon[j];
+            if ((a[1] > point[1]) !== (b[1] > point[1]) && point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+        }
+        return inside;
+    }
+
+    // 다각형 넓이(부호 있음: 반시계가 +)
+    function polygonArea(points) {
+        var sum = 0;
+        for (var i = 0; i < points.length; i++) {
+            var p = points[i], q = points[(i + 1) % points.length];
+            sum += p[0] * q[1] - q[0] * p[1];
+        }
+        return sum / 2;
     }
 
     function dia(radius) {
@@ -426,10 +632,10 @@ try {
     }
 
     // 같은 분자 count개를 한 줄(mode 0) 또는 모아서(mode 1) 놓는다. 좌표는 pt, 묶음 경계 가운데가 원점
-    function arrangeSpecies(formula, count, mode, tilt, unit, gapPt) {
+    function arrangeSpecies(formula, count, mode, tilt, unit, gapPt, textbook) {
         var lays = [], maxW = 0, maxH = 0, i;
         for (i = 0; i < count; i++) {
-            var lay = molLayout(formula, tilt * (i % 2 === 0 ? 1 : -1));
+            var lay = molLayout(formula, tilt * (i % 2 === 0 ? 1 : -1), textbook);
             lays.push(lay);
             maxW = Math.max(maxW, lay.w * unit);
             maxH = Math.max(maxH, lay.h * unit);
@@ -460,24 +666,48 @@ try {
         return {items: items, w: w, h: h};
     }
 
-    // 분자 하나를 (cx, cy)에 그린다. 원자마다 구를 그린 뒤 기호를 얹어, 앞 원자가 뒤 원자의 기호를 가린다
+    // 분자 하나를 (cx, cy)에 그린다. 같은 배치·크기는 처음 그린 그룹을 복제해 옮긴다.
+    // 아래층에 구를 전체 원으로 뒤→앞 순서로 깔고(경계 틈 방지), 일부가 가려진 구는 보이는 부분만 위층에 다시 그려 교차선에서 맞닿게 한다
     function paintMolecule(t, lay, cx, cy, unit, showSymbols, F) {
-        for (var i = 0; i < lay.atoms.length; i++) {
-            var a = lay.atoms[i], el = ELEMENTS[a.key];
-            var x = cx + a.x * unit, y = cy + a.y * unit, radius = a.d * unit / 2;
-            t.sphere(x, y, radius, el.pal);
-            if (showSymbols || lay.labeled) {
-                var size = Math.max(4.5, Math.min(F, radius * 2 * 0.55));
-                t.text(el.text + (el.sup || ""), x + a.lx * unit, y + a.ly * unit - size * 0.35, size, "center", sphereTextK(el.pal, t.mode), el.sup ? {supLast: 1} : null);
+        var withSymbols = showSymbols || lay.labeled;
+        var key = lay.key + "|" + unit.toFixed(2) + "|" + (withSymbols ? 1 : 0) + "|" + F;
+        var proto = t.molecules[key];
+        if (proto) {
+            var copy = proto.item.duplicate(t.group, ElementPlacement.PLACEATBEGINNING);
+            copy.translate(cx - proto.cx, cy - proto.cy, true, true, true, true);
+            return;
+        }
+        var mg = t.group.groupItems.add(), regions = molRegions(lay), i;
+        for (i = 0; i < lay.atoms.length; i++) {
+            var a = lay.atoms[i];
+            t.sphere(mg, cx + a.x * unit, cy + a.y * unit, a.d * unit / 2, ELEMENTS[a.key].pal, null);
+        }
+        for (i = 0; i < lay.atoms.length; i++) {
+            if (regions[i].loops === null || regions[i].loops.length === 0) continue;
+            var atom = lay.atoms[i], moved = [];
+            for (var m = 0; m < regions[i].loops.length; m++) {
+                var loop = [];
+                for (var q = 0; q < regions[i].loops[m].length; q++) loop.push([cx + regions[i].loops[m][q][0] * unit, cy + regions[i].loops[m][q][1] * unit]);
+                moved.push(loop);
+            }
+            t.sphere(mg, cx + atom.x * unit, cy + atom.y * unit, atom.d * unit / 2, ELEMENTS[atom.key].pal, moved);
+        }
+        if (withSymbols) {
+            for (i = 0; i < lay.atoms.length; i++) {
+                if (regions[i].label === null) continue;
+                var el = ELEMENTS[lay.atoms[i].key], size = Math.max(4.5, Math.min(F, lay.atoms[i].d * unit * 0.55));
+                t.text(el.text + (el.sup || ""), cx + regions[i].label[0] * unit, cy + regions[i].label[1] * unit - size * 0.35, size, "center",
+                    sphereTextK(el.pal, t.mode), el.sup ? {supLast: 1} : null, mg);
             }
         }
         var br = lay.bracket;
         if (br) {
             var x0 = cx + br.x0 * unit, x1 = cx + br.x1 * unit, y0 = cy + br.y0 * unit, y1 = cy + br.y1 * unit, prong = 0.2 * unit;
-            t.path([[x0 + prong, y1], [x0, y1], [x0, y0], [x0 + prong, y0]], false, null, 100, 0.5);
-            t.path([[x1 - prong, y1], [x1, y1], [x1, y0], [x1 - prong, y0]], false, null, 100, 0.5);
-            t.text(MINUS, x1 + 0.1 * unit, y1 - F * 0.5, F * 1.2, "left", 100);
+            t.path([[x0 + prong, y1], [x0, y1], [x0, y0], [x0 + prong, y0]], false, null, 100, 0.5, null, undefined, mg);
+            t.path([[x1 - prong, y1], [x1, y1], [x1, y0], [x1 - prong, y0]], false, null, 100, 0.5, null, undefined, mg);
+            t.text(MINUS, x1 + 0.1 * unit, y1 - F * 0.5, F * 1.2, "left", 100, null, mg);
         }
+        t.molecules[key] = {item: mg, cx: cx, cy: cy};
     }
 
     // ==== 창 ====
@@ -729,7 +959,7 @@ try {
         }
 
         function saveSettings() {
-            var parts = ["v2"];
+            var parts = ["v3"];
             for (var i = 0; i < controls.length; i++) {
                 var ctl = controls[i];
                 if (!ctl.key) continue;
@@ -746,7 +976,7 @@ try {
             var p = String(raw).split("|");
             var keyed = [];
             for (var i = 0; i < controls.length; i++) if (controls[i].key) keyed.push(controls[i]);
-            if (p[0] !== "v2" || p.length !== keyed.length + 1) return;
+            if (p[0] !== "v3" || p.length !== keyed.length + 1) return;
             var values = [];
             for (var k = 0; k < keyed.length; k++) {
                 var ctl = keyed[k], text = p[k + 1];
@@ -775,12 +1005,11 @@ try {
 
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다. 색은 K값(숫자) 또는 [r, g, b]
     function makeFormTools(g) {
-        var t = {mm: FORM_MM, group: g, mode: 0};
-        var spheres = {};
+        var t = {mm: FORM_MM, group: g, mode: 0, molecules: {}};
         // 0 컬러 / 1 회색 음영. 그리기 전에 한 번 정한다
         t.setMode = function(mode) { t.mode = mode; };
-        t.path = function(points, closed, fill, stroke, width, dashes, join) {
-            var p = g.pathItems.add();
+        t.path = function(points, closed, fill, stroke, width, dashes, join, parent) {
+            var p = (parent || g).pathItems.add();
             p.setEntirePath(points);
             p.closed = !!closed;
             formPaint(p, fill, stroke, width, dashes, join);
@@ -837,31 +1066,32 @@ try {
                 true, PLUS_COLORS[colorIndex] === null ? 100 : (t.mode === 1 ? PLUS_COLORS[colorIndex].k : PLUS_COLORS[colorIndex].rgb), null, 0);
             return p;
         };
-        // 공간 채움 구: 왼쪽 위에 하이라이트. 같은 색·크기는 처음 것을 복제해 옮긴다
-        t.sphere = function(cx, cy, r, pal) {
-            var key = pal + "|" + r.toFixed(2);
-            var proto = spheres[key];
-            if (proto) {
-                var copy = proto.item.duplicate(g, ElementPlacement.PLACEATBEGINNING);
-                copy.translate(cx - proto.cx, cy - proto.cy, true, true, true, true);
-                return copy;
+        // 공간 채움 구: 왼쪽 위에 하이라이트. loops(구멍 없는 윤곽선들)가 있으면 그 안쪽만 보이게, 조각마다 클리핑 그룹 하나. parent 그룹 안에 만든다
+        t.sphere = function(parent, cx, cy, r, pal, loops) {
+            var pieces = loops === null || loops === undefined ? [null] : loops;
+            for (var m = 0; m < pieces.length; m++) {
+                var clip = parent.groupItems.add();
+                var radius = r * 1.5, hx = cx - r * 0.3, hy = cy + r * 0.3;
+                var big = clip.pathItems.ellipse(hy + radius, hx - radius, radius * 2, radius * 2);
+                big.stroked = false;
+                big.filled = true;
+                var gradientColor = new GradientColor();
+                var gray = t.mode === 1, colors = gray ? SPHERE_GRAYS[pal] : SPHERE_COLORS[pal];
+                gradientColor.gradient = formGradient("RM_sphere_" + pal + (gray ? "_gray" : ""), GradientType.RADIAL,
+                    [[0, colors[0]], [30, colors[1]], [100, colors[2]]]);
+                big.fillColor = gradientColor;
+                var mask;
+                if (pieces[m] === null) {
+                    mask = clip.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
+                } else {
+                    mask = clip.pathItems.add();
+                    mask.setEntirePath(pieces[m]);
+                    mask.closed = true;
+                }
+                mask.filled = false;
+                mask.stroked = false;
+                clip.clipped = true;
             }
-            var clip = g.groupItems.add();
-            var radius = r * 1.5, hx = cx - r * 0.3, hy = cy + r * 0.3;
-            var big = clip.pathItems.ellipse(hy + radius, hx - radius, radius * 2, radius * 2);
-            big.stroked = false;
-            big.filled = true;
-            var gradientColor = new GradientColor();
-            var gray = t.mode === 1, colors = gray ? SPHERE_GRAYS[pal] : SPHERE_COLORS[pal];
-            gradientColor.gradient = formGradient("RM_sphere_" + pal + (gray ? "_gray" : ""), GradientType.RADIAL,
-                [[0, colors[0]], [30, colors[1]], [100, colors[2]]]);
-            big.fillColor = gradientColor;
-            var mask = clip.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
-            mask.filled = false;
-            mask.stroked = false;
-            clip.clipped = true;
-            spheres[key] = {item: clip, cx: cx, cy: cy};
-            return clip;
         };
         // 정육면체의 뒤쪽 면(뒷면·왼쪽 안쪽 벽·바닥). 분자를 그리기 전에
         t.cubeBack = function(x0, y0, w, h, dx, dy) {
@@ -892,8 +1122,8 @@ try {
         };
         // (x, baseline)이 글자의 가로 기준(align 가운데·"left"면 왼쪽 끝·"right"면 오른쪽 끝)과 기준선.
         // opts: sub 글자 뒤 숫자를 아래 첨자로 / supLast 끝에서 n글자를 위 첨자로
-        t.text = function(text, x, baseline, size, align, k, opts) {
-            var frame = g.textFrames.add();
+        t.text = function(text, x, baseline, size, align, k, opts, parent) {
+            var frame = (parent || g).textFrames.add();
             frame.contents = String(text);
             var range = frame.textRange;
             var attributes = range.characterAttributes;

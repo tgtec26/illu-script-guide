@@ -41,8 +41,8 @@ function extractVar(name) {
   return source.slice(start, end + 1);
 }
 
-const tables = ["MINUS", "ANGSTROM", "ELEMENTS", "SPHERE_COLORS", "SPHERE_GRAYS", "NITRATE", "BRACKET", "MOLECULES", "REACT_PRESETS", "GAS_PRESETS"];
-const functions = ["dia", "parseEquations", "parseSide", "molLayout", "clusterRows", "arrangeSpecies", "formSubFlags", "sphereTextK"];
+const tables = ["MINUS", "ANGSTROM", "regionCache", "TEXTBOOK_OVERLAP", "TEXTBOOK_H_RADIUS", "ELEMENTS", "SPHERE_COLORS", "SPHERE_GRAYS", "NITRATE", "BRACKET", "MOLECULES", "REACT_PRESETS", "GAS_PRESETS"];
+const functions = ["dia", "atomRadius", "polygonArea", "pointInPolygon", "mergeHoles", "molRegions", "parseEquations", "parseSide", "molLayout", "clusterRows", "arrangeSpecies", "formSubFlags", "sphereTextK"];
 const names = tables.concat(functions);
 const lib = new Function(`${tables.map(extractVar).join("\n")}\n${functions.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
@@ -130,6 +130,62 @@ for (const presets of [lib.REACT_PRESETS, lib.GAS_PRESETS]) {
   for (const [f, i, j] of [["H2O", 0, 2], ["NH3", 0, 2], ["CH4", 3, 2], ["CO2", 0, 2], ["HCl", 0, 1], ["O2", 0, 1]]) {
     const ei = lib.ELEMENTS[lib.MOLECULES[f].atoms[i][0]], ej = lib.ELEMENTS[lib.MOLECULES[f].atoms[j][0]];
     assert.ok(dist(f, i, j) / lib.ANGSTROM < (ei.d + ej.d) / 2, `${f} bonded spheres overlap`);
+  }
+}
+
+// 교재 비율: H 지름 ≈ O의 0.58배, ref 결합의 중심 간격 = 반지름 합 × 0.76 (참고 그림 실측), 이온 결합은 그대로
+{
+  const textbookWater = lib.molLayout("H2O", 0, true), realWater = lib.molLayout("H2O", 0, false);
+  const byOrder = (lay, order) => lay.atoms.find((a) => a.order === order);
+  near2(byOrder(textbookWater, 0).d / byOrder(textbookWater, 2).d, 0.88 / 1.52, 1e-9, "textbook H/O");
+  near2(byOrder(realWater, 0).d / byOrder(realWater, 2).d, 1.2 / 1.52, 1e-9, "real H/O");
+  for (const [formula, mol] of Object.entries(lib.MOLECULES)) {
+    const lay = lib.molLayout(formula, 0, true);
+    if (mol.ionic) {
+      assert.deepStrictEqual(lay.atoms, lib.molLayout(formula, 0, false).atoms, `${formula} ionic ignores proportion`);
+      continue;
+    }
+    if (!mol.ref) continue;
+    const a = byOrder(lay, mol.ref[0]), b = byOrder(lay, mol.ref[1]);
+    const distance = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+    near2(distance, 0.76 * (a.d + b.d) / 2, 1e-9, `${formula} textbook bond spacing`);
+  }
+  function near2(actual, expected, tolerance, label) { assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} vs ${expected}`); }
+}
+
+// 보이는 부분: 윤곽선 넓이의 합 = 구들을 겹쳐 놓은 모양의 넓이 (모든 점은 가장 앞선 구 하나의 몫)
+{
+  for (const [formula, mol] of Object.entries(lib.MOLECULES)) {
+    for (const textbook of [true, false]) {
+      for (const angle of [0, 25]) {
+        const lay = lib.molLayout(formula, angle, textbook);
+        const infos = lib.molRegions(lay);
+        assert.strictEqual(infos.length, lay.atoms.length);
+        let total = 0;
+        lay.atoms.forEach((atom, i) => {
+          const area = Math.PI * atom.d * atom.d / 4;
+          if (infos[i].loops === null) total += area;
+          else {
+            for (const loop of infos[i].loops) {
+              assert.ok(loop.every((p) => Number.isFinite(p[0]) && Number.isFinite(p[1])), `${formula} finite`);
+              assert.ok(lib.polygonArea(loop) > 0, `${formula} piece must be counter-clockwise (no separate holes)`);
+              total += lib.polygonArea(loop);
+            }
+          }
+        });
+        let covered = 0;
+        const N = 360, xs = lay.atoms.map((a) => a.x), ys = lay.atoms.map((a) => a.y);
+        const left = Math.min(...lay.atoms.map((a) => a.x - a.d / 2)), right = Math.max(...lay.atoms.map((a) => a.x + a.d / 2));
+        const bottom = Math.min(...lay.atoms.map((a) => a.y - a.d / 2)), top = Math.max(...lay.atoms.map((a) => a.y + a.d / 2));
+        const cell = Math.max(right - left, top - bottom) / N;
+        for (let px = left; px < right; px += cell) {
+          for (let py = bottom; py < top; py += cell) {
+            if (lay.atoms.some((a) => (px - a.x) ** 2 + (py - a.y) ** 2 <= a.d * a.d / 4)) covered += cell * cell;
+          }
+        }
+        assert.ok(Math.abs(total - covered) / covered < 0.03, `${formula} ${textbook} ${angle}: visible ${total} vs union ${covered}`);
+      }
+    }
   }
 }
 
