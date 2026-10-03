@@ -1,6 +1,8 @@
 // Object_MotionPhoto.jsx
 // 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
 try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 파선 양 끝 정렬 (01_도형/Object_setdash_align_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.fsName + "/Object_setdash_align_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -26,6 +28,8 @@ try {
 //     마지막 사진이 지표면에 닿고(띠도 거기서 끝), 아래 기준이면 마지막 보조선은 지표면 선이 대신해 그리지 않는다.
 //   - 거리 표시의 맞은편에 시간 표시(0초, 0.1초… 촬영 간격 기준), 눈금자(첫 사진이 0, 5칸마다 긴 눈금 + 칸 수 0·5·10…), 운동 방향 화살표를
 //     띠에서 가까운 순서로 쌓는다.
+//   - '배경 위 보조선은 흰색'을 켜면 파선 보조선(출발선, 거리 표시 연장선) 중 배경(띠) 위를 지나는 조각만 흰색, 띠 밖은 검정이다.
+//   - 파선(출발선, 보조선, 지난 위치 단색 테두리)은 '파선을 모서리와 패스 끝에 정렬하고 길이를 조정해 맞추기'를 적용해 양 끝이 같다.
 //   - 확인하면 파선·배경·지표면·표시선·글자·사진이 든 그룹 하나가 남는다.
 
 (function() {
@@ -97,7 +101,7 @@ try {
 
     // 저장 순서: 라디오, 체크박스, 숫자(NUMBER_KEYS)
     var RADIO_KEYS = ["direction", "motion", "ball"];
-    var CHECK_KEYS = ["bgOn", "startOn", "surfaceOn", "distOn", "ghostOn", "rulerOn", "timeOn", "arrowOn", "bottomOn", "touchOn"];
+    var CHECK_KEYS = ["bgOn", "startOn", "surfaceOn", "distOn", "ghostOn", "rulerOn", "timeOn", "arrowOn", "bottomOn", "touchOn", "guideWhite"];
 
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
     var NUMBER_KEYS = ["speed", "startSpeed", "accel", "interval", "count", "size", "ballK", "bgK", "tick", "offsetX", "offsetY"];
@@ -126,7 +130,7 @@ try {
 
     var options = {
         direction: 0, motion: 0, ball: 0,
-        bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false, rulerOn: false, timeOn: false, arrowOn: false, bottomOn: false, touchOn: false,
+        bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false, rulerOn: false, timeOn: false, arrowOn: false, bottomOn: false, touchOn: false, guideWhite: false,
         speed: 100, startSpeed: 0, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, tick: 5,
         distText: "d",
         offsetX: 0, offsetY: 0,
@@ -169,7 +173,11 @@ try {
     addCheck(ballPanel, "지난 위치는 흐리게 (구: 반투명, 단색: 흰 속 + 파선)", "ghostOn");
 
     var showPanel = addPanel(dlg, "배경·표시");
-    addCheck(showPanel, "배경", "bgOn");
+    var bgRow = showPanel.add("group");
+    bgRow.alignChildren = ["left", "center"];
+    addCheck(bgRow, "배경", "bgOn");
+    addCheck(bgRow, "배경 위 보조선은 흰색", "guideWhite");
+    checks.guideWhite.helpTip = "배경(띠) 위를 지나는 파선 보조선만 흰색으로 그린다. 띠 밖은 검정 그대로";
     addRow(showPanel, "bgK", "배경 색", "K");
     var markRow = showPanel.add("group");
     markRow.alignChildren = ["left", "center"];
@@ -259,6 +267,7 @@ try {
         setRowEnabled(rows.bgK, options.bgOn && !tape);
         setRowEnabled(rows.tick, options.rulerOn);
         checks.bgOn.enabled = !tape;
+        checks.guideWhite.enabled = options.bgOn && !tape;
         checks.ghostOn.enabled = !tape;
         checks.surfaceOn.enabled = options.direction === 1;
         checks.touchOn.enabled = options.direction === 1 && options.surfaceOn;
@@ -353,6 +362,18 @@ try {
         }
         var forward = vertical ? [0, -1] : [1, 0];
         var black = makeGray(LINE_K);
+        var white = makeGray(0);
+        // 배경(띠) 위에서만 흰색인 보조선: 띠 위 조각은 흰색으로 따로 그려 띠 위에 얹는다
+        var whiteGuide = o.guideWhite && o.bgOn && !tape;
+        var dashed = [];   // 양 끝 정렬을 적용할 파선들
+        // 운동 방향 거리 s에서 c가 cFrom → cTo로 가는 파선 보조선
+        function guide(s, cFrom, cTo, width, color, name) {
+            var line = drawLine(group, at(s, cFrom), at(s, cTo), width, color);
+            line.name = name;
+            try { line.strokeDashes = DASHES; } catch (guideDashError) {}
+            dashed.push(line);
+            return line;
+        }
 
         previewGroup = findEditableLayer().groupItems.add();
         previewGroup.name = "MotionPhoto";
@@ -361,14 +382,19 @@ try {
         // 거리 표시가 놓이는 쪽(가로: 아래, 세로: 오른쪽)
         var labelSign = vertical ? 1 : -1;
         var showDist = o.distOn && trimText(o.distText) !== "";
+        var startInner = false;   // 띠 위의 출발선 조각은 띠를 그린 뒤에 얹는다
         if (o.startOn) {
             // 거리 표시가 있으면 그쪽은 표시선 연장선 끝까지만 (글자를 가로지르지 않게)
             // 시간 글자가 있는 쪽은 띠 가장자리에서 끝낸다 (글자를 가로지르지 않게)
             var otherReach = half + (o.timeOn ? 0 : EXT_MM * MM);
             var labelReach = showDist ? half + (DIM_GAP_MM + DIM_OVERSHOOT_MM) * MM : otherReach;
-            var startLine = drawLine(group, at(shift, labelSign * labelReach), at(shift, -labelSign * otherReach), LINE_PT, black);
-            startLine.name = "StartLine";
-            try { startLine.strokeDashes = DASHES; } catch (dashError) {}
+            if (whiteGuide) {
+                if (labelReach > half) guide(shift, labelSign * labelReach, labelSign * half, LINE_PT, black, "StartLine");
+                if (otherReach > half) guide(shift, -labelSign * half, -labelSign * otherReach, LINE_PT, black, "StartLine");
+                startInner = true;
+            } else {
+                guide(shift, labelSign * labelReach, -labelSign * otherReach, LINE_PT, black, "StartLine");
+            }
         }
 
         if (tape || o.bgOn) {
@@ -382,6 +408,8 @@ try {
                 back.strokeWidth = AUX_PT;
             }
         }
+
+        if (startInner) guide(shift, labelSign * half, -labelSign * half, LINE_PT, white, "StartLine");
 
         if (vertical && o.surfaceOn) {
             var wide = half + SURFACE_SIDE_MM * MM;
@@ -412,9 +440,14 @@ try {
                 if (e === 0 && o.startOn) continue;
                 // 지표면 선이 마지막 보조선 자리를 지난다
                 if (touch && shift > 0 && e === count - 1) continue;
-                var extension = drawLine(group, at(pos[e] * MM + shift, extFrom), at(pos[e] * MM + shift, extTo), AUX_PT, black);
-                extension.name = "Extension";
-                try { extension.strokeDashes = DASHES; } catch (extensionDashError) {}
+                var extS = pos[e] * MM + shift;
+                if (whiteGuide && shift > 0) {
+                    // 띠 안(운동 축에서 띠 가장자리까지)은 흰색, 띠 밖은 검정
+                    guide(extS, labelSign * half, extTo, AUX_PT, black, "Extension");
+                    guide(extS, extFrom, labelSign * half, AUX_PT, white, "Extension");
+                } else {
+                    guide(extS, extFrom, extTo, AUX_PT, black, "Extension");
+                }
             }
             var rowEnds = [];   // 글자 줄마다 마지막 글자가 끝나는 s 위치
             for (var k = 0; k < count - 1; k++) {
@@ -498,6 +531,8 @@ try {
         // 지난 위치를 흐리게 하면 마지막 사진만 따로 그린다 (테이프의 점은 흐리게 하지 않는다)
         var ghost = o.ghostOn && !tape;
         var proto = drawBall(balls, origin[0], origin[1], radius, o, ghost);
+        var ghostSolid = ghost && o.ball === 1;   // 단색의 지난 위치는 파선 테두리
+        if (ghostSolid) dashed.push(proto);
         for (var b = 1; b < count; b++) {
             var spot = at(pos[b] * MM, 0);
             if (ghost && b === count - 1) {
@@ -506,7 +541,11 @@ try {
             }
             var copy = proto.duplicate(balls, ElementPlacement.PLACEATBEGINNING);
             copy.translate(spot[0] - origin[0], spot[1] - origin[1], true, true, true, true);
+            if (ghostSolid) dashed.push(copy);
         }
+
+        // 파선은 양 끝이 같도록 모서리·끝에 정렬한다 (헬퍼가 없으면 건너뛴다)
+        if (dashed.length > 0 && typeof applyDashPatternToItems === "function") applyDashPatternToItems(dashed, DASHES, false);
 
         if (o.offsetX !== 0 || o.offsetY !== 0) group.translate(o.offsetX * MM, o.offsetY * MM);
     }
@@ -899,10 +938,10 @@ try {
     }
 
     // -------------------------------------------------------
-    // 설정 저장 · 복원 ("v4" + 라디오 3 + 체크 10 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
+    // 설정 저장 · 복원 ("v5" + 라디오 3 + 체크 11 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v4"];
+        var parts = ["v5"];
         for (var r = 0; r < RADIO_KEYS.length; r++) parts.push(options[RADIO_KEYS[r]]);
         for (var c = 0; c < CHECK_KEYS.length; c++) parts.push(options[CHECK_KEYS[c]] ? "1" : "0");
         for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
@@ -918,7 +957,7 @@ try {
         var p = raw.split("|");
         var radioCount = RADIO_KEYS.length;
         var checkCount = CHECK_KEYS.length;
-        if (p[0] !== "v4" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
+        if (p[0] !== "v5" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
         var radioLimits = [DIRECTIONS.length, MOTIONS.length, BALLS.length];
         for (var r = 0; r < radioCount; r++) {
             var index = parseInt(p[1 + r], 10);

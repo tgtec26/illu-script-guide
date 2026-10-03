@@ -39,7 +39,7 @@ const make = (options, prefs) => new Function("app", "options", `${constants.map
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
 const base = {direction: 0, motion: 0, ball: 0, bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false,
-  rulerOn: false, timeOn: false, arrowOn: false, bottomOn: false, touchOn: false,
+  rulerOn: false, timeOn: false, arrowOn: false, bottomOn: false, touchOn: false, guideWhite: false,
   speed: 100, startSpeed: 0, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, tick: 5, distText: "d", offsetX: 0, offsetY: 0, previewOn: true};
 const lib = make({...base}, {});
 
@@ -131,11 +131,11 @@ assert.strictEqual(lib.formatSeconds(1.5), "1.5");
 // 설정 저장·복원
 {
   const prefs = {};
-  const saved = {...base, direction: 1, motion: 1, ball: 2, bgOn: false, surfaceOn: true, ghostOn: true, rulerOn: true, timeOn: true, arrowOn: true, bottomOn: true, touchOn: true,
+  const saved = {...base, direction: 1, motion: 1, ball: 2, bgOn: false, surfaceOn: true, ghostOn: true, rulerOn: true, timeOn: true, arrowOn: true, bottomOn: true, touchOn: true, guideWhite: true,
     speed: 250, startSpeed: 40, accel: -1200, interval: 0.05, count: 9, size: 6.5, ballK: 50, bgK: 70, tick: 2.5, distText: "12 cm", offsetX: -2, offsetY: 4.5,
     previewOn: false};
   make({...saved}, prefs).saveSettings();
-  assert.ok(prefs["ObjectMotionPhoto/settings"].startsWith("v4|1|1|2|0|"), "settings start with the version tag and radios");
+  assert.ok(prefs["ObjectMotionPhoto/settings"].startsWith("v5|1|1|2|0|"), "settings start with the version tag and radios");
   const restored = {...base};
   make(restored, prefs).applySettings();
   assert.deepStrictEqual(restored, saved, "saved options come back");
@@ -146,20 +146,21 @@ assert.strictEqual(lib.formatSeconds(1.5), "1.5");
   make(back, prefs).applySettings();
   assert.strictEqual(back.distText, "ab", "separator is stripped from the text");
   // 필드 수가 다르면 무시
-  prefs["ObjectMotionPhoto/settings"] = "v4|1|1";
+  prefs["ObjectMotionPhoto/settings"] = "v5|1|1";
   const untouched = {...base};
   make(untouched, prefs).applySettings();
   assert.deepStrictEqual(untouched, base, "a different field count is ignored");
   // 범위를 벗어난 값은 줄인다
-  // 지난 v2·v3 저장값은 필드 구성이 달라 버린다
+  // 지난 v2·v3·v4 저장값은 필드 구성이 달라 버린다
   for (const stale of ["v2|1|1|1|0|0|1|0|0|250|1200|0.05|9|6.5|50|70|-2|4.5|12 cm|0",
-    "v3|1|1|2|0|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0"]) {
+    "v3|1|1|2|0|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0",
+    "v4|1|1|2|0|1|1|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0"]) {
     prefs["ObjectMotionPhoto/settings"] = stale;
     const oldFormat = {...base};
     make(oldFormat, prefs).applySettings();
     assert.deepStrictEqual(oldFormat, base, `an old ${stale.slice(0, 2)} string falls back to the defaults`);
   }
-  prefs["ObjectMotionPhoto/settings"] = "v4|9|9|9|1|1|1|1|1|1|1|1|1|1|99999|99999|-99999|99|99|99|999|999|999|999|999|x|1";
+  prefs["ObjectMotionPhoto/settings"] = "v5|9|9|9|1|1|1|1|1|1|1|1|1|1|1|99999|99999|-99999|99|99|99|999|999|999|999|999|x|1";
   const clamped = {...base};
   make(clamped, prefs).applySettings();
   assert.strictEqual(clamped.direction, 0, "out-of-range radio is ignored");
