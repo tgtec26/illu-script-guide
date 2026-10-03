@@ -387,4 +387,20 @@ function prepare(engine, items) {
   assert.ok(lit.paths.some((p) => !p.filled && p.stroked && p.strokeDashes.length === 0), "보이는 실선이 따로 있다");
 }
 
+
+// Live shading keeps curve bands stable even when adjacent K values become equal/different.
+{
+  const engine = loadEngine({ rotY: 45, rotX: 35.3, fillMode: 2 });
+  prepare(engine, [circlePath(0, 0, 40)]);
+  engine.createSolid(false, false);
+  const model = engine.buildModel(); engine.beginView(model);
+  const boundaries = fills => fills.map(f => [f.kind, f.u0, f.u1]);
+  const before = boundaries(engine.collectFills(model));
+  engine.setState({ lightAzimuth: -20, brightness: 80 });
+  const after = boundaries(engine.collectFills(model));
+  assert.deepStrictEqual(after, before, 'preview bands must not change with lighting');
+  engine.createSolid(false, true);
+  assert.ok(engine.collectFills(model).length <= before.length, 'final output still merges adjacent equal-K bands');
+}
+
 console.log("check-extrude3d: 통과");

@@ -9,7 +9,7 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 3D → 2D 라인: 입체 도형·돌출·회전체를 한 창의 탭으로 묶었다. 시점·선과 면·위치는 탭들이 같이 쓴다.
+// 3D → 2D 라인: 입체 도형·돌출·회전체·평면 회전을 한 창의 탭으로 묶었다. 시점·위치는 공용이고, 숨은선·면 음영은 입체 탭에서 쓴다.
 // 입체 도형은 탭이 둘이다. 1은 시점(가로 회전·위아래 기울기·화면 회전·원근으로 물체를 돌리는 카메라 방식),
 // 2는 관찰 각도(결정 구조와 같은 제도 방식: 모서리의 화면 각도와 앞·뒤 면 거리로 그림을 정함. 원근 없음).
 // 라이노에서 3D를 만들고 2D로 뽑던 작업을 일러스트레이터 안에서 끝내기 위한 스크립트.
@@ -51,7 +51,7 @@ try {
     var FILL_FLAT = 1;
     var FILL_LIT = 2;
 
-    // 세 탭이 같이 쓰는 옵션
+    // 탭들이 같이 쓰는 옵션
     var tabIndex = 0;
     var rotY = 45;      // 가로 회전 (턴테이블). 회전체는 쓰지 않는다
     var rotX = 35.3;    // 위아래 기울기
@@ -73,6 +73,12 @@ try {
     var previewEnabled = true;
 
     var previewGroup = null;
+    var previewEngine = null;
+    var previewGeometryKey = "";
+    var previewRenderKey = "";
+    var previewIsLight = false;
+    var previewFillTargets = [];
+    var activeFillTargets = null;
     var lastLiveRender = 0;     // 슬라이더를 끄는 동안 마지막으로 미리보기를 그린 시각
     // 커스텀 시점 프리셋 4개: {y, x, z, perspective, distance}. 설정과 별도 키에 저장해 설정 버전이 바뀌어도 남는다
     var PRESET_KEY = "Object3DLine/presets";
@@ -95,7 +101,7 @@ try {
     var sel = doc.selection;
     for (var selIndex = 0; sel && selIndex < sel.length; selIndex++) selectedItems.push(sel[selIndex]);
 
-    var engines = [makeSolidEngine("rotation"), makeSolidEngine("angles"), makeExtrudeEngine(), makeRevolveEngine()];
+    var engines = [makeSolidEngine("rotation"), makeSolidEngine("angles"), makeExtrudeEngine(), makeRevolveEngine(), makePlaneEngine()];
     for (var engineIndex = 0; engineIndex < engines.length; engineIndex++) {
         engines[engineIndex].error = engines[engineIndex].prepare(selectedItems);
     }
@@ -104,9 +110,14 @@ try {
     applySavedSettings();
     // 저장된 탭이 선택에 맞지 않으면 선택을 가장 구체적으로 쓰는 탭(회전체 > 돌출 > 입체 도형)으로 연다
     if (engines[tabIndex].error) {
-        for (engineIndex = engines.length - 1; engineIndex >= 0; engineIndex--) {
+        for (engineIndex = 3; engineIndex >= 0; engineIndex--) {
             if (!engines[engineIndex].error) { tabIndex = engineIndex; break; }
         }
+    }
+    // 기존 Rotate3d 메뉴는 이 탭을 바로 여는 진입점으로 남긴다.
+    if (typeof __3DLineStartTab !== "undefined" && __3DLineStartTab === "평면 회전") {
+        if (engines[4].error) { alert(engines[4].error); return; }
+        tabIndex = 4;
     }
     var engine = engines[tabIndex];
     originX = engine.originX;
@@ -303,6 +314,7 @@ try {
         originX = engine.originX;
         originY = engine.originY;
         syncEngineRows();
+        win.layout.layout(true);
         updatePreview();
     };
     perspectiveCheck.onClick = function() {
@@ -351,19 +363,26 @@ try {
     tightenRows(win);
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     var result = win.show();
-    clearPreview();
-
     if (result === 1) {
-        var finalGroup = engine.create(false, true);
-        if (finalGroup !== null) {
+        // 돌출만 확정 출력에서 앵커 종류를 넣는다. 나머지는 보던 미리보기를 그대로 확정한다.
+        if (previewEnabled && !engine.finalRebuild) updatePreview();
+        var finalGroup = null;
+        if (previewGroup !== null && !previewIsLight && !engine.finalRebuild) {
+            finalGroup = previewGroup;
+            if (previewEngine && previewEngine.release) previewEngine.release();
+            previewGroup = null;
+            previewEngine = null;
+        } else {
+            clearPreview();
+            finalGroup = engine.create(false, true);
             translateItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
-            engine.finish(finalGroup);
-            try {
-                doc.selection = null;
-                finalGroup.selected = true;
-            } catch (selectError) {}
+            if (engine.release) engine.release();
         }
-    }
+        if (finalGroup !== null) {
+            engine.finish(finalGroup);
+            try { doc.selection = null; finalGroup.selected = true; } catch (selectError) {}
+        }
+    } else clearPreview();
     app.redraw();
 
     // ---- 다이얼로그 도우미 ------------------------------------------------
@@ -411,7 +430,7 @@ try {
             if (parsed === null || parsed < minimum || parsed > maximum) return;
             control.value = parsed;
             try { slider.value = parsed; } catch (sliderError) {}
-            onCommit(parsed);
+            onCommit(parsed, true);
         };
         input.onChange = function() { commit(input.text); };
         control.set = function(newValue, silent) { commit(newValue, silent); };
@@ -435,6 +454,7 @@ try {
         rotationGroup.visible = !engine.usesViewAngles;
         anglesGroup.visible = engine.usesViewAngles;
         viewPanel.text = engine.usesViewAngles ? "관찰 각도 (오른쪽 + 왼쪽 + 상단 = 360°)" : "시점";
+        linePanel.visible = !engine.isPlane;
         syncFillRows();
         engine.sync();
     }
@@ -467,8 +487,31 @@ try {
         engine.sync();
     }
 
-    // 끄는 동안 와이어프레임만 그리는 엔진(돌출)은 광원 값이 보이지 않으므로 손을 뗄 때만 그린다
+    // 광원·밝기는 숨은선과 패스를 다시 만들지 않고 이미 그린 면의 색만 바꾼다.
     function updateLighting(live) {
+        if (live && new Date().getTime() - lastLiveRender < LIVE_INTERVAL_MS) return;
+        if (previewEnabled && previewGroup !== null && !previewIsLight &&
+                previewGeometryKey === geometryKey() && engine.previewFills) {
+            try {
+                if (previewRenderKey === renderKey(false)) return;
+                var fills = engine.previewFills();
+                if (fills && fills.length === previewFillTargets.length) {
+                    for (var i = 0; i < fills.length; i++) {
+                        var targets = previewFillTargets[i];
+                        for (var j = 0; j < targets.length; j++) {
+                            if (targets[j].k === fills[i].k) continue;
+                            targets[j].path.fillColor = makeKColor(fills[i].k);
+                            targets[j].k = fills[i].k;
+                        }
+                    }
+                    previewRenderKey = renderKey(false);
+                    app.redraw();
+                    if (live) lastLiveRender = new Date().getTime();
+                    return;
+                }
+            } catch (recolorError) {}
+        }
+        // 간소화된 선만 있으면 손을 뗄 때 면까지 다시 그린다.
         if (live && engine.liveWireframe) return;
         updatePreview(live);
     }
@@ -575,35 +618,65 @@ try {
         try { item.translate(deltaX, deltaY); } catch (translateError) {}
     }
 
-    // live: 슬라이더를 끄는 동안. 직전 그리기에서 얼마 안 지났으면 건너뛰고, 엔진에 따라 와이어프레임만 그린다.
-    // 손을 떼면 live 없이 다시 불려 완전히 그린다
+    function geometryKey() {
+        return [tabIndex, rotY, rotX, rotZ, perspectiveOn, perspectiveMm, angleR, angleL, depthPercent,
+            hiddenMode, fillMode].concat(engine.saveFields()).join("|");
+    }
+
+    function renderKey(light) {
+        return geometryKey() + "|" + [brightness, contrast, lightAzimuth, lightElevation, light].join("|");
+    }
+
+    // 같은 값의 onChanging/onChange 중복은 생략. 돌출의 간소 미리보기는 손을 떼면 정밀 출력으로 바꾼다.
     function updatePreview(live) {
+        var light = !!live && !!engine.liveWireframe;
+        var key = renderKey(light);
+        if (previewEnabled && previewGroup !== null && previewRenderKey === key) return;
         if (live && new Date().getTime() - lastLiveRender < LIVE_INTERVAL_MS) return;
-        clearPreview();
         if (!previewEnabled) {
-            app.redraw();
+            if (previewGroup !== null) { clearPreview(); app.redraw(); }
             return;
         }
-        previewGroup = engine.create(!!live, false);
-        if (previewGroup !== null) {
+        // 평면 회전은 복제를 한 번만 만들고 원본 좌표에서 갱신한다. 누적 회전·undo 없음.
+        if (previewGroup !== null && previewEngine === engine && engine.update && engine.update(previewGroup)) {
             translateItem(previewGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
-            previewGroup.name = "3DLine Preview";
+        } else {
+            clearPreview();
+            previewGroup = engine.create(light, false);
+            activeFillTargets = null;
+            if (previewGroup !== null) {
+                previewEngine = engine;
+                translateItem(previewGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
+                previewGroup.name = "3DLine Preview";
+            }
+        }
+        if (previewGroup !== null) {
+            previewGeometryKey = geometryKey();
+            previewRenderKey = key;
+            previewIsLight = light;
         }
         app.redraw();
         if (live) lastLiveRender = new Date().getTime();
     }
 
     function clearPreview() {
-        if (previewGroup === null) return;
-        try { previewGroup.remove(); } catch (removeError) {}
+        if (previewEngine && previewEngine.release) previewEngine.release();
+        if (previewGroup !== null) {
+            try { previewGroup.remove(); } catch (removeError) {}
+        }
         previewGroup = null;
+        previewEngine = null;
+        previewGeometryKey = "";
+        previewRenderKey = "";
+        previewFillTargets = [];
+        activeFillTargets = null;
     }
 
     // 공통 항목 뒤에 엔진별 항목을 순서대로 잇는다. 엔진 항목 수가 바뀌면 v를 올린다
     function saveSettings() {
-        var parts = ["v3", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
+        var parts = ["v4", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
             offsetXmm, offsetYmm, fillMode, brightness, contrast, lightAzimuth, lightElevation,
-            angleR, angleL, depthPercent];
+            angleR, angleL, depthPercent, previewEnabled ? 1 : 0];
         for (var i = 0; i < engines.length; i++) parts = parts.concat(engines[i].saveFields());
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (saveError) {}
     }
@@ -613,10 +686,11 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (readError) { return; }
         if (!raw) return;
         var p = String(raw).split("|");
-        var expected = 18;
+        var sharedCount = p[0] === "v3" ? 18 : 19;
+        var expected = sharedCount;
         for (var i = 0; i < engines.length; i++) expected += engines[i].fieldCount;
-        if (p[0] !== "v3" || p.length !== expected) return;
-        tabIndex = restoreInteger(p[1], tabIndex, 0, engines.length - 1);
+        if ((p[0] !== "v3" && p[0] !== "v4") || p.length !== expected) return;
+        tabIndex = restoreInteger(p[1], tabIndex, 0, p[0] === "v3" ? 3 : engines.length - 1);
         rotY = restoreNumber(p[2], rotY, -180, 180);
         rotX = restoreNumber(p[3], rotX, -180, 180);
         rotZ = restoreNumber(p[4], rotZ, -180, 180);
@@ -633,7 +707,8 @@ try {
         angleR = restoreNumber(p[15], angleR, 91, 179);
         angleL = restoreNumber(p[16], angleL, 91, 179);
         depthPercent = restoreNumber(p[17], depthPercent, 40, 160);
-        var at = 18;
+        if (p[0] === "v4" && (p[18] === "0" || p[18] === "1")) previewEnabled = p[18] === "1";
+        var at = sharedCount;
         for (i = 0; i < engines.length; i++) {
             engines[i].restoreFields(p.slice(at, at + engines[i].fieldCount));
             at += engines[i].fieldCount;
@@ -886,6 +961,19 @@ try {
         path.stroked = false;
         path.filled = true;
         try { path.fillColor = makeKColor(k); } catch (fillError) {}
+        recordFillTarget(path, k);
+    }
+
+    function beginFillTarget() {
+        if (typeof previewFillTargets === "undefined") return;
+        activeFillTargets = [];
+        previewFillTargets.push(activeFillTargets);
+    }
+
+    function recordFillTarget(path, k) {
+        if (typeof activeFillTargets !== "undefined" && activeFillTargets !== null) {
+            activeFillTargets.push({path: path, k: k});
+        }
     }
 
     function distance2(a, b) {
@@ -1049,6 +1137,7 @@ try {
             addRows: addRows,
             sync: syncShapeRows,
             create: createSolid,
+            previewFills: function() { return previewModel === null ? null : collectFills(previewModel); },
             finish: finish,
             saveFields: saveFields,
             restoreFields: restoreFields
@@ -1224,8 +1313,11 @@ try {
         // ---- 그리기 -----------------------------------------------------------
         // 모델 좌표: 원점 중심, X 오른쪽, Y 위, Z 화면 앞. 회전 뒤 Z가 클수록 보는 사람과 가깝다.
 
+        var previewModel = null;
+
         function createSolid() {
             var model = buildModel();
+            previewModel = model;
             beginView(model);
             // 잘라낸 구는 평행 투영으로만 그린다 (실루엣을 시선에 수직인 대원으로 잡는다)
             if (SHAPES[shapeIndex].sphere) perspectiveActive = false;
@@ -1512,6 +1604,7 @@ try {
         function drawFills(group, fills) {
             for (var i = 0; i < fills.length; i++) {
                 var fill = fills[i];
+                beginFillTarget();
                 var path;
                 if (fill.kind === "poly") {
                     var anchors = [];
@@ -2195,6 +2288,7 @@ try {
 
         var depthMm = 20;   // 돌출 깊이
         var mergeFaces = false;    // 단일 음영일 때 보이는 선을 면의 획으로 붙인다 (셰이프 빌더로 합친 구조)
+        var stablePreviewFills = false; // 광원 미리보기는 띠 경계를 고정하고 색만 바꾼다
         var setPointType = false;   // 확정 출력만 앵커 종류(모서리/매끄러움)를 넣는다. 미리보기는 생략해 DOM 호출을 줄인다
         var contours = [];      // [{anchors, points, closed, hole, uTotal}] 모델 좌표의 단면 테두리
         var solidClosed = true; // 닫힌 패스만 고르면 뚜껑 있는 기둥, 하나라도 열려 있으면 뚜껑 없는 띠
@@ -2207,6 +2301,7 @@ try {
             usesRotY: true,
             usesViewAngles: false,
             liveWireframe: true,
+            finalRebuild: true,
             originX: 0,
             originY: 0,
             fieldCount: 2,
@@ -2214,6 +2309,7 @@ try {
             addRows: addRows,
             sync: syncRows,
             create: createSolid,
+            previewFills: function() { return previewModel === null ? null : collectFills(previewModel); },
             finish: finish,
             saveFields: saveFields,
             restoreFields: restoreFields
@@ -2846,10 +2942,14 @@ try {
         // ---- 그리기 ---------------------------------------------------------------
 
         // light: 숨은선 판정과 면 없이 모든 선을 실선으로 (슬라이더를 끄는 동안). finalOutput: 확정 출력(앵커 종류까지 넣는다)
+        var previewModel = null;
+
         function createSolid(light, finalOutput) {
             var model = buildModel();
+            previewModel = model;
             beginView(model);
             setPointType = !!finalOutput;
+            stablePreviewFills = !finalOutput && fillMode === FILL_LIT;
 
             var parts = collectParts(model, light);
             var group;
@@ -3265,14 +3365,14 @@ try {
             var i;
             for (i = 0; i < edges.length; i++) {
                 var edge = edges[i];
-                if (edge && run && !edge.cut && run.side === edge.side && run.k === edge.k) {
+                if (!stablePreviewFills && edge && run && !edge.cut && run.side === edge.side && run.k === edge.k) {
                     run.u1 = edge.u1;
                     continue;
                 }
                 run = edge ? {u0: edge.u0, u1: edge.u1, side: edge.side, k: edge.k} : null;
                 if (run) runs.push(run);
             }
-            if (contour.closed && runs.length > 1 && edges[0] && !edges[0].cut && edges[edges.length - 1]) {
+            if (!stablePreviewFills && contour.closed && runs.length > 1 && edges[0] && !edges[0].cut && edges[edges.length - 1]) {
                 var head = runs[0];
                 var tail = runs[runs.length - 1];
                 if (head.side === tail.side && head.k === tail.k) {
@@ -3286,6 +3386,7 @@ try {
         function drawFills(group, fills) {
             for (var i = 0; i < fills.length; i++) {
                 var fill = fills[i];
+                beginFillTarget();
                 if (fill.kind === "cap") drawCap(group, fill);
                 else drawBand(group, fill);
             }
@@ -3339,6 +3440,7 @@ try {
             if (path === null) return;
             path.filled = true;
             try { path.fillColor = makeKColor(k); } catch (fillError) {}
+            recordFillTarget(path, k);
             if (facesMerged()) applyStrokeStyle(path, false);
             else path.stroked = false;
         }
@@ -3391,6 +3493,7 @@ try {
             addRows: function() { return false; },
             sync: function() {},
             create: createSolid,
+            previewFills: function() { return previewModel === null ? null : collectFills(previewModel); },
             finish: finish,
             saveFields: function() { return []; },
             restoreFields: function() {}
@@ -3547,8 +3650,11 @@ try {
         // ---- 그리기 -----------------------------------------------------------
         // 모델 좌표: 원점은 단면의 축 방향 중심, Y가 축, X·Z가 반지름 방향. 회전 뒤 Z가 클수록 보는 사람과 가깝다.
 
+        var previewModel = null;
+
         function createSolid() {
             var model = buildModel();
+            previewModel = model;
             beginView(model);
 
             var parts = collectParts(model);
@@ -3578,6 +3684,7 @@ try {
 
         // 회전 행렬과 시점 거리를 한 번만 계산해 둔다
         function beginView(model) {
+            perspectiveActive = perspectiveOn;
             var rx = rotX * Math.PI / 180;
             var rz = rotZ * Math.PI / 180;
             var ra = axisAngle - Math.PI / 2;
@@ -4454,6 +4561,7 @@ try {
         function drawFills(group, fills) {
             for (var i = 0; i < fills.length; i++) {
                 var fill = fills[i];
+                beginFillTarget();
                 if (fill.kind === "ring") {
                     drawRing(group, fill.outer, fill.inner, fill.k);
                 } else {
@@ -4483,6 +4591,162 @@ try {
         }
 
         // ---- 벡터·숫자 도우미 ---------------------------------------------------
+
+        return api;
+    }
+
+    // ==== 평면 회전 엔진 ====================================================
+    // 선택한 평면 패스의 모양·색·그룹을 유지한다. 입체 생성과 별도 엔진이며 숨은선·광원은 쓰지 않는다.
+    function makePlaneEngine() {
+        var sources = [];
+        var sourceHidden = [];
+        var paths = [];
+        var coordinates = [];
+        var centerX = 0;
+        var centerY = 0;
+        var radius = 1;
+        var api = {
+            label: "평면 회전",
+            hint: "평면 패스·복합 패스·패스 그룹을 선택. 색과 그룹을 유지하며 기울인다",
+            usesRotY: true,
+            usesViewAngles: false,
+            liveWireframe: false,
+            isPlane: true,
+            originX: 0,
+            originY: 0,
+            fieldCount: 0,
+            prepare: prepare,
+            addRows: function(page) {
+                page.add("statictext", undefined, "선택한 평면을 회전합니다. 숨은선·면 음영은 만들지 않습니다.");
+                return false;
+            },
+            sync: function() {},
+            create: create,
+            update: update,
+            release: release,
+            finish: finish,
+            saveFields: function() { return []; },
+            restoreFields: function() {}
+        };
+
+        function collect(item, out) {
+            var children;
+            if (item.typename === "PathItem") {
+                if (item.guides || item.locked || item.hidden) return false;
+                out.push(item);
+                return true;
+            }
+            if (item.typename === "GroupItem") children = item.pageItems;
+            else if (item.typename === "CompoundPathItem") children = item.pathItems;
+            else return false;
+            // 숨김·잠긴 내용은 변형할 수 없으므로 원본을 잃지 않도록 선택 전체를 거절한다.
+            if (item.locked || item.hidden) return false;
+            for (var i = 0; i < children.length; i++) {
+                if (!collect(children[i], out)) return false;
+            }
+            return true;
+        }
+
+        function prepare(items) {
+            if (!items.length) return "회전할 평면 패스·복합 패스·패스 그룹을 선택해주세요.";
+            var checked = [];
+            var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (var i = 0; i < items.length; i++) {
+                if (!collect(items[i], checked)) return "평면 회전은 패스만 지원합니다. 문자·이미지·숨김·잠긴 개체·안내선은 제외해주세요.";
+                var b = items[i].controlBounds;
+                minX = Math.min(minX, b[0]); maxY = Math.max(maxY, b[1]);
+                maxX = Math.max(maxX, b[2]); minY = Math.min(minY, b[3]);
+            }
+            if (!checked.length) return "회전할 패스가 없습니다.";
+            sources = items;
+            centerX = (minX + maxX) / 2;
+            centerY = (minY + maxY) / 2;
+            radius = Math.sqrt(Math.pow(maxX - minX, 2) + Math.pow(maxY - minY, 2)) / 2;
+            api.originX = centerX;
+            api.originY = centerY;
+            return null;
+        }
+
+        function create() {
+            var group = null;
+            try {
+                group = doc.groupItems.add();
+                paths = [];
+                coordinates = [];
+                sourceHidden = [];
+                // 원본과 같은 레이어·쌓임 위치에 미리보기를 둔다.
+                try { group.move(sources[0], ElementPlacement.PLACEBEFORE); } catch (moveError) {}
+                for (var i = 0; i < sources.length; i++) {
+                    var copy = sources[i].duplicate(group, ElementPlacement.PLACEATEND);
+                    copy.hidden = false;
+                    if (!collect(copy, paths)) throw new Error("복제한 패스를 읽을 수 없습니다.");
+                }
+                for (i = 0; i < paths.length; i++) {
+                    var points = paths[i].pathPoints;
+                    var saved = [];
+                    for (var j = 0; j < points.length; j++) {
+                        saved.push({a: points[j].anchor, l: points[j].leftDirection, r: points[j].rightDirection});
+                    }
+                    coordinates.push(saved);
+                }
+                if (!update(group)) throw new Error("평면 회전 미리보기를 갱신할 수 없습니다.");
+                for (i = 0; i < sources.length; i++) {
+                    sourceHidden.push(sources[i].hidden);
+                    sources[i].hidden = true;
+                }
+                return group;
+            } catch (drawError) {
+                release();
+                if (group !== null) { try { group.remove(); } catch (removeError) {} }
+                return null;
+            }
+        }
+
+        function update(group) {
+            if (!paths.length) return false;
+            var rx = rotX * Math.PI / 180, ry = rotY * Math.PI / 180, rz = rotZ * Math.PI / 180;
+            var cx = Math.cos(rx), sx = Math.sin(rx), cy = Math.cos(ry), sy = Math.sin(ry);
+            var cz = Math.cos(rz), sz = Math.sin(rz);
+            // 3D 라인과 같은 Y → X → Z 회전. 좌표별 삼각함수 계산은 하지 않는다.
+            var m00 = cz * cy - sz * sx * sy, m01 = -sz * cx;
+            var m10 = sz * cy + cz * sx * sy, m11 = cz * cx;
+            var m20 = -cx * sy, m21 = sx;
+            // 눈이 선택 영역 안에 들어가 투영 좌표가 무한대로 발산하지 않도록 한다.
+            var distance = Math.max(perspectiveMm * MM_TO_PT, radius * 1.5 + 1);
+            function project(p) {
+                var x = p[0] - centerX, y = p[1] - centerY;
+                var factor = perspectiveOn ? distance / (distance - (m20 * x + m21 * y)) : 1;
+                return [centerX + (m00 * x + m01 * y) * factor, centerY + (m10 * x + m11 * y) * factor];
+            }
+            try {
+                for (var i = 0; i < paths.length; i++) {
+                    var points = paths[i].pathPoints;
+                    for (var j = 0; j < coordinates[i].length; j++) {
+                        var saved = coordinates[i][j], point = points[j];
+                        point.anchor = project(saved.a);
+                        point.leftDirection = project(saved.l);
+                        point.rightDirection = project(saved.r);
+                    }
+                }
+                return true;
+            } catch (updateError) { return false; }
+        }
+
+        function release() {
+            for (var i = 0; i < sourceHidden.length; i++) {
+                try { sources[i].hidden = sourceHidden[i]; } catch (restoreError) {}
+            }
+            sourceHidden = [];
+            paths = [];
+            coordinates = [];
+        }
+
+        function finish(group) {
+            group.name = "Plane3D";
+            for (var i = 0; i < sources.length; i++) {
+                try { sources[i].remove(); } catch (removeError) {}
+            }
+        }
 
         return api;
     }

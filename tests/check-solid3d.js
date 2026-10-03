@@ -249,6 +249,7 @@ for (const id of Object.keys(topology)) {
       var SIZE_STEP_MM = 0.1, MAX_SIZE_MM = 200, SIDES_MIN = 3, SIDES_MAX = 24, POSITION_LIMIT_MM = 100, HIDDEN_NONE = 0, HIDDEN_SOLID = 2, FILL_NONE = 0, FILL_LIT = 2;
       var SHAPES = new Array(12);
       var shapeIndex = 0, widthMm = 20, depthMm = 20, heightMm = 20, linkWidthDepth = true, sideCount = 6, baseRotation = 0, topRatio = 50, showNames = false;
+      var previewEnabled = true;
       var tabIndex = 0, rotY = 45, rotX = 35.3, rotZ = 0, perspectiveOn = false, perspectiveMm = 300, hiddenMode = 1, offsetXmm = 0, offsetYmm = 0;
       var fillMode = 2, brightness = 70, contrast = 40, lightAzimuth = -35, lightElevation = 50;
       var PREF_KEY = "k";
@@ -288,8 +289,8 @@ for (const id of Object.keys(topology)) {
   assert.strictEqual(outOfRange.depthPercent, 100, "bad depth ignored");
   const shortString = run("v1|1|2");
   assert.strictEqual(shortString.shapeIndex, 0, "short string ignored");
-  const saveFields = source.match(/var parts = \["v3", tabIndex[^\]]*\]/)[0].split(",").length;
-  assert.strictEqual(saveFields, 18, "shared save/restore field count matches");
+  const saveFields = source.match(/var parts = \["v4", tabIndex[^\]]*\]/)[0].split(",").length;
+  assert.strictEqual(saveFields, 19, "shared save/restore field count matches");
 }
 
 // 11. 면 음영: 등각 정육면체는 윗면 < 왼쪽 앞면 < 오른쪽 옆면 순으로 K가 커진다 (왼쪽 위 광원)
