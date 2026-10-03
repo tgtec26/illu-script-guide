@@ -19,7 +19,7 @@ try {
 //     극_S · 극_N   자석 두 반쪽의 앞면(패스 하나씩이 가장 확실). 아래쪽 극을 바꾸면 두 면의 채움을 맞바꾼다
 //     글자_S · 글자_N 자석에 새긴 글자. 극을 바꾸면 자리를 맞바꾼다
 //   이름이 없는 부분은 그 옵션만 꺼진다. 자석·바늘·원통이 빠지면 알려준다.
-//   도선만 스크립트가 그린다(회색 음영). 확인하면 장치 전체가 든 그룹 하나가 남는다.
+//   도선만 스크립트가 그린다(회색 음영): 감은 횟수·굵기·사이 틈. 확인하면 장치 전체가 든 그룹 하나가 남는다.
 
 (function() {
     if (app.documents.length === 0) {
@@ -31,7 +31,6 @@ try {
     var MM = 2.834645669;
     var KAPPA = 0.5522847498;
     var TILT = 0.3;              // 위에서 비스듬히 본 원: 세로 반지름 / 가로 반지름
-    var WIRE_MM = 0.75;          // 도선 굵기 (감은 간격이 더 좁으면 간격의 92 %)
 
     // 앞쪽 반바퀴(왼쪽 끝 → 앞 → 오른쪽 끝)를 베지어 점 3개로. 나선 x = r·cosθ, y = y0 + pitch·(θ−π)/2π + e·sinθ (θ: π → 2π).
     // 점: {anchor, left, right}
@@ -51,16 +50,13 @@ try {
         return points;
     }
 
-    // 감을 영역(테두리 [왼, 위, 오른, 아래])과 횟수 → 가운데 x, 도선 중심 반지름, 타원 처짐 e, 간격, 굵기, 첫 바퀴 양 끝 높이.
-    // 앞쪽이 e만큼 처지므로 바퀴의 양 끝은 아래 테두리 + e 에서 시작한다. 처짐과 굵기의 최대치를 빼고 (횟수 − ½)로 나눈 간격이면
-    // 마지막 바퀴의 오른쪽 끝(반 간격 높다)도 위 테두리 안에 든다. 좁게 감기면 도선은 간격의 92 %
-    // 도선은 기둥 위에 감기므로 중심 반지름은 기둥 반지름 + 굵기 반. 양옆으로 굵기 반만큼 나와 감긴 실루엣이 된다
-    function windingPlan(bounds, turns) {
-        var d = bounds[2] - bounds[0];
-        var pitch = Math.max((bounds[1] - bounds[3] - (d / 2 + WIRE_MM * MM / 2) * TILT - WIRE_MM * MM) / (turns - 0.5), 0.1);
-        var wire = Math.min(WIRE_MM * MM, pitch * 0.92);
+    // 감을 영역(테두리 [왼, 위, 오른, 아래]), 도선 굵기·사이 틈(mm) → 가운데 x, 도선 중심 반지름, 타원 처짐 e, 간격, 굵기, 첫 바퀴 양 끝 높이.
+    // 도선은 기둥 위에 감기므로 중심 반지름은 기둥 반지름 + 굵기 반(양옆으로 굵기 반만큼 나온다). 앞쪽이 e만큼 처지므로
+    // 첫 바퀴의 양 끝은 아래 테두리 + e 에서 시작하고, 바퀴는 간격(굵기 + 틈)만큼 위로 쌓인다 (위 바퀴가 앞)
+    function windingPlan(bounds, wireMm, gapMm) {
+        var d = bounds[2] - bounds[0], wire = wireMm * MM;
         var rw = d / 2 + wire / 2, e = rw * TILT;
-        return {cx: (bounds[0] + bounds[2]) / 2, rw: rw, e: e, pitch: pitch, wire: wire, y0: bounds[3] + e + wire / 2};
+        return {cx: (bounds[0] + bounds[2]) / 2, rw: rw, e: e, pitch: wire + gapMm * MM, wire: wire, y0: bounds[3] + e + wire / 2};
     }
 
     function offsetPoints(points, dx, dy) {
@@ -87,10 +83,12 @@ try {
     var LABEL_WIDTH = 110;
     var SLIDER_WIDTH = 196;
     var POSITION_LIMIT_MM = 100;
-    var NUMBER_KEYS = ["magnetY", "turns", "needle", "offsetX", "offsetY"];
+    var NUMBER_KEYS = ["magnetY", "turns", "wire", "gap", "needle", "offsetX", "offsetY"];
     var SPECS = {
         magnetY: {range: [-60, 60], step: 0.5, decimals: 1},
-        turns: {range: [3, 80], step: 1, decimals: 0},
+        turns: {range: [1, 80], step: 1, decimals: 0},
+        wire: {range: [0.2, 3], step: 0.05, decimals: 2},
+        gap: {range: [0, 5], step: 0.1, decimals: 1},
         needle: {range: [-50, 50], step: 1, decimals: 0},
         offsetX: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
         offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1}
@@ -101,7 +99,7 @@ try {
     var centerX = (artboardRect[0] + artboardRect[2]) / 2;
     var centerY = (artboardRect[1] + artboardRect[3]) / 2;
 
-    var options = {pole: 0, magnetY: 0, turns: 20, needle: 0, offsetX: 0, offsetY: 0, previewOn: true};
+    var options = {pole: 0, magnetY: 0, turns: 20, wire: 0.75, gap: 0, needle: 0, offsetX: 0, offsetY: 0, previewOn: true};
     applySettings();
 
     var previewGroup = loadTemplate();
@@ -111,16 +109,17 @@ try {
     for (var m = 0; m < REQUIRED_PARTS.length; m++) {
         if (!parts[REQUIRED_PARTS[m]]) missing.push(REQUIRED_PARTS[m]);
     }
-    if (missing.length > 0) {
-        alert("템플릿에서 이름을 찾지 못했습니다: " + missing.join(", ") + "\n그 옵션은 꺼집니다.\n" + TEMPLATE_NAME + "에서 그룹·패스에 이름을 붙여주세요.");
-    }
-    var hasPole = true;
+    var poleMissing = [];
     for (var q = 0; q < POLE_PARTS.length; q++) {
-        if (!parts[POLE_PARTS[q]]) hasPole = false;
+        if (!parts[POLE_PARTS[q]]) poleMissing.push(POLE_PARTS[q]);
+    }
+    var hasPole = poleMissing.length === 0;
+    if (missing.length > 0 || !hasPole) {
+        alert("템플릿에서 이름을 찾지 못했습니다: " + missing.concat(poleMissing).join(", ") + "\n그 옵션은 꺼집니다.\n" + TEMPLATE_NAME + "에서 그룹·패스에 이름을 붙여주세요.");
     }
 
     // 그려 놓은 상태 (템플릿 그대로가 자석 0, 바늘 0). 옵션과의 차이만큼만 손본다
-    var state = {magnetY: 0, needle: 0, turns: 0, sBottom: hasPole ? centerOf(parts["글자_S"])[1] < centerOf(parts["글자_N"])[1] : false};
+    var state = {magnetY: 0, needle: 0, coilKey: "", sBottom: hasPole ? centerOf(parts["글자_S"])[1] < centerOf(parts["글자_N"])[1] : false};
     var needlePivot = parts["바늘"] ? bottomCenterOf(parts["바늘"]) : null;
     var turnsGroup = null;
     var rows = {};
@@ -146,6 +145,9 @@ try {
 
     var coilPanel = addPanel(dlg, "코일");
     addRow(coilPanel, "turns", "감은 횟수 (회):", !!parts["원통"]);
+    addRow(coilPanel, "wire", "굵기 (mm):", !!parts["원통"]);
+    addRow(coilPanel, "gap", "간격 (mm):", !!parts["원통"]);
+    rows.gap.input.helpTip = "도선 사이 틈. 0이면 빈틈없이 감긴다";
 
     var meterPanel = addPanel(dlg, "검류계");
     addRow(meterPanel, "needle", "바늘 각도 (°):", !!parts["바늘"]);
@@ -166,6 +168,8 @@ try {
 
     bindValueRow(rows.magnetY, "magnetY");
     bindValueRow(rows.turns, "turns");
+    bindValueRow(rows.wire, "wire");
+    bindValueRow(rows.gap, "gap");
     bindValueRow(rows.needle, "needle");
     bindPositionRow(rows.offsetX, "offsetX", true);
     bindPositionRow(rows.offsetY, "offsetY", false);
@@ -323,14 +327,15 @@ try {
     // 도선: 원통 바로 위에 그룹을 두고 앞쪽 반바퀴를 감은 횟수만큼. 첫 바퀴만 그리고 간격만큼 올려 복제한다 (위 바퀴가 앞)
     function applyTurns() {
         if (!parts["원통"]) return;
-        if (turnsGroup !== null && state.turns === options.turns) return;
+        var coilKey = options.turns + "|" + options.wire + "|" + options.gap;
+        if (turnsGroup !== null && state.coilKey === coilKey) return;
         if (turnsGroup !== null) {
             try { turnsGroup.remove(); } catch (removeError) {}
         }
         turnsGroup = previewGroup.groupItems.add();
         turnsGroup.name = "코일 도선";
         turnsGroup.move(parts["원통"], ElementPlacement.PLACEBEFORE);
-        var plan = windingPlan(parts["원통"].geometricBounds, options.turns);
+        var plan = windingPlan(parts["원통"].geometricBounds, options.wire, options.gap);
         var base = bez(turnsGroup, offsetPoints(frontHalfTurn(plan.rw, plan.e, plan.pitch, plan.y0), plan.cx, 0), false);
         strokeRound(base, WIRE_K, plan.wire);
         var shine = bez(turnsGroup, offsetPoints(frontHalfTurn(plan.rw, plan.e, plan.pitch, plan.y0 + plan.wire * 0.2), plan.cx, 0), false);
@@ -339,7 +344,7 @@ try {
             base.duplicate(turnsGroup, ElementPlacement.PLACEATBEGINNING).translate(0, i * plan.pitch);
             shine.duplicate(turnsGroup, ElementPlacement.PLACEATBEGINNING).translate(0, i * plan.pitch);
         }
-        state.turns = options.turns;
+        state.coilKey = coilKey;
     }
 
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다. 바늘 축도 같이 옮긴다
@@ -365,10 +370,16 @@ try {
         return [(b[0] + b[2]) / 2, b[3]];
     }
 
+    // 자리와 쌓임 순서를 함께 맞바꾼다. 손이 자석 위쪽을 가리므로 위에 오는 글자는 원래 위 글자의 앞뒤 위치를 물려받아야 한다
     function swapPlaces(a, b) {
         var ca = centerOf(a), cb = centerOf(b);
         a.translate(cb[0] - ca[0], cb[1] - ca[1]);
         b.translate(ca[0] - cb[0], ca[1] - cb[1]);
+        var marker = previewGroup.pathItems.add();
+        marker.move(a, ElementPlacement.PLACEBEFORE);
+        a.move(b, ElementPlacement.PLACEBEFORE);
+        b.move(marker, ElementPlacement.PLACEBEFORE);
+        marker.remove();
     }
 
     // 두 개체의 패스를 차례로 짝지어 채움을 맞바꾼다 (패스 하나씩이면 그 둘)
@@ -575,10 +586,10 @@ try {
     }
 
     // -------------------------------------------------------
-    // 설정 저장 · 복원 ("v2" + 극 + 숫자 5 + 미리보기. 확인할 때만 저장)
+    // 설정 저장 · 복원 ("v3" + 극 + 숫자 7 + 미리보기. 확인할 때만 저장)
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v2", options.pole];
+        var parts = ["v3", options.pole];
         for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
         parts.push(options.previewOn ? "1" : "0");
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
@@ -589,7 +600,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length !== 3 + NUMBER_KEYS.length) return;
+        if (p[0] !== "v3" || p.length !== 3 + NUMBER_KEYS.length) return;
         var pole = parseInt(p[1], 10);
         if (pole >= 0 && pole < POLES.length) options.pole = pole;
         for (var i = 0; i < NUMBER_KEYS.length; i++) {

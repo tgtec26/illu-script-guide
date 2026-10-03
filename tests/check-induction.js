@@ -14,7 +14,7 @@ const start = source.indexOf("// ==== 순수 기하 시작");
 const end = source.indexOf("// ==== 순수 기하 끝");
 assert.ok(start > 0 && end > start, "pure geometry markers");
 const lib = new Function(`${source.slice(start, end)}
-return {MM, TILT, WIRE_MM, frontHalfTurn, windingPlan, offsetPoints, poleSwapNeeded};`)();
+return {MM, TILT, frontHalfTurn, windingPlan, offsetPoints, poleSwapNeeded};`)();
 const {MM, TILT} = lib;
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
 
@@ -29,22 +29,19 @@ const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: 
   assert.deepStrictEqual(left.left, left.anchor, "open start has no incoming handle");
 }
 
-// 감기 계획: 템플릿 원통의 테두리 안에서, 앞쪽 처짐만큼 위에서 시작해 위 테두리를 넘지 않는다
+// 감기 계획: 굵기·틈은 그대로 쓰고, 도선은 기둥 밖으로 굵기 반만큼 나오며 첫 바퀴는 앞쪽 처짐만큼 위에서 시작한다
 {
   const bounds = [-10 * MM, 50 * MM, 10 * MM, 0];
-  for (const turns of [5, 20, 80]) {
-    const plan = lib.windingPlan(bounds, turns);
-    near(plan.cx, 0, 1e-9, "centre x");
-    near(plan.rw, 10 * MM + plan.wire / 2, 1e-9, "wire sits on the cylinder: sticks out by half its width");
-    near(plan.e, plan.rw * TILT, 1e-9, "front dip from the wire radius");
-    assert.ok(plan.y0 - plan.e - plan.wire / 2 >= -1e-9, `turns=${turns}: front of the first turn stays above the bottom`);
-    const lastRightEnd = plan.y0 + (turns - 1) * plan.pitch + plan.pitch / 2;
-    assert.ok(lastRightEnd + plan.wire / 2 <= bounds[1] + 1e-9, `turns=${turns}: last turn stays under the top`);
-    assert.ok(plan.wire <= plan.pitch, `turns=${turns}: wire fits the pitch`);
-  }
-  const sparse = lib.windingPlan(bounds, 5), dense = lib.windingPlan(bounds, 80);
-  near(sparse.wire, 0.75 * MM, 1e-9, "sparse wire");
-  assert.ok(dense.wire < sparse.wire, "dense wire thinner");
+  const plan = lib.windingPlan(bounds, 0.75, 0);
+  near(plan.cx, 0, 1e-9, "centre x");
+  near(plan.wire, 0.75 * MM, 1e-9, "wire thickness as given");
+  near(plan.rw, 10 * MM + plan.wire / 2, 1e-9, "wire sits on the cylinder: sticks out by half its width");
+  near(plan.e, plan.rw * TILT, 1e-9, "front dip from the wire radius");
+  near(plan.pitch, plan.wire, 1e-9, "gap 0 → turns touch");
+  near(plan.y0 - plan.e - plan.wire / 2, 0, 1e-9, "front of the first turn sits on the bottom");
+  const spaced = lib.windingPlan(bounds, 0.5, 1);
+  near(spaced.pitch, 1.5 * MM, 1e-9, "pitch = wire + gap");
+  near(spaced.wire, 0.5 * MM, 1e-9, "thinner wire");
 }
 
 // 점 이동과 극 판정
