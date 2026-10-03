@@ -89,7 +89,7 @@ try {
     var SPECS = {
         magnetY: {range: [-60, 60], step: 0.5, decimals: 1},
         turns: {range: [1, 80], step: 1, decimals: 0},
-        wire: {range: [0.2, 3], step: 0.05, decimals: 2},
+        wire: {range: [0.1, 0.5], step: 0.01, decimals: 2},
         shade: {range: [0, 100], step: 1, decimals: 0},
         needle: {range: [-50, 50], step: 1, decimals: 0},
         offsetX: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
@@ -101,7 +101,7 @@ try {
     var centerX = (artboardRect[0] + artboardRect[2]) / 2;
     var centerY = (artboardRect[1] + artboardRect[3]) / 2;
 
-    var options = {pole: 0, magnetY: 0, turns: 20, wire: 0.75, shade: 62, needle: 0, offsetX: 0, offsetY: 0, previewOn: true};
+    var options = {pole: 0, magnetY: 0, turns: 20, wire: 0.3, shade: 62, needle: 0, offsetX: 0, offsetY: 0, previewOn: true};
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
     var DEFAULTS = {};
     for (var d = 0; d < NUMBER_KEYS.length; d++) DEFAULTS[NUMBER_KEYS[d]] = options[NUMBER_KEYS[d]];
