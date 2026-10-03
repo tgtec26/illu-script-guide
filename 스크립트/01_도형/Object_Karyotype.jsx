@@ -461,14 +461,17 @@ try {
 
     // 사각형(W×H, 왼쪽 위 기준, y는 아래로)에 맞춰 칸마다 위치를 정한다. 염색체 크기는 가장 빡빡한 쪽에 맞추고
     // 남는 가로·세로는 열 간격·줄 간격으로 나눠 사각형을 채운다.
+    // 열(칸) 사이는 상동 염색체 간격의 2배 이상, 칸 너비의 15% 이상 띄운다 — 가로가 빡빡해도 짝이 이웃 칸보다 가깝게 보여야 한다.
+    // 그러려면 배율을 최대 25%까지 줄이고, 그래도 모자라면 상동 염색체 간격 쪽을 줄인다 (염색체가 사라지지 않게)
     // o: chromGeom의 옵션 + { pairGap, labelGap, fontSize, margin } (뒤의 넷은 pt)
     function layoutKaryotype(rows, o, W, H) {
         var MIN_ROW_GAP = 10;      // 줄 사이 최소 간격(단위)
-        var MIN_COL_GAP = 0;       // 열 사이 최소 간격(염색체 칸 너비의 배수). 0: 칸이 맞닿기 전까지는 세로 기준 크기를 지킨다
+        var MIN_COL_GAP = 0.15;    // 열 사이 최소 간격(염색체 칸 너비의 배수)
+        var PAIR_GAP_RATIO = 2;    // 열 사이 최소 간격(상동 염색체 간격의 배수)
         var r, c, i;
         var rowMax = [];
         var unitWmax = 0;
-        var gapMax = 0;
+        var maxExtra = 0;
         var colSpan = 0;
         var sumRowMax = 0;
         for (r = 0; r < rows.length; r++) {
@@ -486,8 +489,7 @@ try {
                 }
                 cell.sum = sum;
                 if (sum > unitWmax) unitWmax = sum;
-                var gaps = (cell.variants.length - 1) * o.pairGap;
-                if (gaps > gapMax) gapMax = gaps;
+                if (cell.variants.length - 1 > maxExtra) maxExtra = cell.variants.length - 1;
                 if (cell.col > colSpan) colSpan = cell.col;
             }
             sumRowMax += rowMax[r];
@@ -497,9 +499,18 @@ try {
         var labelBlock = o.labelGap + labelH;
         var availW = W - 2 * o.margin;
         var availH = H - 2 * o.margin;
+        var pairGap = o.pairGap;
+        var gapMax = maxExtra * pairGap;
         var sH = (availH - nr * labelBlock) / (sumRowMax + (nr - 1) * MIN_ROW_GAP);
         var sW = (availW - (colSpan + 1) * gapMax) / (unitWmax * ((1 + MIN_COL_GAP) * colSpan + 1));
         var s = Math.max(0.01, Math.min(sH, sW));
+        var sP = (availW - (colSpan + 1) * gapMax - colSpan * PAIR_GAP_RATIO * pairGap) / (unitWmax * (colSpan + 1));
+        if (sP < s) {
+            s = Math.max(sP, 0.75 * s);
+            var fit = (availW - (colSpan + 1) * s * unitWmax) / ((colSpan + 1) * maxExtra + colSpan * PAIR_GAP_RATIO);
+            if (fit < pairGap) pairGap = Math.max(0, fit);
+            gapMax = maxExtra * pairGap;
+        }
         var cellW = s * unitWmax + gapMax;
         var pitch = colSpan > 0 ? (availW - cellW) / colSpan : 0;
         var rowGap = nr > 1 ? (availH - s * sumRowMax - nr * labelBlock) / (nr - 1) : 0;
@@ -511,18 +522,18 @@ try {
             for (c = 0; c < rows[r].length; c++) {
                 var cl = rows[r][c];
                 var cx = colSpan > 0 ? o.margin + cellW / 2 + cl.col * pitch : o.margin + availW / 2;
-                var total = s * cl.sum + (cl.variants.length - 1) * o.pairGap;
+                var total = s * cl.sum + (cl.variants.length - 1) * pairGap;
                 var x = cx - total / 2;
                 var items = [];
                 for (i = 0; i < cl.variants.length; i++) {
                     items.push({ variant: cl.variants[i], x: x + s * cl.widths[i] / 2 });
-                    x += s * cl.widths[i] + o.pairGap;
+                    x += s * cl.widths[i] + pairGap;
                 }
                 out.push({ id: cl.id, cx: cx, bottom: bottom, labelBase: labelBase, items: items });
             }
             y = labelBase + rowGap;
         }
-        return { s: s, cells: out };
+        return { s: s, pairGap: pairGap, cells: out };
     }
     // ==== 순수 기하 끝 ====
 
@@ -670,8 +681,10 @@ try {
     thickRow.input.helpTip = "염색 분체의 너비. 100 = 1번 염색체 길이의 7% (모양마다 배율이 다르다)";
 
     var layoutPanel = addPanel(dlg, "배치");
-    var marginRow = addValueRow(layoutPanel, "사각형 안쪽 여백", "mm", marginMm, MARGIN_RANGE[0], MARGIN_RANGE[1], 0.5, 1);
-    var pairGapRow = addValueRow(layoutPanel, "상동 염색체 간격", "mm", pairGapMm, GAP_RANGE[0], GAP_RANGE[1], 0.1, 1);
+    var marginRow = addValueRow(layoutPanel, "안쪽 여백", "mm", marginMm, MARGIN_RANGE[0], MARGIN_RANGE[1], 0.5, 1);
+    marginRow.input.helpTip = "선택한 사각형 가장자리와 염색체 사이";
+    var pairGapRow = addValueRow(layoutPanel, "상동 간격", "mm", pairGapMm, GAP_RANGE[0], GAP_RANGE[1], 0.1, 1);
+    pairGapRow.input.helpTip = "상동 염색체(짝) 사이 거리. 이웃 번호와는 이보다 2배 이상 띄운다";
     var labelGapRow = addValueRow(layoutPanel, "번호 간격", "mm", labelGapMm, GAP_RANGE[0], GAP_RANGE[1], 0.1, 1);
     labelGapRow.input.helpTip = "염색체 아래끝과 번호(X, Y 포함) 사이";
     var fontRow = addValueRow(layoutPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);

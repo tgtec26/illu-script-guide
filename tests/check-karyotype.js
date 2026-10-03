@@ -271,6 +271,35 @@ for (let style = 0; style < 3; style++) {
   close(scaleAt(0, 10), scaleAt(0, 7), 1e-9, "thickness keeps the scale");
 }
 
+// 가로가 빡빡한 사각형에서도 이웃 칸 사이는 상동 염색체 간격의 2배 이상이라 짝이 더 가깝게 보인다
+{
+  const o = { style: 2, wc: 7, chromatids: 2, splay: 10, centromere: "one", pairGap: 6, labelGap: 4, fontSize: 8, margin: 10 };
+  const lay = core.layoutKaryotype(core.buildCells(ALL, "normal", "M"), o, 220, 400);
+  const byRow = {};
+  lay.cells.forEach((cell) => { (byRow[Math.round(cell.bottom)] = byRow[Math.round(cell.bottom)] || []).push(cell); });
+  Object.keys(byRow).forEach((key) => {
+    const cells = byRow[key].sort((p, q) => p.cx - q.cx);
+    for (let i = 1; i < cells.length; i++) {
+      const prev = cells[i - 1];
+      const prevG = core.chromGeom(prev.id, prev.items[prev.items.length - 1].variant, o);
+      const nextG = core.chromGeom(cells[i].id, cells[i].items[0].variant, o);
+      const edgeGap = (cells[i].items[0].x - core.chromWidth(nextG, o) * lay.s / 2) - (prev.items[prev.items.length - 1].x + core.chromWidth(prevG, o) * lay.s / 2);
+      assert.ok(edgeGap >= 2 * lay.pairGap - 1e-6, `cell gap ${edgeGap} should be at least twice the pair gap`);
+      if (prev.items.length === 2) {
+        const g0 = core.chromGeom(prev.id, prev.items[0].variant, o);
+        const pairEdgeGap = prev.items[1].x - prev.items[0].x - core.chromWidth(g0, o) * lay.s;
+        assert.ok(edgeGap > pairEdgeGap, "homologs closer than neighbours");
+      }
+    }
+  });
+  assert.ok(lay.pairGap > 0 && lay.pairGap <= 6, `pair gap may only shrink: ${lay.pairGap}`);
+  // 아주 좁은 틀 + 큰 상동 간격: 배율은 25%까지만 줄고 상동 간격이 대신 줄어든다. 염색체는 사라지지 않는다
+  const tight = core.layoutKaryotype(core.buildCells(ALL, "normal", "M"), { ...o, pairGap: 12 }, 200, 250);
+  const loose = core.layoutKaryotype(core.buildCells(ALL, "normal", "M"), { ...o, pairGap: 0 }, 200, 250);
+  assert.ok(tight.pairGap < 12 && tight.pairGap >= 0, `pair gap reduced: ${tight.pairGap}`);
+  assert.ok(tight.s > 0.3 * loose.s, `chromosomes stay visible: ${tight.s} vs ${loose.s}`);
+}
+
 // ---- 스크립트 규약 (AGENTS.md)
 assert.ok(source.indexOf('var SETTINGS_TAG = "v4"') < source.indexOf("readSettings();"), "settings constants before readSettings()");
 assert.ok(/p\.length !== SETTINGS_LENGTH/.test(source), "settings length check");
