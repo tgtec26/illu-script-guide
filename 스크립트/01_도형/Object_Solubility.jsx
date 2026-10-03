@@ -16,6 +16,9 @@ try {
 // X축은 온도 0~100 ℃, Y축은 용해도 0~160 g/물 100 g (눈금 20 간격, 보조선은 20 또는 10 간격).
 // 곡선 값은 CRC Handbook·Lange's Handbook 계열 값을 정리한 Wikipedia "Solubility table"의 측정점이다.
 // 측정점이 없는 온도는 측정점 사이를 곡선으로 이은 것이고, 측정 범위 밖으로는 곡선을 늘이지 않는다.
+// 점 A~E: 체크한 점을 (온도, 용해도) 자리에 점과 글자로 찍는다. "포화"를 켜면 고른 물질의 그 온도 용해도를 입력창에 넣고
+// 그려진 곡선 위에 찍으며(글자는 곡선 위쪽 바깥), 끄면 입력한 용해도 자리에 찍는다(글자는 오른쪽).
+// 물질의 측정 범위 밖이거나 용해도가 그래프 위쪽(Y_MAX)을 넘으면 입력창에 "범위 밖"을 보이고 점은 찍지 않는다.
 
 (function() {
     if (app.documents.length === 0) {
@@ -33,6 +36,17 @@ try {
     var SLIDER_WIDTH = 196;
     var NAME_COLUMN_WIDTH = 120;
     var RADIO_COLUMN_WIDTH = 30;
+    var POINT_CHECK_WIDTH = 44;
+    var POINT_TEMP_WIDTH = 50;
+    var POINT_SUB_WIDTH = 96;
+    var POINT_SAT_WIDTH = 52;
+    var POINT_VALUE_WIDTH = 56;
+    var POINT_NAMES = ["A", "B", "C", "D", "E"];
+    var POINT_COUNT = POINT_NAMES.length;
+    var POINT_SIZE_MIN_MM = 0.5;
+    var POINT_SIZE_MAX_MM = 5;
+    var POINT_LABEL_GAP_MM = 0.3;   // 점 가장자리와 글자 윤곽 사이
+    var OUT_OF_RANGE = "범위 밖";
 
     var AXIS_PT = 0.4;
     var TICK_PT = 0.4;
@@ -131,8 +145,18 @@ try {
     curveOn[1] = true; curveStyle[1] = 0;
     curveOn[3] = true; curveStyle[3] = 1;
     curveOn[2] = true; curveStyle[2] = 2;
+    var pointSizeMm = 1.5;
+    var glyphOffsetCache = {};
+    var pointOn = [false, false, false, false, false];
+    var pointSat = [true, true, false, true, true];
+    var pointSub = [1, 1, 1, 1, 1];
+    var pointT = [20, 40, 40, 60, 80];
+    var pointV = [0, 0, 30, 0, 0];
 
     applySettings();
+    for (var z = 0; z < POINT_COUNT; z++) {
+        if (pointSat[z]) pointV[z] = saturatedValue(pointSub[z], pointT[z]);
+    }
 
     // 그래프 왼쪽 위 기준점(pt). 사각형이 있으면 사각형 모서리, 없으면 대지 가운데에서 기본 크기로
     var originLeft, originTop;
@@ -208,6 +232,23 @@ try {
     var nameFormulaRadio = nameGroup.add("radiobutton", undefined, "화학식");
     var nameNoneRadio = nameGroup.add("radiobutton", undefined, "넣지 않음");
 
+    var pointPanel = addPanel(dlg, "점");
+    var pointHeader = pointPanel.add("group");
+    pointHeader.alignChildren = ["left", "center"];
+    pointHeader.add("group").preferredSize.width = POINT_CHECK_WIDTH;
+    pointHeader.add("statictext", undefined, "온도 (°C)").preferredSize.width = POINT_TEMP_WIDTH;
+    pointHeader.add("statictext", undefined, "물질").preferredSize.width = POINT_SUB_WIDTH;
+    pointHeader.add("group").preferredSize.width = POINT_SAT_WIDTH;
+    pointHeader.add("statictext", undefined, "용해도 (g)").preferredSize.width = POINT_VALUE_WIDTH + 20;
+    var pointTempInputs = [];
+    var pointSubLists = [];
+    var pointValueInputs = [];
+    for (var pointIndex = 0; pointIndex < POINT_COUNT; pointIndex++) {
+        addPointRow(pointIndex);
+    }
+    var pointSizeControls = addValueRow(pointPanel, "점 크기", "mm", pointSizeMm,
+        POINT_SIZE_MIN_MM, POINT_SIZE_MAX_MM, 0.1, 1);
+
     var positionPanel = addPanel(dlg, "위치");
     var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm,
         -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
@@ -238,6 +279,7 @@ try {
     previewCheck.value = previewEnabled;
     setRowValue(widthControls, widthMm);
     setRowValue(heightControls, heightMm);
+    setRowValue(pointSizeControls, pointSizeMm);
     setRowValue(offsetXControls, offsetXmm);
     setRowValue(offsetYControls, offsetYmm);
     for (var k = 0; k < SUBSTANCE_COUNT; k++) {
@@ -277,12 +319,15 @@ try {
     // 크기는 다시 그리고, 위치는 미리보기 그룹만 옮긴다
     bindSizeRow(widthControls, function(v) { widthMm = v; });
     bindSizeRow(heightControls, function(v) { heightMm = v; });
+    bindSizeRow(pointSizeControls, function(v) { pointSizeMm = v; });
     bindPositionRow(offsetXControls, function() { return offsetXmm; },
         function(v) { offsetXmm = v; }, true);
     bindPositionRow(offsetYControls, function() { return offsetYmm; },
         function(v) { offsetYmm = v; }, false);
 
     okButton.onClick = function() {
+        // 입력창에서 바로 확인을 눌러 onChange가 오지 않은 값도 반영한다
+        if (syncAllPoints() && previewGroup !== null) updatePreview();
         if (previewGroup === null) {
             setOriginalHidden(true);
             buildPreview();
@@ -436,11 +481,24 @@ try {
         yTitle.rotate(90);
         var ytb = yTitle.geometricBounds;
         yTitle.translate(labelsLeft - titleGap - ytb[2], (bottom + top) / 2 - (ytb[1] + ytb[3]) / 2);
+
+        // 점 A~E. 포화 점은 그려진 곡선(꺾은선이면 그 선, 단순한 곡선이면 베지어) 위에 얹는다
+        var fitCache = {};
+        for (var pn = 0; pn < POINT_COUNT; pn++) {
+            if (!pointOn[pn] || pointV[pn] === null) continue;
+            var pointY = py(pointV[pn]);
+            var rising = true;
+            if (pointSat[pn]) {
+                pointY = drawnCurveY(pointSub[pn], pointT[pn], px, py, fitCache);
+                rising = substanceValueAt(pointSub[pn], pointT[pn] + 1) >= substanceValueAt(pointSub[pn], pointT[pn] - 1);
+            }
+            drawPoint(group, px(pointT[pn]), pointY, POINT_NAMES[pn], pointSat[pn], rising);
+        }
         return group;
     }
 
     // 값이 Y_MAX를 넘는 곡선은 위쪽 변에서 잘라 그린다
-    function drawCurve(group, substance, dashes, px, py) {
+    function curveScreenPoints(substance, px, py) {
         var points = [];
         var samples = substance.samples;
         for (var n = 0; n < samples.length; n++) {
@@ -453,6 +511,11 @@ try {
             }
             points.push([px(t), py(value)]);
         }
+        return points;
+    }
+
+    function drawCurve(group, substance, dashes, px, py) {
+        var points = curveScreenPoints(substance, px, py);
         var path = group.pathItems.add();
         if (simpleCurve) setBezierPath(path, fitBezier(points, BEZIER_TOLERANCE_MM * MM_TO_PT));
         else path.setEntirePath(points);
@@ -471,6 +534,154 @@ try {
         var centerY = points[i][1] + tangentX / length * substance.side * distance;
         label.translate(centerX - (lb[0] + lb[2]) / 2, centerY - (lb[1] + lb[3]) / 2);
         label.rotate(Math.atan2(tangentY, tangentX) * 180 / Math.PI);
+    }
+
+    // 물질 index의 온도 t(℃) 용해도(1 ℃ 간격 값을 직선으로 이음). 측정 범위 밖이면 null
+    function substanceValueAt(index, t) {
+        var samples = SUBSTANCES[index].samples;
+        var first = samples[0][0];
+        var offset = t - first;
+        if (offset < 0 || offset > samples.length - 1) return null;
+        var low = Math.floor(offset);
+        if (low >= samples.length - 1) return samples[samples.length - 1][1];
+        return samples[low][1] + (offset - low) * (samples[low + 1][1] - samples[low][1]);
+    }
+
+    // 점 입력창에 넣을 포화 용해도(소수 첫째 자리). 측정 범위 밖이거나 그래프 위쪽을 넘으면 null
+    function saturatedValue(index, t) {
+        var value = substanceValueAt(index, t);
+        if (value === null || value > Y_MAX) return null;
+        return round1(value);
+    }
+
+    // 그려진 곡선 위 온도 t의 높이(pt)
+    function drawnCurveY(index, t, px, py, fitCache) {
+        var points = curveScreenPoints(SUBSTANCES[index], px, py);
+        var x = px(t);
+        if (simpleCurve) {
+            if (!fitCache[index]) fitCache[index] = fitBezier(points, BEZIER_TOLERANCE_MM * MM_TO_PT);
+            var fitted = curveYAt(fitCache[index], x);
+            if (fitted !== null) return fitted;
+        }
+        for (var i = 1; i < points.length; i++) {
+            if (x <= points[i][0] + 1e-6) {
+                var fraction = (x - points[i - 1][0]) / (points[i][0] - points[i - 1][0]);
+                return points[i - 1][1] + fraction * (points[i][1] - points[i - 1][1]);
+            }
+        }
+        return points[points.length - 1][1];
+    }
+
+    // 점과 글자. 곡선 위의 점은 곡선 바깥쪽인 위쪽에(곡선이 오르면 왼쪽 위, 내리면 오른쪽 위), 곡선 밖의 점은 오른쪽에 글자를 붙인다.
+    // 간격은 점 가장자리에서 글자 윤곽까지 잰다 (위쪽은 윤곽 상자의 모서리를 점 중심에서 대각선으로 둔다)
+    function drawPoint(group, x, y, name, onCurve, rising) {
+        var radius = pointSizeMm * MM_TO_PT / 2;
+        var dot = group.pathItems.ellipse(y + radius, x - radius, radius * 2, radius * 2);
+        dot.filled = true;
+        dot.fillColor = grayK100;
+        dot.stroked = false;
+        var distance = radius + POINT_LABEL_GAP_MM * MM_TO_PT;
+        var label = addText(group, name);
+        var b = label.geometricBounds;
+        var o = glyphOffsets(label, name);
+        var glyphLeft = b[0] + o[0], glyphTop = b[1] + o[1], glyphRight = b[2] + o[2], glyphBottom = b[3] + o[3];
+        if (onCurve) {
+            var corner = distance / Math.SQRT2;
+            if (rising) label.translate(x - corner - glyphRight, y + corner - glyphBottom);
+            else label.translate(x + corner - glyphLeft, y + corner - glyphBottom);
+        } else {
+            label.translate(x + distance - glyphLeft, y - (glyphTop + glyphBottom) / 2);
+        }
+    }
+
+    // 글자 틀 경계(geometricBounds)는 글자 윤곽보다 커서(윗줄·아랫줄 여백) 그대로 쓰면 점과 글자가 떨어져 보인다.
+    // 윤곽선을 만들어 윤곽 경계와 틀 경계의 차이 [왼쪽, 위, 오른쪽, 아래]를 글자마다 한 번만 재 둔다
+    function glyphOffsets(label, name) {
+        if (glyphOffsetCache[name]) return glyphOffsetCache[name];
+        var offsets = [0, 0, 0, 0];
+        try {
+            var frameBounds = label.geometricBounds;
+            var outline = label.duplicate().createOutline();
+            var glyph = outline.geometricBounds;
+            outline.remove();
+            for (var i = 0; i < 4; i++) offsets[i] = glyph[i] - frameBounds[i];
+        } catch (e) {}
+        glyphOffsetCache[name] = offsets;
+        return offsets;
+    }
+
+    // -------------------------------------------------------
+    // 점 A~E 행: [체크 글자] [온도] [물질] [포화] [용해도]
+    // -------------------------------------------------------
+    function addPointRow(index) {
+        var row = pointPanel.add("group");
+        row.alignChildren = ["left", "center"];
+        var check = row.add("checkbox", undefined, POINT_NAMES[index]);
+        check.preferredSize.width = POINT_CHECK_WIDTH;
+        var tempInput = row.add("edittext", undefined, String(pointT[index]));
+        tempInput.preferredSize.width = POINT_TEMP_WIDTH;
+        var substanceNames = [];
+        for (var n = 0; n < SUBSTANCE_COUNT; n++) substanceNames.push(SUBSTANCES[n].formula);
+        var substanceList = row.add("dropdownlist", undefined, substanceNames);
+        substanceList.preferredSize.width = POINT_SUB_WIDTH;
+        substanceList.selection = pointSub[index];
+        var satCheck = row.add("checkbox", undefined, "포화");
+        satCheck.preferredSize.width = POINT_SAT_WIDTH;
+        var valueInput = row.add("edittext", undefined, pointV[index] === null ? OUT_OF_RANGE : formatNumber(pointV[index], 1));
+        valueInput.preferredSize.width = POINT_VALUE_WIDTH + 20;
+        check.value = pointOn[index];
+        satCheck.value = pointSat[index];
+        valueInput.enabled = !pointSat[index];
+        pointTempInputs.push(tempInput);
+        pointSubLists.push(substanceList);
+        pointValueInputs.push(valueInput);
+
+        check.onClick = function() {
+            pointOn[index] = check.value;
+            updatePreview();
+        };
+        substanceList.onChange = function() {
+            if (substanceList.selection === null) return;
+            pointSub[index] = substanceList.selection.index;
+            syncPoint(index);
+            updatePreview();
+        };
+        satCheck.onClick = function() {
+            pointSat[index] = satCheck.value;
+            valueInput.enabled = !pointSat[index];
+            if (!pointSat[index] && pointV[index] === null) pointV[index] = 0;
+            syncPoint(index);
+            updatePreview();
+        };
+        tempInput.onChange = valueInput.onChange = function() {
+            syncPoint(index);
+            updatePreview();
+        };
+    }
+
+    // 입력창 글자를 읽어 값을 정리하고(범위·소수 첫째 자리), 포화면 용해도를 그 물질·온도의 포화값으로 채운다
+    function syncPoint(index) {
+        var temperature = parseNumber(pointTempInputs[index].text);
+        pointT[index] = clamp(round1(temperature === null ? pointT[index] : temperature), 0, X_MAX);
+        pointTempInputs[index].text = String(pointT[index]);
+        if (pointSat[index]) {
+            pointV[index] = saturatedValue(pointSub[index], pointT[index]);
+        } else {
+            var amount = parseNumber(pointValueInputs[index].text);
+            pointV[index] = clamp(round1(amount === null ? (pointV[index] === null ? 0 : pointV[index]) : amount), 0, Y_MAX);
+        }
+        pointValueInputs[index].text = pointV[index] === null ? OUT_OF_RANGE : formatNumber(pointV[index], 1);
+    }
+
+    // 값이 하나라도 바뀌었으면 true
+    function syncAllPoints() {
+        var changed = false;
+        for (var i = 0; i < POINT_COUNT; i++) {
+            var oldT = pointT[i], oldV = pointV[i];
+            syncPoint(i);
+            if (pointT[i] !== oldT || pointV[i] !== oldV) changed = true;
+        }
+        return changed;
     }
 
     function addLine(group, x1, y1, x2, y2, width, color, dashes) {
@@ -549,6 +760,22 @@ try {
         var segment = vLen(vSub(p3, p0));
         if (alpha1 < 1e-6 * segment || alpha2 < 1e-6 * segment) alpha1 = alpha2 = segment / 3;
         return [p0, vAdd(p0, vMul(tan1, alpha1)), vAdd(p3, vMul(tan2, alpha2)), p3];
+    }
+
+    // 베지어 마디들(x가 왼쪽에서 오른쪽으로 커진다)로 그린 곡선의 x 위치 높이. 곡선 범위 밖이면 null
+    function curveYAt(segments, x) {
+        for (var i = 0; i < segments.length; i++) {
+            var segment = segments[i];
+            if (x < segment[0][0] - 1e-6 || x > segment[3][0] + 1e-6) continue;
+            var low = 0, high = 1;
+            for (var n = 0; n < 40; n++) {
+                var middle = (low + high) / 2;
+                if (bezierAt(segment, middle)[0] < x) low = middle;
+                else high = middle;
+            }
+            return bezierAt(segment, (low + high) / 2)[1];
+        }
+        return null;
     }
 
     function bezierAt(b, t) {
@@ -802,6 +1029,10 @@ try {
         return value;
     }
 
+    function round1(value) {
+        return Math.round(value * 10) / 10;
+    }
+
     function roundTo(value, step) {
         if (step <= 0) return value;
         return Math.round(value / step) * step;
@@ -831,8 +1062,16 @@ try {
             checks.push(curveOn[i] ? "1" : "0");
             styles.push(curveStyle[i]);
         }
+        var on = [];
+        var sat = [];
+        var sub = [];
+        for (var p = 0; p < POINT_COUNT; p++) {
+            on.push(pointOn[p] ? "1" : "0");
+            sat.push(pointSat[p] ? "1" : "0");
+            sub.push(pointSub[p]);
+        }
         var parts = [
-            "v4",
+            "v5",
             widthMm,
             heightMm,
             gridOn ? "1" : "0",
@@ -844,7 +1083,13 @@ try {
             offsetYmm,
             previewEnabled ? "1" : "0",
             checks.join(""),
-            styles.join("")
+            styles.join(""),
+            pointSizeMm,
+            on.join(""),
+            sat.join(""),
+            sub.join(""),
+            pointT.join(","),
+            pointV.join(",")
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -854,8 +1099,12 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v4" || p.length !== 13) return;
+        if (p[0] !== "v5" || p.length !== 19) return;
         if (p[11].length !== SUBSTANCE_COUNT || p[12].length !== SUBSTANCE_COUNT) return;
+        var temperatures = p[17].split(",");
+        var amounts = p[18].split(",");
+        if (p[14].length !== POINT_COUNT || p[15].length !== POINT_COUNT || p[16].length !== POINT_COUNT
+            || temperatures.length !== POINT_COUNT || amounts.length !== POINT_COUNT) return;
         widthMm = restoreNumber(p[1], widthMm, SIZE_MIN_MM, SIZE_MAX_MM);
         heightMm = restoreNumber(p[2], heightMm, SIZE_MIN_MM, SIZE_MAX_MM);
         gridOn = (p[3] === "1");
@@ -870,6 +1119,15 @@ try {
             curveOn[i] = (p[11].charAt(i) === "1");
             var style = parseInt(p[12].charAt(i), 10);
             curveStyle[i] = (style >= 0 && style < LINE_STYLES.length) ? style : 0;
+        }
+        pointSizeMm = round1(restoreNumber(p[13], pointSizeMm, POINT_SIZE_MIN_MM, POINT_SIZE_MAX_MM));
+        for (var q = 0; q < POINT_COUNT; q++) {
+            var subIndex = parseInt(p[16].charAt(q), 10);
+            pointOn[q] = (p[14].charAt(q) === "1");
+            pointSat[q] = (p[15].charAt(q) === "1");
+            pointSub[q] = (subIndex >= 0 && subIndex < SUBSTANCE_COUNT) ? subIndex : pointSub[q];
+            pointT[q] = round1(restoreNumber(temperatures[q], pointT[q], 0, X_MAX));
+            pointV[q] = round1(restoreNumber(amounts[q], pointV[q] === null ? 0 : pointV[q], 0, Y_MAX));
         }
     }
 
