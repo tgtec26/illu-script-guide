@@ -95,7 +95,8 @@ try {
         control.scrollbar.jumpdelta = 15;
         control.isSyncing = false;
 
-        control.reset = grp.add("button", undefined, "초기화");
+        control.reset = grp.add("button", undefined, "R");
+        control.reset.preferredSize.width = 30;
         control.reset.helpTip = "이 축의 회전 각도만 0도로 되돌립니다.";
         control.reset.onClick = function() {
             setAngle(control, 0);
