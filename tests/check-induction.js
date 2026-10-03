@@ -35,6 +35,7 @@ const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: 
   for (const turns of [5, 20, 80]) {
     const plan = lib.windingPlan(bounds, turns);
     near(plan.cx, 0, 1e-9, "centre x");
+    near(plan.rw, 10 * MM + plan.wire / 2, 1e-9, "wire sits on the cylinder: sticks out by half its width");
     near(plan.e, plan.rw * TILT, 1e-9, "front dip from the wire radius");
     assert.ok(plan.y0 - plan.e - plan.wire / 2 >= -1e-9, `turns=${turns}: front of the first turn stays above the bottom`);
     const lastRightEnd = plan.y0 + (turns - 1) * plan.pitch + plan.pitch / 2;

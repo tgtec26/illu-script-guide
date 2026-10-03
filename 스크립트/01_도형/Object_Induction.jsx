@@ -54,11 +54,12 @@ try {
     // 감을 영역(테두리 [왼, 위, 오른, 아래])과 횟수 → 가운데 x, 도선 중심 반지름, 타원 처짐 e, 간격, 굵기, 첫 바퀴 양 끝 높이.
     // 앞쪽이 e만큼 처지므로 바퀴의 양 끝은 아래 테두리 + e 에서 시작한다. 처짐과 굵기의 최대치를 빼고 (횟수 − ½)로 나눈 간격이면
     // 마지막 바퀴의 오른쪽 끝(반 간격 높다)도 위 테두리 안에 든다. 좁게 감기면 도선은 간격의 92 %
+    // 도선은 기둥 위에 감기므로 중심 반지름은 기둥 반지름 + 굵기 반. 양옆으로 굵기 반만큼 나와 감긴 실루엣이 된다
     function windingPlan(bounds, turns) {
         var d = bounds[2] - bounds[0];
-        var pitch = Math.max((bounds[1] - bounds[3] - d / 2 * TILT - WIRE_MM * MM) / (turns - 0.5), 0.1);
+        var pitch = Math.max((bounds[1] - bounds[3] - (d / 2 + WIRE_MM * MM / 2) * TILT - WIRE_MM * MM) / (turns - 0.5), 0.1);
         var wire = Math.min(WIRE_MM * MM, pitch * 0.92);
-        var rw = d / 2 - wire / 2, e = rw * TILT;
+        var rw = d / 2 + wire / 2, e = rw * TILT;
         return {cx: (bounds[0] + bounds[2]) / 2, rw: rw, e: e, pitch: pitch, wire: wire, y0: bounds[3] + e + wire / 2};
     }
 
@@ -82,7 +83,7 @@ try {
     var REQUIRED_PARTS = ["자석", "바늘", "원통"];
     var POLE_PARTS = ["극_S", "극_N", "글자_S", "글자_N"];
     var POLES = ["N극이 아래", "S극이 아래"];
-    var WIRE_K = 48, WIRE_LIGHT_K = 20;   // 도선 회색 (K %)
+    var WIRE_K = 62, WIRE_LIGHT_K = 28;   // 도선 회색 (K %)
     var LABEL_WIDTH = 110;
     var SLIDER_WIDTH = 196;
     var POSITION_LIMIT_MM = 100;
