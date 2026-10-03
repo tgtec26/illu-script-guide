@@ -11,6 +11,7 @@ try {
 } catch (e) {}
 
 // 선택한 사각형을 이중 슬릿(영의 실험) 간섭무늬가 맺힌 스크린으로 바꾼다.
+//   - 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다.
 //   - 밝은 무늬(보강 간섭)와 어두운 무늬(상쇄 간섭)가 긴 변을 따라 번갈아 놓이고, 밝기는 cos² 곡선을 K 그라데이션으로 그린다.
 //   - 무늬 간격 Δx = λL/d (파장 λ, 슬릿–스크린 거리 L, 슬릿 간격 d). 그림에서는 Δx = 사각형 길이 ÷ (무늬 수 ÷ 2)로
 //     정해지므로 λ·L·d는 따로 받지 않는다. 광원–슬릿 거리는 무늬 위치와 무관하다.
@@ -42,21 +43,44 @@ try {
     // 그라데이션 정지점: 띠(무늬 하나)마다 최대 8개, 전체는 240개 안쪽. 띠가 많으면 띠당 개수를 줄인다
     var MAX_STOPS_PER_BAND = 8;
     var STOP_BUDGET = 240;
+    var FRAME_KEY = PREF_KEY + "/frame";
+    var DEFAULT_FRAME_MM = {w: 80, h: 60};
 
     var doc = app.activeDocument;
-    var rect = getSelectedRectangle(doc.selection);
-    if (rect === null) {
-        alert("가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요.");
-        return;
+    var selected = doc.selection;
+    var rect = null;
+    var rectWasHidden = false;
+    var centerX = 0;
+    var centerY = 0;
+    var widthMm = 0;
+    var heightMm = 0;
+    var rectWidthMm = 0;
+    var rectHeightMm = 0;
+    if (selected && selected.length > 0) {
+        rect = getSelectedRectangle(selected);
+        if (rect === null) {
+            alert("가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요.");
+            return;
+        }
+        rectWasHidden = rect.hidden;
+        var bounds = rect.geometricBounds; // [left, top, right, bottom]
+        centerX = (bounds[0] + bounds[2]) / 2;
+        centerY = (bounds[1] + bounds[3]) / 2;
+        rectWidthMm = (bounds[2] - bounds[0]) / MM;
+        rectHeightMm = (bounds[1] - bounds[3]) / MM;
+        widthMm = Math.round(rectWidthMm * 10) / 10;
+        heightMm = Math.round(rectHeightMm * 10) / 10;
+    } else {
+        // 선택이 없으면 기억한 틀 크기로 대지 가운데에 그린다
+        var frame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+        var artboardRect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        centerX = (artboardRect[0] + artboardRect[2]) / 2;
+        centerY = (artboardRect[1] + artboardRect[3]) / 2;
+        widthMm = clamp(Math.round(frame.w * 10) / 10, SIZE_RANGE[0], SIZE_RANGE[1]);
+        heightMm = clamp(Math.round(frame.h * 10) / 10, SIZE_RANGE[0], SIZE_RANGE[1]);
     }
-    var rectWasHidden = rect.hidden;
-    var bounds = rect.geometricBounds; // [left, top, right, bottom]
-    var centerX = (bounds[0] + bounds[2]) / 2;
-    var centerY = (bounds[1] + bounds[3]) / 2;
 
-    // 옵션 (크기는 선택한 사각형에서 오므로 저장하지 않는다)
-    var widthMm = Math.round((bounds[2] - bounds[0]) / MM * 10) / 10;
-    var heightMm = Math.round((bounds[1] - bounds[3]) / MM * 10) / 10;
+    // 옵션 (크기는 선택한 사각형이나 기억한 틀에서 오므로 설정 문자열에는 저장하지 않는다)
     var brightCount = 5;
     var darkCount = 4;
     var slitRatio = 0;
@@ -148,24 +172,29 @@ try {
     };
     okButton.onClick = function() {
         if (previewGroup === null) {
-            rect.hidden = true;
+            if (rect !== null) rect.hidden = true;
             buildPreview();
         }
-        try { rect.remove(); } catch (removeError) {}
+        if (rect !== null) {
+            try { rect.remove(); } catch (removeError) {}
+            saveFrame(rectWidthMm, rectHeightMm);
+        }
         saveSettings();
         doc.selection = null;
         try { previewGroup.selected = true; } catch (selectError) {}
         dlg.close(1);
     };
 
-    rect.selected = false;
+    if (rect !== null) rect.selected = false;
     updatePreview();
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
     if (dlg.show() !== 1) {
         clearPreview();
-        rect.hidden = rectWasHidden;
-        rect.selected = true;
+        if (rect !== null) {
+            rect.hidden = rectWasHidden;
+            rect.selected = true;
+        }
         removeGradient();
     }
     app.redraw();
@@ -176,12 +205,28 @@ try {
     function updatePreview() {
         clearPreview();
         if (previewEnabled) {
-            rect.hidden = true;
+            if (rect !== null) rect.hidden = true;
             buildPreview();
-        } else {
+        } else if (rect !== null) {
             rect.hidden = rectWasHidden;
         }
         app.redraw();
+    }
+
+    // 선택한 사각형의 크기는 설정 문자열과 따로 기억한다(설정 형식을 건드리지 않는다)
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
     }
 
     // 원본 사각형의 가운데를 기준으로 너비·높이를 잡은 스크린 하나를 그룹에 넣는다

@@ -14,6 +14,7 @@ try {
 
 // 선택한 가로 사각형을 스펙트럼 띠로 바꾼다. 연속 스펙트럼 · 선 방출 스펙트럼 · 선 흡수 스펙트럼(별) 중
 // 고른 것을 위에서부터 그 순서로, 사각형과 같은 크기로 아래에 쌓는다. 확인하면 원본 사각형은 지운다.
+//   - 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다.
 //   - 연속 스펙트럼: 파장별 밝기 키포인트를 부드럽게 이은 K 농도 그라데이션. 정확한 색채계가 아니라 보기에 그럴듯한 수준이다.
 //   - 선 방출: 배경(K) 위에 원소 하나의 방출선. 선 흡수: 연속 스펙트럼 위에 여러 원소의 흡수선(별의 스펙트럼).
 //   - 선 위치는 NIST ASD 실측 파장. 주요 선만 또는 약한 선까지.
@@ -27,6 +28,8 @@ try {
     }
 
     var PREF_KEY = "SpectrumGray/settings";
+    var FRAME_KEY = PREF_KEY + "/frame";
+    var DEFAULT_FRAME_MM = {w: 100, h: 15};   // 선택이 없고 기억한 틀도 없을 때의 첫 띠 크기
     var MM = 2.834645669;
     var LABEL_WIDTH = 90;
     var RESET_BUTTON_WIDTH = 34;
@@ -87,12 +90,22 @@ try {
     ];
 
     var doc = app.activeDocument;
-    var rect = getSelectedRectangle(doc.selection);
-    if (rect === null) {
-        alert("가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요.");
-        return;
+    // 선택이 비면 rect는 null이고, 마지막에 쓴 틀(없으면 기본 크기)로 대지 가운데에 그린다
+    var rect = null;
+    var frame;   // 첫 띠의 [left, top, right, bottom]
+    var frameFromSelection = false;
+    if (doc.selection && doc.selection.length > 0) {
+        rect = getSelectedRectangle(doc.selection);
+        if (rect === null) {
+            alert("가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요.");
+            return;
+        }
+        frame = rect.geometricBounds;
+        frameFromSelection = true;
+    } else {
+        frame = artboardFrame(loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h));
     }
-    var rectWasHidden = rect.hidden;
+    var rectWasHidden = rect !== null && rect.hidden;
 
     // 옵션 (설정 저장 대상)
     var showContinuous = true;
@@ -256,8 +269,10 @@ try {
     };
 
     syncPanels();
-    rect.hidden = true;
-    rect.selected = false;
+    if (rect !== null) {
+        rect.hidden = true;
+        rect.selected = false;
+    }
     updatePreview();
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
@@ -267,13 +282,16 @@ try {
     if (result === 1) {
         readFields(false);
         var finalGroup = buildSpectrum(true);
-        rect.remove();
+        if (rect !== null) rect.remove();
         saveSettings();
+        if (frameFromSelection) saveFrame((frame[2] - frame[0]) / MM, (frame[1] - frame[3]) / MM);
         doc.selection = null;
         finalGroup.selected = true;
     } else {
-        rect.hidden = rectWasHidden;
-        rect.selected = true;
+        if (rect !== null) {
+            rect.hidden = rectWasHidden;
+            rect.selected = true;
+        }
         removeGradient();
     }
     app.redraw();
@@ -299,7 +317,7 @@ try {
         var kinds = selectedKinds();
         var group = doc.activeLayer.groupItems.add();
         group.name = "Spectrum";
-        var bounds = rect.geometricBounds; // [left, top, right, bottom]
+        var bounds = frame; // [left, top, right, bottom]
         var left = bounds[0], top = bounds[1], right = bounds[2], bottom = bounds[3];
         var height = top - bottom;
         var gapPt = gapMm * MM;
@@ -310,7 +328,8 @@ try {
             var rowGroup = group.groupItems.add();
             rowGroup.name = kinds[k];
             var shift = -k * (height + gapPt);
-            var band = rect.duplicate(rowGroup, ElementPlacement.PLACEATEND);
+            var band = rect !== null ? rect.duplicate(rowGroup, ElementPlacement.PLACEATEND)
+                : rowGroup.pathItems.rectangle(top, left, right - left, height);
             band.hidden = false;
             band.selected = false;
             band.stroked = false;   // 원본 사각형의 선(흰 선 등)은 띠에 넣지 않는다
@@ -629,6 +648,32 @@ try {
         }
         if (xs.length !== 2 || ys.length !== 2) return null;
         return item;
+    }
+
+    // 틀(mm)을 활성 대지 가운데에 놓은 [left, top, right, bottom] (pt)
+    function artboardFrame(size) {
+        var board = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        var cx = (board[0] + board[2]) / 2;
+        var cy = (board[1] + board[3]) / 2;
+        var halfW = size.w * MM / 2;
+        var halfH = size.h * MM / 2;
+        return [cx - halfW, cy + halfH, cx + halfW, cy - halfH];
+    }
+
+    // 지난번 선택에서 기억한 틀 크기(mm). 없으면 fallback. 항상 {w, h}
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
     }
 
     function pushDistinct(list, value) {

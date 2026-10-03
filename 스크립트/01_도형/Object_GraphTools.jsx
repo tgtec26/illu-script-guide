@@ -12,7 +12,8 @@ try {
 
 // 그래프·표: 축 눈금·그래프 마커·표·점선 분할선·모델 곡선·원그래프·태양 스펙트럼을 한 창의 탭으로 묶었다.
 // 탭마다 필요한 선택이 다르다 (축 눈금: 사각형, 마커: 꺾은선 패스, 표·점선 분할선·모델 곡선: 축에 나란한 사각형, 원그래프: 원).
-// 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적고, 어느 탭에도 맞지 않으면 도형을 그리라는 안내만 띄운다. 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
+// 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적고, 선택이 있는데 어느 탭에도 맞지 않으면 안내만 띄운다. 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
+// 선택이 없으면 축·표·모델·원·복사 탭은 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다 (마커·분할 탭은 고칠 그림이 있어야 한다).
 // 탭 라벨은 창이 옆으로 늘어나지 않도록 한두 글자(축·마커·표·분할·모델·원·복사)로 둔다. 안내 홈페이지의 탭 이름도 같다.
 (function() {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
@@ -23,6 +24,7 @@ try {
     var selectedItems = [];
     var sel = doc.selection;
     for (var selIndex = 0; sel && selIndex < sel.length; selIndex++) selectedItems.push(sel[selIndex]);
+    var noSelection = selectedItems.length === 0;
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
@@ -71,7 +73,7 @@ try {
     if (engines[tabIndex].error) {
         var problems = [];
         for (engineIndex = 0; engineIndex < engines.length; engineIndex++) problems.push("[" + engines[engineIndex].label + "] " + engines[engineIndex].error);
-        alert("먼저 도형을 그려 선택한 뒤 실행해주세요. 원 → 원그래프, 사각형 → 그 밖의 탭(마커는 꺾은선 패스).\n\n" + problems.join("\n"));
+        alert("선택한 개체가 어느 탭에도 맞지 않습니다. 원 → 원그래프, 사각형 → 그 밖의 탭(마커는 꺾은선 패스). 선택을 풀면 마지막에 쓴 크기로 그립니다.\n\n" + problems.join("\n"));
         return;
     }
     var engine = engines[tabIndex];
@@ -109,6 +111,26 @@ try {
     if (result !== 1) engine.clearPreview();
     try { app.redraw(); } catch (redrawError) {}
 
+    // 틀 기억: 선택이 없을 때 마지막에 쓴 크기로 그리려고 확인 때 저장한다. 값은 "v1|너비mm|높이mm" (원은 지름을 둘 다에)
+    function loadFrame(frameKey, fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(frameKey).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+    function saveFrame(frameKey, w, h) {
+        try { app.preferences.setStringPreference(frameKey, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
+    }
+    // 활성 대지의 가운데 [x, y] (pt)
+    function artboardCenter() {
+        var r = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        return [(r[0] + r[2]) / 2, (r[1] + r[3]) / 2];
+    }
+
     // ==== 축 눈금 ====
     function makeAxisTicksEngine() {
         var api = {label: "축", error: null, addRows: addRows,
@@ -121,9 +143,14 @@ try {
             var doc = app.activeDocument;
             var sel = doc.selection;
 
-            if (sel.length === 0) return "사각형을 선택해주세요.";
-            var rect = sel[0];
-            if (rect.typename !== "PathItem") return "PathItem(사각형)을 선택해주세요.";
+            // 선택이 없으면 마지막에 쓴 틀(없으면 기본 크기)을 대지 가운데에 놓는다
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var DEFAULT_FRAME_MM = {w: 80, h: 60};
+            var rect = null;
+            if (!noSelection) {
+                rect = sel[0];
+                if (rect.typename !== "PathItem") return "PathItem(사각형)을 선택해주세요.";
+            }
 
             // 단위·스타일 상수
             var mmToPt = 2.834645669;
@@ -135,14 +162,22 @@ try {
             var arrowMargin = 3.0 * mmToPt;
 
             // 사각형 좌표 (원본은 미리보기 동안 숨겼다가 확정 시 삭제)
-            var bounds = rect.geometricBounds;
+            var bounds;
+            if (rect !== null) {
+                bounds = rect.geometricBounds;
+            } else {
+                var frame = loadFrame(FRAME_KEY, DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+                var boardCenter = artboardCenter();
+                bounds = [boardCenter[0] - frame.w * mmToPt / 2, boardCenter[1] + frame.h * mmToPt / 2,
+                    boardCenter[0] + frame.w * mmToPt / 2, boardCenter[1] - frame.h * mmToPt / 2];
+            }
             var leftX = bounds[0];
             var topY = bounds[1];
             var rightX = bounds[2];
             var bottomY = bounds[3];
             var originX = leftX;
             var originY = bottomY;
-            var rectWasHidden = rect.hidden;
+            var rectWasHidden = rect !== null && rect.hidden;
 
             var blackColor = new CMYKColor();
             blackColor.cyan = 0;
@@ -348,15 +383,19 @@ try {
             // 탭 호스트가 부르는 훅. 이 탭이 켜져 있는 동안만 원본 사각형을 숨긴다
             api.setPreview = function(on) {
                 previewEnabled = on;
-                rect.hidden = true;
-                rect.selected = false;
+                if (rect !== null) {
+                    rect.hidden = true;
+                    rect.selected = false;
+                }
                 updatePreview();
             };
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
                 clearPreview();
-                rect.hidden = rectWasHidden;
-                rect.selected = true;
+                if (rect !== null) {
+                    rect.hidden = rectWasHidden;
+                    rect.selected = true;
+                }
             };
             api.commit = function() {
                 if (!readOptions(true)) return false;
@@ -364,7 +403,10 @@ try {
                 clearPreview();
                 var finalGroup = drawAxisTicks(true);
                 moveItem(finalGroup, offsetXmm * mmToPt, offsetYmm * mmToPt);
-                rect.remove();
+                if (rect !== null) {
+                    saveFrame(FRAME_KEY, (rightX - leftX) / mmToPt, (topY - bottomY) / mmToPt);
+                    rect.remove();
+                }
                 doc.selection = null;
                 finalGroup.selected = true;
                 return true;
@@ -1314,15 +1356,29 @@ try {
             var SIZE_MAX_MM = 120;
 
             var doc = app.activeDocument;
-            var source = getSelectedRectangle(doc.selection);
-            if (source === null) return "가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요.";
+            // 선택이 없으면 마지막에 쓴 틀(없으면 기본 크기)을 대지 가운데에 놓는다
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var DEFAULT_FRAME_MM = {w: 80, h: 60};
+            var source = null;
+            var tableLeft, tableTop, tableWidthMm, tableHeightMm;
+            if (!noSelection) {
+                source = getSelectedRectangle(doc.selection);
+                if (source === null) return "가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요.";
 
-            var bounds = source.geometricBounds; // [left, top, right, bottom]
-            var tableLeft = bounds[0];
-            var tableTop = bounds[1];
-            var tableWidthMm = (bounds[2] - bounds[0]) / MM_TO_PT;
-            var tableHeightMm = (bounds[1] - bounds[3]) / MM_TO_PT;
-            if (tableWidthMm <= 0 || tableHeightMm <= 0) return "가로와 세로 크기가 있는 사각형을 선택해주세요.";
+                var bounds = source.geometricBounds; // [left, top, right, bottom]
+                tableLeft = bounds[0];
+                tableTop = bounds[1];
+                tableWidthMm = (bounds[2] - bounds[0]) / MM_TO_PT;
+                tableHeightMm = (bounds[1] - bounds[3]) / MM_TO_PT;
+                if (tableWidthMm <= 0 || tableHeightMm <= 0) return "가로와 세로 크기가 있는 사각형을 선택해주세요.";
+            } else {
+                var frame = loadFrame(FRAME_KEY, DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+                tableWidthMm = Math.min(Math.max(frame.w, SIZE_MIN_MM), SIZE_MAX_MM * MAX_COLS);
+                tableHeightMm = Math.min(Math.max(frame.h, SIZE_MIN_MM), SIZE_MAX_MM * MAX_ROWS);
+                var boardCenter = artboardCenter();
+                tableLeft = boardCenter[0] - tableWidthMm * MM_TO_PT / 2;
+                tableTop = boardCenter[1] + tableHeightMm * MM_TO_PT / 2;
+            }
 
             var rowCount = 3;
             var colCount = 3;
@@ -1335,7 +1391,7 @@ try {
             var offsetYmm = 0;
             var previewEnabled = true;
             var previewGroup = null;
-            var sourceWasHidden = source.hidden;
+            var sourceWasHidden = source !== null && source.hidden;
 
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var DEFAULTS = {rowCount: rowCount, colCount: colCount, headerK: headerK, strokeWidthPt: strokeWidthPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
@@ -1409,15 +1465,19 @@ try {
             // 탭 호스트가 부르는 훅. 이 탭이 켜져 있는 동안만 원본 사각형을 숨긴다
             api.setPreview = function(on) {
                 previewEnabled = on;
-                source.hidden = true;
-                source.selected = false;
+                if (source !== null) {
+                    source.hidden = true;
+                    source.selected = false;
+                }
                 updatePreview();
             };
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
                 clearPreview();
-                source.hidden = sourceWasHidden;
-                source.selected = true;
+                if (source !== null) {
+                    source.hidden = sourceWasHidden;
+                    source.selected = true;
+                }
             };
             api.commit = function() {
                 if (!readFields(true)) return false;
@@ -1426,8 +1486,11 @@ try {
                 var finalGroup = drawTable();
                 moveItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
                 finalGroup.name = "Table";
-                try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
-                source.remove();
+                if (source !== null) {
+                    try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
+                    saveFrame(FRAME_KEY, tableWidthMm, tableHeightMm);
+                    source.remove();
+                }
                 saveSettings();
                 doc.selection = null;
                 finalGroup.selected = true;
@@ -2411,13 +2474,29 @@ try {
             }
 
             var doc = app.activeDocument;
-            var rect = getSelectedRectangle(doc.selection);
-            if (rect === null) return "그래프 영역이 될 사각형 하나를 선택해주세요. 가로·세로 변이 축에 나란해야 합니다.";
-            var bounds = rect.geometricBounds; // [left, top, right, bottom]
-            var boxLeft = bounds[0], boxBottom = bounds[3];
-            var boxWidth = bounds[2] - bounds[0], boxHeight = bounds[1] - bounds[3];
-            if (boxWidth <= 0 || boxHeight <= 0) return "너비와 높이가 0보다 큰 사각형을 선택해주세요.";
-            var rectWasHidden = rect.hidden;
+            // 선택이 없으면 마지막에 쓴 틀(없으면 기본 크기)을 대지 가운데에 놓는다
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var DEFAULT_FRAME_MM = {w: 80, h: 60};
+            var rect = null;
+            var boxLeft, boxBottom, boxWidth, boxHeight;
+            if (!noSelection) {
+                rect = getSelectedRectangle(doc.selection);
+                if (rect === null) return "그래프 영역이 될 사각형 하나를 선택해주세요. 가로·세로 변이 축에 나란해야 합니다.";
+                var bounds = rect.geometricBounds; // [left, top, right, bottom]
+                boxLeft = bounds[0];
+                boxBottom = bounds[3];
+                boxWidth = bounds[2] - bounds[0];
+                boxHeight = bounds[1] - bounds[3];
+                if (boxWidth <= 0 || boxHeight <= 0) return "너비와 높이가 0보다 큰 사각형을 선택해주세요.";
+            } else {
+                var frame = loadFrame(FRAME_KEY, DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+                var boardCenter = artboardCenter();
+                boxWidth = frame.w * MM;
+                boxHeight = frame.h * MM;
+                boxLeft = boardCenter[0] - boxWidth / 2;
+                boxBottom = boardCenter[1] - boxHeight / 2;
+            }
+            var rectWasHidden = rect !== null && rect.hidden;
 
             var typeIndex = 0;
             var values = [], flagValues = [];
@@ -2468,6 +2547,10 @@ try {
             var keepCheck = strokePanel.add("checkbox", undefined, "사각형 유지 (끄면 확정할 때 지움)");
             keepCheck.value = keepRect;
             keepCheck.onClick = updatePreview;
+            if (rect === null) {
+                keepCheck.enabled = false;
+                keepCheck.helpTip = "선택한 사각형이 없어 남기거나 지울 것이 없다";
+            }
 
             var positionPanel = addPanel(dlg, "위치");
             var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, OFFSET_STEP_MM, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, DEFAULTS.offsetXmm);
@@ -2488,14 +2571,16 @@ try {
             // 탭 호스트가 부르는 훅
             api.setPreview = function(on) {
                 previewEnabled = on;
-                rect.selected = false;
+                if (rect !== null) rect.selected = false;
                 updatePreview();
             };
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
                 clearPreview();
-                rect.hidden = rectWasHidden;
-                rect.selected = true;
+                if (rect !== null) {
+                    rect.hidden = rectWasHidden;
+                    rect.selected = true;
+                }
             };
             api.commit = function() {
                 if (!readFields(true)) return false;
@@ -2507,8 +2592,11 @@ try {
                 var group = buildGroup();
                 moveItem(group, offsetXmm * MM, offsetYmm * MM);
                 group.name = "Model Curve";
-                rect.hidden = rectWasHidden;
-                if (!keepRect) rect.remove();
+                if (rect !== null) {
+                    rect.hidden = rectWasHidden;
+                    saveFrame(FRAME_KEY, boxWidth / MM, boxHeight / MM);
+                    if (!keepRect) rect.remove();
+                }
                 saveSettings();
                 doc.selection = null;
                 group.selected = true;
@@ -2524,8 +2612,10 @@ try {
 
             function buildGroup() {
                 var specs = currentSpecs();
-                var group = rect.parent.groupItems.add();
-                try { group.move(rect, ElementPlacement.PLACEBEFORE); } catch (e) {}
+                var group = (rect !== null ? rect.parent : doc.activeLayer).groupItems.add();
+                if (rect !== null) {
+                    try { group.move(rect, ElementPlacement.PLACEBEFORE); } catch (e) {}
+                }
                 for (var i = 0; i < specs.length; i++) {
                     var path = drawSegments(group, specSegments(specs[i], boxWidth, boxHeight), boxLeft, boxBottom, specs[i].corners === true);
                     if (specs[i].dashed) try { path.strokeDashes = DASH_PATTERN; } catch (e2) {}
@@ -2687,7 +2777,7 @@ try {
                     app.redraw();
                     return;
                 }
-                rect.hidden = (previewEnabled && !keepRect) ? true : rectWasHidden;
+                if (rect !== null) rect.hidden = (previewEnabled && !keepRect) ? true : rectWasHidden;
                 if (!previewEnabled || currentSpecs().length === 0) {
                     app.redraw();
                     return;
@@ -2984,15 +3074,27 @@ try {
             var DEFAULT_PERCENTS = [40, 25, 15, 10, 5, 3, 2];
 
             var doc = app.activeDocument;
-            var source = getSelectedCircle(doc.selection);
-            if (source === null) return "원 하나를 선택해주세요 (그 원의 지름이 원그래프의 바깥 지름이 됩니다).";
-            var sourceBounds = source.geometricBounds; // [left, top, right, bottom]
-            var baseCenter = [(sourceBounds[0] + sourceBounds[2]) / 2, (sourceBounds[1] + sourceBounds[3]) / 2];
-            // 외경은 선택한 원의 지름에서 시작한다. 선택에서 오는 값이라 저장하지 않고, 바꾸면 원의 가운데를 기준으로 커지거나 작아진다
-            var outerMm = (sourceBounds[2] - sourceBounds[0]) / MM_TO_PT;   // 손대기 전에는 원 지름 그대로 (반올림 없음)
-            var outerR = outerMm * MM_TO_PT / 2;
             var OUTER_RANGE_MM = [5, 500];
-            var sourceWasHidden = source.hidden;
+            // 선택이 없으면 마지막에 쓴 지름(없으면 기본 크기)의 원을 대지 가운데에 놓는다
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var DEFAULT_FRAME_MM = {w: 50, h: 50};
+            var source = null;
+            var baseCenter, outerMm;
+            var selectedDiameterMm = 0;   // 선택한 원의 지름. 확인할 때 틀로 기억한다
+            if (!noSelection) {
+                source = getSelectedCircle(doc.selection);
+                if (source === null) return "원 하나를 선택해주세요 (그 원의 지름이 원그래프의 바깥 지름이 됩니다).";
+                var sourceBounds = source.geometricBounds; // [left, top, right, bottom]
+                baseCenter = [(sourceBounds[0] + sourceBounds[2]) / 2, (sourceBounds[1] + sourceBounds[3]) / 2];
+                // 외경은 선택한 원의 지름에서 시작한다. 바꾸면 원의 가운데를 기준으로 커지거나 작아진다
+                outerMm = (sourceBounds[2] - sourceBounds[0]) / MM_TO_PT;   // 손대기 전에는 원 지름 그대로 (반올림 없음)
+                selectedDiameterMm = outerMm;
+            } else {
+                baseCenter = artboardCenter();
+                outerMm = Math.min(Math.max(loadFrame(FRAME_KEY, DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h).w, OUTER_RANGE_MM[0]), OUTER_RANGE_MM[1]);
+            }
+            var outerR = outerMm * MM_TO_PT / 2;
+            var sourceWasHidden = source !== null && source.hidden;
 
             var korFont = getFont("SpoqaHanSansNeo-Regular");
             var engFont = getFont("GSMediumB1");
@@ -3094,7 +3196,7 @@ try {
 
             var shapePanel = addPanel(dlg, "모양");
             var outerControls = addValueRow(shapePanel, "외경", "mm", outerMm, OUTER_RANGE_MM[0], OUTER_RANGE_MM[1], 0.5, 1, DEFAULTS.outerMm);
-            outerControls.input.helpTip = outerControls.slider.helpTip = "선택한 원의 지름에서 시작합니다. 바꾸면 원의 가운데를 기준으로 커지거나 작아집니다";
+            outerControls.input.helpTip = outerControls.slider.helpTip = "선택한 원의 지름(선택이 없으면 마지막에 쓴 지름)에서 시작합니다. 바꾸면 원의 가운데를 기준으로 커지거나 작아집니다";
             var innerControls = addValueRow(shapePanel, "내경", "mm", innerMm, 0, Math.max(0.5, outerMm - 1), 0.5, 1, DEFAULTS.innerMm);
             innerControls.input.helpTip = innerControls.slider.helpTip = "0이면 파이, 크면 도넛";
             var spinControls = addValueRow(shapePanel, "회전", "°", spinDeg, -180, 180, 1, 0, DEFAULTS.spinDeg);
@@ -3140,15 +3242,19 @@ try {
             // 탭 호스트가 부르는 훅. 이 탭이 켜져 있는 동안만 원본 원을 숨긴다
             api.setPreview = function(on) {
                 previewEnabled = on;
-                source.hidden = true;
-                source.selected = false;
+                if (source !== null) {
+                    source.hidden = true;
+                    source.selected = false;
+                }
                 updatePreview();
             };
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
                 clearPreview();
-                source.hidden = sourceWasHidden;
-                source.selected = true;
+                if (source !== null) {
+                    source.hidden = sourceWasHidden;
+                    source.selected = true;
+                }
             };
             api.commit = function() {
                 clearPreview();
@@ -3156,13 +3262,15 @@ try {
                 try {
                     finalGroup = buildChart();
                 } catch (e) {
-                    source.hidden = sourceWasHidden;
+                    if (source !== null) source.hidden = sourceWasHidden;
                     alert("원그래프를 만들지 못했습니다: " + e + " (" + e.line + "행)");
                     return false;
                 }
                 finalGroup.name = "Pie Chart";
-                source.remove();
+                if (source !== null) source.remove();
                 saveSettings();
+                var framedMm = source !== null ? selectedDiameterMm : outerMm;
+                saveFrame(FRAME_KEY, framedMm, framedMm);
                 doc.selection = null;
                 try { finalGroup.selected = true; } catch (selectError) {}
                 return true;
@@ -3213,9 +3321,9 @@ try {
 
             // 그리다 실패하면 반쯤 만든 그룹을 지우고 오류를 다시 던진다 (유령 조각 방지)
             function buildChart() {
-                var group = source.parent.groupItems.add();
+                var group = (source !== null ? source.parent : doc.activeLayer).groupItems.add();
                 try {
-                    group.move(source, ElementPlacement.PLACEBEFORE);
+                    if (source !== null) group.move(source, ElementPlacement.PLACEBEFORE);
                     drawChart(group);
                 } catch (e) {
                     try { group.remove(); } catch (removeError) {}
@@ -4114,17 +4222,22 @@ try {
             var RANGE_GAP_MM = 2;           // 파장 영역 화살표와 위쪽 글자 사이
 
             var doc = app.activeDocument;
-            // 선택한 사각형이 그래프 영역이다. 아래의 rect === null 분기는 예전 화면 중앙 모드의 흔적으로 이제 타지 않는다
-            var rect = getSelectedRectangle(doc.selection);
-            if (rect === null) return "가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요 (그 사각형이 그래프 영역이 됩니다).";
+            // 선택한 사각형이 그래프 영역이다. 선택이 없으면 rect === null이고 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var DEFAULT_FRAME_MM = {w: 80, h: 50};
+            var rect = null;
+            if (!noSelection) {
+                rect = getSelectedRectangle(doc.selection);
+                if (rect === null) return "가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요 (그 사각형이 그래프 영역이 됩니다).";
+            }
             var rectWasHidden = rect !== null && rect.hidden;
-            var viewCenter = doc.activeView.centerPoint;
-            var centerX = viewCenter[0];
-            var centerY = viewCenter[1];
+            var boardCenter = artboardCenter();
+            var centerX = boardCenter[0];
+            var centerY = boardCenter[1];
 
             // 옵션 (설정 저장 대상)
-            var widthMm = 80;
-            var heightMm = 50;
+            var widthMm = DEFAULT_FRAME_MM.w;
+            var heightMm = DEFAULT_FRAME_MM.h;
             var maxUm = 3;
             var sigmaNm = 15;
             var strokePt = 0.4;
@@ -4147,7 +4260,7 @@ try {
             var SIGMA_RANGE = [0, 60];
             var STROKE_RANGE = [0.2, 1.5];
 
-            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다 (폭·높이는 사각형이 정해 늘 꺼져 있으므로 사각형 크기를 쓴다)
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다 (폭·높이는 사각형이 있으면 꺼져 있고 그 크기를, 없으면 열 때 정한 틀 크기를 쓴다)
             var DEFAULTS = {maxUm: maxUm, sigmaNm: sigmaNm, strokePt: strokePt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySavedSettings();
             // 사각형이 크기를 정할 때도 저장되는 기본 크기는 그대로 둔다
@@ -4157,6 +4270,11 @@ try {
                 var rectBounds = rect.geometricBounds; // [left, top, right, bottom]
                 widthMm = Math.round((rectBounds[2] - rectBounds[0]) / MM * 100) / 100;
                 heightMm = Math.round((rectBounds[1] - rectBounds[3]) / MM * 100) / 100;
+            } else {
+                // 선택이 없으면 마지막에 쓴 크기. 크기 칸이 켜져 있어 고칠 수 있다
+                var frame = loadFrame(FRAME_KEY, widthMm, heightMm);
+                widthMm = Math.min(Math.max(frame.w, WIDTH_RANGE[0]), WIDTH_RANGE[1]);
+                heightMm = Math.min(Math.max(frame.h, HEIGHT_RANGE[0]), HEIGHT_RANGE[1]);
             }
 
             var black = makeColor(0, 0, 0, 100);
@@ -4181,6 +4299,9 @@ try {
                 heightField.row.enabled = false;
                 widthField.input.helpTip = "선택한 사각형의 크기";
                 heightField.input.helpTip = "선택한 사각형의 크기";
+            } else {
+                widthField.input.helpTip = "선택이 없으면 마지막에 쓴 크기로 그린다";
+                heightField.input.helpTip = "선택이 없으면 마지막에 쓴 크기로 그린다";
             }
             var maxUmField = addNumberField(sizePanel, "최대 파장", "µm", maxUm, 0.5, MAX_UM_RANGE[0], MAX_UM_RANGE[1], DEFAULTS.maxUm);
 
@@ -4262,6 +4383,7 @@ try {
                 finalGroup.name = "Solar Spectrum";
                 if (rect !== null) rect.remove();
                 saveSettings();
+                saveFrame(FRAME_KEY, widthMm, heightMm);
                 doc.selection = null;
                 finalGroup.selected = true;
                 return true;

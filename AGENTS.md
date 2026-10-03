@@ -56,6 +56,16 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
 ```
 - 글자 크기는 줄일 수 없다. `graphics.font`를 바꿔도 이 일러 버전은 화면에 반영하지 않는다(확인됨).
 
+## Optional Frame Selection (required)
+
+원·사각형을 틀(크기·가운데)로만 쓰는 스크립트는 선택이 비어 있어도 실행된다. 사용자의 그림을 가공하는 스크립트(열린 패스, 직선, 임의 모양, 글자)는 해당하지 않는다.
+
+- 선택이 비면 알림 없이 마지막에 쓴 틀 크기, 없으면 기본 크기로 활성 대지 가운데에 그린다. 기존 `위치` 옵션은 그 위에 더한다.
+- 선택이 비어 있지 않은데 맞지 않으면(원이 아닌 타원, 사각형 둘 등) 이유를 알리고 끝낸다.
+- 틀 크기는 `PREF_KEY + "/frame"` 키에 `v1|너비mm|높이mm`(원은 지름을 둘 다에)로 저장한다. 확인할 때만, 틀이 실제 선택에서 왔을 때만 저장한다. 기존 설정 문자열 형식은 건드리지 않는다.
+- 원본을 숨기거나 지우거나 되살리는 코드는 원본이 `null`이어도 안전해야 한다. 기본 크기는 상수 하나(`DEFAULT_FRAME_MM`)로 둔다.
+- 참고 구현: `스크립트/01_도형/Object_Quadrat.jsx`, `스크립트/01_도형/Object_Karyotype.jsx`.
+
 ## Last-Script Memo (required)
 
 Every runnable `.jsx` under `스크립트/` records its own path so `스크립트/10_기타/RepeatLast.jsx`(F4)가 그 스크립트를 다시 실행할 수 있다. 새 스크립트를 만들면 파일 맨 위(단, `#target`/`#include` 지시문 뒤)에 아래 조각을 그대로 넣는다. `RepeatLast.jsx` 자신만 예외다.

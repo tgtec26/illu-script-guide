@@ -11,10 +11,11 @@ try {
 
 // 가계도 그리기
 // 선택한 사각형 중앙에 조부모(1세대) → 부모·형제(2세대) → 자녀(3세대) 가계도를 그린다.
+// 선택이 없으면 활성 대지 가운데에 그린다 (사각형은 가운데 위치만 쓰므로 기억할 크기가 없다).
 // 사각형 = 남자, 원 = 여자. (가) 발현은 사선, (나) 발현은 격자, 둘 다 발현은 20% 음영.
 (function() {
     if (app.documents.length === 0) {
-        alert("문서를 열고 가계도가 들어갈 사각형 하나를 선택해주세요.");
+        alert("문서를 열어주세요.");
         return;
     }
     var doc = app.activeDocument;
@@ -23,8 +24,9 @@ try {
         return;
     }
     var sel = doc.selection;
-    if (!sel || sel.typename === "TextRange" || sel.length !== 1 || sel[0].typename !== "PathItem") {
-        alert("가계도가 들어갈 사각형 하나를 선택해주세요.\n완성된 가계도는 사각형 중앙에 놓입니다.");
+    var noSelection = !sel || (sel.typename !== "TextRange" && sel.length === 0);
+    if (!noSelection && (sel.typename === "TextRange" || sel.length !== 1 || sel[0].typename !== "PathItem")) {
+        alert("가계도가 들어갈 사각형 하나를 선택해주세요.\n완성된 가계도는 사각형 중앙에 놓입니다.\n(선택하지 않으면 대지 가운데에 그립니다.)");
         return;
     }
 
@@ -57,9 +59,10 @@ try {
     var MARK_LABELS = ["없음", "ⓐ", "ⓑ", "ⓒ"];
     var MARK_LETTERS = ["", "a", "b", "c"];
 
-    var rect = sel[0];
-    var rectBounds = rect.geometricBounds;   // [left, top, right, bottom]
-    var rectWasHidden = rect.hidden;
+    var rect = noSelection ? null : sel[0];
+    var rectWasHidden = rect !== null ? rect.hidden : false;
+    // 가계도 가운데를 놓을 곳: 선택한 사각형의 범위, 선택이 없으면 활성 대지
+    var frameBounds = noSelection ? doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect : rect.geometricBounds;   // [left, top, right, bottom]
 
     // -------------------------------------------------------
     // 상태 (다이얼로그와 저장 옵션이 공유)
@@ -234,8 +237,10 @@ try {
     cancelButton.onClick = function() { dlg.close(0); };
 
     removeLeftoverPreviews();
-    rect.hidden = true;
-    rect.selected = false;
+    if (rect !== null) {
+        rect.hidden = true;
+        rect.selected = false;
+    }
     updatePreview();
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
@@ -249,15 +254,17 @@ try {
             finalGroup.name = "Pedigree";
         } catch (buildError) {
             if (finalGroup !== null) { try { finalGroup.remove(); } catch (e) {} }
-            rect.hidden = rectWasHidden;
+            if (rect !== null) rect.hidden = rectWasHidden;
             alert("가계도를 그리지 못했습니다.\n" + buildError);
             app.redraw();
             return;
         }
-        try { rect.remove(); } catch (removeError) {}
+        if (rect !== null) {
+            try { rect.remove(); } catch (removeError) {}
+        }
         doc.selection = null;
         try { finalGroup.selected = true; } catch (selectError) {}
-    } else {
+    } else if (rect !== null) {
         rect.hidden = rectWasHidden;
     }
     app.redraw();
@@ -461,8 +468,8 @@ try {
         var b = layoutBounds(layout, LABEL_GAP_MM * MM_TO_PT + TEXT_PT * 0.75);
         builtLegend = legendOn ? drawLegend(group, layout, spec.size, b) : null;
         group.translate(
-            (rectBounds[0] + rectBounds[2]) / 2 - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT,
-            (rectBounds[1] + rectBounds[3]) / 2 - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
+            (frameBounds[0] + frameBounds[2]) / 2 - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT,
+            (frameBounds[1] + frameBounds[3]) / 2 - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
     }
 
     // 범례 항목: 정상 → (가) → (나) → (가)(나), 각각 남자 → 여자 순. 가계도에 실제로 그려진 표현만

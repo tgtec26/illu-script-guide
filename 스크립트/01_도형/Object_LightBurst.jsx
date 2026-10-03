@@ -10,31 +10,49 @@ try {
 } catch (e) {}
 
 // 빛 번짐: 선택한 정원을 중심으로 사방으로 갈라지는 빛줄기·후광을 만든다 (별, 광원, 폭발 표현)
+// 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)의 원을 기준으로 대지 가운데에 그린다
 (function() {
     if (app.documents.length === 0) {
-        alert("문서를 열고 원을 선택해주세요.");
+        alert("문서를 열어주세요.");
         return;
     }
 
     var doc = app.activeDocument;
-    var source = getSelectedCircle(doc.selection);
-    if (source === null) {
-        alert("원 패스 하나만 선택해주세요.");
-        return;
-    }
-
-    var bounds = source.geometricBounds;
-    var width = bounds[2] - bounds[0];
-    var height = bounds[1] - bounds[3];
-    if (width <= 0 || Math.abs(width - height) > Math.max(0.1, width * 0.01)) {
-        alert("가로와 세로 크기가 같은 원을 선택해주세요.");
-        return;
-    }
-
-    var centerX = (bounds[0] + bounds[2]) / 2;
-    var centerY = (bounds[1] + bounds[3]) / 2;
-    var radius = width / 2;
     var MM_TO_PT = 2.834645669;
+    var FRAME_KEY = "LightBurst/settings/frame";
+    var DEFAULT_FRAME_MM = {w: 10, h: 10};
+    var selected = doc.selection;
+    var hasSelection = !!selected && selected.length > 0;
+    var source = null;
+    var centerX = 0;
+    var centerY = 0;
+    var radius = 0;
+    if (hasSelection) {
+        source = getSelectedCircle(selected);
+        if (source === null) {
+            alert("원 패스 하나만 선택해주세요.");
+            return;
+        }
+
+        var bounds = source.geometricBounds;
+        var width = bounds[2] - bounds[0];
+        var height = bounds[1] - bounds[3];
+        if (width <= 0 || Math.abs(width - height) > Math.max(0.1, width * 0.01)) {
+            alert("가로와 세로 크기가 같은 원을 선택해주세요.");
+            return;
+        }
+
+        centerX = (bounds[0] + bounds[2]) / 2;
+        centerY = (bounds[1] + bounds[3]) / 2;
+        radius = width / 2;
+    } else {
+        // 선택이 없으면 기억한 지름의 원을 대지 가운데에 둔 것으로 본다
+        var frame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+        var rect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        centerX = (rect[0] + rect[2]) / 2;
+        centerY = (rect[1] + rect[3]) / 2;
+        radius = frame.w * MM_TO_PT / 2;
+    }
     var POSITION_LIMIT_MM = 100;
     var OFFSET_STEP_MM = 0.1;
     var LIMITS = {
@@ -89,7 +107,7 @@ try {
     var offsetYmm = 0;
     var previewEnabled = true;
     var previewGroup = null;
-    var sourceWasHidden = source.hidden;
+    var sourceWasHidden = source !== null ? source.hidden : false;
     var gradients = {};
     var tintedKey = "";
 
@@ -130,7 +148,7 @@ try {
     var coreCheck = corePanel.add("checkbox", undefined, "중심 원 표시");
     coreCheck.value = coreVisible;
     coreCheck.helpTip = "끄면 빛줄기와 번짐만 남는다";
-    var coreRow = addNumberRow(corePanel, "중심 크기 (배):", "선택한 원 반지름 대비. 1 = 원 크기 그대로. 빛줄기·번짐 기준은 그대로 선택한 원", coreRatio, LIMITS.core, 0.1, 1);
+    var coreRow = addNumberRow(corePanel, "중심 크기 (배):", "기준 원(선택한 원, 없으면 마지막에 쓴 크기) 반지름 대비. 1 = 원 크기 그대로. 빛줄기·번짐 기준은 그대로 기준 원", coreRatio, LIMITS.core, 0.1, 1);
 
     var rayPanel = dlg.add("panel", undefined, "빛줄기");
     rayPanel.orientation = "column";
@@ -257,8 +275,10 @@ try {
     };
     cancelButton.onClick = function() { dlg.close(0); };
 
-    source.hidden = true;
-    source.selected = false;
+    if (source !== null) {
+        source.hidden = true;
+        source.selected = false;
+    }
     updatePreview();
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
@@ -266,20 +286,41 @@ try {
     clearPreview();
 
     if (result === 1) {
-        source.hidden = false;
+        if (source !== null) source.hidden = false;
         var finalGroup = createBurst();
         moveItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         finalGroup.name = "LightBurst";
-        try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
-        source.remove();
+        if (source !== null) {
+            try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
+            source.remove();
+            saveFrame(radius * 2 / MM_TO_PT, radius * 2 / MM_TO_PT);
+        }
         doc.selection = null;
         finalGroup.selected = true;
     } else {
         removeGradients();
-        source.hidden = sourceWasHidden;
-        source.selected = true;
+        if (source !== null) {
+            source.hidden = sourceWasHidden;
+            source.selected = true;
+        }
     }
     app.redraw();
+
+    // 선택한 원의 지름은 설정 문자열과 따로 기억한다(설정 형식을 건드리지 않는다)
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
+    }
 
     function saveSettings() {
         var parts = ["v5", styleIndex, colorIndex, rayCount, rayLength, lengthVar, lengthMode,
@@ -462,7 +503,9 @@ try {
         previewGroup = createBurst();
         moveItem(previewGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         previewGroup.name = "LightBurst Preview";
-        try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
+        if (source !== null) {
+            try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
+        }
         app.redraw();
     }
 
@@ -475,7 +518,7 @@ try {
     // 아래부터 후광 → 빛줄기 → 중심(켠 경우) 순서로 쌓는다 (add()는 그룹 맨 앞에 넣으므로 나중 것이 위)
     function createBurst() {
         tintGradients();
-        var group = source.layer.groupItems.add();
+        var group = (source !== null ? source.layer : doc.activeLayer).groupItems.add();
         if (haloRatio > 0) {
             var haloRadius = radius * haloRatio;
             var halo = group.pathItems.ellipse(centerY + haloRadius, centerX - haloRadius, haloRadius * 2, haloRadius * 2);

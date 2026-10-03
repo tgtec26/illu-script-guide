@@ -11,7 +11,8 @@ try {
 } catch (e) {}
 
 // 염색체·세포 분열: 염색체 모형·상동 염색체·감수 분열·세포 주기를 한 창의 탭으로 묶었다.
-// 상동 염색체와 감수 분열은 그림이 들어갈 사각형 하나를 선택해야 한다. 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적는다.
+// 상동 염색체와 감수 분열은 그림이 들어갈 사각형 하나를 선택하면 그 크기·가운데에 맞춰 그린다. 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적는다.
+// 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다.
 // 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
 (function() {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
@@ -794,8 +795,10 @@ try {
             var doc = app.activeDocument;
             if (doc.activeLayer.locked || !doc.activeLayer.visible) return "현재 레이어가 잠겨 있거나 숨겨져 있습니다. 편집할 수 있는 레이어를 선택한 뒤 실행해주세요.";
 
+            // 선택이 비어 있으면 틀(마지막에 쓴 크기, 없으면 기본 크기)을 대지 가운데에 놓고 그린다
             var sel = doc.selection;
-            if (sel.length !== 1 || sel[0].typename !== "PathItem") return "그림이 들어갈 사각형 하나를 선택해주세요. 사각형의 높이가 염색체 전체 길이를, 좌우 폭이 두께와 간격의 초기값을 정합니다.";
+            var useFrame = !sel || sel.length === 0;
+            if (!useFrame && (sel.length !== 1 || sel[0].typename !== "PathItem")) return "그림이 들어갈 사각형 하나만 선택해주세요(선택을 비우면 마지막에 쓴 크기로 그립니다). 사각형의 높이가 염색체 전체 길이를, 좌우 폭이 두께와 간격의 초기값을 정합니다.";
 
             var MM_TO_PT = 2.834645669;
             var LINE_WIDTH_PT = 0.3;
@@ -803,11 +806,19 @@ try {
             var LOCUS_COUNT = 3;
             var POSITION_LIMIT_MM = 100;
             var PREF_KEY = "ObjectHomologousChromosome/settings";
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var DEFAULT_FRAME_MM = {w: 20, h: 40};
             var PREVIEW_NAME = "Homologous Chromosome Preview";
 
-            var rect = sel[0];
-            var bounds = rect.geometricBounds;   // [left, top, right, bottom]
-            var rectWasHidden = rect.hidden;
+            var rect = useFrame ? null : sel[0];   // 선택이 없으면 null
+            var bounds;   // [left, top, right, bottom]
+            var rectWasHidden = false;
+            if (rect !== null) {
+                bounds = rect.geometricBounds;
+                rectWasHidden = rect.hidden;
+            } else {
+                bounds = frameBounds(loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h));
+            }
             var rectWidthMm = (bounds[2] - bounds[0]) / MM_TO_PT;
 
             // 사각형 폭에 대한 기본 비율. 0.33 + 0.28 + 0.33 = 0.94 로 좌우에 약간 여유를 둔다.
@@ -897,21 +908,24 @@ try {
             // 탭 호스트가 부르는 훅. 이 탭이 켜져 있는 동안만 원본 사각형을 숨긴다
             api.setPreview = function(on) {
                 previewEnabled = on;
-                rect.hidden = true;
-                rect.selected = false;
+                if (rect !== null) {
+                    rect.hidden = true;
+                    rect.selected = false;
+                }
                 updatePreview();
             };
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
                 clearPreview();
-                rect.hidden = rectWasHidden;
+                if (rect !== null) rect.hidden = rectWasHidden;
             };
             api.commit = function() {
                 saveSettings();
+                if (rect !== null) saveFrame(rectWidthMm, (bounds[1] - bounds[3]) / MM_TO_PT);
                 clearPreview();
                 var finalGroup = tryBuildDiagram(2);
                 finalGroup.name = "Homologous Chromosome";
-                try { rect.remove(); } catch (removeError) {}
+                if (rect !== null) { try { rect.remove(); } catch (removeError) {} }
                 doc.selection = null;
                 try { finalGroup.selected = true; } catch (selectError) {}
                 return true;
@@ -1306,6 +1320,30 @@ try {
                 if (isNaN(value) || value < minimum || value > maximum) return fallback;
                 return value;
             }
+
+            // 선택이 없을 때 쓰는 틀. 마지막에 선택한 사각형의 크기(mm)를 기억해 둔다
+            function loadFrame(fallbackW, fallbackH) {
+                try {
+                    var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+                    if (p.length === 3 && p[0] === "v1") {
+                        var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                        if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+                    }
+                } catch (e) {}
+                return {w: fallbackW, h: fallbackH};
+            }
+
+            function saveFrame(w, h) {
+                try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
+            }
+
+            // 활성 대지 가운데에 틀 크기(mm)를 놓은 [left, top, right, bottom] (pt)
+            function frameBounds(frame) {
+                var r = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+                var cx = (r[0] + r[2]) / 2, cy = (r[1] + r[3]) / 2;
+                var halfW = frame.w * MM_TO_PT / 2, halfH = frame.h * MM_TO_PT / 2;
+                return [cx - halfW, cy + halfH, cx + halfW, cy - halfH];
+            }
             return null;
         }
         return api;
@@ -1319,8 +1357,10 @@ try {
             var doc = app.activeDocument;
             if (doc.activeLayer.locked || !doc.activeLayer.visible) return "현재 레이어가 잠겨 있거나 숨겨져 있습니다. 편집할 수 있는 레이어를 선택한 뒤 실행해주세요.";
 
+            // 선택이 비어 있으면 틀(마지막에 쓴 크기, 없으면 기본 크기)을 대지 가운데에 놓고 그린다
             var sel = doc.selection;
-            if (sel.length !== 1 || sel[0].typename !== "PathItem") return "그림이 들어갈 사각형 하나를 선택해주세요. 사각형의 좌우 폭이 맨 아래 네 세포의 배치를, 높이가 세로 간격의 초기값을 정합니다.";
+            var useFrame = !sel || sel.length === 0;
+            if (!useFrame && (sel.length !== 1 || sel[0].typename !== "PathItem")) return "그림이 들어갈 사각형 하나만 선택해주세요(선택을 비우면 마지막에 쓴 크기로 그립니다). 사각형의 좌우 폭이 맨 아래 네 세포의 배치를, 높이가 세로 간격의 초기값을 정합니다.";
 
             var MM_TO_PT = 2.834645669;
             var CIRCLE_WIDTH_PT = 0.4;
@@ -1338,11 +1378,19 @@ try {
             var ARROW_NAME_KO = "화살표 1";
             var ARROW_NAME_EN = "Arrow 1";
             var PREF_KEY = "ObjectMeiosis/settings";
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var DEFAULT_FRAME_MM = {w: 35, h: 50};
             var PREVIEW_NAME = "Meiosis Preview";
 
-            var rect = sel[0];
-            var bounds = rect.geometricBounds;   // [left, top, right, bottom]
-            var rectWasHidden = rect.hidden;
+            var rect = useFrame ? null : sel[0];   // 선택이 없으면 null
+            var bounds;   // [left, top, right, bottom]
+            var rectWasHidden = false;
+            if (rect !== null) {
+                bounds = rect.geometricBounds;
+                rectWasHidden = rect.hidden;
+            } else {
+                bounds = frameBounds(loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h));
+            }
             // 비율 저장·복원의 기준. 0이면 나눗셈이 터지므로 1pt로 받친다.
             var rectWidthPt = Math.max(1, bounds[2] - bounds[0]);
             var rectHeightPt = Math.max(1, bounds[1] - bounds[3]);
@@ -1500,21 +1548,24 @@ try {
             // 탭 호스트가 부르는 훅. 이 탭이 켜져 있는 동안만 원본 사각형을 숨긴다
             api.setPreview = function(on) {
                 previewEnabled = on;
-                rect.hidden = true;
-                rect.selected = false;
+                if (rect !== null) {
+                    rect.hidden = true;
+                    rect.selected = false;
+                }
                 updatePreview();
             };
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
                 clearPreview();
-                rect.hidden = rectWasHidden;
+                if (rect !== null) rect.hidden = rectWasHidden;
             };
             api.commit = function() {
                 saveSettings();
+                if (rect !== null) saveFrame(rectWidthPt / MM_TO_PT, rectHeightPt / MM_TO_PT);
                 clearPreview();
                 var finalGroup = tryBuildDiagram(2);
                 finalGroup.name = "Meiosis";
-                try { rect.remove(); } catch (removeError) {}
+                if (rect !== null) { try { rect.remove(); } catch (removeError) {} }
                 doc.selection = null;
                 try { finalGroup.selected = true; } catch (selectError) {}
                 return true;
@@ -2220,6 +2271,30 @@ try {
                 var value = parseFloat(text);
                 if (isNaN(value) || value < minimum || value > maximum) return fallback;
                 return value;
+            }
+
+            // 선택이 없을 때 쓰는 틀. 마지막에 선택한 사각형의 크기(mm)를 기억해 둔다
+            function loadFrame(fallbackW, fallbackH) {
+                try {
+                    var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+                    if (p.length === 3 && p[0] === "v1") {
+                        var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                        if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+                    }
+                } catch (e) {}
+                return {w: fallbackW, h: fallbackH};
+            }
+
+            function saveFrame(w, h) {
+                try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
+            }
+
+            // 활성 대지 가운데에 틀 크기(mm)를 놓은 [left, top, right, bottom] (pt)
+            function frameBounds(frame) {
+                var r = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+                var cx = (r[0] + r[2]) / 2, cy = (r[1] + r[3]) / 2;
+                var halfW = frame.w * MM_TO_PT / 2, halfH = frame.h * MM_TO_PT / 2;
+                return [cx - halfW, cy + halfH, cx + halfW, cy - halfH];
             }
             return null;
         }

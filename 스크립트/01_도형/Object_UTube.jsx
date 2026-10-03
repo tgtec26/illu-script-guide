@@ -11,6 +11,7 @@ try {
 } catch (e) {}
 
 // 선택한 사각형 자리에 J자관·U자관을 그린다.
+//   - 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다.
 //   - 사각형의 너비·높이가 관 전체 크기(긴 관 꼭대기 ~ 굽은 바닥 바깥)가 되고, 다이얼로그에서 고칠 수 있다.
 //   - J자관: 왼쪽 관은 위가 시험관 바닥처럼 반원(반지름 = 관 두께 절반)으로 막혀 있고 오른쪽 관보다 높이 차만큼 낮다.
 //     U자관: 두 관 모두 열려 있고 같은 높이.
@@ -46,21 +47,44 @@ try {
     var SIZE_RANGE = [2, 500];
     var BORE_RANGE = [0.5, 100];
     var POSITION_LIMIT_MM = 50;
+    var FRAME_KEY = PREF_KEY + "/frame";
+    var DEFAULT_FRAME_MM = {w: 30, h: 60};
 
     var doc = app.activeDocument;
-    var rect = getSelectedRectangle(doc.selection);
-    if (rect === null) {
-        alert("가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요.");
-        return;
+    var selected = doc.selection;
+    var rect = null;
+    var rectWasHidden = false;
+    var centerX = 0;
+    var centerY = 0;
+    var widthMm = 0;
+    var heightMm = 0;
+    var rectWidthMm = 0;
+    var rectHeightMm = 0;
+    if (selected && selected.length > 0) {
+        rect = getSelectedRectangle(selected);
+        if (rect === null) {
+            alert("가로·세로 변이 축에 나란한 사각형 하나를 선택해주세요.");
+            return;
+        }
+        rectWasHidden = rect.hidden;
+        var bounds = rect.geometricBounds; // [left, top, right, bottom]
+        centerX = (bounds[0] + bounds[2]) / 2;
+        centerY = (bounds[1] + bounds[3]) / 2;
+        rectWidthMm = (bounds[2] - bounds[0]) / MM;
+        rectHeightMm = (bounds[1] - bounds[3]) / MM;
+        widthMm = Math.round(rectWidthMm * 10) / 10;
+        heightMm = Math.round(rectHeightMm * 10) / 10;
+    } else {
+        // 선택이 없으면 기억한 틀 크기로 대지 가운데에 그린다
+        var frame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+        var artboardRect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        centerX = (artboardRect[0] + artboardRect[2]) / 2;
+        centerY = (artboardRect[1] + artboardRect[3]) / 2;
+        widthMm = clamp(Math.round(frame.w * 10) / 10, SIZE_RANGE[0], SIZE_RANGE[1]);
+        heightMm = clamp(Math.round(frame.h * 10) / 10, SIZE_RANGE[0], SIZE_RANGE[1]);
     }
-    var rectWasHidden = rect.hidden;
-    var bounds = rect.geometricBounds; // [left, top, right, bottom]
-    var centerX = (bounds[0] + bounds[2]) / 2;
-    var centerY = (bounds[1] + bounds[3]) / 2;
 
-    // 옵션 (크기는 선택한 사각형에서 오므로 저장하지 않는다)
-    var widthMm = Math.round((bounds[2] - bounds[0]) / MM * 10) / 10;
-    var heightMm = Math.round((bounds[1] - bounds[3]) / MM * 10) / 10;
+    // 옵션 (크기는 선택한 사각형이나 기억한 틀에서 오므로 설정 문자열에는 저장하지 않는다)
     var tubeType = 0;          // 0 J자관, 1 U자관
     var boreMm = 4;
     var glassMm = 0;
@@ -77,7 +101,7 @@ try {
 
     var previewGroup = null;
 
-    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다. 너비·높이는 선택한 사각형에서 온다
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다. 너비·높이는 선택한 사각형(없으면 기억한 틀)에서 온다
     var DEFAULTS = {widthMm: widthMm, heightMm: heightMm, boreMm: boreMm, glassMm: glassMm, heightDiffMm: heightDiffMm, membraneWeightPt: membraneWeightPt, liquidK: liquidK, levelRightMm: levelRightMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm, levelLeftMm: levelLeftMm};
     applySettings();
 
@@ -174,24 +198,29 @@ try {
     };
     okButton.onClick = function() {
         if (previewGroup === null) {
-            rect.hidden = true;
+            if (rect !== null) rect.hidden = true;
             buildPreview();
         }
-        try { rect.remove(); } catch (removeError) {}
+        if (rect !== null) {
+            try { rect.remove(); } catch (removeError) {}
+            saveFrame(rectWidthMm, rectHeightMm);
+        }
         saveSettings();
         doc.selection = null;
         try { previewGroup.selected = true; } catch (selectError) {}
         dlg.close(1);
     };
 
-    rect.selected = false;
+    if (rect !== null) rect.selected = false;
     updatePreview();
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
     if (dlg.show() !== 1) {
         clearPreview();
-        rect.hidden = rectWasHidden;
-        rect.selected = true;
+        if (rect !== null) {
+            rect.hidden = rectWasHidden;
+            rect.selected = true;
+        }
     }
     app.redraw();
 
@@ -214,12 +243,28 @@ try {
     function updatePreview() {
         clearPreview();
         if (previewEnabled) {
-            rect.hidden = true;
+            if (rect !== null) rect.hidden = true;
             buildPreview();
-        } else {
+        } else if (rect !== null) {
             rect.hidden = rectWasHidden;
         }
         app.redraw();
+    }
+
+    // 선택한 사각형의 크기는 설정 문자열과 따로 기억한다(설정 형식을 건드리지 않는다)
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
     }
 
     // 원본 사각형의 가운데를 기준으로 너비·높이를 잡은 관 하나를 그룹에 넣는다
@@ -253,9 +298,9 @@ try {
         });
 
         var black = makeColor(100);
-        previewGroup = rect.parent.groupItems.add();
+        previewGroup = (rect !== null ? rect.parent : doc.activeLayer).groupItems.add();
         previewGroup.name = "UTube";
-        previewGroup.move(rect, ElementPlacement.PLACEBEFORE);
+        if (rect !== null) previewGroup.move(rect, ElementPlacement.PLACEBEFORE);
 
         var liquid = drawPath(previewGroup, geometry.liquid, true);
         liquid.name = "Liquid";

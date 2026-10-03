@@ -21,6 +21,7 @@ try {
 //   - 크기와 p/q 비율: RERF(방사선영향연구소) Giemsa 핵형 표 2의 상대 길이(p:q). 1번 염색체 길이를 100으로 둔다.
 //     G 밴드 무늬: UCSC hg38 cytoBand의 밴드 단계(gpos25~100·gvar)를 각 팔 길이의 1/64 칸으로 모은 것.
 //   - 사각형 크기에 맞춰 배치하고, 남는 가로·세로는 열·줄 간격으로 나눠 사각형을 채운다.
+//   - 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다.
 
 (function() {
     if (app.documents.length === 0) {
@@ -577,18 +578,33 @@ try {
     var GAP_RANGE = [0, 10];
     var FONT_RANGE = [4, 24];
     var POSITION_LIMIT_MM = 200;
+    var DEFAULT_FRAME_MM = { w: 120, h: 100 };   // 선택도 기억한 틀도 없을 때의 크기
+    var FRAME_KEY = PREF_KEY + "/frame";
 
     var doc = app.activeDocument;
-    var frameItem = findFrameItem(doc.selection);
-    if (frameItem === null) {
-        alert("핵형을 넣을 사각형을 선택해주세요.");
-        return;
+    var frameFromSelection = false;
+    var frameLeft, frameTop, frameW, frameH;
+    if (!doc.selection || doc.selection.length === 0) {
+        // 선택이 없으면 기억한 틀(없으면 기본 크기)을 대지 가운데에 놓는다
+        var rememberedFrame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+        var artboardRect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        frameW = rememberedFrame.w * MM;
+        frameH = rememberedFrame.h * MM;
+        frameLeft = (artboardRect[0] + artboardRect[2]) / 2 - frameW / 2;
+        frameTop = (artboardRect[1] + artboardRect[3]) / 2 + frameH / 2;
+    } else {
+        var frameItem = findFrameItem(doc.selection);
+        if (frameItem === null) {
+            alert("핵형을 넣을 사각형을 선택해주세요.");
+            return;
+        }
+        var fb = frameItem.geometricBounds;
+        frameLeft = Math.min(fb[0], fb[2]);
+        frameTop = Math.max(fb[1], fb[3]);
+        frameW = Math.abs(fb[2] - fb[0]);
+        frameH = Math.abs(fb[1] - fb[3]);
+        frameFromSelection = true;
     }
-    var fb = frameItem.geometricBounds;
-    var frameLeft = Math.min(fb[0], fb[2]);
-    var frameTop = Math.max(fb[1], fb[3]);
-    var frameW = Math.abs(fb[2] - fb[0]);
-    var frameH = Math.abs(fb[1] - fb[3]);
 
     var engFont = findTextFont([ENG_FONT_NAME]);
     var layer = findEditableLayer();
@@ -784,6 +800,7 @@ try {
         chromText = listInput.text;
         if (previewGroup === null) buildPreview();
         saveSettings();
+        if (frameFromSelection) saveFrame(frameW / MM, frameH / MM);
         dlg.close(1);
     };
 
@@ -1090,6 +1107,22 @@ try {
             } catch (e) {}
         }
         return null;
+    }
+
+    // 틀 전용 설정: "v1|너비mm|높이mm". 확인을 누를 때 선택에서 읽은 틀만 저장한다
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
     }
 
     // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다

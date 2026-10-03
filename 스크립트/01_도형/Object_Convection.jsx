@@ -22,6 +22,7 @@ try {
 //   - 고리는 둥근 사각형을 네 변으로 끊은 선이고, 조각 끝에 화살촉을 단다. 끊는 곳은 변의 곧은 부분에서 고른다
 //     (끊김 위치 0%는 모서리를 막 돈 곳, 50%는 변 가운데). 곡선 위에서 끊으면 화살촉이 비틀려 보인다.
 //   - 가열 표시: 가열하는 곳 아래에 짧은 위쪽 화살표 세 개와 '가열'.
+// 선택이 없으면 마지막에 쓴 비커 크기(없으면 기본 크기)로 활성 대지 가운데에 비커를 그린다.
 // 결과는 선택한 개체와 따로 된 그룹 하나.
 
 (function() {
@@ -31,6 +32,9 @@ try {
     }
 
     var PREF_KEY = "ObjectConvection/settings";
+    // 선택한 사각형에서 읽은 비커 크기(mm). 선택이 없을 때 이 값으로 그린다. 기존 설정 문자열과 따로 둔다
+    var FRAME_KEY = PREF_KEY + "/frame";
+    var DEFAULT_FRAME_MM = {w: 60, h: 70};
     var MM = 2.834645669;
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
@@ -59,18 +63,30 @@ try {
     var GLASS_RANGE = [0, 5];
 
     var doc = app.activeDocument;
-    if (!doc.selection || doc.selection.length !== 1) {
-        alert("대류를 그릴 용기(비커·사각형 등) 하나를 선택해주세요.");
+    var noSelection = !doc.selection || doc.selection.length === 0;
+    if (!noSelection && doc.selection.length !== 1) {
+        alert("대류를 그릴 용기(비커·사각형 등) 하나를 선택해주세요.\n(선택하지 않으면 마지막에 쓴 크기의 비커를 대지 가운데에 그립니다.)");
         return;
     }
-    var target = doc.selection[0];
-    var bounds = target.geometricBounds;
-    // 사각형이면 비커로 바꾼다. 비커 크기는 사각형에서 오므로 저장하지 않는다
+    var target = noSelection ? null : doc.selection[0];
+    var bounds, center, widthMm, heightMm;
+    // 사각형이면 비커로 바꾼다. 선택이 없으면 기억한 크기의 비커를 대지 가운데에 그린다
     var rect = getSelectedRectangle(doc.selection);
     var rectWasHidden = rect !== null ? rect.hidden : false;
-    var center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
-    var widthMm = Math.round((bounds[2] - bounds[0]) / MM * 10) / 10;
-    var heightMm = Math.round((bounds[1] - bounds[3]) / MM * 10) / 10;
+    var beakerMode = rect !== null || noSelection;
+    if (target !== null) {
+        bounds = target.geometricBounds;
+        center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
+        widthMm = Math.round((bounds[2] - bounds[0]) / MM * 10) / 10;
+        heightMm = Math.round((bounds[1] - bounds[3]) / MM * 10) / 10;
+    } else {
+        var frame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+        widthMm = clamp(frame.w, SIZE_RANGE[0], SIZE_RANGE[1]);
+        heightMm = clamp(frame.h, SIZE_RANGE[0], SIZE_RANGE[1]);
+        var artboardRect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        center = [(artboardRect[0] + artboardRect[2]) / 2, (artboardRect[1] + artboardRect[3]) / 2];
+        bounds = [center[0] - widthMm * MM / 2, center[1] + heightMm * MM / 2, center[0] + widthMm * MM / 2, center[1] - heightMm * MM / 2];
+    }
     var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
     var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
     var batangFont = findOptionalFont("Batang");
@@ -93,7 +109,7 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
-    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다. 너비·높이는 선택한 사각형 크기다
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다. 너비·높이는 열 때 정해진 틀 크기(선택한 사각형, 없으면 기억한 크기)다
     var DEFAULTS = {widthMm: widthMm, heightMm: heightMm, levelPct: levelPct, glassMm: glassMm, marginMm: marginMm,
         roundPct: roundPct, gapMm: gapMm, breakPct: breakPct, spacingMm: spacingMm, lineWidth: lineWidth,
         headScale: headScale, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
@@ -111,7 +127,7 @@ try {
     dlg.margins = 12;
 
     var widthRow = null, heightRow = null, levelRow = null, glassRow = null;
-    if (rect !== null) {
+    if (beakerMode) {
         var beakerPanel = addPanel(dlg, "비커");
         widthRow = addValueRow(beakerPanel, "너비", "mm", widthMm, SIZE_RANGE[0], SIZE_RANGE[1], 0.5, 1);
         heightRow = addValueRow(beakerPanel, "높이", "mm", heightMm, SIZE_RANGE[0], SIZE_RANGE[1], 0.5, 1);
@@ -191,7 +207,7 @@ try {
     bindValueRow(breakRow, function() { return breakPct; }, function(v) { breakPct = v; }, DEFAULTS.breakPct);
     bindValueRow(lineWidthRow, function() { return lineWidth; }, function(v) { lineWidth = v; }, DEFAULTS.lineWidth);
     bindValueRow(spacingRow, function() { return spacingMm; }, function(v) { spacingMm = v; }, DEFAULTS.spacingMm);
-    if (rect !== null) {
+    if (beakerMode) {
         bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; }, DEFAULTS.widthMm);
         bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; }, DEFAULTS.heightMm);
         bindValueRow(levelRow, function() { return levelPct; }, function(v) { levelPct = v; }, DEFAULTS.levelPct);
@@ -211,6 +227,7 @@ try {
             try { rect.remove(); } catch (removeError) {}
         }
         saveSettings();
+        if (rect !== null) saveFrame(widthMm, heightMm);
         dlg.close(1);
     };
 
@@ -224,7 +241,10 @@ try {
         if (rect !== null) rect.hidden = rectWasHidden;
     }
     doc.selection = null;
-    try { (confirmed && previewGroup !== null ? previewGroup : target).selected = true; } catch (selectError) {}
+    var toSelect = confirmed && previewGroup !== null ? previewGroup : target;
+    if (toSelect !== null) {
+        try { toSelect.selected = true; } catch (selectError) {}
+    }
     app.redraw();
 
     // -------------------------------------------------------
@@ -246,16 +266,16 @@ try {
         var black = makeGray(100);
         // 고리를 그릴 상자와 가열 표시 기준 상자. 비커면 고리는 물 안에
         var loopBounds = bounds, heatBounds = bounds, beaker = null;
-        if (rect !== null) {
+        if (beakerMode) {
             beaker = beakerShape(center, widthMm * MM, heightMm * MM, levelPct / 100, glassMm * MM);
             loopBounds = beaker.water;
             heatBounds = beaker.box;
         }
         var loops = convectionLoops(loopBounds, heatAt, marginMm * MM, roundPct / 100, LOOP_COUNTS[loopCount], spacingMm * MM);
         if (loops.length === 0 && beaker === null) return;
-        previewGroup = target.layer.groupItems.add();
+        previewGroup = (target !== null ? target.layer : doc.activeLayer).groupItems.add();
         previewGroup.name = beaker !== null ? "대류 (비커)" : "대류";
-        previewGroup.move(target, ElementPlacement.PLACEBEFORE);
+        if (target !== null) previewGroup.move(target, ElementPlacement.PLACEBEFORE);
         if (beaker !== null) drawBeaker(beaker, black);
         var paths = [];
         for (var i = 0; i < loops.length; i++) {
@@ -928,6 +948,22 @@ try {
         var parts = ["v4", heatAt, marginMm, roundPct, gapMm, lineWidth, headScale, heatMark ? "1" : "0", fontPt,
             offsetXmm, offsetYmm, previewEnabled ? "1" : "0", loopCount, spacingMm, levelPct, breakPct, glassMm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    // 선택한 사각형의 비커 크기를 기억한다. 값은 "v1|너비mm|높이mm"
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
     }
 
     function readSettings() {

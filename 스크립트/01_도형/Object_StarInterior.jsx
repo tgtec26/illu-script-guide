@@ -17,36 +17,50 @@ try {
     - 회전 = 절개 방향을 세로축 중심으로 회전 (0° = 정면, 90° = 옆, 180° = 뒤)
     - 시점 X/Y/Z 회전은 sphere 스크립트와 같은 방식 (Rx→Ry→Rz)
     - 절단면은 항상 구의 중심을 지나므로 모든 껍질의 단면이 보입니다
-  사용법: 정원을 선택한 뒤 실행
+  사용법: 정원을 선택한 뒤 실행. 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다
 */
 
 (function() {
     if (app.documents.length === 0) {
-        alert("문서를 열고 원을 선택해주세요.");
+        alert("문서를 열어주세요.");
         return;
     }
 
     var PREF_KEY = "ObjectStarInterior/settings";
+    var FRAME_KEY = PREF_KEY + "/frame";
+    var DEFAULT_FRAME_MM = {w: 50, h: 50};   // 선택이 없고 기억한 틀도 없을 때의 원 지름
+    var MM_TO_PT = 2.834645669;
 
     var doc = app.activeDocument;
-    var source = getSelectedCircle(doc.selection);
-    if (source === null) {
-        alert("원 패스 하나만 선택해주세요.");
-        return;
-    }
+    // 원을 선택하면 그 크기·가운데를 쓴다. 선택이 없으면 지난번 지름으로 대지 가운데에 만든다
+    var source = null;
+    var diameter, centerX, centerY;
+    if (isEmptySelection(doc.selection)) {
+        var frame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+        var board = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        diameter = frame.w * MM_TO_PT;
+        centerX = (board[0] + board[2]) / 2;
+        centerY = (board[1] + board[3]) / 2;
+    } else {
+        source = getSelectedCircle(doc.selection);
+        if (source === null) {
+            alert("원 패스 하나만 선택하거나 선택을 비워주세요.");
+            return;
+        }
 
-    var bounds = source.geometricBounds;
-    var diameter = bounds[2] - bounds[0];
-    var sourceHeight = bounds[1] - bounds[3];
-    if (diameter <= 0 ||
-            Math.abs(diameter - sourceHeight) > Math.max(0.1, diameter * 0.01) ||
-            !hasCircularPathPoints(source)) {
-        alert("가로와 세로 크기가 같은 원을 선택해주세요.");
-        return;
-    }
+        var bounds = source.geometricBounds;
+        diameter = bounds[2] - bounds[0];
+        var sourceHeight = bounds[1] - bounds[3];
+        if (diameter <= 0 ||
+                Math.abs(diameter - sourceHeight) > Math.max(0.1, diameter * 0.01) ||
+                !hasCircularPathPoints(source)) {
+            alert("가로와 세로 크기가 같은 원을 선택해주세요.");
+            return;
+        }
 
-    var centerX = (bounds[0] + bounds[2]) / 2;
-    var centerY = (bounds[1] + bounds[3]) / 2;
+        centerX = (bounds[0] + bounds[2]) / 2;
+        centerY = (bounds[1] + bounds[3]) / 2;
+    }
     var radius = diameter / 2;
 
     var shellCount = 6;
@@ -54,7 +68,6 @@ try {
     var rotationDeg = 40;
     var axisLineOn = true;
     var contrastK = 15;
-    var MM_TO_PT = 2.834645669;
     var POSITION_LIMIT_MM = 100;
     var offsetXmm = 0;
     var offsetYmm = 0;
@@ -63,7 +76,7 @@ try {
     var viewZ = 0;
     var previewEnabled = true;
     var previewGroup = null;
-    var sourceWasHidden = source.hidden;
+    var sourceWasHidden = source !== null ? source.hidden : false;
 
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
     var DEFAULTS = {shellCount: shellCount, cutDeg: cutDeg, rotationDeg: rotationDeg, contrastK: contrastK, viewX: viewX, viewY: viewY, viewZ: viewZ, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
@@ -136,8 +149,10 @@ try {
         dlg.close(1);
     };
 
-    source.hidden = true;
-    source.selected = false;
+    if (source !== null) {
+        source.hidden = true;
+        source.selected = false;
+    }
     updatePreview();
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
@@ -149,12 +164,15 @@ try {
         var finalGroup = drawStar();
         moveItem(finalGroup, offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
         finalGroup.name = "Star Interior";
-        try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
-        source.remove();
+        if (source !== null) {
+            try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
+            source.remove();
+            saveFrame(diameter / MM_TO_PT, diameter / MM_TO_PT);
+        }
         saveSettings();
         doc.selection = null;
         finalGroup.selected = true;
-    } else {
+    } else if (source !== null) {
         source.hidden = sourceWasHidden;
         source.selected = true;
     }
@@ -606,6 +624,26 @@ try {
         viewY = vy;
         viewZ = vz;
         return true;
+    }
+
+    function isEmptySelection(selection) {
+        return !selection || (selection.typename !== "TextRange" && selection.length === 0);
+    }
+
+    // 값: "v1|너비mm|높이mm" (원은 지름을 둘 다에). 항상 {w, h}를 돌려준다
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
     }
 
     function getSelectedCircle(selection) {

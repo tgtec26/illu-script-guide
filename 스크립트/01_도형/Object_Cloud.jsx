@@ -4,6 +4,7 @@
                선택한 사각형 안에 그린다. 모양은 원본 그대로이고 크기와 세 면의 K값(10 단위), 선 표시만 조절한다.
                외곽선은 크기를 바꿔도 0.3pt를 지킨다.
   사용법: 구름이 들어갈 사각형 하나를 선택한 뒤 실행. 확인하면 원본 사각형은 지워진다.
+         선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다.
   구름 모양 데이터: Object_Cloud_library.jsxinc (같은 폴더). 다시 만들려면 tools/cloud-library 참고
 */
 
@@ -21,7 +22,7 @@ try {
 
 (function() {
     if (app.documents.length === 0) {
-        alert("문서를 열고 사각형을 선택해주세요.");
+        alert("문서를 열어주세요.");
         return;
     }
     if (typeof CLOUD_LIBRARY === "undefined" || CLOUD_LIBRARY.length === 0) {
@@ -35,17 +36,27 @@ try {
         return;
     }
 
-    var source = getSelectedRect(doc.selection);
-    if (source === null) {
-        alert("구름이 들어갈 사각형 하나를 선택해주세요.");
-        return;
-    }
-    var sourceWasHidden = source.hidden;
-    var bounds = source.geometricBounds;   // [left, top, right, bottom]
-    var box = {left: bounds[0], top: bounds[1], right: bounds[2], bottom: bounds[3]};
-    if (box.right - box.left < 1 || box.top - box.bottom < 1) {
-        alert("사각형이 너무 작습니다. 가로세로 1pt 이상이어야 합니다.");
-        return;
+    var MM_TO_PT = 2.834645669;
+    var DEFAULT_FRAME_MM = {w: 80, h: 40};
+    var selected = doc.selection;
+    var source = null;
+    var sourceWasHidden = false;
+    var box = null;
+    var frameFromSelection = false;
+    if (selected && selected.length > 0) {
+        source = getSelectedRect(selected);
+        if (source === null) {
+            alert("구름이 들어갈 사각형 하나를 선택해주세요.");
+            return;
+        }
+        sourceWasHidden = source.hidden;
+        var bounds = source.geometricBounds;   // [left, top, right, bottom]
+        box = {left: bounds[0], top: bounds[1], right: bounds[2], bottom: bounds[3]};
+        if (box.right - box.left < 1 || box.top - box.bottom < 1) {
+            alert("사각형이 너무 작습니다. 가로세로 1pt 이상이어야 합니다.");
+            return;
+        }
+        frameFromSelection = true;
     }
 
     var library = CLOUD_LIBRARY;
@@ -54,6 +65,7 @@ try {
     var SLIDER_WIDTH = 196;
     var RESET_BUTTON_WIDTH = 34;
     var PREF_KEY = "ObjectCloud/settings";
+    var FRAME_KEY = PREF_KEY + "/frame";
     var PREVIEW_NAME = "Cloud Preview";
     var K_LIMIT = [0, 100];
     var ROLE_NAMES = {cloud: "구름", shadow1: "그림자 1", shadow2: "그림자 2", outline: "외곽선", ink: "선(면)", line: "선"};
@@ -75,6 +87,18 @@ try {
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
     var DEFAULTS = {cloudK: cloudK, shadow1K: shadow1K, shadow2K: shadow2K};
     applySavedSettings();
+
+    // 선택이 없으면 기억한 틀 크기의 사각형을 대지 가운데에 둔 것으로 본다
+    if (box === null) {
+        var frame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+        var frameW = Math.max(1, frame.w) * MM_TO_PT;
+        var frameH = Math.max(1, frame.h) * MM_TO_PT;
+        var artboardRect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        var frameCenterX = (artboardRect[0] + artboardRect[2]) / 2;
+        var frameCenterY = (artboardRect[1] + artboardRect[3]) / 2;
+        box = {left: frameCenterX - frameW / 2, top: frameCenterY + frameH / 2,
+            right: frameCenterX + frameW / 2, bottom: frameCenterY - frameH / 2};
+    }
 
     // -------------------------------------------------------
     // 다이얼로그
@@ -154,8 +178,10 @@ try {
     };
     cancelButton.onClick = function() { dlg.close(0); };
 
-    source.hidden = true;
-    source.selected = false;
+    if (source !== null) {
+        source.hidden = true;
+        source.selected = false;
+    }
     updatePreview();
 
     if (typeof bindTabOrder === "function") bindTabOrder(dlg);
@@ -163,19 +189,38 @@ try {
     clearPreview();
 
     if (result === 1) {
-        source.hidden = false;
+        if (source !== null) source.hidden = false;
         setPointType = true;
         var finalGroup = createCloud();
         finalGroup.name = "Cloud " + library[cloudIndex].name;
-        try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
-        source.remove();
+        if (source !== null) {
+            try { finalGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
+            source.remove();
+        }
+        if (frameFromSelection) saveFrame((box.right - box.left) / MM_TO_PT, (box.top - box.bottom) / MM_TO_PT);
         doc.selection = null;
         finalGroup.selected = true;
-    } else {
+    } else if (source !== null) {
         source.hidden = sourceWasHidden;
         source.selected = true;
     }
     app.redraw();
+
+    // 선택한 사각형의 크기는 설정 문자열과 따로 기억한다(설정 형식을 건드리지 않는다)
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
+    }
 
     // -------------------------------------------------------
     // 선택
@@ -257,7 +302,9 @@ try {
         }
         previewGroup = createCloud();
         previewGroup.name = PREVIEW_NAME;
-        try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
+        if (source !== null) {
+            try { previewGroup.move(source, ElementPlacement.PLACEBEFORE); } catch (e) {}
+        }
         app.redraw();
     }
 
@@ -310,7 +357,7 @@ try {
     function createCloud() {
         var cloud = library[cloudIndex];
         var fit = fitTransform(box, cloud.aspect, fitToRect);
-        var group = source.layer.groupItems.add();
+        var group = (source !== null ? source.layer : doc.activeLayer).groupItems.add();
         var outlineWidth = mergedOutlineWidth(cloud);
         var cloudItem = null;
         for (var i = 0; i < cloud.items.length; i++) {

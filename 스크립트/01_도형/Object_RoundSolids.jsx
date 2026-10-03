@@ -10,7 +10,8 @@ try {
 } catch (e) {}
 
 // 원 입체: 선택한 원을 기준으로 원기둥·원뿔·구를 만드는 세 스크립트를 한 창의 탭으로 묶었다.
-// 세 탭 모두 가로·세로가 같은 원 패스 하나를 선택해야 한다. 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
+// 세 탭 모두 가로·세로가 같은 원 패스 하나를 선택하거나 선택을 비워 둔다. 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
+// 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다.
 (function() {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
 
@@ -24,6 +25,69 @@ try {
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
     var engines = [makeCylinderEngine(), makeConeEngine(), makeSphereEngine()];
+
+    // 틀(원 지름) 기억. 세 탭이 같은 원을 쓰므로 키 하나를 같이 쓴다. 값: "v1|너비mm|높이mm" (원은 지름을 둘 다에)
+    var FRAME_KEY = "RoundSolids/frame";
+    var DEFAULT_FRAME_MM = {w: 50, h: 50};
+    var FRAME_PT_PER_MM = 2.834645669;
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
+    }
+
+    // 선택이 비어 있으면 기억한 틀(없으면 기본 크기)의 원을 활성 대지 가운데에 만들어 선택한다.
+    // 세 탭은 이 원을 선택한 원처럼 쓰고, 확인하면 원본으로 지워지고 취소하면 아래에서 지운다.
+    // 선택이 있으면 확인 때 저장할 지름(mm)만 읽어 둔다. 원이 아니면 null이라 저장하지 않는다.
+    var frameCircle = null;
+    var selectedFrameMm = null;
+    if (selectedItems.length === 0) {
+        try {
+            var frame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+            var frameDiameter = frame.w * FRAME_PT_PER_MM;
+            var artboardRect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+            var frameCenterX = (artboardRect[0] + artboardRect[2]) / 2;
+            var frameCenterY = (artboardRect[1] + artboardRect[3]) / 2;
+            frameCircle = doc.pathItems.ellipse(frameCenterY + frameDiameter / 2, frameCenterX - frameDiameter / 2, frameDiameter, frameDiameter);
+            frameCircle.filled = false;
+            frameCircle.stroked = true;
+            frameCircle.strokeWidth = 0.3;
+            if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                var frameCmyk = new CMYKColor();
+                frameCmyk.cyan = 0; frameCmyk.magenta = 0; frameCmyk.yellow = 0; frameCmyk.black = 100;
+                frameCircle.strokeColor = frameCmyk;
+            } else {
+                var frameGray = new GrayColor();
+                frameGray.gray = 100;
+                frameCircle.strokeColor = frameGray;
+            }
+            doc.selection = null;
+            frameCircle.selected = true;
+        } catch (frameError) {
+            if (frameCircle !== null) { try { frameCircle.remove(); } catch (removeError) {} }
+            alert("원을 만들 수 없습니다. 원 패스 하나를 선택하고 다시 실행해주세요.\n" + frameError);
+            return;
+        }
+    } else if (selectedItems.length === 1) {
+        try {
+            var picked = selectedItems[0];
+            var pickedBounds = picked.geometricBounds;
+            var pickedWidth = pickedBounds[2] - pickedBounds[0];
+            var pickedHeight = pickedBounds[1] - pickedBounds[3];
+            if (picked.typename === "PathItem" && picked.closed && pickedWidth > 0 &&
+                    Math.abs(pickedWidth - pickedHeight) <= Math.max(0.1, pickedWidth * 0.01)) {
+                selectedFrameMm = pickedWidth / FRAME_PT_PER_MM;
+            }
+        } catch (pickedError) {}
+    }
 
     var win = new Window("dialog", "원 입체 (원기둥·원뿔·구)");
     win.orientation = "column";
@@ -71,6 +135,7 @@ try {
         var problems = [];
         for (engineIndex = 0; engineIndex < engines.length; engineIndex++) problems.push("[" + engines[engineIndex].label + "] " + engines[engineIndex].error);
         alert("선택이 어느 탭에도 맞지 않습니다.\n\n" + problems.join("\n"));
+        if (frameCircle !== null) { try { frameCircle.remove(); } catch (removeError) {} }
         return;
     }
     var engine = engines[tabIndex];
@@ -97,6 +162,7 @@ try {
     okButton.onClick = function() {
         if (!engine.commit()) return;
         try { app.preferences.setStringPreference(TAB_PREF_KEY, String(tabIndex)); } catch (saveError) {}
+        if (selectedFrameMm !== null) saveFrame(selectedFrameMm, selectedFrameMm);
         win.close(1);
     };
     cancelButton.onClick = function() { win.close(0); };
@@ -105,7 +171,10 @@ try {
     win.onShow = function() { engine.setPreview(previewCheck.value); };
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     var result = win.show();
-    if (result !== 1) engine.clearPreview();
+    if (result !== 1) {
+        engine.clearPreview();
+        if (frameCircle !== null) { try { frameCircle.remove(); } catch (removeError) {} }
+    }
     try { app.redraw(); } catch (redrawError) {}
 
     // ==== 원기둥 ====

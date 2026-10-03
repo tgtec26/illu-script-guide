@@ -12,7 +12,7 @@ try {
 } catch (e) {}
 
 // 중학교 수학: 도형 표기·수직선·좌표평면·통계·작도·전개도·원의 성질·색칠한 부분·도형 문제·실생활 그래프·수형도를 한 창의 탭으로 묶었다.
-// 탭마다 필요한 선택이 다르다 (표기: 직선 패스, 작도: 선분·각·삼각형, 원: 원 패스, 나머지는 선택 없음).
+// 탭마다 필요한 선택이 다르다 (표기: 직선 패스, 작도: 선분·각·삼각형, 원: 원 패스 — 선택이 없으면 마지막에 쓴 지름(없으면 40mm)의 원을 대지 가운데에 새로 그린다, 나머지는 선택 없음).
 // 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적는다. 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
 // 선 두께는 평가원 수능 그림 측정값에 맞춘 과학 기준(축 0.4pt, 메인 0.8pt, 보조 0.3pt)이다.
 (function() {
@@ -4488,7 +4488,7 @@ try {
         __memo.close();
     } catch (e) {}
     
-    // 원의 성질: 선택한 원 위의 점 A·B·P·T를 각도(오른쪽 0°, 반시계)로 정하고
+    // 원의 성질: 선택한 원(선택이 없으면 마지막에 쓴 지름, 없으면 40mm의 원을 대지 가운데에 새로 그린다) 위의 점 A·B·P·T를 각도(오른쪽 0°, 반시계)로 정하고
     // 현 AB, 반지름 OA·OB, 원주각 ∠APB, 중심각·원주각 표시와 각도 값, 중심에서 현에 내린 수선 OM(직각 표시),
     // 부채꼴 AOB(A에서 반시계로 B까지), T에서의 접선(직각 표시), 원 밖의 점 Q에서 그은 두 접선 QC·QD,
     // 내접 사각형 ABCD(마주 보는 두 각), 접선과 현 TA가 이루는 각과 원주각 ∠TPA를 골라 그린다.
@@ -4521,16 +4521,29 @@ try {
 
             var doc = app.activeDocument;
 
+            // 선택이 비면 마지막에 쓴 지름(없으면 기본 지름)의 원을 대지 가운데에 새로 그린다. 원 패스는 미리보기를 처음 그릴 때 만든다
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var DEFAULT_FRAME_MM = {w: 40, h: 40};
             var target = null;
+            var generated = false;
+            var center, radius;
             var sel = doc.selection;
-            if (sel && sel.length === 1 && sel[0].typename === "PathItem" && sel[0].closed) target = sel[0];
-            var bounds = target ? target.geometricBounds : null;
-            if (target === null || Math.abs((bounds[2] - bounds[0]) - (bounds[1] - bounds[3])) > (bounds[2] - bounds[0]) * 0.01 ||
-                    !anchorsOnCircle(target, bounds)) {
-                return "가로·세로가 같은 원(패스) 하나를 선택해주세요.";
+            if (sel && sel.length > 0) {
+                if (sel.length === 1 && sel[0].typename === "PathItem" && sel[0].closed) target = sel[0];
+                var bounds = target ? target.geometricBounds : null;
+                if (target === null || Math.abs((bounds[2] - bounds[0]) - (bounds[1] - bounds[3])) > (bounds[2] - bounds[0]) * 0.01 ||
+                        !anchorsOnCircle(target, bounds)) {
+                    return "가로·세로가 같은 원(패스) 하나를 선택해주세요.";
+                }
+                center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
+                radius = (bounds[2] - bounds[0]) / 2;
+            } else {
+                generated = true;
+                var frame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+                var artboardRect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+                center = [(artboardRect[0] + artboardRect[2]) / 2, (artboardRect[1] + artboardRect[3]) / 2];
+                radius = frame.w * MM_TO_PT / 2;
             }
-            var center = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
-            var radius = (bounds[2] - bounds[0]) / 2;
 
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -4551,8 +4564,8 @@ try {
             applySettings();
 
             var previewGroup = null;
-            var originalStroked = target.stroked;
-            var originalStrokeWidth = target.strokeWidth;
+            var originalStroked = target ? target.stroked : true;
+            var originalStrokeWidth = target ? target.strokeWidth : SHAPE_STROKE_PT;
 
             // -------------------------------------------------------
             // 다이얼로그
@@ -4608,6 +4621,7 @@ try {
             api.commit = function() {
                 if (previewGroup === null) buildPreview();
                 saveSettings();
+                if (!generated) saveFrame(radius * 2 / MM_TO_PT);
                 doc.selection = null;
                 if (previewGroup !== null) previewGroup.selected = true;
                 return true;
@@ -4619,7 +4633,7 @@ try {
             };
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
-                clearPreview();
+                clearPreview(true);
                 app.redraw();
             };
             return null;
@@ -4650,23 +4664,56 @@ try {
             // 미리보기
             // -------------------------------------------------------
             function updatePreview() {
-                clearPreview();
+                clearPreview(!previewEnabled);
                 if (previewEnabled) buildPreview();
                 app.redraw();
             }
 
-            function clearPreview() {
-                try {
-                    target.stroked = originalStroked;
-                    target.strokeWidth = originalStrokeWidth;
-                } catch (restoreError) {}
+            // removeGenerated: 새로 그린 원도 지운다 (미리보기를 끄거나 취소·탭 이동)
+            function clearPreview(removeGenerated) {
+                if (target !== null && !generated) {
+                    try {
+                        target.stroked = originalStroked;
+                        target.strokeWidth = originalStrokeWidth;
+                    } catch (restoreError) {}
+                }
                 if (previewGroup !== null) {
                     try { previewGroup.remove(); } catch (e) {}
                 }
                 previewGroup = null;
+                if (removeGenerated && generated && target !== null) {
+                    try { target.remove(); } catch (e) {}
+                    target = null;
+                }
+            }
+
+            // 선택이 없을 때의 원: 면 없음, 검은 선 0.8pt (선택한 원에 맞춰 주는 모양과 같다)
+            function ensureTarget() {
+                if (target !== null) return;
+                target = doc.activeLayer.pathItems.ellipse(center[1] + radius, center[0] - radius, radius * 2, radius * 2);
+                target.filled = false;
+                target.stroked = true;
+                target.strokeColor = makeGray(100);
+                target.strokeWidth = SHAPE_STROKE_PT;
+            }
+
+            function loadFrame(fallbackW, fallbackH) {
+                try {
+                    var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+                    if (p.length === 3 && p[0] === "v1") {
+                        var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                        if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+                    }
+                } catch (e) {}
+                return {w: fallbackW, h: fallbackH};
+            }
+
+            function saveFrame(diameterMm) {
+                try { app.preferences.setStringPreference(FRAME_KEY, ["v1", diameterMm.toFixed(2), diameterMm.toFixed(2)].join("|")); } catch (e) {}
             }
 
             function buildPreview() {
+                ensureTarget();
                 if (normalizeStroke) {
                     target.stroked = true;
                     target.strokeWidth = SHAPE_STROKE_PT;

@@ -144,7 +144,8 @@ assert.ok(source.includes('if (rect === null) return "가로·세로 변이 축�
 assert.ok(wholeSource.includes("makeModelCurvesEngine(), makePieChartEngine(), makeSolarSpectrumEngine()]"), "engine registered last");
 assert.ok(!wholeSource.includes("standalone"), "no standalone tabs remain");
 assert.ok(wholeSource.includes("if (!engines[engineIndex].error) tabIndex = engineIndex;"), "host opens the first fitting tab");
-assert.ok(wholeSource.includes('alert("먼저 도형을 그려 선택한 뒤 실행해주세요.'), "no-selection guidance");
+assert.ok(!wholeSource.includes('alert("먼저 도형을 그려 선택한 뒤 실행해주세요.'), "empty selection no longer blocked");
+assert.ok(wholeSource.includes("var noSelection = selectedItems.length === 0;"), "empty selection detected");
 // 사각형: 있으면 그래프 영역이 되고 확인 때 지워진다. 크기 칸은 잠긴다
 assert.ok(source.includes("if (rect !== null) rect.remove();"));
 assert.ok(source.includes("widthField.row.enabled = false;"));

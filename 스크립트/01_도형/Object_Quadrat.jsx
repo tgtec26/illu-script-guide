@@ -9,23 +9,47 @@ try {
     __memo.close();
 } catch (e) {}
 
+// 정사각형을 선택하면 그 크기·자리에 방형구를 그린다. 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다.
 (function() {
     if (app.documents.length === 0) {
-        alert("문서를 열고 정사각형 하나를 선택해주세요.");
+        alert("문서를 열어주세요.");
         return;
     }
 
     var doc = app.activeDocument;
-    var guideSquare = getSelectedSquare(doc.selection);
-    if (guideSquare === null) {
-        alert("전체 방형구 크기로 사용할 정사각형 패스 하나를 선택해주세요.");
-        return;
-    }
-    var guideBounds = guideSquare.geometricBounds;
-    var guideWasHidden = guideSquare.hidden;
-
     var PREF_KEY = "ObjectQuadrat/settings";
+    var FRAME_KEY = PREF_KEY + "/frame";
+    var DEFAULT_FRAME_MM = {w: 80, h: 80};
     var MM = 2.834645669;
+
+    // 선택이 비어 있으면 틀 없이 기억한 크기로, 선택이 있는데 정사각형이 아니면 알리고 끝낸다
+    var guideSquare = null;
+    var guideBounds;
+    var guideWasHidden = false;
+    var guideFromSelection = false;
+    var guideSideMM = 0;
+    var currentSelection = doc.selection;
+    var selectionIsEmpty = !currentSelection ||
+        (currentSelection.typename !== "TextRange" && currentSelection.length === 0);
+    if (selectionIsEmpty) {
+        var frame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+        var artboardRect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        var centerX = (artboardRect[0] + artboardRect[2]) / 2;
+        var centerY = (artboardRect[1] + artboardRect[3]) / 2;
+        var half = frame.w * MM / 2;
+        guideBounds = [centerX - half, centerY + half, centerX + half, centerY - half];
+        guideSideMM = frame.w;
+    } else {
+        guideSquare = getSelectedSquare(currentSelection);
+        if (guideSquare === null) {
+            alert("전체 방형구 크기로 사용할 정사각형 패스 하나를 선택해주세요.");
+            return;
+        }
+        guideBounds = guideSquare.geometricBounds;
+        guideWasHidden = guideSquare.hidden;
+        guideFromSelection = true;
+        guideSideMM = (guideBounds[2] - guideBounds[0]) / MM;
+    }
     var LINE_WIDTH_PT = 0.6;
     var TEXT_SIZE_PT = 8;
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
@@ -167,6 +191,7 @@ try {
         requestedFrequency = state.frequency;
         previewEnabled = previewCheck.value;
         saveSettings();
+        if (guideFromSelection) saveFrame(guideSideMM, guideSideMM);
         dlg.close(1);
     };
     cancelButton.onClick = function() { dlg.close(0); };
@@ -184,7 +209,7 @@ try {
     try {
         finalGroup = drawQuadrat(solution, gridSize, cellMeters, guideBounds);
         moveItem(finalGroup, offsetXmm * MM, offsetYmm * MM);
-        guideSquare.remove();
+        if (guideSquare !== null) guideSquare.remove();
     } catch (drawError) {
         try { if (drawingGroup !== null) drawingGroup.remove(); } catch (cleanupError) {}
         restoreGuide();
@@ -218,8 +243,10 @@ try {
         }
 
         clearPreview();
-        guideSquare.selected = false;
-        guideSquare.hidden = true;
+        if (guideSquare !== null) {
+            guideSquare.selected = false;
+            guideSquare.hidden = true;
+        }
         try {
             previewGroup = drawQuadrat(
                 solution, state.gridSize, state.cellMeters, guideBounds);
@@ -332,6 +359,7 @@ try {
     }
 
     function restoreGuide() {
+        if (guideSquare === null) return;
         try {
             guideSquare.hidden = guideWasHidden;
             guideSquare.selected = true;
@@ -549,10 +577,12 @@ try {
     }
 
     function drawQuadrat(data, size, meters, bounds) {
-        var group = guideSquare.layer.groupItems.add();
+        var group = (guideSquare !== null ? guideSquare.layer : doc.activeLayer).groupItems.add();
         drawingGroup = group;
         group.name = "Quadrat_" + size + "x" + size + "_" + meters + "m";
-        try { group.move(guideSquare, ElementPlacement.PLACEBEFORE); } catch (moveError) {}
+        if (guideSquare !== null) {
+            try { group.move(guideSquare, ElementPlacement.PLACEBEFORE); } catch (moveError) {}
+        }
 
         var gridWidth = bounds[2] - bounds[0];
         var gap = gridWidth * 0.015;
@@ -931,6 +961,22 @@ try {
             offsetXmm, offsetYmm
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    // 선택한 정사각형의 변(mm)을 기억해 두었다가 선택이 없을 때 쓴다. 값: "v1|너비mm|높이mm"
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
     }
 
     function loadSettings() {

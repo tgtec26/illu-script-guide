@@ -10,23 +10,45 @@ try {
 } catch (e) {}
 
 // 검류계·전류계·전압계의 눈금만 만든다. 선택한 사각형은 배치 기준이며 확인할 때 눈금으로 바뀐다.
+// 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다.
 (function() {
     var MM_TO_PT = 2.834645669;
     var PREF_KEY = "Object_MeterScale/settings";
+    var FRAME_KEY = PREF_KEY + "/frame";
+    var DEFAULT_FRAME_MM = {w: 60, h: 35};
     var NAMES = ["검류계", "전류계", "전압계"];
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
     var doc = app.activeDocument;
-    if (doc.selection.length !== 1 || !isRectangle(doc.selection[0])) {
-        alert("가로·세로 방향의 사각형 패스 하나를 선택해주세요."); return;
+    var selected = doc.selection;
+    var source = null;
+    var originalHidden = false;
+    var centerX = 0;
+    var centerY = 0;
+    var frameWidth = 0;
+    var frameHeight = 0;
+    if (selected && selected.length > 0) {
+        if (selected.length !== 1 || !isRectangle(selected[0])) {
+            alert("가로·세로 방향의 사각형 패스 하나를 선택해주세요."); return;
+        }
+        source = selected[0];
+        var bounds = source.geometricBounds;
+        centerX = (bounds[0] + bounds[2]) / 2;
+        centerY = (bounds[1] + bounds[3]) / 2;
+        originalHidden = source.hidden;
+        frameWidth = clamp((bounds[2] - bounds[0]) / MM_TO_PT, 5, 500);
+        frameHeight = clamp((bounds[1] - bounds[3]) / MM_TO_PT, 3, 300);
+    } else {
+        // 선택이 없으면 기억한 틀 크기로 대지 가운데에 그린다
+        var frame = loadFrame(DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+        var artboardRect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        centerX = (artboardRect[0] + artboardRect[2]) / 2;
+        centerY = (artboardRect[1] + artboardRect[3]) / 2;
+        frameWidth = clamp(frame.w, 5, 500);
+        frameHeight = clamp(frame.h, 3, 300);
     }
-    var source = doc.selection[0];
-    var bounds = source.geometricBounds;
-    var centerX = (bounds[0] + bounds[2]) / 2;
-    var centerY = (bounds[1] + bounds[3]) / 2;
-    var originalHidden = source.hidden;
     var settings = {
-        kind: 0, width: clamp((bounds[2] - bounds[0]) / MM_TO_PT, 5, 500),
-        height: clamp((bounds[1] - bounds[3]) / MM_TO_PT, 3, 300),
+        kind: 0, width: frameWidth,
+        height: frameHeight,
         curvature: 65, maximum: 30, divisions: 6, subdivisions: 10,
         tickLength: 2, stroke: 0.3, numbers: true, fontSize: 8, numberGap: 0.5, tiltNumbers: true,
         x: 0, y: 0, preview: true
@@ -104,21 +126,24 @@ try {
     previewCheck.onClick = function() { settings.preview = previewCheck.value; updatePreview(); };
     ok.onClick = function() {
         if (!previewGroup && !buildPreview()) return;
-        try { source.remove(); } catch (removeError) { alert("원본 사각형을 제거할 수 없습니다."); return; }
+        if (source) {
+            try { source.remove(); } catch (removeError) { alert("원본 사각형을 제거할 수 없습니다."); return; }
+        }
         committed = true;
         saveSettings();
+        if (source) saveFrame(frameWidth, frameHeight);
         doc.selection = null; previewGroup.selected = true;
         win.close(1);
     };
     win.onClose = function() {
-        if (!committed) { clearPreview(); source.hidden = originalHidden; app.redraw(); }
+        if (!committed) { clearPreview(); if (source) source.hidden = originalHidden; app.redraw(); }
     };
     syncTextControls();
     win.layout.layout(true);
     updatePreview();
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     try { win.show(); }
-    finally { if (!committed) { clearPreview(); source.hidden = originalHidden; } }
+    finally { if (!committed) { clearPreview(); if (source) source.hidden = originalHidden; } }
 
     function panel(title) {
         var p = win.add("panel", undefined, title);
@@ -166,7 +191,7 @@ try {
     }
     function updatePreview() {
         clearPreview();
-        source.hidden = originalHidden;
+        if (source) source.hidden = originalHidden;
         if (settings.preview) buildPreview();
         app.redraw();
     }
@@ -177,8 +202,8 @@ try {
     function buildPreview() {
         var group = null;
         try {
-            group = source.layer.groupItems.add();
-            group.move(source, ElementPlacement.PLACEBEFORE);
+            group = (source ? source.layer : doc.activeLayer).groupItems.add();
+            if (source) group.move(source, ElementPlacement.PLACEBEFORE);
             group.name = "MeterScale_" + NAMES[settings.kind];
             var geometry = buildScaleGeometry(settings);
             drawCurve(group, geometry.arc);
@@ -186,11 +211,11 @@ try {
             for (var j = 0; j < geometry.labels.length; j++) drawNumber(group, geometry.labels[j]);
             group.translate(centerX + settings.x * MM_TO_PT, centerY - settings.y * MM_TO_PT);
             previewGroup = group;
-            source.hidden = true;
+            if (source) source.hidden = true;
             return true;
         } catch (error) {
             if (group) { try { group.remove(); } catch (cleanupError) {} }
-            source.hidden = originalHidden;
+            if (source) source.hidden = originalHidden;
             alert("눈금을 만들지 못했습니다.\n" + error);
             return false;
         }
@@ -324,6 +349,20 @@ try {
             if ((dx > dy) === (Math.abs(b[0] - c[0]) > Math.abs(b[1] - c[1]))) return false;
         }
         return true;
+    }
+    // 선택한 사각형의 크기는 설정 문자열과 따로 기억한다(설정 형식을 건드리지 않는다)
+    function loadFrame(fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(FRAME_KEY).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+    function saveFrame(w, h) {
+        try { app.preferences.setStringPreference(FRAME_KEY, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
     }
     function loadSettings() {
         try {

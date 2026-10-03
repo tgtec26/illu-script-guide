@@ -11,6 +11,7 @@ try {
 
 // 전기: 회로 기호 삽입·코일 감긴 도선·에너지 흐름 화살표를 한 창의 탭으로 묶었다.
 // 탭마다 필요한 선택이 다르다 (회로 기호: 앵커 2개 직선, 코일 도선: 사각형, 에너지 흐름: 앵커 4개 사각형).
+// 코일 도선·에너지 흐름은 선택이 없으면 마지막에 쓴 크기(없으면 기본 크기)로 대지 가운데에 그린다.
 // 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적는다. 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
 (function() {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
@@ -108,6 +109,35 @@ try {
     var result = win.show();
     if (result !== 1) engine.clearPreview();
     try { app.redraw(); } catch (redrawError) {}
+
+    // ==== 틀(사각형) 도우미: 선택이 없으면 지난번 틀 크기로 대지 가운데에 그린다 ====
+    function isEmptySelection(selection) {
+        return !selection || (selection.typename !== "TextRange" && selection.length === 0);
+    }
+
+    // 값: "v1|너비mm|높이mm". 항상 {w, h}를 돌려준다
+    function loadFrame(key, fallbackW, fallbackH) {
+        try {
+            var p = app.preferences.getStringPreference(key).split("|");
+            if (p.length === 3 && p[0] === "v1") {
+                var w = parseFloat(p[1]), h = parseFloat(p[2]);
+                if (w > 0.1 && h > 0.1 && w <= 2000 && h <= 2000) return {w: w, h: h};
+            }
+        } catch (e) {}
+        return {w: fallbackW, h: fallbackH};
+    }
+
+    function saveFrame(key, w, h) {
+        try { app.preferences.setStringPreference(key, ["v1", w.toFixed(2), h.toFixed(2)].join("|")); } catch (e) {}
+    }
+
+    // 활성 대지 가운데에 가로 widthPt, 세로 heightPt인 사각형의 [left, top, right, bottom]
+    function centeredBounds(doc, widthPt, heightPt) {
+        var board = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+        var cx = (board[0] + board[2]) / 2;
+        var cy = (board[1] + board[3]) / 2;
+        return [cx - widthPt / 2, cy + heightPt / 2, cx + widthPt / 2, cy - heightPt / 2];
+    }
 
     // ==== 회로 기호 ====
     function makeCircuitSymbolEngine() {
@@ -652,12 +682,22 @@ try {
             var MM = 2.834645669;
             var KAPPA = 0.5522847;
 
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var DEFAULT_FRAME_MM = {w: 60, h: 6};   // 선택이 없고 기억한 틀도 없을 때의 도선 길이·굵기
+
             var doc = app.activeDocument;
             var sel = doc.selection;
-            if (!sel || sel.length !== 1 || sel[0].typename !== "PathItem") return "도선이 될 사각형 하나를 선택해주세요. 사각형의 가로가 도선 길이, 세로가 도선 굵기가 됩니다.";
-
-            var rect = sel[0];
-            var bounds = rect.geometricBounds; // [left, top, right, bottom]
+            // 사각형을 선택하면 그 크기·가운데를 쓴다. 선택이 없으면 지난번 틀 크기로 대지 가운데에 만든다
+            var rect = null;
+            var bounds; // [left, top, right, bottom]
+            if (isEmptySelection(sel)) {
+                var frame = loadFrame(FRAME_KEY, DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+                bounds = centeredBounds(doc, frame.w * MM, frame.h * MM);
+            } else {
+                if (sel.length !== 1 || sel[0].typename !== "PathItem") return "도선이 될 사각형 하나를 선택하거나 선택을 비워주세요. 사각형의 가로가 도선 길이, 세로가 도선 굵기가 됩니다.";
+                rect = sel[0];
+                bounds = rect.geometricBounds;
+            }
             var leftX = bounds[0];
             var rightX = bounds[2];
             var centerY = (bounds[1] + bounds[3]) / 2;
@@ -675,7 +715,7 @@ try {
             var offsetYmm = 0;
             var previewEnabled = true;
             var previewGroup = null;
-            var rectWasHidden = rect.hidden;
+            var rectWasHidden = rect !== null ? rect.hidden : false;
 
             // 그라데이션은 문서당 한 번만 만들어 재사용한다(미리보기 반복 시 스와치 폭증 방지).
             var _rodGradient = null;
@@ -714,15 +754,19 @@ try {
             // 탭 호스트가 부르는 훅. 이 탭이 켜져 있는 동안만 원본 사각형을 숨긴다
             api.setPreview = function(on) {
                 previewEnabled = on;
-                rect.hidden = true;
-                rect.selected = false;
+                if (rect !== null) {
+                    rect.hidden = true;
+                    rect.selected = false;
+                }
                 updatePreview();
             };
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
                 clearPreview();
-                rect.hidden = rectWasHidden;
-                rect.selected = true;
+                if (rect !== null) {
+                    rect.hidden = rectWasHidden;
+                    rect.selected = true;
+                }
             };
             api.commit = function() {
                 if (!readFields(true)) return false;
@@ -731,8 +775,11 @@ try {
                 var finalGroup = drawSolenoid();
                 moveItem(finalGroup, offsetXmm * MM, offsetYmm * MM);
                 finalGroup.name = "Solenoid";
-                try { finalGroup.move(rect, ElementPlacement.PLACEBEFORE); } catch (e) {}
-                rect.remove();
+                if (rect !== null) {
+                    try { finalGroup.move(rect, ElementPlacement.PLACEBEFORE); } catch (e) {}
+                    rect.remove();
+                    saveFrame(FRAME_KEY, rodLength / MM, rodRadius * 2 / MM);
+                }
                 saveSettings();
                 doc.selection = null;
                 finalGroup.selected = true;
@@ -1162,18 +1209,20 @@ try {
             if (doc.activeLayer.locked || !doc.activeLayer.visible) return "현재 레이어가 잠겨 있거나 숨겨져 있습니다. 편집할 수 있는 레이어를 선택한 뒤 실행해주세요.";
 
             var sel = doc.selection;
-            if (!sel || sel.length !== 1 || sel[0].typename !== "PathItem" || sel[0].pathPoints.length !== 4) return "상자가 될 사각형 하나를 선택해주세요. 사각형 폭이 화살표 전체 폭이 됩니다.";
-            var sourceRect = sel[0];
-            var rectBounds = sourceRect.geometricBounds;   // [left, top, right, bottom]
-            // 상자 크기는 선택한 사각형에서 가져오고, 윗변 가운데를 고정한 채 다이얼로그에서 바꾼다 (저장하지 않음)
-            var boxTopCenterX = (rectBounds[0] + rectBounds[2]) / 2;
-            var boxTopY = rectBounds[1];
+            // 사각형을 선택하면 그 크기·위치를 쓴다. 선택이 없으면 지난번 틀 크기로 대지 가운데에 만든다
+            var sourceRect = null;
+            if (!isEmptySelection(sel)) {
+                if (sel.length !== 1 || sel[0].typename !== "PathItem" || sel[0].pathPoints.length !== 4) return "상자가 될 사각형 하나를 선택하거나 선택을 비워주세요. 사각형 폭이 화살표 전체 폭이 됩니다.";
+                sourceRect = sel[0];
+            }
 
             var MM_TO_PT = 2.834645669;
             var LINE_WIDTH_PT = 0.3;
             var MAX_ARROWS = 4;
             var POSITION_LIMIT_MM = 100;
             var PREF_KEY = "ObjectEnergyFlow/settings";
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var DEFAULT_FRAME_MM = {w: 60, h: 14};   // 선택이 없고 기억한 틀도 없을 때의 상자 크기
             var PREVIEW_NAME = "Energy Flow Preview";
             var ARROW_KEYS = ["angleDeg", "bendMm", "lengthMm", "radiusMm", "gray"];
             var MIN_SECTOR_PERCENT = 1;
@@ -1185,6 +1234,18 @@ try {
             var korFont = getFont(KOR_FONT_NAME);
             var engFont = getFont(ENG_FONT_NAME);
             var italicFont = getFont(ITALIC_FONT_NAME);
+
+            var rectBounds;   // [left, top, right, bottom]
+            if (sourceRect !== null) {
+                rectBounds = sourceRect.geometricBounds;
+            } else {
+                var frame = loadFrame(FRAME_KEY, DEFAULT_FRAME_MM.w, DEFAULT_FRAME_MM.h);
+                rectBounds = centeredBounds(doc, clamp(roundTo(frame.w, 0.5), 5, 200) * MM_TO_PT,
+                    clamp(roundTo(frame.h, 0.5), 2, 200) * MM_TO_PT);
+            }
+            // 상자 크기는 사각형(또는 기억한 틀)에서 가져오고, 윗변 가운데를 고정한 채 다이얼로그에서 바꾼다 (상자 크기 자체는 옵션에 저장하지 않음)
+            var boxTopCenterX = (rectBounds[0] + rectBounds[2]) / 2;
+            var boxTopY = rectBounds[1];
 
             // ---- 옵션 ----
             var boxName = "연료 에너지";
@@ -1363,14 +1424,18 @@ try {
             api.setPreview = function(on) {
                 previewEnabled = on;
                 doc.selection = null;
-                try { sourceRect.hidden = true; } catch (hideError) {}
+                if (sourceRect !== null) {
+                    try { sourceRect.hidden = true; } catch (hideError) {}
+                }
                 updatePreview();
             };
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
                 clearPreview();
-                try { sourceRect.hidden = false; } catch (unhideError) {}
-                try { sourceRect.selected = true; } catch (reselectError) {}
+                if (sourceRect !== null) {
+                    try { sourceRect.hidden = false; } catch (unhideError) {}
+                    try { sourceRect.selected = true; } catch (reselectError) {}
+                }
             };
             api.commit = function() {
                 saveSettings();
@@ -1379,7 +1444,10 @@ try {
                     alert("도형을 만들지 못했습니다. 다시 실행해주세요.");
                     return false;
                 }
-                try { sourceRect.remove(); } catch (removeError) {}
+                if (sourceRect !== null) {
+                    try { sourceRect.remove(); } catch (removeError) {}
+                    saveFrame(FRAME_KEY, defaults.boxWidthMm, defaults.boxHeightMm);
+                }
                 finalGroup.name = "Energy Flow";
                 doc.selection = null;
                 try { finalGroup.selected = true; } catch (selectError) {}
