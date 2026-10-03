@@ -14,6 +14,8 @@ try {
 // 화학 반응 탭: 반응물 + 반응물 → 생성물을 분자 모형으로 늘어놓고 +·화살표로 잇고 이름을 단다 (이온 반응 포함).
 // 기체 반응 탭: 분자를 정육면체 안에 담는다. 계수만큼 칸을 이어 붙이고(모서리는 경사 연결), 표 선·값은 그리지 않는다.
 // 두 탭 모두 컬러 / 회색 음영으로 바꿀 수 있다.
+// 공간 채움 모형: 구 반지름 = 반데르발스 반지름(Bondi: H 1.20, C 1.70, N 1.55, O 1.52, Cl 1.75 Å), 구 중심 간격 = 실제 결합 길이·각도(NIST CCCBDB)라
+// 결합한 원자의 구는 서로 많이 겹친다. 이온 결합은 이온 반지름(Shannon: Na+ 1.02, Cl- 1.81, Ag+ 1.15 Å)으로 맞닿게 그린다.
 // 반응식은 "2H2+O2=2H2O"처럼 적는다. 화살표는 =, >, ->, → 모두 되고, ;로 이으면 반응 여러 개(기체 반응 탭은 세로로 쌓음).
 // 쓸 수 있는 물질: H2 O2 N2 Cl2 H2O H2O2 NH3 HCl CH4 CO2 CO NO NO2 C NaCl AgCl AgNO3 NaNO3
 
@@ -30,16 +32,18 @@ try {
     var gradientCache = {};
 
     // ==== 표 ====
+    // 공간 채움 모형의 구 지름 = 반데르발스 반지름(Bondi 1964)의 두 배. 이온 결합은 이온 반지름(Shannon). 산소 지름(2 × 1.52 Å = 3.04 Å)을 1로 둔다
+    var ANGSTROM = 3.04;
     // 원자: d = 지름(산소 = 1), pal = 색 이름, text·sup = 원자에 쓰는 기호와 전하
     var ELEMENTS = {
-        H: {d: 0.64, pal: "H", text: "H"},
-        C: {d: 1.12, pal: "C", text: "C"},
-        N: {d: 1, pal: "N", text: "N"},
-        O: {d: 1, pal: "O", text: "O"},
-        Cl: {d: 1.3, pal: "Cl", text: "Cl"},
-        "Na+": {d: 0.7, pal: "Na", text: "Na", sup: "+"},
-        "Cl-": {d: 1.3, pal: "Cl", text: "Cl", sup: MINUS},
-        "Ag+": {d: 1.25, pal: "Ag", text: "Ag", sup: "+"}
+        H: {d: dia(1.2), pal: "H", text: "H"},
+        C: {d: dia(1.7), pal: "C", text: "C"},
+        N: {d: dia(1.55), pal: "N", text: "N"},
+        O: {d: dia(1.52), pal: "O", text: "O"},
+        Cl: {d: dia(1.75), pal: "Cl", text: "Cl"},
+        "Na+": {d: dia(1.02), pal: "Na", text: "Na", sup: "+"},
+        "Cl-": {d: dia(1.81), pal: "Cl", text: "Cl", sup: MINUS},
+        "Ag+": {d: dia(1.15), pal: "Ag", text: "Ag", sup: "+"}
     };
     // 구 색: [하이라이트, 본색, 가장자리] (RGB)
     var SPHERE_COLORS = {
@@ -61,28 +65,31 @@ try {
         O: [22, 70, 90],
         C: [55, 90, 100]
     };
-    // 분자 모형: 원자는 [종류, x, y] (산소 지름 = 1, y는 위쪽이 +). 앞에 적은 원자가 뒤에 그려진다
-    var NITRATE = [["O", 0.5, 0.9], ["O", 0.5, -0.9], ["O", 1.4, 0], ["N", 0.5, 0]];
-    var BRACKET = {x0: -0.12, x1: 2.02, y0: -1.52, y1: 1.52};
+    // 분자 모형: 원자는 [종류, x, y, z] (Å, 위쪽 +y, 보는 쪽 +z). 중심 간격이 실제 결합 길이·각도(NIST CCCBDB)이고
+    // 보기 좋은 방향으로 돌려 놓았다. 앞(z가 큰) 원자가 뒤 원자를 가리도록 뒤에서 앞으로 그리며, z가 같으면 적은 순서.
+    // 5번째 값이 있으면 기호를 원점에서 바깥쪽으로 그만큼(Å) 옮겨 쓴다 (다른 원자에 덮인 원자의 기호가 보이도록)
+    var NITRATE = [["O", 0, 1.24, 0, 0.9], ["O", -1.074, -0.62, 0, 0.9], ["O", 1.074, -0.62, 0, 0.9], ["N", 0, 0, 0]];
+    var BRACKET = {x0: -2.9, x1: 2.9, y0: -2.45, y1: 3.05};
     var MOLECULES = {
-        H2: {name: "수소", atoms: [["H", -0.27, 0], ["H", 0.27, 0]]},
-        O2: {name: "산소", atoms: [["O", -0.4, 0], ["O", 0.4, 0]]},
-        N2: {name: "질소", atoms: [["N", -0.4, 0], ["N", 0.4, 0]]},
-        Cl2: {name: "염소", atoms: [["Cl", -0.5, 0], ["Cl", 0.5, 0]]},
-        H2O: {name: "물", atoms: [["H", -0.55, -0.42], ["H", 0.55, -0.42], ["O", 0, 0.1]]},
-        H2O2: {name: "과산화 수소", atoms: [["H", -0.9, -0.38], ["H", 0.9, 0.38], ["O", -0.4, 0], ["O", 0.4, 0]]},
-        NH3: {name: "암모니아", atoms: [["H", -0.56, -0.1], ["H", 0.56, -0.1], ["N", 0, 0.12], ["H", 0, -0.5]]},
-        HCl: {name: "염화 수소", atoms: [["H", -0.78, 0], ["Cl", 0, 0]]},
-        CH4: {name: "메테인", atoms: [["H", 0, 0.72], ["H", -0.72, -0.12], ["H", 0.72, -0.12], ["C", 0, 0.02], ["H", 0, -0.64]]},
-        CO2: {name: "이산화 탄소", atoms: [["O", -0.92, 0], ["O", 0.92, 0], ["C", 0, 0]]},
-        CO: {name: "일산화 탄소", atoms: [["C", -0.42, 0], ["O", 0.42, 0]]},
-        NO: {name: "일산화 질소", atoms: [["N", -0.4, 0], ["O", 0.4, 0]]},
-        NO2: {name: "이산화 질소", atoms: [["O", 0.6, 0.27], ["N", 0, 0], ["O", -0.38, -0.58]]},
-        C: {name: "탄소", atoms: [["C", 0, 0]]},
-        NaCl: {name: "염화 나트륨", ionic: true, atoms: [["Cl-", 0.455, 0], ["Na+", -0.455, 0]]},
-        AgCl: {name: "염화 은", ionic: true, atoms: [["Cl-", 0.6, 0], ["Ag+", -0.6, 0]]},
-        AgNO3: {name: "질산 은", ionic: true, bracket: BRACKET, atoms: NITRATE.concat([["Ag+", -0.85, 0]])},
-        NaNO3: {name: "질산 나트륨", ionic: true, bracket: BRACKET, atoms: NITRATE.concat([["Na+", -0.55, 0]])}
+        H2: {name: "수소", atoms: [["H", -0.371, 0, 0], ["H", 0.371, 0, 0]]},
+        O2: {name: "산소", atoms: [["O", -0.604, 0, 0], ["O", 0.604, 0, 0]]},
+        N2: {name: "질소", atoms: [["N", -0.549, 0, 0], ["N", 0.549, 0, 0]]},
+        Cl2: {name: "염소", atoms: [["Cl", -0.994, 0, 0], ["Cl", 0.994, 0, 0]]},
+        H2O: {name: "물", atoms: [["H", -0.757, -0.567, -0.152], ["H", 0.757, -0.567, -0.152], ["O", 0, 0, 0]]},
+        H2O2: {name: "과산화 수소", atoms: [["H", -0.818, -0.789, -0.553], ["H", 0.818, 0.804, -0.532], ["O", -0.738, 0, 0], ["O", 0.738, 0, 0]]},
+        NH3: {name: "암모니아", atoms: [["H", -0.812, 0.198, -0.425], ["H", 0.812, 0.198, -0.425], ["N", 0, 0.345, 0.161], ["H", 0, -0.396, 0.85]]},
+        HCl: {name: "염화 수소", atoms: [["H", -1.198, 0, 0.436], ["Cl", 0, 0, 0]]},
+        CH4: {name: "메테인", atoms: [["H", -0.920, -0.570, -0.104], ["H", 0.828, -0.570, -0.413], ["C", 0.000, 0.000, 0.000], ["H", -0.094, 0.941, -0.535], ["H", 0.186, 0.199, 1.052]]},
+        CO2: {name: "이산화 탄소", atoms: [["O", -1.162, 0, 0], ["O", 1.162, 0, 0], ["C", 0, 0, 0]]},
+        CO: {name: "일산화 탄소", atoms: [["C", -0.564, 0, 0], ["O", 0.564, 0, 0]]},
+        NO: {name: "일산화 질소", atoms: [["N", -0.576, 0, 0], ["O", 0.576, 0, 0]]},
+        NO2: {name: "이산화 질소", atoms: [["O", -0.964, -0.387, 0.588], ["O", 0.23, 0.959, -0.673], ["N", 0, 0, 0]]},
+        C: {name: "탄소", atoms: [["C", 0, 0, 0]]},
+        // 이온 결합: 양이온·음이온 구가 맞닿는다(중심 간격 = 이온 반지름의 합)
+        NaCl: {name: "염화 나트륨", ionic: true, atoms: [["Cl-", 0, 0, 0], ["Na+", -2.83, 0, 0]]},
+        AgCl: {name: "염화 은", ionic: true, atoms: [["Cl-", 0, 0, 0], ["Ag+", -2.96, 0, 0]]},
+        AgNO3: {name: "질산 은", ionic: true, bracket: BRACKET, atoms: NITRATE.concat([["Ag+", -4.39, 0, 0]])},
+        NaNO3: {name: "질산 나트륨", ionic: true, bracket: BRACKET, atoms: NITRATE.concat([["Na+", -4.26, 0, 0]])}
     };
     // 반응 목록: eq는 입력창에 들어가는 반응식, 마지막은 직접 입력
     var REACT_PRESETS = [
@@ -234,7 +241,7 @@ try {
                 {key: "cell", label: "칸 크기", unit: "mm", min: 8, max: 30, step: 0.5, value: 16},
                 {key: "depth", label: "깊이", unit: "mm", min: 2, max: 15, step: 0.5, value: 5},
                 {key: "angle", label: "깊이 각도", unit: "°", min: 10, max: 80, step: 5, value: 45},
-                {key: "size", label: "원자 크기", unit: "mm", min: 2, max: 10, step: 0.1, value: 6.2},
+                {key: "size", label: "원자 크기", unit: "mm", min: 2, max: 12, step: 0.1, value: 7},
                 {key: "perCell", label: "칸당 분자 수", unit: "개", min: 1, max: 4, step: 1, value: 1},
                 {key: "tilt", label: "기울임", unit: "°", min: 0, max: 45, step: 5, value: 0},
                 {panel: "간격·색상"},
@@ -369,34 +376,43 @@ try {
         return titles;
     }
 
-    // 분자를 angle(°)만큼 돌려 경계 가운데가 원점이 되게 한 배치 (산소 지름 = 1). 이온·괄호 분자는 돌리지 않는다
+    // 분자를 화면 안에서 angle(°)만큼 돌려 경계 가운데가 원점이 되게 한 배치 (산소 지름 = 1). 원자는 뒤에서 앞(z 순)으로 정렬.
+    // 이온 결합 분자는 돌리지 않는다
     function molLayout(formula, angle) {
         var mol = MOLECULES[formula];
         var rad = mol.ionic ? 0 : angle * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);
         var atoms = [], l = 1e9, t = -1e9, r = -1e9, b = 1e9;
         for (var i = 0; i < mol.atoms.length; i++) {
             var a = mol.atoms[i], d = ELEMENTS[a[0]].d;
-            var x = a[1] * cos - a[2] * sin, y = a[1] * sin + a[2] * cos;
-            atoms.push({key: a[0], x: x, y: y, d: d});
+            var px = a[1] / ANGSTROM, py = a[2] / ANGSTROM;
+            var x = px * cos - py * sin, y = px * sin + py * cos;
+            var len = Math.sqrt(px * px + py * py), shift = a[4] ? a[4] / ANGSTROM : 0;
+            atoms.push({key: a[0], x: x, y: y, z: a[3] / ANGSTROM, d: d, order: i,
+                lx: len > 0 ? x / Math.sqrt(x * x + y * y) * shift : 0, ly: len > 0 ? y / Math.sqrt(x * x + y * y) * shift : 0});
             l = Math.min(l, x - d / 2);
             r = Math.max(r, x + d / 2);
             t = Math.max(t, y + d / 2);
             b = Math.min(b, y - d / 2);
         }
+        atoms.sort(function(p, q) { return p.z !== q.z ? p.z - q.z : p.order - q.order; });
         var br = mol.bracket;
         if (br) {
-            l = Math.min(l, br.x0);
-            r = Math.max(r, br.x1 + 0.4);
-            t = Math.max(t, br.y1 + 0.25);
-            b = Math.min(b, br.y0);
+            l = Math.min(l, br.x0 / ANGSTROM);
+            r = Math.max(r, br.x1 / ANGSTROM + 0.4);
+            t = Math.max(t, br.y1 / ANGSTROM + 0.25);
+            b = Math.min(b, br.y0 / ANGSTROM);
         }
         var cx = (l + r) / 2, cy = (t + b) / 2;
         for (var k = 0; k < atoms.length; k++) {
             atoms[k].x -= cx;
             atoms[k].y -= cy;
         }
-        var shifted = br ? {x0: br.x0 - cx, x1: br.x1 - cx, y0: br.y0 - cy, y1: br.y1 - cy} : null;
+        var shifted = br ? {x0: br.x0 / ANGSTROM - cx, x1: br.x1 / ANGSTROM - cx, y0: br.y0 / ANGSTROM - cy, y1: br.y1 / ANGSTROM - cy} : null;
         return {atoms: atoms, bracket: shifted, labeled: !!mol.ionic, w: r - l, h: t - b};
+    }
+
+    function dia(radius) {
+        return radius * 2 / ANGSTROM;
     }
 
     // 개수 → 모아 놓을 때 줄별 개수(위에서 아래로, 아래 줄이 가득 찬다). 3개는 [1, 2]
@@ -452,7 +468,7 @@ try {
             t.sphere(x, y, radius, el.pal);
             if (showSymbols || lay.labeled) {
                 var size = Math.max(4.5, Math.min(F, radius * 2 * 0.55));
-                t.text(el.text + (el.sup || ""), x, y - size * 0.35, size, "center", sphereTextK(el.pal, t.mode), el.sup ? {supLast: 1} : null);
+                t.text(el.text + (el.sup || ""), x + a.lx * unit, y + a.ly * unit - size * 0.35, size, "center", sphereTextK(el.pal, t.mode), el.sup ? {supLast: 1} : null);
             }
         }
         var br = lay.bracket;

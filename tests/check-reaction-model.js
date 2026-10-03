@@ -41,8 +41,8 @@ function extractVar(name) {
   return source.slice(start, end + 1);
 }
 
-const tables = ["MINUS", "ELEMENTS", "SPHERE_COLORS", "SPHERE_GRAYS", "NITRATE", "BRACKET", "MOLECULES", "REACT_PRESETS", "GAS_PRESETS"];
-const functions = ["parseEquations", "parseSide", "molLayout", "clusterRows", "arrangeSpecies", "formSubFlags", "sphereTextK"];
+const tables = ["MINUS", "ANGSTROM", "ELEMENTS", "SPHERE_COLORS", "SPHERE_GRAYS", "NITRATE", "BRACKET", "MOLECULES", "REACT_PRESETS", "GAS_PRESETS"];
+const functions = ["dia", "parseEquations", "parseSide", "molLayout", "clusterRows", "arrangeSpecies", "formSubFlags", "sphereTextK"];
 const names = tables.concat(functions);
 const lib = new Function(`${tables.map(extractVar).join("\n")}\n${functions.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
@@ -77,6 +77,59 @@ for (const presets of [lib.REACT_PRESETS, lib.GAS_PRESETS]) {
     for (const reaction of parsed) {
       assert.deepStrictEqual(countAtoms(reaction.left), countAtoms(reaction.right), `${preset.title} not balanced`);
     }
+  }
+}
+
+// 실제 결합 길이·각도(NIST CCCBDB)와 이온 반지름 합: 원자 좌표(Å)에서 직접 잰다
+{
+  const dist = (formula, i, j) => {
+    const a = lib.MOLECULES[formula].atoms[i], b = lib.MOLECULES[formula].atoms[j];
+    return Math.hypot(a[1] - b[1], a[2] - b[2], a[3] - b[3]);
+  };
+  const angle = (formula, i, center, j) => {
+    const m = lib.MOLECULES[formula].atoms;
+    const u = [1, 2, 3].map((k) => m[i][k] - m[center][k]), v = [1, 2, 3].map((k) => m[j][k] - m[center][k]);
+    const dot = u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+    return Math.acos(dot / (Math.hypot(...u) * Math.hypot(...v))) * 180 / Math.PI;
+  };
+  const near = (actual, expected, tolerance, label) => assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} vs ${expected}`);
+  near(dist("H2", 0, 1), 0.741, 0.01, "H2");
+  near(dist("O2", 0, 1), 1.208, 0.01, "O2");
+  near(dist("N2", 0, 1), 1.098, 0.01, "N2");
+  near(dist("Cl2", 0, 1), 1.988, 0.01, "Cl2");
+  near(dist("CO", 0, 1), 1.128, 0.01, "CO");
+  near(dist("NO", 0, 1), 1.151, 0.01, "NO");
+  near(dist("HCl", 0, 1), 1.275, 0.01, "HCl");
+  near(dist("H2O", 0, 2), 0.958, 0.01, "H2O OH");
+  near(dist("H2O", 1, 2), 0.958, 0.01, "H2O OH");
+  near(angle("H2O", 0, 2, 1), 104.5, 0.5, "H2O angle");
+  near(dist("H2O2", 2, 3), 1.475, 0.01, "H2O2 OO");
+  near(dist("H2O2", 0, 2), 0.967, 0.01, "H2O2 OH");
+  near(dist("H2O2", 1, 3), 0.967, 0.01, "H2O2 OH");
+  near(angle("H2O2", 0, 2, 3), 94.8, 0.5, "H2O2 OOH");
+  for (const h of [0, 1, 3]) near(dist("NH3", 2, h), 1.012, 0.01, "NH3 NH");
+  near(angle("NH3", 0, 2, 1), 106.7, 0.5, "NH3 angle");
+  near(angle("NH3", 0, 2, 3), 106.7, 0.5, "NH3 angle");
+  for (const h of [0, 1, 3, 4]) near(dist("CH4", 2, h), 1.087, 0.01, "CH4 CH");
+  near(angle("CH4", 0, 2, 1), 109.47, 0.5, "CH4 angle");
+  near(angle("CH4", 3, 2, 4), 109.47, 0.5, "CH4 angle");
+  near(dist("CO2", 0, 2), 1.162, 0.01, "CO2");
+  near(angle("CO2", 0, 2, 1), 180, 0.5, "CO2 linear");
+  near(dist("NO2", 0, 2), 1.194, 0.01, "NO2");
+  near(angle("NO2", 0, 2, 1), 133.9, 0.5, "NO2 angle");
+  for (const o of [0, 1, 2]) near(dist("AgNO3", 3, o), 1.24, 0.01, "nitrate NO");
+  near(angle("AgNO3", 0, 3, 1), 120, 0.5, "nitrate angle");
+  near(dist("NaCl", 0, 1), 1.02 + 1.81, 0.01, "NaCl touching");
+  near(dist("AgCl", 0, 1), 1.15 + 1.81, 0.01, "AgCl touching");
+  // 구 지름 = 반데르발스 반지름의 두 배 (산소 1.52 Å = 지름 1)
+  near(lib.ELEMENTS.O.d, 1, 1e-9, "O diameter");
+  near(lib.ELEMENTS.H.d, 1.2 / 1.52, 1e-9, "H diameter");
+  near(lib.ELEMENTS.C.d, 1.7 / 1.52, 1e-9, "C diameter");
+  near(lib.ELEMENTS["Cl-"].d, 1.81 / 1.52, 1e-9, "Cl- diameter");
+  // 결합한 원자는 구가 겹친다 (중심 간격 < 반지름 합)
+  for (const [f, i, j] of [["H2O", 0, 2], ["NH3", 0, 2], ["CH4", 3, 2], ["CO2", 0, 2], ["HCl", 0, 1], ["O2", 0, 1]]) {
+    const ei = lib.ELEMENTS[lib.MOLECULES[f].atoms[i][0]], ej = lib.ELEMENTS[lib.MOLECULES[f].atoms[j][0]];
+    assert.ok(dist(f, i, j) / lib.ANGSTROM < (ei.d + ej.d) / 2, `${f} bonded spheres overlap`);
   }
 }
 
