@@ -1,0 +1,739 @@
+// Object_MotionPhoto.jsx
+// 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 마지막 실행 스크립트 기록 → 10_기타/RepeatLast.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
+// 연속 촬영(스트로보) 운동 사진: 같은 간격으로 찍은 사진을 한 장에 겹쳐 놓은 모습을 그린다.
+//   - 방향은 가로(왼쪽 → 오른쪽) 또는 세로(위 → 아래). 운동은 등속(속도) 또는 정지에서 출발하는 가속(가속도).
+//     i번째 사진의 위치는 등속이면 v·t, 가속이면 ½·a·t² (t = i × 촬영 간격). 속도·가속도는 그림 위의 길이(mm) 기준이다.
+//   - 물체: 테두리 없는 구형 그라데이션(왼쪽 위 하이라이트) 또는 테두리가 있는 단색. 색은 K 값(10 단위)이고 모두 회색 음영.
+//   - 배경(검은 띠)은 켜고 끌 수 있고 K 값을 10 단위로 고른다. 뒤쪽 사진이 앞쪽 사진 위에 놓인다.
+//   - 거리 표시: 이웃한 사진 중심 사이에 양쪽 화살표를 긋고 값을 쓴다. 입력한 값이 숫자로 시작하면(예: "10 cm")
+//     가속에서는 구간마다 1, 3, 5배…로 늘려 쓰고(출발에서 정지 상태이므로 구간 거리는 1:3:5…), "d"처럼 글자면 d, 3d, 5d…로 쓴다.
+//   - 출발 지점은 첫 사진 중심을 지나는 점선, 지표면은 세로일 때만(맨 아래 사진 밑에 위쪽 선 + 아래로 옅어지는 그라데이션).
+//   - 확인하면 점선·배경·지표면·표시선·글자·사진이 든 그룹 하나가 남는다.
+
+(function() {
+    if (app.documents.length === 0) {
+        alert("문서를 열어주세요.");
+        return;
+    }
+
+    var PREF_KEY = "ObjectMotionPhoto/settings";
+    var MM = 2.834645669;
+    var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
+    var ENG_FONT_NAME = "GSMediumB1";
+    var ITALIC_FONT_NAME = "GSMediItaC1";
+    var ENG_BASELINE_PT = 0.5;
+    var FONT_PT = 8;
+    var LINE_PT = 0.4;
+    var AUX_PT = 0.3;
+    var GROUND_PT = 0.8;
+    var BALL_STROKE_PT = 0.4;
+    var LINE_K = 100;
+    // 구 그라데이션: 하이라이트·가장자리가 기본 색 K보다 이만큼 밝고 어둡다
+    var BALL_LIGHT_K = 30;
+    var BALL_DARK_K = 30;
+    // 지표면 그라데이션 위쪽 K (아래는 흰색)
+    var GROUND_TOP_K = 25;
+    var DASHES = [2, 2];
+    // 거리 표시 화살촉(pt): 평가원식 (07_수학, MotionGraph와 같은 치수)
+    var ARROW = {length: 4, halfWidth: 1.3, notch: 1};
+    // 띠 가장자리 여백, 점선이 띠 밖으로 나오는 길이, 띠에서 표시선까지, 연장선이 표시선을 넘는 길이, 표시선과 글자 사이, 글자끼리
+    var PAD_MM = 2;
+    var EXT_MM = 6;
+    var DIM_GAP_MM = 4;
+    var DIM_OVERSHOOT_MM = 1;
+    var TEXT_GAP_MM = 0.8;
+    var LABEL_SPACE_MM = 0.5;   // 글자끼리 최소 간격
+    var SURFACE_SIDE_MM = 12;
+    var SURFACE_HEIGHT_MM = 8;
+    // 첫 사진에서 마지막 사진까지의 최대 길이(mm). 넘으면 속도·가속도를 줄인다
+    var SPAN_MAX_MM = 1000;
+
+    var DIRECTIONS = ["가로", "세로 (아래로 운동)"];
+    var MOTIONS = ["등속 운동", "가속 운동 (정지에서 출발)"];
+    var BALLS = ["구 (그라데이션)", "테두리 + 단색"];
+
+    var LABEL_WIDTH = 120;
+    var SLIDER_WIDTH = 196;
+    var POSITION_LIMIT_MM = 100;
+
+    // 저장 순서: 라디오, 체크박스, 숫자(NUMBER_KEYS)
+    var RADIO_KEYS = ["direction", "motion", "ball"];
+    var CHECK_KEYS = ["bgOn", "startOn", "surfaceOn", "distOn"];
+
+    // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
+    var NUMBER_KEYS = ["speed", "accel", "interval", "count", "size", "ballK", "bgK", "offsetX", "offsetY"];
+    var SPECS = {
+        speed: {range: [5, 1000], step: 5, decimals: 0},
+        accel: {range: [10, 5000], step: 10, decimals: 0},
+        interval: {range: [0.01, 2], step: 0.01, decimals: 2},
+        count: {range: [2, 30], step: 1, decimals: 0},
+        size: {range: [2, 30], step: 0.5, decimals: 1},
+        ballK: {range: [0, 100], step: 10, decimals: 0},
+        bgK: {range: [0, 100], step: 10, decimals: 0},
+        offsetX: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
+        offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1}
+    };
+
+    var doc = app.activeDocument;
+    var korFont = findTextFont([KOR_FONT_NAME]);
+    var engFont = findTextFont([ENG_FONT_NAME]);
+    var italicFont = findTextFont([ITALIC_FONT_NAME, ENG_FONT_NAME]);
+
+    var artboardRect = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+    var centerX = (artboardRect[0] + artboardRect[2]) / 2;
+    var centerY = (artboardRect[1] + artboardRect[3]) / 2;
+
+    var options = {
+        direction: 0, motion: 0, ball: 0,
+        bgOn: true, startOn: true, surfaceOn: false, distOn: true,
+        speed: 100, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90,
+        distText: "d",
+        offsetX: 0, offsetY: 0,
+        previewOn: true
+    };
+    applySettings();
+
+    var previewGroup = null;
+    var rows = {};
+    var radioSets = {};
+    var checks = {};
+    var distInput = null;
+
+    // -------------------------------------------------------
+    // 다이얼로그
+    // -------------------------------------------------------
+    var dlg = new Window("dialog", "연속 촬영 운동 사진");
+    dlg.orientation = "column";
+    dlg.alignChildren = "fill";
+    dlg.spacing = 6;
+    dlg.margins = 12;
+
+    var motionPanel = addPanel(dlg, "운동");
+    addRadioRow(motionPanel, "방향:", "direction", DIRECTIONS);
+    addRadioRow(motionPanel, "운동:", "motion", MOTIONS);
+    addRow(motionPanel, "speed", "속도", "mm/s");
+    addRow(motionPanel, "accel", "가속도", "mm/s²");
+    addRow(motionPanel, "interval", "촬영 간격", "s");
+    addRow(motionPanel, "count", "촬영 횟수", "회");
+
+    var ballPanel = addPanel(dlg, "물체");
+    addRadioRow(ballPanel, "모양:", "ball", BALLS);
+    addRow(ballPanel, "size", "지름", "mm");
+    addRow(ballPanel, "ballK", "색", "K");
+
+    var showPanel = addPanel(dlg, "배경·표시");
+    addCheck(showPanel, "배경", "bgOn");
+    addRow(showPanel, "bgK", "배경 색", "K");
+    var markRow = showPanel.add("group");
+    markRow.alignChildren = ["left", "center"];
+    addCheck(markRow, "출발 지점 표시", "startOn");
+    addCheck(markRow, "지표면 표시 (세로)", "surfaceOn");
+    var distRow = showPanel.add("group");
+    distRow.alignChildren = ["left", "center"];
+    addCheck(distRow, "중심 거리 표시:", "distOn");
+    distInput = distRow.add("edittext", undefined, options.distText);
+    distInput.characters = 12;
+    distInput.helpTip = "숫자로 시작하면(예: 10 cm) 가속에서 구간마다 1, 3, 5배…로, 글자면(예: d) d, 3d, 5d…로 쓴다";
+    distInput.onChange = function() { commitDistText(); };
+
+    var positionPanel = addPanel(dlg, "위치");
+    addRow(positionPanel, "offsetX", "가로", "mm");
+    addRow(positionPanel, "offsetY", "세로", "mm");
+
+    var footer = dlg.add("group");
+    var previewCheck = footer.add("checkbox", undefined, "미리보기");
+    var footerSpacer = footer.add("group");
+    footerSpacer.alignment = ["fill", "center"];
+    // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    var okButton = footer.add("button", undefined, "확인");
+    try { dlg.defaultElement = null; } catch (defaultError) {}
+    footer.add("button", undefined, "취소", {name: "cancel"});
+
+    for (var n = 0; n < NUMBER_KEYS.length; n++) {
+        if (NUMBER_KEYS[n] === "offsetX") {
+            bindPositionRow(rows.offsetX, "offsetX", true);
+        } else if (NUMBER_KEYS[n] === "offsetY") {
+            bindPositionRow(rows.offsetY, "offsetY", false);
+        } else {
+            bindValueRow(rows[NUMBER_KEYS[n]], NUMBER_KEYS[n]);
+        }
+    }
+    previewCheck.value = options.previewOn;
+    syncUi();
+
+    previewCheck.onClick = function() {
+        options.previewOn = previewCheck.value;
+        updatePreview();
+    };
+    okButton.onClick = function() {
+        // 입력창에 쓰던 값이 아직 반영되지 않았을 수 있다
+        var typed = cleanDistText(distInput.text);
+        if (typed !== options.distText) {
+            options.distText = typed;
+            clearPreview();
+        }
+        if (previewGroup === null) buildPreview();
+        saveSettings();
+        doc.selection = null;
+        try { previewGroup.selected = true; } catch (selectError) {}
+        dlg.close(1);
+    };
+
+    updatePreview();
+
+    if (typeof bindTabOrder === "function") bindTabOrder(dlg);
+    if (dlg.show() !== 1) clearPreview();
+    app.redraw();
+
+    // 라디오·체크박스 상태와 지금 쓰지 않는 입력의 꺼짐을 옵션에 맞춘다
+    function syncUi() {
+        for (var key in radioSets) {
+            for (var i = 0; i < radioSets[key].length; i++) radioSets[key][i].value = (options[key] === i);
+        }
+        for (var checkKey in checks) checks[checkKey].value = options[checkKey];
+        setRowEnabled(rows.speed, options.motion === 0);
+        setRowEnabled(rows.accel, options.motion === 1);
+        setRowEnabled(rows.bgK, options.bgOn);
+        checks.surfaceOn.enabled = options.direction === 1;
+        distInput.enabled = options.distOn;
+    }
+
+    function setRowEnabled(controls, enabled) {
+        controls.input.enabled = enabled;
+        controls.slider.enabled = enabled;
+    }
+
+    function commitDistText() {
+        var typed = cleanDistText(distInput.text);
+        if (typed === options.distText) return;
+        options.distText = typed;
+        updatePreview();
+    }
+
+    // 저장 문자열의 구분자 | 는 뺀다
+    function cleanDistText(text) {
+        return String(text).split("|").join("");
+    }
+
+    // -------------------------------------------------------
+    // 미리보기
+    // -------------------------------------------------------
+    function updatePreview() {
+        clearPreview();
+        if (options.previewOn) buildPreview();
+        app.redraw();
+    }
+
+    function clearPreview() {
+        if (previewGroup === null) return;
+        try { previewGroup.remove(); } catch (e) {}
+        previewGroup = null;
+    }
+
+    function movePreview(deltaX, deltaY) {
+        if (previewGroup === null || (deltaX === 0 && deltaY === 0)) return;
+        try { previewGroup.translate(deltaX, deltaY); } catch (e) {}
+    }
+
+    function buildPreview() {
+        // 너무 길어지는 값은 줄여서 입력창에도 되돌려 준다
+        var o = clampOptions(options);
+        for (var i = 0; i < NUMBER_KEYS.length; i++) {
+            var numberKey = NUMBER_KEYS[i];
+            if (o[numberKey] !== options[numberKey]) {
+                options[numberKey] = o[numberKey];
+                showRowValue(rows[numberKey], o[numberKey]);
+            }
+        }
+
+        var vertical = o.direction === 1;
+        var pos = framePositions(o);
+        var count = pos.length;
+        var radius = o.size * MM / 2;
+        var pad = PAD_MM * MM;
+        var half = radius + pad;                     // 띠의 폭의 절반
+        var sMin = -radius - pad;
+        var sMax = pos[count - 1] * MM + radius + pad;
+        var sMid = (sMin + sMax) / 2;
+        // s: 운동 방향 거리(첫 사진 중심이 0), c: 운동에 수직인 방향(가로: 위, 세로: 오른쪽) → 쪽 좌표
+        function at(s, c) {
+            return vertical ? [centerX + c, centerY - (s - sMid)] : [centerX + (s - sMid), centerY + c];
+        }
+        var forward = vertical ? [0, -1] : [1, 0];
+        var black = makeGray(LINE_K);
+
+        previewGroup = findEditableLayer().groupItems.add();
+        previewGroup.name = "MotionPhoto";
+        var group = previewGroup;
+
+        if (o.startOn) {
+            var reach = half + EXT_MM * MM;
+            var startLine = drawLine(group, at(0, -reach), at(0, reach), LINE_PT, black);
+            startLine.name = "StartLine";
+            try { startLine.strokeDashes = DASHES; } catch (dashError) {}
+        }
+
+        if (o.bgOn) {
+            var back = drawRect(group, at(sMin, half), at(sMax, -half));
+            back.name = "Background";
+            back.stroked = false;
+            back.filled = true;
+            back.fillColor = makeGray(o.bgK);
+        }
+
+        if (vertical && o.surfaceOn) {
+            var wide = half + SURFACE_SIDE_MM * MM;
+            var ground = drawRect(group, at(sMax, -wide), at(sMax + SURFACE_HEIGHT_MM * MM, wide));
+            ground.name = "Ground";
+            ground.stroked = false;
+            ground.filled = true;
+            var groundColor = new GradientColor();
+            groundColor.gradient = grayGradient("MP_ground", GradientType.LINEAR, [[0, GROUND_TOP_K], [100, 0]]);
+            ground.fillColor = groundColor;
+            // 새 채우기에는 마지막 그라데이션 각도가 붙으므로 읽어서 차이만큼만 돌린다 (-90: 첫 색이 위)
+            ground.rotate(-90 - ground.fillColor.angle, false, false, true, false, Transformation.CENTER);
+            var groundLine = drawLine(group, at(sMax, -wide), at(sMax, wide), GROUND_PT, black);
+            groundLine.name = "GroundLine";
+        }
+
+        if (o.distOn && trimText(o.distText) !== "") {
+            var dimC = (vertical ? 1 : -1) * (half + DIM_GAP_MM * MM);   // 표시선 자리 (가로: 아래, 세로: 오른쪽)
+            var extFrom = (vertical ? 1 : -1) * half;
+            var extTo = dimC + (vertical ? 1 : -1) * DIM_OVERSHOOT_MM * MM;
+            for (var e = 0; e < count; e++) {
+                var extension = drawLine(group, at(pos[e] * MM, extFrom), at(pos[e] * MM, extTo), AUX_PT, black);
+                extension.name = "Extension";
+            }
+            var rowEnds = [];   // 글자 줄마다 마지막 글자가 끝나는 s 위치
+            for (var k = 0; k < count - 1; k++) {
+                var s0 = pos[k] * MM;
+                var s1 = pos[k + 1] * MM;
+                var scale = Math.min(1, (s1 - s0) / (2 * ARROW.length));
+                var inset = (ARROW.length - ARROW.notch) * scale;
+                var from = at(s0, dimC);
+                var to = at(s1, dimC);
+                var dimension = drawLine(group,
+                    [from[0] + forward[0] * inset, from[1] + forward[1] * inset],
+                    [to[0] - forward[0] * inset, to[1] - forward[1] * inset], LINE_PT, black);
+                dimension.name = "Dimension";
+                drawHead(group, from, [-forward[0], -forward[1]], scale, black);
+                drawHead(group, to, forward, scale, black);
+
+                var frame = makeLabel(group, distanceLabel(o.distText, o.motion === 1 ? 2 * k + 1 : 1));
+                frame.name = "Distance";
+                var mid = at((s0 + s1) / 2, dimC);
+                var box = frame.geometricBounds;   // [left, top, right, bottom]
+                var width = box[2] - box[0];
+                var height = box[1] - box[3];
+                // 앞 글자와 겹치면 한 줄 더 바깥으로 민다 (가속 운동 처음의 좁은 구간)
+                var along = vertical ? height : width;
+                var row = 0;
+                while (rowEnds[row] !== undefined && rowEnds[row] > (s0 + s1) / 2 - along / 2 - LABEL_SPACE_MM * MM) row++;
+                rowEnds[row] = (s0 + s1) / 2 + along / 2;
+                if (vertical) placeText(frame, mid[0] + TEXT_GAP_MM * MM + row * (width + LABEL_SPACE_MM * MM), mid[1], "l", "m");
+                else placeText(frame, mid[0], mid[1] - TEXT_GAP_MM * MM - row * (height + LABEL_SPACE_MM * MM), "c", "t");
+            }
+        }
+
+        // 첫 사진만 그리고 나머지는 복제해 옮긴다. 새로 놓는 복제가 맨 앞이라 뒤쪽 사진이 위에 온다
+        var balls = group.groupItems.add();
+        balls.name = "Balls";
+        var origin = at(0, 0);
+        var proto = drawBall(balls, origin[0], origin[1], radius, o);
+        for (var b = 1; b < count; b++) {
+            var spot = at(pos[b] * MM, 0);
+            var copy = proto.duplicate(balls, ElementPlacement.PLACEATBEGINNING);
+            copy.translate(spot[0] - origin[0], spot[1] - origin[1], true, true, true, true);
+        }
+
+        if (o.offsetX !== 0 || o.offsetY !== 0) group.translate(o.offsetX * MM, o.offsetY * MM);
+    }
+
+    // -------------------------------------------------------
+    // 기하 · 글자 내용
+    // -------------------------------------------------------
+    // 사진마다 첫 사진에서 떨어진 거리(mm): 등속은 v·t, 가속은 ½·a·t² (t = 번호 × 촬영 간격)
+    function framePositions(o) {
+        var positions = [];
+        for (var i = 0; i < o.count; i++) {
+            var t = i * o.interval;
+            positions.push(o.motion === 0 ? o.speed * t : 0.5 * o.accel * t * t);
+        }
+        return positions;
+    }
+
+    // 첫 사진에서 마지막 사진까지가 SPAN_MAX_MM을 넘지 않도록 속도·가속도를 줄인다
+    function clampOptions(o) {
+        var out = {};
+        for (var key in o) out[key] = o[key];
+        var total = (o.count - 1) * o.interval;
+        out.speed = Math.min(o.speed, SPAN_MAX_MM / total);
+        out.accel = Math.min(o.accel, 2 * SPAN_MAX_MM / (total * total));
+        return out;
+    }
+
+    // 거리 표시값 → 구간 글자. 숫자로 시작하면 coef배한 숫자 + 나머지(단위), 아니면 계수(1이면 생략) + 입력 그대로(변수).
+    // italicFrom: 이 위치부터의 영문자는 이탤릭 변수로 쓴다
+    function distanceLabel(text, coef) {
+        var s = trimText(text);
+        var end = 0;
+        while (end < s.length && "0123456789.".indexOf(s.charAt(end)) >= 0) end++;
+        var number = end > 0 ? parseFloat(s.substring(0, end)) : NaN;
+        if (!isNaN(number)) {
+            var scaled = String(Math.round(number * coef * 1e6) / 1e6) + s.substring(end);
+            return {text: scaled, italicFrom: scaled.length};
+        }
+        var prefix = coef === 1 ? "" : String(coef);
+        return {text: prefix + s, italicFrom: prefix.length};
+    }
+
+    function trimText(text) {
+        var start = 0;
+        var end = text.length;
+        while (start < end && text.charCodeAt(start) <= 32) start++;
+        while (end > start && text.charCodeAt(end - 1) <= 32) end--;
+        return text.substring(start, end);
+    }
+
+    // 화살촉: 끝점, 뒤쪽 두 날개, 오목한 점. scale로 줄여 좁은 구간에도 맞춘다
+    function arrowHeadPoints(tip, d, scale) {
+        var n = [-d[1], d[0]];
+        var length = ARROW.length * scale;
+        var back = [tip[0] - d[0] * length, tip[1] - d[1] * length];
+        var wing = ARROW.halfWidth * scale;
+        var notch = ARROW.notch * scale;
+        return [
+            [tip[0], tip[1]],
+            [back[0] + n[0] * wing, back[1] + n[1] * wing],
+            [back[0] + d[0] * notch, back[1] + d[1] * notch],
+            [back[0] - n[0] * wing, back[1] - n[1] * wing]
+        ];
+    }
+
+    // -------------------------------------------------------
+    // 일러스트레이터 개체
+    // -------------------------------------------------------
+    function drawLine(container, a, b, width, color) {
+        var path = container.pathItems.add();
+        path.setEntirePath([a, b]);
+        path.filled = false;
+        path.stroked = true;
+        path.strokeColor = color;
+        path.strokeWidth = width;
+        path.strokeCap = StrokeCap.BUTTENDCAP;
+        return path;
+    }
+
+    function drawHead(container, tip, d, scale, color) {
+        var head = container.pathItems.add();
+        head.setEntirePath(arrowHeadPoints(tip, d, scale));
+        head.closed = true;
+        head.stroked = false;
+        head.filled = true;
+        head.fillColor = color;
+        head.name = "DimensionHead";
+        return head;
+    }
+
+    // 대각선 두 점으로 사각형
+    function drawRect(container, a, b) {
+        var left = Math.min(a[0], b[0]);
+        var top = Math.max(a[1], b[1]);
+        return container.pathItems.rectangle(top, left, Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
+    }
+
+    // 중심 (cx, cy), 반지름 r인 물체. 구는 하이라이트(왼쪽 위)가 치우친 큰 원을 구 모양으로 잘라 만든다
+    // (GradientColor의 origin·length는 무시되므로). 마스크가 그룹 맨 위의 패스여야 한다
+    function drawBall(container, cx, cy, r, o) {
+        if (o.ball === 1) {
+            var disc = container.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
+            disc.filled = true;
+            disc.fillColor = makeGray(o.ballK);
+            disc.stroked = true;
+            disc.strokeColor = makeGray(LINE_K);
+            disc.strokeWidth = BALL_STROKE_PT;
+            return disc;
+        }
+        var clip = container.groupItems.add();
+        var big = r * 1.5;
+        var light = clip.pathItems.ellipse(cy + r * 0.3 + big, cx - r * 0.3 - big, big * 2, big * 2);
+        light.stroked = false;
+        light.filled = true;
+        var gradientColor = new GradientColor();
+        gradientColor.gradient = grayGradient("MP_ball_" + o.ballK, GradientType.RADIAL,
+            [[0, Math.max(0, o.ballK - BALL_LIGHT_K)], [30, o.ballK], [100, Math.min(100, o.ballK + BALL_DARK_K)]]);
+        light.fillColor = gradientColor;
+        var mask = clip.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
+        mask.filled = false;
+        mask.stroked = false;
+        clip.clipped = true;
+        return clip;
+    }
+
+    // 같은 이름 그라데이션이 문서에 있으면 다시 쓴다 (실행마다 견본이 늘지 않게). stops: [[위치%, K값], ...]
+    function grayGradient(name, type, stops) {
+        var gradient = null;
+        try { gradient = doc.gradients.getByName(name); } catch (e) { gradient = null; }
+        if (gradient !== null) return gradient;
+        gradient = doc.gradients.add();
+        gradient.name = name;
+        gradient.type = type;
+        for (var added = gradient.gradientStops.length; added < stops.length; added++) gradient.gradientStops.add();
+        for (var i = 0; i < stops.length; i++) {
+            var stop = gradient.gradientStops[i];
+            stop.rampPoint = stops[i][0];
+            stop.color = makeGray(stops[i][1]);
+        }
+        return gradient;
+    }
+
+    // 글자 서체 (02_문자/Text_koen.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자·기호 GSMediumB1(기준선 +0.5pt),
+    // 변수(italicFrom 뒤의 영문자)는 이탤릭 GSMediItaC1. 크기를 정한 뒤에 글자마다 서체를 정한다
+    function makeLabel(container, label) {
+        var frame = container.textFrames.add();
+        frame.contents = label.text;
+        frame.textRange.characterAttributes.size = FONT_PT;
+        frame.textRange.characterAttributes.fillColor = makeGray(LINE_K);
+        for (var i = 0; i < label.text.length; i++) {
+            var code = label.text.charCodeAt(i);
+            var attributes = frame.textRange.characters[i].characterAttributes;
+            if (isKoreanOrSpace(code)) {
+                attributes.textFont = korFont;
+                attributes.baselineShift = 0;
+            } else {
+                attributes.textFont = (i >= label.italicFrom && isAsciiLetter(code)) ? italicFont : engFont;
+                attributes.baselineShift = ENG_BASELINE_PT;
+            }
+        }
+        return frame;
+    }
+
+    function isKoreanOrSpace(code) {
+        return (code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160;
+    }
+
+    function isAsciiLetter(code) {
+        return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+    }
+
+    // 글자 테두리의 가로 기준(l 왼쪽, c 가운데, r 오른쪽)과 세로 기준(t 위, m 가운데, b 아래)이 (x, y)에 오도록 옮긴다
+    function placeText(frame, x, y, h, v) {
+        var b = frame.geometricBounds; // [left, top, right, bottom]
+        var dx = h === "l" ? x - b[0] : (h === "r" ? x - b[2] : x - (b[0] + b[2]) / 2);
+        var dy = v === "t" ? y - b[1] : (v === "b" ? y - b[3] : y - (b[1] + b[3]) / 2);
+        frame.translate(dx, dy);
+    }
+
+    function findTextFont(names) {
+        for (var i = 0; i < names.length; i++) {
+            try { return app.textFonts.getByName(names[i]); } catch (e) {}
+        }
+        return app.textFonts[0];
+    }
+
+    // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
+    function findEditableLayer() {
+        var active = doc.activeLayer;
+        if (!active.locked && active.visible) return active;
+        for (var i = 0; i < doc.layers.length; i++) {
+            if (!doc.layers[i].locked && doc.layers[i].visible) return doc.layers[i];
+        }
+        return doc.layers.add();
+    }
+
+    // K값(0~100)만 있는 회색. RGB 문서면 같은 밝기의 회색으로
+    function makeGray(k) {
+        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+            var cmyk = new CMYKColor();
+            cmyk.cyan = 0;
+            cmyk.magenta = 0;
+            cmyk.yellow = 0;
+            cmyk.black = k;
+            return cmyk;
+        }
+        var v = Math.round(255 * (1 - k / 100));
+        var rgb = new RGBColor();
+        rgb.red = v;
+        rgb.green = v;
+        rgb.blue = v;
+        return rgb;
+    }
+
+    // -------------------------------------------------------
+    // 다이얼로그 부품
+    // -------------------------------------------------------
+    function addPanel(parent, title) {
+        var panel = parent.add("panel", undefined, title);
+        panel.alignChildren = ["left", "top"];
+        panel.margins = [12, 16, 12, 12];
+        panel.spacing = 6;
+        return panel;
+    }
+
+    // 라벨 | 라디오 버튼들
+    function addRadioRow(parent, label, key, names) {
+        var row = parent.add("group");
+        row.alignChildren = ["left", "center"];
+        row.add("statictext", undefined, label).preferredSize.width = LABEL_WIDTH;
+        radioSets[key] = [];
+        for (var i = 0; i < names.length; i++) {
+            var radio = row.add("radiobutton", undefined, names[i]);
+            bindRadio(radio, key, i);
+            radioSets[key].push(radio);
+        }
+    }
+
+    function bindRadio(radio, key, index) {
+        radio.onClick = function() {
+            options[key] = index;
+            syncUi();
+            updatePreview();
+        };
+    }
+
+    function addCheck(parent, text, key) {
+        var check = parent.add("checkbox", undefined, text);
+        check.onClick = function() {
+            options[key] = check.value;
+            syncUi();
+            updatePreview();
+        };
+        checks[key] = check;
+    }
+
+    // 라벨 (단위): | 입력창 | 스크롤바
+    function addRow(parent, key, label, unit) {
+        var spec = SPECS[key];
+        var row = parent.add("group");
+        row.alignChildren = ["left", "center"];
+        row.add("statictext", undefined, label + " (" + unit + "):").preferredSize.width = LABEL_WIDTH;
+        var input = row.add("edittext", undefined, formatNumber(options[key], spec.decimals));
+        input.characters = 6;
+        input.justify = "center";
+        var slider = row.add("scrollbar", undefined, options[key], spec.range[0], spec.range[1]);
+        slider.stepdelta = spec.step;
+        slider.jumpdelta = spec.step * 10;
+        slider.preferredSize.width = SLIDER_WIDTH;
+        rows[key] = {input: input, slider: slider, min: spec.range[0], max: spec.range[1], step: spec.step, decimals: spec.decimals};
+        return rows[key];
+    }
+
+    // 값을 그대로(단계로 반올림하지 않고) 입력창과 스크롤바에 보여 준다
+    function showRowValue(controls, value) {
+        controls.input.text = formatNumber(value, controls.decimals);
+        try { controls.slider.value = clamp(value, controls.min, controls.max); } catch (e) {}
+    }
+
+    // 값이 바뀌면 옵션에 쓰고 미리보기를 다시 그린다
+    function bindValueRow(controls, key) {
+        function commit(value) {
+            value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+            showRowValue(controls, value);
+            if (value === options[key]) return;
+            options[key] = value;
+            updatePreview();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? options[key] : value);
+        };
+    }
+
+    // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
+    function bindPositionRow(controls, key, isX) {
+        function commit(value) {
+            value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+            var delta = (value - options[key]) * MM;
+            options[key] = value;
+            showRowValue(controls, value);
+            if (delta === 0) return;
+            movePreview(isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? options[key] : value);
+        };
+    }
+
+    function parseNumber(text) {
+        var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+        return isNaN(value) ? null : value;
+    }
+
+    function clamp(value, minimum, maximum) {
+        if (value < minimum) return minimum;
+        if (value > maximum) return maximum;
+        return value;
+    }
+
+    function roundTo(value, step) {
+        if (step <= 0) return value;
+        return Math.round(Math.round(value / step) * step * 1e6) / 1e6;
+    }
+
+    function formatNumber(value, decimals) {
+        var factor = Math.pow(10, decimals);
+        var rounded = Math.round(value * factor) / factor;
+        var text = String(rounded);
+        if (decimals <= 0) return text;
+        var dot = text.indexOf(".");
+        if (dot === -1) {
+            text += ".";
+            dot = text.length - 1;
+        }
+        while (text.length - dot - 1 < decimals) text += "0";
+        return text;
+    }
+
+    // -------------------------------------------------------
+    // 설정 저장 · 복원 ("v1" + 라디오 3 + 체크 4 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
+    // -------------------------------------------------------
+    function saveSettings() {
+        var parts = ["v1"];
+        for (var r = 0; r < RADIO_KEYS.length; r++) parts.push(options[RADIO_KEYS[r]]);
+        for (var c = 0; c < CHECK_KEYS.length; c++) parts.push(options[CHECK_KEYS[c]] ? "1" : "0");
+        for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
+        parts.push(cleanDistText(options.distText));
+        parts.push(options.previewOn ? "1" : "0");
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function applySettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        var radioCount = RADIO_KEYS.length;
+        var checkCount = CHECK_KEYS.length;
+        if (p[0] !== "v1" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
+        var radioLimits = [DIRECTIONS.length, MOTIONS.length, BALLS.length];
+        for (var r = 0; r < radioCount; r++) {
+            var index = parseInt(p[1 + r], 10);
+            if (index >= 0 && index < radioLimits[r]) options[RADIO_KEYS[r]] = index;
+        }
+        for (var c = 0; c < checkCount; c++) options[CHECK_KEYS[c]] = (p[1 + radioCount + c] === "1");
+        var base = 1 + radioCount + checkCount;
+        for (var i = 0; i < NUMBER_KEYS.length; i++) {
+            var spec = SPECS[NUMBER_KEYS[i]];
+            var value = parseNumber(p[base + i]);
+            if (value !== null) options[NUMBER_KEYS[i]] = clamp(roundTo(value, spec.step), spec.range[0], spec.range[1]);
+        }
+        options.distText = p[base + NUMBER_KEYS.length];
+        options.previewOn = (p[base + NUMBER_KEYS.length + 1] === "1");
+    }
+})();
