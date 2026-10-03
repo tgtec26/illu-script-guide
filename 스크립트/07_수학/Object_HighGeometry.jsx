@@ -2527,7 +2527,7 @@ try {
             modeRow.add("statictext", undefined, "종류:");
             var modeList = modeRow.add("dropdownlist", undefined, MODES);
             modeList.selection = mode;
-            var planeControls = addValueRow(shapePanel, "평면 가로", "mm", planeMm, 30, 120, 1, 0);
+            var planeControls = addValueRow(shapePanel, "평면 너비", "mm", planeMm, 30, 120, 1, 0);
             var thetaControls = addValueRow(shapePanel, "각 θ", "°", thetaDeg, 5, 85, 1, 0);
             var lengthControls = addValueRow(shapePanel, "선분 AB", "mm", lengthMm, 10, 100, 1, 0);
             var heightControls = addValueRow(shapePanel, "높이", "mm", heightMm, 0, 60, 0.5, 1);

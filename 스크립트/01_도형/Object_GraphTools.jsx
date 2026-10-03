@@ -4174,7 +4174,7 @@ try {
 
             var sizePanel = addPanel(dlg, "크기");
             // 사각형이 있으면 크기는 사각형이 정한다. 값이 범위 밖이면 확인에서 걸린다
-            var widthField = addNumberField(sizePanel, "폭", "mm", widthMm, 1, WIDTH_RANGE[0], WIDTH_RANGE[1], widthMm);
+            var widthField = addNumberField(sizePanel, "너비", "mm", widthMm, 1, WIDTH_RANGE[0], WIDTH_RANGE[1], widthMm);
             var heightField = addNumberField(sizePanel, "높이", "mm", heightMm, 1, HEIGHT_RANGE[0], HEIGHT_RANGE[1], heightMm);
             if (rect !== null) {
                 widthField.row.enabled = false;

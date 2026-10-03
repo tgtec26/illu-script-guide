@@ -1414,9 +1414,9 @@ try {
                 gapControls.push(addValueRow(gapPanel, GAP_NAMES[g], gapsMm[g], 1, 10, 0.5, 1));
             }
             var daughterStepControls = addValueRow(gapPanel, "딸세포 사이", daughterStepMm, 0.5, 10, 0.5, 1);
-            var offsetXControls = addValueRow(gapPanel, "전체 가로", offsetXmm,
+            var offsetXControls = addValueRow(gapPanel, "가로", offsetXmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
-            var offsetYControls = addValueRow(gapPanel, "전체 세로", offsetYmm,
+            var offsetYControls = addValueRow(gapPanel, "세로", offsetYmm,
                 -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
 
             var sizePanel = addPanel(dlg, "세포 지름 (mm)");
@@ -1432,7 +1432,7 @@ try {
             var spermPanel = addPanel(dlg, "정자 (mm)");
             var spermCheck = spermPanel.add("checkbox", undefined, "정자 그리기");
             spermCheck.value = showSperm;
-            var headWidthControls = addValueRow(spermPanel, "머리 폭", headWidthMm, 0.5, 2, 0.1, 1);
+            var headWidthControls = addValueRow(spermPanel, "머리 너비", headWidthMm, 0.5, 2, 0.1, 1);
             var headHeightControls = addValueRow(spermPanel, "머리 높이", headHeightMm, 0.5, 2, 0.1, 1);
             var tailLengthControls = addValueRow(spermPanel, "꼬리 길이", tailLengthMm, 0.5, 5, 0.1, 1);
             var tailWidthControls = addValueRow(spermPanel, "꼬리 두께 pt", tailWidthPt, 0.1, 2, 0.1, 1);

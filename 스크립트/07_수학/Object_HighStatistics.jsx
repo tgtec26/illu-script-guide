@@ -942,7 +942,7 @@ try {
             var shadeControls = addValueRow(probPanel, "음영", "K", shadeK, 5, 60, 5, 0);
 
             var stylePanel = addPanel(win, "표시");
-            var widthControls = addValueRow(stylePanel, "가로 길이", "mm", widthMm, 30, 200, 1, 0);
+            var widthControls = addValueRow(stylePanel, "너비", "mm", widthMm, 30, 200, 1, 0);
             var heightControls = addValueRow(stylePanel, "높이", "mm", heightMm, 10, 100, 1, 0);
             var fontControls = addValueRow(stylePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var checkRow = stylePanel.add("group");

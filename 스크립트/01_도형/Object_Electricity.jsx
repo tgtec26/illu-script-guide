@@ -1312,7 +1312,7 @@ try {
 
             // ---- 모양 탭 ----
             var boxSizePanel = addPanel(shapeTab, "상자 크기");
-            var boxWidthControls = addValueRow(boxSizePanel, "폭", "mm", boxWidthMm, 5, 200, 0.5, 1, defaults.boxWidthMm);
+            var boxWidthControls = addValueRow(boxSizePanel, "너비", "mm", boxWidthMm, 5, 200, 0.5, 1, defaults.boxWidthMm);
             var boxHeightControls = addValueRow(boxSizePanel, "높이", "mm", boxHeightMm, 2, 200, 0.5, 1, defaults.boxHeightMm);
             boxWidthControls.input.helpTip = boxWidthControls.slider.helpTip = "윗변 가운데를 고정하고 좌우로 늘어납니다";
             boxHeightControls.input.helpTip = boxHeightControls.slider.helpTip = "윗변을 고정하고 아래로 늘어납니다";

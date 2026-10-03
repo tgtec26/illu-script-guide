@@ -1198,8 +1198,8 @@ try {
                 }, ENGINE_DEFAULTS.topRatio);
 
             var sizePanel = shapePanel;
-            widthControl = addNumberRow(sizePanel, "가로 (mm)", widthMm, SIZE_STEP_MM, MAX_SIZE_MM,
-                SIZE_STEP_MM, 1, "밑면의 가로 지름(정다면체는 가로 폭)", function(value, live) {
+            widthControl = addNumberRow(sizePanel, "너비 (mm)", widthMm, SIZE_STEP_MM, MAX_SIZE_MM,
+                SIZE_STEP_MM, 1, "밑면의 너비 지름(정다면체는 너비)", function(value, live) {
                     widthMm = value;
                     if (linkWidthDepth && depthMm !== value) {
                         depthMm = value;
@@ -1207,8 +1207,8 @@ try {
                     }
                     updatePreview(live);
                 }, ENGINE_DEFAULTS.widthMm);
-            depthControl = addNumberRow(sizePanel, "세로 (mm)", depthMm, SIZE_STEP_MM, MAX_SIZE_MM,
-                SIZE_STEP_MM, 1, "밑면의 세로 지름(안쪽 깊이)", function(value, live) {
+            depthControl = addNumberRow(sizePanel, "깊이 (mm)", depthMm, SIZE_STEP_MM, MAX_SIZE_MM,
+                SIZE_STEP_MM, 1, "밑면의 깊이 방향 지름(안쪽)", function(value, live) {
                     depthMm = value;
                     if (linkWidthDepth && widthMm !== value) {
                         widthMm = value;
@@ -1221,7 +1221,7 @@ try {
                     heightMm = value;
                     updatePreview(live);
                 }, ENGINE_DEFAULTS.heightMm);
-            linkCheck = sizePanel.add("checkbox", undefined, "가로·세로 같게 (정원·정다각형 유지)");
+            linkCheck = sizePanel.add("checkbox", undefined, "너비·깊이 같게 (정원·정다각형 유지)");
             linkCheck.value = linkWidthDepth;
             namesCheck = sizePanel.add("checkbox", undefined, "꼭짓점 이름 (A, B, C …)");
             namesCheck.value = showNames;

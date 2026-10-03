@@ -2663,8 +2663,8 @@ try {
             kindList.selection = kind;
 
             var sizePanel = addPanel(win, "크기");
-            var widthControls = addValueRow(sizePanel, "가로", "mm", widthMm, 20, 150, 1, 0);
-            var heightControls = addValueRow(sizePanel, "세로", "mm", heightMm, 15, 120, 1, 0);
+            var widthControls = addValueRow(sizePanel, "너비", "mm", widthMm, 20, 150, 1, 0);
+            var heightControls = addValueRow(sizePanel, "높이", "mm", heightMm, 15, 120, 1, 0);
             heightControls.input.helpTip = "상자그림에는 쓰지 않는다";
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
 
@@ -3946,8 +3946,8 @@ try {
             var rows = {
                 net: addValueRow(sizePanel, "전개도 번호", "", values.net, 1, 11, 1, 0),
                 count: addValueRow(sizePanel, "밑면 변 수", "", values.count, 3, 8, 1, 0),
-                side: addValueRow(sizePanel, "한 변 · 가로", "mm", values.side, 3, 60, 0.5, 1),
-                depth: addValueRow(sizePanel, "세로", "mm", values.depth, 3, 60, 0.5, 1),
+                side: addValueRow(sizePanel, "한 변 · 너비", "mm", values.side, 3, 60, 0.5, 1),
+                depth: addValueRow(sizePanel, "깊이", "mm", values.depth, 3, 60, 0.5, 1),
                 height: addValueRow(sizePanel, "높이", "mm", values.height, 3, 80, 0.5, 1),
                 lateral: addValueRow(sizePanel, "옆모서리", "mm", values.lateral, 3, 80, 0.5, 1),
                 radius: addValueRow(sizePanel, "반지름", "mm", values.radius, 2, 40, 0.5, 1),
@@ -6911,8 +6911,8 @@ try {
             var gridCheck = checkRow.add("checkbox", undefined, "격자");
 
             var sizePanel = addPanel(win, "크기");
-            var widthControls = addValueRow(sizePanel, "가로 길이", "mm", widthMm, 20, 150, 1, 0);
-            var heightControls = addValueRow(sizePanel, "세로 길이", "mm", heightMm, 20, 150, 1, 0);
+            var widthControls = addValueRow(sizePanel, "너비", "mm", widthMm, 20, 150, 1, 0);
+            var heightControls = addValueRow(sizePanel, "높이", "mm", heightMm, 20, 150, 1, 0);
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
 
             var messageText = win.add("statictext", undefined, " ");

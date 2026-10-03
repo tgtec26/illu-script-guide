@@ -1843,7 +1843,7 @@ try {
 
             var widthRow = sizePanel.add("group");
             widthRow.alignChildren = ["left", "center"];
-            widthRow.add("statictext", undefined, "좌우 폭 (mm):").preferredSize.width = 90;
+            widthRow.add("statictext", undefined, "너비 (mm):").preferredSize.width = 90;
             var widthInput = widthRow.add("edittext", undefined, formatNumber(coilWidthMm, 2));
             widthInput.characters = 6;
             var widthSlider = addSliderWithSteps(widthRow, coilWidthMm, SIZE_STEP_MM, maxCoilWidthMm, SIZE_STEP_MM);
@@ -1851,7 +1851,7 @@ try {
 
             var heightRow = sizePanel.add("group");
             heightRow.alignChildren = ["left", "center"];
-            heightRow.add("statictext", undefined, "위아래 높이 (mm):").preferredSize.width = 90;
+            heightRow.add("statictext", undefined, "높이 (mm):").preferredSize.width = 90;
             var heightInput = heightRow.add("edittext", undefined, formatNumber(coilHeightMm, 2));
             heightInput.characters = 6;
             var heightSlider = addSliderWithSteps(heightRow, coilHeightMm, SIZE_STEP_MM, maxCoilHeightMm, SIZE_STEP_MM);
@@ -2016,12 +2016,12 @@ try {
                 var validHeight = parseNumber(heightInput.text);
                 var validTurns = parseNumber(turnsInput.text);
                 if (validWidth === null || validWidth < SIZE_STEP_MM || validWidth > maxCoilWidthMm) {
-                    alert("좌우 폭은 " + formatNumber(SIZE_STEP_MM, 2) + "mm부터 " +
+                    alert("너비는 " + formatNumber(SIZE_STEP_MM, 2) + "mm부터 " +
                         formatNumber(maxCoilWidthMm, 2) + "mm 사이로 입력해주세요.");
                     return false;
                 }
                 if (validHeight === null || validHeight < SIZE_STEP_MM || validHeight > maxCoilHeightMm) {
-                    alert("위아래 높이는 " + formatNumber(SIZE_STEP_MM, 2) + "mm부터 " +
+                    alert("높이는 " + formatNumber(SIZE_STEP_MM, 2) + "mm부터 " +
                         formatNumber(maxCoilHeightMm, 2) + "mm 사이로 입력해주세요.");
                     return false;
                 }

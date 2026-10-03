@@ -68,8 +68,8 @@ function drawIsometricBox() {
     panel.alignChildren = ["fill", "top"];
     panel.margins = 20;
 
-    var widthControl = addSizeControl(panel, "가로 (Width):", "5", maxWidthMm);
-    var depthControl = addSizeControl(panel, "세로 (Depth):", "5");
+    var widthControl = addSizeControl(panel, "너비 (Width):", "5", maxWidthMm);
+    var depthControl = addSizeControl(panel, "깊이 (Depth):", "5");
     var heightControl = addSizeControl(panel, "높이 (Height):", "5");
     var inputW = widthControl.input;
     var inputD = depthControl.input;
@@ -141,8 +141,8 @@ function drawIsometricBox() {
     posPanel.alignChildren = ["fill", "top"];
     posPanel.margins = 20;
 
-    var offsetXControl = addOffsetControl(posPanel, "X (+오른쪽):", 0);
-    var offsetYControl = addOffsetControl(posPanel, "Y (+위쪽):", 0);
+    var offsetXControl = addOffsetControl(posPanel, "가로 (+오른쪽):", 0);
+    var offsetYControl = addOffsetControl(posPanel, "세로 (+위쪽):", 0);
     var inputOffX = offsetXControl.input;
     var inputOffY = offsetYControl.input;
 

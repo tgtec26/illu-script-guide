@@ -176,7 +176,7 @@ try {
         spreadInput.justify = "center";
         spreadInputs.push(spreadInput);
     }
-    var ratioRow = addValueRow(modeTabs[2], "단면 폭", "%", ratioPct, RATIO_RANGE[0], RATIO_RANGE[1], 1, 0);
+    var ratioRow = addValueRow(modeTabs[2], "단면 너비", "%", ratioPct, RATIO_RANGE[0], RATIO_RANGE[1], 1, 0);
     ratioRow.input.helpTip = "잘린 면(원)을 옆에서 본 납작함. 작을수록 옆에서 본 모습";
     tabs.selection = modeTabs[mode];
 
