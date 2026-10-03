@@ -19,7 +19,8 @@ function run(show, saved, preferenceFailure = false) {
         }}; g.paths.push(p); return p;
       }},
       textFrames: {add() {
-        const t = {textRange: {characterAttributes: {}}, geometricBounds: [0, 8, 8, 0], rotate() {}, translate() {}};
+        const t = {textRange: {characterAttributes: {}}, geometricBounds: [0, 8, 8, 0], rotate() {},
+          translate(x, y) {this.position = [x, y];}};
         g.labels.push(t); return t;
       }}
     }; log.groups.push(g); return g;
@@ -36,7 +37,7 @@ function run(show, saved, preferenceFailure = false) {
     Object.defineProperty(c, 'selection', {get() {return this.selectedItem;}, set(v) {this.selectedItem = typeof v === 'number' ? {index: v} : v;}});
     return c;
   }
-  const ctx = {console, app: {documents: [doc], activeDocument: doc, redraw() {}, textFonts: {getByName() {return {}; }},
+  const ctx = {console, app: {documents: [doc], activeDocument: doc, redraw() {}, textFonts: {getByName(name) {return {name}; }},
     preferences: {getStringPreference() {if (preferenceFailure) throw Error('unavailable'); return saved || '';},
       setStringPreference(key, value) {if (preferenceFailure) throw Error('unavailable'); log.writes.push([key, value]);}}},
     Window: function() {return control('dialog', '');}, File: function() {throw Error('no file IO in mock');}, Folder: {temp: ''},
@@ -89,7 +90,8 @@ for (const [kind, maximum] of [[1, 3], [2, 15]]) {
   assert.strictEqual(log.groups[log.groups.length - 1].removed, false);
   assert.strictEqual(log.writes[0][0], 'Object_MeterScale/settings');
   saved = log.writes[0][1];
-  assert.strictEqual(saved.split('|').length, 16);
+  assert.strictEqual(saved.split('|').length, 17);
+  assert.strictEqual(saved.split('|')[0], 'v2');
 }
 run(log => {
   assert.strictEqual(row(log, '최대값:').input.text, '15');
@@ -98,6 +100,21 @@ run(log => {
 }, saved);
 run(log => assert.strictEqual(row(log, '최대값:').input.text, '30'), 'v0|invalid');
 run(log => button(log, '확인').onClick(), '', true);
+
+// Spacing moves only the labels, applies GSMediumB1, and survives the settings round trip.
+let gapSaved;
+run(log => {
+  const before = log.groups[0];
+  const gap = row(log, '숫자 간격 (mm):'); gap.input.text = '1.5'; gap.input.onChange();
+  const after = log.groups[log.groups.length - 1];
+  assert.deepStrictEqual(after.paths.map(p => p.pathPoints), before.paths.map(p => p.pathPoints));
+  const middle = Math.floor(after.labels.length / 2);
+  assert.ok(Math.abs(after.labels[middle].position[1] - before.labels[middle].position[1] - 2.834645669) < 1e-7);
+  assert.ok(after.labels.every(t => t.textRange.characterAttributes.textFont.name === 'GSMediumB1'));
+  button(log, '확인').onClick(); gapSaved = log.writes[0][1];
+});
+run(log => assert.strictEqual(row(log, '숫자 간격 (mm):').input.text, '1.5'), gapSaved);
+run(log => assert.strictEqual(row(log, '최대값:').input.text, '30'), saved.replace(/^v2/, 'v1'));
 
 // Numeric limits are shared by loading and dialog, invalid input never creates nonfinite geometry.
 run(log => {
@@ -108,6 +125,7 @@ run(log => {
   const numbers = check(log, '숫자 표시'); numbers.value = false; numbers.onClick();
   assert.strictEqual(log.groups[log.groups.length - 1].labels.length, 0);
   assert.strictEqual(row(log, '숫자 크기 (pt):').input.enabled, false);
+  assert.strictEqual(row(log, '숫자 간격 (mm):').input.enabled, false);
   for (const g of log.groups) for (const p of g.paths) for (const pt of p.pathPoints) {
     assert.ok(pt.anchor.every(Number.isFinite));
   }

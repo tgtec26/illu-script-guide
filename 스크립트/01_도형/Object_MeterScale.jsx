@@ -28,15 +28,15 @@ try {
         kind: 0, width: clamp((bounds[2] - bounds[0]) / MM_TO_PT, 5, 500),
         height: clamp((bounds[1] - bounds[3]) / MM_TO_PT, 3, 300),
         curvature: 65, maximum: 30, divisions: 6, subdivisions: 10,
-        tickLength: 2, stroke: 0.3, numbers: true, fontSize: 8, tiltNumbers: true,
+        tickLength: 2, stroke: 0.3, numbers: true, fontSize: 8, numberGap: 0.5, tiltNumbers: true,
         x: 0, y: 0, preview: true
     };
     var FIELDS = ["kind", "width", "height", "curvature", "maximum", "divisions", "subdivisions",
-        "tickLength", "stroke", "numbers", "fontSize", "tiltNumbers", "x", "y", "preview"];
+        "tickLength", "stroke", "numbers", "fontSize", "numberGap", "tiltNumbers", "x", "y", "preview"];
     var RANGES = {
         kind: [0, 2, true], width: [5, 500], height: [3, 300], curvature: [0, 100],
         maximum: [0.01, 10000], divisions: [2, 20, true], subdivisions: [1, 20, true],
-        tickLength: [0.2, 20], stroke: [0.1, 5], fontSize: [3, 72], x: [-500, 500], y: [-500, 500]
+        tickLength: [0.2, 20], stroke: [0.1, 5], fontSize: [3, 72], numberGap: [0, 20], x: [-500, 500], y: [-500, 500]
     };
     loadSettings();
     var previewGroup = null;
@@ -44,7 +44,8 @@ try {
     var rows = {};
     var black = new GrayColor(); black.gray = 100;
     var font = null;
-    try { font = app.textFonts.getByName("ArialMT"); } catch (fontError) {}
+    try { font = app.textFonts.getByName("GSMediumB1"); }
+    catch (fontError) { alert("GSMediumB1 서체를 설치한 뒤 실행해주세요."); return; }
 
     var win = new Window("dialog", "계기 눈금 — 검류계 · 전류계 · 전압계");
     win.orientation = "column";
@@ -73,6 +74,8 @@ try {
     var tiltCheck = textOptions.add("checkbox", undefined, "곡선에 맞춰 기울이기");
     tiltCheck.value = settings.tiltNumbers;
     numberRow(textPanel, "숫자 크기 (pt):", "fontSize", 0.5);
+    numberRow(textPanel, "숫자 간격 (mm):", "numberGap", 0.1);
+    rows.numberGap.input.helpTip = "긴 눈금 끝과 숫자 사이의 간격입니다.";
     var positionPanel = panel("위치");
     numberRow(positionPanel, "가로 (mm):", "x", 0.1);
     numberRow(positionPanel, "세로 (mm):", "y", 0.1);
@@ -151,6 +154,7 @@ try {
     function syncTextControls() {
         tiltCheck.enabled = settings.numbers;
         rows.fontSize.input.enabled = rows.fontSize.bar.enabled = settings.numbers;
+        rows.numberGap.input.enabled = rows.numberGap.bar.enabled = settings.numbers;
     }
     function updatePreview() {
         clearPreview();
@@ -206,10 +210,15 @@ try {
         var text = group.textFrames.add(); text.contents = label.text;
         var attr = text.textRange.characterAttributes;
         attr.size = settings.fontSize; attr.fillColor = black; attr.strokeColor = new NoColor();
-        if (font) attr.textFont = font;
+        attr.textFont = font;
+        var initialBounds = text.geometricBounds;
+        var halfHeight = (initialBounds[1] - initialBounds[3]) / 2;
+        var halfWidth = (initialBounds[2] - initialBounds[0]) / 2;
+        var extent = settings.tiltNumbers ? halfHeight : Math.abs(label.normal[0]) * halfWidth + label.normal[1] * halfHeight;
         if (settings.tiltNumbers) text.rotate(label.angle);
         var b = text.geometricBounds;
-        text.translate(label.point[0] - (b[0] + b[2]) / 2, label.point[1] - (b[1] + b[3]) / 2);
+        text.translate(label.point[0] + label.normal[0] * extent - (b[0] + b[2]) / 2,
+            label.point[1] + label.normal[1] * extent - (b[1] + b[3]) / 2);
     }
     // 중심 위치는 그린 뒤 이동한다. 곡률 0은 직선, 100은 사용할 수 있는 높이까지 휜다.
     function buildScaleGeometry(s) {
@@ -251,8 +260,9 @@ try {
             ticks.push([p, [p[0] + nx * tick, p[1] + ny * tick]]);
             if (major && s.numbers) {
                 var value = s.kind === 0 ? -s.maximum + 2 * s.maximum * i / total : s.maximum * i / total;
-                var offset = length + gap + s.fontSize * 0.65;
+                var offset = length + s.numberGap * MM_TO_PT;
                 labels.push({text: formatValue(value), point: [p[0] + nx * offset, p[1] + ny * offset],
+                    normal: [nx, ny],
                     angle: -Math.atan2(nx, ny) * 180 / Math.PI});
             }
         }
@@ -280,7 +290,7 @@ try {
     function loadSettings() {
         try {
             var parts = app.preferences.getStringPreference(PREF_KEY).split("|");
-            if (parts[0] !== "v1" || parts.length !== FIELDS.length + 1) return;
+            if (parts[0] !== "v2" || parts.length !== FIELDS.length + 1) return;
             for (var i = 0; i < FIELDS.length; i++) {
                 var key = FIELDS[i], raw = parts[i + 1], range = RANGES[key];
                 if (!range) {
@@ -295,7 +305,7 @@ try {
     }
     function saveSettings() {
         try {
-            var parts = ["v1"];
+            var parts = ["v2"];
             for (var i = 0; i < FIELDS.length; i++) {
                 var value = settings[FIELDS[i]];
                 parts.push(typeof value === "boolean" ? (value ? "1" : "0") : value);
