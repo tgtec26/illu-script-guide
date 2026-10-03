@@ -21,6 +21,10 @@ function run(show, saved, preferenceFailure = false) {
       textFrames: {add() {
         const t = {textRange: {characterAttributes: {}}, geometricBounds: [0, 8, 8, 0], rotate() {},
           translate(x, y) {this.position = [x, y];}};
+        Object.defineProperty(t, 'contents', {get() {return this.value;}, set(value) {
+          this.value = value;
+          this.textRange.characters = [...value].map(contents => ({contents, characterAttributes: {}}));
+        }});
         g.labels.push(t); return t;
       }}
     }; log.groups.push(g); return g;
@@ -59,7 +63,10 @@ const row = (log, label) => {
     assert.strictEqual(log.groups.length, 1);
     const g = log.groups[0];
     assert.strictEqual(g.paths.length, 62); // baseline + 6*10+1 ticks
-    assert.deepStrictEqual(g.labels.map(t => t.contents), ['−30', '−20', '−10', '0', '10', '20', '30']);
+    assert.deepStrictEqual(g.labels.map(t => t.contents), ['-30', '-20', '-10', '0', '10', '20', '30']);
+    assert.ok(g.labels.slice(0, 3).every(t => t.textRange.characters[0].characterAttributes.textFont.name === 'Batang'));
+    assert.ok(g.labels.every(t => t.textRange.characterAttributes.textFont.name === 'GSMediumB1'));
+    assert.ok(g.labels.slice(3).every(t => !t.textRange.characters[0].characterAttributes.textFont));
     const x = row(log, '가로 (mm):'); x.bar.value = 5; x.bar.onChanging();
     assert.strictEqual(log.groups.length, 1);
     assert.ok(Math.abs(g.moves[1][0] - 5 * 2.834645669) < 1e-7);

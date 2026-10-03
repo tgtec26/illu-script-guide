@@ -44,6 +44,7 @@ try {
     var rows = {};
     var black = new GrayColor(); black.gray = 100;
     var font = null;
+    var minusFont = null;
     try { font = app.textFonts.getByName("GSMediumB1"); }
     catch (fontError) { alert("GSMediumB1 서체를 설치한 뒤 실행해주세요."); return; }
 
@@ -211,6 +212,13 @@ try {
         var attr = text.textRange.characterAttributes;
         attr.size = settings.fontSize; attr.fillColor = black; attr.strokeColor = new NoColor();
         attr.textFont = font;
+        if (label.text.charAt(0) === "-") {
+            if (!minusFont) {
+                try { minusFont = app.textFonts.getByName("Batang"); }
+                catch (fontError) { throw new Error("음수 기호에 사용할 바탕체(Batang)를 설치해주세요."); }
+            }
+            text.textRange.characters[0].characterAttributes.textFont = minusFont;
+        }
         var initialBounds = text.geometricBounds;
         var halfHeight = (initialBounds[1] - initialBounds[3]) / 2;
         var halfWidth = (initialBounds[2] - initialBounds[0]) / 2;
@@ -270,7 +278,7 @@ try {
     }
     function formatValue(value) {
         var rounded = Math.round(value * 10000) / 10000;
-        return String(rounded === 0 ? 0 : rounded).replace("-", "−");
+        return String(rounded === 0 ? 0 : rounded);
     }
     function clamp(n, low, high) { return Math.max(low, Math.min(high, n)); }
     function isRectangle(item) {
