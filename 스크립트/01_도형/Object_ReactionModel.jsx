@@ -12,7 +12,7 @@ try {
 
 // 화학 반응 채움 모형: 분자를 공간 채움 모형(하이라이트가 있는 구)으로 그린다. 선택 없이 화면 가운데에 그린다.
 // 화학 반응 탭: 반응물 + 반응물 → 생성물을 분자 모형으로 늘어놓고 +·화살표로 잇고 이름을 단다 (이온 반응 포함).
-// 기체 반응 탭: 분자를 정육면체 안에 담는다. 계수만큼 칸을 이어 붙이고(모서리는 경사 연결), 표 선·값은 그리지 않는다.
+// 기체 반응 탭: 분자를 정육면체 안에 담는다. 계수만큼 칸을 이어 붙이고(모서리는 경사 연결), 표 선·값은 그리지 않는다. 이름표는 고를 수 있다.
 // 두 탭 모두 컬러 / 회색 음영으로 바꿀 수 있다.
 // 공간 채움 모형: 구 반지름 = 반데르발스 반지름(Bondi: H 1.20, C 1.70, N 1.55, O 1.52, Cl 1.75 Å), 구 중심 간격 = 실제 결합 길이·각도(NIST CCCBDB)라
 // 결합한 원자의 구는 서로 많이 겹친다. 이온 결합은 이온 반지름(Shannon: Na+ 1.02, Cl- 1.81, Ag+ 1.15 Å)으로 맞닿게 그린다.
@@ -256,9 +256,11 @@ try {
                 {key: "colorMode", label: "색상", items: ["컬러", "회색 음영"], value: 0},
                 {key: "arrowColor", label: "화살표 색", items: ["파랑", "빨강", "검정"], value: 1},
                 {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 1},
-                {panel: "화학식"},
-                {key: "formulaRow", check: "화학식 표시", value: false},
-                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
+                {panel: "이름표"},
+                {key: "label", label: "이름표", items: ["이름", "화학식", "이름(화학식)", "없음"], value: 0},
+                {key: "coef", check: "화학식에 계수", value: true},
+                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
+                {key: "labelGap", label: "이름표 간격", unit: "mm", min: 0, max: 10, step: 0.5, value: 2.5}
             ],
             draw: drawGas
         });
@@ -295,24 +297,24 @@ try {
                 }
             }
 
-            var offX = -x / 2, frontBottom = y - boxH, centerY = frontBottom + boxH / 2, formulaBase = frontBottom - 1.8 * mm - F * 0.72;
+            var offX = -x / 2, frontBottom = y - boxH, centerY = frontBottom + boxH / 2, labelBase = frontBottom - o.labelGap * mm - F * 0.72;
             for (var i = 0; i < items.length; i++) {
                 var it = items[i];
                 if (it.type === "box") {
                     drawBox(offX + it.x0, frontBottom, it.n, it.formula);
-                    if (o.formulaRow) t.text((it.n > 1 ? it.n : "") + it.formula, offX + it.cx, formulaBase, F, "center", 100, {sub: true});
+                    if (o.label < 3) t.text(molLabel(o.label, it.formula, it.n, o.coef), offX + it.cx, labelBase, F, "center", 100, {sub: true});
                 } else if (it.type === "plus") {
                     t.plus(offX + it.cx, centerY, plusW, o.plusColor);
-                    if (o.formulaRow) t.text("+", offX + it.cx, formulaBase, F, "center", 100);
+                    if (o.label === 1) t.text("+", offX + it.cx, labelBase, F, "center", 100);
                 } else {
                     t.blockArrow(offX + it.x0, offX + it.x1, centerY, o.arrowColor);
-                    if (o.formulaRow) {
+                    if (o.label === 1) {
                         var mid = offX + (it.x0 + it.x1) / 2, half = (it.x1 - it.x0) * 0.35;
-                        t.arrow([mid - half, formulaBase + F * 0.3], [mid + half, formulaBase + F * 0.3], 0.5, 100, 1.6 * mm);
+                        t.arrow([mid - half, labelBase + F * 0.3], [mid + half, labelBase + F * 0.3], 0.5, 100, 1.6 * mm);
                     }
                 }
             }
-            y = (o.formulaRow ? formulaBase - F * 0.3 : frontBottom) - o.blockGap * mm;
+            y = (o.label < 3 ? labelBase - F * 0.3 : frontBottom) - o.blockGap * mm;
         }
 
         // 정육면체 하나(계수만큼 칸을 이어 붙임). (x0, y0)은 앞면 왼쪽 아래
@@ -959,7 +961,7 @@ try {
         }
 
         function saveSettings() {
-            var parts = ["v3"];
+            var parts = ["v4"];
             for (var i = 0; i < controls.length; i++) {
                 var ctl = controls[i];
                 if (!ctl.key) continue;
@@ -976,7 +978,7 @@ try {
             var p = String(raw).split("|");
             var keyed = [];
             for (var i = 0; i < controls.length; i++) if (controls[i].key) keyed.push(controls[i]);
-            if (p[0] !== "v3" || p.length !== keyed.length + 1) return;
+            if (p[0] !== "v4" || p.length !== keyed.length + 1) return;
             var values = [];
             for (var k = 0; k < keyed.length; k++) {
                 var ctl = keyed[k], text = p[k + 1];
