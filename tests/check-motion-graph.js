@@ -63,7 +63,7 @@ const geo = (pattern) => lib.graphGeometry({...box, pattern});
   near(up[1].anchor[1], 280 - lib.ARROW.length, 1e-9, "upward arrow wing is back along y");
 }
 
-// 모양: 일정 / 직선 증가 / 직선 감소 / 아래로 볼록 곡선
+// 모양: 일정 / 직선 증가 / 직선 감소 / 아래로 볼록 곡선 / 위로 볼록 곡선
 {
   const spanX = 90 * lib.GRAPH_X_RATIO;
   const top = 80 * lib.Y_TOP_RATIO;
@@ -85,6 +85,26 @@ const geo = (pattern) => lib.graphGeometry({...box, pattern});
   const t = 0.5;
   const y = (1 - t) ** 3 * 200 + 3 * (1 - t) ** 2 * t * curve[0].right[1] + 3 * (1 - t) * t ** 2 * curve[1].left[1] + t ** 3 * curve[1].anchor[1];
   assert.ok(y < 200 + top / 2, "curve sags below the straight chord");
+
+  // 위로 볼록: 같은 두 끝점, 시작은 수직·끝은 수평, 가운데 점이 직선보다 위
+  const bulge = geo(4).graph;
+  assert.strictEqual(bulge.length, 2, "bulging curve is one Bezier segment");
+  assert.deepStrictEqual([bulge[0].anchor, bulge[1].anchor], [curve[0].anchor, curve[1].anchor], "same end points as the sagging curve");
+  near(bulge[0].right[0], 100, 1e-9, "bulging curve leaves the origin vertically");
+  assert.ok(bulge[0].right[1] > 200, "start handle points up");
+  near(bulge[1].left[1], bulge[1].anchor[1], 1e-9, "bulging curve ends horizontally");
+  assert.ok(bulge[1].left[0] < bulge[1].anchor[0], "end handle points left");
+  const by = (1 - t) ** 3 * 200 + 3 * (1 - t) ** 2 * t * bulge[0].right[1] + 3 * (1 - t) * t ** 2 * bulge[1].left[1] + t ** 3 * bulge[1].anchor[1];
+  assert.ok(by > 200 + top / 2, "curve bulges above the straight chord");
+  // 두 곡선은 y = x 기준 맞바꿈 관계(정규화 좌표): 아래로 볼록의 (x, y) 점 = 위로 볼록의 (y, x) 점
+  const at = (c, u) => {
+    const mix = (a, b, cc, d) => (1 - u) ** 3 * a + 3 * (1 - u) ** 2 * u * b + 3 * (1 - u) * u ** 2 * cc + u ** 3 * d;
+    return [mix(c[0].anchor[0], c[0].right[0], c[1].left[0], c[1].anchor[0]) - 100, mix(c[0].anchor[1], c[0].right[1], c[1].left[1], c[1].anchor[1]) - 200];
+  };
+  const p1 = at(curve, 0.3);
+  const p2 = at(bulge, 0.3);
+  near(p1[0] / spanX, p2[1] / top, 1e-9, "sagging x matches bulging y");
+  near(p1[1] / top, p2[0] / spanX, 1e-9, "sagging y matches bulging x");
 }
 
 // 값 줄이기: 크기는 범위 안, y값은 축 높이의 95 %까지

@@ -11,8 +11,9 @@ try {
 } catch (e) {}
 
 // 시간에 따른 이동거리·속력 그래프: 축(원점 O, 시간)과 그래프 하나를 그린다.
-//   - 모양 4가지: 일정, 일정하게 증가(원점에서 직선), 일정하게 감소(y축에서 시작해 x축에서 끝나는 직선),
-//     점점 빠르게 증가(원점에서 아래로 볼록한 곡선, 끝이 거의 수직). 곡선은 앵커 둘짜리 베지어 하나다.
+//   - 모양 5가지: 일정, 일정하게 증가(원점에서 직선), 일정하게 감소(y축에서 시작해 x축에서 끝나는 직선),
+//     점점 빠르게 증가(원점에서 아래로 볼록한 곡선, 끝이 거의 수직), 점점 느리게 증가(위로 볼록한 곡선, 시작이 거의 수직).
+//     곡선은 앵커 둘짜리 베지어 하나이고, 위로 볼록은 아래로 볼록을 y = x 기준으로 맞바꾼 모양이다.
 //   - y축 이름은 이동거리 또는 속력. 한 글자씩 세로로 쌓아 y축 위쪽 왼쪽에 둔다. x축 이름은 시간(오른쪽 끝 아래), 원점에 O.
 //   - 일정은 x축에서 y값(mm)만큼 위에 가로선을 긋는다. 나머지 모양의 높이는 정해져 있다.
 //   - 사각형을 하나 선택하고 실행하면 그 사각형의 가운데와 크기를 축의 크기(너비·높이)로 쓰고(사각형은 확인할 때 지운다),
@@ -43,13 +44,14 @@ try {
     var GRAPH_X_RATIO = 0.9;
     var Y_TOP_RATIO = 0.88;
     var Y_START_DOWN_RATIO = 0.76;
-    // 곡선(점점 빠르게 증가): 시작 손잡이 길이(가로 비율)와 끝 손잡이 높이(Y_TOP 비율)
+    // 곡선(점점 빠르게 증가): 시작 손잡이 길이(가로 비율)와 끝 손잡이 높이(Y_TOP 비율). 위로 볼록은 두 값을 가로·세로에 맞바꿔 쓴다
     var CURVE_START_HANDLE = 0.55;
     var CURVE_END_HANDLE = 0.4;
     // y값(일정)은 축 높이의 이 비율까지만
     var Y_CONST_MAX_RATIO = 0.95;
     var TEXT_GAP_MM = 1;
-    var PATTERNS = ["일정", "일정하게 증가", "일정하게 감소", "점점 빠르게 증가 (아래로 볼록)"];
+    var PATTERNS = ["일정", "일정하게 증가", "일정하게 감소", "점점 빠르게 증가 (아래로 볼록)",
+        "점점 느리게 증가 (위로 볼록)"];
     var Y_NAMES = ["이동거리", "속력"];
     var X_NAME = "시간";
 
@@ -325,11 +327,18 @@ try {
             points = [corner(g.left, g.bottom), corner(g.left + spanX, g.bottom + yTop)];
         } else if (g.pattern === 2) {
             points = [corner(g.left, g.bottom + g.height * Y_START_DOWN_RATIO), corner(g.left + spanX, g.bottom)];
-        } else {
+        } else if (g.pattern === 3) {
             points = [
                 {anchor: [g.left, g.bottom], left: [g.left, g.bottom],
                     right: [g.left + spanX * CURVE_START_HANDLE, g.bottom]},
                 {anchor: [g.left + spanX, g.bottom + yTop], left: [g.left + spanX, g.bottom + yTop * CURVE_END_HANDLE],
+                    right: [g.left + spanX, g.bottom + yTop]}
+            ];
+        } else {
+            points = [
+                {anchor: [g.left, g.bottom], left: [g.left, g.bottom],
+                    right: [g.left, g.bottom + yTop * CURVE_START_HANDLE]},
+                {anchor: [g.left + spanX, g.bottom + yTop], left: [g.left + spanX * CURVE_END_HANDLE, g.bottom + yTop],
                     right: [g.left + spanX, g.bottom + yTop]}
             ];
         }
