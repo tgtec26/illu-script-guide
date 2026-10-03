@@ -863,9 +863,10 @@ try {
                 { key: "strokeWidth", label: "선 두께", unit: "pt", min: 0.3, max: 2, step: 0.1, initial: 0.3 },
                 // 물체: 같은 시간 간격으로 궤적 위에 놓는다 (섬광 사진처럼). 0이면 선만 그린다
                 { key: "count", label: "물체 수", unit: "개", min: 0, max: 20, step: 1, initial: 0 },
-                { key: "diameter", label: "지름", unit: "mm", min: 0.5, max: 20, step: 0.1, initial: 4 }
+                { key: "diameter", label: "지름", unit: "mm", min: 0.5, max: 20, step: 0.1, initial: 4 },
+                // 진하기: 평면 원은 안쪽 K값, 구는 가운데 K값(밝은 쪽 −30, 어두운 쪽 +45). 10 단위
+                { key: "shade", label: "진하기", unit: "%", min: 0, max: 100, step: 10, initial: 30 }
             ];
-            var BALL_K = 30;             // 물체 회색. 구는 밝은 쪽 0, 어두운 쪽 +45
             var options = readSettings();
             var view = doc.activeView ? doc.activeView : doc.views[0];
             var viewCenter = view.centerPoint;
@@ -898,6 +899,7 @@ try {
             ballPanel.alignChildren = "fill";
             addRow(ballPanel, fields[5], false);
             addRow(ballPanel, fields[6], false);
+            addRow(ballPanel, fields[7], false);
             var sphereCheck = ballPanel.add("checkbox", undefined, "입체(구)로 그리기 (끄면 평면 원)");
             sphereCheck.value = options.sphere;
             sphereCheck.onClick = function() {
@@ -941,6 +943,7 @@ try {
                 function apply(value, dragging) {
                     if (field.key === "strokeWidth") value = Math.round(value * 10) / 10;
                     if (field.key === "count") value = Math.round(value);
+                    if (field.key === "shade") value = Math.round(value / 10) * 10;
                     value = Math.round(value * 100) / 100;
                     if (!isFinite(value) || value < field.min || value > field.max) {
                         input.text = String(options[field.key]);
@@ -1089,7 +1092,7 @@ try {
                 if (!options.sphere) {
                     var disc = container.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
                     disc.filled = true;
-                    disc.fillColor = grayColor(0);
+                    disc.fillColor = grayColor(options.shade);
                     disc.stroked = true;
                     disc.strokeColor = blackColor();
                     disc.strokeWidth = options.strokeWidth;
@@ -1112,11 +1115,12 @@ try {
 
             // 같은 이름 그라데이션이 문서에 있으면 다시 쓴다 (실행마다 견본이 늘지 않게). 정지점은 CMYK만 받는다
             function ballGradient() {
-                var name = "HP_ball_" + BALL_K;
+                var k = options.shade;
+                var name = "HP_ball_" + k;
                 var gradient = null;
                 try { gradient = doc.gradients.getByName(name); } catch (e) { gradient = null; }
                 if (gradient !== null) return gradient;
-                var stops = [[0, 0], [30, BALL_K], [100, Math.min(100, BALL_K + 45)]];
+                var stops = [[0, Math.max(0, k - 30)], [30, k], [100, Math.min(100, k + 45)]];
                 gradient = doc.gradients.add();
                 gradient.name = name;
                 gradient = doc.gradients.getByName(name);
@@ -1164,30 +1168,31 @@ try {
                 }
             }
 
-            // v5: 숫자 7개(높이·속도·가로·세로·선 두께·물체 수·지름) + 구 여부 + 미리보기
+            // v6: 숫자 8개(높이·속도·가로·세로·선 두께·물체 수·지름·진하기) + 구 여부 + 미리보기
             function readSettings() {
                 var result = { preview: true, sphere: true };
                 for (var i = 0; i < fields.length; i++) result[fields[i].key] = fields[i].initial;
                 try {
                     var parts = app.preferences.getStringPreference(PREF_KEY).split("|");
-                    if (parts[0] !== "v5" || parts.length !== fields.length + 3 || !/^[01]$/.test(parts[8]) || !/^[01]$/.test(parts[9])) return result;
+                    if (parts[0] !== "v6" || parts.length !== fields.length + 3 || !/^[01]$/.test(parts[9]) || !/^[01]$/.test(parts[10])) return result;
                     for (var j = 0; j < fields.length; j++) {
                         var value = Number(parts[j + 1]);
                         if (!/\S/.test(parts[j + 1]) || !isFinite(value) || value < fields[j].min || value > fields[j].max) return result;
                         if (fields[j].key === "strokeWidth" && Math.abs(value * 10 - Math.round(value * 10)) > 0.000001) return result;
                         if (fields[j].key === "count" && value !== Math.round(value)) return result;
+                        if (fields[j].key === "shade" && value % 10 !== 0) return result;
                     }
                     for (var k = 0; k < fields.length; k++) result[fields[k].key] = Number(parts[k + 1]);
-                    result.sphere = parts[8] === "1";
-                    result.preview = parts[9] === "1";
+                    result.sphere = parts[9] === "1";
+                    result.preview = parts[10] === "1";
                 } catch (e) {}
                 return result;
             }
 
             function saveSettings() {
                 try {
-                    app.preferences.setStringPreference(PREF_KEY, ["v5", options.height, options.speed,
-                        options.offsetX, options.offsetY, options.strokeWidth, options.count, options.diameter,
+                    app.preferences.setStringPreference(PREF_KEY, ["v6", options.height, options.speed,
+                        options.offsetX, options.offsetY, options.strokeWidth, options.count, options.diameter, options.shade,
                         options.sphere ? 1 : 0, options.preview ? 1 : 0].join("|"));
                 } catch (e) {}
             }
