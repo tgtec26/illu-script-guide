@@ -50,6 +50,7 @@ try {
     var FONT_RANGE = [5, 20];
     var SPACING_RANGE = [40, 200];
     var ARROW_RANGE = [5, 40];
+    var HEAD_SIZE_RANGE = [30, 200];
     var GAP_RANGE = [2, 100];
     var PAIRS = ["하나", "N–S", "N–N", "S–S"];
 
@@ -75,7 +76,7 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
-    var spacingPct = 100, arrowPct = 20, pair = 0, gapMm = 15;
+    var spacingPct = 100, arrowPct = 20, pair = 0, gapMm = 15, headSizePct = 100;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
     var DEFAULTS = {lengthMm: lengthMm, thickMm: thickMm, cornerMm: cornerMm, turns: turns, lineCount: lineCount, rangePct: rangePct, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
@@ -114,6 +115,7 @@ try {
     var arrowRow = addValueRow(fieldPanel, "극 화살촉 거리", "%", arrowPct, ARROW_RANGE[0], ARROW_RANGE[1], 1, 0, 20);
     arrowRow.input.helpTip = "극에서 선 길이의 몇 % 떨어질지 조절합니다. 작을수록 극에 가깝습니다. 가운데 화살촉은 고정됩니다.";
     rangeRow.input.helpTip = "막대·코일 길이에 대한 %. 이 범위 밖으로 나가는 선은 잘린다";
+    var headSizeRow = addValueRow(fieldPanel, "화살촉 크기", "%", headSizePct, HEAD_SIZE_RANGE[0], HEAD_SIZE_RANGE[1], 5, 0, 100);
     var checkRow = fieldPanel.add("group");
     var arrowsCheck = checkRow.add("checkbox", undefined, "화살촉");
     var labelsCheck = checkRow.add("checkbox", undefined, "N·S 글자");
@@ -145,6 +147,7 @@ try {
     bindValueRow(linesRow, function() { return lineCount; }, function(v) { lineCount = v; });
     bindValueRow(rangeRow, function() { return rangePct; }, function(v) { rangePct = v; });
     bindValueRow(spacingRow, function() { return spacingPct; }, function(v) { spacingPct = v; });
+    bindValueRow(headSizeRow, function() { return headSizePct; }, function(v) { headSizePct = v; });
     bindValueRow(arrowRow, function() { return arrowPct; }, function(v) { arrowPct = v; });
     bindValueRow(gapRow, function() { return gapMm; }, function(v) { gapMm = v; });
     bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
@@ -177,6 +180,7 @@ try {
     function syncEnabled() {
         setRowEnabled(gapRow, kind === 0 && pair !== 0);
         setRowEnabled(arrowRow, arrowsOn && kind !== 1);
+        setRowEnabled(headSizeRow, arrowsOn);
         for (var r = 0; r < pairRadios.length; r++) pairRadios[r].enabled = kind === 0;
         setRowEnabled(thickRow, kind !== 1);
         setRowEnabled(cornerRow, kind === 0);
@@ -389,13 +393,7 @@ try {
             var angle = toSouth + margin + (2 * Math.PI - 2 * margin) * spreadFraction(count === 1 ? 0.5 : i / (count - 1), spacing || 1);
             var start = [poles[0].x + h * Math.cos(angle), h * Math.sin(angle)];
             var trace = traceLine(start, poles, h * 1.5, h, box);
-            var kept = [], state = 0;
-            for (var j = 0; j < trace.length; j++) {
-                var inside = Math.abs(trace[j][0]) < body[0] && Math.abs(trace[j][1]) < body[1];
-                if (state === 0 && !inside) state = 1;
-                if (state === 1 && inside) break;
-                if (state === 1 && (j % 3 === 0 || j === trace.length - 1)) kept.push(trace[j]);
-            }
+            var kept = clipFieldTrace(trace, [0], body[0], body[1], 0.6 * 2.834645669);
             if (kept.length < 3) continue;
             lines.push(kept);
             // 상자 밖으로 나간 선은 S극 쪽에도 좌우 대칭으로 하나 더 (밖에서 S극으로 들어오는 방향)
@@ -434,12 +432,62 @@ try {
         return (1 + (signed < 0 ? -1 : 1) * Math.pow(Math.abs(signed), 1 / spacing)) / 2;
     }
 
+    // 몸체까지의 실제 거리로 자른다. 경계 교점을 보간해 점 간격에 따른 오차를 없앤다.
+    function clipFieldTrace(trace, centers, halfLength, halfThick, gap) {
+        function clearance(p) {
+            var nearest = 1e30;
+            for (var i = 0; i < centers.length; i++) {
+                var dx = Math.max(0, Math.abs(p[0] - centers[i]) - halfLength);
+                var dy = Math.max(0, Math.abs(p[1]) - halfThick);
+                nearest = Math.min(nearest, Math.sqrt(dx * dx + dy * dy));
+            }
+            return nearest;
+        }
+        function boundary(a, b) {
+            var lo = 0, hi = 1, outsideA = clearance(a) >= gap;
+            for (var n = 0; n < 24; n++) {
+                var t = (lo + hi) / 2;
+                var p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+                if ((clearance(p) >= gap) === outsideA) lo = t; else hi = t;
+            }
+            var f = outsideA ? lo : hi;
+            return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+        }
+        var kept = [], emerged = false;
+        for (var j = 0; j < trace.length; j++) {
+            var outside = clearance(trace[j]) >= gap;
+            if (!emerged && outside) {
+                if (j > 0) kept.push(boundary(trace[j - 1], trace[j]));
+                else kept.push(trace[j]);
+                emerged = true;
+            } else if (emerged && !outside) {
+                kept.push(boundary(trace[j - 1], trace[j]));
+                break;
+            }
+            if (emerged && outside && j % 3 === 0) kept.push(trace[j]);
+            if (emerged && outside && j === trace.length - 1 && j % 3 !== 0) kept.push(trace[j]);
+        }
+        if (kept.length < 3) return [];
+        // 자석 중앙 위·아래를 거의 스치는 고리는 통째로 제외한다.
+        for (var c = 0; c < centers.length; c++) {
+            for (var k = 1; k < kept.length; k++) {
+                var a = kept[k - 1], b = kept[k];
+                if (a[0] === b[0]) continue;
+                var f = (centers[c] - a[0]) / (b[0] - a[0]);
+                if (f < 0 || f > 1) continue;
+                var y = a[1] + (b[1] - a[1]) * f;
+                if (Math.abs(y) < halfThick + gap + Math.max(1.5, halfThick * 0.2)) return [];
+            }
+        }
+        return kept;
+    }
+
     // 양 끝이 극에 닿는 선은 중앙과 양 극, 범위에서 잘린 선은 극 쪽에만 놓는다.
     function fieldArrowFractions(points, distance, centers, length, thick, centralOnly) {
         if (centralOnly) return [0.5];
         function nearBody(p) {
             // 추적점 간격만큼 허용하되, 그리는 범위 끝을 극으로 판단하지 않는다.
-            var tolerance = length / 150 * 5;
+            var tolerance = 0.6 * 2.834645669 + length / 150 * 5;
             for (var i = 0; i < centers.length; i++) {
                 var dx = Math.max(0, Math.abs(p[0] - centers[i]) - length / 2);
                 var dy = Math.max(0, Math.abs(p[1]) - thick / 2);
@@ -474,16 +522,7 @@ try {
             for (var i = 0; i < count; i++) {
                 var angle = 2 * Math.PI * spreadFraction((i + 0.5) / count, spacing);
                 var trace = traceLine([poles[s].x + h * Math.cos(angle), h * Math.sin(angle)], poles, h * 1.5, h, box);
-                var kept = [], emerged = false;
-                for (var j = 0; j < trace.length; j++) {
-                    var p = trace[j];
-                    var inside = (Math.abs(p[0] - centers[0]) < length / 2 || Math.abs(p[0] - centers[1]) < length / 2) && Math.abs(p[1]) < thick / 2;
-                    if (inside && emerged) break;
-                    if (!inside) {
-                        emerged = true;
-                        if (j % 3 === 0 || j === trace.length - 1) kept.push(p);
-                    }
-                }
+                var kept = clipFieldTrace(trace, centers, length / 2, thick / 2, Math.min(0.6 * 2.834645669, gap / 4));
                 if (kept.length > 2) {
                     if (reverse) kept.reverse();
                     lines.push(kept);
@@ -520,8 +559,8 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v4", kind, lengthMm, thickMm, cornerMm, lineCount, rangePct, turns, current, arrowsOn ? "1" : "0", labelsOn ? "1" : "0",
-            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", spacingPct, arrowPct, pair, gapMm];
+        var parts = ["v5", kind, lengthMm, thickMm, cornerMm, lineCount, rangePct, turns, current, arrowsOn ? "1" : "0", labelsOn ? "1" : "0",
+            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", spacingPct, arrowPct, pair, gapMm, headSizePct];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -530,11 +569,12 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v4" || p.length !== 19) return;
+        if (p[0] !== "v5" || p.length !== 20) return;
         spacingPct = restoreNumber(p[15], spacingPct, SPACING_RANGE, 5);
         arrowPct = restoreNumber(p[16], arrowPct, ARROW_RANGE, 1);
         pair = restoreNumber(p[17], pair, [0, 3], 1);
         gapMm = restoreNumber(p[18], gapMm, GAP_RANGE, 0.5);
+        headSizePct = restoreNumber(p[19], headSizePct, HEAD_SIZE_RANGE, 5);
         kind = restoreNumber(p[1], kind, [0, KINDS.length - 1], 1);
         lengthMm = restoreNumber(p[2], lengthMm, LENGTH_RANGE, 1);
         thickMm = restoreNumber(p[3], thickMm, THICK_RANGE, 0.5);
@@ -591,8 +631,9 @@ try {
     function arrowHeadPoints(tip, dx, dy) {
         var length = Math.sqrt(dx * dx + dy * dy);
         var ux = dx / length, uy = dy / length;
-        var bx = tip[0] - ux * HEAD_LENGTH, by = tip[1] - uy * HEAD_LENGTH;
-        return [tip, [bx - uy * HEAD_WIDTH / 2, by + ux * HEAD_WIDTH / 2], [bx + uy * HEAD_WIDTH / 2, by - ux * HEAD_WIDTH / 2]];
+        var scale = headSizePct / 100;
+        var bx = tip[0] - ux * HEAD_LENGTH * scale, by = tip[1] - uy * HEAD_LENGTH * scale;
+        return [tip, [bx - uy * HEAD_WIDTH * scale / 2, by + ux * HEAD_WIDTH * scale / 2], [bx + uy * HEAD_WIDTH * scale / 2, by - ux * HEAD_WIDTH * scale / 2]];
     }
 
         function styleLine(path, weight, dashes, k) {

@@ -21,7 +21,7 @@ function extractFunction(name) {
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= (tol || 1e-9), `${label}: expected ${b}, got ${a}`);
 
-const names = ["fieldAt", "traceLine", "fieldLines", "coilInsideLines", "wireRadii", "magnetHalfPoints", "spreadFraction", "pairFieldLines", "smoothPoints", "pointAlongCurve", "fieldArrowFractions"];
+const names = ["fieldAt", "traceLine", "fieldLines", "coilInsideLines", "wireRadii", "magnetHalfPoints", "spreadFraction", "pairFieldLines", "smoothPoints", "pointAlongCurve", "fieldArrowFractions", "clipFieldTrace"];
 const lib = new Function(`${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 막대자석: 선은 모두 막대 밖, 좌우 대칭 쌍이 있고 NaN 없음
@@ -57,7 +57,7 @@ assert.ok(south[1].right[0] > south[1].anchor[0] && south[4].left[0] > south[4].
 // 호출 결과에 바로 textRange를 대입하면 일러스트레이터가 종료된다
 assert.ok(!/addText\([^;]*\)\.textRange/.test(source), "no chained textRange assignment");
 assert.ok(source.includes('var PREF_KEY = "ObjectMagneticField/settings";'));
-assert.ok(source.includes('p[0] !== "v4" || p.length !== 19'), "settings field count");
+assert.ok(source.includes('p[0] !== "v5" || p.length !== 20'), "settings field count");
 console.log("magnetic field checks passed");
 
 // 모든 극 조합, 좁은 간격, 분포 양끝에서 유한한 좌표와 몸체 외부를 보장한다.
@@ -106,3 +106,25 @@ assert.deepStrictEqual(lib.fieldArrowFractions(exiting.slice().reverse(), 0.2, [
 assert.deepStrictEqual(lib.fieldArrowFractions(connecting, 0.3, [0], L, T, true), [0.5]);
 assert.ok(lib.fieldArrowFractions(loop, 0.2, [0], L, T).includes(0.5), 'actual traced loop retains center arrow');
 console.log('solid stroke inheritance and fixed center arrow checks passed');
+
+// 경계에 닿는 선 끝은 샘플 간격과 무관하게 0.6mm 간격이다.
+const fieldGap = 0.6 * 2.834645669;
+function bodyDistance(p, center = 0) {
+  return Math.hypot(Math.max(0, Math.abs(p[0] - center) - L / 2), Math.max(0, Math.abs(p[1]) - T / 2));
+}
+const cleanLines = lib.fieldLines(L, 0.8, 24, 2, [L / 2, T / 2], true, 1);
+assert.ok(cleanLines.length > 4);
+for (const line of cleanLines) {
+  for (const end of [line[0], line.at(-1)]) if (bodyDistance(end) < 5) near(bodyDistance(end), fieldGap, 1e-6, 'uniform body gap');
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1], b = line[i];
+    if (a[0] === b[0]) continue;
+    const f = -a[0] / (b[0] - a[0]);
+    if (f >= 0 && f <= 1) assert.ok(Math.abs(a[1] + f * (b[1] - a[1])) >= T / 2 + fieldGap + Math.max(1.5, T / 10), 'no shallow central loops');
+  }
+}
+assert.deepStrictEqual(lib.clipFieldTrace([[-40,14],[-20,15],[0,15.5],[20,15],[40,14]], [0], L/2, T/2, fieldGap), []);
+const makeHead = size => new Function('headSizePct','HEAD_LENGTH','HEAD_WIDTH', `${extractFunction('arrowHeadPoints')}\nreturn arrowHeadPoints([0,0],1,0);`)(size, 4, 3);
+near(makeHead(200)[1][0], makeHead(100)[1][0] * 2, 1e-9, 'head length scales');
+near(makeHead(30)[1][1], makeHead(100)[1][1] * 0.3, 1e-9, 'head width scales');
+console.log('uniform clearance, shallow loop removal and head size checks passed');
