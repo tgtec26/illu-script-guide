@@ -21,7 +21,7 @@ function extractFunction(name) {
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= (tol || 1e-9), `${label}: expected ${b}, got ${a}`);
 
-const names = ["fieldAt", "traceLine", "fieldLines", "coilInsideLines", "wireRadii", "magnetHalfPoints", "spreadFraction", "pairFieldLines", "smoothPoints", "pointAlongCurve"];
+const names = ["fieldAt", "traceLine", "fieldLines", "coilInsideLines", "wireRadii", "magnetHalfPoints", "spreadFraction", "pairFieldLines", "smoothPoints", "pointAlongCurve", "fieldArrowFractions"];
 const lib = new Function(`${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 막대자석: 선은 모두 막대 밖, 좌우 대칭 쌍이 있고 NaN 없음
@@ -57,7 +57,7 @@ assert.ok(south[1].right[0] > south[1].anchor[0] && south[4].left[0] > south[4].
 // 호출 결과에 바로 textRange를 대입하면 일러스트레이터가 종료된다
 assert.ok(!/addText\([^;]*\)\.textRange/.test(source), "no chained textRange assignment");
 assert.ok(source.includes('var PREF_KEY = "ObjectMagneticField/settings";'));
-assert.ok(source.includes('p[0] !== "v3" || p.length !== 19'), "settings field count");
+assert.ok(source.includes('p[0] !== "v4" || p.length !== 19'), "settings field count");
 console.log("magnetic field checks passed");
 
 // 모든 극 조합, 좁은 간격, 분포 양끝에서 유한한 좌표와 몸체 외부를 보장한다.
@@ -84,3 +84,25 @@ assert.ok(arrowStart.point[0] < 20 && arrowEnd.point[0] > 80 && arrowEnd.dx > 0)
 assert.notDeepStrictEqual(lib.wireRadii(50, 5, 0.4), lib.wireRadii(50, 5, 2));
 new Function(source);
 console.log('pair geometry and JSX syntax checks passed');
+
+// 직전 Illustrator 선 설정이 점선이어도 선과 면의 테두리는 실선으로 초기화한다.
+const styles = new Function('makeGray', 'LINE_WIDTH_PT', `${extractFunction('styleLine')}\n${extractFunction('styleFace')}\nreturn {styleLine, styleFace};`)(k => k, 0.3);
+for (const draw of [p => styles.styleLine(p, 0.3, null), p => styles.styleFace(p, 60)]) {
+  const inherited = {strokeDashes: [8, 8], strokeDashOffset: 5};
+  draw(inherited);
+  assert.deepStrictEqual(inherited.strokeDashes, [], 'clear inherited dashes');
+  assert.strictEqual(inherited.strokeDashOffset, 0);
+}
+const explicitDashes = {};
+styles.styleLine(explicitDashes, 0.3, [2, 3]);
+assert.deepStrictEqual(explicitDashes.strokeDashes, [2, 3]);
+// 극 사이에 이어지는 선은 중앙 고정 + 양 극 거리만 이동한다.
+const connecting = [[-40, 15], [0, 50], [40, 15]];
+assert.deepStrictEqual(lib.fieldArrowFractions(connecting, 0.1, [0], L, T), [0.5, 0.1, 0.9]);
+assert.deepStrictEqual(lib.fieldArrowFractions(connecting, 0.3, [0], L, T), [0.5, 0.3, 0.7]);
+const exiting = [[-L / 2, 0], [-80, 40], [-113, 80]];
+assert.deepStrictEqual(lib.fieldArrowFractions(exiting, 0.2, [0], L, T), [0.2]);
+assert.deepStrictEqual(lib.fieldArrowFractions(exiting.slice().reverse(), 0.2, [0], L, T), [0.8]);
+assert.deepStrictEqual(lib.fieldArrowFractions(connecting, 0.3, [0], L, T, true), [0.5]);
+assert.ok(lib.fieldArrowFractions(loop, 0.2, [0], L, T).includes(0.5), 'actual traced loop retains center arrow');
+console.log('solid stroke inheritance and fixed center arrow checks passed');

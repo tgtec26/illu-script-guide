@@ -49,7 +49,7 @@ try {
     var TURNS_RANGE = [2, 20];
     var FONT_RANGE = [5, 20];
     var SPACING_RANGE = [40, 200];
-    var ARROW_RANGE = [10, 90];
+    var ARROW_RANGE = [5, 40];
     var GAP_RANGE = [2, 100];
     var PAIRS = ["하나", "N–S", "N–N", "S–S"];
 
@@ -75,7 +75,7 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
-    var spacingPct = 100, arrowPct = 50, pair = 0, gapMm = 15;
+    var spacingPct = 100, arrowPct = 20, pair = 0, gapMm = 15;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
     var DEFAULTS = {lengthMm: lengthMm, thickMm: thickMm, cornerMm: cornerMm, turns: turns, lineCount: lineCount, rangePct: rangePct, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
@@ -111,8 +111,8 @@ try {
     var rangeRow = addValueRow(fieldPanel, "그리는 범위", "%", rangePct, RANGE_RANGE[0], RANGE_RANGE[1], 10, 0, DEFAULTS.rangePct);
     var spacingRow = addValueRow(fieldPanel, "선 간격", "%", spacingPct, SPACING_RANGE[0], SPACING_RANGE[1], 5, 0, 100);
     spacingRow.input.helpTip = "100%는 기본 분포. 값을 높이면 안쪽 선들이 더 넓게 퍼집니다. 선 수와 함께 조절하세요.";
-    var arrowRow = addValueRow(fieldPanel, "화살표 위치", "%", arrowPct, ARROW_RANGE[0], ARROW_RANGE[1], 5, 0, 50);
-    arrowRow.input.helpTip = "자기력선 시작부터 잰 위치. 도선은 위쪽에서 전류 방향을 따라 이동합니다.";
+    var arrowRow = addValueRow(fieldPanel, "극 화살촉 거리", "%", arrowPct, ARROW_RANGE[0], ARROW_RANGE[1], 1, 0, 20);
+    arrowRow.input.helpTip = "극에서 선 길이의 몇 % 떨어질지 조절합니다. 작을수록 극에 가깝습니다. 가운데 화살촉은 고정됩니다.";
     rangeRow.input.helpTip = "막대·코일 길이에 대한 %. 이 범위 밖으로 나가는 선은 잘린다";
     var checkRow = fieldPanel.add("group");
     var arrowsCheck = checkRow.add("checkbox", undefined, "화살촉");
@@ -176,7 +176,7 @@ try {
     // 종류마다 쓰는 행만 켠다
     function syncEnabled() {
         setRowEnabled(gapRow, kind === 0 && pair !== 0);
-        setRowEnabled(arrowRow, arrowsOn);
+        setRowEnabled(arrowRow, arrowsOn && kind !== 1);
         for (var r = 0; r < pairRadios.length; r++) pairRadios[r].enabled = kind === 0;
         setRowEnabled(thickRow, kind !== 1);
         setRowEnabled(cornerRow, kind === 0);
@@ -221,13 +221,18 @@ try {
         previewGroup.translate(viewCenter[0] + offsetXmm * MM, viewCenter[1] + offsetYmm * MM);
     }
 
-    function drawFieldLine(points) {
+    function drawFieldLine(points, centralOnly) {
         var path = drawBezier(previewGroup, smoothPoints(points), false);
         styleLine(path, LINE_WIDTH_PT, null);
         path.name = "자기력선";
         if (!arrowsOn || points.length < 3) return;
-        var arrow = pointAlongCurve(points, arrowPct / 100);
-        addHead(arrow.point, arrow.dx, arrow.dy);
+        var length = lengthMm * MM, thick = thickMm * MM;
+        var centers = kind === 0 && pair !== 0 ? [-(length + gapMm * MM) / 2, (length + gapMm * MM) / 2] : [0];
+        var positions = fieldArrowFractions(points, arrowPct / 100, centers, length, thick, centralOnly);
+        for (var i = 0; i < positions.length; i++) {
+            var arrow = pointAlongCurve(points, positions[i]);
+            addHead(arrow.point, arrow.dx, arrow.dy);
+        }
     }
 
     function drawPlacedMagnet(length, thick, x, northLeft) {
@@ -288,7 +293,7 @@ try {
     function drawCoil(length, thick, northLeft) {
         var d = Math.min(thick * 0.35, length / turns * 0.8);
         var inside = coilInsideLines(length, thick, Math.max(2, Math.round(lineCount / 3)), northLeft, spacingPct / 100);
-        for (var i = 0; i < inside.length; i++) drawFieldLine(inside[i]);
+        for (var i = 0; i < inside.length; i++) drawFieldLine(inside[i], true);
         for (var t = 0; t < turns; t++) {
             var x = -length / 2 + length * (t + 0.5) / turns;
             drawWireSymbol([x, thick / 2], d, current === 0);
@@ -308,8 +313,7 @@ try {
             styleLine(ring, LINE_WIDTH_PT, null);
             ring.name = "자기력선";
             // 맨 위 점에서 나오는 전류면 왼쪽(시계 반대), 들어가는 전류면 오른쪽(시계 방향)으로
-            var a = Math.PI / 2 + (outOfPage ? 1 : -1) * (arrowPct / 100 - 0.5) * 2 * Math.PI;
-            if (arrowsOn) addHead([radii[i] * Math.cos(a), radii[i] * Math.sin(a)], (outOfPage ? -1 : 1) * Math.sin(a), (outOfPage ? 1 : -1) * Math.cos(a));
+            if (arrowsOn) addHead([0, radii[i]], outOfPage ? -1 : 1, 0);
         }
         drawWireSymbol([0, 0], Math.min(4 * MM, radii[0] * 1.2), !outOfPage);
     }
@@ -430,6 +434,27 @@ try {
         return (1 + (signed < 0 ? -1 : 1) * Math.pow(Math.abs(signed), 1 / spacing)) / 2;
     }
 
+    // 양 끝이 극에 닿는 선은 중앙과 양 극, 범위에서 잘린 선은 극 쪽에만 놓는다.
+    function fieldArrowFractions(points, distance, centers, length, thick, centralOnly) {
+        if (centralOnly) return [0.5];
+        function nearBody(p) {
+            // 추적점 간격만큼 허용하되, 그리는 범위 끝을 극으로 판단하지 않는다.
+            var tolerance = length / 150 * 5;
+            for (var i = 0; i < centers.length; i++) {
+                var dx = Math.max(0, Math.abs(p[0] - centers[i]) - length / 2);
+                var dy = Math.max(0, Math.abs(p[1]) - thick / 2);
+                if (Math.sqrt(dx * dx + dy * dy) <= tolerance) return true;
+            }
+            return false;
+        }
+        var start = nearBody(points[0]), end = nearBody(points[points.length - 1]);
+        var positions = [];
+        if (start && end) positions.push(0.5);
+        if (start) positions.push(distance);
+        if (end) positions.push(1 - distance);
+        return positions;
+    }
+
     // 네 점 극의 합성장을 추적한다. S–S는 극을 반전해 추적한 뒤 점 순서를 뒤집는다.
     function pairFieldLines(length, thick, gap, mode, count, range, spacing) {
         var centers = [-(length + gap) / 2, (length + gap) / 2];
@@ -495,7 +520,7 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v3", kind, lengthMm, thickMm, cornerMm, lineCount, rangePct, turns, current, arrowsOn ? "1" : "0", labelsOn ? "1" : "0",
+        var parts = ["v4", kind, lengthMm, thickMm, cornerMm, lineCount, rangePct, turns, current, arrowsOn ? "1" : "0", labelsOn ? "1" : "0",
             fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", spacingPct, arrowPct, pair, gapMm];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -505,9 +530,9 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length !== 19) return;
+        if (p[0] !== "v4" || p.length !== 19) return;
         spacingPct = restoreNumber(p[15], spacingPct, SPACING_RANGE, 5);
-        arrowPct = restoreNumber(p[16], arrowPct, ARROW_RANGE, 5);
+        arrowPct = restoreNumber(p[16], arrowPct, ARROW_RANGE, 1);
         pair = restoreNumber(p[17], pair, [0, 3], 1);
         gapMm = restoreNumber(p[18], gapMm, GAP_RANGE, 0.5);
         kind = restoreNumber(p[1], kind, [0, KINDS.length - 1], 1);
@@ -575,7 +600,9 @@ try {
         path.stroked = true;
         path.strokeColor = makeGray(k === undefined ? 100 : k);
         path.strokeWidth = weight;
-        if (dashes) path.strokeDashes = dashes;
+        // 새 경로가 기존 점선 설정을 물려받지 않도록 실선도 명시한다.
+        path.strokeDashes = dashes || [];
+        path.strokeDashOffset = 0;
     }
 
         function styleFace(path, k, stroked) {
@@ -585,6 +612,8 @@ try {
         if (path.stroked) {
             path.strokeColor = makeGray(100);
             path.strokeWidth = LINE_WIDTH_PT;
+            path.strokeDashes = [];
+            path.strokeDashOffset = 0;
         }
     }
 
