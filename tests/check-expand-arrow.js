@@ -6,6 +6,33 @@ const root = path.resolve(__dirname, "..");
 const scriptPath = path.join(root, "스크립트", "01_도형", "Object_expand_arrow.jsx");
 const source = fs.readFileSync(scriptPath, "utf8");
 
+// K 색은 CMY 없이 생성하고, 저장값은 새 형식과 10K 간격만 허용한다.
+{
+  const makeColor = new Function("CMYKColor", `${extractFunction("makeKColor")} return makeKColor;`)(function() {});
+  for (const k of [0, 10, 50, 100]) {
+    const color = makeColor(k);
+    assert.deepStrictEqual([color.cyan, color.magenta, color.yellow, color.black], [0, 0, 0, k]);
+  }
+  const values = {strokeK: 0, fillK: 100};
+  let raw = "v3|0|8|12|18|1|0.3|0|0|30|70";
+  const app = {preferences: {getStringPreference: () => raw}};
+  const rows = {strokeK: {min: 0, max: 100}, fillK: {min: 0, max: 100}};
+  for (const key of ["startWidth", "endWidth", "headLength", "headWidth", "whiteWidth", "offsetX", "offsetY"]) rows[key] = {min: -100, max: 200};
+  const load = new Function("app", "values", "ROWS", `var PREF_KEY = "test", addWhiteLine = true;
+    ${extractFunction("restoreValue")} ${extractFunction("applySavedSettings")} return applySavedSettings;`)(app, values, rows);
+  load();
+  assert.strictEqual(values.strokeK, 30);
+  assert.strictEqual(values.fillK, 70);
+  raw = "v3|0|8|12|18|1|0.3|0|0|35|110";
+  load();
+  assert.strictEqual(values.strokeK, 30);
+  assert.strictEqual(values.fillK, 70);
+  raw = "v2|0|8|12|18|1|0.3|0|0";
+  load();
+  assert.strictEqual(values.strokeK, 30);
+  assert.strictEqual(values.fillK, 70);
+}
+
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.ok(start >= 0, `missing helper: ${name}`);

@@ -59,6 +59,8 @@ try {
         headLength: {label: "길이", unit: "pt", min: 0.5, max: 200, step: 0.5},
         headWidth: {label: "너비", unit: "pt", min: 0.5, max: 200, step: 0.5},
         whiteWidth: {label: "", unit: "pt", min: 0.1, max: 20, step: 0.1},
+        strokeK: {label: "선 색", unit: "K", min: 0, max: 100, step: 10},
+        fillK: {label: "내부 색", unit: "K", min: 0, max: 100, step: 10},
         offsetX: {label: "가로", unit: "mm", min: -POSITION_LIMIT_MM, max: POSITION_LIMIT_MM, step: 0.1},
         offsetY: {label: "세로", unit: "mm", min: -POSITION_LIMIT_MM, max: POSITION_LIMIT_MM, step: 0.1}
     };
@@ -69,6 +71,8 @@ try {
         headLength: 12,
         headWidth: 18,
         whiteWidth: 0.3,
+        strokeK: 0,
+        fillK: 100,
         offsetX: 0,
         offsetY: 0
     };
@@ -102,11 +106,14 @@ try {
     var outlinePanel = addPanel(dlg, "테두리");
     var whiteRow = outlinePanel.add("group");
     whiteRow.alignChildren = ["left", "center"];
-    var whiteCheck = whiteRow.add("checkbox", undefined, "흰색 선 (pt):");
+    var whiteCheck = whiteRow.add("checkbox", undefined, "선 두께 (pt):");
     whiteCheck.preferredSize.width = LABEL_WIDTH;
     whiteCheck.value = addWhiteLine;
     var whiteControls = addValueRow(whiteRow, "whiteWidth", true);
     bindValueRow(whiteControls);
+    var strokeColorControls = addValueRow(outlinePanel, "strokeK");
+    bindColorRow(strokeColorControls);
+    bindColorRow(addValueRow(outlinePanel, "fillK"));
 
     var positionPanel = addPanel(dlg, "위치");
     bindPositionRow(addValueRow(positionPanel, "offsetX"), true);
@@ -127,11 +134,17 @@ try {
         whiteControls.input.enabled = addWhiteLine;
         whiteControls.slider.enabled = addWhiteLine;
         whiteControls.reset.enabled = addWhiteLine;
+        strokeColorControls.input.enabled = addWhiteLine;
+        strokeColorControls.slider.enabled = addWhiteLine;
+        strokeColorControls.reset.enabled = addWhiteLine;
         updatePreview();
     };
     whiteControls.input.enabled = addWhiteLine;
     whiteControls.slider.enabled = addWhiteLine;
     whiteControls.reset.enabled = addWhiteLine;
+    strokeColorControls.input.enabled = addWhiteLine;
+    strokeColorControls.slider.enabled = addWhiteLine;
+    strokeColorControls.reset.enabled = addWhiteLine;
     previewCheck.onClick = function() {
         previewEnabled = previewCheck.value;
         updatePreview();
@@ -192,7 +205,7 @@ try {
         };
         var dx = values.offsetX * MM_TO_PT;
         var dy = values.offsetY * MM_TO_PT;
-        var white = addWhiteLine ? makeWhiteColor(doc) : null;
+        var white = addWhiteLine ? makeKColor(values.strokeK) : null;
 
         for (var i = 0; i < sourcePaths.length; i++) {
             var source = sourcePaths[i];
@@ -203,7 +216,7 @@ try {
             if (outline === null) continue;
 
             try {
-                var color = arrowColor(source);
+                var color = makeKColor(values.fillK);
                 var arrow = source.duplicate();
                 arrow.hidden = false;
                 setPathNodes(arrow, outline);
@@ -304,15 +317,14 @@ try {
         writeActionFile(actionFile, lines);
     }
 
-    // 원래 선 색을 화살표 면 색으로 쓴다. 선이 없으면 면 색, 둘 다 없으면 검정.
-    function arrowColor(source) {
-        try {
-            if (source.stroked && source.strokeColor.typename !== "NoColor") return source.strokeColor;
-            if (source.filled && source.fillColor.typename !== "NoColor") return source.fillColor;
-        } catch (e) {}
-        var black = new GrayColor();
-        black.gray = 100;
-        return black;
+    // K만 사용하여 CMY가 섞이지 않는 회색을 만든다.
+    function makeKColor(k) {
+        var color = new CMYKColor();
+        color.cyan = 0;
+        color.magenta = 0;
+        color.yellow = 0;
+        color.black = k;
+        return color;
     }
 
     function readPathPoints(pathItem) {
@@ -364,6 +376,29 @@ try {
         function commit(value) {
             values[controls.key] = setRowValue(controls, value);
             updatePreview();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(DEFAULTS[controls.key]); };
+        controls.input.onChange = function() {
+            var parsed = parseNumber(controls.input.text);
+            commit(parsed === null ? values[controls.key] : parsed);
+        };
+    }
+
+    // 색 변경은 외곽선을 재계산하거나 선 정렬 액션을 다시 실행하지 않는다.
+    function bindColorRow(controls) {
+        function commit(value) {
+            var before = values[controls.key];
+            var after = setRowValue(controls, value);
+            values[controls.key] = after;
+            if (before === after) return;
+            var color = makeKColor(after);
+            for (var i = 0; i < previewItems.length; i++) {
+                if (controls.key === "fillK") previewItems[i].fillColor = color;
+                else if (addWhiteLine) previewItems[i].strokeColor = color;
+            }
+            if (previewItems.length > 0) app.redraw();
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
         controls.slider.onChange = function() { commit(controls.slider.value); };
@@ -431,7 +466,7 @@ try {
 
     function saveSettings() {
         var parts = [
-            "v2",
+            "v3",
             values.startWidth,
             values.endWidth,
             values.headLength,
@@ -439,7 +474,9 @@ try {
             addWhiteLine ? "1" : "0",
             values.whiteWidth,
             values.offsetX,
-            values.offsetY
+            values.offsetY,
+            values.strokeK,
+            values.fillK
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -449,7 +486,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length !== 9) return;
+        if (p[0] !== "v3" || p.length !== 11) return;
 
         var keys = ["startWidth", "endWidth", "headLength", "headWidth"];
         for (var i = 0; i < keys.length; i++) {
@@ -459,12 +496,15 @@ try {
         restoreValue("whiteWidth", p[6]);
         restoreValue("offsetX", p[7]);
         restoreValue("offsetY", p[8]);
+        restoreValue("strokeK", p[9]);
+        restoreValue("fillK", p[10]);
     }
 
     function restoreValue(key, text) {
         var value = parseFloat(text);
         var spec = ROWS[key];
-        if (isFinite(value) && value >= spec.min && value <= spec.max) values[key] = value;
+        if (isFinite(value) && value >= spec.min && value <= spec.max &&
+            ((key !== "strokeK" && key !== "fillK") || value % 10 === 0)) values[key] = value;
     }
 
     // 베지어 패스를 점 목록으로 편다. 직선 구간은 끝점만 넣는다
