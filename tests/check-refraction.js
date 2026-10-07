@@ -14,7 +14,7 @@ const end = source.indexOf("// ==== 순수 기하 끝");
 assert.ok(start > 0 && end > start, "pure geometry markers");
 const pure = source.slice(start, end);
 const geo = new Function(`${pure}
-return {DEG, polar, rayLines, arrowHead, arcPoints, angleArcs, normalSpan, refractionAngle, HEAD_TRIANGLE, HEAD_CHEVRON, HEAD_SWALLOW};`)();
+return {DEG, polar, rayLines, arrowHead, arcPoints, angleArcs, normalSpan, refractionAngle, HEAD_TRIANGLE, HEAD_CATALOG};`)();
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
 const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
@@ -39,37 +39,28 @@ const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
   near(straight.refracted[1][1], -20, 1e-9, "0 degree refracted goes straight down");
 }
 
-// 화살촉: 가운데가 시작점에서 dist(mm) 자리, 끝은 진행 방향, 길이 size, 밑변 폭 0.7 size. 광선 밖이면 끝으로 잠근다
+// 화살촉: 가운데가 시작점에서 dist(mm) 자리, 끝은 진행 방향, size가 삼각형 머리 길이(mm)이고 일러스트레이터 화살촉 4종류(tools/arrowheads.json)를 같은 배율로 그린다. 광선 밖이면 끝으로 잠근다
 {
+  const {catalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
+  assert.deepStrictEqual(geo.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), "same data as tools/arrowheads.json");
   const line = [[-10, 10], [0, 0]];
   const len = Math.hypot(10, 10);
-  const tri = geo.arrowHead(line, len / 2, 3, geo.HEAD_TRIANGLE);
-  assert.strictEqual(tri.closed, true);
-  assert.strictEqual(tri.points.length, 3);
-  const [tip, left, right] = tri.points;
-  const mid = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
-  const center = [(tip[0] + mid[0]) / 2, (tip[1] + mid[1]) / 2];
-  near(center[0], -5, 1e-9, "head centered halfway (x)");
-  near(center[1], 5, 1e-9, "head centered halfway (y)");
-  near(dist(tip, mid), 3, 1e-9, "head length");
-  near(dist(left, right), 2.1, 1e-9, "head base width");
-  assert.ok(tip[0] > mid[0] && tip[1] < mid[1], "tip points along the travel direction");
-  const h0 = geo.arrowHead(line, -5, 2, geo.HEAD_TRIANGLE);
-  near((h0.points[0][0] + (h0.points[1][0] + h0.points[2][0]) / 2) / 2, -10, 1e-9, "negative distance clamps to the start");
-  const hEnd = geo.arrowHead([[0, 0], [0, -20]], 50, 2, geo.HEAD_TRIANGLE);
-  near((hEnd.points[0][1] + (hEnd.points[1][1] + hEnd.points[2][1]) / 2) / 2, -20, 1e-9, "beyond the end clamps to the end");
-  // 꺾쇠: 열린 선, 가운데 점이 끝
-  const chev = geo.arrowHead(line, len / 2, 3, geo.HEAD_CHEVRON);
-  assert.strictEqual(chev.closed, false);
-  assert.deepStrictEqual(chev.points[1], tip, "chevron apex is the tip");
-  assert.deepStrictEqual([chev.points[0], chev.points[2]], [left, right], "chevron arms end at the base corners");
-  // 제비꼬리: 닫힌 네 점, 홈은 밑변에서 끝 쪽으로 0.3 size
-  const sw = geo.arrowHead(line, len / 2, 3, geo.HEAD_SWALLOW);
-  assert.strictEqual(sw.closed, true);
-  assert.strictEqual(sw.points.length, 4);
-  assert.deepStrictEqual(sw.points[0], tip);
-  near(dist(sw.points[2], mid), 0.9, 1e-9, "notch sits 0.3 size inside the base");
-  assert.ok(dist(sw.points[2], tip) < dist(mid, tip), "notch is between base and tip");
+  const d = [10 / len, -10 / len];
+  const k = 3 / 8.6;
+  for (let shape = 0; shape < 4; shape++) {
+    const h = geo.arrowHead(line, len / 2, 3, shape);
+    assert.strictEqual(h.closed, true, `shape ${shape} is closed`);
+    // 삼각형 머리 길이 3이 광선의 가운데에 놓인다: 끝은 가운데에서 1.5 앞
+    const tip = [-5 + d[0] * 1.5, 5 + d[1] * 1.5];
+    nearPoints(h.points, expectedPoints(shape, tip, d, k), `shape ${shape}`);
+  }
+  // 광선 앞뒤로 벗어나면 끝점에 잠근다
+  const h0 = geo.arrowHead(line, -5, 2, 0);
+  const tip0 = [-10 + d[0] * 1, 10 + d[1] * 1];
+  nearPoints(h0.points, expectedPoints(0, tip0, d, 2 / 8.6), "negative distance clamps to the start");
+  const hEnd = geo.arrowHead([[0, 0], [0, -20]], 50, 2, 0);
+  nearPoints(hEnd.points, expectedPoints(0, [0, -21], [0, -1], 2 / 8.6), "beyond the end clamps to the end");
+  assert.ok(Math.abs(hEnd.points[0][1] - (-20 - 1)) < 1e-9, "tip passes the clamp by half the head length");
 }
 
 // 호: 양 끝이 원 위, 손잡이 방향이 접선, 베지어 가운데 점도 원 위(≤90° 한 구간). 90°를 넘으면 나눈다

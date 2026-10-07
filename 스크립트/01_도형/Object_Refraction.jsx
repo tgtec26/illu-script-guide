@@ -54,13 +54,29 @@ try {
     }
 
     var HEAD_TRIANGLE = 0;
-    var HEAD_CHEVRON = 1;
-    var HEAD_SWALLOW = 2;
 
-    // 광선 위 화살촉. 가운데가 시작점에서 dist(mm) 떨어진 자리(광선 안으로 잠근다), 길이 size, 밑변 폭은 길이의 0.7배.
-    //   삼각형: [끝, 밑변 왼쪽, 밑변 오른쪽] 채운 닫힌 패스
-    //   꺾쇠: [밑변 왼쪽, 끝, 밑변 오른쪽] 열린 선
-    //   제비꼬리: [끝, 밑변 왼쪽, 밑변 가운데 홈, 밑변 오른쪽] 채운 닫힌 패스
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
+
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
+    }
+
+    // 광선 위 화살촉. 가운데가 시작점에서 dist(mm) 떨어진 자리(광선 안으로 잠근다). size는 삼각형 머리 길이(mm)이고
+    // 다른 모양도 같은 배율(size / 8.6)로 그린다. 점들은 닫힌 채운 패스다 (끝이 첫 점)
     function arrowHead(line, dist, size, shape) {
         var dx = line[1][0] - line[0][0];
         var dy = line[1][1] - line[0][1];
@@ -72,14 +88,7 @@ try {
         var cx = line[0][0] + ux * dist;
         var cy = line[0][1] + uy * dist;
         var tip = [cx + ux * size / 2, cy + uy * size / 2];
-        var bx = cx - ux * size / 2;
-        var by = cy - uy * size / 2;
-        var half = size * 0.35;
-        var left = [bx - uy * half, by + ux * half];
-        var right = [bx + uy * half, by - ux * half];
-        if (shape === HEAD_CHEVRON) return {points: [left, tip, right], closed: false};
-        if (shape === HEAD_SWALLOW) return {points: [tip, left, [bx + ux * size * 0.3, by + uy * size * 0.3], right], closed: true};
-        return {points: [tip, left, right], closed: true};
+        return {points: catalogPoints(shape, tip, [ux, uy], size / HEAD_CATALOG[HEAD_TRIANGLE].length), closed: true};
     }
 
     // 원점 중심, 반지름 r, a0→a1(도)의 호를 3차 베지어 점 목록으로. 90°를 넘으면 나눈다. 점: {anchor, left, right}
@@ -152,7 +161,7 @@ try {
     var CUSTOM_MEDIUM = 4;
     // 매질 1(위)·매질 2(아래)의 라디오 후보 (MEDIA 번호)
     var MEDIUM_CHOICES = [[0, 1, 2, CUSTOM_MEDIUM], [1, 2, 3, CUSTOM_MEDIUM]];
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"];
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
     var TOTAL_REFLECTION_TEXT = "전반사";
 
     var LABEL_WIDTH = 100;
@@ -237,7 +246,7 @@ try {
     addCheck(arrowRow, "arrowOn", "화살촉");
     var headShapeList = arrowRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = options.headShape;
-    headShapeList.helpTip = "삼각형·제비꼬리는 채운 모양, 꺾쇠는 빛 굵기의 열린 선";
+    headShapeList.helpTip = "작살형이 평가원식. 모두 일러스트레이터 화살촉을 측정한 모양";
     addRow(rayPanel, "headSize", "화살촉 크기", "mm");
     addRow(rayPanel, "headDist", "화살촉 위치", "mm");
     rows.headDist.input.helpTip = "입사점(반사·굴절 지점)에서 화살촉 가운데까지의 거리. 광선 길이를 넘으면 끝에 둡니다";
