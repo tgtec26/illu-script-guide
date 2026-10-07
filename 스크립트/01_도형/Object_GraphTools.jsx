@@ -137,10 +137,11 @@ try {
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
         function addRows(page) {
             var PREF_KEY = "AxisTickMarks/settings";
-            // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
-            var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다
+            var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+            var ARROW_NATIVE = ["화살표 3", "화살표 4", "화살표 2", "화살표 1"];
             var HEAD_SCALE_RANGE = [30, 300];
-            var headType = 1;
+            var headShape = 3;
             var headScale = 100;
 
             var doc = app.activeDocument;
@@ -325,15 +326,15 @@ try {
             arrowCheck.value = true;
             arrowCheck.helpTip = "화살촉은 확인할 때 붙는다";
 
-            var headTypeGroup = legendPanel.add("group");
-            headTypeGroup.alignChildren = ["left", "center"];
-            headTypeGroup.add("statictext", undefined, "화살촉 종류:");
-            var headTypeList = headTypeGroup.add("dropdownlist", undefined, ARROW_TYPES);
-            headTypeList.selection = headType - 1;
-            headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
-            headTypeList.onChange = function() {
-                if (!headTypeList.selection) return;
-                headType = headTypeList.selection.index + 1;
+            var headShapeGroup = legendPanel.add("group");
+            headShapeGroup.alignChildren = ["left", "center"];
+            headShapeGroup.add("statictext", undefined, "화살촉 종류:");
+            var headShapeList = headShapeGroup.add("dropdownlist", undefined, HEAD_SHAPES);
+            headShapeList.selection = headShape;
+            headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
+            headShapeList.onChange = function() {
+                if (!headShapeList.selection) return;
+                headShape = headShapeList.selection.index;
             };
 
             var headScaleGroup = legendPanel.add("group");
@@ -373,7 +374,7 @@ try {
             function updateArrowEnabled() {
                 // 사각형 유지 모드에서는 축 끝이 없어 화살표를 붙일 수 없다
                 arrowCheck.enabled = axisShapeRadio.value;
-                headTypeList.enabled = arrowCheck.enabled;
+                headShapeList.enabled = arrowCheck.enabled;
                 headScaleInput.enabled = arrowCheck.enabled;
                 headScaleSlider.enabled = arrowCheck.enabled;
                 headScaleReset.enabled = arrowCheck.enabled;
@@ -865,7 +866,7 @@ try {
                     offsetXmm,
                     offsetYmm,
                     headScale,
-                    headType
+                    headShape
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -906,10 +907,10 @@ try {
                     if (p[0] === "v8" && p.length >= 23) {
                         var savedScale = parseNumber(p[21]);
                         if (savedScale !== null) commitHeadScale(savedScale);
-                        var savedType = parseInt(p[22], 10);
-                        if (savedType >= 1 && savedType <= ARROW_TYPES.length) {
-                            headType = savedType;
-                            headTypeList.selection = headType - 1;
+                        var savedShape = parseInt(p[22], 10);
+                        if (savedShape >= 0 && savedShape < HEAD_SHAPES.length) {
+                            headShape = savedShape;
+                            headShapeList.selection = headShape;
                         }
                     }
                 } catch (e) {}
@@ -976,7 +977,7 @@ try {
             function writeArrowheadAction(actionFile, actionSetName, actionName) {
                 var setName = toActionHex(actionSetName);
                 var name = toActionHex(actionName);
-                var arrow = toActionHex(ARROW_TYPES[headType - 1]);
+                var arrow = toActionHex(ARROW_NATIVE[headShape]);
                 var lines = [];
 
                 lines.push("/version 3");
@@ -4185,8 +4186,9 @@ try {
         function addRows(page) {
             var PREF_KEY = "ObjectSolarSpectrum/settings";
             var MM = 2.834645669;
-            // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
-            var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다
+            var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+            var ARROW_NATIVE = ["화살표 3", "화살표 4", "화살표 2", "화살표 1"];
             var HEAD_SCALE_RANGE = [30, 300];
 
             // ASTM G173-03 (NREL) 스펙트럼. 200~4000 nm, 5 nm 간격, 단위 mW/m²/nm
@@ -4299,7 +4301,7 @@ try {
             var maxUm = 3;
             var sigmaNm = 15;
             var strokePt = 0.4;
-            var headType = 1;
+            var headShape = 3;
             var headScale = 100;
             var showGround = true;
             var showUV = true;
@@ -4371,15 +4373,15 @@ try {
             var strokeField = addNumberField(curvePanel, "선 두께", "pt", strokePt, 0.1, STROKE_RANGE[0], STROKE_RANGE[1], DEFAULTS.strokePt);
             var headScaleField = addNumberField(curvePanel, "화살촉 크기", "%", headScale, 5, HEAD_SCALE_RANGE[0], HEAD_SCALE_RANGE[1], DEFAULTS.headScale);
             headScaleField.input.helpTip = "파장 영역 화살표의 화살촉. 확인할 때 붙는다";
-            var headTypeRow = curvePanel.add("group");
-            headTypeRow.alignChildren = ["left", "center"];
-            headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
-            var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
-            headTypeList.selection = headType - 1;
-            headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양). 확인할 때 붙는다";
-            headTypeList.onChange = function() {
-                if (!headTypeList.selection) return;
-                headType = headTypeList.selection.index + 1;
+            var headShapeRow = curvePanel.add("group");
+            headShapeRow.alignChildren = ["left", "center"];
+            headShapeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
+            var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
+            headShapeList.selection = headShape;
+            headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙이며, 확인할 때 붙는다";
+            headShapeList.onChange = function() {
+                if (!headShapeList.selection) return;
+                headShape = headShapeList.selection.index;
             };
 
             var showPanel = addPanel(dlg, "표시");
@@ -4981,7 +4983,7 @@ try {
             function writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale) {
                 var setName = toActionHex(actionSetName);
                 var name = toActionHex(actionName);
-                var arrow = toActionHex(ARROW_TYPES[headType - 1]);
+                var arrow = toActionHex(ARROW_NATIVE[headShape]);
                 var lines = [];
 
                 lines.push("/version 3");
@@ -5243,7 +5245,7 @@ try {
             function saveSettings() {
                 var parts = ["v2", rect !== null ? defaultWidthMm : widthMm, rect !== null ? defaultHeightMm : heightMm, maxUm, sigmaNm, strokePt,
                     showGround ? 1 : 0, showUV ? 1 : 0, showBands ? 1 : 0, fillToET ? 1 : 0,
-                    showTicks ? 1 : 0, showLegend ? 1 : 0, showRanges ? 1 : 0, offsetXmm, offsetYmm, headScale, headType];
+                    showTicks ? 1 : 0, showLegend ? 1 : 0, showRanges ? 1 : 0, offsetXmm, offsetYmm, headScale, headShape];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -5277,8 +5279,8 @@ try {
                 if (inRange(offY, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM])) offsetYmm = offY;
                 var savedHead = parseFloat(p[15]);
                 if (inRange(savedHead, HEAD_SCALE_RANGE)) headScale = savedHead;
-                var savedType = parseInt(p[16], 10);
-                if (savedType >= 1 && savedType <= ARROW_TYPES.length) headType = savedType;
+                var savedShape = parseInt(p[16], 10);
+                if (savedShape >= 0 && savedShape < HEAD_SHAPES.length) headShape = savedShape;
             }
             return null;
         }

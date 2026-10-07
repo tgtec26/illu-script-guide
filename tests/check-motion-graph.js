@@ -29,9 +29,9 @@ function extractVar(name) {
   return `var ${name} = ${match[1]};`;
 }
 
-const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW", "HEAD_HARPOON", "GRAPH_X_RATIO", "Y_TOP_RATIO", "Y_START_DOWN_RATIO", "CURVE_START_HANDLE", "CURVE_END_HANDLE",
+const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_EXAM", "HEAD_CATALOG", "GRAPH_X_RATIO", "Y_TOP_RATIO", "Y_START_DOWN_RATIO", "CURVE_START_HANDLE", "CURVE_END_HANDLE",
   "Y_CONST_MAX_RATIO", "WIDTH_RANGE", "HEIGHT_RANGE", "Y_VALUE_RANGE"];
-const names = ["graphGeometry", "arrowHeadPoints", "arrowHeadShape", "shaftInset", "corner", "clampOptions", "clamp"];
+const names = ["graphGeometry", "catalogPoints", "arrowHeadShape", "shaftInset", "corner", "clampOptions", "clamp"];
 const lib = new Function(`${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
   `return {${[...constants, ...names].join(",")}};`)();
 
@@ -50,54 +50,25 @@ const geo = (pattern) => lib.graphGeometry({...box, pattern});
   near(g.axes[1].to[1], 280 - (lib.ARROW.length - lib.ARROW.notch), 1e-9, "y axis line stops at the notch");
 }
 
-// 화살촉: 끝점, 날개 둘(대칭), 오목한 점
+// 화살촉: 일러스트레이터 화살촉 4종류(tools/arrowheads.json). 제비꼬리 길이 ARROW.length를 기준으로 배율 scale을 정하고, 선은 머리 속(lineEnd)에서 끝난다
 {
-  const head = lib.arrowHeadPoints([190, 200], [1, 0]);
-  assert.strictEqual(head.length, 4, "arrow head has four points");
-  assert.deepStrictEqual(head[0].anchor, [190, 200], "tip first");
-  near(head[1].anchor[0], 190 - lib.ARROW.length, 1e-9, "wing is one arrow length back");
-  near(head[1].anchor[1] + head[3].anchor[1], 400, 1e-9, "wings mirror across the axis");
-  near(Math.abs(head[1].anchor[1] - 200), lib.ARROW.halfWidth, 1e-9, "wing half width");
-  near(head[2].anchor[0], 190 - lib.ARROW.length + lib.ARROW.notch, 1e-9, "notch point");
-  const up = lib.arrowHeadPoints([100, 280], [0, 1]);
-  near(up[1].anchor[1], 280 - lib.ARROW.length, 1e-9, "upward arrow wing is back along y");
-}
-
-// 화살촉 모양: 제비꼬리(평가원식)는 위 네 점 그대로, 삼각형은 끝·날개 둘, 꺾쇠는 열린 선. 배율은 길이·폭에 같이 적용
-{
-  const swallow = lib.arrowHeadShape([190, 200], [1, 0], 1, lib.HEAD_SWALLOW);
-  assert.strictEqual(swallow.closed, true);
-  assert.strictEqual(swallow.points.length, 4);
-  assert.deepStrictEqual(swallow.points, lib.arrowHeadPoints([190, 200], [1, 0]), "default swallowtail is the exam-style head");
-  const triangle = lib.arrowHeadShape([190, 200], [1, 0], 1, lib.HEAD_TRIANGLE);
-  assert.strictEqual(triangle.closed, true);
-  assert.strictEqual(triangle.points.length, 3);
-  assert.deepStrictEqual(triangle.points[0].anchor, [190, 200], "triangle tip");
-  near(triangle.points[1].anchor[1] + triangle.points[2].anchor[1], 400, 1e-9, "triangle wings mirror");
-  const chevron = lib.arrowHeadShape([190, 200], [1, 0], 1, lib.HEAD_CHEVRON);
-  assert.strictEqual(chevron.closed, false);
-  assert.deepStrictEqual(chevron.points[1].anchor, [190, 200], "chevron apex is the tip");
-  const big = lib.arrowHeadShape([190, 200], [1, 0], 2, lib.HEAD_SWALLOW);
-  near(big.points[1].anchor[0], 190 - 2 * lib.ARROW.length, 1e-9, "scaled wing is further back");
-  near(Math.abs(big.points[1].anchor[1] - 200), 2 * lib.ARROW.halfWidth, 1e-9, "scaled wing is wider");
-  // 작살형(일러 화살표 3): 닫힌 여섯 점, 날개 끝은 머리 길이만큼 뒤, 홈은 끝에서 0.818 L
-  const harpoon = lib.arrowHeadShape([190, 200], [1, 0], 1, lib.HEAD_HARPOON);
-  assert.strictEqual(harpoon.closed, true);
-  assert.strictEqual(harpoon.points.length, 6);
-  assert.deepStrictEqual(harpoon.points[0].anchor, [190, 200], "harpoon tip");
-  near(harpoon.points[2].anchor[0], 190 - lib.ARROW.length, 1e-9, "barb tips one head length back");
-  near(Math.abs(harpoon.points[2].anchor[1] - 200), 0.306 * lib.ARROW.length, 1e-9, "barb half width");
-  near(harpoon.points[3].anchor[0], 190 - 0.818 * lib.ARROW.length, 1e-9, "notch 0.818 L from the tip");
-  near(harpoon.points[4].anchor[1] + harpoon.points[2].anchor[1], 400, 1e-9, "barbs mirror");
-  const harpoonUp = lib.arrowHeadShape([100, 280], [0, 1], 2, lib.HEAD_HARPOON);
-  near(harpoonUp.points[3].anchor[1], 280 - 0.818 * 2 * lib.ARROW.length, 1e-9, "upward notch scales");
-  near(lib.shaftInset(lib.HEAD_HARPOON, 1), 0.75 * lib.ARROW.length, 1e-9, "line stops inside the harpoon head");
-  assert.ok(lib.shaftInset(lib.HEAD_HARPOON, 1) > 0.818 * lib.ARROW.length - lib.ARROW.length * 0.1, "line reaches past the notch region");
-  // 축 선 끝: 제비꼬리는 오목한 점, 삼각형은 밑변 조금 앞, 꺾쇠는 끝점
-  near(lib.shaftInset(lib.HEAD_SWALLOW, 1), lib.ARROW.length - lib.ARROW.notch, 1e-9, "line stops at the notch");
-  near(lib.shaftInset(lib.HEAD_SWALLOW, 2), 2 * (lib.ARROW.length - lib.ARROW.notch), 1e-9, "notch distance scales");
-  near(lib.shaftInset(lib.HEAD_CHEVRON, 1), 0, 1e-9, "chevron line runs to the tip");
-  assert.ok(lib.shaftInset(lib.HEAD_TRIANGLE, 1) > 0 && lib.shaftInset(lib.HEAD_TRIANGLE, 1) < lib.ARROW.length, "triangle line ends inside the head");
+  const {catalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
+  assert.deepStrictEqual(lib.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), "same data as tools/arrowheads.json");
+  const k1 = lib.ARROW.length / 12.1;   // 평가원식(작살형) 길이가 ARROW.length
+  for (let shape = 0; shape < 4; shape++) {
+    const h = lib.arrowHeadShape([190, 200], [1, 0], 1, shape);
+    assert.strictEqual(h.closed, true);
+    assert.deepStrictEqual(h.points[0].anchor, [190, 200], `shape ${shape}: tip`);
+    nearPoints(h.points.map((p) => p.anchor), expectedPoints(shape, [190, 200], [1, 0], k1), `shape ${shape}`);
+    near(lib.shaftInset(shape, 1), catalog.types[shape].lineEnd * k1, 1e-9, `shape ${shape}: line stops at lineEnd`);
+    near(lib.shaftInset(shape, 2), 2 * catalog.types[shape].lineEnd * k1, 1e-9, `shape ${shape}: scales with the size`);
+    const bigHead = lib.arrowHeadShape([190, 200], [1, 0], 2, shape);
+    nearPoints(bigHead.points.map((p) => p.anchor), expectedPoints(shape, [190, 200], [1, 0], 2 * k1), `shape ${shape} at 200%`);
+  }
+  // 위쪽을 가리키는 화살촉
+  nearPoints(lib.arrowHeadShape([100, 280], [0, 1], 1, lib.HEAD_EXAM).points.map((p) => p.anchor), expectedPoints(3, [100, 280], [0, 1], k1), "upward swallowtail");
+  // 선이 머리에서 삐져나오지 않는다: 몸통 끝이 모든 모양에서 머리 길이 안쪽이다
+  for (let shape = 0; shape < 4; shape++) assert.ok(lib.shaftInset(shape, 1) < catalog.types[shape].length * k1, `shape ${shape}: line ends inside the head`);
 }
 
 // 모양: 일정 / 직선 증가 / 직선 감소 / 아래로 볼록 곡선 / 위로 볼록 곡선

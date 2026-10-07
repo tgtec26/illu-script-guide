@@ -22,17 +22,33 @@ try {
     var TAB_PREF_KEY = "HighMath2/tab";   // 마지막에 쓴 탭. 각 탭의 옵션은 탭마다 따로 저장한다
 
     // ==== 화살촉 (모든 탭 공통: 창 아래의 화살촉 모양·크기) ====
-    // 평가원식(제비꼬리)이 기본이다. 규격(길이·반폭·오목)은 registerHead로 등록하고, 모양·크기가 바뀌면 applyHeadStyle()이 등록된 규격을 다시 쓴다.
-    // 선이 머리와 만나는 거리가 길이 − 오목이라, 모양마다 오목을 달리 둔다(삼각형 0.1 L, 꺾쇠 L(선이 끝점까지), 작살형 0.25 L).
-    var HEAD_TRIANGLE = 0;
-    var HEAD_CHEVRON = 1;
-    var HEAD_SWALLOW = 2;
-    var HEAD_HARPOON = 3;
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리 (평가원식)", "작살형 (화살표 3)"];
+    // 작살형(평가원식)가 기본이다. 규격(길이·반폭·오목)은 registerHead로 등록하고, 모양·크기가 바뀌면 applyHeadStyle()이 등록된 규격을 다시 쓴다.
+    // 규격의 length는 작살형(평가원식) 머리 길이로 보고, 모양은 아래 카탈로그를 같은 배율로 그린다. 선이 머리와 만나는 거리가 길이 − 오목이라
+    // 오목을 고른 모양의 lineEnd에 맞춘다(삼각형 7.7, 꺾쇠 0.8, 제비꼬리 7, 작살형 9 — 작살형 길이 12.1 기준).
+    var HEAD_EXAM = 3;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
+
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
+    }
     var HEAD_PREF_KEY = "HighMath2/head";
     var HEAD_SIZE_RANGE = [30, 300];
-    var HEAD_STROKE_PT = 0.4;
-    var headStyle = {shape: HEAD_SWALLOW, size: 100};
+    var headStyle = {shape: HEAD_EXAM, size: 100};
     var headSpecs = [];
     loadHeadStyle();
 
@@ -48,49 +64,24 @@ try {
         var b = spec.base;
         spec.length = b.length * s;
         spec.halfWidth = b.halfWidth * s;
-        if (headStyle.shape === HEAD_TRIANGLE) spec.notch = spec.length * 0.1;
-        else if (headStyle.shape === HEAD_CHEVRON) spec.notch = spec.length;
-        else if (headStyle.shape === HEAD_HARPOON) spec.notch = spec.length * 0.25;
-        else spec.notch = b.notch * s;
+        spec.notch = spec.length - HEAD_CATALOG[headStyle.shape].lineEnd * spec.length / HEAD_CATALOG[HEAD_EXAM].length;
     }
 
     function applyHeadStyle() {
         for (var i = 0; i < headSpecs.length; i++) applyHeadSpec(headSpecs[i]);
     }
 
-    // 화살촉 점들 {points, closed}. 끝 tip, 방향 d, 규격 spec, 규격에 곱하는 배율 scale(없으면 1). 등록 안 한 규격은 늘 제비꼬리(평가원식)다
+    // 화살촉 점들 {points, closed}. 끝 tip, 방향 d, 규격 spec, 규격에 곱하는 배율 scale(없으면 1). 등록 안 한 규격은 늘 작살형(평가원식)다
     function headShapeFor(tip, d, spec, scale) {
-        var k = scale === undefined ? 1 : scale;
-        var n = [-d[1], d[0]];
-        var len = spec.length * k, half = spec.halfWidth * k, notch = spec.notch * k;
-        var back = [tip[0] - d[0] * len, tip[1] - d[1] * len];
-        var wingA = [back[0] + n[0] * half, back[1] + n[1] * half];
-        var wingB = [back[0] - n[0] * half, back[1] - n[1] * half];
-        var shape = spec.base ? headStyle.shape : HEAD_SWALLOW;
-        if (shape === HEAD_CHEVRON) return {points: [wingA, tip, wingB], closed: false};
-        if (shape === HEAD_TRIANGLE) return {points: [tip, wingA, wingB], closed: true};
-        if (shape === HEAD_HARPOON) {
-            // 일러 화살표 3: 머리 길이 L에 날개 반폭 0.306 L, 중간(끝에서 0.504 L) 반폭 0.116 L, 홈은 끝에서 0.818 L
-            var at = function(f, w) { return [tip[0] - d[0] * len * f + n[0] * len * w, tip[1] - d[1] * len * f + n[1] * len * w]; };
-            return {points: [tip, at(0.504, 0.116), at(1, 0.306), at(0.818, 0), at(1, -0.306), at(0.504, -0.116)], closed: true};
-        }
-        return {points: [tip, wingA, [back[0] + d[0] * notch, back[1] + d[1] * notch], wingB], closed: true};
+        var k = spec.length * (scale === undefined ? 1 : scale) / HEAD_CATALOG[HEAD_EXAM].length;
+        return {points: catalogPoints(spec.base ? headStyle.shape : HEAD_EXAM, tip, d, k), closed: true};
     }
 
-    // 닫힌 모양은 채우고, 꺾쇠(열린 선)는 HEAD_STROKE_PT로 긋는다
+    // 화살촉은 채운 닫힌 패스다
     function paintHead(path, closed, color) {
-        if (closed) {
-            path.stroked = false;
-            path.filled = true;
-            path.fillColor = color;
-        } else {
-            path.filled = false;
-            path.stroked = true;
-            path.strokeColor = color;
-            path.strokeWidth = HEAD_STROKE_PT;
-            path.strokeCap = StrokeCap.BUTTENDCAP;
-            path.strokeJoin = StrokeJoin.MITERENDJOIN;
-        }
+        path.stroked = false;
+        path.filled = true;
+        path.fillColor = color;
     }
 
     function loadHeadStyle() {
@@ -153,7 +144,7 @@ try {
     previewCheck.value = true;
     var headShapeList = footer.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = headStyle.shape;
-    headShapeList.helpTip = "모든 탭의 화살촉 모양. 제비꼬리가 평가원식(기본). 삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 축 굵기 정도의 열린 선";
+    headShapeList.helpTip = "모든 탭의 화살촉 모양. 작살형이 평가원식(기본). 모두 일러스트레이터 화살촉을 측정한 모양";
     var footerSpacer = footer.add("group");
     footerSpacer.alignment = ["fill", "center"];
     // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다

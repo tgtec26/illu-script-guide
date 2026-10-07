@@ -31,8 +31,8 @@ function extractVar(name) {
 
 const constants = ["MM", "KAPPA", "MOUTH_MARGIN_MM", "MIN_VACUUM_MM", "CORNER_R_MM", "FRAME_W_RANGE", "FRAME_H_RANGE",
   "TROUGH_W_RANGE", "TROUGH_H_RANGE", "DEPTH_RANGE", "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE",
-  "DIM_HEAD_LEN_MM", "DIM_HEAD_WIDTH_MM", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW", "HEAD_HARPOON"];
-const names = ["clampOptions", "mouthHeights", "mercuryGeometry", "uPath", "corner", "cornerAt", "clamp", "dimHeadPoints", "dimLineInset"];
+  "DIM_HEAD_LEN_MM", "HEAD_TRIANGLE", "HEAD_CATALOG"];
+const names = ["clampOptions", "mouthHeights", "mercuryGeometry", "uPath", "corner", "cornerAt", "clamp", "catalogPoints", "dimHeadPoints", "dimLineInset"];
 const lib = new Function(`${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
   `return {${[...constants, ...names].join(",")}};`)();
 
@@ -114,41 +114,22 @@ for (const tilt of [-45, -20, 0, 10, 30, 60]) {
   assert.deepStrictEqual(g.troughFill[0].anchor, [-50, 40], "mercury fill stops at the surface");
   near(g.troughOutline[2].left[0], -42 - lib.KAPPA * 8, 1e-9, "corner handle uses KAPPA");
 }
-// 치수선 화살촉: 삼각형은 닫힌 세 점, 꺾쇠는 열린 선, 제비꼬리는 닫힌 네 점. 배율은 길이·폭에 같이 적용, 위·아래 방향
+// 치수선 화살촉: 일러스트레이터 화살촉 4종류(tools/arrowheads.json). 삼각형 머리 길이가 DIM_HEAD_LEN_MM × scale이고 다른 모양도 같은 배율, 위·아래 방향
 {
+  const {catalog, nearPoints} = require("./arrowhead-catalog.js");
+  assert.deepStrictEqual(lib.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), "same data as tools/arrowheads.json");
   const len = lib.DIM_HEAD_LEN_MM * MM;
-  const half = lib.DIM_HEAD_WIDTH_MM * MM / 2;
-  const up = lib.dimHeadPoints(10, 50, 1, lib.HEAD_TRIANGLE, 1);
-  assert.strictEqual(up.closed, true);
-  assert.deepStrictEqual(up.points[0], [10, 50], "tip at (x, y)");
-  near(up.points[1][1], 50 - len, 1e-9, "upward head's base is below the tip");
-  near(up.points[1][0] - up.points[2][0], 2 * half, 1e-9, "base width");
-  const down = lib.dimHeadPoints(10, 50, -1, lib.HEAD_TRIANGLE, 1);
-  near(down.points[1][1], 50 + len, 1e-9, "downward head's base is above the tip");
-  const big = lib.dimHeadPoints(10, 50, 1, lib.HEAD_TRIANGLE, 2);
-  near(big.points[1][1], 50 - 2 * len, 1e-9, "scaled length");
-  near(big.points[1][0] - big.points[2][0], 4 * half, 1e-9, "scaled width");
-  const chevron = lib.dimHeadPoints(10, 50, 1, lib.HEAD_CHEVRON, 1);
-  assert.strictEqual(chevron.closed, false);
-  assert.deepStrictEqual(chevron.points[1], [10, 50], "chevron apex at the tip");
-  const swallow = lib.dimHeadPoints(10, 50, 1, lib.HEAD_SWALLOW, 1);
-  assert.strictEqual(swallow.closed, true);
-  assert.strictEqual(swallow.points.length, 4);
-  near(swallow.points[2][1], 50 - len + 0.3 * len, 1e-9, "notch 0.3 head lengths ahead of the base");
-  // 작살형(일러 화살표 3): 닫힌 여섯 점, 날개 끝은 머리 길이만큼 뒤, 홈은 끝에서 0.818 L, 위·아래 방향
-  const harpoon = lib.dimHeadPoints(10, 50, 1, lib.HEAD_HARPOON, 1);
-  assert.strictEqual(harpoon.closed, true);
-  assert.strictEqual(harpoon.points.length, 6);
-  assert.deepStrictEqual(harpoon.points[0], [10, 50], "harpoon tip");
-  near(harpoon.points[2][1], 50 - len, 1e-9, "barb tips one head length below the tip");
-  near(Math.abs(harpoon.points[2][0] - 10), 0.306 * len, 1e-9, "barb half width");
-  near(harpoon.points[3][1], 50 - 0.818 * len, 1e-9, "notch 0.818 L from the tip");
-  near(lib.dimHeadPoints(10, 50, -1, lib.HEAD_HARPOON, 1).points[3][1], 50 + 0.818 * len, 1e-9, "downward notch");
-  near(lib.dimLineInset(len, lib.HEAD_HARPOON), 0.75 * len, 1e-9, "line stops inside the harpoon head");
-  // 치수선 끝: 삼각형은 밑변, 제비꼬리는 홈 안쪽, 꺾쇠는 끝점
-  near(lib.dimLineInset(len, lib.HEAD_TRIANGLE), len, 1e-9, "line stops at the base");
-  near(lib.dimLineInset(len, lib.HEAD_CHEVRON), 0, 1e-9, "chevron line runs to the tip");
-  assert.ok(lib.dimLineInset(len, lib.HEAD_SWALLOW) < 0.7 * len + 1e-9, "swallowtail line ends inside the solid part");
+  const k = len / 8.6;
+  for (let shape = 0; shape < 4; shape++) {
+    for (const dir of [1, -1]) {
+      const h = lib.dimHeadPoints(10, 50, dir, shape, 1);
+      assert.strictEqual(h.closed, true);
+      nearPoints(h.points, catalog.types[shape].poly.map((p) => [10 + p[0] * k, 50 - dir * p[1] * k]), `shape ${shape} dir ${dir}`);
+    }
+    nearPoints(lib.dimHeadPoints(10, 50, 1, shape, 2).points, catalog.types[shape].poly.map((p) => [10 + p[0] * 2 * k, 50 - p[1] * 2 * k]), `shape ${shape} at 200%`);
+    near(lib.dimLineInset(len, shape), catalog.types[shape].lineEnd * k, 1e-9, `shape ${shape}: line stops at lineEnd`);
+    assert.ok(lib.dimLineInset(len, shape) < catalog.types[shape].length * k, `shape ${shape}: line ends inside the head`);
+  }
 }
 
 // 설정 저장·복원: 저장한 값이 그대로 돌아오고, 형식이 다르거나 범위를 벗어난 값은 무시·보정한다

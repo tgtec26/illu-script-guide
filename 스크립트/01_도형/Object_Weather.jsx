@@ -24,10 +24,23 @@ try {
     var locale = "";
     try { locale = String(app.locale).toLowerCase(); } catch (localeError) {}
     var isKorean = (locale === "" || locale.indexOf("ko") === 0);
-    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 목록 번호(0~7)가 화살표 번호 − 1이다
-    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다.
+    // 층 묶음 기호는 중괄호용 촉(바깥 끝 7, 가운데 끝 6)으로 고정이다
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
     var ARROW_PREFIX = isKorean ? "화살표 " : "Arrow ";
-    function arrowNameOf(index) { return ARROW_PREFIX + (index + 1); }
+    var ARROW_NUMBER = [3, 4, 2, 1];
+    function arrowNameOf(shape) { return ARROW_PREFIX + ARROW_NUMBER[shape]; }
+    var ARROW_BRACE_OUTER = ARROW_PREFIX + 7;
+    var ARROW_BRACE_INNER = ARROW_PREFIX + 6;
     var ARROW_ALIGN_TIP = isKorean ? "패스 끝의 팁" : "Tip of arrow at end of path";
     var BRACE_PT = 0.5;
 
@@ -54,9 +67,7 @@ try {
                 {key: "braces", check: "층 묶음 기호", value: false},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
                 {panel: "화살촉"},
-                {key: "headType", label: "축 화살촉", items: ARROW_TYPES, value: 0},
-                {key: "braceOuter", label: "묶음 바깥 끝", items: ARROW_TYPES, value: 6},
-                {key: "braceInner", label: "묶음 가운데 끝", items: ARROW_TYPES, value: 5},
+                {key: "headShape", label: "축 화살촉 모양", items: HEAD_SHAPES, value: 3},
                 {key: "headScale", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100}
             ],
             draw: drawAtmosphere
@@ -136,7 +147,7 @@ try {
 
         // 축은 한 패스(Y축 끝 → 원점 → X축 끝). 화살촉은 DOM에 없어 액션으로 단다
         var axis = t.path([[0, H + ARROW_MARGIN], [0, 0], [W + ARROW_MARGIN, 0]], false, null, 100, AXIS_PT);
-        if (o.arrows) setStrokeArrowheads([axis], arrowNameOf(o.headType), arrowNameOf(o.headType), AXIS_PT, o.headScale);
+        if (o.arrows) setStrokeArrowheads([axis], arrowNameOf(o.headShape), arrowNameOf(o.headShape), AXIS_PT, o.headScale);
 
         // 층 묶음 기호 (Object_RegionBrace.jsx): 층 높이만큼의 세로선을 가운데에서 잘라
         // 바깥 끝에 화살표 7, 가운데 끝에 화살표 6. 이웃한 기호가 붙지 않게 0.2mm씩 띄운다
@@ -149,8 +160,8 @@ try {
                 tails.push(t.line([bx, ym], [bx, y0], BRACE_PT));
                 if (o.names) t.text(NAMES[b], bx + 2 * mm, ym, F, "left");
             }
-            setStrokeArrowheads(heads, arrowNameOf(o.braceOuter), arrowNameOf(o.braceInner), BRACE_PT, o.headScale);
-            setStrokeArrowheads(tails, arrowNameOf(o.braceInner), arrowNameOf(o.braceOuter), BRACE_PT, o.headScale);
+            setStrokeArrowheads(heads, ARROW_BRACE_OUTER, ARROW_BRACE_INNER, BRACE_PT, o.headScale);
+            setStrokeArrowheads(tails, ARROW_BRACE_INNER, ARROW_BRACE_OUTER, BRACE_PT, o.headScale);
         }
     }
 
@@ -233,7 +244,7 @@ try {
                 {panel: "화살표"},
                 {key: "arrowPt", label: "선 두께", unit: "pt", min: 0.3, max: 2, step: 0.05, value: 0.75},
                 {key: "headScale", label: "촉 크기", unit: "%", min: 30, max: 200, step: 5, value: 100},
-                {key: "headType", label: "촉 종류", items: ARROW_TYPES, value: 0},
+                {key: "headShape", label: "촉 모양", items: HEAD_SHAPES, value: 3},
                 {panel: "축 (옆에서 본 모습)"},
                 {key: "axes", check: "축", value: false},
                 {key: "axisArrows", check: "축 화살표", value: true},
@@ -295,7 +306,7 @@ try {
             winds.push(t.line([c[0] - d[0] * length / 2, c[1] - d[1] * length / 2], [c[0] + d[0] * length / 2, c[1] + d[1] * length / 2], o.arrowPt));
         }
         // 화살촉은 고른 종류(기본 화살표 1, 패스 끝의 팁)
-        if (winds.length) setStrokeArrowheads(winds, null, arrowNameOf(o.headType), o.arrowPt, o.headScale);
+        if (winds.length) setStrokeArrowheads(winds, null, arrowNameOf(o.headShape), o.arrowPt, o.headScale);
     }
 
     // 옆 모습: 가운데 하강(고기압)·상승(저기압) 기류, 지면에서 불어 나가거나 들어오는 바람, 위에서 반대로.
@@ -317,7 +328,7 @@ try {
                 flow([near, H], [far, H]);
             }
         }
-        setStrokeArrowheads(flows, null, arrowNameOf(o.headType), o.arrowPt, o.headScale);
+        setStrokeArrowheads(flows, null, arrowNameOf(o.headShape), o.arrowPt, o.headScale);
         t.text(high ? "하강 기류" : "상승 기류", 1.5 * mm, H / 2, F, "left");
 
         if (o.axes) {
@@ -328,7 +339,7 @@ try {
                 t.line([-half, ty], [-half + sign * TICK, ty], AXIS_PT);
             }
             var axis = t.path([[-half, H + ARROW_MARGIN], [-half, 0], [half + ARROW_MARGIN, 0]], false, null, 100, AXIS_PT);
-            if (o.axisArrows) setStrokeArrowheads([axis], arrowNameOf(o.headType), arrowNameOf(o.headType), AXIS_PT, 100);
+            if (o.axisArrows) setStrokeArrowheads([axis], arrowNameOf(o.headShape), arrowNameOf(o.headShape), AXIS_PT, 100);
             t.text("높이", -half, H + ARROW_MARGIN + F * 0.7, F);
         } else {
             t.line([-half, 0], [half, 0], 0.5);
@@ -350,7 +361,7 @@ try {
                 {key: "names", check: "육지·바다 이름", value: true},
                 {key: "pressure", check: "기압", value: true},
                 {key: "when", check: "때", value: false},
-                {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"], value: 0},
+                {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"], value: 0},
                 {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
             ],
@@ -663,6 +674,17 @@ try {
         return Number(value).toFixed(decimals);
     }
 
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
+    }
+
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다
     function makeFormTools(g, o) {
         var t = {mm: FORM_MM, group: g};
@@ -701,8 +723,8 @@ try {
             formPaint(p, fillK, strokeK, width);
             return p;
         };
-        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리, 3 작살형), 크기는 o.headSize(%).
-        // 삼각형·제비꼬리·작살형은 채운 촉이고 선은 촉 뿌리(제비꼬리·작살형은 홈 안쪽)까지, 꺾쇠는 선 두께의 열린 선이고 선이 끝점까지 간다
+        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리, 3 작살형), 크기는 o.headSize(%): 삼각형 머리 길이가 headLength × 크기이고 다른 모양도 같은 배율을 쓴다.
+        // 선은 머리 속(lineEnd)에서 끝나 틈이 없다
         t.arrow = function(a, b, width, k, headLength) {
             if (k === undefined) k = 100;
             var scale = o && o.headSize ? o.headSize / 100 : 1;
@@ -713,30 +735,10 @@ try {
             if (len < 0.01) return;
             var ux = dx / len, uy = dy / len;
             if (head > len) head = len;
-            var base = [b[0] - ux * head, b[1] - uy * head];
-            var half = head * 0.35;
-            var left = [base[0] - uy * half, base[1] + ux * half];
-            var right = [base[0] + uy * half, base[1] - ux * half];
-            if (shape === 1) {
-                t.line(a, b, width, k);
-                t.path([left, b, right], false, null, k, width);
-                return;
-            }
-            if (shape === 3) {
-                // 작살형(일러 화살표 3): 머리 길이 head에 날개 반폭 0.306 head, 중간(끝에서 0.504 head) 반폭 0.116 head, 홈은 끝에서 0.818 head
-                var at = function(f, w) { return [b[0] - ux * head * f - uy * head * w, b[1] - uy * head * f + ux * head * w]; };
-                if (len > head * 0.75) t.line(a, [b[0] - ux * head * 0.75, b[1] - uy * head * 0.75], width, k);
-                t.path([at(0, 0), at(0.504, 0.116), at(1, 0.306), at(0.818, 0), at(1, -0.306), at(0.504, -0.116)], true, k, null, 0);
-                return;
-            }
-            if (shape === 2) {
-                var notch = [b[0] - ux * head * 0.7, b[1] - uy * head * 0.7];
-                if (len > head * 0.6) t.line(a, [b[0] - ux * head * 0.6, b[1] - uy * head * 0.6], width, k);
-                t.path([b, left, notch, right], true, k, null, 0);
-                return;
-            }
-            if (len > head) t.line(a, [base[0] + ux * 0.2, base[1] + uy * 0.2], width, k);
-            t.path([b, left, right], true, k, null, 0);
+            var unit = head / HEAD_CATALOG[0].length;
+            var lineEnd = HEAD_CATALOG[shape].lineEnd * unit;
+            if (len > lineEnd) t.line(a, [b[0] - ux * lineEnd, b[1] - uy * lineEnd], width, k);
+            t.path(catalogPoints(shape, b, [ux, uy], unit), true, k, null, 0);
         };
         // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). sub: 글자 뒤 숫자를 아래 첨자로
         t.text = function(text, x, y, size, align, k, sub) {

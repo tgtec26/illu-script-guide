@@ -21,6 +21,15 @@ try {
     var FORM_KOR_FONT = formFindFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
 
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
+
     runFormHost("화학 반응 모형", [makeChemEngine()], "");
 
     // ==== 화학 반응 모형 ====
@@ -42,7 +51,7 @@ try {
                 {key: "symbols", check: "원소 기호", value: true},
                 {key: "labels", check: "이름", value: true},
                 {key: "equation", check: "반응식", value: false},
-                {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"], value: 0},
+                {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"], value: 0},
                 {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
             ],
@@ -478,6 +487,17 @@ try {
         return Number(value).toFixed(decimals);
     }
 
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
+    }
+
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다
     function makeFormTools(g, o) {
         var t = {mm: FORM_MM, group: g};
@@ -516,8 +536,8 @@ try {
             formPaint(p, fillK, strokeK, width);
             return p;
         };
-        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리, 3 작살형), 크기는 o.headSize(%).
-        // 삼각형·제비꼬리·작살형은 채운 촉이고 선은 촉 뿌리(제비꼬리·작살형은 홈 안쪽)까지, 꺾쇠는 선 두께의 열린 선이고 선이 끝점까지 간다
+        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리, 3 작살형), 크기는 o.headSize(%): 삼각형 머리 길이가 headLength × 크기이고 다른 모양도 같은 배율을 쓴다.
+        // 선은 머리 속(lineEnd)에서 끝나 틈이 없다
         t.arrow = function(a, b, width, k, headLength) {
             if (k === undefined) k = 100;
             var scale = o && o.headSize ? o.headSize / 100 : 1;
@@ -528,30 +548,10 @@ try {
             if (len < 0.01) return;
             var ux = dx / len, uy = dy / len;
             if (head > len) head = len;
-            var base = [b[0] - ux * head, b[1] - uy * head];
-            var half = head * 0.35;
-            var left = [base[0] - uy * half, base[1] + ux * half];
-            var right = [base[0] + uy * half, base[1] - ux * half];
-            if (shape === 1) {
-                t.line(a, b, width, k);
-                t.path([left, b, right], false, null, k, width);
-                return;
-            }
-            if (shape === 3) {
-                // 작살형(일러 화살표 3): 머리 길이 head에 날개 반폭 0.306 head, 중간(끝에서 0.504 head) 반폭 0.116 head, 홈은 끝에서 0.818 head
-                var at = function(f, w) { return [b[0] - ux * head * f - uy * head * w, b[1] - uy * head * f + ux * head * w]; };
-                if (len > head * 0.75) t.line(a, [b[0] - ux * head * 0.75, b[1] - uy * head * 0.75], width, k);
-                t.path([at(0, 0), at(0.504, 0.116), at(1, 0.306), at(0.818, 0), at(1, -0.306), at(0.504, -0.116)], true, k, null, 0);
-                return;
-            }
-            if (shape === 2) {
-                var notch = [b[0] - ux * head * 0.7, b[1] - uy * head * 0.7];
-                if (len > head * 0.6) t.line(a, [b[0] - ux * head * 0.6, b[1] - uy * head * 0.6], width, k);
-                t.path([b, left, notch, right], true, k, null, 0);
-                return;
-            }
-            if (len > head) t.line(a, [base[0] + ux * 0.2, base[1] + uy * 0.2], width, k);
-            t.path([b, left, right], true, k, null, 0);
+            var unit = head / HEAD_CATALOG[0].length;
+            var lineEnd = HEAD_CATALOG[shape].lineEnd * unit;
+            if (len > lineEnd) t.line(a, [b[0] - ux * lineEnd, b[1] - uy * lineEnd], width, k);
+            t.path(catalogPoints(shape, b, [ux, uy], unit), true, k, null, 0);
         };
         // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). sub: 글자 뒤 숫자를 아래 첨자로
         t.text = function(text, x, y, size, align, k, sub) {

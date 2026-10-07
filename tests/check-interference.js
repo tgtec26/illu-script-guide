@@ -14,8 +14,8 @@ const end = source.indexOf("// ==== 순수 기하 끝");
 assert.ok(start > 0 && end > start, "pure geometry markers");
 const pure = source.slice(start, end);
 const geo = new Function(`${pure}
-return {PULSE, TRAIN, SAMPLES_PER_WAVELENGTH, ARROW_LEN_MM, ARROW_GAP_MM, ARROW_STACK_MM, LINE_MARGIN_MM, HEAD_LEN_MM, HEAD_HALF_MM,
-  HEAD_TRIANGLE, HEAD_CHEVRON, HEAD_SWALLOW, HEAD_HARPOON,
+return {PULSE, TRAIN, SAMPLES_PER_WAVELENGTH, ARROW_LEN_MM, ARROW_GAP_MM, ARROW_STACK_MM, LINE_MARGIN_MM, HEAD_LEN_MM,
+  HEAD_TRIANGLE, HEAD_CATALOG,
   halfSupport, snapPulsePhase, waveAt, sumAt, wavesOverlap, curvePoints, lineExtent, curveTop, arrowHeights, arrowShape,
   stateCaption};`)();
 const {PULSE, TRAIN} = geo;
@@ -165,51 +165,28 @@ function maxCurveError(waves, from, to) {
   near(far[1], far[0], 1e-9, "far arrows share a height");
 }
 
-// 화살표 모양: 끝점, 대칭 날개, 몸통은 화살촉 속에서 끝남
+// 화살표 모양: 일러스트레이터 화살촉 4종류(tools/arrowheads.json). 삼각형 머리 길이가 HEAD_LEN_MM이고 다른 모양도 같은 배율, 몸통은 머리 속(lineEnd)에서 끝난다
 {
-  const right = geo.arrowShape(-4, 4, 12);
-  assert.deepStrictEqual(right.head[0], [4, 12], "head tip at the tip");
-  near(right.head[1][1] + right.head[2][1], 24, 1e-9, "wings mirror across the arrow axis");
-  near(right.head[1][0], 4 - geo.HEAD_LEN_MM, 1e-9, "wings one head length back");
-  assert.ok(right.line[1][0] > right.head[1][0] && right.line[1][0] < 4, "body ends inside the head");
-  const left = geo.arrowShape(4, -4, 12);
-  assert.deepStrictEqual(left.head[0], [-4, 12], "left-pointing tip");
-  assert.ok(left.line[1][0] < left.head[1][0] && left.line[1][0] > -4, "left body ends inside the head");
-  assert.strictEqual(right.closed, true, "default head is the filled triangle");
-
-  // 배율: 날개 위치와 폭이 같은 비율로 커진다
-  const big = geo.arrowShape(-4, 4, 12, 2, geo.HEAD_TRIANGLE);
-  near(big.head[1][0], 4 - 2 * geo.HEAD_LEN_MM, 1e-9, "head length scales");
-  near(big.head[1][1] - 12, 2 * geo.HEAD_HALF_MM, 1e-9, "head half width scales");
-
-  // 꺾쇠: 열린 선 [날개, 끝, 날개], 몸통이 끝점까지
-  const chevron = geo.arrowShape(-4, 4, 12, 1, geo.HEAD_CHEVRON);
-  assert.strictEqual(chevron.closed, false, "chevron is open");
-  assert.deepStrictEqual(chevron.head[1], [4, 12], "chevron apex at the tip");
-  assert.deepStrictEqual(chevron.line[1], [4, 12], "body runs to the tip");
-  near(chevron.head[0][0], 4 - geo.HEAD_LEN_MM, 1e-9, "chevron arms one head length back");
-
-  // 제비꼬리: 닫힌 네 점, 홈은 밑변에서 머리 길이의 0.3 앞, 몸통은 홈 앞에서 끝남
-  const swallow = geo.arrowShape(-4, 4, 12, 1, geo.HEAD_SWALLOW);
-  assert.strictEqual(swallow.closed, true);
-  assert.strictEqual(swallow.head.length, 4);
-  near(swallow.head[2][0], 4 - 0.7 * geo.HEAD_LEN_MM, 1e-9, "notch 0.3 head lengths ahead of the base");
-  assert.ok(swallow.line[1][0] > swallow.head[1][0] && swallow.line[1][0] < 4 - 0.7 * geo.HEAD_LEN_MM + 1e-9 + geo.HEAD_LEN_MM, "body ends inside the head");
-  // 작살형(일러 화살표 3): 닫힌 여섯 점, 날개 끝은 머리 길이만큼 뒤, 홈은 끝에서 0.818 L, 몸통은 홈 안쪽에서 끝남
-  const harpoon = geo.arrowShape(-4, 4, 12, 1, geo.HEAD_HARPOON);
-  assert.strictEqual(harpoon.closed, true);
-  assert.strictEqual(harpoon.head.length, 6);
-  assert.deepStrictEqual(harpoon.head[0], [4, 12], "harpoon tip");
-  near(harpoon.head[2][0], 4 - geo.HEAD_LEN_MM, 1e-9, "barb tips one head length back");
-  near(Math.abs(harpoon.head[2][1] - 12), 0.306 * geo.HEAD_LEN_MM, 1e-9, "barb half width");
-  near(harpoon.head[3][0], 4 - 0.818 * geo.HEAD_LEN_MM, 1e-9, "notch 0.818 L from the tip");
-  near(harpoon.head[1][0], 4 - 0.504 * geo.HEAD_LEN_MM, 1e-9, "mid point 0.504 L from the tip");
-  near(harpoon.head[4][1] + harpoon.head[2][1], 24, 1e-9, "barbs mirror across the axis");
-  assert.ok(harpoon.line[1][0] > harpoon.head[3][0] - 1e-9 && harpoon.line[1][0] < 4, "body ends inside the head");
-  const harpoonLeft = geo.arrowShape(4, -4, 12, 1, geo.HEAD_HARPOON);
-  near(harpoonLeft.head[3][0], -4 + 0.818 * geo.HEAD_LEN_MM, 1e-9, "left-pointing notch");
-  const swallowLeft = geo.arrowShape(4, -4, 12, 1, geo.HEAD_SWALLOW);
-  near(swallowLeft.head[2][0], -4 + 0.7 * geo.HEAD_LEN_MM, 1e-9, "left-pointing notch");
+  const {catalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
+  const k = geo.HEAD_LEN_MM / 8.6;
+  assert.deepStrictEqual(geo.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), "same data as tools/arrowheads.json");
+  for (let shape = 0; shape < 4; shape++) {
+    // 오른쪽(+x)으로 가는 화살표
+    const right = geo.arrowShape(-4, 4, 12, 1, shape);
+    assert.strictEqual(right.closed, true);
+    nearPoints(right.head, expectedPoints(shape, [4, 12], [1, 0], k), `right-pointing shape ${shape}`);
+    near(right.line[0][0], -4, 1e-9, `shape ${shape} body starts at the tail`);
+    near(right.line[1][0], 4 - catalog.types[shape].lineEnd * k, 1e-9, `shape ${shape} body ends at lineEnd`);
+    // 왼쪽으로 가는 화살표는 거울상
+    const left = geo.arrowShape(4, -4, 12, 1, shape);
+    near(left.line[1][0], -4 + catalog.types[shape].lineEnd * k, 1e-9, `shape ${shape} left-pointing body end`);
+    assert.deepStrictEqual(left.head[0], [-4, 12], `shape ${shape} left-pointing tip`);
+  }
+  // 배율: 모든 점의 끝에서의 거리가 같은 비율로 커진다
+  const small = geo.arrowShape(-4, 4, 12, 1, 2), big = geo.arrowShape(-4, 4, 12, 2, 2);
+  near(4 - big.head[1][0], 2 * (4 - small.head[1][0]), 1e-9, "scaled notch distance");
+  // 기본(모양 인자 없음)은 삼각형
+  assert.deepStrictEqual(geo.arrowShape(-4, 4, 12).head, geo.arrowShape(-4, 4, 12, 1, geo.HEAD_TRIANGLE).head);
 }
 
 // 설정 저장·복원: 저장한 값이 그대로 돌아오고, 형식이 다르면 기본값을 지킨다

@@ -10,7 +10,6 @@ try {
     __memo.close();
 } catch (e) {}
 
-
 // 순환·배설: 화면 가운데에 두 모식도 중 하나를 그린다.
 //   - 혈액 순환: 심장 네 칸(보는 사람 기준 왼쪽이 우심방·우심실), 위에 폐, 아래에 온몸. 우심실 → 폐동맥 → 폐 → 폐정맥 → 좌심방(폐순환),
 //     좌심실 → 대동맥 → 온몸 → 대정맥 → 우심방(온몸 순환). 동맥혈은 빨간색, 정맥혈은 파란색(회색 모드는 연한·진한 회색).
@@ -33,10 +32,16 @@ try {
     var BASE_HEAD_LENGTH = 1.8 * MM;
     var BASE_HEAD_WIDTH = 1.4 * MM;
     var HEAD_TRIANGLE = 0;
-    var HEAD_CHEVRON = 1;
-    var HEAD_SWALLOW = 2;
-    var HEAD_HARPOON = 3;
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"];
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
     var HEAD_LENGTH = BASE_HEAD_LENGTH;
     var HEAD_WIDTH = BASE_HEAD_WIDTH;
     var ARTERIAL = {cmyk: [0, 90, 80, 0], rgb: [220, 40, 40], k: 15};
@@ -119,7 +124,7 @@ try {
     headShapeRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
     var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = headShape;
-    headShapeList.helpTip = "삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    headShapeList.helpTip = "모두 일러스트레이터 화살촉을 측정한 모양";
     var fontRow = addValueRow(markPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
 
     var positionPanel = addPanel(dlg, "위치");
@@ -535,29 +540,23 @@ try {
         return [tip, [bx - uy * HEAD_WIDTH / 2, by + ux * HEAD_WIDTH / 2], [bx + uy * HEAD_WIDTH / 2, by - ux * HEAD_WIDTH / 2]];
     }
 
-    // 작살형(일러 화살표 3): 삼각형 세 점 [끝, 밑변 한쪽, 밑변 다른쪽]에서 만든 여섯 점 [끝, 오른쪽 중간, 오른쪽 날개 끝, 홈, 왼쪽 날개 끝, 왼쪽 중간].
-    // 머리 길이 L에 대해 날개 반폭 0.306 L, 중간(끝에서 0.504 L) 반폭 0.116 L, 홈은 끝에서 0.818 L
-    function harpoonPoints(t) {
-        var mx = (t[1][0] + t[2][0]) / 2, my = (t[1][1] + t[2][1]) / 2;
-        var ax = t[0][0] - mx, ay = t[0][1] - my;
-        var len = Math.sqrt(ax * ax + ay * ay);
-        var wx = t[2][0] - t[1][0], wy = t[2][1] - t[1][1];
-        var wl = Math.sqrt(wx * wx + wy * wy);
-        var nx = wx / wl, ny = wy / wl;
-        function at(f, s) { return [mx + ax * f + nx * s * len, my + ay * f + ny * s * len]; }
-        return [t[0], at(0.496, 0.116), at(0, 0.306), at(0.182, 0), at(0, -0.306), at(0.496, -0.116)];
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
     }
 
-    // 화살촉 모양: 삼각형·제비꼬리는 채운 닫힌 패스, 꺾쇠는 열린 선. 모두 삼각형 세 점에서 만든다
+    // 모양은 카탈로그에서 만든다. 삼각형 머리(arrowHeadPoints)의 길이를 카탈로그 삼각형 길이(8.6)로 보고 배율을 정한다
     function arrowHeadShape(tip, dx, dy) {
         var t = arrowHeadPoints(tip, dx, dy);
-        if (headShape === HEAD_CHEVRON) return {points: [t[1], t[0], t[2]], closed: false};
-        if (headShape === HEAD_SWALLOW) {
-            var mx = (t[1][0] + t[2][0]) / 2, my = (t[1][1] + t[2][1]) / 2;
-            return {points: [t[0], t[1], [mx + (t[0][0] - mx) * 0.3, my + (t[0][1] - my) * 0.3], t[2]], closed: true};
-        }
-        if (headShape === HEAD_HARPOON) return {points: harpoonPoints(t), closed: true};
-        return {points: t, closed: true};
+        var ax = t[0][0] - (t[1][0] + t[2][0]) / 2, ay = t[0][1] - (t[1][1] + t[2][1]) / 2;
+        var len = Math.sqrt(ax * ax + ay * ay);
+        return {points: catalogPoints(headShape, t[0], [ax / len, ay / len], len / HEAD_CATALOG[0].length), closed: true};
     }
 
         function styleLine(path, weight, dashes, k) {

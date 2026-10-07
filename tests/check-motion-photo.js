@@ -29,12 +29,12 @@ function extractVar(name) {
   return `var ${name} = ${match[1]};`;
 }
 
-const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW", "HEAD_HARPOON", "HEAD_SHAPES", "SPAN_MAX_MM", "RULER_MAX_TICKS", "PREF_KEY", "DIRECTIONS", "MOTIONS", "BALLS", "POSITION_LIMIT_MM", "RADIO_KEYS",
+const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_EXAM", "HEAD_CATALOG", "HEAD_SHAPES", "SPAN_MAX_MM", "RULER_MAX_TICKS", "PREF_KEY", "DIRECTIONS", "MOTIONS", "BALLS", "POSITION_LIMIT_MM", "RADIO_KEYS",
   "CHECK_KEYS", "NUMBER_KEYS", "SPECS"];
-const names = ["framePositions", "clampOptions", "gapRatio", "rulerMarks", "formatSeconds", "distanceLabel", "trimText", "arrowHeadPoints", "arrowHeadShape", "shaftInset",
+const names = ["framePositions", "clampOptions", "gapRatio", "rulerMarks", "formatSeconds", "distanceLabel", "trimText", "catalogPoints", "arrowHeadShape", "shaftInset",
   "cleanDistText", "saveSettings", "applySettings", "parseNumber", "roundTo", "clamp"];
 const make = (options, prefs) => new Function("app", "options", `${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
-  `return {${[...names, "SPAN_MAX_MM", "ARROW"].join(",")}};`)(
+  `return {${[...names, "SPAN_MAX_MM", "ARROW", "HEAD_CATALOG"].join(",")}};`)(
   {preferences: {setStringPreference: (k, v) => { prefs[k] = v; }, getStringPreference: (k) => prefs[k] || ""}}, options);
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
@@ -118,41 +118,22 @@ assert.strictEqual(lib.formatSeconds(1.5), "1.5");
   assert.strictEqual(lib.distanceLabel("  0.5m ", 1).text, "0.5m", "whitespace around the value is trimmed");
 }
 
-// 화살촉: 끝점이 맨 앞, 날개는 축에 대칭, scale로 줄어든다
+// 화살촉: 일러스트레이터 화살촉 4종류(tools/arrowheads.json). 제비꼬리 길이 ARROW.length를 기준으로 배율 scale(좁은 구간에는 줄인다)을 정한다
 {
-  const head = lib.arrowHeadPoints([100, 50], [1, 0], 1);
-  assert.deepStrictEqual(head[0], [100, 50], "tip first");
-  near(head[1][0], 100 - lib.ARROW.length, 1e-9, "wing is one arrow length back");
-  near(head[1][1] + head[3][1], 100, 1e-9, "wings mirror across the axis");
-  const small = lib.arrowHeadPoints([100, 50], [1, 0], 0.5);
-  near(small[1][0], 98, 1e-9, "half scale halves the length");
-
-  // 모양: 제비꼬리(평가원식)는 위 네 점 그대로, 삼각형은 끝·날개 둘, 꺾쇠는 열린 선
-  const swallow = lib.arrowHeadShape([100, 50], [1, 0], 1, 2);
-  assert.strictEqual(swallow.closed, true);
-  assert.deepStrictEqual(swallow.points, head, "default swallowtail is the exam-style head");
-  const triangle = lib.arrowHeadShape([100, 50], [1, 0], 1, 0);
-  assert.strictEqual(triangle.closed, true);
-  assert.strictEqual(triangle.points.length, 3);
-  assert.deepStrictEqual(triangle.points, [head[0], head[1], head[3]], "triangle keeps tip and both wings");
-  const chevron = lib.arrowHeadShape([100, 50], [1, 0], 1, 1);
-  assert.strictEqual(chevron.closed, false);
-  assert.deepStrictEqual(chevron.points, [head[1], head[0], head[3]], "chevron is wing, tip, wing");
-  // 작살형(일러 화살표 3): 닫힌 여섯 점, 날개 끝은 머리 길이만큼 뒤, 홈은 끝에서 0.818 L
-  const harpoon = lib.arrowHeadShape([100, 50], [1, 0], 1, 3);
-  assert.strictEqual(harpoon.closed, true);
-  assert.strictEqual(harpoon.points.length, 6);
-  assert.deepStrictEqual(harpoon.points[0], [100, 50], "harpoon tip");
-  near(harpoon.points[2][0], 100 - lib.ARROW.length, 1e-9, "barb tips one head length back");
-  near(Math.abs(harpoon.points[2][1] - 50), 0.306 * lib.ARROW.length, 1e-9, "barb half width");
-  near(harpoon.points[3][0], 100 - 0.818 * lib.ARROW.length, 1e-9, "notch 0.818 L from the tip");
-  near(lib.arrowHeadShape([100, 50], [1, 0], 0.5, 3).points[3][0], 100 - 0.818 * 0.5 * lib.ARROW.length, 1e-9, "half scale halves the notch distance");
-  near(lib.shaftInset(1, 3), 0.75 * lib.ARROW.length, 1e-9, "line stops inside the harpoon head");
-  // 선이 끝나는 거리: 제비꼬리는 오목한 점, 꺾쇠는 끝점, 삼각형은 머리 안쪽
-  near(lib.shaftInset(1, 2), lib.ARROW.length - lib.ARROW.notch, 1e-9, "line stops at the notch");
-  near(lib.shaftInset(0.5, 2), 0.5 * (lib.ARROW.length - lib.ARROW.notch), 1e-9, "notch distance scales");
-  near(lib.shaftInset(1, 1), 0, 1e-9, "chevron line runs to the tip");
-  assert.ok(lib.shaftInset(1, 0) > 0 && lib.shaftInset(1, 0) < lib.ARROW.length, "triangle line ends inside the head");
+  const {catalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
+  const k1 = lib.ARROW.length / 12.1;   // 평가원식(작살형) 길이가 ARROW.length
+  for (let shape = 0; shape < 4; shape++) {
+    const h = lib.arrowHeadShape([100, 50], [1, 0], 1, shape);
+    assert.strictEqual(h.closed, true);
+    assert.deepStrictEqual(h.points[0], [100, 50], `shape ${shape}: tip first`);
+    nearPoints(h.points, expectedPoints(shape, [100, 50], [1, 0], k1), `shape ${shape}`);
+    nearPoints(lib.arrowHeadShape([100, 50], [1, 0], 0.5, shape).points, expectedPoints(shape, [100, 50], [1, 0], 0.5 * k1), `shape ${shape} at half scale`);
+    near(lib.shaftInset(1, shape), catalog.types[shape].lineEnd * k1, 1e-9, `shape ${shape}: line stops at lineEnd`);
+    near(lib.shaftInset(0.5, shape), 0.5 * catalog.types[shape].lineEnd * k1, 1e-9, `shape ${shape}: lineEnd scales`);
+    assert.ok(lib.shaftInset(1, shape) < catalog.types[shape].length * k1, `shape ${shape}: line ends inside the head`);
+  }
+  nearPoints(lib.arrowHeadShape([100, 50], [0, -1], 1, 3).points, expectedPoints(3, [100, 50], [0, -1], k1), "downward harpoon");
+  assert.deepStrictEqual(lib.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), "same data as tools/arrowheads.json");
 }
 
 // 설정 저장·복원

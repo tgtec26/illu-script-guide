@@ -51,9 +51,9 @@ try {
     var locale = "";
     try { locale = String(app.locale).toLowerCase(); } catch (localeError) {}
     var isKorean = (locale === "" || locale.indexOf("ko") === 0);
-    var ARROW_PREFIX = isKorean ? "화살표 " : "Arrow ";
-    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 바깥 끝 기본은 7, 가운데 끝 기본은 6
-    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+    // 중괄호 양 끝은 커스텀 화살표(화살표.ai)의 중괄호용 촉이다. 종류는 고정이고 크기만 고른다
+    var ARROW_OUTER = isKorean ? "화살표 7" : "Arrow 7";
+    var ARROW_INNER = isKorean ? "화살표 6" : "Arrow 6";
     var HEAD_RANGE = [30, 300];
     var ALIGN_TIP_NAME = isKorean ? "패스 끝의 팁" : "Tip of arrow at end of path";
 
@@ -64,8 +64,6 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
-    var outerType = 7;
-    var innerType = 6;
     var headScale = ARROW_SCALE;
 
     var previewGroups = [];
@@ -83,8 +81,6 @@ try {
     var flipVerticalCheck = flipPanel.add("checkbox", undefined, "좌우 반전 (세로선)");
 
     var headPanel = addPanel(dlg, "화살촉");
-    var outerTypeList = addTypeRow(headPanel, "바깥 끝:", function() { return outerType; }, function(v) { outerType = v; });
-    var innerTypeList = addTypeRow(headPanel, "가운데 끝:", function() { return innerType; }, function(v) { innerType = v; });
     var headScaleControls = addValueRow(headPanel, "크기", "%", headScale, HEAD_RANGE[0], HEAD_RANGE[1], 10, 0);
 
     var positionPanel = addPanel(dlg, "위치");
@@ -111,8 +107,6 @@ try {
     setRowValue(offsetXControls, offsetXmm);
     setRowValue(offsetYControls, offsetYmm);
     setRowValue(headScaleControls, headScale);
-    outerTypeList.selection = outerType - 1;
-    innerTypeList.selection = innerType - 1;
 
     flipHorizontalCheck.onClick = function() {
         flipHorizontalLine = flipHorizontalCheck.value;
@@ -236,8 +230,8 @@ try {
         }
 
         var swap = horizontal ? flipHorizontalLine : flipVerticalLine;
-        var outerName = ARROW_PREFIX + (swap ? innerType : outerType);
-        var innerName = ARROW_PREFIX + (swap ? outerType : innerType);
+        var outerName = swap ? ARROW_INNER : ARROW_OUTER;
+        var innerName = swap ? ARROW_OUTER : ARROW_INNER;
 
         var mid = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2];
 
@@ -347,22 +341,6 @@ try {
         };
     }
 
-    // 화살촉 종류 목록 한 줄: 고르면 바로 옵션에 쓰고 미리보기를 다시 그린다
-    function addTypeRow(parent, label, getter, setter) {
-        var row = parent.add("group");
-        row.alignChildren = ["left", "center"];
-        row.add("statictext", undefined, label).preferredSize.width = LABEL_WIDTH;
-        var list = row.add("dropdownlist", undefined, ARROW_TYPES);
-        list.selection = getter() - 1;
-        list.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
-        list.onChange = function() {
-            if (!list.selection) return;
-            setter(list.selection.index + 1);
-            updatePreview();
-        };
-        return list;
-    }
-
     // 값이 바뀌면 옵션에 쓰고 미리보기를 다시 그린다
     function bindScaleRow(controls, getter, setter, initial) {
         function commit(value) {
@@ -423,9 +401,7 @@ try {
             offsetXmm,
             offsetYmm,
             previewEnabled ? "1" : "0",
-            headScale,
-            outerType,
-            innerType
+            headScale
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -435,7 +411,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length < 9) return;
+        if (p[0] !== "v3" || p.length < 7) return;
         flipHorizontalLine = (p[1] === "1");
         flipVerticalLine = (p[2] === "1");
         offsetXmm = restoreNumber(p[3], offsetXmm);
@@ -443,9 +419,6 @@ try {
         previewEnabled = (p[5] === "1");
         var scale = parseNumber(p[6]);
         if (scale !== null) headScale = clamp(roundTo(scale, 10), HEAD_RANGE[0], HEAD_RANGE[1]);
-        var outer = parseInt(p[7], 10), inner = parseInt(p[8], 10);
-        if (outer >= 1 && outer <= ARROW_TYPES.length) outerType = outer;
-        if (inner >= 1 && inner <= ARROW_TYPES.length) innerType = inner;
     }
 
     function restoreNumber(text, fallback) {

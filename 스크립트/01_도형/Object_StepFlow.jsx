@@ -20,7 +20,7 @@ try {
     - 박스 크기는 '모두 같게'(공통 너비·높이) 또는 개별(글자 범위 + 좌우·상하 여백) 중 고릅니다.
       개별이라도 높이는 글자 높이 + 상하 여백이라 모든 박스가 같은 높이입니다
     - 박스 선 0.3pt 고정, 코너 라운딩 조절
-    - 화살표: 길이·두께·화살촉 종류(일러 화살표 1~8, 기본 3)·크기·색(K, 10 단위) 조절
+    - 화살표: 길이·두께·화살촉 모양(삼각형·꺾쇠·제비꼬리·작살형, 기본 삼각형 = 화살표 3)·크기·색(K, 10 단위) 조절
     - 박스와 화살표 사이 간격은 모두 같고 조절할 수 있습니다. 전체가 가로 한 줄, 세로 중앙 정렬
     - 글자는 한글=Spoqa, 영문·숫자·기호=GSMediumB1 규칙을 글자마다 적용합니다
     - 화살촉은 액션으로만 붙어 느리므로 슬라이더를 끄는 동안은 생략하고 손을 떼면 그립니다
@@ -39,8 +39,9 @@ try {
     var MAX_STEPS = 6;
     var BOX_STROKE = 0.3;
     var PREVIEW_NAME = "StepFlow_Preview";
-    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다 (기본 3). 이름은 UI 언어를 따른다
-    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다. 이름은 UI 언어를 따른다
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+    var ARROW_NUMBER = [3, 4, 2, 1];
     var ARROW_PREFIX = (function() {
         var locale = getAppLocale();
         return locale === "" || locale.indexOf("ko") === 0 ? "화살표 " : "Arrow ";
@@ -160,14 +161,14 @@ try {
     addRow(arrowPanel, "길이", "arrowLength", 1, 5, "mm", false);
     addRow(arrowPanel, "두께", "arrowWidth", 0.3, 4, "pt", false);
     addRow(arrowPanel, "화살촉 크기", "arrowScale", 10, 100, "%", false);
-    var headTypeRow = arrowPanel.add("group");
-    headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
-    var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
-    headTypeList.selection = options.headType - 1;
-    headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
-    headTypeList.onChange = function() {
-        if (!headTypeList.selection) return;
-        options.headType = headTypeList.selection.index + 1;
+    var headShapeRow = arrowPanel.add("group");
+    headShapeRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
+    var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.selection = options.headShape;
+    headShapeList.helpTip = "화살촉 모양. 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
+    headShapeList.onChange = function() {
+        if (!headShapeList.selection) return;
+        options.headShape = headShapeList.selection.index;
         arrowheadPending = true;
         updatePreview();
     };
@@ -572,7 +573,7 @@ try {
         lines.push("        /parameterCount 5");
         addUnitRealParameter(lines, 1, 2003072104, options.arrowWidth);
         addUStringParameter(lines, 2, 1634231345, getNoneArrowName());
-        addUStringParameter(lines, 3, 1634231346, ARROW_PREFIX + options.headType);
+        addUStringParameter(lines, 3, 1634231346, ARROW_PREFIX + ARROW_NUMBER[options.headShape]);
         addRealParameter(lines, 4, 1634951986, options.arrowScale);
         addEnumeratedParameter(lines, 5, 1634230636, "패스 끝의 팁", 0);
         lines.push("    }");
@@ -631,16 +632,16 @@ try {
     function settingKeys() {
         return {
             keys: ["count", "fontSize", "boxWidth", "boxHeight", "paddingX", "paddingY", "radius",
-                "arrowLength", "arrowWidth", "arrowScale", "arrowK", "gap", "offsetX", "offsetY", "symbolSet", "headType"],
-            mins: [MIN_STEPS, 4, 5, 3, 0, 0, 0, 1, 0.3, 10, 0, 0, -100, -100, 0, 1],
-            maxs: [MAX_STEPS, 30, 20, 10, 3, 3, 5, 5, 4, 100, 100, 3, 100, 100, SYMBOL_SETS.length - 1, 8]
+                "arrowLength", "arrowWidth", "arrowScale", "arrowK", "gap", "offsetX", "offsetY", "symbolSet", "headShape"],
+            mins: [MIN_STEPS, 4, 5, 3, 0, 0, 0, 1, 0.3, 10, 0, 0, -100, -100, 0, 0],
+            maxs: [MAX_STEPS, 30, 20, 10, 3, 3, 5, 5, 4, 100, 100, 3, 100, 100, SYMBOL_SETS.length - 1, 3]
         };
     }
 
     function defaultOptions() {
         return { count: 4, fontSize: 8, boxWidth: 20, boxHeight: 8, paddingX: 2, paddingY: 1.5,
             radius: 1, arrowLength: 4, arrowWidth: 1, arrowScale: 100, arrowK: 100, gap: 1.5,
-            offsetX: 0, offsetY: 0, symbolSet: 1, headType: 3, sameSize: false, preview: true };
+            offsetX: 0, offsetY: 0, symbolSet: 1, headShape: 0, sameSize: false, preview: true };
     }
 
     function readSettings() {
@@ -659,7 +660,7 @@ try {
             for (var j = 0; j < spec.keys.length; j++) result[spec.keys[j]] = Number(p[j + 1]);
             result.count = Math.round(result.count);
             result.symbolSet = Math.round(result.symbolSet);
-            result.headType = Math.round(result.headType);
+            result.headShape = Math.round(result.headShape);
             result.sameSize = flags[0] === "1";
             result.preview = flags[1] === "1";
         } catch (e) {}

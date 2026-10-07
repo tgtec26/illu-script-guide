@@ -61,10 +61,16 @@ try {
     var DIM_HEAD_WIDTH_MM = 0.9;
     // 치수선 화살촉 모양
     var HEAD_TRIANGLE = 0;
-    var HEAD_CHEVRON = 1;
-    var HEAD_SWALLOW = 2;
-    var HEAD_HARPOON = 3;
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"];
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
     var DIM_PAD_MM = 0.8;
     var DIM_GAP_MIN_MM = 8;
     var DIM_GAP_RATIO = 0.2;
@@ -214,7 +220,7 @@ try {
     heightInput.helpTip = "치수선 가운데에 넣을 글자";
     var headShapeList = heightRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = options.headShape;
-    headShapeList.helpTip = "치수선 화살촉 모양. 삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    headShapeList.helpTip = "치수선 화살촉 모양. 모두 일러스트레이터 화살촉을 측정한 모양";
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
         options.headShape = headShapeList.selection.index;
@@ -664,28 +670,29 @@ try {
         return path;
     }
 
-    // 치수선 화살촉의 점들: 끝이 (x, y), dir 1이면 위를 가리킨다. scale은 크기 배율(1 = 100%).
-    // 삼각형·제비꼬리는 채운 닫힌 패스(홈은 밑변에서 머리 길이의 0.3 앞), 꺾쇠는 열린 선
-    function dimHeadPoints(x, y, dir, shape, scale) {
-        var len = DIM_HEAD_LEN_MM * MM * scale;
-        var halfW = DIM_HEAD_WIDTH_MM * MM * scale / 2;
-        var baseY = y - dir * len;
-        if (shape === HEAD_CHEVRON) return {points: [[x + halfW, baseY], [x, y], [x - halfW, baseY]], closed: false};
-        if (shape === HEAD_SWALLOW) return {points: [[x, y], [x + halfW, baseY], [x, baseY + dir * len * 0.3], [x - halfW, baseY]], closed: true};
-        if (shape === HEAD_HARPOON) {
-            // 일러 화살표 3: 머리 길이 len에 날개 반폭 0.306 len, 중간(끝에서 0.504 len) 반폭 0.116 len, 홈은 끝에서 0.818 len
-            var at = function(f, w) { return [x + w * len, y - dir * len * f]; };
-            return {points: [at(0, 0), at(0.504, 0.116), at(1, 0.306), at(0.818, 0), at(1, -0.306), at(0.504, -0.116)], closed: true};
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
         }
-        return {points: [[x, y], [x + halfW, baseY], [x - halfW, baseY]], closed: true};
+        return out;
     }
 
-    // 치수선이 화살촉 쪽에서 끝나는, 끝점으로부터의 거리: 삼각형은 밑변, 제비꼬리는 홈보다 안쪽, 꺾쇠는 끝점
+    // 치수선 화살촉의 점들: 끝이 (x, y), dir 1이면 위를 가리킨다. 삼각형 머리 길이가 DIM_HEAD_LEN_MM × scale(1 = 100%)이고 다른 모양도 같은 배율을 쓴다
+    function dimHeadPoints(x, y, dir, shape, scale) {
+        var k = DIM_HEAD_LEN_MM * MM * scale / HEAD_CATALOG[HEAD_TRIANGLE].length;
+        var poly = HEAD_CATALOG[shape].poly;
+        var points = [];
+        for (var i = 0; i < poly.length; i++) points.push([x + poly[i][0] * k, y - dir * poly[i][1] * k]);
+        return {points: points, closed: true};
+    }
+
+    // 치수선이 화살촉 속에서 끝나는, 끝에서의 거리. headLen은 삼각형 머리 길이다
     function dimLineInset(headLen, shape) {
-        if (shape === HEAD_CHEVRON) return 0;
-        if (shape === HEAD_SWALLOW) return headLen * 0.6;
-        if (shape === HEAD_HARPOON) return headLen * 0.75;
-        return headLen;
+        return HEAD_CATALOG[shape].lineEnd * headLen / HEAD_CATALOG[HEAD_TRIANGLE].length;
     }
 
     // 치수선 끝 화살촉

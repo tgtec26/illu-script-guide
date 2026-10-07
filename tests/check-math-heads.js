@@ -3,6 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
+const {catalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
 const FILES = ["Object_HighCommon.jsx", "Object_HighGeometry.jsx", "Object_HighMath1.jsx", "Object_HighMath2.jsx",
   "Object_HighStatistics.jsx", "Object_MiddleMath.jsx"];
 
@@ -36,59 +37,45 @@ for (const file of FILES) {
     setStringPreference: (k, v) => { store[k] = v; }
   }};
   const make = () => new Function("app", `${block}
-return {headStyle, registerHead, applyHeadStyle, headShapeFor, saveHeadStyle, loadHeadStyle, HEAD_PREF_KEY, HEAD_SHAPES};`)(app);
+return {headStyle, registerHead, applyHeadStyle, headShapeFor, saveHeadStyle, loadHeadStyle, HEAD_PREF_KEY, HEAD_SHAPES, HEAD_CATALOG};`)(app);
   const lib = make();
   assert.strictEqual(lib.HEAD_SHAPES.length, 4, `${file}: four shapes`);
+  assert.deepStrictEqual(lib.HEAD_SHAPES, ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"], `${file}: labels`);
+  assert.deepStrictEqual(lib.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), `${file}: same data as tools/arrowheads.json`);
 
   const spec = lib.registerHead({length: 4, halfWidth: 1.3, notch: 1});
   const loose = {length: 4, halfWidth: 1.3, notch: 1};   // 등록하지 않은 규격(글자 위 화살표 등)
   const tip = [10, 0], d = [1, 0];
+  const k1 = 4 / 12.1;   // 규격 길이 4가 평가원식(작살형) 길이 12.1에 해당한다
 
-  // 기본은 평가원식(제비꼬리): 예전 네 점 그대로
+  // 기본은 평가원식(작살형): 규격 길이 4에서 예전 축 화살촉과 거의 같은 크기, 선은 예전처럼 끝에서 3 앞(2.98)에서 끝난다
+  assert.strictEqual(lib.headStyle.shape, 3, `${file}: harpoon (exam-style) is the default`);
   let h = lib.headShapeFor(tip, d, spec);
-  assert.strictEqual(lib.headStyle.shape, 2, `${file}: swallowtail is the default`);
   assert.strictEqual(h.closed, true);
-  assert.deepStrictEqual(h.points, [[10, 0], [6, 1.3], [7, 0], [6, -1.3]], `${file}: exam-style head unchanged`);
-  near(spec.length - spec.notch, 3, `${file}: line meets the head at length - notch`);
+  nearPoints(h.points, expectedPoints(3, tip, d, k1), `${file}: default head`);
+  near(spec.length - spec.notch, 9 * k1, `${file}: line meets the head at lineEnd`);
+  assert.ok(Math.abs((spec.length - spec.notch) - 3) < 0.05, `${file}: close to the old exam-style line end (3)`);
 
-  // 삼각형: 세 점, 선은 밑변 조금 앞(0.9 L)
-  lib.headStyle.shape = 0; lib.applyHeadStyle();
-  h = lib.headShapeFor(tip, d, spec);
-  assert.strictEqual(h.points.length, 3, `${file}: triangle`);
-  assert.deepStrictEqual(h.points[0], [10, 0]);
-  near(spec.length - spec.notch, 3.6, `${file}: triangle line ends at 0.9 L`);
+  // 네 모양: 모양마다 카탈로그 모양과 선 끝 거리
+  for (let shape = 0; shape < 4; shape++) {
+    lib.headStyle.shape = shape; lib.applyHeadStyle();
+    h = lib.headShapeFor(tip, d, spec);
+    assert.strictEqual(h.closed, true, `${file}: shape ${shape} is closed`);
+    nearPoints(h.points, expectedPoints(shape, tip, d, k1), `${file}: shape ${shape}`);
+    near(spec.length - spec.notch, catalog.types[shape].lineEnd * k1, `${file}: shape ${shape} line end`);
+    assert.ok(spec.length - spec.notch < catalog.types[shape].length * k1, `${file}: shape ${shape} line ends inside the head`);
+  }
 
-  // 꺾쇠: 열린 선, 선은 끝점까지
-  lib.headStyle.shape = 1; lib.applyHeadStyle();
-  h = lib.headShapeFor(tip, d, spec);
-  assert.strictEqual(h.closed, false, `${file}: chevron is open`);
-  assert.deepStrictEqual(h.points[1], [10, 0], `${file}: chevron apex`);
-  near(spec.length - spec.notch, 0, `${file}: chevron line runs to the tip`);
-
-  // 작살형(일러 화살표 3): 닫힌 여섯 점, 날개 끝 L 뒤 반폭 0.306 L, 홈 0.818 L, 선은 0.75 L에서 끝남
-  lib.headStyle.shape = 3; lib.applyHeadStyle();
-  h = lib.headShapeFor(tip, d, spec);
-  assert.strictEqual(h.closed, true);
-  assert.strictEqual(h.points.length, 6, `${file}: harpoon`);
-  near(h.points[2][0], 6, `${file}: barb tips`);
-  near(Math.abs(h.points[2][1]), 0.306 * 4, `${file}: barb half width`);
-  near(h.points[3][0], 10 - 0.818 * 4, `${file}: notch`);
-  near(h.points[1][0], 10 - 0.504 * 4, `${file}: mid point`);
-  near(spec.length - spec.notch, 3, `${file}: harpoon line ends at 0.75 L`);
-
-  // 크기: 규격이 같은 비율로 커지고 줄고, 등록 안 한 규격은 모양·크기와 상관없이 평가원식 그대로
+  // 크기: 규격이 같은 비율로 커지고, 등록 안 한 규격은 모양·크기와 상관없이 작살형(평가원식) 그대로
   lib.headStyle.shape = 2; lib.headStyle.size = 200; lib.applyHeadStyle();
   near(spec.length, 8, `${file}: length scales`);
-  near(spec.halfWidth, 2.6, `${file}: half width scales`);
-  near(spec.length - spec.notch, 6, `${file}: notch distance scales`);
-  lib.headStyle.shape = 3;
-  assert.deepStrictEqual(lib.headShapeFor(tip, d, loose).points, [[10, 0], [6, 1.3], [7, 0], [6, -1.3]], `${file}: unregistered spec stays exam-style`);
-  // 배율 인자(벡터 화살표)
-  lib.headStyle.shape = 2; lib.headStyle.size = 100; lib.applyHeadStyle();
-  near(lib.headShapeFor(tip, d, spec, 0.5).points[1][0], 8, `${file}: scale argument`);
-  // 위쪽을 가리키는 화살촉
-  h = lib.headShapeFor([0, 10], [0, 1], spec);
-  near(h.points[1][1], 6, `${file}: upward wing is back along y`);
+  near(spec.length - spec.notch, catalog.types[2].lineEnd * 2 * k1, `${file}: line end scales`);
+  nearPoints(lib.headShapeFor(tip, d, spec).points, expectedPoints(2, tip, d, 2 * k1), `${file}: swallowtail at 200%`);
+  nearPoints(lib.headShapeFor(tip, d, loose).points, expectedPoints(3, tip, d, k1), `${file}: unregistered spec stays exam-style`);
+  // 배율 인자(벡터 화살표)와 위쪽을 가리키는 화살촉
+  lib.headStyle.shape = 3; lib.headStyle.size = 100; lib.applyHeadStyle();
+  nearPoints(lib.headShapeFor(tip, d, spec, 0.5).points, expectedPoints(3, tip, d, 0.5 * k1), `${file}: scale argument`);
+  nearPoints(lib.headShapeFor([0, 10], [0, 1], spec).points, expectedPoints(3, [0, 10], [0, 1], k1), `${file}: upward head`);
 
   // 설정: 저장한 값이 돌아오고 형식이 다르거나 범위를 벗어난 값은 기본값
   lib.headStyle.shape = 3; lib.headStyle.size = 150; lib.saveHeadStyle();
@@ -96,9 +83,9 @@ return {headStyle, registerHead, applyHeadStyle, headShapeFor, saveHeadStyle, lo
   const again = make();
   assert.deepStrictEqual(again.headStyle, {shape: 3, size: 150}, `${file}: restored`);
   store[lib.HEAD_PREF_KEY] = "v1|9|150";
-  assert.deepStrictEqual(make().headStyle, {shape: 2, size: 150}, `${file}: unknown shape is ignored, the valid size is kept`);
+  assert.deepStrictEqual(make().headStyle, {shape: 3, size: 150}, `${file}: unknown shape is ignored, the valid size is kept`);
   store[lib.HEAD_PREF_KEY] = "v0|1|150";
-  assert.deepStrictEqual(make().headStyle, {shape: 2, size: 100}, `${file}: old tag ignored`);
+  assert.deepStrictEqual(make().headStyle, {shape: 3, size: 100}, `${file}: old tag ignored`);
   store[lib.HEAD_PREF_KEY] = "v1|1|999";
   assert.deepStrictEqual(make().headStyle, {shape: 1, size: 100}, `${file}: out-of-range size ignored`);
 

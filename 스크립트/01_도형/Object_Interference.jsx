@@ -40,11 +40,16 @@ try {
     var ARROW_LEN_MM = 8;
     var HEAD_LEN_MM = 1.6;
     var HEAD_TRIANGLE = 0;
-    var HEAD_CHEVRON = 1;
-    var HEAD_SWALLOW = 2;
-    var HEAD_HARPOON = 3;
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"];
-    var HEAD_HALF_MM = 0.55;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
     var ARROW_GAP_MM = 3;
     var ARROW_STACK_MM = 3;
 
@@ -176,34 +181,26 @@ try {
         return [y1, y2];
     }
 
-    // 화살표: 몸통 두 점과 화살촉 점들 (mm). headScale은 화살촉 배율(1 = 100%), headShape는 모양.
-    //   삼각형·제비꼬리·작살형: 채운 닫힌 패스. 몸통은 화살촉 속으로 조금 들어가 틈이 없다.
-    //   꺾쇠: 열린 선 [날개, 끝, 날개]. 몸통이 끝점까지 간다.
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
+    }
+
+    // 화살표: 몸통 두 점과 화살촉 점들 (mm). headScale은 화살촉 배율(1 = 100%), headShape는 모양 번호(HEAD_SHAPES).
+    // 삼각형 머리 길이가 HEAD_LEN_MM이고 다른 모양도 같은 배율을 쓴다. 몸통은 머리 속(lineEnd)에서 끝나 틈이 없다.
     function arrowShape(tailX, tipX, y, headScale, headShape) {
         var dir = tipX > tailX ? 1 : -1;
-        var k = headScale === undefined ? 1 : headScale;
-        var len = HEAD_LEN_MM * k;
-        var half = HEAD_HALF_MM * k;
-        var back = tipX - dir * len;
-        if (headShape === HEAD_CHEVRON) {
-            return {line: [[tailX, y], [tipX, y]], head: [[back, y + half], [tipX, y], [back, y - half]], closed: false};
-        }
-        if (headShape === HEAD_SWALLOW) {
-            // 홈은 밑변에서 머리 길이의 0.3 앞
-            return {line: [[tailX, y], [tipX - dir * len * 0.6, y]],
-                head: [[tipX, y], [back, y + half], [tipX - dir * len * 0.7, y], [back, y - half]], closed: true};
-        }
-        if (headShape === HEAD_HARPOON) {
-            // 일러 화살표 3: 머리 길이 len에 날개 반폭 0.306 len, 중간(끝에서 0.504 len) 반폭 0.116 len, 홈은 끝에서 0.818 len
-            return {line: [[tailX, y], [tipX - dir * len * 0.75, y]],
-                head: [[tipX, y], [tipX - dir * len * 0.504, y - len * 0.116], [back, y - len * 0.306],
-                    [tipX - dir * len * 0.818, y], [back, y + len * 0.306], [tipX - dir * len * 0.504, y + len * 0.116]], closed: true};
-        }
-        return {
-            line: [[tailX, y], [tipX - dir * len * 0.9, y]],
-            head: [[tipX, y], [back, y + half], [back, y - half]],
-            closed: true
-        };
+        var spec = HEAD_CATALOG[headShape === undefined ? HEAD_TRIANGLE : headShape];
+        var k = (headScale === undefined ? 1 : headScale) * HEAD_LEN_MM / HEAD_CATALOG[HEAD_TRIANGLE].length;
+        var head = [];
+        for (var i = 0; i < spec.poly.length; i++) head.push([tipX - dir * spec.poly[i][1] * k, y + spec.poly[i][0] * k]);
+        return {line: [[tailX, y], [tipX - dir * spec.lineEnd * k, y]], head: head, closed: true};
     }
 
     // 위치와 위상으로 정하는 상태 글자
@@ -351,7 +348,7 @@ try {
     var colorArrow2List = addColorList(arrowColorRow, "colorArrow2", "파동 2 화살표");
     var headShapeList = arrowColorRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = options.headShape;
-    headShapeList.helpTip = "화살촉 모양. 삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    headShapeList.helpTip = "화살촉 모양. 모두 일러스트레이터 화살촉을 측정한 모양";
 
     var showRow = stylePanel.add("group");
     showRow.alignChildren = ["left", "center"];

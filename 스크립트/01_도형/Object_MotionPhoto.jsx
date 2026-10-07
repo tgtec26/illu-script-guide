@@ -63,12 +63,19 @@ try {
     var GROUND_TEXT_GAP_MM = 1.5;
     // 거리 표시 화살촉(pt): 평가원식 (07_수학, MotionGraph와 같은 치수)
     var ARROW = {length: 4, halfWidth: 1.3, notch: 1};
-    // 화살촉 모양: 제비꼬리가 위의 평가원식(기본)이다
+    // 화살촉 모양: 작살형이 평가원식(기본)이다
     var HEAD_TRIANGLE = 0;
-    var HEAD_CHEVRON = 1;
-    var HEAD_SWALLOW = 2;
-    var HEAD_HARPOON = 3;
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리 (평가원식)", "작살형 (화살표 3)"];
+    var HEAD_EXAM = 3;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
     // 띠 가장자리 여백, 점선이 띠 밖으로 나오는 길이, 띠에서 표시선까지, 연장선이 표시선을 넘는 길이, 표시선과 글자 사이, 글자끼리
     var PAD_MM = 2;
     var EXT_MM = 6;
@@ -136,7 +143,7 @@ try {
     var centerY = (artboardRect[1] + artboardRect[3]) / 2;
 
     var options = {
-        direction: 0, motion: 0, ball: 0, headShape: HEAD_SWALLOW,
+        direction: 0, motion: 0, ball: 0, headShape: HEAD_EXAM,
         bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false, rulerOn: false, timeOn: false, arrowOn: false, bottomOn: false, touchOn: false, guideWhite: false,
         speed: 100, startSpeed: 0, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, tick: 5,
         distText: "d",
@@ -199,7 +206,7 @@ try {
     addCheck(guideRow, "운동 방향", "arrowOn");
     var headShapeList = guideRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = options.headShape;
-    headShapeList.helpTip = "화살촉 모양(거리 표시·운동 방향). 제비꼬리는 평가원식. 삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    headShapeList.helpTip = "화살촉 모양(거리 표시·운동 방향). 작살형이 평가원식. 모두 일러스트레이터 화살촉을 측정한 모양";
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
         options.headShape = headShapeList.selection.index;
@@ -638,42 +645,25 @@ try {
         return text.substring(start, end);
     }
 
-    // 화살촉: 끝점, 뒤쪽 두 날개, 오목한 점. scale로 줄여 좁은 구간에도 맞춘다
-    function arrowHeadPoints(tip, d, scale) {
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
         var n = [-d[1], d[0]];
-        var length = ARROW.length * scale;
-        var back = [tip[0] - d[0] * length, tip[1] - d[1] * length];
-        var wing = ARROW.halfWidth * scale;
-        var notch = ARROW.notch * scale;
-        return [
-            [tip[0], tip[1]],
-            [back[0] + n[0] * wing, back[1] + n[1] * wing],
-            [back[0] + d[0] * notch, back[1] + d[1] * notch],
-            [back[0] - n[0] * wing, back[1] - n[1] * wing]
-        ];
-    }
-
-    // 화살촉 모양: 위 네 점 [끝, 날개, 오목, 날개]에서 만든다(작살형은 일러 화살표 3에서 따로). 삼각형·제비꼬리·작살형은 채운 닫힌 패스, 꺾쇠는 열린 선
-    function arrowHeadShape(tip, d, scale, shape) {
-        var p = arrowHeadPoints(tip, d, scale);
-        if (shape === HEAD_CHEVRON) return {points: [p[1], p[0], p[3]], closed: false};
-        if (shape === HEAD_TRIANGLE) return {points: [p[0], p[1], p[3]], closed: true};
-        if (shape === HEAD_HARPOON) {
-            // 일러 화살표 3: 머리 길이 L에 날개 반폭 0.306 L, 중간(끝에서 0.504 L) 반폭 0.116 L, 홈은 끝에서 0.818 L
-            var len = ARROW.length * scale;
-            var n = [-d[1], d[0]];
-            var at = function(f, w) { return [tip[0] - d[0] * len * f + n[0] * len * w, tip[1] - d[1] * len * f + n[1] * len * w]; };
-            return {points: [at(0, 0), at(0.504, 0.116), at(1, 0.306), at(0.818, 0), at(1, -0.306), at(0.504, -0.116)], closed: true};
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
         }
-        return {points: p, closed: true};
+        return out;
     }
 
-    // 선이 화살촉 쪽에서 끝나는 거리(pt): 제비꼬리는 오목한 점, 삼각형은 밑변 조금 앞, 꺾쇠는 끝점
+    // 화살촉: 작살형(평가원식) 길이 ARROW.length를 기준으로 배율 scale(1 = 100%, 좁은 구간에는 줄인다)을 정하고, 카탈로그 모양을 만든다
+    function arrowHeadShape(tip, d, scale, shape) {
+        return {points: catalogPoints(shape, tip, d, ARROW.length * scale / HEAD_CATALOG[HEAD_EXAM].length), closed: true};
+    }
+
+    // 선이 화살촉 속에서 끝나는, 끝에서의 거리(pt)
     function shaftInset(scale, shape) {
-        if (shape === HEAD_CHEVRON) return 0;
-        if (shape === HEAD_TRIANGLE) return ARROW.length * scale * 0.9;
-        if (shape === HEAD_HARPOON) return ARROW.length * scale * 0.75;
-        return (ARROW.length - ARROW.notch) * scale;
+        return HEAD_CATALOG[shape].lineEnd * ARROW.length * scale / HEAD_CATALOG[HEAD_EXAM].length;
     }
 
     // -------------------------------------------------------

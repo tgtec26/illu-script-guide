@@ -1374,9 +1374,10 @@ try {
             // 머리는 달걀꼴: 앞(위)이 좁고 뒤(꼬리 쪽)가 넓다. 앞 끝 폭 = (1 - HEAD_TAPER) × 뒤 끝 폭.
             var HEAD_TAPER = 0.35;
             var HEAD_SAMPLES = 24;
-            // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1', 영문판 'Arrow 1')
-            var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
-            var headType = 1;
+            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다. 이름은 UI 언어를 따른다
+            var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+            var ARROW_NUMBER = [3, 4, 2, 1];
+            var headShape = 3;
             var PREF_KEY = "ObjectMeiosis/settings";
             var FRAME_KEY = PREF_KEY + "/frame";
             var DEFAULT_FRAME_MM = {w: 35, h: 50};
@@ -1476,15 +1477,15 @@ try {
             var arrowPanel = addPanel(dlg, "화살표");
             var arrowGapControls = addValueRow(arrowPanel, "원과의 간격 mm", arrowGapMm, 0, 2, 0.1, 1);
             var arrowScaleControls = addValueRow(arrowPanel, "화살촉 크기 %", arrowScale, 10, 800, 5, 0);
-            var headTypeRow = arrowPanel.add("group");
-            headTypeRow.alignChildren = ["left", "center"];
-            headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
-            var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
-            headTypeList.selection = headType - 1;
-            headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
-            headTypeList.onChange = function() {
-                if (!headTypeList.selection) return;
-                headType = headTypeList.selection.index + 1;
+            var headShapeRow = arrowPanel.add("group");
+            headShapeRow.alignChildren = ["left", "center"];
+            headShapeRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
+            var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
+            headShapeList.selection = headShape;
+            headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
+            headShapeList.onChange = function() {
+                if (!headShapeList.selection) return;
+                headShape = headShapeList.selection.index;
                 // 화살촉은 확인할 때 적용된다 (미리보기는 직접 그린 화살촉)
             };
 
@@ -2058,7 +2059,7 @@ try {
                 var actionFile = new File(Folder.temp + "/Codex_MeiosisArrow.aia");
                 var locale = getAppLocale();
                 var isKorean = locale === "" || locale.indexOf("ko") === 0;
-                var arrowName = (isKorean ? "화살표 " : "Arrow ") + headType;
+                var arrowName = (isKorean ? "화살표 " : "Arrow ") + ARROW_NUMBER[headShape];
 
                 try {
                     doc.selection = null;
@@ -2242,7 +2243,7 @@ try {
                 parts.push(daughterStepMm * MM_TO_PT / rectWidthPt);
                 parts.push(offsetXmm * MM_TO_PT / rectWidthPt, offsetYmm * MM_TO_PT / rectHeightPt);
                 parts.push(headWidthMm, headHeightMm, tailLengthMm, tailWidthPt, waveAmpMm, showSperm ? 1 : 0,
-                    spermRotationDeg, headType);
+                    spermRotationDeg, headShape);
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -2276,7 +2277,7 @@ try {
                 waveAmpMm = restoreNumber(p[18], waveAmpMm, 0, 2);
                 showSperm = p[19] !== "0";
                 spermRotationDeg = restoreNumber(p[20], spermRotationDeg, -180, 180);
-                headType = Math.round(restoreNumber(p[21], headType, 1, ARROW_TYPES.length));
+                headShape = Math.round(restoreNumber(p[21], headShape, 0, HEAD_SHAPES.length - 1));
             }
 
             function restoreNumber(text, fallback, minimum, maximum) {
@@ -2357,9 +2358,10 @@ try {
             var labelIndexes = [0, 1, 2, 3];
             var arrowWidthPt = 3;
             var arrowScale = 200;
-            var headType2 = 3;
-            // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다 (기본 화살표 3)
-            var ARROW_TYPES2 = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+            var headShape2 = 0;   // 기본 삼각형 (화살표 3)
+            // 화살촉 모양 4종류와 일러스트레이터 커스텀 화살표 번호(위 감수 분열 탭과 같다)
+            var HEAD_SHAPES2 = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+            var ARROW_NUMBER2 = [3, 4, 2, 1];
             var gapDeg = 6;
             var startAngleDeg = 0;
             var offsetXmm = 0;
@@ -2446,15 +2448,15 @@ try {
             var arrowPanel = addPanel(dlg, "내부 화살표");
             var arrowWidthControls = addValueRow(arrowPanel, "굵기", "pt", arrowWidthPt, 0.5, 30, 0.5, 1);
             var arrowScaleControls = addValueRow(arrowPanel, "화살촉 크기", "%", arrowScale, 10, 800, 1, 0);
-            var headTypeRow2 = arrowPanel.add("group");
-            headTypeRow2.alignChildren = ["left", "center"];
-            headTypeRow2.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
-            var headTypeList2 = headTypeRow2.add("dropdownlist", undefined, ARROW_TYPES2);
-            headTypeList2.selection = headType2 - 1;
-            headTypeList2.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
-            headTypeList2.onChange = function() {
-                if (!headTypeList2.selection) return;
-                headType2 = headTypeList2.selection.index + 1;
+            var headShapeRow2 = arrowPanel.add("group");
+            headShapeRow2.alignChildren = ["left", "center"];
+            headShapeRow2.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
+            var headShapeList2 = headShapeRow2.add("dropdownlist", undefined, HEAD_SHAPES2);
+            headShapeList2.selection = headShape2;
+            headShapeList2.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
+            headShapeList2.onChange = function() {
+                if (!headShapeList2.selection) return;
+                headShape2 = headShapeList2.selection.index;
                 updatePreview();
             };
             var gapControls = addValueRow(arrowPanel, "간격", "°", gapDeg, 0, 60, 1, 0);
@@ -2546,7 +2548,7 @@ try {
             }
 
             function previewSettingsKey(lightweight) {
-                return [lightweight ? 1 : 0, outerMm, innerMm, startAngleDeg, arrowWidthPt, arrowScale, headType2, gapDeg,
+                return [lightweight ? 1 : 0, outerMm, innerMm, startAngleDeg, arrowWidthPt, arrowScale, headShape2, gapDeg,
                     offsetXmm, offsetYmm, percents.join(","), labelIndexes.join(",")].join("|");
             }
 
@@ -2810,7 +2812,7 @@ try {
                 var actionFile = new File(Folder.temp + "/Codex_CellCycleArrow.aia");
                 var locale = getAppLocale();
                 var isKorean = locale === "" || locale.indexOf("ko") === 0;
-                var arrowName = (isKorean ? "화살표 " : "Arrow ") + headType2;
+                var arrowName = (isKorean ? "화살표 " : "Arrow ") + ARROW_NUMBER2[headShape2];
 
                 try {
                     doc.selection = null;
@@ -3256,7 +3258,7 @@ try {
                 var parts = ["v4", outerMm, innerMm];
                 for (var i = 0; i < SECTOR_COUNT; i++) parts.push(percents[i]);
                 for (var j = 0; j < SECTOR_COUNT; j++) parts.push(labelIndexes[j]);
-                parts.push(arrowWidthPt, arrowScale, gapDeg, offsetXmm, offsetYmm, startAngleDeg, headType2);
+                parts.push(arrowWidthPt, arrowScale, gapDeg, offsetXmm, offsetYmm, startAngleDeg, headShape2);
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -3282,7 +3284,7 @@ try {
                 offsetXmm = restoreNumber(p[14], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 offsetYmm = restoreNumber(p[15], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 startAngleDeg = restoreNumber(p[16], startAngleDeg, -180, 180);
-                headType2 = Math.round(restoreNumber(p[17], headType2, 1, ARROW_TYPES2.length));
+                headShape2 = Math.round(restoreNumber(p[17], headShape2, 0, HEAD_SHAPES2.length - 1));
             }
 
             function restoreNumber(text, fallback, minimum, maximum) {

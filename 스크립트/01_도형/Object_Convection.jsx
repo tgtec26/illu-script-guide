@@ -39,9 +39,10 @@ try {
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
     // 화살촉 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
-    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
-    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
-    var headType = 1;
+    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+    var ARROW_NATIVE = ["화살표 3", "화살표 4", "화살표 2", "화살표 1"];
+    var headShape = 3;
     var HEAT_POSITIONS = ["가운데", "왼쪽", "오른쪽"];
     var LOOP_COUNTS = [1, 3];
     var LINE_WIDTH_PT = 0.3;
@@ -161,15 +162,15 @@ try {
     var stylePanel = addPanel(dlg, "모양");
     var lineWidthRow = addValueRow(stylePanel, "선 두께", "pt", lineWidth, WIDTH_RANGE[0], WIDTH_RANGE[1], 0.1, 1);
     var headRow = addValueRow(stylePanel, "화살촉 크기", "%", headScale, HEAD_RANGE[0], HEAD_RANGE[1], 10, 0);
-    var headTypeRow = stylePanel.add("group");
-    headTypeRow.alignChildren = ["left", "center"];
-    headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
-    var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
-    headTypeList.selection = headType - 1;
-    headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
-    headTypeList.onChange = function() {
-        if (!headTypeList.selection) return;
-        headType = headTypeList.selection.index + 1;
+    var headShapeRow = stylePanel.add("group");
+    headShapeRow.alignChildren = ["left", "center"];
+    headShapeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
+    var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.selection = headShape;
+    headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
+    headShapeList.onChange = function() {
+        if (!headShapeList.selection) return;
+        headShape = headShapeList.selection.index;
         updatePreview();
     };
     var heatCheck = stylePanel.add("checkbox", undefined, "가열 표시 (아래 화살표와 '가열')");
@@ -699,7 +700,7 @@ try {
     function writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale) {
         var setName = toActionHex(actionSetName);
         var name = toActionHex(actionName);
-        var arrow = toActionHex(ARROW_TYPES[headType - 1]);
+        var arrow = toActionHex(ARROW_NATIVE[headShape]);
         var lines = [
             "/version 3",
             "/name [ " + setName.length, "    " + setName.hex, "]",
@@ -959,7 +960,7 @@ try {
     // -------------------------------------------------------
     function saveSettings() {
         var parts = ["v5", heatAt, marginMm, roundPct, gapMm, lineWidth, headScale, heatMark ? "1" : "0", fontPt,
-            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", loopCount, spacingMm, levelPct, breakPct, glassMm, headType];
+            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", loopCount, spacingMm, levelPct, breakPct, glassMm, headShape];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -1001,7 +1002,7 @@ try {
         levelPct = restoreNumber(p[14], levelPct, LEVEL_RANGE, 1);
         breakPct = restoreNumber(p[15], breakPct, BREAK_RANGE, 5);
         glassMm = restoreNumber(p[16], glassMm, GLASS_RANGE, 0.1);
-        headType = restoreNumber(p[17], headType, [1, ARROW_TYPES.length], 1);
+        headShape = restoreNumber(p[17], headShape, [0, HEAD_SHAPES.length - 1], 1);
     }
 
     function restoreNumber(text, fallback, range, step) {
