@@ -14,7 +14,8 @@ const end = source.indexOf("// ==== 순수 기하 끝");
 assert.ok(start > 0 && end > start, "pure geometry markers");
 const pure = source.slice(start, end);
 const geo = new Function(`${pure}
-return {PULSE, TRAIN, SAMPLES_PER_WAVELENGTH, ARROW_LEN_MM, ARROW_GAP_MM, ARROW_STACK_MM, LINE_MARGIN_MM, HEAD_LEN_MM,
+return {PULSE, TRAIN, SAMPLES_PER_WAVELENGTH, ARROW_LEN_MM, ARROW_GAP_MM, ARROW_STACK_MM, LINE_MARGIN_MM, HEAD_LEN_MM, HEAD_HALF_MM,
+  HEAD_TRIANGLE, HEAD_CHEVRON, HEAD_SWALLOW,
   halfSupport, snapPulsePhase, waveAt, sumAt, wavesOverlap, curvePoints, lineExtent, curveTop, arrowHeights, arrowShape,
   stateCaption};`)();
 const {PULSE, TRAIN} = geo;
@@ -174,6 +175,28 @@ function maxCurveError(waves, from, to) {
   const left = geo.arrowShape(4, -4, 12);
   assert.deepStrictEqual(left.head[0], [-4, 12], "left-pointing tip");
   assert.ok(left.line[1][0] < left.head[1][0] && left.line[1][0] > -4, "left body ends inside the head");
+  assert.strictEqual(right.closed, true, "default head is the filled triangle");
+
+  // 배율: 날개 위치와 폭이 같은 비율로 커진다
+  const big = geo.arrowShape(-4, 4, 12, 2, geo.HEAD_TRIANGLE);
+  near(big.head[1][0], 4 - 2 * geo.HEAD_LEN_MM, 1e-9, "head length scales");
+  near(big.head[1][1] - 12, 2 * geo.HEAD_HALF_MM, 1e-9, "head half width scales");
+
+  // 꺾쇠: 열린 선 [날개, 끝, 날개], 몸통이 끝점까지
+  const chevron = geo.arrowShape(-4, 4, 12, 1, geo.HEAD_CHEVRON);
+  assert.strictEqual(chevron.closed, false, "chevron is open");
+  assert.deepStrictEqual(chevron.head[1], [4, 12], "chevron apex at the tip");
+  assert.deepStrictEqual(chevron.line[1], [4, 12], "body runs to the tip");
+  near(chevron.head[0][0], 4 - geo.HEAD_LEN_MM, 1e-9, "chevron arms one head length back");
+
+  // 제비꼬리: 닫힌 네 점, 홈은 밑변에서 머리 길이의 0.3 앞, 몸통은 홈 앞에서 끝남
+  const swallow = geo.arrowShape(-4, 4, 12, 1, geo.HEAD_SWALLOW);
+  assert.strictEqual(swallow.closed, true);
+  assert.strictEqual(swallow.head.length, 4);
+  near(swallow.head[2][0], 4 - 0.7 * geo.HEAD_LEN_MM, 1e-9, "notch 0.3 head lengths ahead of the base");
+  assert.ok(swallow.line[1][0] > swallow.head[1][0] && swallow.line[1][0] < 4 - 0.7 * geo.HEAD_LEN_MM + 1e-9 + geo.HEAD_LEN_MM, "body ends inside the head");
+  const swallowLeft = geo.arrowShape(4, -4, 12, 1, geo.HEAD_SWALLOW);
+  near(swallowLeft.head[2][0], -4 + 0.7 * geo.HEAD_LEN_MM, 1e-9, "left-pointing notch");
 }
 
 // 설정 저장·복원: 저장한 값이 그대로 돌아오고, 형식이 다르면 기본값을 지킨다
@@ -222,11 +245,11 @@ return {options, saveSettings, applySettings, NUMBER_KEYS, SPECS, COLORS, PREF_K
   Object.assign(options, {shape: TRAIN, sameAmp: false, sameWl: false, arrowsOn: false, dotOn: false, captionOn: false,
     colorWave1: 3, colorWave2: 4, colorSum: 5, colorArrow1: 6, colorArrow2: 0, previewOn: false,
     width: 150, cycles: 4, lineWidth: 1.25, pos1: -12.5, phase1: 45, amp1: 7.5, wl1: 18, pos2: 8, phase2: 225, amp2: 12, wl2: 9,
-    offsetX: 3.5, offsetY: -2});
+    offsetX: 3.5, offsetY: -2, headSize: 150, headShape: 2});
   const saved = JSON.parse(JSON.stringify(options));
   env.saveSettings();
-  assert.strictEqual(store[env.PREF_KEY].split("|").length, 13 + NUMBER_KEYS.length, "header + numbers");
-  assert.strictEqual(store[env.PREF_KEY].split("|")[0], "v1");
+  assert.strictEqual(store[env.PREF_KEY].split("|").length, 14 + NUMBER_KEYS.length, "header + numbers + head shape");
+  assert.strictEqual(store[env.PREF_KEY].split("|")[0], "v2");
   Object.assign(options, JSON.parse(JSON.stringify(defaults)));
   env.applySettings();
   assert.deepStrictEqual(options, saved, "stored options round-trip");

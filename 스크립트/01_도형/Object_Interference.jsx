@@ -39,6 +39,10 @@ try {
     var LINE_MARGIN_MM = 1;
     var ARROW_LEN_MM = 8;
     var HEAD_LEN_MM = 1.6;
+    var HEAD_TRIANGLE = 0;
+    var HEAD_CHEVRON = 1;
+    var HEAD_SWALLOW = 2;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"];
     var HEAD_HALF_MM = 0.55;
     var ARROW_GAP_MM = 3;
     var ARROW_STACK_MM = 3;
@@ -171,12 +175,27 @@ try {
         return [y1, y2];
     }
 
-    // 화살표: 몸통 두 점과 채운 화살촉 세 점 (mm). 몸통은 화살촉 속으로 조금 들어가 틈이 없다
-    function arrowShape(tailX, tipX, y) {
+    // 화살표: 몸통 두 점과 화살촉 점들 (mm). headScale은 화살촉 배율(1 = 100%), headShape는 모양.
+    //   삼각형·제비꼬리: 채운 닫힌 패스. 몸통은 화살촉 속으로 조금 들어가 틈이 없다.
+    //   꺾쇠: 열린 선 [날개, 끝, 날개]. 몸통이 끝점까지 간다.
+    function arrowShape(tailX, tipX, y, headScale, headShape) {
         var dir = tipX > tailX ? 1 : -1;
+        var k = headScale === undefined ? 1 : headScale;
+        var len = HEAD_LEN_MM * k;
+        var half = HEAD_HALF_MM * k;
+        var back = tipX - dir * len;
+        if (headShape === HEAD_CHEVRON) {
+            return {line: [[tailX, y], [tipX, y]], head: [[back, y + half], [tipX, y], [back, y - half]], closed: false};
+        }
+        if (headShape === HEAD_SWALLOW) {
+            // 홈은 밑변에서 머리 길이의 0.3 앞
+            return {line: [[tailX, y], [tipX - dir * len * 0.6, y]],
+                head: [[tipX, y], [back, y + half], [tipX - dir * len * 0.7, y], [back, y - half]], closed: true};
+        }
         return {
-            line: [[tailX, y], [tipX - dir * HEAD_LEN_MM * 0.9, y]],
-            head: [[tipX, y], [tipX - dir * HEAD_LEN_MM, y + HEAD_HALF_MM], [tipX - dir * HEAD_LEN_MM, y - HEAD_HALF_MM]]
+            line: [[tailX, y], [tipX - dir * len * 0.9, y]],
+            head: [[tipX, y], [back, y + half], [back, y - half]],
+            closed: true
         };
     }
 
@@ -218,7 +237,7 @@ try {
 
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
     var NUMBER_KEYS = ["width", "cycles", "lineWidth", "pos1", "phase1", "amp1", "wl1", "pos2", "phase2", "amp2", "wl2",
-        "offsetX", "offsetY"];
+        "offsetX", "offsetY", "headSize"];
     var WAVE_POS_RANGE = [-120, 120];
     var PHASE_RANGE_TRAIN = [0, 360];
     var SPECS = {
@@ -234,7 +253,8 @@ try {
         amp2: {range: [1, 40], step: 0.5, decimals: 1},
         wl2: {range: [4, 100], step: 0.5, decimals: 1},
         offsetX: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
-        offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1}
+        offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
+        headSize: {range: [30, 300], step: 5, decimals: 0}
     };
 
     var doc = app.activeDocument;
@@ -249,7 +269,7 @@ try {
         width: 100, cycles: 2, lineWidth: 0.75,
         pos1: -25, phase1: 0, amp1: 10, wl1: 20,
         pos2: 25, phase2: 0, amp2: 10, wl2: 20,
-        offsetX: 0, offsetY: 0,
+        offsetX: 0, offsetY: 0, headSize: 100, headShape: HEAD_TRIANGLE,
         previewOn: true
     };
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
@@ -305,7 +325,9 @@ try {
     addRow(wave2Panel, "wl2", "파장", "mm");
 
     var stylePanel = addPanel(dlg, "선·색·표시");
+    stylePanel.spacing = 5;
     addRow(stylePanel, "lineWidth", "선 두께", "pt");
+    addRow(stylePanel, "headSize", "화살촉 크기", "%");
     var waveColorRow = stylePanel.add("group");
     waveColorRow.alignChildren = ["left", "center"];
     waveColorRow.add("statictext", undefined, "파동 색:").preferredSize.width = LABEL_WIDTH;
@@ -320,6 +342,9 @@ try {
     arrowColorRow.add("statictext", undefined, "화살표 색:").preferredSize.width = LABEL_WIDTH;
     var colorArrow1List = addColorList(arrowColorRow, "colorArrow1", "파동 1 화살표");
     var colorArrow2List = addColorList(arrowColorRow, "colorArrow2", "파동 2 화살표");
+    var headShapeList = arrowColorRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.selection = options.headShape;
+    headShapeList.helpTip = "화살촉 모양. 삼각형·제비꼬리는 채운 모양, 꺾쇠는 선 굵기의 열린 선";
 
     var showRow = stylePanel.add("group");
     showRow.alignChildren = ["left", "center"];
@@ -358,6 +383,7 @@ try {
     captionCheck.value = options.captionOn;
     previewCheck.value = options.previewOn;
     applyShapeMode();
+    applyArrowMode();
 
     shapeList.onChange = function() {
         if (!shapeList.selection) return;
@@ -369,7 +395,12 @@ try {
     sameWlCheck.onClick = function() { options.sameWl = sameWlCheck.value; updatePreview(); };
     constructiveButton.onClick = function() { setPhase2(options.phase1); };
     destructiveButton.onClick = function() { setPhase2((options.phase1 + 180) % 360); };
-    arrowsCheck.onClick = function() { options.arrowsOn = arrowsCheck.value; updatePreview(); };
+    headShapeList.onChange = function() {
+        if (!headShapeList.selection) return;
+        options.headShape = headShapeList.selection.index;
+        updatePreview();
+    };
+    arrowsCheck.onClick = function() { options.arrowsOn = arrowsCheck.value; applyArrowMode(); updatePreview(); };
     dotCheck.onClick = function() { options.dotOn = dotCheck.value; updatePreview(); };
     captionCheck.onClick = function() { options.captionOn = captionCheck.value; updatePreview(); };
     previewCheck.onClick = function() {
@@ -413,6 +444,12 @@ try {
         var wlText = (pulse ? "폭" : "파장") + " (mm):";
         rows.wl1.label.text = wlText;
         rows.wl2.label.text = wlText;
+    }
+
+    // 화살표를 끄면 화살촉 모양·크기를 잠근다
+    function applyArrowMode() {
+        headShapeList.enabled = options.arrowsOn;
+        setRowEnabled(rows.headSize, options.arrowsOn);
     }
 
     function setPhase2(value) {
@@ -510,9 +547,9 @@ try {
 
         var heights = arrowHeights(waves[0], waves[1]);
         if (options.arrowsOn) {
-            drawArrow(group, "Arrow1", arrowShape(waves[0].center - ARROW_LEN_MM / 2, waves[0].center + ARROW_LEN_MM / 2, heights[0]),
+            drawArrow(group, "Arrow1", arrowShape(waves[0].center - ARROW_LEN_MM / 2, waves[0].center + ARROW_LEN_MM / 2, heights[0], options.headSize / 100, options.headShape),
                 makeColor(options.colorArrow1));
-            drawArrow(group, "Arrow2", arrowShape(waves[1].center + ARROW_LEN_MM / 2, waves[1].center - ARROW_LEN_MM / 2, heights[1]),
+            drawArrow(group, "Arrow2", arrowShape(waves[1].center + ARROW_LEN_MM / 2, waves[1].center - ARROW_LEN_MM / 2, heights[1], options.headSize / 100, options.headShape),
                 makeColor(options.colorArrow2));
         }
 
@@ -597,12 +634,19 @@ try {
         line.name = name + "Body";
         styleStroke(line, color, ARROW_STROKE_PT);
         var head = arrow.pathItems.add();
-        head.setEntirePath([pagePoint(shape.head[0]), pagePoint(shape.head[1]), pagePoint(shape.head[2])]);
-        head.closed = true;
+        var headPoints = [];
+        for (var h = 0; h < shape.head.length; h++) headPoints.push(pagePoint(shape.head[h]));
+        head.setEntirePath(headPoints);
+        head.closed = shape.closed;
         head.name = name + "Head";
-        head.stroked = false;
-        head.filled = true;
-        head.fillColor = color;
+        if (shape.closed) {
+            head.stroked = false;
+            head.filled = true;
+            head.fillColor = color;
+        } else {
+            styleStroke(head, color, ARROW_STROKE_PT);
+            head.strokeJoin = StrokeJoin.MITERENDJOIN;
+        }
         return arrow;
     }
 
@@ -773,16 +817,17 @@ try {
 
     // -------------------------------------------------------
     // 설정 저장 · 복원
-    // "v1" + 파형 + 같게 둘 + 표시 셋 + 색 다섯 + 미리보기 + 숫자(NUMBER_KEYS 순서). 확인할 때만 저장
+    // "v2" + 파형 + 같게 둘 + 표시 셋 + 색 다섯 + 미리보기 + 숫자(NUMBER_KEYS 순서) + 화살촉 모양. 확인할 때만 저장
     // -------------------------------------------------------
     function flag(value) { return value ? "1" : "0"; }
 
     function saveSettings() {
-        var parts = ["v1", options.shape, flag(options.sameAmp), flag(options.sameWl),
+        var parts = ["v2", options.shape, flag(options.sameAmp), flag(options.sameWl),
             flag(options.arrowsOn), flag(options.dotOn), flag(options.captionOn),
             options.colorWave1, options.colorWave2, options.colorSum, options.colorArrow1, options.colorArrow2,
             flag(options.previewOn)];
         for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
+        parts.push(options.headShape);
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -791,7 +836,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 13 + NUMBER_KEYS.length) return;
+        if (p[0] !== "v2" || p.length !== 14 + NUMBER_KEYS.length) return;
         var shape = parseInt(p[1], 10);
         if (shape === PULSE || shape === TRAIN) options.shape = shape;
         options.sameAmp = (p[2] === "1");
@@ -810,5 +855,7 @@ try {
             var value = parseNumber(p[13 + i]);
             if (value !== null) options[NUMBER_KEYS[i]] = clamp(roundTo(value, spec.step), spec.range[0], spec.range[1]);
         }
+        var headShape = parseInt(p[13 + NUMBER_KEYS.length], 10);
+        if (headShape >= 0 && headShape < HEAD_SHAPES.length) options.headShape = headShape;
     }
 })();
