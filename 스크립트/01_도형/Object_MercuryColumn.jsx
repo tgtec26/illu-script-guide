@@ -61,6 +61,7 @@ try {
     var DIM_HEAD_WIDTH_MM = 0.9;
     // 치수선 화살촉 모양
     var HEAD_TRIANGLE = 0;
+    var HEAD_EXAM = 3;   // 작살형(평가원식): 치수선 기본
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
 
     // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
@@ -147,7 +148,7 @@ try {
         troughW: 60, troughH: 20, depth: 15, troughPt: 0.8,
         tubeW: 5.5, tubeLen: 50, tilt: 0, tubePt: 0.4,
         colH: 30,
-        offsetX: 0, offsetY: 0, headSize: 100, headShape: HEAD_TRIANGLE,
+        offsetX: 0, offsetY: 0, headSize: 100, headShape: HEAD_EXAM,
         arrowsOn: true, vacuumOn: true, columnOn: true, surfaceOn: true, mercuryOn: true,
         glassOn: true, glassText: "1 m 유리관",
         heightOn: true, heightText: "76 cm",
