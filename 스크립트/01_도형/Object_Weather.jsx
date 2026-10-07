@@ -24,9 +24,10 @@ try {
     var locale = "";
     try { locale = String(app.locale).toLowerCase(); } catch (localeError) {}
     var isKorean = (locale === "" || locale.indexOf("ko") === 0);
-    var ARROW_AXIS = isKorean ? "화살표 1" : "Arrow 1";
-    var ARROW_BRACE_OUTER = isKorean ? "화살표 7" : "Arrow 7";
-    var ARROW_BRACE_INNER = isKorean ? "화살표 6" : "Arrow 6";
+    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 목록 번호(0~7)가 화살표 번호 − 1이다
+    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+    var ARROW_PREFIX = isKorean ? "화살표 " : "Arrow ";
+    function arrowNameOf(index) { return ARROW_PREFIX + (index + 1); }
     var ARROW_ALIGN_TIP = isKorean ? "패스 끝의 팁" : "Tip of arrow at end of path";
     var BRACE_PT = 0.5;
 
@@ -51,7 +52,12 @@ try {
                 {key: "shade", check: "층 음영", value: true},
                 {key: "arrows", check: "축 화살표", value: true},
                 {key: "braces", check: "층 묶음 기호", value: false},
-                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
+                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
+                {panel: "화살촉"},
+                {key: "headType", label: "축 화살촉", items: ARROW_TYPES, value: 0},
+                {key: "braceOuter", label: "묶음 바깥 끝", items: ARROW_TYPES, value: 6},
+                {key: "braceInner", label: "묶음 가운데 끝", items: ARROW_TYPES, value: 5},
+                {key: "headScale", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100}
             ],
             draw: drawAtmosphere
         });
@@ -130,7 +136,7 @@ try {
 
         // 축은 한 패스(Y축 끝 → 원점 → X축 끝). 화살촉은 DOM에 없어 액션으로 단다
         var axis = t.path([[0, H + ARROW_MARGIN], [0, 0], [W + ARROW_MARGIN, 0]], false, null, 100, AXIS_PT);
-        if (o.arrows) setStrokeArrowheads([axis], ARROW_AXIS, ARROW_AXIS, AXIS_PT, 100);
+        if (o.arrows) setStrokeArrowheads([axis], arrowNameOf(o.headType), arrowNameOf(o.headType), AXIS_PT, o.headScale);
 
         // 층 묶음 기호 (Object_RegionBrace.jsx): 층 높이만큼의 세로선을 가운데에서 잘라
         // 바깥 끝에 화살표 7, 가운데 끝에 화살표 6. 이웃한 기호가 붙지 않게 0.2mm씩 띄운다
@@ -143,8 +149,8 @@ try {
                 tails.push(t.line([bx, ym], [bx, y0], BRACE_PT));
                 if (o.names) t.text(NAMES[b], bx + 2 * mm, ym, F, "left");
             }
-            setStrokeArrowheads(heads, ARROW_BRACE_OUTER, ARROW_BRACE_INNER, BRACE_PT, 100);
-            setStrokeArrowheads(tails, ARROW_BRACE_INNER, ARROW_BRACE_OUTER, BRACE_PT, 100);
+            setStrokeArrowheads(heads, arrowNameOf(o.braceOuter), arrowNameOf(o.braceInner), BRACE_PT, o.headScale);
+            setStrokeArrowheads(tails, arrowNameOf(o.braceInner), arrowNameOf(o.braceOuter), BRACE_PT, o.headScale);
         }
     }
 
@@ -227,6 +233,7 @@ try {
                 {panel: "화살표"},
                 {key: "arrowPt", label: "선 두께", unit: "pt", min: 0.3, max: 2, step: 0.05, value: 0.75},
                 {key: "headScale", label: "촉 크기", unit: "%", min: 30, max: 200, step: 5, value: 100},
+                {key: "headType", label: "촉 종류", items: ARROW_TYPES, value: 0},
                 {panel: "축 (옆에서 본 모습)"},
                 {key: "axes", check: "축", value: false},
                 {key: "axisArrows", check: "축 화살표", value: true},
@@ -287,8 +294,8 @@ try {
             var d = windDirection(theta, high);
             winds.push(t.line([c[0] - d[0] * length / 2, c[1] - d[1] * length / 2], [c[0] + d[0] * length / 2, c[1] + d[1] * length / 2], o.arrowPt));
         }
-        // 화살촉은 기권 탭 축과 같은 화살표 1 (패스 끝의 팁)
-        if (winds.length) setStrokeArrowheads(winds, null, ARROW_AXIS, o.arrowPt, o.headScale);
+        // 화살촉은 고른 종류(기본 화살표 1, 패스 끝의 팁)
+        if (winds.length) setStrokeArrowheads(winds, null, arrowNameOf(o.headType), o.arrowPt, o.headScale);
     }
 
     // 옆 모습: 가운데 하강(고기압)·상승(저기압) 기류, 지면에서 불어 나가거나 들어오는 바람, 위에서 반대로.
@@ -310,7 +317,7 @@ try {
                 flow([near, H], [far, H]);
             }
         }
-        setStrokeArrowheads(flows, null, ARROW_AXIS, o.arrowPt, o.headScale);
+        setStrokeArrowheads(flows, null, arrowNameOf(o.headType), o.arrowPt, o.headScale);
         t.text(high ? "하강 기류" : "상승 기류", 1.5 * mm, H / 2, F, "left");
 
         if (o.axes) {
@@ -321,7 +328,7 @@ try {
                 t.line([-half, ty], [-half + sign * TICK, ty], AXIS_PT);
             }
             var axis = t.path([[-half, H + ARROW_MARGIN], [-half, 0], [half + ARROW_MARGIN, 0]], false, null, 100, AXIS_PT);
-            if (o.axisArrows) setStrokeArrowheads([axis], ARROW_AXIS, ARROW_AXIS, AXIS_PT, 100);
+            if (o.axisArrows) setStrokeArrowheads([axis], arrowNameOf(o.headType), arrowNameOf(o.headType), AXIS_PT, 100);
             t.text("높이", -half, H + ARROW_MARGIN + F * 0.7, F);
         } else {
             t.line([-half, 0], [half, 0], 0.5);

@@ -28,7 +28,9 @@ try {
     var FLATTEN_STEPS = 16;
     var STATES = ["고체", "액체", "기체"];
     // 화살촉 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
-    var ARROW_NAME = "화살표 1";
+    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
+    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+    var headType = 1;
     var LINE_WIDTH_PT = 0.3;
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
@@ -104,6 +106,17 @@ try {
     var arrowWidthRow = addValueRow(arrowPanel, "화살표 두께", "pt", arrowWidthPt, ARROW_WIDTH_RANGE[0], ARROW_WIDTH_RANGE[1], 0.1, 1);
     var arrowKRow = addValueRow(arrowPanel, "화살표 색", "K", arrowK, K_RANGE[0], K_RANGE[1], 10, 0);
     var headRow = addValueRow(arrowPanel, "화살촉 크기", "%", headScale, HEAD_RANGE[0], HEAD_RANGE[1], 10, 0);
+    var headTypeRow = arrowPanel.add("group");
+    headTypeRow.alignChildren = ["left", "center"];
+    headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
+    var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
+    headTypeList.selection = headType - 1;
+    headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
+    headTypeList.onChange = function() {
+        if (!headTypeList.selection) return;
+        headType = headTypeList.selection.index + 1;
+        updatePreview();
+    };
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
@@ -444,7 +457,7 @@ try {
     function writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale) {
         var setName = toActionHex(actionSetName);
         var name = toActionHex(actionName);
-        var arrow = toActionHex(ARROW_NAME);
+        var arrow = toActionHex(ARROW_TYPES[headType - 1]);
         var lines = [
             "/version 3",
             "/name [ " + setName.length, "    " + setName.hex, "]",
@@ -623,8 +636,8 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v2", state, diameterMm, levelPct, gasCount, particleK, arrowRatio, arrowMm, arrowWidthPt, arrowK, headScale, seed,
-            offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+        var parts = ["v3", state, diameterMm, levelPct, gasCount, particleK, arrowRatio, arrowMm, arrowWidthPt, arrowK, headScale, seed,
+            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", headType];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -633,7 +646,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length !== 15) return;
+        if (p[0] !== "v3" || p.length !== 16) return;
         state = restoreNumber(p[1], state, [0, STATES.length - 1], 1);
         diameterMm = restoreNumber(p[2], diameterMm, DIAMETER_RANGE, 0.1);
         levelPct = restoreNumber(p[3], levelPct, LEVEL_RANGE, 1);
@@ -648,6 +661,7 @@ try {
         offsetXmm = restoreNumber(p[12], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         offsetYmm = restoreNumber(p[13], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         previewEnabled = p[14] === "1";
+        headType = restoreNumber(p[15], headType, [1, ARROW_TYPES.length], 1);
     }
 
     function restoreNumber(text, fallback, range, step) {

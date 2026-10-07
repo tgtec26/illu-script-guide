@@ -32,8 +32,9 @@ try {
     var ORBIT_DASH = [2, 1.5];
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
-    // 화살촉 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
-    var ARROW_NAME = "화살표 1";
+    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
+    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+    var HEAD_RANGE = [30, 300];
     var MODES = ["위상", "일식", "월식"];
     var LABEL_STYLES = ["없음", "기호", "이름"];
     var PHASE_NAMES = {0: "삭", 45: "초승달", 90: "상현달", 180: "망", 270: "하현달", 315: "그믐달"};
@@ -70,6 +71,8 @@ try {
     var rayGapMm = 14;
     var rayCount = 5;
     var rayK = 100;
+    var headType = 1;
+    var headScale = 100;
     var showApparent = true;
     var labelStyle = 2;
     var widthMm = 120;
@@ -81,7 +84,7 @@ try {
     var offsetYmm = 0;
     var previewEnabled = true;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-    var DEFAULTS = {orbitMm: orbitMm, moonMm: moonMm, earthMm: earthMm, rayWeight: rayWeight, rayGapMm: rayGapMm, rayCount: rayCount, rayK: rayK, widthMm: widthMm, umbraK: umbraK, penumbraK: penumbraK, darkK: darkK, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    var DEFAULTS = {headScale: headScale, orbitMm: orbitMm, moonMm: moonMm, earthMm: earthMm, rayWeight: rayWeight, rayGapMm: rayGapMm, rayCount: rayCount, rayK: rayK, widthMm: widthMm, umbraK: umbraK, penumbraK: penumbraK, darkK: darkK, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var layer = findEditableLayer();
@@ -117,6 +120,18 @@ try {
     var rayGapRow = addValueRow(phasePanel, "햇빛 간격", "mm", rayGapMm, RAY_GAP_RANGE[0], RAY_GAP_RANGE[1], 0.5, 1);
     var rayCountRow = addValueRow(phasePanel, "햇빛 수", "개", rayCount, RAY_COUNT_RANGE[0], RAY_COUNT_RANGE[1], 1, 0);
     var rayKRow = addValueRow(phasePanel, "햇빛 색", "K", rayK, K_RANGE[0], K_RANGE[1], 10, 0);
+    var headRow = addValueRow(phasePanel, "화살촉 크기", "%", headScale, HEAD_RANGE[0], HEAD_RANGE[1], 10, 0);
+    var headTypeRow = phasePanel.add("group");
+    headTypeRow.alignChildren = ["left", "center"];
+    headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
+    var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
+    headTypeList.selection = headType - 1;
+    headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
+    headTypeList.onChange = function() {
+        if (!headTypeList.selection) return;
+        headType = headTypeList.selection.index + 1;
+        updatePreview();
+    };
     var apparentCheck = phasePanel.add("checkbox", undefined, "지구에서 본 모양 (궤도 바깥)");
     var labelRow = phasePanel.add("group");
     labelRow.add("statictext", undefined, "표시:").preferredSize.width = LABEL_WIDTH;
@@ -177,6 +192,7 @@ try {
     bindValueRow(rayGapRow, function() { return rayGapMm; }, function(v) { rayGapMm = v; }, function() { return DEFAULTS.rayGapMm; });
     bindValueRow(rayCountRow, function() { return rayCount; }, function(v) { rayCount = v; }, function() { return DEFAULTS.rayCount; });
     bindValueRow(rayKRow, function() { return rayK; }, function(v) { rayK = v; }, function() { return DEFAULTS.rayK; });
+    bindValueRow(headRow, function() { return headScale; }, function(v) { headScale = v; }, function() { return DEFAULTS.headScale; });
     bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; }, function() { return DEFAULTS.widthMm; });
     bindValueRow(umbraRow, function() { return umbraK; }, function(v) { umbraK = v; }, function() { return DEFAULTS.umbraK; });
     bindValueRow(penumbraRow, function() { return penumbraK; }, function(v) { penumbraK = v; }, function() { return DEFAULTS.penumbraK; });
@@ -323,7 +339,7 @@ try {
         }
         var label = addText("햇빛", cx + side * (distance + length / 2), cy + spread + fontPt);
         label.move(group, ElementPlacement.PLACEATEND);
-        applyArrowheads(paths, rayWeight, 100);
+        applyArrowheads(paths, rayWeight, headScale);
     }
 
     function buildEclipse(cx, cy) {
@@ -556,7 +572,7 @@ try {
     function writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale) {
         var setName = toActionHex(actionSetName);
         var name = toActionHex(actionName);
-        var arrow = toActionHex(ARROW_NAME);
+        var arrow = toActionHex(ARROW_TYPES[headType - 1]);
         var lines = [
             "/version 3",
             "/name [ " + setName.length, "    " + setName.hex, "]",
@@ -799,9 +815,9 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v2", mode, positions, orbitMm, moonMm, earthMm, sunOnRight ? "1" : "0", showApparent ? "1" : "0",
+        var parts = ["v3", mode, positions, orbitMm, moonMm, earthMm, sunOnRight ? "1" : "0", showApparent ? "1" : "0",
             labelStyle, widthMm, darkK, umbraK, penumbraK, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
-            rayWeight, rayGapMm, rayCount, rayK];
+            rayWeight, rayGapMm, rayCount, rayK, headScale, headType];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -810,7 +826,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length !== 21) return;
+        if (p[0] !== "v3" || p.length !== 23) return;
         mode = restoreNumber(p[1], mode, [0, MODES.length - 1], 1);
         positions = p[2] === "4" ? 4 : 8;
         orbitMm = restoreNumber(p[3], orbitMm, ORBIT_RANGE, 0.5);
@@ -831,6 +847,8 @@ try {
         rayGapMm = restoreNumber(p[18], rayGapMm, RAY_GAP_RANGE, 0.5);
         rayCount = restoreNumber(p[19], rayCount, RAY_COUNT_RANGE, 1);
         rayK = restoreNumber(p[20], rayK, K_RANGE, 10);
+        headScale = restoreNumber(p[21], headScale, HEAD_RANGE, 10);
+        headType = restoreNumber(p[22], headType, [1, ARROW_TYPES.length], 1);
     }
 
     function restoreNumber(text, fallback, range, step) {

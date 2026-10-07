@@ -51,8 +51,10 @@ try {
     var locale = "";
     try { locale = String(app.locale).toLowerCase(); } catch (localeError) {}
     var isKorean = (locale === "" || locale.indexOf("ko") === 0);
-    var ARROW_OUTER = isKorean ? "화살표 7" : "Arrow 7";
-    var ARROW_INNER = isKorean ? "화살표 6" : "Arrow 6";
+    var ARROW_PREFIX = isKorean ? "화살표 " : "Arrow ";
+    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 바깥 끝 기본은 7, 가운데 끝 기본은 6
+    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+    var HEAD_RANGE = [30, 300];
     var ALIGN_TIP_NAME = isKorean ? "패스 끝의 팁" : "Tip of arrow at end of path";
 
     // 다이얼로그가 다루는 옵션 값
@@ -62,6 +64,9 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    var outerType = 7;
+    var innerType = 6;
+    var headScale = ARROW_SCALE;
 
     var previewGroups = [];
 
@@ -76,6 +81,11 @@ try {
     var flipPanel = addPanel(dlg, "화살표 반전");
     var flipHorizontalCheck = flipPanel.add("checkbox", undefined, "상하 반전 (가로선)");
     var flipVerticalCheck = flipPanel.add("checkbox", undefined, "좌우 반전 (세로선)");
+
+    var headPanel = addPanel(dlg, "화살촉");
+    var outerTypeList = addTypeRow(headPanel, "바깥 끝:", function() { return outerType; }, function(v) { outerType = v; });
+    var innerTypeList = addTypeRow(headPanel, "가운데 끝:", function() { return innerType; }, function(v) { innerType = v; });
+    var headScaleControls = addValueRow(headPanel, "크기", "%", headScale, HEAD_RANGE[0], HEAD_RANGE[1], 10, 0);
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm,
@@ -93,13 +103,16 @@ try {
     footer.add("button", undefined, "취소", { name: "cancel" });
 
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-    var DEFAULTS = {offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    var DEFAULTS = {offsetXmm: offsetXmm, offsetYmm: offsetYmm, headScale: headScale};
     applySettings();
     flipHorizontalCheck.value = flipHorizontalLine;
     flipVerticalCheck.value = flipVerticalLine;
     previewCheck.value = previewEnabled;
     setRowValue(offsetXControls, offsetXmm);
     setRowValue(offsetYControls, offsetYmm);
+    setRowValue(headScaleControls, headScale);
+    outerTypeList.selection = outerType - 1;
+    innerTypeList.selection = innerType - 1;
 
     flipHorizontalCheck.onClick = function() {
         flipHorizontalLine = flipHorizontalCheck.value;
@@ -113,6 +126,8 @@ try {
         previewEnabled = previewCheck.value;
         updatePreview();
     };
+
+    bindScaleRow(headScaleControls, function() { return headScale; }, function(v) { headScale = v; }, DEFAULTS.headScale);
 
     // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
     bindPositionRow(offsetXControls, function() { return offsetXmm; },
@@ -221,8 +236,8 @@ try {
         }
 
         var swap = horizontal ? flipHorizontalLine : flipVerticalLine;
-        var outerName = swap ? ARROW_INNER : ARROW_OUTER;
-        var innerName = swap ? ARROW_OUTER : ARROW_INNER;
+        var outerName = ARROW_PREFIX + (swap ? innerType : outerType);
+        var innerName = ARROW_PREFIX + (swap ? outerType : innerType);
 
         var mid = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2];
 
@@ -332,6 +347,41 @@ try {
         };
     }
 
+    // 화살촉 종류 목록 한 줄: 고르면 바로 옵션에 쓰고 미리보기를 다시 그린다
+    function addTypeRow(parent, label, getter, setter) {
+        var row = parent.add("group");
+        row.alignChildren = ["left", "center"];
+        row.add("statictext", undefined, label).preferredSize.width = LABEL_WIDTH;
+        var list = row.add("dropdownlist", undefined, ARROW_TYPES);
+        list.selection = getter() - 1;
+        list.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
+        list.onChange = function() {
+            if (!list.selection) return;
+            setter(list.selection.index + 1);
+            updatePreview();
+        };
+        return list;
+    }
+
+    // 값이 바뀌면 옵션에 쓰고 미리보기를 다시 그린다
+    function bindScaleRow(controls, getter, setter, initial) {
+        function commit(value) {
+            value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+            controls.input.text = formatNumber(value, controls.decimals);
+            try { controls.slider.value = value; } catch (e) {}
+            if (value === getter()) return;
+            setter(value);
+            updatePreview();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? getter() : value);
+        };
+    }
+
     function parseNumber(text) {
         var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
         return isNaN(value) ? null : value;
@@ -367,12 +417,15 @@ try {
     // -------------------------------------------------------
     function saveSettings() {
         var parts = [
-            "v2",
+            "v3",
             flipHorizontalLine ? "1" : "0",
             flipVerticalLine ? "1" : "0",
             offsetXmm,
             offsetYmm,
-            previewEnabled ? "1" : "0"
+            previewEnabled ? "1" : "0",
+            headScale,
+            outerType,
+            innerType
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -382,12 +435,17 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length < 6) return;
+        if (p[0] !== "v3" || p.length < 9) return;
         flipHorizontalLine = (p[1] === "1");
         flipVerticalLine = (p[2] === "1");
         offsetXmm = restoreNumber(p[3], offsetXmm);
         offsetYmm = restoreNumber(p[4], offsetYmm);
         previewEnabled = (p[5] === "1");
+        var scale = parseNumber(p[6]);
+        if (scale !== null) headScale = clamp(roundTo(scale, 10), HEAD_RANGE[0], HEAD_RANGE[1]);
+        var outer = parseInt(p[7], 10), inner = parseInt(p[8], 10);
+        if (outer >= 1 && outer <= ARROW_TYPES.length) outerType = outer;
+        if (inner >= 1 && inner <= ARROW_TYPES.length) innerType = inner;
     }
 
     function restoreNumber(text, fallback) {
@@ -507,13 +565,13 @@ try {
         lines.push("            /key 1634951985");
         lines.push("            /showInPalette -1");
         lines.push("            /type (real)");
-        lines.push("            /value " + ARROW_SCALE);
+        lines.push("            /value " + headScale);
         lines.push("        }");
         lines.push("        /parameter-5 {");
         lines.push("            /key 1634951986");
         lines.push("            /showInPalette -1");
         lines.push("            /type (real)");
-        lines.push("            /value " + ARROW_SCALE);
+        lines.push("            /value " + headScale);
         lines.push("        }");
         // 화살표 정렬: 패스 끝의 팁
         lines.push("        /parameter-6 {");

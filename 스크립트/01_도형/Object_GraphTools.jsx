@@ -137,8 +137,11 @@ try {
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
         function addRows(page) {
             var PREF_KEY = "AxisTickMarks/settings";
-            // 화살표 이름은 Illustrator UI 언어를 따른다 (한국어판 기준)
-            var ARROW_NAME = "화살표 1";
+            // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
+            var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+            var HEAD_SCALE_RANGE = [30, 300];
+            var headType = 1;
+            var headScale = 100;
 
             var doc = app.activeDocument;
             var sel = doc.selection;
@@ -318,8 +321,47 @@ try {
             var zeroCheck = legendPanel.add("checkbox", undefined, "원점에 0 넣기 (대각선 2mm)");
             zeroCheck.value = true;
 
-            var arrowCheck = legendPanel.add("checkbox", undefined, "축 양 끝에 화살표 1 넣기");
+            var arrowCheck = legendPanel.add("checkbox", undefined, "축 양 끝에 화살촉 넣기");
             arrowCheck.value = true;
+            arrowCheck.helpTip = "화살촉은 확인할 때 붙는다";
+
+            var headTypeGroup = legendPanel.add("group");
+            headTypeGroup.alignChildren = ["left", "center"];
+            headTypeGroup.add("statictext", undefined, "화살촉 종류:");
+            var headTypeList = headTypeGroup.add("dropdownlist", undefined, ARROW_TYPES);
+            headTypeList.selection = headType - 1;
+            headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
+            headTypeList.onChange = function() {
+                if (!headTypeList.selection) return;
+                headType = headTypeList.selection.index + 1;
+            };
+
+            var headScaleGroup = legendPanel.add("group");
+            headScaleGroup.alignChildren = ["left", "center"];
+            headScaleGroup.add("statictext", undefined, "화살촉 크기 (%):");
+            var headScaleInput = headScaleGroup.add("edittext", undefined, String(headScale));
+            headScaleInput.characters = 6;
+            headScaleInput.justify = "center";
+            var headScaleSlider = headScaleGroup.add("scrollbar", undefined, headScale, HEAD_SCALE_RANGE[0], HEAD_SCALE_RANGE[1]);
+            headScaleSlider.preferredSize.width = 196;
+            headScaleSlider.stepdelta = 5;
+            headScaleSlider.jumpdelta = 50;
+            var headScaleReset = headScaleGroup.add("button", undefined, "R");
+            headScaleReset.preferredSize.width = 34;
+            headScaleReset.helpTip = "처음 값으로 되돌리기";
+            function commitHeadScale(value) {
+                if (value === null || !isFinite(value)) value = headScale;
+                value = Math.round(value / 5) * 5;
+                if (value < HEAD_SCALE_RANGE[0]) value = HEAD_SCALE_RANGE[0];
+                if (value > HEAD_SCALE_RANGE[1]) value = HEAD_SCALE_RANGE[1];
+                headScale = value;
+                headScaleInput.text = String(value);
+                try { headScaleSlider.value = value; } catch (e) {}
+            }
+            headScaleSlider.onChanging = function() { commitHeadScale(headScaleSlider.value); };
+            headScaleSlider.onChange = function() { commitHeadScale(headScaleSlider.value); };
+            headScaleInput.onChange = function() { commitHeadScale(parseNumber(headScaleInput.text)); };
+            headScaleReset.onClick = function() { commitHeadScale(100); };
 
             var positionPanel = dlg.add("panel", undefined, "위치");
             positionPanel.orientation = "column";
@@ -331,6 +373,10 @@ try {
             function updateArrowEnabled() {
                 // 사각형 유지 모드에서는 축 끝이 없어 화살표를 붙일 수 없다
                 arrowCheck.enabled = axisShapeRadio.value;
+                headTypeList.enabled = arrowCheck.enabled;
+                headScaleInput.enabled = arrowCheck.enabled;
+                headScaleSlider.enabled = arrowCheck.enabled;
+                headScaleReset.enabled = arrowCheck.enabled;
             }
 
             // 모든 컨트롤 변경 시 미리보기 갱신
@@ -797,7 +843,7 @@ try {
             // -------------------------------------------------------
             function saveSettings() {
                 var parts = [
-                    "v7",
+                    "v8",
                     getSelectedCount(yBtns),
                     yStartInput.text,
                     yStepInput.text,
@@ -817,7 +863,9 @@ try {
                     xGridCheck.value ? "1" : "0",
                     yGridCheck.value ? "1" : "0",
                     offsetXmm,
-                    offsetYmm
+                    offsetYmm,
+                    headScale,
+                    headType
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -827,7 +875,7 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if ((p[0] !== "v6" && p[0] !== "v7") || p.length < 19) return;
+                if ((p[0] !== "v6" && p[0] !== "v7" && p[0] !== "v8") || p.length < 19) return;
                 try {
                     selectCount(yBtns, parseInt(p[1], 10));
                     yStartInput.text = p[2];
@@ -851,9 +899,18 @@ try {
                     legendEndRadio.value = !legendCenterRadio.value;
                     xGridCheck.value = (p[17] === "1");
                     yGridCheck.value = (p[18] === "1");
-                    if (p[0] === "v7" && p.length >= 21) {
+                    if ((p[0] === "v7" || p[0] === "v8") && p.length >= 21) {
                         setOffsetValue(offsetXControls, true, parseNumber(p[19]));
                         setOffsetValue(offsetYControls, false, parseNumber(p[20]));
+                    }
+                    if (p[0] === "v8" && p.length >= 23) {
+                        var savedScale = parseNumber(p[21]);
+                        if (savedScale !== null) commitHeadScale(savedScale);
+                        var savedType = parseInt(p[22], 10);
+                        if (savedType >= 1 && savedType <= ARROW_TYPES.length) {
+                            headType = savedType;
+                            headTypeList.selection = headType - 1;
+                        }
                     }
                 } catch (e) {}
             }
@@ -919,7 +976,7 @@ try {
             function writeArrowheadAction(actionFile, actionSetName, actionName) {
                 var setName = toActionHex(actionSetName);
                 var name = toActionHex(actionName);
-                var arrow = toActionHex(ARROW_NAME);
+                var arrow = toActionHex(ARROW_TYPES[headType - 1]);
                 var lines = [];
 
                 lines.push("/version 3");
@@ -973,18 +1030,18 @@ try {
                 lines.push("                " + arrow.hex);
                 lines.push("            ]");
                 lines.push("        }");
-                // 시작/끝 화살표 크기 100%
+                // 시작/끝 화살표 크기 (%)
                 lines.push("        /parameter-4 {");
                 lines.push("            /key 1634951985");
                 lines.push("            /showInPalette -1");
                 lines.push("            /type (real)");
-                lines.push("            /value 100.0");
+                lines.push("            /value " + headScale.toFixed(1));
                 lines.push("        }");
                 lines.push("        /parameter-5 {");
                 lines.push("            /key 1634951986");
                 lines.push("            /showInPalette -1");
                 lines.push("            /type (real)");
-                lines.push("            /value 100.0");
+                lines.push("            /value " + headScale.toFixed(1));
                 lines.push("        }");
                 // 화살표 정렬: 패스 끝의 팁
                 lines.push("        /parameter-6 {");
@@ -4128,8 +4185,9 @@ try {
         function addRows(page) {
             var PREF_KEY = "ObjectSolarSpectrum/settings";
             var MM = 2.834645669;
-            // 화살표 이름은 Illustrator UI 언어를 따른다 (한국어판 기준)
-            var ARROW_NAME = "화살표 1";
+            // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
+            var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+            var HEAD_SCALE_RANGE = [30, 300];
 
             // ASTM G173-03 (NREL) 스펙트럼. 200~4000 nm, 5 nm 간격, 단위 mW/m²/nm
             var LAMBDA_MIN = 200;
@@ -4241,6 +4299,8 @@ try {
             var maxUm = 3;
             var sigmaNm = 15;
             var strokePt = 0.4;
+            var headType = 1;
+            var headScale = 100;
             var showGround = true;
             var showUV = true;
             var showBands = true;
@@ -4261,7 +4321,7 @@ try {
             var STROKE_RANGE = [0.2, 1.5];
 
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다 (폭·높이는 사각형이 있으면 꺼져 있고 그 크기를, 없으면 열 때 정한 틀 크기를 쓴다)
-            var DEFAULTS = {maxUm: maxUm, sigmaNm: sigmaNm, strokePt: strokePt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+            var DEFAULTS = {headScale: headScale, maxUm: maxUm, sigmaNm: sigmaNm, strokePt: strokePt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySavedSettings();
             // 사각형이 크기를 정할 때도 저장되는 기본 크기는 그대로 둔다
             var defaultWidthMm = widthMm;
@@ -4309,6 +4369,18 @@ try {
             var sigmaField = addNumberField(curvePanel, "단순화", "nm", sigmaNm, 1, SIGMA_RANGE[0], SIGMA_RANGE[1], DEFAULTS.sigmaNm);
             sigmaField.input.helpTip = "가우시안 평활 폭. 0이면 데이터 그대로, 클수록 잔 요철과 얕은 흡수 골이 사라진다";
             var strokeField = addNumberField(curvePanel, "선 두께", "pt", strokePt, 0.1, STROKE_RANGE[0], STROKE_RANGE[1], DEFAULTS.strokePt);
+            var headScaleField = addNumberField(curvePanel, "화살촉 크기", "%", headScale, 5, HEAD_SCALE_RANGE[0], HEAD_SCALE_RANGE[1], DEFAULTS.headScale);
+            headScaleField.input.helpTip = "파장 영역 화살표의 화살촉. 확인할 때 붙는다";
+            var headTypeRow = curvePanel.add("group");
+            headTypeRow.alignChildren = ["left", "center"];
+            headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
+            var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
+            headTypeList.selection = headType - 1;
+            headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양). 확인할 때 붙는다";
+            headTypeList.onChange = function() {
+                if (!headTypeList.selection) return;
+                headType = headTypeList.selection.index + 1;
+            };
 
             var showPanel = addPanel(dlg, "표시");
             var showRow1 = showPanel.add("group");
@@ -4535,7 +4607,7 @@ try {
                 strokeOnly(addPath(curveGroup, etAnchors, false), etColor, strokePt);
 
                 // 축·영역 화살촉: DOM에 노출되지 않는 속성이라 액션으로 적용. 미리보기에서는 생략
-                if (isFinal) applyArrowheads([axis].concat(rangeLines), strokePt);
+                if (isFinal) applyArrowheads([axis].concat(rangeLines), strokePt, headScale);
 
                 return group;
             }
@@ -4862,7 +4934,7 @@ try {
             }
 
             // 화살촉: 임시 액션 파일(ai_plugin_setStroke)로 양끝에 붙인다. 실패해도 선 자체는 그대로 남는다
-            function applyArrowheads(paths, weight) {
+            function applyArrowheads(paths, weight, scale) {
                 var actionSetName = "Codex_SolarSpectrum";
                 var actionName = "Arrowheads";
                 var actionFile = new File(Folder.temp + "/Codex_SolarSpectrumArrowheads.aia");
@@ -4871,7 +4943,7 @@ try {
                     doc.selection = null;
                     for (var i = 0; i < paths.length; i++) paths[i].selected = true;
 
-                    writeArrowheadAction(actionFile, actionSetName, actionName, weight);
+                    writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale);
                     try { app.unloadAction(actionSetName, ""); } catch (e) {}
                     app.loadAction(actionFile);
                     app.doScript(actionName, actionSetName);
@@ -4906,10 +4978,10 @@ try {
                 return {hex: hex, length: bytes.length};
             }
 
-            function writeArrowheadAction(actionFile, actionSetName, actionName, weight) {
+            function writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale) {
                 var setName = toActionHex(actionSetName);
                 var name = toActionHex(actionName);
-                var arrow = toActionHex(ARROW_NAME);
+                var arrow = toActionHex(ARROW_TYPES[headType - 1]);
                 var lines = [];
 
                 lines.push("/version 3");
@@ -4968,13 +5040,13 @@ try {
                 lines.push("            /key 1634951985");
                 lines.push("            /showInPalette -1");
                 lines.push("            /type (real)");
-                lines.push("            /value 100.0");
+                lines.push("            /value " + scale.toFixed(1));
                 lines.push("        }");
                 lines.push("        /parameter-5 {");
                 lines.push("            /key 1634951986");
                 lines.push("            /showInPalette -1");
                 lines.push("            /type (real)");
-                lines.push("            /value 100.0");
+                lines.push("            /value " + scale.toFixed(1));
                 lines.push("        }");
                 // 화살표 정렬: 패스 끝의 팁
                 lines.push("        /parameter-6 {");
@@ -5027,6 +5099,7 @@ try {
                 var maximum = parseNumber(maxUmField.input.text);
                 var sigma = parseNumber(sigmaField.input.text);
                 var stroke = parseNumber(strokeField.input.text);
+                var headSize = parseNumber(headScaleField.input.text);
                 var offX = parseNumber(offsetXField.input.text);
                 var offY = parseNumber(offsetYField.input.text);
 
@@ -5048,6 +5121,10 @@ try {
                     if (showAlert) alert("선 두께는 " + STROKE_RANGE[0] + "~" + STROKE_RANGE[1] + "pt 사이로 입력해주세요.");
                     return false;
                 }
+                if (!inRange(headSize, HEAD_SCALE_RANGE)) {
+                    if (showAlert) alert("화살촉 크기는 " + HEAD_SCALE_RANGE[0] + "~" + HEAD_SCALE_RANGE[1] + "% 사이로 입력해주세요.");
+                    return false;
+                }
                 if (!inRange(offX, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM]) || !inRange(offY, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM])) {
                     if (showAlert) alert("이동은 -" + POSITION_LIMIT_MM + "부터 " + POSITION_LIMIT_MM + "mm 사이로 입력해주세요.");
                     return false;
@@ -5058,6 +5135,7 @@ try {
                 maxUm = maximum;
                 sigmaNm = sigma;
                 strokePt = stroke;
+                headScale = headSize;
                 offsetXmm = offX;
                 offsetYmm = offY;
                 return true;
@@ -5163,9 +5241,9 @@ try {
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
-                var parts = ["v1", rect !== null ? defaultWidthMm : widthMm, rect !== null ? defaultHeightMm : heightMm, maxUm, sigmaNm, strokePt,
+                var parts = ["v2", rect !== null ? defaultWidthMm : widthMm, rect !== null ? defaultHeightMm : heightMm, maxUm, sigmaNm, strokePt,
                     showGround ? 1 : 0, showUV ? 1 : 0, showBands ? 1 : 0, fillToET ? 1 : 0,
-                    showTicks ? 1 : 0, showLegend ? 1 : 0, showRanges ? 1 : 0, offsetXmm, offsetYmm];
+                    showTicks ? 1 : 0, showLegend ? 1 : 0, showRanges ? 1 : 0, offsetXmm, offsetYmm, headScale, headType];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -5174,7 +5252,7 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 15) return;
+                if (p[0] !== "v2" || p.length !== 17) return;
 
                 var width = parseFloat(p[1]);
                 var height = parseFloat(p[2]);
@@ -5197,6 +5275,10 @@ try {
                 showRanges = p[12] === "1";
                 if (inRange(offX, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM])) offsetXmm = offX;
                 if (inRange(offY, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM])) offsetYmm = offY;
+                var savedHead = parseFloat(p[15]);
+                if (inRange(savedHead, HEAD_SCALE_RANGE)) headScale = savedHead;
+                var savedType = parseInt(p[16], 10);
+                if (savedType >= 1 && savedType <= ARROW_TYPES.length) headType = savedType;
             }
             return null;
         }

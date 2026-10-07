@@ -157,6 +157,6 @@ for (const clockwise of [true, false]) {
   const pick = (src) => { const i = src.indexOf("    function offsetWall("); return src.slice(i, src.indexOf("\n    }\n", i)); };
   assert.strictEqual(pick(source), pick(lab), "offsetWall matches Object_LabGlassware.jsx");
 }
-assert.ok(source.includes('if (p[0] !== "v4" || p.length !== 17) return;'), "settings bumped to v4");
+assert.ok(source.includes('if (p[0] !== "v5" || p.length !== 18) return;'), "settings bumped to v5");
 assert.ok(source.includes('var PREF_KEY = "ObjectConvection/settings";'));
 console.log("convection checks passed");

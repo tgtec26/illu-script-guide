@@ -20,7 +20,7 @@ try {
     - 박스 크기는 '모두 같게'(공통 너비·높이) 또는 개별(글자 범위 + 좌우·상하 여백) 중 고릅니다.
       개별이라도 높이는 글자 높이 + 상하 여백이라 모든 박스가 같은 높이입니다
     - 박스 선 0.3pt 고정, 코너 라운딩 조절
-    - 화살표: 길이·두께·화살촉(화살표 3) 크기·색(K, 10 단위) 조절
+    - 화살표: 길이·두께·화살촉 종류(일러 화살표 1~8, 기본 3)·크기·색(K, 10 단위) 조절
     - 박스와 화살표 사이 간격은 모두 같고 조절할 수 있습니다. 전체가 가로 한 줄, 세로 중앙 정렬
     - 글자는 한글=Spoqa, 영문·숫자·기호=GSMediumB1 규칙을 글자마다 적용합니다
     - 화살촉은 액션으로만 붙어 느리므로 슬라이더를 끄는 동안은 생략하고 손을 떼면 그립니다
@@ -39,9 +39,11 @@ try {
     var MAX_STEPS = 6;
     var BOX_STROKE = 0.3;
     var PREVIEW_NAME = "StepFlow_Preview";
-    var ARROW_NAME = (function() {
+    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다 (기본 3). 이름은 UI 언어를 따른다
+    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+    var ARROW_PREFIX = (function() {
         var locale = getAppLocale();
-        return locale === "" || locale.indexOf("ko") === 0 ? "화살표 3" : "Arrow 3";
+        return locale === "" || locale.indexOf("ko") === 0 ? "화살표 " : "Arrow ";
     })();
     // 프레임 범위 안에서 실제 글자가 차지하는 자리 (Text_ChatBubbles와 같은 실측 배수)
     var GLYPH_BOTTOM = 0.23;
@@ -152,12 +154,23 @@ try {
         updatePreview();
     };
 
-    var arrowPanel = win.add("panel", undefined, "화살표 (화살표 3)");
+    var arrowPanel = win.add("panel", undefined, "화살표");
     arrowPanel.alignChildren = "fill";
     arrowPanel.spacing = 2;
     addRow(arrowPanel, "길이", "arrowLength", 1, 5, "mm", false);
     addRow(arrowPanel, "두께", "arrowWidth", 0.3, 4, "pt", false);
     addRow(arrowPanel, "화살촉 크기", "arrowScale", 10, 100, "%", false);
+    var headTypeRow = arrowPanel.add("group");
+    headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
+    var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
+    headTypeList.selection = options.headType - 1;
+    headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
+    headTypeList.onChange = function() {
+        if (!headTypeList.selection) return;
+        options.headType = headTypeList.selection.index + 1;
+        arrowheadPending = true;
+        updatePreview();
+    };
     addRow(arrowPanel, "색 (K)", "arrowK", 0, 100, "", false).helpTip = "10 단위";
     addRow(arrowPanel, "박스·화살표 간격", "gap", 0, 3, "mm", false);
 
@@ -559,7 +572,7 @@ try {
         lines.push("        /parameterCount 5");
         addUnitRealParameter(lines, 1, 2003072104, options.arrowWidth);
         addUStringParameter(lines, 2, 1634231345, getNoneArrowName());
-        addUStringParameter(lines, 3, 1634231346, ARROW_NAME);
+        addUStringParameter(lines, 3, 1634231346, ARROW_PREFIX + options.headType);
         addRealParameter(lines, 4, 1634951986, options.arrowScale);
         addEnumeratedParameter(lines, 5, 1634230636, "패스 끝의 팁", 0);
         lines.push("    }");
@@ -618,16 +631,16 @@ try {
     function settingKeys() {
         return {
             keys: ["count", "fontSize", "boxWidth", "boxHeight", "paddingX", "paddingY", "radius",
-                "arrowLength", "arrowWidth", "arrowScale", "arrowK", "gap", "offsetX", "offsetY", "symbolSet"],
-            mins: [MIN_STEPS, 4, 5, 3, 0, 0, 0, 1, 0.3, 10, 0, 0, -100, -100, 0],
-            maxs: [MAX_STEPS, 30, 20, 10, 3, 3, 5, 5, 4, 100, 100, 3, 100, 100, SYMBOL_SETS.length - 1]
+                "arrowLength", "arrowWidth", "arrowScale", "arrowK", "gap", "offsetX", "offsetY", "symbolSet", "headType"],
+            mins: [MIN_STEPS, 4, 5, 3, 0, 0, 0, 1, 0.3, 10, 0, 0, -100, -100, 0, 1],
+            maxs: [MAX_STEPS, 30, 20, 10, 3, 3, 5, 5, 4, 100, 100, 3, 100, 100, SYMBOL_SETS.length - 1, 8]
         };
     }
 
     function defaultOptions() {
         return { count: 4, fontSize: 8, boxWidth: 20, boxHeight: 8, paddingX: 2, paddingY: 1.5,
             radius: 1, arrowLength: 4, arrowWidth: 1, arrowScale: 100, arrowK: 100, gap: 1.5,
-            offsetX: 0, offsetY: 0, symbolSet: 1, sameSize: false, preview: true };
+            offsetX: 0, offsetY: 0, symbolSet: 1, headType: 3, sameSize: false, preview: true };
     }
 
     function readSettings() {
@@ -635,7 +648,7 @@ try {
         try {
             var spec = settingKeys();
             var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-            if (p[0] !== "v2" || p.length !== spec.keys.length + 3) return result;
+            if (p[0] !== "v3" || p.length !== spec.keys.length + 3) return result;
             for (var i = 0; i < spec.keys.length; i++) {
                 var raw = p[i + 1];
                 var value = Number(raw);
@@ -646,6 +659,7 @@ try {
             for (var j = 0; j < spec.keys.length; j++) result[spec.keys[j]] = Number(p[j + 1]);
             result.count = Math.round(result.count);
             result.symbolSet = Math.round(result.symbolSet);
+            result.headType = Math.round(result.headType);
             result.sameSize = flags[0] === "1";
             result.preview = flags[1] === "1";
         } catch (e) {}
@@ -655,7 +669,7 @@ try {
     function saveSettings() {
         try {
             var spec = settingKeys();
-            var parts = ["v2"];
+            var parts = ["v3"];
             for (var i = 0; i < spec.keys.length; i++) parts.push(options[spec.keys[i]]);
             parts.push(options.sameSize ? 1 : 0, options.preview ? 1 : 0);
             app.preferences.setStringPreference(PREF_KEY, parts.join("|"));

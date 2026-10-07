@@ -2151,7 +2151,7 @@ for (const file of updaterFiles) {
     new Function("app", `
       var PREF_KEY = "ObjectCellCycle/settings", SECTOR_COUNT = 4;
       var outerMm = 40, innerMm = 16, percents = [40, 30, 20, 10];
-      var labelIndexes = [0, 1, 2, 3], arrowWidthPt = 3, arrowScale = 200, gapDeg = 6;
+      var labelIndexes = [0, 1, 2, 3], arrowWidthPt = 3, arrowScale = 200, headType2 = 3, gapDeg = 6;
       var offsetXmm = 2.5, offsetYmm = -1.5, startAngleDeg = 45;
       ${extractFunction(source, "saveSettings")}
       saveSettings();
@@ -2159,7 +2159,7 @@ for (const file of updaterFiles) {
     assert.strictEqual(preferenceStore.key, "ObjectCellCycle/settings", "cell cycle preferences use the script key");
     assert.strictEqual(
       preferenceStore.value,
-      "v3|40|16|40|30|20|10|0|1|2|3|3|200|6|2.5|-1.5|45",
+      "v4|40|16|40|30|20|10|0|1|2|3|3|200|6|2.5|-1.5|45|3",
       "cell cycle preferences must persist the adjustable start boundary"
     );
   } catch (error) {
@@ -2190,7 +2190,7 @@ for (const file of updaterFiles) {
     const previewApi = new Function("log", `
       var previewEnabled = true, previewGroup = null, previewSignature = "";
       var PREVIEW_NAME = "Cell Cycle Preview";
-      var outerMm = 40, innerMm = 16, startAngleDeg = 0, arrowWidthPt = 3, arrowScale = 200, gapDeg = 6;
+      var outerMm = 40, innerMm = 16, startAngleDeg = 0, arrowWidthPt = 3, arrowScale = 200, headType2 = 3, gapDeg = 6;
       var offsetXmm = 0, offsetYmm = 0, percents = [40, 30, 20, 10], labelIndexes = [0, 1, 2, 3];
       var app = {redraw: function() { log.redraws++; }};
       function buildDiagram() {

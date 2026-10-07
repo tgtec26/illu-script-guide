@@ -38,7 +38,9 @@ try {
     // 도(°, U+00B0)는 GSMediumB1의 U+02D8(˘) 글리프로 넣는다 (02_문자/Text_degree.jsx)
     var DEGREE_GLYPH = "\u02D8";
     // 화살촉 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
-    var ARROW_NAME = "화살표 1";
+    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
+    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+    var headType = 1;
     var DIRECTIONS = ["북쪽", "동쪽", "남쪽", "서쪽"];
     var DIRECTION_LETTERS = ["북", "동", "남", "서"];
     var MODES = ["개념도", "실제 별"];
@@ -304,6 +306,17 @@ try {
 
     var markPanel = addPanel(dlg, "표시");
     var headRow = addValueRow(markPanel, "화살촉 크기", "%", headScale, HEAD_RANGE[0], HEAD_RANGE[1], 10, 0);
+    var headTypeRow = markPanel.add("group");
+    headTypeRow.alignChildren = ["left", "center"];
+    headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
+    var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
+    headTypeList.selection = headType - 1;
+    headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
+    headTypeList.onChange = function() {
+        if (!headTypeList.selection) return;
+        headType = headTypeList.selection.index + 1;
+        updatePreview();
+    };
     headRow.input.helpTip = "0이면 화살촉 없음";
     var horizonCheck = markPanel.add("checkbox", undefined, "지평선·방위");
     var fontRow = addValueRow(markPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
@@ -926,7 +939,7 @@ try {
     function writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale) {
         var setName = toActionHex(actionSetName);
         var name = toActionHex(actionName);
-        var arrow = toActionHex(ARROW_NAME);
+        var arrow = toActionHex(ARROW_TYPES[headType - 1]);
         var lines = [
             "/version 3",
             "/name [ " + setName.length, "    " + setName.hex, "]",
@@ -1169,9 +1182,9 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v2", direction, sizeMm, count, hours, latitude, headScale, seed, angleMark ? "1" : "0",
+        var parts = ["v3", direction, sizeMm, count, hours, latitude, headScale, seed, angleMark ? "1" : "0",
             horizonOn ? "1" : "0", fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
-            mode, season, presetId, clockHour, namesOn ? "1" : "0", linesOn ? "1" : "0", dotsOn ? "1" : "0"];
+            mode, season, presetId, clockHour, namesOn ? "1" : "0", linesOn ? "1" : "0", dotsOn ? "1" : "0", headType];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -1180,7 +1193,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length !== 21) return;
+        if (p[0] !== "v3" || p.length !== 22) return;
         direction = restoreNumber(p[1], direction, [0, DIRECTIONS.length - 1], 1);
         sizeMm = restoreNumber(p[2], sizeMm, SIZE_RANGE, 1);
         count = restoreNumber(p[3], count, COUNT_RANGE, 1);
@@ -1201,6 +1214,7 @@ try {
         namesOn = p[18] === "1";
         linesOn = p[19] === "1";
         dotsOn = p[20] === "1";
+        headType = restoreNumber(p[21], headType, [1, ARROW_TYPES.length], 1);
     }
 
     function restoreNumber(text, fallback, range, step) {

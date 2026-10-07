@@ -39,7 +39,9 @@ try {
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
     // 화살촉 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
-    var ARROW_NAME = "화살표 1";
+    // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
+    var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+    var headType = 1;
     var HEAT_POSITIONS = ["가운데", "왼쪽", "오른쪽"];
     var LOOP_COUNTS = [1, 3];
     var LINE_WIDTH_PT = 0.3;
@@ -159,6 +161,17 @@ try {
     var stylePanel = addPanel(dlg, "모양");
     var lineWidthRow = addValueRow(stylePanel, "선 두께", "pt", lineWidth, WIDTH_RANGE[0], WIDTH_RANGE[1], 0.1, 1);
     var headRow = addValueRow(stylePanel, "화살촉 크기", "%", headScale, HEAD_RANGE[0], HEAD_RANGE[1], 10, 0);
+    var headTypeRow = stylePanel.add("group");
+    headTypeRow.alignChildren = ["left", "center"];
+    headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
+    var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
+    headTypeList.selection = headType - 1;
+    headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
+    headTypeList.onChange = function() {
+        if (!headTypeList.selection) return;
+        headType = headTypeList.selection.index + 1;
+        updatePreview();
+    };
     var heatCheck = stylePanel.add("checkbox", undefined, "가열 표시 (아래 화살표와 '가열')");
     var fontRow = addValueRow(stylePanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
 
@@ -686,7 +699,7 @@ try {
     function writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale) {
         var setName = toActionHex(actionSetName);
         var name = toActionHex(actionName);
-        var arrow = toActionHex(ARROW_NAME);
+        var arrow = toActionHex(ARROW_TYPES[headType - 1]);
         var lines = [
             "/version 3",
             "/name [ " + setName.length, "    " + setName.hex, "]",
@@ -945,8 +958,8 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v4", heatAt, marginMm, roundPct, gapMm, lineWidth, headScale, heatMark ? "1" : "0", fontPt,
-            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", loopCount, spacingMm, levelPct, breakPct, glassMm];
+        var parts = ["v5", heatAt, marginMm, roundPct, gapMm, lineWidth, headScale, heatMark ? "1" : "0", fontPt,
+            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", loopCount, spacingMm, levelPct, breakPct, glassMm, headType];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -971,7 +984,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v4" || p.length !== 17) return;
+        if (p[0] !== "v5" || p.length !== 18) return;
         heatAt = restoreNumber(p[1], heatAt, [0, HEAT_POSITIONS.length - 1], 1);
         marginMm = restoreNumber(p[2], marginMm, MARGIN_RANGE, 0.5);
         roundPct = restoreNumber(p[3], roundPct, ROUND_RANGE, 1);
@@ -988,6 +1001,7 @@ try {
         levelPct = restoreNumber(p[14], levelPct, LEVEL_RANGE, 1);
         breakPct = restoreNumber(p[15], breakPct, BREAK_RANGE, 5);
         glassMm = restoreNumber(p[16], glassMm, GLASS_RANGE, 0.1);
+        headType = restoreNumber(p[17], headType, [1, ARROW_TYPES.length], 1);
     }
 
     function restoreNumber(text, fallback, range, step) {

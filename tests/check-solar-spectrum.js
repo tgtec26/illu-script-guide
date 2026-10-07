@@ -132,9 +132,9 @@ assert.deepStrictEqual(reversed[1].r, bottom[1].l);
 // 부분 경로: 데이터 인덱스 범위로 자른다
 assert.deepStrictEqual(lib.subPath(bottom, 1, 2).map((a) => a.idx), [1, 2]);
 
-// 저장 형식: v1 태그와 15개 필드, 확인(commit) 때만 저장. 사각형이 크기를 정했을 때는 기본 크기를 그대로 저장한다
+// 저장 형식: v2 태그와 17개 필드, 확인(commit) 때만 저장. 사각형이 크기를 정했을 때는 기본 크기를 그대로 저장한다
 assert.ok(source.includes('var PREF_KEY = "ObjectSolarSpectrum/settings";'));
-assert.ok(source.includes('if (p[0] !== "v1" || p.length !== 15) return;'));
+assert.ok(source.includes('if (p[0] !== "v2" || p.length !== 17) return;'));
 assert.strictEqual((source.match(/saveSettings\(\);/g) || []).length, 1, "saveSettings is called from one place");
 assert.ok(/api\.commit = function\(\) \{[\s\S]*?saveSettings\(\);[\s\S]*?return true;/.test(source), "settings saved in commit only");
 assert.ok(source.includes('rect !== null ? defaultWidthMm : widthMm'));
@@ -152,7 +152,7 @@ assert.ok(source.includes("widthField.row.enabled = false;"));
 assert.ok(source.includes("if (rect === null && (!inRange(width, WIDTH_RANGE)"), "rectangle size is not range-checked");
 // 미리보기: 위치는 그룹만 옮기고, 화살촉은 확인 때만 액션으로
 assert.ok(source.includes("previewGroup.translate(isX ? delta : 0, isX ? 0 : delta)"));
-assert.ok(source.includes("if (isFinal) applyArrowheads([axis].concat(rangeLines), strokePt);"));
+assert.ok(source.includes("if (isFinal) applyArrowheads([axis].concat(rangeLines), strokePt, headScale);"));
 
 // 순수 문법 검사 (#지시문 제외)
 new Function(wholeSource.replace(/^#.*$/mg, ""));

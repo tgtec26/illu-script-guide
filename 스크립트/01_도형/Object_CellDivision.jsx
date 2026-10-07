@@ -1374,9 +1374,9 @@ try {
             // 머리는 달걀꼴: 앞(위)이 좁고 뒤(꼬리 쪽)가 넓다. 앞 끝 폭 = (1 - HEAD_TAPER) × 뒤 끝 폭.
             var HEAD_TAPER = 0.35;
             var HEAD_SAMPLES = 24;
-            // 화살표 이름은 Illustrator UI 언어를 따른다 (한국어판 기준)
-            var ARROW_NAME_KO = "화살표 1";
-            var ARROW_NAME_EN = "Arrow 1";
+            // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다. 이름은 UI 언어를 따른다 (한국어판 '화살표 1', 영문판 'Arrow 1')
+            var ARROW_TYPES = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
+            var headType = 1;
             var PREF_KEY = "ObjectMeiosis/settings";
             var FRAME_KEY = PREF_KEY + "/frame";
             var DEFAULT_FRAME_MM = {w: 35, h: 50};
@@ -1476,6 +1476,17 @@ try {
             var arrowPanel = addPanel(dlg, "화살표");
             var arrowGapControls = addValueRow(arrowPanel, "원과의 간격 mm", arrowGapMm, 0, 2, 0.1, 1);
             var arrowScaleControls = addValueRow(arrowPanel, "화살촉 크기 %", arrowScale, 10, 800, 5, 0);
+            var headTypeRow = arrowPanel.add("group");
+            headTypeRow.alignChildren = ["left", "center"];
+            headTypeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
+            var headTypeList = headTypeRow.add("dropdownlist", undefined, ARROW_TYPES);
+            headTypeList.selection = headType - 1;
+            headTypeList.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
+            headTypeList.onChange = function() {
+                if (!headTypeList.selection) return;
+                headType = headTypeList.selection.index + 1;
+                // 화살촉은 확인할 때 적용된다 (미리보기는 직접 그린 화살촉)
+            };
 
             var spermPanel = addPanel(dlg, "정자 (mm)");
             var spermCheck = spermPanel.add("checkbox", undefined, "정자 그리기");
@@ -2047,7 +2058,7 @@ try {
                 var actionFile = new File(Folder.temp + "/Codex_MeiosisArrow.aia");
                 var locale = getAppLocale();
                 var isKorean = locale === "" || locale.indexOf("ko") === 0;
-                var arrowName = isKorean ? ARROW_NAME_KO : ARROW_NAME_EN;
+                var arrowName = (isKorean ? "화살표 " : "Arrow ") + headType;
 
                 try {
                     doc.selection = null;
@@ -2221,17 +2232,17 @@ try {
             // -------------------------------------------------------
             // 옵션 저장
             // -------------------------------------------------------
-            // v4: 지름 4 · 화살표 간격 · 화살촉 크기 · 줄 간격 비율 4 · 딸세포 간격 비율 · 위치 비율 2
-            //     · 정자(머리 폭 · 머리 높이 · 꼬리 길이 · 꼬리 두께 · 물결 폭 · 그리기 여부 · 회전)
+            // v5: 지름 4 · 화살표 간격 · 화살촉 크기 · 줄 간격 비율 4 · 딸세포 간격 비율 · 위치 비율 2
+            //     · 정자(머리 폭 · 머리 높이 · 꼬리 길이 · 꼬리 두께 · 물결 폭 · 그리기 여부 · 회전) · 화살촉 종류
             function saveSettings() {
-                var parts = ["v4"];
+                var parts = ["v5"];
                 for (var i = 0; i < diametersMm.length; i++) parts.push(diametersMm[i]);
                 parts.push(arrowGapMm, arrowScale);
                 for (var g = 0; g < gapsMm.length; g++) parts.push(gapsMm[g] * MM_TO_PT / rectHeightPt);
                 parts.push(daughterStepMm * MM_TO_PT / rectWidthPt);
                 parts.push(offsetXmm * MM_TO_PT / rectWidthPt, offsetYmm * MM_TO_PT / rectHeightPt);
                 parts.push(headWidthMm, headHeightMm, tailLengthMm, tailWidthPt, waveAmpMm, showSperm ? 1 : 0,
-                    spermRotationDeg);
+                    spermRotationDeg, headType);
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -2240,7 +2251,7 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v4" || p.length !== 21) return;
+                if (p[0] !== "v5" || p.length !== 22) return;
                 for (var i = 0; i < diametersMm.length; i++) {
                     diametersMm[i] = restoreNumber(p[1 + i], diametersMm[i], 1, 10);
                 }
@@ -2265,6 +2276,7 @@ try {
                 waveAmpMm = restoreNumber(p[18], waveAmpMm, 0, 2);
                 showSperm = p[19] !== "0";
                 spermRotationDeg = restoreNumber(p[20], spermRotationDeg, -180, 180);
+                headType = Math.round(restoreNumber(p[21], headType, 1, ARROW_TYPES.length));
             }
 
             function restoreNumber(text, fallback, minimum, maximum) {
@@ -2345,6 +2357,9 @@ try {
             var labelIndexes = [0, 1, 2, 3];
             var arrowWidthPt = 3;
             var arrowScale = 200;
+            var headType2 = 3;
+            // 화살촉은 일러스트레이터 기본 화살표 1~8 중에서 고른다 (기본 화살표 3)
+            var ARROW_TYPES2 = ["화살표 1", "화살표 2", "화살표 3", "화살표 4", "화살표 5", "화살표 6", "화살표 7", "화살표 8"];
             var gapDeg = 6;
             var startAngleDeg = 0;
             var offsetXmm = 0;
@@ -2431,6 +2446,17 @@ try {
             var arrowPanel = addPanel(dlg, "내부 화살표");
             var arrowWidthControls = addValueRow(arrowPanel, "굵기", "pt", arrowWidthPt, 0.5, 30, 0.5, 1);
             var arrowScaleControls = addValueRow(arrowPanel, "화살촉 크기", "%", arrowScale, 10, 800, 1, 0);
+            var headTypeRow2 = arrowPanel.add("group");
+            headTypeRow2.alignChildren = ["left", "center"];
+            headTypeRow2.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
+            var headTypeList2 = headTypeRow2.add("dropdownlist", undefined, ARROW_TYPES2);
+            headTypeList2.selection = headType2 - 1;
+            headTypeList2.helpTip = "일러스트레이터 기본 화살표 1~8. 3은 작살형(날개가 뒤로 젖혀진 모양)";
+            headTypeList2.onChange = function() {
+                if (!headTypeList2.selection) return;
+                headType2 = headTypeList2.selection.index + 1;
+                updatePreview();
+            };
             var gapControls = addValueRow(arrowPanel, "간격", "°", gapDeg, 0, 60, 1, 0);
             var arrowNote = arrowPanel.add("statictext", undefined, "미리보기는 슬라이더를 놓는 순간 화살촉까지 그립니다 (흰색 채움은 확인 후 적용).");
             arrowNote.preferredSize.width = 380;
@@ -2520,7 +2546,7 @@ try {
             }
 
             function previewSettingsKey(lightweight) {
-                return [lightweight ? 1 : 0, outerMm, innerMm, startAngleDeg, arrowWidthPt, arrowScale, gapDeg,
+                return [lightweight ? 1 : 0, outerMm, innerMm, startAngleDeg, arrowWidthPt, arrowScale, headType2, gapDeg,
                     offsetXmm, offsetYmm, percents.join(","), labelIndexes.join(",")].join("|");
             }
 
@@ -2784,7 +2810,7 @@ try {
                 var actionFile = new File(Folder.temp + "/Codex_CellCycleArrow.aia");
                 var locale = getAppLocale();
                 var isKorean = locale === "" || locale.indexOf("ko") === 0;
-                var arrowName = isKorean ? "화살표 3" : "Arrow 3";
+                var arrowName = (isKorean ? "화살표 " : "Arrow ") + headType2;
 
                 try {
                     doc.selection = null;
@@ -3227,10 +3253,10 @@ try {
             // 옵션 저장
             // -------------------------------------------------------
             function saveSettings() {
-                var parts = ["v3", outerMm, innerMm];
+                var parts = ["v4", outerMm, innerMm];
                 for (var i = 0; i < SECTOR_COUNT; i++) parts.push(percents[i]);
                 for (var j = 0; j < SECTOR_COUNT; j++) parts.push(labelIndexes[j]);
-                parts.push(arrowWidthPt, arrowScale, gapDeg, offsetXmm, offsetYmm, startAngleDeg);
+                parts.push(arrowWidthPt, arrowScale, gapDeg, offsetXmm, offsetYmm, startAngleDeg, headType2);
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -3239,7 +3265,7 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v3" || p.length !== 17) return;
+                if (p[0] !== "v4" || p.length !== 18) return;
                 outerMm = restoreNumber(p[1], outerMm, 5, 200);
                 innerMm = restoreNumber(p[2], innerMm, 1, 199.5);
                 if (innerMm >= outerMm) innerMm = Math.max(1, outerMm - 0.5);
@@ -3256,6 +3282,7 @@ try {
                 offsetXmm = restoreNumber(p[14], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 offsetYmm = restoreNumber(p[15], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 startAngleDeg = restoreNumber(p[16], startAngleDeg, -180, 180);
+                headType2 = Math.round(restoreNumber(p[17], headType2, 1, ARROW_TYPES2.length));
             }
 
             function restoreNumber(text, fallback, minimum, maximum) {
