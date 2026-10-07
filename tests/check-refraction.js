@@ -14,7 +14,7 @@ const end = source.indexOf("// ==== 순수 기하 끝");
 assert.ok(start > 0 && end > start, "pure geometry markers");
 const pure = source.slice(start, end);
 const geo = new Function(`${pure}
-return {DEG, polar, rayLines, arrowHead, arcPoints, angleArcs, normalSpan, refractionAngle};`)();
+return {DEG, polar, rayLines, arrowHead, arcPoints, angleArcs, normalSpan, refractionAngle, HEAD_TRIANGLE, HEAD_CHEVRON, HEAD_SWALLOW};`)();
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
 const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
@@ -39,21 +39,37 @@ const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
   near(straight.refracted[1][1], -20, 1e-9, "0 degree refracted goes straight down");
 }
 
-// 화살촉: 가운데가 시작점에서 길이의 pos% 자리, 끝은 진행 방향, 길이 size, 밑변 폭 0.7 size
+// 화살촉: 가운데가 시작점에서 dist(mm) 자리, 끝은 진행 방향, 길이 size, 밑변 폭 0.7 size. 광선 밖이면 끝으로 잠근다
 {
   const line = [[-10, 10], [0, 0]];
-  const h = geo.arrowHead(line, 50, 3);
-  const mid = [(h[1][0] + h[2][0]) / 2, (h[1][1] + h[2][1]) / 2];
-  const center = [(h[0][0] + mid[0]) / 2, (h[0][1] + mid[1]) / 2];
-  near(center[0], -5, 1e-9, "head centered at 50% (x)");
-  near(center[1], 5, 1e-9, "head centered at 50% (y)");
-  near(dist(h[0], mid), 3, 1e-9, "head length");
-  near(dist(h[1], h[2]), 2.1, 1e-9, "head base width");
-  assert.ok(h[0][0] > mid[0] && h[0][1] < mid[1], "tip points along the travel direction");
-  const h0 = geo.arrowHead(line, 0, 2);
-  near((h0[0][0] + (h0[1][0] + h0[2][0]) / 2) / 2, -10, 1e-9, "0% sits at the start");
-  const h100 = geo.arrowHead([[0, 0], [0, -20]], 100, 2);
-  near((h100[0][1] + (h100[1][1] + h100[2][1]) / 2) / 2, -20, 1e-9, "100% sits at the end");
+  const len = Math.hypot(10, 10);
+  const tri = geo.arrowHead(line, len / 2, 3, geo.HEAD_TRIANGLE);
+  assert.strictEqual(tri.closed, true);
+  assert.strictEqual(tri.points.length, 3);
+  const [tip, left, right] = tri.points;
+  const mid = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
+  const center = [(tip[0] + mid[0]) / 2, (tip[1] + mid[1]) / 2];
+  near(center[0], -5, 1e-9, "head centered halfway (x)");
+  near(center[1], 5, 1e-9, "head centered halfway (y)");
+  near(dist(tip, mid), 3, 1e-9, "head length");
+  near(dist(left, right), 2.1, 1e-9, "head base width");
+  assert.ok(tip[0] > mid[0] && tip[1] < mid[1], "tip points along the travel direction");
+  const h0 = geo.arrowHead(line, -5, 2, geo.HEAD_TRIANGLE);
+  near((h0.points[0][0] + (h0.points[1][0] + h0.points[2][0]) / 2) / 2, -10, 1e-9, "negative distance clamps to the start");
+  const hEnd = geo.arrowHead([[0, 0], [0, -20]], 50, 2, geo.HEAD_TRIANGLE);
+  near((hEnd.points[0][1] + (hEnd.points[1][1] + hEnd.points[2][1]) / 2) / 2, -20, 1e-9, "beyond the end clamps to the end");
+  // 꺾쇠: 열린 선, 가운데 점이 끝
+  const chev = geo.arrowHead(line, len / 2, 3, geo.HEAD_CHEVRON);
+  assert.strictEqual(chev.closed, false);
+  assert.deepStrictEqual(chev.points[1], tip, "chevron apex is the tip");
+  assert.deepStrictEqual([chev.points[0], chev.points[2]], [left, right], "chevron arms end at the base corners");
+  // 제비꼬리: 닫힌 네 점, 홈은 밑변에서 끝 쪽으로 0.3 size
+  const sw = geo.arrowHead(line, len / 2, 3, geo.HEAD_SWALLOW);
+  assert.strictEqual(sw.closed, true);
+  assert.strictEqual(sw.points.length, 4);
+  assert.deepStrictEqual(sw.points[0], tip);
+  near(dist(sw.points[2], mid), 0.9, 1e-9, "notch sits 0.3 size inside the base");
+  assert.ok(dist(sw.points[2], tip) < dist(mid, tip), "notch is between base and tip");
 }
 
 // 호: 양 끝이 원 위, 손잡이 방향이 접선, 베지어 가운데 점도 원 위(≤90° 한 구간). 90°를 넘으면 나눈다
@@ -90,15 +106,18 @@ const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
   assert.deepStrictEqual(geo.normalSpan(40, 60, 2), [[0, -28], [0, 28]]);
 }
 
-// 스넬 법칙: sin(입사각) = n·sin(굴절각). n = 1이면 그대로, 수직 입사는 0°, 스침 입사도 n ≥ 1이면 임계각
+// 스넬 법칙: n1·sin(입사각) = n2·sin(굴절각). 같은 매질이면 그대로, 수직 입사는 0°, 빽빽한 매질에서 성긴 매질로 크게 들어가면 전반사(null)
 {
-  near(geo.refractionAngle(45, 1.5), Math.asin(Math.sin(45 * geo.DEG) / 1.5) / geo.DEG, 1e-9, "snell 45 into glass");
-  near(geo.refractionAngle(45, 1.5), 28.1255, 1e-3, "45 into glass is about 28.1 degrees");
-  near(geo.refractionAngle(30, 1.33), 22.0824, 1e-3, "30 into water is about 22.1 degrees");
-  near(geo.refractionAngle(60, 1), 60, 1e-9, "n = 1 keeps the angle");
-  near(geo.refractionAngle(0, 2.42), 0, 1e-9, "normal incidence does not bend");
-  near(geo.refractionAngle(90, 1.5), Math.asin(1 / 1.5) / geo.DEG, 1e-9, "grazing incidence gives the critical angle");
-  assert.ok(geo.refractionAngle(85, 1.33) < 85, "denser medium bends toward the normal");
+  near(geo.refractionAngle(45, 1, 1.5), Math.asin(Math.sin(45 * geo.DEG) / 1.5) / geo.DEG, 1e-9, "snell 45 air into glass");
+  near(geo.refractionAngle(45, 1, 1.5), 28.1255, 1e-3, "45 into glass is about 28.1 degrees");
+  near(geo.refractionAngle(30, 1, 1.33), 22.0824, 1e-3, "30 into water is about 22.1 degrees");
+  near(geo.refractionAngle(60, 1.5, 1.5), 60, 1e-9, "same index keeps the angle");
+  near(geo.refractionAngle(0, 1, 2.42), 0, 1e-9, "normal incidence does not bend");
+  near(geo.refractionAngle(30, 1.5, 1.33), Math.asin(1.5 * Math.sin(30 * geo.DEG) / 1.33) / geo.DEG, 1e-9, "glass into water bends away");
+  assert.ok(geo.refractionAngle(30, 1.5, 1.33) > 30, "sparser medium bends away from the normal");
+  assert.strictEqual(geo.refractionAngle(70, 1.5, 1.33), null, "glass into water at 70 degrees is total reflection");
+  assert.strictEqual(geo.refractionAngle(45, 1.5, 1), null, "glass into air at 45 degrees is total reflection");
+  assert.ok(geo.refractionAngle(85, 1, 1.33) < 85, "denser medium bends toward the normal");
 }
 
 // 다이얼로그 규칙: 설정 저장 키, 위치 행, R 버튼, 탭 헬퍼, 기본 버튼 제거
@@ -109,8 +128,8 @@ assert.ok(source.includes('reset.helpTip = "처음 값으로 되돌리기"'), "R
 assert.ok(source.includes("ui_tab_helper.jsxinc"), "tab helper");
 assert.ok(source.includes("dlg.defaultElement = null"), "no default button");
 assert.ok(source.includes("var BOUNDARY_PT = 0.5;"), "boundary line is 0.5pt");
-assert.ok(source.includes('{name: "물", n: 1.33}') && source.includes('{name: "유리", n: 1.5}') && source.includes('{name: "다이아몬드", n: 2.42}'), "medium presets");
-assert.ok(source.includes('["v2", options.angleMode, options.medium]') && source.includes('p[0] !== "v2"'), "settings v2 with angle mode and medium");
+assert.ok(source.includes('{name: "공기", n: 1}') && source.includes('{name: "물", n: 1.33}') && source.includes('{name: "유리", n: 1.5}') && source.includes('{name: "다이아몬드", n: 2.42}'), "medium presets");
+assert.ok(source.includes('["v3", options.angleMode, options.medium1, options.medium2, options.headShape]') && source.includes('p[0] !== "v3"'), "settings v3");
 assert.ok(/medium1K: \{range: \[0, 100\], step: 10/.test(source) && /medium2K: \{range: \[0, 100\], step: 10/.test(source), "medium gray in K 10 steps");
 
 console.log("check-refraction: ok");

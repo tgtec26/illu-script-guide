@@ -13,10 +13,12 @@ try {
 // 빛의 반사와 굴절: 두 매질의 경계면에 비스듬히 들어온 빛이 반사하고 굴절하는 모습을 그린다.
 //   - 틀(너비·높이)의 가운데 가로선이 경계면이고 그 가운데가 입사점이다. 위가 매질 1, 아래가 매질 2.
 //   - 입사광은 왼쪽 위에서 입사점으로, 반사광은 오른쪽 위로(반사각 = 입사각), 굴절광은 오른쪽 아래로 나간다.
-//     굴절각은 직접 정하거나(과장해서 그릴 때) 굴절률로 계산한다: 매질 1은 공기(n=1), 매질 2는 물·유리·다이아몬드 또는 직접 넣은 n.
-//     계산은 스넬 법칙 sin(입사각) = n·sin(굴절각). 매질 2를 고르면 매질 이름도 그에 맞춘다.
-//   - 광선 길이·빛 굵기·빛 색(K), 화살촉 크기와 위치(광선 길이의 %), 법선(점선)·경계면(0.5pt)을 켜고 끈다.
-//   - 매질 이름(공기·유리)과 색은 K값 10 단위 회색 음영. 모든 색은 회색 음영이다.
+//     굴절각은 직접 정하거나(과장해서 그릴 때) 굴절률로 계산한다: 스넬 법칙 n1·sin(입사각) = n2·sin(굴절각).
+//     매질 1은 공기·물·유리·직접, 매질 2는 물·유리·다이아몬드·직접. 직접이면 이름과 굴절률을 넣는다.
+//     매질 1이 더 빽빽해 굴절각이 90°를 넘으면 전반사: 굴절광을 그리지 않는다.
+//   - 광선 길이·빛 굵기·빛 색(K), 화살촉 모양(삼각형·꺾쇠·제비꼬리)·크기·위치(입사점에서의 거리 mm),
+//     법선(점선)·경계면(0.5pt)을 켜고 끈다.
+//   - 매질 색은 K값 10 단위 회색 음영. 모든 색은 회색 음영이다.
 //   - 글자: 입사광·반사광·굴절광, 각(호와 입사각·반사각·굴절각), 매질 이름, 법선·경계면 이름을 따로 켜고 끈다.
 //   - 확인하면 미리보기 그룹이 그대로 결과로 남는다.
 
@@ -51,21 +53,33 @@ try {
         };
     }
 
-    // 광선 위 화살촉(채운 삼각형) 세 점 [끝, 밑변 왼쪽, 밑변 오른쪽]. 가운데가 시작점에서 길이의 pos%인 자리.
-    // 길이 size, 밑변 폭은 길이의 0.7배
-    function arrowHead(line, pos, size) {
+    var HEAD_TRIANGLE = 0;
+    var HEAD_CHEVRON = 1;
+    var HEAD_SWALLOW = 2;
+
+    // 광선 위 화살촉. 가운데가 시작점에서 dist(mm) 떨어진 자리(광선 안으로 잠근다), 길이 size, 밑변 폭은 길이의 0.7배.
+    //   삼각형: [끝, 밑변 왼쪽, 밑변 오른쪽] 채운 닫힌 패스
+    //   꺾쇠: [밑변 왼쪽, 끝, 밑변 오른쪽] 열린 선
+    //   제비꼬리: [끝, 밑변 왼쪽, 밑변 가운데 홈, 밑변 오른쪽] 채운 닫힌 패스
+    function arrowHead(line, dist, size, shape) {
         var dx = line[1][0] - line[0][0];
         var dy = line[1][1] - line[0][1];
         var len = Math.sqrt(dx * dx + dy * dy);
         var ux = dx / len;
         var uy = dy / len;
-        var cx = line[0][0] + dx * pos / 100;
-        var cy = line[0][1] + dy * pos / 100;
+        if (dist < 0) dist = 0;
+        if (dist > len) dist = len;
+        var cx = line[0][0] + ux * dist;
+        var cy = line[0][1] + uy * dist;
         var tip = [cx + ux * size / 2, cy + uy * size / 2];
         var bx = cx - ux * size / 2;
         var by = cy - uy * size / 2;
         var half = size * 0.35;
-        return [tip, [bx - uy * half, by + ux * half], [bx + uy * half, by - ux * half]];
+        var left = [bx - uy * half, by + ux * half];
+        var right = [bx + uy * half, by - ux * half];
+        if (shape === HEAD_CHEVRON) return {points: [left, tip, right], closed: false};
+        if (shape === HEAD_SWALLOW) return {points: [tip, left, [bx + ux * size * 0.3, by + uy * size * 0.3], right], closed: true};
+        return {points: [tip, left, right], closed: true};
     }
 
     // 원점 중심, 반지름 r, a0→a1(도)의 호를 3차 베지어 점 목록으로. 90°를 넘으면 나눈다. 점: {anchor, left, right}
@@ -105,10 +119,10 @@ try {
         return [[0, -half], [0, half]];
     }
 
-    // 스넬 법칙: 공기(n=1)에서 굴절률 n인 매질로 들어갈 때의 굴절각(도). n ≥ 1이라 항상 굴절한다
-    function refractionAngle(angleI, n) {
-        var ratio = Math.sin(angleI * DEG) / n;
-        if (ratio > 1) ratio = 1;
+    // 스넬 법칙: 굴절률 n1인 매질에서 n2인 매질로 들어갈 때의 굴절각(도). 전반사(sin > 1)면 null
+    function refractionAngle(angleI, n1, n2) {
+        var ratio = n1 * Math.sin(angleI * DEG) / n2;
+        if (ratio > 1) return null;
         return Math.asin(ratio) / DEG;
     }
     // ==== 순수 기하 끝 ====
@@ -127,14 +141,19 @@ try {
     var LINE_K = 100;
     var ANGLE_DIRECT = 0;
     var ANGLE_SNELL = 1;
-    // 매질 2 후보와 굴절률. n이 null이면 직접 넣는다
+    // 매질 후보와 굴절률. n이 null이면 이름과 굴절률을 직접 넣는다
     var MEDIA = [
+        {name: "공기", n: 1},
         {name: "물", n: 1.33},
         {name: "유리", n: 1.5},
         {name: "다이아몬드", n: 2.42},
-        {name: "직접 입력", n: null}
+        {name: "직접", n: null}
     ];
-    var AIR_NAME = "공기";
+    var CUSTOM_MEDIUM = 4;
+    // 매질 1(위)·매질 2(아래)의 라디오 후보 (MEDIA 번호)
+    var MEDIUM_CHOICES = [[0, 1, 2, CUSTOM_MEDIUM], [1, 2, 3, CUSTOM_MEDIUM]];
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"];
+    var TOTAL_REFLECTION_TEXT = "전반사";
 
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
@@ -145,17 +164,18 @@ try {
 
     var CHECK_KEYS = ["arrowOn", "normalOn", "boundaryOn", "rayLabelsOn", "angleOn", "mediumLabelsOn", "lineLabelsOn"];
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
-    var NUMBER_KEYS = ["angleI", "angleT", "index", "rayLen", "rayWidth", "rayK", "headSize", "headPos",
+    var NUMBER_KEYS = ["angleI", "angleT", "index1", "index2", "rayLen", "rayWidth", "rayK", "headSize", "headDist",
         "frameW", "frameH", "medium1K", "medium2K", "arcRadius", "offsetX", "offsetY"];
     var SPECS = {
         angleI: {range: [0, 85], step: 1, decimals: 0},
-        angleT: {range: [0, 85], step: 1, decimals: 0},
-        index: {range: [1, 3], step: 0.01, decimals: 2},
+        angleT: {range: [0, 90], step: 1, decimals: 0},
+        index1: {range: [1, 3], step: 0.01, decimals: 2},
+        index2: {range: [1, 3], step: 0.01, decimals: 2},
         rayLen: {range: [5, 100], step: 0.5, decimals: 1},
         rayWidth: {range: [0.25, 4], step: 0.05, decimals: 2},
         rayK: {range: [0, 100], step: 10, decimals: 0},
         headSize: {range: [1, 10], step: 0.1, decimals: 1},
-        headPos: {range: [0, 100], step: 1, decimals: 0},
+        headDist: {range: [0, 100], step: 0.5, decimals: 1},
         frameW: {range: [20, 200], step: 1, decimals: 0},
         frameH: {range: [20, 200], step: 1, decimals: 0},
         medium1K: {range: [0, 100], step: 10, decimals: 0},
@@ -173,9 +193,9 @@ try {
     var options = {
         arrowOn: true, normalOn: true, boundaryOn: true,
         rayLabelsOn: true, angleOn: true, mediumLabelsOn: true, lineLabelsOn: true,
-        angleMode: ANGLE_DIRECT, medium: 1,
+        angleMode: ANGLE_DIRECT, medium1: 0, medium2: 2, headShape: HEAD_TRIANGLE,
         medium1Name: "공기", medium2Name: "유리",
-        angleI: 45, angleT: 28, index: 1.5, rayLen: 30, rayWidth: 1, rayK: 100, headSize: 3, headPos: 50,
+        angleI: 45, angleT: 28, index1: 1, index2: 1.5, rayLen: 30, rayWidth: 1, rayK: 100, headSize: 3, headDist: 15,
         frameW: 80, frameH: 60, medium1K: 0, medium2K: 20, arcRadius: 8,
         offsetX: 0, offsetY: 0,
         previewOn: true
@@ -205,19 +225,8 @@ try {
     modeRow.alignChildren = ["left", "center"];
     modeRow.add("statictext", undefined, "굴절각 정하기:").preferredSize.width = LABEL_WIDTH;
     var directRadio = modeRow.add("radiobutton", undefined, "직접 입력 (과장)");
-    var snellRadio = modeRow.add("radiobutton", undefined, "굴절률로 계산 (공기 → 매질 2)");
-    snellRadio.helpTip = "스넬 법칙 sin(입사각) = n·sin(굴절각). 매질 1은 공기(n = 1)";
-    var mediumRow = rayPanel.add("group");
-    mediumRow.alignChildren = ["left", "center"];
-    mediumRow.add("statictext", undefined, "매질 2:").preferredSize.width = LABEL_WIDTH;
-    var mediumRadios = [];
-    for (var m = 0; m < MEDIA.length; m++) {
-        var mediumRadio = mediumRow.add("radiobutton", undefined, MEDIA[m].name);
-        if (MEDIA[m].n !== null) mediumRadio.helpTip = "n = " + MEDIA[m].n;
-        mediumRadios.push(mediumRadio);
-    }
-    addRow(rayPanel, "index", "굴절률", "n");
-    rows.index.input.helpTip = "매질 2의 굴절률. 매질 2가 직접 입력일 때만 바꿀 수 있습니다";
+    var snellRadio = modeRow.add("radiobutton", undefined, "굴절률로 계산");
+    snellRadio.helpTip = "스넬 법칙 n1·sin(입사각) = n2·sin(굴절각). 매질 패널의 굴절률을 씁니다";
     addRow(rayPanel, "angleT", "굴절각", "°");
     rows.angleT.input.helpTip = "법선과 굴절광 사이의 각. 직접 입력일 때만 바꿀 수 있습니다. 공기→유리는 입사각보다 작게";
     addRow(rayPanel, "rayLen", "광선 길이", "mm");
@@ -226,24 +235,40 @@ try {
     var arrowRow = rayPanel.add("group");
     arrowRow.alignChildren = ["left", "center"];
     addCheck(arrowRow, "arrowOn", "화살촉");
+    var headShapeList = arrowRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.selection = options.headShape;
+    headShapeList.helpTip = "삼각형·제비꼬리는 채운 모양, 꺾쇠는 빛 굵기의 열린 선";
     addRow(rayPanel, "headSize", "화살촉 크기", "mm");
-    addRow(rayPanel, "headPos", "화살촉 위치", "%");
-    rows.headPos.input.helpTip = "광선 시작점(입사광은 왼쪽 위 끝, 나머지는 입사점)에서 광선 길이의 몇 % 자리에 둘지";
+    addRow(rayPanel, "headDist", "화살촉 위치", "mm");
+    rows.headDist.input.helpTip = "입사점(반사·굴절 지점)에서 화살촉 가운데까지의 거리. 광선 길이를 넘으면 끝에 둡니다";
 
-    var framePanel = addPanel(dlg, "틀·매질");
-    addRow(framePanel, "frameW", "너비", "mm");
-    addRow(framePanel, "frameH", "높이", "mm");
-    var nameRow = framePanel.add("group");
-    nameRow.alignChildren = ["left", "center"];
-    nameRow.add("statictext", undefined, "매질 이름:").preferredSize.width = LABEL_WIDTH;
-    var medium1Input = nameRow.add("edittext", undefined, options.medium1Name);
-    medium1Input.characters = NAME_CHARS;
-    medium1Input.helpTip = "매질 1 (위)";
-    var medium2Input = nameRow.add("edittext", undefined, options.medium2Name);
-    medium2Input.characters = NAME_CHARS;
-    medium2Input.helpTip = "매질 2 (아래)";
-    addRow(framePanel, "medium1K", "매질 1 색 (위)", "K");
-    addRow(framePanel, "medium2K", "매질 2 색 (아래)", "K");
+    var framePanel = addPanel(dlg, "매질 (위 1 · 아래 2)");
+    var mediumRadios = [[], []];
+    var mediumInputs = [];
+    for (var m = 0; m < 2; m++) {
+        var mediumRow = framePanel.add("group");
+        mediumRow.alignChildren = ["left", "center"];
+        mediumRow.add("statictext", undefined, "매질 " + (m + 1) + ":").preferredSize.width = LABEL_WIDTH;
+        for (var c = 0; c < MEDIUM_CHOICES[m].length; c++) {
+            var choice = MEDIA[MEDIUM_CHOICES[m][c]];
+            var mediumRadio = mediumRow.add("radiobutton", undefined, choice.name);
+            if (choice.n !== null) mediumRadio.helpTip = "n = " + choice.n;
+            else mediumRadio.helpTip = "이름과 굴절률을 직접 넣습니다";
+            mediumRadios[m].push(mediumRadio);
+        }
+        var mediumInput = mediumRow.add("edittext", undefined, options["medium" + (m + 1) + "Name"]);
+        mediumInput.characters = NAME_CHARS;
+        mediumInput.helpTip = "매질 이름 (직접일 때 타이핑)";
+        mediumInputs.push(mediumInput);
+    }
+    addRow(framePanel, "index1", "굴절률 1", "n");
+    addRow(framePanel, "index2", "굴절률 2", "n");
+    rows.index1.input.helpTip = "굴절률로 계산할 때, 매질이 직접일 때만 바꿀 수 있습니다";
+    rows.index2.input.helpTip = rows.index1.input.helpTip;
+    addRow(framePanel, "medium1K", "매질 1 색", "K");
+    addRow(framePanel, "medium2K", "매질 2 색", "K");
+    addRow(framePanel, "frameW", "틀 너비", "mm");
+    addRow(framePanel, "frameH", "틀 높이", "mm");
     var lineRow = framePanel.add("group");
     lineRow.alignChildren = ["left", "center"];
     addCheck(lineRow, "normalOn", "법선 (점선)");
@@ -283,16 +308,23 @@ try {
     previewCheck.value = options.previewOn;
     directRadio.value = options.angleMode === ANGLE_DIRECT;
     snellRadio.value = options.angleMode === ANGLE_SNELL;
-    mediumRadios[options.medium].value = true;
+    for (var m2 = 0; m2 < 2; m2++) {
+        for (var r = 0; r < mediumRadios[m2].length; r++) {
+            mediumRadios[m2][r].value = MEDIUM_CHOICES[m2][r] === options["medium" + (m2 + 1)];
+            bindMediumRadio(m2, r);
+        }
+        bindMediumInput(m2);
+    }
     applyCheckModes();
-    applyAngleMode();
+    applyMediumMode();
 
     directRadio.onClick = function() { setAngleMode(ANGLE_DIRECT); };
     snellRadio.onClick = function() { setAngleMode(ANGLE_SNELL); };
-    for (var r = 0; r < mediumRadios.length; r++) bindMediumRadio(r);
-
-    medium1Input.onChange = function() { options.medium1Name = medium1Input.text; updatePreview(); };
-    medium2Input.onChange = function() { options.medium2Name = medium2Input.text; updatePreview(); };
+    headShapeList.onChange = function() {
+        if (!headShapeList.selection) return;
+        options.headShape = headShapeList.selection.index;
+        updatePreview();
+    };
     previewCheck.onClick = function() {
         options.previewOn = previewCheck.value;
         updatePreview();
@@ -315,56 +347,69 @@ try {
 
     function setAngleMode(mode) {
         options.angleMode = mode;
-        if (mode === ANGLE_SNELL) applyMediumNames();
-        applyAngleMode();
+        applyMediumMode();
         updatePreview();
     }
 
-    function bindMediumRadio(index) {
-        mediumRadios[index].onClick = function() {
-            options.medium = index;
-            if (options.angleMode === ANGLE_SNELL) applyMediumNames();
-            applyAngleMode();
+    // 매질 라디오: 고르면 그 이름을 넣는다(직접은 입력창 그대로). 굴절률도 그에 맞춘다
+    function bindMediumRadio(which, choiceIndex) {
+        var key = "medium" + (which + 1);
+        mediumRadios[which][choiceIndex].onClick = function() {
+            options[key] = MEDIUM_CHOICES[which][choiceIndex];
+            var medium = MEDIA[options[key]];
+            if (medium.n !== null) {
+                options[key + "Name"] = medium.name;
+                mediumInputs[which].text = medium.name;
+            }
+            applyMediumMode();
             updatePreview();
         };
     }
 
-    // 매질 2를 고르면 매질 이름도 그에 맞춘다(직접 입력은 그대로 둔다). 매질 1은 공기
-    function applyMediumNames() {
-        if (MEDIA[options.medium].n === null) return;
-        options.medium1Name = AIR_NAME;
-        options.medium2Name = MEDIA[options.medium].name;
-        medium1Input.text = options.medium1Name;
-        medium2Input.text = options.medium2Name;
+    function bindMediumInput(which) {
+        var key = "medium" + (which + 1) + "Name";
+        mediumInputs[which].onChange = function() {
+            options[key] = mediumInputs[which].text;
+            updatePreview();
+        };
     }
 
-    // 계산 모드: 고른 매질의 n을 굴절률 행에 넣고(직접 입력만 풀어 둔다) 굴절각 행은 계산값을 보여 주며 잠근다.
-    // 직접 입력 모드: 매질·굴절률 행을 잠그고 굴절각 행을 푼다
-    function applyAngleMode() {
+    // 매질마다: 직접이면 이름 입력창을 풀고, 아니면 잠그고 굴절률을 그 매질 값으로. 굴절률 행은 계산 모드의 직접 매질만 푼다.
+    // 굴절각 행은 계산 모드면 계산값(전반사면 글자)을 보여 주며 잠그고, 직접 입력 모드면 푼다
+    function applyMediumMode() {
         var snell = options.angleMode === ANGLE_SNELL;
-        var preset = MEDIA[options.medium].n;
-        if (snell && preset !== null) {
-            options.index = preset;
-            showRowValue(rows.index, options.index);
+        for (var m = 0; m < 2; m++) {
+            var medium = MEDIA[options["medium" + (m + 1)]];
+            var indexRow = rows["index" + (m + 1)];
+            if (medium.n !== null) {
+                options["index" + (m + 1)] = medium.n;
+                showRowValue(indexRow, medium.n);
+            }
+            mediumInputs[m].enabled = medium.n === null;
+            setRowEnabled(indexRow, snell && medium.n === null);
         }
-        for (var i = 0; i < mediumRadios.length; i++) mediumRadios[i].enabled = snell;
-        setRowEnabled(rows.index, snell && preset === null);
         setRowEnabled(rows.angleT, !snell);
-        if (snell) showRowValue(rows.angleT, refractionAngle(options.angleI, options.index));
+        if (!snell) return;
+        var angleT = currentAngleT();
+        if (angleT === null) {
+            rows.angleT.input.text = TOTAL_REFLECTION_TEXT;
+            try { rows.angleT.slider.value = rows.angleT.max; } catch (e) {}
+        } else {
+            showRowValue(rows.angleT, angleT);
+        }
     }
 
-    // 그릴 때 쓰는 굴절각: 계산 모드면 스넬 법칙 값(반올림하지 않음), 아니면 입력값
+    // 그릴 때 쓰는 굴절각: 계산 모드면 스넬 법칙 값(반올림하지 않음, 전반사면 null), 아니면 입력값
     function currentAngleT() {
-        return options.angleMode === ANGLE_SNELL ? refractionAngle(options.angleI, options.index) : options.angleT;
+        return options.angleMode === ANGLE_SNELL ? refractionAngle(options.angleI, options.index1, options.index2) : options.angleT;
     }
 
     // 화살촉을 끄면 크기·위치 행을, 각을 끄면 호 반지름 행을 잠근다
     function applyCheckModes() {
         setRowEnabled(rows.headSize, options.arrowOn);
-        setRowEnabled(rows.headPos, options.arrowOn);
+        setRowEnabled(rows.headDist, options.arrowOn);
+        headShapeList.enabled = options.arrowOn;
         setRowEnabled(rows.arcRadius, options.angleOn);
-        medium1Input.enabled = options.mediumLabelsOn;
-        medium2Input.enabled = options.mediumLabelsOn;
     }
 
     function setRowEnabled(controls, enabled) {
@@ -396,7 +441,9 @@ try {
     function buildPreview() {
         var o = options;
         var angleT = currentAngleT();
-        var rays = rayLines(o.angleI, angleT, o.rayLen);
+        var totalReflection = angleT === null;
+        var rays = rayLines(o.angleI, totalReflection ? 0 : angleT, o.rayLen);
+        if (totalReflection) delete rays.refracted;
         var halfW = o.frameW / 2;
         var halfH = o.frameH / 2;
         var rayColor = makeGray(o.rayK);
@@ -424,7 +471,8 @@ try {
             normal.strokeDashes = NORMAL_DASH_PT;
         }
 
-        var arcs = angleArcs(o.angleI, angleT);
+        var arcs = angleArcs(o.angleI, totalReflection ? 0 : angleT);
+        if (totalReflection) delete arcs.refracted;
         var arcNames = {incident: "입사각", reflected: "반사각", refracted: "굴절각"};
         if (o.angleOn) {
             for (var key in arcs) {
@@ -449,14 +497,22 @@ try {
             ray.name = "Ray" + capitalize(rayKey);
             styleStroke(ray, rayColor, o.rayWidth);
             if (o.arrowOn) {
-                var headPoints = arrowHead(line, o.headPos, o.headSize);
+                // 위치는 입사점에서의 거리: 입사광은 끝(입사점)에서 거슬러, 나머지는 시작점(입사점)에서
+                var fromStart = rayKey === "incident" ? o.rayLen - o.headDist : o.headDist;
+                var headShape = arrowHead(line, fromStart, o.headSize, o.headShape);
+                var pagePoints = [];
+                for (var hp = 0; hp < headShape.points.length; hp++) pagePoints.push(pagePoint(headShape.points[hp]));
                 var head = group.pathItems.add();
-                head.setEntirePath([pagePoint(headPoints[0]), pagePoint(headPoints[1]), pagePoint(headPoints[2])]);
-                head.closed = true;
+                head.setEntirePath(pagePoints);
+                head.closed = headShape.closed;
                 head.name = "Head" + capitalize(rayKey);
-                head.stroked = false;
-                head.filled = true;
-                head.fillColor = rayColor;
+                if (headShape.closed) {
+                    head.stroked = false;
+                    head.filled = true;
+                    head.fillColor = rayColor;
+                } else {
+                    styleStroke(head, rayColor, o.rayWidth);
+                }
             }
             if (o.rayLabelsOn) {
                 // 광선의 바깥쪽 끝에서 광선 방향으로 조금 더 나간 자리
@@ -663,7 +719,7 @@ try {
             showRowValue(controls, value);
             if (value === options[key]) return;
             options[key] = value;
-            if (key === "angleI" || key === "index") applyAngleMode();
+            if (key === "angleI" || key === "index1" || key === "index2") applyMediumMode();
             updatePreview();
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
@@ -727,12 +783,12 @@ try {
 
     // -------------------------------------------------------
     // 설정 저장 · 복원
-    // "v2" + 굴절각 모드 + 매질 2 + 체크(CHECK_KEYS 순서) + 미리보기 + 매질 이름 둘 + 숫자(NUMBER_KEYS 순서). 확인할 때만 저장
+    // "v3" + 굴절각 모드 + 매질 1·2 + 화살촉 모양 + 체크(CHECK_KEYS 순서) + 미리보기 + 매질 이름 둘 + 숫자(NUMBER_KEYS 순서). 확인할 때만 저장
     // -------------------------------------------------------
     function flag(value) { return value ? "1" : "0"; }
 
     function saveSettings() {
-        var parts = ["v2", options.angleMode, options.medium];
+        var parts = ["v3", options.angleMode, options.medium1, options.medium2, options.headShape];
         for (var c = 0; c < CHECK_KEYS.length; c++) parts.push(flag(options[CHECK_KEYS[c]]));
         parts.push(flag(options.previewOn));
         // 구분자 | 는 이름에 쓸 수 없다
@@ -747,16 +803,22 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        var head = 3 + CHECK_KEYS.length + 1 + 2;
-        if (p[0] !== "v2" || p.length !== head + NUMBER_KEYS.length) return;
+        var head = 5 + CHECK_KEYS.length + 1 + 2;
+        if (p[0] !== "v3" || p.length !== head + NUMBER_KEYS.length) return;
         var mode = parseInt(p[1], 10);
         if (mode === ANGLE_DIRECT || mode === ANGLE_SNELL) options.angleMode = mode;
-        var medium = parseInt(p[2], 10);
-        if (medium >= 0 && medium < MEDIA.length) options.medium = medium;
-        for (var c = 0; c < CHECK_KEYS.length; c++) options[CHECK_KEYS[c]] = (p[3 + c] === "1");
-        options.previewOn = (p[3 + CHECK_KEYS.length] === "1");
-        options.medium1Name = p[4 + CHECK_KEYS.length];
-        options.medium2Name = p[5 + CHECK_KEYS.length];
+        for (var m = 0; m < 2; m++) {
+            var medium = parseInt(p[2 + m], 10);
+            for (var k = 0; k < MEDIUM_CHOICES[m].length; k++) {
+                if (MEDIUM_CHOICES[m][k] === medium) options["medium" + (m + 1)] = medium;
+            }
+        }
+        var shape = parseInt(p[4], 10);
+        if (shape >= 0 && shape < HEAD_SHAPES.length) options.headShape = shape;
+        for (var c = 0; c < CHECK_KEYS.length; c++) options[CHECK_KEYS[c]] = (p[5 + c] === "1");
+        options.previewOn = (p[5 + CHECK_KEYS.length] === "1");
+        options.medium1Name = p[6 + CHECK_KEYS.length];
+        options.medium2Name = p[7 + CHECK_KEYS.length];
         for (var i = 0; i < NUMBER_KEYS.length; i++) {
             var spec = SPECS[NUMBER_KEYS[i]];
             var value = parseNumber(p[head + i]);
