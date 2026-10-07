@@ -65,7 +65,7 @@ function bezierAt(p0, p1, p2, p3, t) {
 // 파일 규약: F4 반복 기록, 설정 키, 탭 헬퍼, 안내 홈페이지 항목
 assert.ok(source.includes('Folder.temp + "/illu_last_script.txt"') && source.includes("__memo.write($.fileName)"), "must record itself for RepeatLast.jsx");
 assert.ok(source.includes('var PREF_KEY = "ObjectLensMirror/settings"'), "own preference key");
-assert.ok(source.includes('p[0] !== "v5"') && source.includes('var parts = ["v5"]'), "versioned settings string");
+assert.ok(source.includes('p[0] !== "v6"') && source.includes('var parts = ["v6"]'), "versioned settings string");
 assert.ok(/if \(typeof bindTabOrder === "function"\) bindTabOrder\(win\);/.test(source), "tab helper bound before show()");
 assert.ok(source.indexOf("bindTabOrder(win)") < source.indexOf("win.show()"), "bindTabOrder must run before win.show()");
 assert.ok(source.includes('addRow(positionPanel, "가로", "offsetX"') && source.includes('addRow(positionPanel, "세로", "offsetY"'), "movable preview rows");

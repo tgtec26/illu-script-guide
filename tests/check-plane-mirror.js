@@ -43,5 +43,5 @@ for (const p of g.object) {
 // 거울 밖에 닿으면 null
 assert.strictEqual(lib.reflectionRay([-25, 200], [-40, 200], -25, 25), null);
 assert.ok(source.includes('var PREF_KEY = "ObjectPlaneMirror/settings";'));
-assert.ok(source.includes('p[0] !== "v1" || p.length !== 14'), "settings field count");
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 16'), "settings field count");
 console.log("plane mirror checks passed");

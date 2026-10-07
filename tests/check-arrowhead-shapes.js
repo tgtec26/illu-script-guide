@@ -12,6 +12,7 @@ const SCRIPTS = [
   "Object_SeparationSetup.jsx",
   "Object_Circulation.jsx",
   "Object_MagneticField.jsx",
+  "Object_LensMirror.jsx",
 ];
 
 function extractFunction(source, name) {
@@ -64,6 +65,23 @@ for (const file of SCRIPTS) {
   assert.ok(/headShapeList = \w+\.add\("dropdownlist", undefined, HEAD_SHAPES\)/.test(source), `${file}: shape dropdown`);
   assert.ok(/headShapeList\.onChange = function/.test(source), `${file}: shape dropdown handler`);
   assert.ok(/previewEnabled \? "1" : "0", headShape/.test(source) || /headShape,/.test(source), `${file}: shape is saved`);
+}
+
+// 렌즈·거울 탭: 삼각형 세 점에서 모양을 만드는 최상위 함수
+{
+  const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_LensMirror.jsx"), "utf8");
+  const lib = new Function(
+    "var HEAD_CHEVRON = 1, HEAD_SWALLOW = 2;\n" + extractFunction(source, "headFromTriangle") + "\nreturn {headFromTriangle: headFromTriangle};"
+  )();
+  const tri = [[10, 0], [6, 1.5], [6, -1.5]];
+  assert.strictEqual(lib.headFromTriangle(tri, 0).closed, true, "lens triangle");
+  const chevron = lib.headFromTriangle(tri, 1);
+  assert.strictEqual(chevron.closed, false, "lens chevron is open");
+  assert.deepStrictEqual(chevron.points[1], [10, 0], "lens chevron apex");
+  const swallow = lib.headFromTriangle(tri, 2);
+  assert.strictEqual(swallow.points.length, 4, "lens swallowtail");
+  near(swallow.points[2][0], 6 + 4 * 0.3, "lens notch position");
+  assert.ok(source.includes('headShapeList.onChange = function() {'), "lens shape dropdown");
 }
 
 console.log(`arrowhead shapes: ${SCRIPTS.length} scripts ok`);
