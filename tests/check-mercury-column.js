@@ -30,8 +30,9 @@ function extractVar(name) {
 }
 
 const constants = ["MM", "KAPPA", "MOUTH_MARGIN_MM", "MIN_VACUUM_MM", "CORNER_R_MM", "FRAME_W_RANGE", "FRAME_H_RANGE",
-  "TROUGH_W_RANGE", "TROUGH_H_RANGE", "DEPTH_RANGE", "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE"];
-const names = ["clampOptions", "mouthHeights", "mercuryGeometry", "uPath", "corner", "cornerAt", "clamp"];
+  "TROUGH_W_RANGE", "TROUGH_H_RANGE", "DEPTH_RANGE", "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE",
+  "DIM_HEAD_LEN_MM", "DIM_HEAD_WIDTH_MM", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW"];
+const names = ["clampOptions", "mouthHeights", "mercuryGeometry", "uPath", "corner", "cornerAt", "clamp", "dimHeadPoints", "dimLineInset"];
 const lib = new Function(`${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
   `return {${[...constants, ...names].join(",")}};`)();
 
@@ -113,36 +114,66 @@ for (const tilt of [-45, -20, 0, 10, 30, 60]) {
   assert.deepStrictEqual(g.troughFill[0].anchor, [-50, 40], "mercury fill stops at the surface");
   near(g.troughOutline[2].left[0], -42 - lib.KAPPA * 8, 1e-9, "corner handle uses KAPPA");
 }
+// 치수선 화살촉: 삼각형은 닫힌 세 점, 꺾쇠는 열린 선, 제비꼬리는 닫힌 네 점. 배율은 길이·폭에 같이 적용, 위·아래 방향
+{
+  const len = lib.DIM_HEAD_LEN_MM * MM;
+  const half = lib.DIM_HEAD_WIDTH_MM * MM / 2;
+  const up = lib.dimHeadPoints(10, 50, 1, lib.HEAD_TRIANGLE, 1);
+  assert.strictEqual(up.closed, true);
+  assert.deepStrictEqual(up.points[0], [10, 50], "tip at (x, y)");
+  near(up.points[1][1], 50 - len, 1e-9, "upward head's base is below the tip");
+  near(up.points[1][0] - up.points[2][0], 2 * half, 1e-9, "base width");
+  const down = lib.dimHeadPoints(10, 50, -1, lib.HEAD_TRIANGLE, 1);
+  near(down.points[1][1], 50 + len, 1e-9, "downward head's base is above the tip");
+  const big = lib.dimHeadPoints(10, 50, 1, lib.HEAD_TRIANGLE, 2);
+  near(big.points[1][1], 50 - 2 * len, 1e-9, "scaled length");
+  near(big.points[1][0] - big.points[2][0], 4 * half, 1e-9, "scaled width");
+  const chevron = lib.dimHeadPoints(10, 50, 1, lib.HEAD_CHEVRON, 1);
+  assert.strictEqual(chevron.closed, false);
+  assert.deepStrictEqual(chevron.points[1], [10, 50], "chevron apex at the tip");
+  const swallow = lib.dimHeadPoints(10, 50, 1, lib.HEAD_SWALLOW, 1);
+  assert.strictEqual(swallow.closed, true);
+  assert.strictEqual(swallow.points.length, 4);
+  near(swallow.points[2][1], 50 - len + 0.3 * len, 1e-9, "notch 0.3 head lengths ahead of the base");
+  // 치수선 끝: 삼각형은 밑변, 제비꼬리는 홈 안쪽, 꺾쇠는 끝점
+  near(lib.dimLineInset(len, lib.HEAD_TRIANGLE), len, 1e-9, "line stops at the base");
+  near(lib.dimLineInset(len, lib.HEAD_CHEVRON), 0, 1e-9, "chevron line runs to the tip");
+  assert.ok(lib.dimLineInset(len, lib.HEAD_SWALLOW) < 0.7 * len + 1e-9, "swallowtail line ends inside the solid part");
+}
+
 // 설정 저장·복원: 저장한 값이 그대로 돌아오고, 형식이 다르거나 범위를 벗어난 값은 무시·보정한다
 {
+  const ioBase = {...base, headSize: 100, headShape: 0};
   const arrays = ["POSITION_LIMIT_MM", "FRAME_W_RANGE", "FRAME_H_RANGE", "TROUGH_W_RANGE", "TROUGH_H_RANGE", "DEPTH_RANGE",
-    "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE", "NUMBER_KEYS", "BOOL_KEYS", "TEXT_KEYS", "SPECS", "PREF_KEY", "TEXT_MAX"];
+    "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE", "NUMBER_KEYS", "CHOICE_KEYS", "BOOL_KEYS", "TEXT_KEYS", "SPECS", "PREF_KEY", "TEXT_MAX", "HEAD_SHAPES"];
   const ioNames = ["saveSettings", "applySettings", "parseNumber", "roundTo", "clamp"];
   const prefs = {};
   const make = (options) => new Function("app", "options", `${arrays.map(extractVar).join("\n")}\n` +
     `${ioNames.map(extractFunction).join("\n")}\n` +
     "return {save: saveSettings, load: applySettings};")(
     {preferences: {setStringPreference: (k, v) => { prefs[k] = v; }, getStringPreference: (k) => prefs[k] || ""}}, options);
-  const saved = {...base, arrowsOn: false, vacuumOn: true, columnOn: false, surfaceOn: true, mercuryOn: false,
-    glassOn: true, glassText: "유리관|A", heightOn: false, heightText: "760 mm", previewOn: false, tilt: -15, offsetX: 3.5};
+  const saved = {...ioBase, arrowsOn: false, vacuumOn: true, columnOn: false, surfaceOn: true, mercuryOn: false,
+    glassOn: true, glassText: "유리관|A", heightOn: false, heightText: "760 mm", previewOn: false, tilt: -15, offsetX: 3.5, headSize: 150, headShape: 2};
   make(saved).save();
-  assert.ok(prefs["ObjectMercuryColumn/settings"].startsWith("v1|"), "settings start with the version tag");
-  const restored = {...base, arrowsOn: true, heightText: "x", glassText: "y", previewOn: true};
+  assert.ok(prefs["ObjectMercuryColumn/settings"].startsWith("v2|"), "settings start with the version tag");
+  const restored = {...ioBase, arrowsOn: true, heightText: "x", glassText: "y", previewOn: true};
   make(restored).load();
   assert.strictEqual(restored.tilt, -15, "numbers come back");
   assert.strictEqual(restored.offsetX, 3.5, "offset comes back");
+  assert.strictEqual(restored.headSize, 150, "head size comes back");
+  assert.strictEqual(restored.headShape, 2, "head shape comes back");
   assert.strictEqual(restored.arrowsOn, false, "flags come back");
   assert.strictEqual(restored.previewOn, false, "preview flag comes back");
   assert.strictEqual(restored.glassText, "유리관A", "the separator is stripped from text");
   assert.strictEqual(restored.heightText, "760 mm", "text comes back");
   // 칸 수가 다르면 기본값 그대로
-  prefs["ObjectMercuryColumn/settings"] = "v1|1|2|3";
-  const untouched = {...base, arrowsOn: true};
+  prefs["ObjectMercuryColumn/settings"] = "v2|1|2|3";
+  const untouched = {...ioBase, arrowsOn: true};
   make(untouched).load();
-  assert.deepStrictEqual(untouched, {...base, arrowsOn: true}, "a different field count is ignored");
+  assert.deepStrictEqual(untouched, {...ioBase, arrowsOn: true}, "a different field count is ignored");
   // 범위를 벗어난 값은 범위 안으로
-  prefs["ObjectMercuryColumn/settings"] = "v1|999|60|60|20|15|0.8|5.5|50|0|0.4|30|0|0|1|1|1|1|1|1|1|1|a|b";
-  const clamped = {...base};
+  prefs["ObjectMercuryColumn/settings"] = "v2|999|60|60|20|15|0.8|5.5|50|0|0.4|30|0|0|999|9|1|1|1|1|1|1|1|1|a|b";
+  const clamped = {...ioBase};
   make(clamped).load();
   assert.strictEqual(clamped.frameW, 300, "out-of-range value is clamped");
 }

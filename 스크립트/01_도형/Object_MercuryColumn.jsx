@@ -59,6 +59,11 @@ try {
     var TEXT_GAP_MM = 1;
     var DIM_HEAD_LEN_MM = 1.8;
     var DIM_HEAD_WIDTH_MM = 0.9;
+    // 치수선 화살촉 모양
+    var HEAD_TRIANGLE = 0;
+    var HEAD_CHEVRON = 1;
+    var HEAD_SWALLOW = 2;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"];
     var DIM_PAD_MM = 0.8;
     var DIM_GAP_MIN_MM = 8;
     var DIM_GAP_RATIO = 0.2;
@@ -84,7 +89,7 @@ try {
 
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
     var NUMBER_KEYS = ["frameW", "frameH", "troughW", "troughH", "depth", "troughPt", "tubeW", "tubeLen", "tilt", "tubePt",
-        "colH", "offsetX", "offsetY"];
+        "colH", "offsetX", "offsetY", "headSize"];
     var SPECS = {
         frameW: {range: FRAME_W_RANGE, step: 0.5, decimals: 1},
         frameH: {range: FRAME_H_RANGE, step: 0.5, decimals: 1},
@@ -98,8 +103,10 @@ try {
         tubePt: {range: LINE_RANGE, step: 0.1, decimals: 1},
         colH: {range: COL_RANGE, step: 0.5, decimals: 1},
         offsetX: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
-        offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1}
+        offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
+        headSize: {range: [30, 300], step: 5, decimals: 0}
     };
+    var CHOICE_KEYS = ["headShape"];
     var BOOL_KEYS = ["arrowsOn", "vacuumOn", "columnOn", "surfaceOn", "mercuryOn", "glassOn", "heightOn", "previewOn"];
     var TEXT_KEYS = ["glassText", "heightText"];
     var TEXT_MAX = 30;
@@ -133,7 +140,7 @@ try {
         troughW: 60, troughH: 20, depth: 15, troughPt: 0.8,
         tubeW: 5.5, tubeLen: 50, tilt: 0, tubePt: 0.4,
         colH: 30,
-        offsetX: 0, offsetY: 0,
+        offsetX: 0, offsetY: 0, headSize: 100, headShape: HEAD_TRIANGLE,
         arrowsOn: true, vacuumOn: true, columnOn: true, surfaceOn: true, mercuryOn: true,
         glassOn: true, glassText: "1 m 유리관",
         heightOn: true, heightText: "76 cm",
@@ -204,11 +211,21 @@ try {
     var heightInput = heightRow.add("edittext", undefined, options.heightText);
     heightInput.characters = 10;
     heightInput.helpTip = "치수선 가운데에 넣을 글자";
+    var headShapeList = heightRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.selection = options.headShape;
+    headShapeList.helpTip = "치수선 화살촉 모양. 삼각형·제비꼬리는 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    headShapeList.onChange = function() {
+        if (!headShapeList.selection) return;
+        options.headShape = headShapeList.selection.index;
+        updatePreview();
+    };
     var glassRow = showPanel.add("group");
     glassRow.alignChildren = ["left", "center"];
     var glassCheck = glassRow.add("checkbox", undefined, "유리관 이름");
     var glassInput = glassRow.add("edittext", undefined, options.glassText);
     glassInput.characters = 14;
+
+    addRow(showPanel, "headSize", "치수선 화살촉 크기", "%");
 
     var positionPanel = addPanel(dlg, "위치");
     addRow(positionPanel, "offsetX", "가로", "mm");
@@ -321,7 +338,7 @@ try {
         var o = clampOptions(options);
         for (var i = 0; i < NUMBER_KEYS.length; i++) {
             var numberKey = NUMBER_KEYS[i];
-            if (o[numberKey] !== options[numberKey]) {
+            if (o.hasOwnProperty(numberKey) && o[numberKey] !== options[numberKey]) {
                 options[numberKey] = o[numberKey];
                 showRowValue(rows[numberKey], o[numberKey]);
             }
@@ -378,7 +395,7 @@ try {
         var bTextTop = -Infinity;
 
         // 높이 표시: 점선 + 치수선 + 값
-        if (options.heightOn && colTop - surfY > 2 * DIM_HEAD_LEN_MM * MM) {
+        if (options.heightOn && colTop - surfY > 2 * DIM_HEAD_LEN_MM * MM * options.headSize / 100) {
             var tubeLeftTop = g.axisX(colTop) - g.hw;
             var dimX = Math.min(Math.min(tubeLeftSurf, tubeLeftTop) - Math.max(DIM_GAP_MIN_MM * MM, DIM_GAP_RATIO * o.troughW * MM),
                 leftLimit - 3 * MM);
@@ -386,7 +403,9 @@ try {
             var level = addLine(group, dimX - LEVEL_EXTRA_MM * MM, colTop, tubeLeftTop, colTop, LINE_PT, black, DASH);
             level.name = "Level";
 
-            var headLen = DIM_HEAD_LEN_MM * MM;
+            var headScale = options.headSize / 100;
+            var headLen = DIM_HEAD_LEN_MM * MM * headScale;
+            var lineInset = dimLineInset(headLen, options.headShape);
             var dimMid = (surfY + colTop) / 2;
             var dimText = options.heightText === "" ? null : makeText(group, options.heightText);
             var dimTextH = 0;
@@ -397,11 +416,11 @@ try {
             var pad = DIM_PAD_MM * MM;
             var broken = dimText !== null && colTop - surfY >= 2 * headLen + dimTextH + 2 * pad + 2 * MM;
             if (broken) {
-                addLine(group, dimX, colTop - headLen, dimX, dimMid + dimTextH / 2 + pad, LINE_PT, black, null).name = "Dimension";
-                addLine(group, dimX, dimMid - dimTextH / 2 - pad, dimX, surfY + headLen, LINE_PT, black, null).name = "Dimension";
+                addLine(group, dimX, colTop - lineInset, dimX, dimMid + dimTextH / 2 + pad, LINE_PT, black, null).name = "Dimension";
+                addLine(group, dimX, dimMid - dimTextH / 2 - pad, dimX, surfY + lineInset, LINE_PT, black, null).name = "Dimension";
                 placeText(dimText, dimX, dimMid, "c", "m");
             } else {
-                addLine(group, dimX, colTop - headLen, dimX, surfY + headLen, LINE_PT, black, null).name = "Dimension";
+                addLine(group, dimX, colTop - lineInset, dimX, surfY + lineInset, LINE_PT, black, null).name = "Dimension";
                 if (dimText !== null) placeText(dimText, dimX - TEXT_GAP_MM * MM, dimMid, "r", "m");
             }
             if (dimText !== null) dimText.name = "HeightValue";
@@ -644,14 +663,32 @@ try {
         return path;
     }
 
-    // 치수선 끝 화살촉: 끝이 (x, y), dir 1이면 위를 가리킨다
+    // 치수선 화살촉의 점들: 끝이 (x, y), dir 1이면 위를 가리킨다. scale은 크기 배율(1 = 100%).
+    // 삼각형·제비꼬리는 채운 닫힌 패스(홈은 밑변에서 머리 길이의 0.3 앞), 꺾쇠는 열린 선
+    function dimHeadPoints(x, y, dir, shape, scale) {
+        var len = DIM_HEAD_LEN_MM * MM * scale;
+        var halfW = DIM_HEAD_WIDTH_MM * MM * scale / 2;
+        var baseY = y - dir * len;
+        if (shape === HEAD_CHEVRON) return {points: [[x + halfW, baseY], [x, y], [x - halfW, baseY]], closed: false};
+        if (shape === HEAD_SWALLOW) return {points: [[x, y], [x + halfW, baseY], [x, baseY + dir * len * 0.3], [x - halfW, baseY]], closed: true};
+        return {points: [[x, y], [x + halfW, baseY], [x - halfW, baseY]], closed: true};
+    }
+
+    // 치수선이 화살촉 쪽에서 끝나는, 끝점으로부터의 거리: 삼각형은 밑변, 제비꼬리는 홈보다 안쪽, 꺾쇠는 끝점
+    function dimLineInset(headLen, shape) {
+        if (shape === HEAD_CHEVRON) return 0;
+        if (shape === HEAD_SWALLOW) return headLen * 0.6;
+        return headLen;
+    }
+
+    // 치수선 끝 화살촉
     function addHead(container, x, y, dir, color) {
-        var len = DIM_HEAD_LEN_MM * MM;
-        var halfW = DIM_HEAD_WIDTH_MM * MM / 2;
-        var path = drawPath(container, [
-            corner(x, y), corner(x + halfW, y - dir * len), corner(x - halfW, y - dir * len)
-        ], true);
-        styleFill(path, color);
+        var shape = dimHeadPoints(x, y, dir, options.headShape, options.headSize / 100);
+        var anchors = [];
+        for (var i = 0; i < shape.points.length; i++) anchors.push(corner(shape.points[i][0], shape.points[i][1]));
+        var path = drawPath(container, anchors, shape.closed);
+        if (shape.closed) styleFill(path, color);
+        else styleStroke(path, color, LINE_PT, null);
         return path;
     }
 
@@ -877,12 +914,13 @@ try {
     }
 
     // -------------------------------------------------------
-    // 설정 저장 · 복원 ("v1" + 숫자 + 켜고 끄는 항목 + 글자 순서. 확인할 때만 저장)
+    // 설정 저장 · 복원 ("v2" + 숫자 + 고르는 항목 + 켜고 끄는 항목 + 글자 순서. 확인할 때만 저장)
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1"];
+        var parts = ["v2"];
         var i;
         for (i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
+        for (i = 0; i < CHOICE_KEYS.length; i++) parts.push(options[CHOICE_KEYS[i]]);
         for (i = 0; i < BOOL_KEYS.length; i++) parts.push(options[BOOL_KEYS[i]] ? "1" : "0");
         for (i = 0; i < TEXT_KEYS.length; i++) parts.push(String(options[TEXT_KEYS[i]]).replace(/\|/g, ""));
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
@@ -893,13 +931,17 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 1 + NUMBER_KEYS.length + BOOL_KEYS.length + TEXT_KEYS.length) return;
+        if (p[0] !== "v2" || p.length !== 1 + NUMBER_KEYS.length + CHOICE_KEYS.length + BOOL_KEYS.length + TEXT_KEYS.length) return;
         var at = 1;
         var i;
         for (i = 0; i < NUMBER_KEYS.length; i++) {
             var spec = SPECS[NUMBER_KEYS[i]];
             var value = parseNumber(p[at++]);
             if (value !== null) options[NUMBER_KEYS[i]] = clamp(roundTo(value, spec.step), spec.range[0], spec.range[1]);
+        }
+        for (i = 0; i < CHOICE_KEYS.length; i++) {
+            var choice = parseInt(p[at++], 10);
+            if (choice >= 0 && choice < HEAD_SHAPES.length) options[CHOICE_KEYS[i]] = choice;
         }
         for (i = 0; i < BOOL_KEYS.length; i++) options[BOOL_KEYS[i]] = (p[at++] === "1");
         for (i = 0; i < TEXT_KEYS.length; i++) options[TEXT_KEYS[i]] = String(p[at++]).substring(0, TEXT_MAX);
