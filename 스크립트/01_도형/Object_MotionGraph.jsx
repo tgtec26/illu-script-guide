@@ -40,6 +40,11 @@ try {
     var GRAPH_K = 60;
     // 축 끝 화살촉(pt): 길이, 반너비, 뒤쪽 오목 (07_수학의 평가원식 화살촉과 같은 치수)
     var ARROW = {length: 4, halfWidth: 1.3, notch: 1};
+    // 화살촉 모양: 제비꼬리가 위의 평가원식(기본)이다
+    var HEAD_TRIANGLE = 0;
+    var HEAD_CHEVRON = 1;
+    var HEAD_SWALLOW = 2;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리 (평가원식)"];
     // 그래프가 차지하는 비율: 가로(축 길이 기준), 곡선·증가선 끝 높이, 감소선 시작 높이
     var GRAPH_X_RATIO = 0.9;
     var Y_TOP_RATIO = 0.88;
@@ -66,13 +71,14 @@ try {
     var Y_VALUE_RANGE = [1, 200];
 
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
-    var NUMBER_KEYS = ["yValue", "width", "height", "offsetX", "offsetY"];
+    var NUMBER_KEYS = ["yValue", "width", "height", "offsetX", "offsetY", "headSize"];
     var SPECS = {
         yValue: {range: Y_VALUE_RANGE, step: 0.5, decimals: 1},
         width: {range: WIDTH_RANGE, step: 0.5, decimals: 1},
         height: {range: HEIGHT_RANGE, step: 0.5, decimals: 1},
         offsetX: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
-        offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1}
+        offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
+        headSize: {range: [30, 300], step: 5, decimals: 0}
     };
 
     var doc = app.activeDocument;
@@ -98,7 +104,7 @@ try {
     var options = {
         pattern: 0, yKind: 1,
         yValue: 18, width: 32, height: 29,
-        offsetX: 0, offsetY: 0,
+        offsetX: 0, offsetY: 0, headSize: 100, headShape: HEAD_SWALLOW,
         previewOn: true
     };
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
@@ -150,6 +156,15 @@ try {
     addRow(sizePanel, "width", "너비", "mm");
     addRow(sizePanel, "height", "높이", "mm");
 
+    var headPanel = addPanel(dlg, "화살촉");
+    var headShapeRow = headPanel.add("group");
+    headShapeRow.alignChildren = ["left", "center"];
+    headShapeRow.add("statictext", undefined, "모양:").preferredSize.width = LABEL_WIDTH;
+    var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.selection = options.headShape;
+    headShapeList.helpTip = "제비꼬리는 평가원식. 삼각형·제비꼬리는 채운 모양, 꺾쇠는 축 굵기의 열린 선";
+    addRow(headPanel, "headSize", "크기", "%");
+
     var positionPanel = addPanel(dlg, "위치");
     addRow(positionPanel, "offsetX", "가로", "mm");
     addRow(positionPanel, "offsetY", "세로", "mm");
@@ -174,6 +189,11 @@ try {
     }
     previewCheck.value = options.previewOn;
     syncRadios();
+    headShapeList.onChange = function() {
+        if (!headShapeList.selection) return;
+        options.headShape = headShapeList.selection.index;
+        updatePreview();
+    };
 
     previewCheck.onClick = function() {
         options.previewOn = previewCheck.value;
@@ -258,7 +278,7 @@ try {
         var o = clampOptions(options);
         for (var i = 0; i < NUMBER_KEYS.length; i++) {
             var numberKey = NUMBER_KEYS[i];
-            if (o[numberKey] !== options[numberKey]) {
+            if (o.hasOwnProperty(numberKey) && o[numberKey] !== options[numberKey]) {
                 options[numberKey] = o[numberKey];
                 showRowValue(rows[numberKey], o[numberKey]);
             }
@@ -281,14 +301,23 @@ try {
         styleStroke(graph, makeGray(GRAPH_K), GRAPH_PT);
         for (var a = 0; a < g.axes.length; a++) {
             var axis = g.axes[a];
-            var line = drawPath(group, [corner(axis.from[0], axis.from[1]), corner(axis.to[0], axis.to[1])], false);
+            var headScale = options.headSize / 100;
+            var inset = shaftInset(options.headShape, headScale);
+            var lineEnd = [axis.tip[0] - axis.dir[0] * inset, axis.tip[1] - axis.dir[1] * inset];
+            var line = drawPath(group, [corner(axis.from[0], axis.from[1]), corner(lineEnd[0], lineEnd[1])], false);
             line.name = a === 0 ? "AxisX" : "AxisY";
             styleStroke(line, axisColor, AXIS_PT);
-            var head = drawPath(group, arrowHeadPoints(axis.tip, axis.dir), true);
+            var headShape = arrowHeadShape(axis.tip, axis.dir, headScale, options.headShape);
+            var head = drawPath(group, headShape.points, headShape.closed);
             head.name = a === 0 ? "AxisXHead" : "AxisYHead";
-            head.stroked = false;
-            head.filled = true;
-            head.fillColor = axisColor;
+            if (headShape.closed) {
+                head.stroked = false;
+                head.filled = true;
+                head.fillColor = axisColor;
+            } else {
+                styleStroke(head, axisColor, AXIS_PT);
+                head.strokeJoin = StrokeJoin.MITERENDJOIN;
+            }
         }
 
         var gap = TEXT_GAP_MM * MM;
@@ -359,16 +388,32 @@ try {
         };
     }
 
-    // 축 끝 화살촉: 끝점, 뒤쪽 두 날개, 오목한 점
-    function arrowHeadPoints(tip, d) {
+    // 축 끝 화살촉: 끝점, 뒤쪽 두 날개, 오목한 점. scale은 크기 배율(1 = 100%)
+    function arrowHeadPoints(tip, d, scale) {
+        var k = scale === undefined ? 1 : scale;
         var n = [-d[1], d[0]];
-        var back = [tip[0] - d[0] * ARROW.length, tip[1] - d[1] * ARROW.length];
+        var back = [tip[0] - d[0] * ARROW.length * k, tip[1] - d[1] * ARROW.length * k];
         return [
             corner(tip[0], tip[1]),
-            corner(back[0] + n[0] * ARROW.halfWidth, back[1] + n[1] * ARROW.halfWidth),
-            corner(back[0] + d[0] * ARROW.notch, back[1] + d[1] * ARROW.notch),
-            corner(back[0] - n[0] * ARROW.halfWidth, back[1] - n[1] * ARROW.halfWidth)
+            corner(back[0] + n[0] * ARROW.halfWidth * k, back[1] + n[1] * ARROW.halfWidth * k),
+            corner(back[0] + d[0] * ARROW.notch * k, back[1] + d[1] * ARROW.notch * k),
+            corner(back[0] - n[0] * ARROW.halfWidth * k, back[1] - n[1] * ARROW.halfWidth * k)
         ];
+    }
+
+    // 화살촉 모양: 위 네 점에서 만든다. 삼각형·제비꼬리는 채운 닫힌 패스, 꺾쇠는 열린 선
+    function arrowHeadShape(tip, d, scale, shape) {
+        var p = arrowHeadPoints(tip, d, scale);
+        if (shape === HEAD_CHEVRON) return {points: [p[1], p[0], p[3]], closed: false};
+        if (shape === HEAD_TRIANGLE) return {points: [p[0], p[1], p[3]], closed: true};
+        return {points: p, closed: true};
+    }
+
+    // 축 선이 화살촉 쪽에서 끝나는 거리(pt): 제비꼬리는 오목한 점, 삼각형은 밑변 조금 앞, 꺾쇠는 끝점
+    function shaftInset(shape, scale) {
+        if (shape === HEAD_CHEVRON) return 0;
+        if (shape === HEAD_TRIANGLE) return ARROW.length * scale * 0.9;
+        return (ARROW.length - ARROW.notch) * scale;
     }
 
     function corner(x, y) {
@@ -611,10 +656,10 @@ try {
     }
 
     // -------------------------------------------------------
-    // 설정 저장 · 복원 ("v1" + 모양 + y축 이름 + 숫자 + 미리보기 순서. 확인할 때만 저장)
+    // 설정 저장 · 복원 ("v2" + 모양 + y축 이름 + 화살촉 모양 + 숫자 + 미리보기 순서. 확인할 때만 저장)
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1", options.pattern, options.yKind];
+        var parts = ["v2", options.pattern, options.yKind, options.headShape];
         for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
         parts.push(options.previewOn ? "1" : "0");
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
@@ -625,16 +670,18 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 4 + NUMBER_KEYS.length) return;
+        if (p[0] !== "v2" || p.length !== 5 + NUMBER_KEYS.length) return;
         var pattern = parseInt(p[1], 10);
         var yKind = parseInt(p[2], 10);
         if (pattern >= 0 && pattern < PATTERNS.length) options.pattern = pattern;
         if (yKind >= 0 && yKind < Y_NAMES.length) options.yKind = yKind;
+        var headShape = parseInt(p[3], 10);
+        if (headShape >= 0 && headShape < HEAD_SHAPES.length) options.headShape = headShape;
         for (var i = 0; i < NUMBER_KEYS.length; i++) {
             var spec = SPECS[NUMBER_KEYS[i]];
-            var value = parseNumber(p[3 + i]);
+            var value = parseNumber(p[4 + i]);
             if (value !== null) options[NUMBER_KEYS[i]] = clamp(roundTo(value, spec.step), spec.range[0], spec.range[1]);
         }
-        options.previewOn = (p[3 + NUMBER_KEYS.length] === "1");
+        options.previewOn = (p[4 + NUMBER_KEYS.length] === "1");
     }
 })();

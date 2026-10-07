@@ -29,9 +29,9 @@ function extractVar(name) {
   return `var ${name} = ${match[1]};`;
 }
 
-const constants = ["ARROW", "GRAPH_X_RATIO", "Y_TOP_RATIO", "Y_START_DOWN_RATIO", "CURVE_START_HANDLE", "CURVE_END_HANDLE",
+const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW", "GRAPH_X_RATIO", "Y_TOP_RATIO", "Y_START_DOWN_RATIO", "CURVE_START_HANDLE", "CURVE_END_HANDLE",
   "Y_CONST_MAX_RATIO", "WIDTH_RANGE", "HEIGHT_RANGE", "Y_VALUE_RANGE"];
-const names = ["graphGeometry", "arrowHeadPoints", "corner", "clampOptions", "clamp"];
+const names = ["graphGeometry", "arrowHeadPoints", "arrowHeadShape", "shaftInset", "corner", "clampOptions", "clamp"];
 const lib = new Function(`${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
   `return {${[...constants, ...names].join(",")}};`)();
 
@@ -61,6 +61,30 @@ const geo = (pattern) => lib.graphGeometry({...box, pattern});
   near(head[2].anchor[0], 190 - lib.ARROW.length + lib.ARROW.notch, 1e-9, "notch point");
   const up = lib.arrowHeadPoints([100, 280], [0, 1]);
   near(up[1].anchor[1], 280 - lib.ARROW.length, 1e-9, "upward arrow wing is back along y");
+}
+
+// 화살촉 모양: 제비꼬리(평가원식)는 위 네 점 그대로, 삼각형은 끝·날개 둘, 꺾쇠는 열린 선. 배율은 길이·폭에 같이 적용
+{
+  const swallow = lib.arrowHeadShape([190, 200], [1, 0], 1, lib.HEAD_SWALLOW);
+  assert.strictEqual(swallow.closed, true);
+  assert.strictEqual(swallow.points.length, 4);
+  assert.deepStrictEqual(swallow.points, lib.arrowHeadPoints([190, 200], [1, 0]), "default swallowtail is the exam-style head");
+  const triangle = lib.arrowHeadShape([190, 200], [1, 0], 1, lib.HEAD_TRIANGLE);
+  assert.strictEqual(triangle.closed, true);
+  assert.strictEqual(triangle.points.length, 3);
+  assert.deepStrictEqual(triangle.points[0].anchor, [190, 200], "triangle tip");
+  near(triangle.points[1].anchor[1] + triangle.points[2].anchor[1], 400, 1e-9, "triangle wings mirror");
+  const chevron = lib.arrowHeadShape([190, 200], [1, 0], 1, lib.HEAD_CHEVRON);
+  assert.strictEqual(chevron.closed, false);
+  assert.deepStrictEqual(chevron.points[1].anchor, [190, 200], "chevron apex is the tip");
+  const big = lib.arrowHeadShape([190, 200], [1, 0], 2, lib.HEAD_SWALLOW);
+  near(big.points[1].anchor[0], 190 - 2 * lib.ARROW.length, 1e-9, "scaled wing is further back");
+  near(Math.abs(big.points[1].anchor[1] - 200), 2 * lib.ARROW.halfWidth, 1e-9, "scaled wing is wider");
+  // 축 선 끝: 제비꼬리는 오목한 점, 삼각형은 밑변 조금 앞, 꺾쇠는 끝점
+  near(lib.shaftInset(lib.HEAD_SWALLOW, 1), lib.ARROW.length - lib.ARROW.notch, 1e-9, "line stops at the notch");
+  near(lib.shaftInset(lib.HEAD_SWALLOW, 2), 2 * (lib.ARROW.length - lib.ARROW.notch), 1e-9, "notch distance scales");
+  near(lib.shaftInset(lib.HEAD_CHEVRON, 1), 0, 1e-9, "chevron line runs to the tip");
+  assert.ok(lib.shaftInset(lib.HEAD_TRIANGLE, 1) > 0 && lib.shaftInset(lib.HEAD_TRIANGLE, 1) < lib.ARROW.length, "triangle line ends inside the head");
 }
 
 // 모양: 일정 / 직선 증가 / 직선 감소 / 아래로 볼록 곡선 / 위로 볼록 곡선
@@ -122,21 +146,21 @@ const geo = (pattern) => lib.graphGeometry({...box, pattern});
   const ioNames = ["saveSettings", "applySettings", "parseNumber", "roundTo", "clamp"];
   const prefs = {};
   const make = (options) => new Function("app", "options", `${["PREF_KEY", "PATTERNS", "Y_NAMES", "POSITION_LIMIT_MM", "WIDTH_RANGE",
-    "HEIGHT_RANGE", "Y_VALUE_RANGE", "NUMBER_KEYS", "SPECS"].map(extractVar).join("\n")}\n${ioNames.map(extractFunction).join("\n")}\n` +
+    "HEIGHT_RANGE", "Y_VALUE_RANGE", "NUMBER_KEYS", "SPECS", "HEAD_SHAPES"].map(extractVar).join("\n")}\n${ioNames.map(extractFunction).join("\n")}\n` +
     "return {save: saveSettings, load: applySettings};")(
     {preferences: {setStringPreference: (k, v) => { prefs[k] = v; }, getStringPreference: (k) => prefs[k] || ""}}, options);
-  const saved = {pattern: 3, yKind: 0, yValue: 12.5, width: 40, height: 33, offsetX: -2, offsetY: 4.5, previewOn: false};
+  const saved = {pattern: 3, yKind: 0, yValue: 12.5, width: 40, height: 33, offsetX: -2, offsetY: 4.5, headSize: 150, headShape: 1, previewOn: false};
   make(saved).save();
-  assert.ok(prefs["ObjectMotionGraph/settings"].startsWith("v1|3|0|"), "settings start with the version tag");
-  const restored = {pattern: 0, yKind: 1, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, previewOn: true};
+  assert.ok(prefs["ObjectMotionGraph/settings"].startsWith("v2|3|0|1|"), "settings start with the version tag");
+  const restored = {pattern: 0, yKind: 1, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, headSize: 100, headShape: 2, previewOn: true};
   make(restored).load();
   assert.deepStrictEqual(restored, saved, "saved options come back");
-  prefs["ObjectMotionGraph/settings"] = "v1|1|2";
-  const untouched = {pattern: 0, yKind: 1, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, previewOn: true};
+  prefs["ObjectMotionGraph/settings"] = "v2|1|2";
+  const untouched = {pattern: 0, yKind: 1, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, headSize: 100, headShape: 2, previewOn: true};
   make(untouched).load();
   assert.strictEqual(untouched.pattern, 0, "a different field count is ignored");
-  prefs["ObjectMotionGraph/settings"] = "v1|9|9|999|999|999|999|999|0";
-  const clamped = {pattern: 1, yKind: 0, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, previewOn: true};
+  prefs["ObjectMotionGraph/settings"] = "v2|9|9|9|999|999|999|999|999|999|0";
+  const clamped = {pattern: 1, yKind: 0, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, headSize: 100, headShape: 2, previewOn: true};
   make(clamped).load();
   assert.strictEqual(clamped.pattern, 1, "out-of-range pattern is ignored");
   assert.strictEqual(clamped.width, 200, "out-of-range number is clamped");
