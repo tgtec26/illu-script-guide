@@ -111,10 +111,10 @@ try {
     var convectionCheck = checkRow.add("checkbox", undefined, "맨틀 대류 화살표");
     var labelsCheck = checkRow.add("checkbox", undefined, "이름");
     var fontRow = addValueRow(markPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1, DEFAULTS.fontPt);
-    var headRow = markPanel.add("group");
-    headRow.alignChildren = ["left", "center"];
-    headRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
-    var headShapeList = headRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    var headShapeRow = markPanel.add("group");
+    headShapeRow.alignChildren = ["left", "center"];
+    headShapeRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
+    var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = headShape;
     headShapeList.helpTip = "삼각형·제비꼬리는 채운 모양, 꺾쇠는 선 굵기의 열린 선";
     var headSizeRow = addValueRow(markPanel, "화살촉 크기", "%", headSizePct, HEAD_SIZE_RANGE[0], HEAD_SIZE_RANGE[1], 5, 0, DEFAULTS.headSizePct);

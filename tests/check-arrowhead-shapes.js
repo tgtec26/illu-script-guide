@@ -10,6 +10,8 @@ const SCRIPTS = [
   "Object_Galaxy.jsx",
   "Object_PlateBoundary.jsx",
   "Object_SeparationSetup.jsx",
+  "Object_Circulation.jsx",
+  "Object_MagneticField.jsx",
 ];
 
 function extractFunction(source, name) {

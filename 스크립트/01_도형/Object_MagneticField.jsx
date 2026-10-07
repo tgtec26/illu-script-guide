@@ -28,6 +28,10 @@ try {
     var PREF_KEY = "ObjectMagneticField/settings";
     var MM = 2.834645669;
     var LINE_WIDTH_PT = 0.3;
+    var HEAD_TRIANGLE = 0;
+    var HEAD_CHEVRON = 1;
+    var HEAD_SWALLOW = 2;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"];
     var HEAD_LENGTH = 1.4 * MM;
     var HEAD_WIDTH = 1 * MM;
     var NORTH_K = 60;
@@ -76,6 +80,7 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    var headShape = HEAD_TRIANGLE;
     var spacingPct = 100, arrowPct = 20, pair = 0, gapMm = 15, headSizePct = 100;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
     var DEFAULTS = {lengthMm: lengthMm, thickMm: thickMm, cornerMm: cornerMm, turns: turns, lineCount: lineCount, rangePct: rangePct, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
@@ -116,6 +121,12 @@ try {
     arrowRow.input.helpTip = "극에서 선 길이의 몇 % 떨어질지 조절합니다. 작을수록 극에 가깝습니다. 가운데 화살촉은 고정됩니다.";
     rangeRow.input.helpTip = "막대·코일 길이에 대한 %. 이 범위 밖으로 나가는 선은 잘린다";
     var headSizeRow = addValueRow(fieldPanel, "화살촉 크기", "%", headSizePct, HEAD_SIZE_RANGE[0], HEAD_SIZE_RANGE[1], 5, 0, 100);
+    var headShapeRow = fieldPanel.add("group");
+    headShapeRow.alignChildren = ["left", "center"];
+    headShapeRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
+    var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.selection = headShape;
+    headShapeList.helpTip = "삼각형·제비꼬리는 채운 모양, 꺾쇠는 선 굵기의 열린 선";
     var checkRow = fieldPanel.add("group");
     var arrowsCheck = checkRow.add("checkbox", undefined, "화살촉");
     var labelsCheck = checkRow.add("checkbox", undefined, "N·S 글자");
@@ -148,6 +159,11 @@ try {
     bindValueRow(rangeRow, function() { return rangePct; }, function(v) { rangePct = v; });
     bindValueRow(spacingRow, function() { return spacingPct; }, function(v) { spacingPct = v; });
     bindValueRow(headSizeRow, function() { return headSizePct; }, function(v) { headSizePct = v; });
+    headShapeList.onChange = function() {
+        if (!headShapeList.selection) return;
+        headShape = headShapeList.selection.index;
+        updatePreview();
+    };
     bindValueRow(arrowRow, function() { return arrowPct; }, function(v) { arrowPct = v; });
     bindValueRow(gapRow, function() { return gapMm; }, function(v) { gapMm = v; });
     bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
@@ -559,8 +575,8 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v5", kind, lengthMm, thickMm, cornerMm, lineCount, rangePct, turns, current, arrowsOn ? "1" : "0", labelsOn ? "1" : "0",
-            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", spacingPct, arrowPct, pair, gapMm, headSizePct];
+        var parts = ["v6", kind, lengthMm, thickMm, cornerMm, lineCount, rangePct, turns, current, arrowsOn ? "1" : "0", labelsOn ? "1" : "0",
+            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", spacingPct, arrowPct, pair, gapMm, headSizePct, headShape];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -569,12 +585,13 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v5" || p.length !== 20) return;
+        if (p[0] !== "v6" || p.length !== 21) return;
         spacingPct = restoreNumber(p[15], spacingPct, SPACING_RANGE, 5);
         arrowPct = restoreNumber(p[16], arrowPct, ARROW_RANGE, 1);
         pair = restoreNumber(p[17], pair, [0, 3], 1);
         gapMm = restoreNumber(p[18], gapMm, GAP_RANGE, 0.5);
         headSizePct = restoreNumber(p[19], headSizePct, HEAD_SIZE_RANGE, 5);
+        headShape = restoreNumber(p[20], headShape, [0, HEAD_SHAPES.length - 1], 1);
         kind = restoreNumber(p[1], kind, [0, KINDS.length - 1], 1);
         lengthMm = restoreNumber(p[2], lengthMm, LENGTH_RANGE, 1);
         thickMm = restoreNumber(p[3], thickMm, THICK_RANGE, 0.5);
@@ -636,6 +653,17 @@ try {
         return [tip, [bx - uy * HEAD_WIDTH * scale / 2, by + ux * HEAD_WIDTH * scale / 2], [bx + uy * HEAD_WIDTH * scale / 2, by - ux * HEAD_WIDTH * scale / 2]];
     }
 
+    // 화살촉 모양: 삼각형·제비꼬리는 채운 닫힌 패스, 꺾쇠는 열린 선. 모두 삼각형 세 점에서 만든다
+    function arrowHeadShape(tip, dx, dy) {
+        var t = arrowHeadPoints(tip, dx, dy);
+        if (headShape === HEAD_CHEVRON) return {points: [t[1], t[0], t[2]], closed: false};
+        if (headShape === HEAD_SWALLOW) {
+            var mx = (t[1][0] + t[2][0]) / 2, my = (t[1][1] + t[2][1]) / 2;
+            return {points: [t[0], t[1], [mx + (t[0][0] - mx) * 0.3, my + (t[0][1] - my) * 0.3], t[2]], closed: true};
+        }
+        return {points: t, closed: true};
+    }
+
         function styleLine(path, weight, dashes, k) {
         path.filled = false;
         path.stroked = true;
@@ -668,11 +696,21 @@ try {
 
         function addHead(tip, dx, dy, container) {
         var head = (container || previewGroup).pathItems.add();
-        head.setEntirePath(arrowHeadPoints(tip, dx, dy));
-        head.closed = true;
-        head.stroked = false;
-        head.filled = true;
-        head.fillColor = makeGray(100);
+        var shape = arrowHeadShape(tip, dx, dy);
+        head.setEntirePath(shape.points);
+        head.closed = shape.closed;
+        if (shape.closed) {
+            head.stroked = false;
+            head.filled = true;
+            head.fillColor = makeGray(100);
+        } else {
+            head.filled = false;
+            head.stroked = true;
+            head.strokeColor = makeGray(100);
+            head.strokeWidth = LINE_WIDTH_PT;
+            head.strokeCap = StrokeCap.BUTTENDCAP;
+            head.strokeJoin = StrokeJoin.MITERENDJOIN;
+        }
         head.name = "화살촉";
         return head;
     }
