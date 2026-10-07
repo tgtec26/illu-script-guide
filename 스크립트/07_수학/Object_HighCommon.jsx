@@ -20,6 +20,94 @@ try {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
 
     var TAB_PREF_KEY = "HighCommon/tab";   // 마지막에 쓴 탭. 각 탭의 옵션은 탭마다 따로 저장한다
+
+    // ==== 화살촉 (모든 탭 공통: 창 아래의 화살촉 모양·크기) ====
+    // 평가원식(제비꼬리)이 기본이다. 규격(길이·반폭·오목)은 registerHead로 등록하고, 모양·크기가 바뀌면 applyHeadStyle()이 등록된 규격을 다시 쓴다.
+    // 선이 머리와 만나는 거리가 길이 − 오목이라, 모양마다 오목을 달리 둔다(삼각형 0.1 L, 꺾쇠 L(선이 끝점까지), 작살형 0.25 L).
+    var HEAD_TRIANGLE = 0;
+    var HEAD_CHEVRON = 1;
+    var HEAD_SWALLOW = 2;
+    var HEAD_HARPOON = 3;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리 (평가원식)", "작살형 (화살표 3)"];
+    var HEAD_PREF_KEY = "HighCommon/head";
+    var HEAD_SIZE_RANGE = [30, 300];
+    var HEAD_STROKE_PT = 0.4;
+    var headStyle = {shape: HEAD_SWALLOW, size: 100};
+    var headSpecs = [];
+    loadHeadStyle();
+
+    function registerHead(spec) {
+        spec.base = {length: spec.length, halfWidth: spec.halfWidth, notch: spec.notch};
+        headSpecs.push(spec);
+        applyHeadSpec(spec);
+        return spec;
+    }
+
+    function applyHeadSpec(spec) {
+        var s = headStyle.size / 100;
+        var b = spec.base;
+        spec.length = b.length * s;
+        spec.halfWidth = b.halfWidth * s;
+        if (headStyle.shape === HEAD_TRIANGLE) spec.notch = spec.length * 0.1;
+        else if (headStyle.shape === HEAD_CHEVRON) spec.notch = spec.length;
+        else if (headStyle.shape === HEAD_HARPOON) spec.notch = spec.length * 0.25;
+        else spec.notch = b.notch * s;
+    }
+
+    function applyHeadStyle() {
+        for (var i = 0; i < headSpecs.length; i++) applyHeadSpec(headSpecs[i]);
+    }
+
+    // 화살촉 점들 {points, closed}. 끝 tip, 방향 d, 규격 spec, 규격에 곱하는 배율 scale(없으면 1). 등록 안 한 규격은 늘 제비꼬리(평가원식)다
+    function headShapeFor(tip, d, spec, scale) {
+        var k = scale === undefined ? 1 : scale;
+        var n = [-d[1], d[0]];
+        var len = spec.length * k, half = spec.halfWidth * k, notch = spec.notch * k;
+        var back = [tip[0] - d[0] * len, tip[1] - d[1] * len];
+        var wingA = [back[0] + n[0] * half, back[1] + n[1] * half];
+        var wingB = [back[0] - n[0] * half, back[1] - n[1] * half];
+        var shape = spec.base ? headStyle.shape : HEAD_SWALLOW;
+        if (shape === HEAD_CHEVRON) return {points: [wingA, tip, wingB], closed: false};
+        if (shape === HEAD_TRIANGLE) return {points: [tip, wingA, wingB], closed: true};
+        if (shape === HEAD_HARPOON) {
+            // 일러 화살표 3: 머리 길이 L에 날개 반폭 0.306 L, 중간(끝에서 0.504 L) 반폭 0.116 L, 홈은 끝에서 0.818 L
+            var at = function(f, w) { return [tip[0] - d[0] * len * f + n[0] * len * w, tip[1] - d[1] * len * f + n[1] * len * w]; };
+            return {points: [tip, at(0.504, 0.116), at(1, 0.306), at(0.818, 0), at(1, -0.306), at(0.504, -0.116)], closed: true};
+        }
+        return {points: [tip, wingA, [back[0] + d[0] * notch, back[1] + d[1] * notch], wingB], closed: true};
+    }
+
+    // 닫힌 모양은 채우고, 꺾쇠(열린 선)는 HEAD_STROKE_PT로 긋는다
+    function paintHead(path, closed, color) {
+        if (closed) {
+            path.stroked = false;
+            path.filled = true;
+            path.fillColor = color;
+        } else {
+            path.filled = false;
+            path.stroked = true;
+            path.strokeColor = color;
+            path.strokeWidth = HEAD_STROKE_PT;
+            path.strokeCap = StrokeCap.BUTTENDCAP;
+            path.strokeJoin = StrokeJoin.MITERENDJOIN;
+        }
+    }
+
+    function loadHeadStyle() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(HEAD_PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = String(raw).split("|");
+        if (p[0] !== "v1" || p.length !== 3) return;
+        var shape = parseInt(p[1], 10);
+        var size = parseFloat(p[2]);
+        if (shape >= 0 && shape < HEAD_SHAPES.length) headStyle.shape = shape;
+        if (!isNaN(size) && size >= HEAD_SIZE_RANGE[0] && size <= HEAD_SIZE_RANGE[1]) headStyle.size = Math.round(size / 5) * 5;
+    }
+
+    function saveHeadStyle() {
+        try { app.preferences.setStringPreference(HEAD_PREF_KEY, ["v1", headStyle.shape, headStyle.size].join("|")); } catch (e) {}
+    }
     var RESET_BUTTON_WIDTH = 34;
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
@@ -46,9 +134,27 @@ try {
         }
     }
 
+    // 화살촉 크기 (모든 탭 공통): 라벨 (단위): | 입력창 | 스크롤바 | R
+    var headSizeGroup = win.add("group");
+    headSizeGroup.alignChildren = ["left", "center"];
+    headSizeGroup.add("statictext", undefined, "화살촉 크기 (%):").preferredSize.width = 100;
+    var headSizeInput = headSizeGroup.add("edittext", undefined, String(headStyle.size));
+    headSizeInput.characters = 6;
+    headSizeInput.justify = "center";
+    var headSizeBar = headSizeGroup.add("scrollbar", undefined, headStyle.size, HEAD_SIZE_RANGE[0], HEAD_SIZE_RANGE[1]);
+    headSizeBar.stepdelta = 5;
+    headSizeBar.jumpdelta = 50;
+    headSizeBar.preferredSize.width = 196;
+    var headSizeReset = headSizeGroup.add("button", undefined, "R");
+    headSizeReset.preferredSize.width = 34;
+    headSizeReset.helpTip = "처음 값으로 되돌리기";
+
     var footer = win.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;
+    var headShapeList = footer.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.selection = headStyle.shape;
+    headShapeList.helpTip = "모든 탭의 화살촉 모양. 제비꼬리가 평가원식(기본). 삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 축 굵기 정도의 열린 선";
     var footerSpacer = footer.add("group");
     footerSpacer.alignment = ["fill", "center"];
     // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
@@ -97,10 +203,35 @@ try {
     previewCheck.onClick = function() { engine.setPreview(previewCheck.value); };
     okButton.onClick = function() {
         if (!engine.commit()) return;
+        saveHeadStyle();
         try { app.preferences.setStringPreference(TAB_PREF_KEY, String(tabIndex)); } catch (saveError) {}
         win.close(1);
     };
     cancelButton.onClick = function() { win.close(0); };
+
+    // 화살촉 모양·크기: 등록된 규격을 다시 쓰고 지금 탭의 미리보기를 다시 그린다
+    headShapeList.onChange = function() {
+        if (!headShapeList.selection) return;
+        headStyle.shape = headShapeList.selection.index;
+        applyHeadStyle();
+        engine.updatePreview();
+    };
+    function commitHeadSize(value) {
+        value = Math.min(HEAD_SIZE_RANGE[1], Math.max(HEAD_SIZE_RANGE[0], Math.round(value / 5) * 5));
+        headSizeInput.text = String(value);
+        try { headSizeBar.value = value; } catch (barError) {}
+        if (value === headStyle.size) return;
+        headStyle.size = value;
+        applyHeadStyle();
+        engine.updatePreview();
+    }
+    headSizeBar.onChanging = function() { commitHeadSize(headSizeBar.value); };
+    headSizeBar.onChange = function() { commitHeadSize(headSizeBar.value); };
+    headSizeReset.onClick = function() { commitHeadSize(100); };
+    headSizeInput.onChange = function() {
+        var value = parseFloat(String(headSizeInput.text).replace(",", "."));
+        commitHeadSize(isNaN(value) ? headStyle.size : value);
+    };
 
     // 초기 미리보기는 표시 시점(onShow)에 그려야 화면에 보인다
     win.onShow = function() { engine.setPreview(previewCheck.value); };
@@ -153,7 +284,9 @@ try {
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
             var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            registerHead(ARROW);
             var SMALL_ARROW = { length: 2.4, halfWidth: 0.9, notch: 0.6 };
+            registerHead(SMALL_ARROW);
             var KINDS = ["평행이동 (a, b)", "x축 대칭", "y축 대칭", "원점 대칭", "y=x 대칭", "y=-x 대칭",
                 "점 (a, b) 대칭", "직선 x=a 대칭", "직선 y=b 대칭"];
             var KIND_USES = [[true, true], [false, false], [false, false], [false, false], [false, false], [false, false],
@@ -330,20 +463,11 @@ try {
             // 끝이 tip, 방향 dir인 채운 화살촉 (뒤가 notch만큼 파인 모양)
             function addArrow(arrow) {
                 var shape = arrow.small ? SMALL_ARROW : ARROW;
-                var d = arrow.dir, n = [-d[1], d[0]];
-                var tip = arrow.tip;
-                var back = [tip[0] - d[0] * shape.length, tip[1] - d[1] * shape.length];
+                var head = headShapeFor(arrow.tip, arrow.dir, shape);
                 var path = previewGroup.pathItems.add();
-                path.setEntirePath([
-                    tip,
-                    [back[0] + n[0] * shape.halfWidth, back[1] + n[1] * shape.halfWidth],
-                    [back[0] + d[0] * shape.notch, back[1] + d[1] * shape.notch],
-                    [back[0] - n[0] * shape.halfWidth, back[1] - n[1] * shape.halfWidth]
-                ]);
-                path.closed = true;
-                path.stroked = false;
-                path.filled = true;
-                path.fillColor = makeGray(100);
+                path.setEntirePath(head.points);
+                path.closed = head.closed;
+                paintHead(path, head.closed, makeGray(100));
             }
 
             function addDot(at) {
@@ -755,6 +879,7 @@ try {
             var RIGHT_MARK_MM = 1.5;
             var LABEL_GAP_MM = 0.8;
             var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            registerHead(ARROW);
             var KAPPA = 0.5522847498;   // 원을 베지어 4개로
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
             var FLAG_KEYS = ["circle", "radius", "crossings", "centerDistance", "tangents", "pointDistance", "equations", "grid", "numbers"];
@@ -941,20 +1066,12 @@ try {
 
             // 끝이 tip, 방향 dir인 채운 화살촉 (뒤가 notch만큼 파인 모양)
             function addArrow(arrow) {
-                var d = arrow.dir, n = [-d[1], d[0]];
-                var tip = arrow.tip;
-                var back = [tip[0] - d[0] * ARROW.length, tip[1] - d[1] * ARROW.length];
+                var shape = ARROW;
+                var head = headShapeFor(arrow.tip, arrow.dir, shape);
                 var path = previewGroup.pathItems.add();
-                path.setEntirePath([
-                    tip,
-                    [back[0] + n[0] * ARROW.halfWidth, back[1] + n[1] * ARROW.halfWidth],
-                    [back[0] + d[0] * ARROW.notch, back[1] + d[1] * ARROW.notch],
-                    [back[0] - n[0] * ARROW.halfWidth, back[1] - n[1] * ARROW.halfWidth]
-                ]);
-                path.closed = true;
-                path.stroked = false;
-                path.filled = true;
-                path.fillColor = makeGray(100);
+                path.setEntirePath(head.points);
+                path.closed = head.closed;
+                paintHead(path, head.closed, makeGray(100));
             }
 
             function addDot(at) {
@@ -1679,6 +1796,7 @@ try {
             var COLUMNS = 240;   // 칠하기 가로 나눔
             var KAPPA = 0.5522847498;
             var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            registerHead(ARROW);
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
             var FLAG_KEYS = ["shade", "formulas", "grid", "numbers"];
 
@@ -1870,20 +1988,12 @@ try {
 
             // 끝이 tip, 방향 dir인 채운 화살촉 (뒤가 notch만큼 파인 모양)
             function addArrow(arrow) {
-                var d = arrow.dir, n = [-d[1], d[0]];
-                var tip = arrow.tip;
-                var back = [tip[0] - d[0] * ARROW.length, tip[1] - d[1] * ARROW.length];
+                var shape = ARROW;
+                var head = headShapeFor(arrow.tip, arrow.dir, shape);
                 var path = previewGroup.pathItems.add();
-                path.setEntirePath([
-                    tip,
-                    [back[0] + n[0] * ARROW.halfWidth, back[1] + n[1] * ARROW.halfWidth],
-                    [back[0] + d[0] * ARROW.notch, back[1] + d[1] * ARROW.notch],
-                    [back[0] - n[0] * ARROW.halfWidth, back[1] - n[1] * ARROW.halfWidth]
-                ]);
-                path.closed = true;
-                path.stroked = false;
-                path.filled = true;
-                path.fillColor = makeGray(100);
+                path.setEntirePath(head.points);
+                path.closed = head.closed;
+                paintHead(path, head.closed, makeGray(100));
             }
 
             // at에서 dir 쪽으로 간격(+clear)을 두고 글자의 가까운 가장자리가 오게 둔다. sup/sub/roman: 첨자·똑바로 쓸 글자 위치
@@ -3250,6 +3360,7 @@ try {
             var DOT_RADIUS_MM = 0.7;
             var LABEL_GAP_MM = 0.8;
             var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            registerHead(ARROW);
             var INEQUALITIES = ["없음", "f(x) > 0", "f(x) ≥ 0", "f(x) < 0", "f(x) ≤ 0"];
             var ROOT_LABELS = ["값", "α, β"];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
@@ -3448,20 +3559,12 @@ try {
 
             // 끝이 tip, 방향 dir인 채운 화살촉 (뒤가 notch만큼 파인 모양)
             function addArrow(arrow) {
-                var d = arrow.dir, n = [-d[1], d[0]];
-                var tip = arrow.tip;
-                var back = [tip[0] - d[0] * ARROW.length, tip[1] - d[1] * ARROW.length];
+                var shape = ARROW;
+                var head = headShapeFor(arrow.tip, arrow.dir, shape);
                 var path = previewGroup.pathItems.add();
-                path.setEntirePath([
-                    tip,
-                    [back[0] + n[0] * ARROW.halfWidth, back[1] + n[1] * ARROW.halfWidth],
-                    [back[0] + d[0] * ARROW.notch, back[1] + d[1] * ARROW.notch],
-                    [back[0] - n[0] * ARROW.halfWidth, back[1] - n[1] * ARROW.halfWidth]
-                ]);
-                path.closed = true;
-                path.stroked = false;
-                path.filled = true;
-                path.fillColor = makeGray(100);
+                path.setEntirePath(head.points);
+                path.closed = head.closed;
+                paintHead(path, head.closed, makeGray(100));
             }
 
             // 점 {at, open}: 채운 점(●) 또는 속이 흰 점(○)
@@ -3935,6 +4038,7 @@ try {
             var DOT_RADIUS_MM = 0.7;
             var LABEL_GAP_MM = 0.8;
             var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            registerHead(ARROW);
             var HYPERBOLA_STEP = 0.25;   // ln|x-p| 간격. 도막 하나의 오차가 단위 길이의 1/10000 아래
             var KINDS = ["유리함수 y = k/(x-p)+q", "무리함수 y = √(a(x-p))+q", "무리함수 y = -√(a(x-p))+q"];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
@@ -4136,20 +4240,12 @@ try {
 
             // 끝이 tip, 방향 dir인 채운 화살촉 (뒤가 notch만큼 파인 모양)
             function addArrow(arrow) {
-                var d = arrow.dir, n = [-d[1], d[0]];
-                var tip = arrow.tip;
-                var back = [tip[0] - d[0] * ARROW.length, tip[1] - d[1] * ARROW.length];
+                var shape = ARROW;
+                var head = headShapeFor(arrow.tip, arrow.dir, shape);
                 var path = previewGroup.pathItems.add();
-                path.setEntirePath([
-                    tip,
-                    [back[0] + n[0] * ARROW.halfWidth, back[1] + n[1] * ARROW.halfWidth],
-                    [back[0] + d[0] * ARROW.notch, back[1] + d[1] * ARROW.notch],
-                    [back[0] - n[0] * ARROW.halfWidth, back[1] - n[1] * ARROW.halfWidth]
-                ]);
-                path.closed = true;
-                path.stroked = false;
-                path.filled = true;
-                path.fillColor = makeGray(100);
+                path.setEntirePath(head.points);
+                path.closed = head.closed;
+                paintHead(path, head.closed, makeGray(100));
             }
 
             function addDot(dot) {
