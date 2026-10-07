@@ -8,6 +8,8 @@ const root = path.resolve(__dirname, "..");
 const SCRIPTS = [
   "Object_Wave.jsx",
   "Object_Galaxy.jsx",
+  "Object_PlateBoundary.jsx",
+  "Object_SeparationSetup.jsx",
 ];
 
 function extractFunction(source, name) {

@@ -28,8 +28,16 @@ try {
     var MM = 2.834645669;
     var LINE_WIDTH_PT = 0.3;
     var ARROW_WIDTH_PT = 1;
-    var HEAD_LENGTH = 2 * MM;
-    var HEAD_WIDTH = 1.6 * MM;
+    // 화살촉 기본 크기(화살촉 크기 100%). 그릴 때 HEAD_LENGTH·HEAD_WIDTH를 배율에 맞춘다
+    var HEAD_TRIANGLE = 0;
+    var HEAD_CHEVRON = 1;
+    var HEAD_SWALLOW = 2;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"];
+    var HEAD_SIZE_RANGE = [30, 300];
+    var BASE_HEAD_LENGTH = 2 * MM;
+    var BASE_HEAD_WIDTH = 1.6 * MM;
+    var HEAD_LENGTH = BASE_HEAD_LENGTH;
+    var HEAD_WIDTH = BASE_HEAD_WIDTH;
     var OCEAN_K = 25;
     var CONTINENT_K = 45;
     var CONTINENT2_K = 35;
@@ -70,9 +78,12 @@ try {
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
+    var headShape = HEAD_TRIANGLE;
+    var headSizePct = 100;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-    var DEFAULTS = {widthMm: widthMm, thickMm: thickMm, dip: dip, reliefMm: reliefMm, mantleMm: mantleMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    var DEFAULTS = {headSizePct: 100, widthMm: widthMm, thickMm: thickMm, dip: dip, reliefMm: reliefMm, mantleMm: mantleMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
+    setHeadSize();
 
     var layer = findEditableLayer();
     var previewGroup = null;
@@ -100,6 +111,13 @@ try {
     var convectionCheck = checkRow.add("checkbox", undefined, "맨틀 대류 화살표");
     var labelsCheck = checkRow.add("checkbox", undefined, "이름");
     var fontRow = addValueRow(markPanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1, DEFAULTS.fontPt);
+    var headRow = markPanel.add("group");
+    headRow.alignChildren = ["left", "center"];
+    headRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
+    var headShapeList = headRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.selection = headShape;
+    headShapeList.helpTip = "삼각형·제비꼬리는 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    var headSizeRow = addValueRow(markPanel, "화살촉 크기", "%", headSizePct, HEAD_SIZE_RANGE[0], HEAD_SIZE_RANGE[1], 5, 0, DEFAULTS.headSizePct);
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1, DEFAULTS.offsetXmm);
@@ -126,6 +144,12 @@ try {
     bindValueRow(reliefRow, function() { return reliefMm; }, function(v) { reliefMm = v; });
     bindValueRow(mantleRow, function() { return mantleMm; }, function(v) { mantleMm = v; });
     bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
+    bindValueRow(headSizeRow, function() { return headSizePct; }, function(v) { headSizePct = v; setHeadSize(); });
+    headShapeList.onChange = function() {
+        if (!headShapeList.selection) return;
+        headShape = headShapeList.selection.index;
+        updatePreview();
+    };
     bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
     bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false);
     previewCheck.onClick = function() {
@@ -340,8 +364,8 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1", kind, widthMm, thickMm, dip, reliefMm, mantleMm, convectionOn ? "1" : "0", labelsOn ? "1" : "0",
-            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+        var parts = ["v2", kind, widthMm, thickMm, dip, reliefMm, mantleMm, convectionOn ? "1" : "0", labelsOn ? "1" : "0",
+            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", headShape, headSizePct];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -350,7 +374,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 13) return;
+        if (p[0] !== "v2" || p.length !== 15) return;
         kind = restoreNumber(p[1], kind, [0, KINDS.length - 1], 1);
         widthMm = restoreNumber(p[2], widthMm, WIDTH_RANGE, 1);
         thickMm = restoreNumber(p[3], thickMm, THICK_RANGE, 0.5);
@@ -363,6 +387,8 @@ try {
         offsetXmm = restoreNumber(p[10], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         offsetYmm = restoreNumber(p[11], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         previewEnabled = p[12] === "1";
+        headShape = restoreNumber(p[13], headShape, [0, HEAD_SHAPES.length - 1], 1);
+        headSizePct = restoreNumber(p[14], headSizePct, HEAD_SIZE_RANGE, 5);
     }
 
     // -------------------------------------------------------
@@ -416,6 +442,22 @@ try {
         return [tip, [bx - uy * HEAD_WIDTH / 2, by + ux * HEAD_WIDTH / 2], [bx + uy * HEAD_WIDTH / 2, by - ux * HEAD_WIDTH / 2]];
     }
 
+    function setHeadSize() {
+        HEAD_LENGTH = BASE_HEAD_LENGTH * headSizePct / 100;
+        HEAD_WIDTH = BASE_HEAD_WIDTH * headSizePct / 100;
+    }
+
+    // 화살촉 모양: 삼각형·제비꼬리는 채운 닫힌 패스, 꺾쇠는 열린 선. 모두 삼각형 세 점에서 만든다
+    function arrowHeadShape(tip, dx, dy) {
+        var t = arrowHeadPoints(tip, dx, dy);
+        if (headShape === HEAD_CHEVRON) return {points: [t[1], t[0], t[2]], closed: false};
+        if (headShape === HEAD_SWALLOW) {
+            var mx = (t[1][0] + t[2][0]) / 2, my = (t[1][1] + t[2][1]) / 2;
+            return {points: [t[0], t[1], [mx + (t[0][0] - mx) * 0.3, my + (t[0][1] - my) * 0.3], t[2]], closed: true};
+        }
+        return {points: t, closed: true};
+    }
+
         function styleLine(path, weight, dashes, k) {
         path.filled = false;
         path.stroked = true;
@@ -453,11 +495,21 @@ try {
 
         function addHead(tip, dx, dy, container) {
         var head = (container || previewGroup).pathItems.add();
-        head.setEntirePath(arrowHeadPoints(tip, dx, dy));
-        head.closed = true;
-        head.stroked = false;
-        head.filled = true;
-        head.fillColor = makeGray(100);
+        var shape = arrowHeadShape(tip, dx, dy);
+        head.setEntirePath(shape.points);
+        head.closed = shape.closed;
+        if (shape.closed) {
+            head.stroked = false;
+            head.filled = true;
+            head.fillColor = makeGray(100);
+        } else {
+            head.filled = false;
+            head.stroked = true;
+            head.strokeColor = makeGray(100);
+            head.strokeWidth = ARROW_WIDTH_PT;
+            head.strokeCap = StrokeCap.BUTTENDCAP;
+            head.strokeJoin = StrokeJoin.MITERENDJOIN;
+        }
         head.name = "화살촉";
         return head;
     }

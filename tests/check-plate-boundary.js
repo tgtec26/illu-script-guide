@@ -53,5 +53,5 @@ assert.strictEqual(between.length, 2);
 assert.ok(Math.sign(between[0][1][0] - between[0][0][0]) !== Math.sign(between[1][1][0] - between[1][0][0]), "opposite along the fault");
 assert.ok(Math.sign(between[0][0][1]) !== Math.sign(between[1][0][1]), "on opposite sides of the fault");
 assert.ok(source.includes('var PREF_KEY = "ObjectPlateBoundary/settings";'));
-assert.ok(source.includes('p[0] !== "v1" || p.length !== 13'), "settings field count");
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 15'), "settings field count");
 console.log("plate boundary checks passed");
