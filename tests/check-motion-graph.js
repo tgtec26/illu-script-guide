@@ -29,7 +29,7 @@ function extractVar(name) {
   return `var ${name} = ${match[1]};`;
 }
 
-const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW", "GRAPH_X_RATIO", "Y_TOP_RATIO", "Y_START_DOWN_RATIO", "CURVE_START_HANDLE", "CURVE_END_HANDLE",
+const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW", "HEAD_HARPOON", "GRAPH_X_RATIO", "Y_TOP_RATIO", "Y_START_DOWN_RATIO", "CURVE_START_HANDLE", "CURVE_END_HANDLE",
   "Y_CONST_MAX_RATIO", "WIDTH_RANGE", "HEIGHT_RANGE", "Y_VALUE_RANGE"];
 const names = ["graphGeometry", "arrowHeadPoints", "arrowHeadShape", "shaftInset", "corner", "clampOptions", "clamp"];
 const lib = new Function(`${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
@@ -80,6 +80,19 @@ const geo = (pattern) => lib.graphGeometry({...box, pattern});
   const big = lib.arrowHeadShape([190, 200], [1, 0], 2, lib.HEAD_SWALLOW);
   near(big.points[1].anchor[0], 190 - 2 * lib.ARROW.length, 1e-9, "scaled wing is further back");
   near(Math.abs(big.points[1].anchor[1] - 200), 2 * lib.ARROW.halfWidth, 1e-9, "scaled wing is wider");
+  // 작살형(일러 화살표 3): 닫힌 여섯 점, 날개 끝은 머리 길이만큼 뒤, 홈은 끝에서 0.818 L
+  const harpoon = lib.arrowHeadShape([190, 200], [1, 0], 1, lib.HEAD_HARPOON);
+  assert.strictEqual(harpoon.closed, true);
+  assert.strictEqual(harpoon.points.length, 6);
+  assert.deepStrictEqual(harpoon.points[0].anchor, [190, 200], "harpoon tip");
+  near(harpoon.points[2].anchor[0], 190 - lib.ARROW.length, 1e-9, "barb tips one head length back");
+  near(Math.abs(harpoon.points[2].anchor[1] - 200), 0.306 * lib.ARROW.length, 1e-9, "barb half width");
+  near(harpoon.points[3].anchor[0], 190 - 0.818 * lib.ARROW.length, 1e-9, "notch 0.818 L from the tip");
+  near(harpoon.points[4].anchor[1] + harpoon.points[2].anchor[1], 400, 1e-9, "barbs mirror");
+  const harpoonUp = lib.arrowHeadShape([100, 280], [0, 1], 2, lib.HEAD_HARPOON);
+  near(harpoonUp.points[3].anchor[1], 280 - 0.818 * 2 * lib.ARROW.length, 1e-9, "upward notch scales");
+  near(lib.shaftInset(lib.HEAD_HARPOON, 1), 0.75 * lib.ARROW.length, 1e-9, "line stops inside the harpoon head");
+  assert.ok(lib.shaftInset(lib.HEAD_HARPOON, 1) > 0.818 * lib.ARROW.length - lib.ARROW.length * 0.1, "line reaches past the notch region");
   // 축 선 끝: 제비꼬리는 오목한 점, 삼각형은 밑변 조금 앞, 꺾쇠는 끝점
   near(lib.shaftInset(lib.HEAD_SWALLOW, 1), lib.ARROW.length - lib.ARROW.notch, 1e-9, "line stops at the notch");
   near(lib.shaftInset(lib.HEAD_SWALLOW, 2), 2 * (lib.ARROW.length - lib.ARROW.notch), 1e-9, "notch distance scales");

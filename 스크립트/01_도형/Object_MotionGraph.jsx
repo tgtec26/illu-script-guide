@@ -44,7 +44,8 @@ try {
     var HEAD_TRIANGLE = 0;
     var HEAD_CHEVRON = 1;
     var HEAD_SWALLOW = 2;
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리 (평가원식)"];
+    var HEAD_HARPOON = 3;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리 (평가원식)", "작살형 (화살표 3)"];
     // 그래프가 차지하는 비율: 가로(축 길이 기준), 곡선·증가선 끝 높이, 감소선 시작 높이
     var GRAPH_X_RATIO = 0.9;
     var Y_TOP_RATIO = 0.88;
@@ -162,7 +163,7 @@ try {
     headShapeRow.add("statictext", undefined, "모양:").preferredSize.width = LABEL_WIDTH;
     var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = options.headShape;
-    headShapeList.helpTip = "제비꼬리는 평가원식. 삼각형·제비꼬리는 채운 모양, 꺾쇠는 축 굵기의 열린 선";
+    headShapeList.helpTip = "제비꼬리는 평가원식. 삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 축 굵기의 열린 선";
     addRow(headPanel, "headSize", "크기", "%");
 
     var positionPanel = addPanel(dlg, "위치");
@@ -401,11 +402,18 @@ try {
         ];
     }
 
-    // 화살촉 모양: 위 네 점에서 만든다. 삼각형·제비꼬리는 채운 닫힌 패스, 꺾쇠는 열린 선
+    // 화살촉 모양: 위 네 점에서 만든다(작살형은 일러 화살표 3에서 따로). 삼각형·제비꼬리·작살형은 채운 닫힌 패스, 꺾쇠는 열린 선
     function arrowHeadShape(tip, d, scale, shape) {
         var p = arrowHeadPoints(tip, d, scale);
         if (shape === HEAD_CHEVRON) return {points: [p[1], p[0], p[3]], closed: false};
         if (shape === HEAD_TRIANGLE) return {points: [p[0], p[1], p[3]], closed: true};
+        if (shape === HEAD_HARPOON) {
+            // 일러 화살표 3: 머리 길이 L에 날개 반폭 0.306 L, 중간(끝에서 0.504 L) 반폭 0.116 L, 홈은 끝에서 0.818 L
+            var len = ARROW.length * (scale === undefined ? 1 : scale);
+            var n = [-d[1], d[0]];
+            var at = function(f, w) { return corner(tip[0] - d[0] * len * f + n[0] * len * w, tip[1] - d[1] * len * f + n[1] * len * w); };
+            return {points: [at(0, 0), at(0.504, 0.116), at(1, 0.306), at(0.818, 0), at(1, -0.306), at(0.504, -0.116)], closed: true};
+        }
         return {points: p, closed: true};
     }
 
@@ -413,6 +421,7 @@ try {
     function shaftInset(shape, scale) {
         if (shape === HEAD_CHEVRON) return 0;
         if (shape === HEAD_TRIANGLE) return ARROW.length * scale * 0.9;
+        if (shape === HEAD_HARPOON) return ARROW.length * scale * 0.75;
         return (ARROW.length - ARROW.notch) * scale;
     }
 

@@ -37,7 +37,8 @@ try {
     var HEAD_TRIANGLE = 0;
     var HEAD_CHEVRON = 1;
     var HEAD_SWALLOW = 2;
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"];
+    var HEAD_HARPOON = 3;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"];
     var HEAD_SIZE_RANGE = [30, 300];
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
@@ -136,7 +137,7 @@ try {
     headShapeRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
     var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = headShape;
-    headShapeList.helpTip = "삼각형·제비꼬리는 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    headShapeList.helpTip = "삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 선 굵기의 열린 선";
     var headSizeRow = addValueRow(markPanel, "화살촉 크기", "%", headSizePct, HEAD_SIZE_RANGE[0], HEAD_SIZE_RANGE[1], 5, 0);
 
     var positionPanel = addPanel(dlg, "위치");
@@ -444,6 +445,19 @@ try {
         HEAD_WIDTH = BASE_HEAD_WIDTH * headSizePct / 100;
     }
 
+    // 작살형(일러 화살표 3): 삼각형 세 점 [끝, 밑변 한쪽, 밑변 다른쪽]에서 만든 여섯 점 [끝, 오른쪽 중간, 오른쪽 날개 끝, 홈, 왼쪽 날개 끝, 왼쪽 중간].
+    // 머리 길이 L에 대해 날개 반폭 0.306 L, 중간(끝에서 0.504 L) 반폭 0.116 L, 홈은 끝에서 0.818 L
+    function harpoonPoints(t) {
+        var mx = (t[1][0] + t[2][0]) / 2, my = (t[1][1] + t[2][1]) / 2;
+        var ax = t[0][0] - mx, ay = t[0][1] - my;
+        var len = Math.sqrt(ax * ax + ay * ay);
+        var wx = t[2][0] - t[1][0], wy = t[2][1] - t[1][1];
+        var wl = Math.sqrt(wx * wx + wy * wy);
+        var nx = wx / wl, ny = wy / wl;
+        function at(f, s) { return [mx + ax * f + nx * s * len, my + ay * f + ny * s * len]; }
+        return [t[0], at(0.496, 0.116), at(0, 0.306), at(0.182, 0), at(0, -0.306), at(0.496, -0.116)];
+    }
+
     // 화살촉 모양: 삼각형·제비꼬리는 채운 닫힌 패스, 꺾쇠는 열린 선. 모두 삼각형 세 점에서 만든다
     function arrowHeadShape(tip, dx, dy) {
         var t = arrowHeadPoints(tip, dx, dy);
@@ -452,6 +466,7 @@ try {
             var mx = (t[1][0] + t[2][0]) / 2, my = (t[1][1] + t[2][1]) / 2;
             return {points: [t[0], t[1], [mx + (t[0][0] - mx) * 0.3, my + (t[0][1] - my) * 0.3], t[2]], closed: true};
         }
+        if (headShape === HEAD_HARPOON) return {points: harpoonPoints(t), closed: true};
         return {points: t, closed: true};
     }
 

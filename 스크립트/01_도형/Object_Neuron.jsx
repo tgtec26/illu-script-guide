@@ -37,7 +37,7 @@ try {
                 {key: "myelin", check: "말이집", value: true},
                 {key: "names", check: "이름", value: true},
                 {key: "arrow", check: "전달 방향", value: true},
-                {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"], value: 0},
+                {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"], value: 0},
                 {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
             ],
@@ -493,8 +493,8 @@ try {
             formPaint(p, fillK, strokeK, width);
             return p;
         };
-        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리), 크기는 o.headSize(%).
-        // 삼각형·제비꼬리는 채운 촉이고 선은 촉 뿌리(제비꼬리는 홈 안쪽)까지, 꺾쇠는 선 두께의 열린 선이고 선이 끝점까지 간다
+        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리, 3 작살형), 크기는 o.headSize(%).
+        // 삼각형·제비꼬리·작살형은 채운 촉이고 선은 촉 뿌리(제비꼬리·작살형은 홈 안쪽)까지, 꺾쇠는 선 두께의 열린 선이고 선이 끝점까지 간다
         t.arrow = function(a, b, width, k, headLength) {
             if (k === undefined) k = 100;
             var scale = o && o.headSize ? o.headSize / 100 : 1;
@@ -512,6 +512,13 @@ try {
             if (shape === 1) {
                 t.line(a, b, width, k);
                 t.path([left, b, right], false, null, k, width);
+                return;
+            }
+            if (shape === 3) {
+                // 작살형(일러 화살표 3): 머리 길이 head에 날개 반폭 0.306 head, 중간(끝에서 0.504 head) 반폭 0.116 head, 홈은 끝에서 0.818 head
+                var at = function(f, w) { return [b[0] - ux * head * f - uy * head * w, b[1] - uy * head * f + ux * head * w]; };
+                if (len > head * 0.75) t.line(a, [b[0] - ux * head * 0.75, b[1] - uy * head * 0.75], width, k);
+                t.path([at(0, 0), at(0.504, 0.116), at(1, 0.306), at(0.818, 0), at(1, -0.306), at(0.504, -0.116)], true, k, null, 0);
                 return;
             }
             if (shape === 2) {

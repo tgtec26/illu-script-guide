@@ -29,7 +29,7 @@ function extractVar(name) {
   return `var ${name} = ${match[1]};`;
 }
 
-const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW", "HEAD_SHAPES", "SPAN_MAX_MM", "RULER_MAX_TICKS", "PREF_KEY", "DIRECTIONS", "MOTIONS", "BALLS", "POSITION_LIMIT_MM", "RADIO_KEYS",
+const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW", "HEAD_HARPOON", "HEAD_SHAPES", "SPAN_MAX_MM", "RULER_MAX_TICKS", "PREF_KEY", "DIRECTIONS", "MOTIONS", "BALLS", "POSITION_LIMIT_MM", "RADIO_KEYS",
   "CHECK_KEYS", "NUMBER_KEYS", "SPECS"];
 const names = ["framePositions", "clampOptions", "gapRatio", "rulerMarks", "formatSeconds", "distanceLabel", "trimText", "arrowHeadPoints", "arrowHeadShape", "shaftInset",
   "cleanDistText", "saveSettings", "applySettings", "parseNumber", "roundTo", "clamp"];
@@ -138,6 +138,16 @@ assert.strictEqual(lib.formatSeconds(1.5), "1.5");
   const chevron = lib.arrowHeadShape([100, 50], [1, 0], 1, 1);
   assert.strictEqual(chevron.closed, false);
   assert.deepStrictEqual(chevron.points, [head[1], head[0], head[3]], "chevron is wing, tip, wing");
+  // 작살형(일러 화살표 3): 닫힌 여섯 점, 날개 끝은 머리 길이만큼 뒤, 홈은 끝에서 0.818 L
+  const harpoon = lib.arrowHeadShape([100, 50], [1, 0], 1, 3);
+  assert.strictEqual(harpoon.closed, true);
+  assert.strictEqual(harpoon.points.length, 6);
+  assert.deepStrictEqual(harpoon.points[0], [100, 50], "harpoon tip");
+  near(harpoon.points[2][0], 100 - lib.ARROW.length, 1e-9, "barb tips one head length back");
+  near(Math.abs(harpoon.points[2][1] - 50), 0.306 * lib.ARROW.length, 1e-9, "barb half width");
+  near(harpoon.points[3][0], 100 - 0.818 * lib.ARROW.length, 1e-9, "notch 0.818 L from the tip");
+  near(lib.arrowHeadShape([100, 50], [1, 0], 0.5, 3).points[3][0], 100 - 0.818 * 0.5 * lib.ARROW.length, 1e-9, "half scale halves the notch distance");
+  near(lib.shaftInset(1, 3), 0.75 * lib.ARROW.length, 1e-9, "line stops inside the harpoon head");
   // 선이 끝나는 거리: 제비꼬리는 오목한 점, 꺾쇠는 끝점, 삼각형은 머리 안쪽
   near(lib.shaftInset(1, 2), lib.ARROW.length - lib.ARROW.notch, 1e-9, "line stops at the notch");
   near(lib.shaftInset(0.5, 2), 0.5 * (lib.ARROW.length - lib.ARROW.notch), 1e-9, "notch distance scales");

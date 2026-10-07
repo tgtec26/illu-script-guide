@@ -42,7 +42,8 @@ try {
     var HEAD_TRIANGLE = 0;
     var HEAD_CHEVRON = 1;
     var HEAD_SWALLOW = 2;
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"];
+    var HEAD_HARPOON = 3;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"];
     var HEAD_HALF_MM = 0.55;
     var ARROW_GAP_MM = 3;
     var ARROW_STACK_MM = 3;
@@ -176,7 +177,7 @@ try {
     }
 
     // 화살표: 몸통 두 점과 화살촉 점들 (mm). headScale은 화살촉 배율(1 = 100%), headShape는 모양.
-    //   삼각형·제비꼬리: 채운 닫힌 패스. 몸통은 화살촉 속으로 조금 들어가 틈이 없다.
+    //   삼각형·제비꼬리·작살형: 채운 닫힌 패스. 몸통은 화살촉 속으로 조금 들어가 틈이 없다.
     //   꺾쇠: 열린 선 [날개, 끝, 날개]. 몸통이 끝점까지 간다.
     function arrowShape(tailX, tipX, y, headScale, headShape) {
         var dir = tipX > tailX ? 1 : -1;
@@ -191,6 +192,12 @@ try {
             // 홈은 밑변에서 머리 길이의 0.3 앞
             return {line: [[tailX, y], [tipX - dir * len * 0.6, y]],
                 head: [[tipX, y], [back, y + half], [tipX - dir * len * 0.7, y], [back, y - half]], closed: true};
+        }
+        if (headShape === HEAD_HARPOON) {
+            // 일러 화살표 3: 머리 길이 len에 날개 반폭 0.306 len, 중간(끝에서 0.504 len) 반폭 0.116 len, 홈은 끝에서 0.818 len
+            return {line: [[tailX, y], [tipX - dir * len * 0.75, y]],
+                head: [[tipX, y], [tipX - dir * len * 0.504, y - len * 0.116], [back, y - len * 0.306],
+                    [tipX - dir * len * 0.818, y], [back, y + len * 0.306], [tipX - dir * len * 0.504, y + len * 0.116]], closed: true};
         }
         return {
             line: [[tailX, y], [tipX - dir * len * 0.9, y]],
@@ -344,7 +351,7 @@ try {
     var colorArrow2List = addColorList(arrowColorRow, "colorArrow2", "파동 2 화살표");
     var headShapeList = arrowColorRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = options.headShape;
-    headShapeList.helpTip = "화살촉 모양. 삼각형·제비꼬리는 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    headShapeList.helpTip = "화살촉 모양. 삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 선 굵기의 열린 선";
 
     var showRow = stylePanel.add("group");
     showRow.alignChildren = ["left", "center"];

@@ -63,7 +63,8 @@ try {
     var HEAD_TRIANGLE = 0;
     var HEAD_CHEVRON = 1;
     var HEAD_SWALLOW = 2;
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"];
+    var HEAD_HARPOON = 3;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"];
     var DIM_PAD_MM = 0.8;
     var DIM_GAP_MIN_MM = 8;
     var DIM_GAP_RATIO = 0.2;
@@ -213,7 +214,7 @@ try {
     heightInput.helpTip = "치수선 가운데에 넣을 글자";
     var headShapeList = heightRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = options.headShape;
-    headShapeList.helpTip = "치수선 화살촉 모양. 삼각형·제비꼬리는 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    headShapeList.helpTip = "치수선 화살촉 모양. 삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 선 굵기의 열린 선";
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
         options.headShape = headShapeList.selection.index;
@@ -671,6 +672,11 @@ try {
         var baseY = y - dir * len;
         if (shape === HEAD_CHEVRON) return {points: [[x + halfW, baseY], [x, y], [x - halfW, baseY]], closed: false};
         if (shape === HEAD_SWALLOW) return {points: [[x, y], [x + halfW, baseY], [x, baseY + dir * len * 0.3], [x - halfW, baseY]], closed: true};
+        if (shape === HEAD_HARPOON) {
+            // 일러 화살표 3: 머리 길이 len에 날개 반폭 0.306 len, 중간(끝에서 0.504 len) 반폭 0.116 len, 홈은 끝에서 0.818 len
+            var at = function(f, w) { return [x + w * len, y - dir * len * f]; };
+            return {points: [at(0, 0), at(0.504, 0.116), at(1, 0.306), at(0.818, 0), at(1, -0.306), at(0.504, -0.116)], closed: true};
+        }
         return {points: [[x, y], [x + halfW, baseY], [x - halfW, baseY]], closed: true};
     }
 
@@ -678,6 +684,7 @@ try {
     function dimLineInset(headLen, shape) {
         if (shape === HEAD_CHEVRON) return 0;
         if (shape === HEAD_SWALLOW) return headLen * 0.6;
+        if (shape === HEAD_HARPOON) return headLen * 0.75;
         return headLen;
     }
 

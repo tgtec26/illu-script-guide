@@ -67,7 +67,8 @@ try {
     var HEAD_TRIANGLE = 0;
     var HEAD_CHEVRON = 1;
     var HEAD_SWALLOW = 2;
-    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리 (평가원식)"];
+    var HEAD_HARPOON = 3;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리 (평가원식)", "작살형 (화살표 3)"];
     // 띠 가장자리 여백, 점선이 띠 밖으로 나오는 길이, 띠에서 표시선까지, 연장선이 표시선을 넘는 길이, 표시선과 글자 사이, 글자끼리
     var PAD_MM = 2;
     var EXT_MM = 6;
@@ -198,7 +199,7 @@ try {
     addCheck(guideRow, "운동 방향", "arrowOn");
     var headShapeList = guideRow.add("dropdownlist", undefined, HEAD_SHAPES);
     headShapeList.selection = options.headShape;
-    headShapeList.helpTip = "화살촉 모양(거리 표시·운동 방향). 제비꼬리는 평가원식. 삼각형·제비꼬리는 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    headShapeList.helpTip = "화살촉 모양(거리 표시·운동 방향). 제비꼬리는 평가원식. 삼각형·제비꼬리·작살형은 채운 모양, 꺾쇠는 선 굵기의 열린 선";
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
         options.headShape = headShapeList.selection.index;
@@ -652,11 +653,18 @@ try {
         ];
     }
 
-    // 화살촉 모양: 위 네 점 [끝, 날개, 오목, 날개]에서 만든다. 삼각형·제비꼬리는 채운 닫힌 패스, 꺾쇠는 열린 선
+    // 화살촉 모양: 위 네 점 [끝, 날개, 오목, 날개]에서 만든다(작살형은 일러 화살표 3에서 따로). 삼각형·제비꼬리·작살형은 채운 닫힌 패스, 꺾쇠는 열린 선
     function arrowHeadShape(tip, d, scale, shape) {
         var p = arrowHeadPoints(tip, d, scale);
         if (shape === HEAD_CHEVRON) return {points: [p[1], p[0], p[3]], closed: false};
         if (shape === HEAD_TRIANGLE) return {points: [p[0], p[1], p[3]], closed: true};
+        if (shape === HEAD_HARPOON) {
+            // 일러 화살표 3: 머리 길이 L에 날개 반폭 0.306 L, 중간(끝에서 0.504 L) 반폭 0.116 L, 홈은 끝에서 0.818 L
+            var len = ARROW.length * scale;
+            var n = [-d[1], d[0]];
+            var at = function(f, w) { return [tip[0] - d[0] * len * f + n[0] * len * w, tip[1] - d[1] * len * f + n[1] * len * w]; };
+            return {points: [at(0, 0), at(0.504, 0.116), at(1, 0.306), at(0.818, 0), at(1, -0.306), at(0.504, -0.116)], closed: true};
+        }
         return {points: p, closed: true};
     }
 
@@ -664,6 +672,7 @@ try {
     function shaftInset(scale, shape) {
         if (shape === HEAD_CHEVRON) return 0;
         if (shape === HEAD_TRIANGLE) return ARROW.length * scale * 0.9;
+        if (shape === HEAD_HARPOON) return ARROW.length * scale * 0.75;
         return (ARROW.length - ARROW.notch) * scale;
     }
 

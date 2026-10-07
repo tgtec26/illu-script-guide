@@ -15,7 +15,7 @@ assert.ok(start > 0 && end > start, "pure geometry markers");
 const pure = source.slice(start, end);
 const geo = new Function(`${pure}
 return {PULSE, TRAIN, SAMPLES_PER_WAVELENGTH, ARROW_LEN_MM, ARROW_GAP_MM, ARROW_STACK_MM, LINE_MARGIN_MM, HEAD_LEN_MM, HEAD_HALF_MM,
-  HEAD_TRIANGLE, HEAD_CHEVRON, HEAD_SWALLOW,
+  HEAD_TRIANGLE, HEAD_CHEVRON, HEAD_SWALLOW, HEAD_HARPOON,
   halfSupport, snapPulsePhase, waveAt, sumAt, wavesOverlap, curvePoints, lineExtent, curveTop, arrowHeights, arrowShape,
   stateCaption};`)();
 const {PULSE, TRAIN} = geo;
@@ -195,6 +195,19 @@ function maxCurveError(waves, from, to) {
   assert.strictEqual(swallow.head.length, 4);
   near(swallow.head[2][0], 4 - 0.7 * geo.HEAD_LEN_MM, 1e-9, "notch 0.3 head lengths ahead of the base");
   assert.ok(swallow.line[1][0] > swallow.head[1][0] && swallow.line[1][0] < 4 - 0.7 * geo.HEAD_LEN_MM + 1e-9 + geo.HEAD_LEN_MM, "body ends inside the head");
+  // 작살형(일러 화살표 3): 닫힌 여섯 점, 날개 끝은 머리 길이만큼 뒤, 홈은 끝에서 0.818 L, 몸통은 홈 안쪽에서 끝남
+  const harpoon = geo.arrowShape(-4, 4, 12, 1, geo.HEAD_HARPOON);
+  assert.strictEqual(harpoon.closed, true);
+  assert.strictEqual(harpoon.head.length, 6);
+  assert.deepStrictEqual(harpoon.head[0], [4, 12], "harpoon tip");
+  near(harpoon.head[2][0], 4 - geo.HEAD_LEN_MM, 1e-9, "barb tips one head length back");
+  near(Math.abs(harpoon.head[2][1] - 12), 0.306 * geo.HEAD_LEN_MM, 1e-9, "barb half width");
+  near(harpoon.head[3][0], 4 - 0.818 * geo.HEAD_LEN_MM, 1e-9, "notch 0.818 L from the tip");
+  near(harpoon.head[1][0], 4 - 0.504 * geo.HEAD_LEN_MM, 1e-9, "mid point 0.504 L from the tip");
+  near(harpoon.head[4][1] + harpoon.head[2][1], 24, 1e-9, "barbs mirror across the axis");
+  assert.ok(harpoon.line[1][0] > harpoon.head[3][0] - 1e-9 && harpoon.line[1][0] < 4, "body ends inside the head");
+  const harpoonLeft = geo.arrowShape(4, -4, 12, 1, geo.HEAD_HARPOON);
+  near(harpoonLeft.head[3][0], -4 + 0.818 * geo.HEAD_LEN_MM, 1e-9, "left-pointing notch");
   const swallowLeft = geo.arrowShape(4, -4, 12, 1, geo.HEAD_SWALLOW);
   near(swallowLeft.head[2][0], -4 + 0.7 * geo.HEAD_LEN_MM, 1e-9, "left-pointing notch");
 }

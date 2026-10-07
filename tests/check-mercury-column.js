@@ -31,7 +31,7 @@ function extractVar(name) {
 
 const constants = ["MM", "KAPPA", "MOUTH_MARGIN_MM", "MIN_VACUUM_MM", "CORNER_R_MM", "FRAME_W_RANGE", "FRAME_H_RANGE",
   "TROUGH_W_RANGE", "TROUGH_H_RANGE", "DEPTH_RANGE", "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE",
-  "DIM_HEAD_LEN_MM", "DIM_HEAD_WIDTH_MM", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW"];
+  "DIM_HEAD_LEN_MM", "DIM_HEAD_WIDTH_MM", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW", "HEAD_HARPOON"];
 const names = ["clampOptions", "mouthHeights", "mercuryGeometry", "uPath", "corner", "cornerAt", "clamp", "dimHeadPoints", "dimLineInset"];
 const lib = new Function(`${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
   `return {${[...constants, ...names].join(",")}};`)();
@@ -135,6 +135,16 @@ for (const tilt of [-45, -20, 0, 10, 30, 60]) {
   assert.strictEqual(swallow.closed, true);
   assert.strictEqual(swallow.points.length, 4);
   near(swallow.points[2][1], 50 - len + 0.3 * len, 1e-9, "notch 0.3 head lengths ahead of the base");
+  // 작살형(일러 화살표 3): 닫힌 여섯 점, 날개 끝은 머리 길이만큼 뒤, 홈은 끝에서 0.818 L, 위·아래 방향
+  const harpoon = lib.dimHeadPoints(10, 50, 1, lib.HEAD_HARPOON, 1);
+  assert.strictEqual(harpoon.closed, true);
+  assert.strictEqual(harpoon.points.length, 6);
+  assert.deepStrictEqual(harpoon.points[0], [10, 50], "harpoon tip");
+  near(harpoon.points[2][1], 50 - len, 1e-9, "barb tips one head length below the tip");
+  near(Math.abs(harpoon.points[2][0] - 10), 0.306 * len, 1e-9, "barb half width");
+  near(harpoon.points[3][1], 50 - 0.818 * len, 1e-9, "notch 0.818 L from the tip");
+  near(lib.dimHeadPoints(10, 50, -1, lib.HEAD_HARPOON, 1).points[3][1], 50 + 0.818 * len, 1e-9, "downward notch");
+  near(lib.dimLineInset(len, lib.HEAD_HARPOON), 0.75 * len, 1e-9, "line stops inside the harpoon head");
   // 치수선 끝: 삼각형은 밑변, 제비꼬리는 홈 안쪽, 꺾쇠는 끝점
   near(lib.dimLineInset(len, lib.HEAD_TRIANGLE), len, 1e-9, "line stops at the base");
   near(lib.dimLineInset(len, lib.HEAD_CHEVRON), 0, 1e-9, "chevron line runs to the tip");

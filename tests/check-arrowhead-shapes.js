@@ -36,8 +36,8 @@ for (const file of SCRIPTS) {
   new Function(source); // 문법
 
   const lib = new Function(
-    "var MM = 1, HEAD_LENGTH = 4, HEAD_WIDTH = 3, headSizePct = 100, HEAD_CHEVRON = 1, HEAD_SWALLOW = 2, headShape = 0;\n" +
-    `${extractFunction(source, "arrowHeadPoints")}\n${extractFunction(source, "arrowHeadShape")}\n` +
+    "var MM = 1, HEAD_LENGTH = 4, HEAD_WIDTH = 3, headSizePct = 100, HEAD_CHEVRON = 1, HEAD_SWALLOW = 2, HEAD_HARPOON = 3, headShape = 0;\n" +
+    `${extractFunction(source, "arrowHeadPoints")}\n${extractFunction(source, "harpoonPoints")}\n${extractFunction(source, "arrowHeadShape")}\n` +
     "return {arrowHeadShape: arrowHeadShape, setShape: function(v) { headShape = v; }};"
   )();
 
@@ -60,8 +60,23 @@ for (const file of SCRIPTS) {
   near(h.points[2][0], 6 + 4 * 0.3, `${file}: notch position`);
   near(h.points[2][1], 0, `${file}: notch on the axis`);
 
+  // 작살형(일러 화살표 3): 닫힌 여섯 점. 끝, 중간, 날개 끝, 홈, 날개 끝, 중간. 길이 4에 날개 반폭 0.306×4, 홈은 끝에서 0.818×4
+  lib.setShape(3);
+  h = lib.arrowHeadShape([10, 0], 1, 0);
+  assert.strictEqual(h.closed, true, `${file}: harpoon is closed`);
+  assert.strictEqual(h.points.length, 6, `${file}: harpoon has 6 points`);
+  assert.deepStrictEqual(h.points[0], [10, 0], `${file}: harpoon tip`);
+  near(h.points[2][0], 6, `${file}: barb tips at the head length`);
+  near(Math.abs(h.points[2][1]), 0.306 * 4, `${file}: barb half width`);
+  near(h.points[4][1], -h.points[2][1], `${file}: barbs mirror`);
+  near(h.points[3][0], 10 - 0.818 * 4, `${file}: notch 0.818 L from the tip`);
+  near(h.points[3][1], 0, `${file}: notch on the axis`);
+  near(h.points[1][0], 10 - 0.504 * 4, `${file}: mid point 0.504 L from the tip`);
+  near(Math.abs(h.points[1][1]), 0.116 * 4, `${file}: mid half width`);
+  near(h.points[5][1], -h.points[1][1], `${file}: mids mirror`);
+
   // 다이얼로그: 모양 목록과 크기·모양 저장
-  assert.ok(source.includes('var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"];'), `${file}: HEAD_SHAPES`);
+  assert.ok(source.includes('var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"];'), `${file}: HEAD_SHAPES`);
   assert.ok(/headShapeList = \w+\.add\("dropdownlist", undefined, HEAD_SHAPES\)/.test(source), `${file}: shape dropdown`);
   assert.ok(/headShapeList\.onChange = function/.test(source), `${file}: shape dropdown handler`);
   assert.ok(/previewEnabled \? "1" : "0", headShape/.test(source) || /headShape,/.test(source), `${file}: shape is saved`);
@@ -71,7 +86,7 @@ for (const file of SCRIPTS) {
 {
   const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_LensMirror.jsx"), "utf8");
   const lib = new Function(
-    "var HEAD_CHEVRON = 1, HEAD_SWALLOW = 2;\n" + extractFunction(source, "headFromTriangle") + "\nreturn {headFromTriangle: headFromTriangle};"
+    "var HEAD_CHEVRON = 1, HEAD_SWALLOW = 2, HEAD_HARPOON = 3;\n" + extractFunction(source, "harpoonPoints") + "\n" + extractFunction(source, "headFromTriangle") + "\nreturn {headFromTriangle: headFromTriangle};"
   )();
   const tri = [[10, 0], [6, 1.5], [6, -1.5]];
   assert.strictEqual(lib.headFromTriangle(tri, 0).closed, true, "lens triangle");
@@ -81,6 +96,10 @@ for (const file of SCRIPTS) {
   const swallow = lib.headFromTriangle(tri, 2);
   assert.strictEqual(swallow.points.length, 4, "lens swallowtail");
   near(swallow.points[2][0], 6 + 4 * 0.3, "lens notch position");
+  const harpoon = lib.headFromTriangle(tri, 3);
+  assert.strictEqual(harpoon.closed, true, "lens harpoon is closed");
+  assert.strictEqual(harpoon.points.length, 6, "lens harpoon has 6 points");
+  near(harpoon.points[3][0], 10 - 0.818 * 4, "lens harpoon notch");
   assert.ok(source.includes('headShapeList.onChange = function() {'), "lens shape dropdown");
 }
 
@@ -131,8 +150,19 @@ for (const file of ["Object_ChemReaction.jsx", "Object_Neuron.jsx", "Object_Weat
     assert.ok(Math.abs(head.points[2][0] - 17.2) < 1e-9, `${file}: notch position`);
     assert.ok(line.points[1][0] > head.points[1][0] && line.points[1][0] < 20, `${file}: line ends inside the head`);
   }
+  // 작살형(일러 화살표 3): 닫힌 여섯 점. 머리 길이 4에 날개 반폭 0.306×4, 홈은 끝에서 0.818×4, 선은 홈 안쪽(0.75×4)에서 끝남
+  {
+    const [line, head] = arrow({headShape: 3, headSize: 100});
+    assert.strictEqual(head.points.length, 6, `${file}: harpoon has 6 points`);
+    assert.strictEqual(head.closed, true);
+    assert.deepStrictEqual(head.points[0], [20, 0], `${file}: harpoon tip`);
+    assert.ok(Math.abs(head.points[2][0] - 16) < 1e-9, `${file}: barb tips at the head length`);
+    assert.ok(Math.abs(Math.abs(head.points[2][1]) - 0.306 * 4) < 1e-9, `${file}: barb half width`);
+    assert.ok(Math.abs(head.points[3][0] - (20 - 0.818 * 4)) < 1e-9, `${file}: notch position`);
+    assert.ok(Math.abs(line.points[1][0] - 17) < 1e-9, `${file}: line ends at 0.75 head lengths`);
+  }
   // 모양·크기 컨트롤이 스펙에 있고 그리기 도구가 옵션을 받는다
-  assert.ok(source.includes('{key: "headShape", label: "화살촉 모양"'), `${file}: shape control`);
+  assert.ok(source.includes('{key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (화살표 3)"]'), `${file}: shape control`);
   assert.ok(source.includes('{key: "headSize", label: "화살촉 크기"'), `${file}: size control`);
   assert.ok(source.includes("spec.draw(makeFormTools(group, o), o);"), `${file}: tools get the options`);
 }
