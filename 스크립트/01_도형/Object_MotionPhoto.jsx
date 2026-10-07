@@ -63,6 +63,11 @@ try {
     var GROUND_TEXT_GAP_MM = 1.5;
     // 거리 표시 화살촉(pt): 평가원식 (07_수학, MotionGraph와 같은 치수)
     var ARROW = {length: 4, halfWidth: 1.3, notch: 1};
+    // 화살촉 모양: 제비꼬리가 위의 평가원식(기본)이다
+    var HEAD_TRIANGLE = 0;
+    var HEAD_CHEVRON = 1;
+    var HEAD_SWALLOW = 2;
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리 (평가원식)"];
     // 띠 가장자리 여백, 점선이 띠 밖으로 나오는 길이, 띠에서 표시선까지, 연장선이 표시선을 넘는 길이, 표시선과 글자 사이, 글자끼리
     var PAD_MM = 2;
     var EXT_MM = 6;
@@ -100,11 +105,11 @@ try {
     var POSITION_LIMIT_MM = 100;
 
     // 저장 순서: 라디오, 체크박스, 숫자(NUMBER_KEYS)
-    var RADIO_KEYS = ["direction", "motion", "ball"];
+    var RADIO_KEYS = ["direction", "motion", "ball", "headShape"];
     var CHECK_KEYS = ["bgOn", "startOn", "surfaceOn", "distOn", "ghostOn", "rulerOn", "timeOn", "arrowOn", "bottomOn", "touchOn", "guideWhite"];
 
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
-    var NUMBER_KEYS = ["speed", "startSpeed", "accel", "interval", "count", "size", "ballK", "bgK", "tick", "offsetX", "offsetY"];
+    var NUMBER_KEYS = ["speed", "startSpeed", "accel", "interval", "count", "size", "ballK", "bgK", "tick", "offsetX", "offsetY", "headSize"];
     var SPECS = {
         speed: {range: [5, 1000], step: 5, decimals: 0},
         startSpeed: {range: [0, 1000], step: 5, decimals: 0},
@@ -116,7 +121,8 @@ try {
         bgK: {range: [0, 100], step: 10, decimals: 0},
         tick: {range: [1, 20], step: 0.5, decimals: 1},
         offsetX: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
-        offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1}
+        offsetY: {range: [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], step: 0.1, decimals: 1},
+        headSize: {range: [30, 300], step: 5, decimals: 0}
     };
 
     var doc = app.activeDocument;
@@ -129,11 +135,11 @@ try {
     var centerY = (artboardRect[1] + artboardRect[3]) / 2;
 
     var options = {
-        direction: 0, motion: 0, ball: 0,
+        direction: 0, motion: 0, ball: 0, headShape: HEAD_SWALLOW,
         bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false, rulerOn: false, timeOn: false, arrowOn: false, bottomOn: false, touchOn: false, guideWhite: false,
         speed: 100, startSpeed: 0, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, tick: 5,
         distText: "d",
-        offsetX: 0, offsetY: 0,
+        offsetX: 0, offsetY: 0, headSize: 100,
         previewOn: true
     };
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
@@ -190,8 +196,17 @@ try {
     addCheck(guideRow, "눈금자", "rulerOn");
     addCheck(guideRow, "시간 표시", "timeOn");
     addCheck(guideRow, "운동 방향", "arrowOn");
+    var headShapeList = guideRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.selection = options.headShape;
+    headShapeList.helpTip = "화살촉 모양(거리 표시·운동 방향). 제비꼬리는 평가원식. 삼각형·제비꼬리는 채운 모양, 꺾쇠는 선 굵기의 열린 선";
+    headShapeList.onChange = function() {
+        if (!headShapeList.selection) return;
+        options.headShape = headShapeList.selection.index;
+        updatePreview();
+    };
     checks.timeOn.helpTip = "사진마다 0초, 촬영 간격, 2×간격… 을 거리 표시의 맞은편에 쓴다";
     addRow(showPanel, "tick", "눈금 간격", "mm");
+    addRow(showPanel, "headSize", "화살촉 크기", "%");
     var distRow = showPanel.add("group");
     distRow.alignChildren = ["left", "center"];
     addCheck(distRow, "중심 거리 표시:", "distOn");
@@ -453,8 +468,8 @@ try {
             for (var k = 0; k < count - 1; k++) {
                 var s0 = pos[k] * MM + shift;
                 var s1 = pos[k + 1] * MM + shift;
-                var scale = Math.min(1, (s1 - s0) / (2 * ARROW.length));
-                var inset = (ARROW.length - ARROW.notch) * scale;
+                var scale = Math.min(options.headSize / 100, (s1 - s0) / (2 * ARROW.length));
+                var inset = shaftInset(scale, options.headShape);
                 var from = at(s0, dimC);
                 var to = at(s1, dimC);
                 var dimension = drawLine(group,
@@ -515,9 +530,10 @@ try {
             var arrowLength = Math.max(pos[count - 1] * MM * MOTION_RATIO, MOTION_MIN_MM * MM);
             var tail = at(0, arrowC);
             var tip = at(arrowLength, arrowC);
-            var shaftInset = ARROW.length - ARROW.notch;
-            drawLine(group, tail, [tip[0] - forward[0] * shaftInset, tip[1] - forward[1] * shaftInset], LINE_PT, black).name = "MotionArrow";
-            drawHead(group, tip, forward, 1, black);
+            var motionScale = options.headSize / 100;
+            var motionInset = shaftInset(motionScale, options.headShape);
+            drawLine(group, tail, [tip[0] - forward[0] * motionInset, tip[1] - forward[1] * motionInset], LINE_PT, black).name = "MotionArrow";
+            drawHead(group, tip, forward, motionScale, black);
             var motionTag = makeLabel(group, {text: MOTION_TEXT, italicFrom: MOTION_TEXT.length});
             motionTag.name = "MotionLabel";
             var tagAt = vertical ? at(arrowLength / 2, arrowC) : tail;
@@ -636,6 +652,21 @@ try {
         ];
     }
 
+    // 화살촉 모양: 위 네 점 [끝, 날개, 오목, 날개]에서 만든다. 삼각형·제비꼬리는 채운 닫힌 패스, 꺾쇠는 열린 선
+    function arrowHeadShape(tip, d, scale, shape) {
+        var p = arrowHeadPoints(tip, d, scale);
+        if (shape === HEAD_CHEVRON) return {points: [p[1], p[0], p[3]], closed: false};
+        if (shape === HEAD_TRIANGLE) return {points: [p[0], p[1], p[3]], closed: true};
+        return {points: p, closed: true};
+    }
+
+    // 선이 화살촉 쪽에서 끝나는 거리(pt): 제비꼬리는 오목한 점, 삼각형은 밑변 조금 앞, 꺾쇠는 끝점
+    function shaftInset(scale, shape) {
+        if (shape === HEAD_CHEVRON) return 0;
+        if (shape === HEAD_TRIANGLE) return ARROW.length * scale * 0.9;
+        return (ARROW.length - ARROW.notch) * scale;
+    }
+
     // -------------------------------------------------------
     // 일러스트레이터 개체
     // -------------------------------------------------------
@@ -651,12 +682,22 @@ try {
     }
 
     function drawHead(container, tip, d, scale, color) {
+        var shape = arrowHeadShape(tip, d, scale, options.headShape);
         var head = container.pathItems.add();
-        head.setEntirePath(arrowHeadPoints(tip, d, scale));
-        head.closed = true;
-        head.stroked = false;
-        head.filled = true;
-        head.fillColor = color;
+        head.setEntirePath(shape.points);
+        head.closed = shape.closed;
+        if (shape.closed) {
+            head.stroked = false;
+            head.filled = true;
+            head.fillColor = color;
+        } else {
+            head.filled = false;
+            head.stroked = true;
+            head.strokeColor = color;
+            head.strokeWidth = LINE_PT;
+            head.strokeCap = StrokeCap.BUTTENDCAP;
+            head.strokeJoin = StrokeJoin.MITERENDJOIN;
+        }
         head.name = "DimensionHead";
         return head;
     }
@@ -938,10 +979,10 @@ try {
     }
 
     // -------------------------------------------------------
-    // 설정 저장 · 복원 ("v5" + 라디오 3 + 체크 11 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
+    // 설정 저장 · 복원 ("v6" + 라디오 3 + 화살촉 모양 + 체크 11 + 숫자 + 거리 글자 + 미리보기 순서. 확인할 때만 저장)
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v5"];
+        var parts = ["v6"];
         for (var r = 0; r < RADIO_KEYS.length; r++) parts.push(options[RADIO_KEYS[r]]);
         for (var c = 0; c < CHECK_KEYS.length; c++) parts.push(options[CHECK_KEYS[c]] ? "1" : "0");
         for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
@@ -957,8 +998,8 @@ try {
         var p = raw.split("|");
         var radioCount = RADIO_KEYS.length;
         var checkCount = CHECK_KEYS.length;
-        if (p[0] !== "v5" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
-        var radioLimits = [DIRECTIONS.length, MOTIONS.length, BALLS.length];
+        if (p[0] !== "v6" || p.length !== 1 + radioCount + checkCount + NUMBER_KEYS.length + 2) return;
+        var radioLimits = [DIRECTIONS.length, MOTIONS.length, BALLS.length, HEAD_SHAPES.length];
         for (var r = 0; r < radioCount; r++) {
             var index = parseInt(p[1 + r], 10);
             if (index >= 0 && index < radioLimits[r]) options[RADIO_KEYS[r]] = index;

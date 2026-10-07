@@ -29,18 +29,18 @@ function extractVar(name) {
   return `var ${name} = ${match[1]};`;
 }
 
-const constants = ["ARROW", "SPAN_MAX_MM", "RULER_MAX_TICKS", "PREF_KEY", "DIRECTIONS", "MOTIONS", "BALLS", "POSITION_LIMIT_MM", "RADIO_KEYS",
+const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_CHEVRON", "HEAD_SWALLOW", "HEAD_SHAPES", "SPAN_MAX_MM", "RULER_MAX_TICKS", "PREF_KEY", "DIRECTIONS", "MOTIONS", "BALLS", "POSITION_LIMIT_MM", "RADIO_KEYS",
   "CHECK_KEYS", "NUMBER_KEYS", "SPECS"];
-const names = ["framePositions", "clampOptions", "gapRatio", "rulerMarks", "formatSeconds", "distanceLabel", "trimText", "arrowHeadPoints",
+const names = ["framePositions", "clampOptions", "gapRatio", "rulerMarks", "formatSeconds", "distanceLabel", "trimText", "arrowHeadPoints", "arrowHeadShape", "shaftInset",
   "cleanDistText", "saveSettings", "applySettings", "parseNumber", "roundTo", "clamp"];
 const make = (options, prefs) => new Function("app", "options", `${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
   `return {${[...names, "SPAN_MAX_MM", "ARROW"].join(",")}};`)(
   {preferences: {setStringPreference: (k, v) => { prefs[k] = v; }, getStringPreference: (k) => prefs[k] || ""}}, options);
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
-const base = {direction: 0, motion: 0, ball: 0, bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false,
+const base = {direction: 0, motion: 0, ball: 0, headShape: 2, bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false,
   rulerOn: false, timeOn: false, arrowOn: false, bottomOn: false, touchOn: false, guideWhite: false,
-  speed: 100, startSpeed: 0, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, tick: 5, distText: "d", offsetX: 0, offsetY: 0, previewOn: true};
+  speed: 100, startSpeed: 0, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, tick: 5, distText: "d", offsetX: 0, offsetY: 0, headSize: 100, previewOn: true};
 const lib = make({...base}, {});
 
 // 위치: 등속은 같은 간격, 가속은 구간 거리가 1:3:5…
@@ -126,16 +126,33 @@ assert.strictEqual(lib.formatSeconds(1.5), "1.5");
   near(head[1][1] + head[3][1], 100, 1e-9, "wings mirror across the axis");
   const small = lib.arrowHeadPoints([100, 50], [1, 0], 0.5);
   near(small[1][0], 98, 1e-9, "half scale halves the length");
+
+  // 모양: 제비꼬리(평가원식)는 위 네 점 그대로, 삼각형은 끝·날개 둘, 꺾쇠는 열린 선
+  const swallow = lib.arrowHeadShape([100, 50], [1, 0], 1, 2);
+  assert.strictEqual(swallow.closed, true);
+  assert.deepStrictEqual(swallow.points, head, "default swallowtail is the exam-style head");
+  const triangle = lib.arrowHeadShape([100, 50], [1, 0], 1, 0);
+  assert.strictEqual(triangle.closed, true);
+  assert.strictEqual(triangle.points.length, 3);
+  assert.deepStrictEqual(triangle.points, [head[0], head[1], head[3]], "triangle keeps tip and both wings");
+  const chevron = lib.arrowHeadShape([100, 50], [1, 0], 1, 1);
+  assert.strictEqual(chevron.closed, false);
+  assert.deepStrictEqual(chevron.points, [head[1], head[0], head[3]], "chevron is wing, tip, wing");
+  // 선이 끝나는 거리: 제비꼬리는 오목한 점, 꺾쇠는 끝점, 삼각형은 머리 안쪽
+  near(lib.shaftInset(1, 2), lib.ARROW.length - lib.ARROW.notch, 1e-9, "line stops at the notch");
+  near(lib.shaftInset(0.5, 2), 0.5 * (lib.ARROW.length - lib.ARROW.notch), 1e-9, "notch distance scales");
+  near(lib.shaftInset(1, 1), 0, 1e-9, "chevron line runs to the tip");
+  assert.ok(lib.shaftInset(1, 0) > 0 && lib.shaftInset(1, 0) < lib.ARROW.length, "triangle line ends inside the head");
 }
 
 // 설정 저장·복원
 {
   const prefs = {};
-  const saved = {...base, direction: 1, motion: 1, ball: 2, bgOn: false, surfaceOn: true, ghostOn: true, rulerOn: true, timeOn: true, arrowOn: true, bottomOn: true, touchOn: true, guideWhite: true,
-    speed: 250, startSpeed: 40, accel: -1200, interval: 0.05, count: 9, size: 6.5, ballK: 50, bgK: 70, tick: 2.5, distText: "12 cm", offsetX: -2, offsetY: 4.5,
+  const saved = {...base, direction: 1, motion: 1, ball: 2, headShape: 1, bgOn: false, surfaceOn: true, ghostOn: true, rulerOn: true, timeOn: true, arrowOn: true, bottomOn: true, touchOn: true, guideWhite: true,
+    speed: 250, startSpeed: 40, accel: -1200, interval: 0.05, count: 9, size: 6.5, ballK: 50, bgK: 70, tick: 2.5, distText: "12 cm", offsetX: -2, offsetY: 4.5, headSize: 150,
     previewOn: false};
   make({...saved}, prefs).saveSettings();
-  assert.ok(prefs["ObjectMotionPhoto/settings"].startsWith("v5|1|1|2|0|"), "settings start with the version tag and radios");
+  assert.ok(prefs["ObjectMotionPhoto/settings"].startsWith("v6|1|1|2|1|0|"), "settings start with the version tag and radios");
   const restored = {...base};
   make(restored, prefs).applySettings();
   assert.deepStrictEqual(restored, saved, "saved options come back");
@@ -146,21 +163,22 @@ assert.strictEqual(lib.formatSeconds(1.5), "1.5");
   make(back, prefs).applySettings();
   assert.strictEqual(back.distText, "ab", "separator is stripped from the text");
   // 필드 수가 다르면 무시
-  prefs["ObjectMotionPhoto/settings"] = "v5|1|1";
+  prefs["ObjectMotionPhoto/settings"] = "v6|1|1";
   const untouched = {...base};
   make(untouched, prefs).applySettings();
   assert.deepStrictEqual(untouched, base, "a different field count is ignored");
   // 범위를 벗어난 값은 줄인다
-  // 지난 v2·v3·v4 저장값은 필드 구성이 달라 버린다
+  // 지난 v2·v3·v4·v5 저장값은 필드 구성이 달라 버린다
   for (const stale of ["v2|1|1|1|0|0|1|0|0|250|1200|0.05|9|6.5|50|70|-2|4.5|12 cm|0",
     "v3|1|1|2|0|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0",
-    "v4|1|1|2|0|1|1|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0"]) {
+    "v4|1|1|2|0|1|1|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0",
+    "v5|1|1|2|0|1|1|1|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0"]) {
     prefs["ObjectMotionPhoto/settings"] = stale;
     const oldFormat = {...base};
     make(oldFormat, prefs).applySettings();
     assert.deepStrictEqual(oldFormat, base, `an old ${stale.slice(0, 2)} string falls back to the defaults`);
   }
-  prefs["ObjectMotionPhoto/settings"] = "v5|9|9|9|1|1|1|1|1|1|1|1|1|1|1|99999|99999|-99999|99|99|99|999|999|999|999|999|x|1";
+  prefs["ObjectMotionPhoto/settings"] = "v6|9|9|9|9|1|1|1|1|1|1|1|1|1|1|1|99999|99999|-99999|99|99|99|999|999|999|999|999|999|x|1";
   const clamped = {...base};
   make(clamped, prefs).applySettings();
   assert.strictEqual(clamped.direction, 0, "out-of-range radio is ignored");
