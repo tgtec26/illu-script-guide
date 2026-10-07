@@ -42,6 +42,8 @@ try {
                 {key: "symbols", check: "원소 기호", value: true},
                 {key: "labels", check: "이름", value: true},
                 {key: "equation", check: "반응식", value: false},
+                {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리"], value: 0},
+                {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
             ],
             draw: drawChem
@@ -418,7 +420,7 @@ try {
             group = layer.groupItems.add();
             group.name = spec.name;
             try {
-                spec.draw(makeFormTools(group), o);
+                spec.draw(makeFormTools(group, o), o);
                 var b = group.geometricBounds;
                 group.translate(center[0] - (b[0] + b[2]) / 2 + o.offsetX * FORM_MM,
                     center[1] - (b[1] + b[3]) / 2 + o.offsetY * FORM_MM);
@@ -477,7 +479,7 @@ try {
     }
 
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다
-    function makeFormTools(g) {
+    function makeFormTools(g, o) {
         var t = {mm: FORM_MM, group: g};
         t.gray = formGray;
         t.path = function(points, closed, fillK, strokeK, width, dashes) {
@@ -514,10 +516,13 @@ try {
             formPaint(p, fillK, strokeK, width);
             return p;
         };
-        // a → b 화살표. 선은 촉 뿌리까지, 촉은 채운 삼각형
+        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리), 크기는 o.headSize(%).
+        // 삼각형·제비꼬리는 채운 촉이고 선은 촉 뿌리(제비꼬리는 홈 안쪽)까지, 꺾쇠는 선 두께의 열린 선이고 선이 끝점까지 간다
         t.arrow = function(a, b, width, k, headLength) {
             if (k === undefined) k = 100;
-            var head = headLength || 1.6 * FORM_MM;
+            var scale = o && o.headSize ? o.headSize / 100 : 1;
+            var shape = o && o.headShape ? o.headShape : 0;
+            var head = (headLength || 1.6 * FORM_MM) * scale;
             var dx = b[0] - a[0], dy = b[1] - a[1];
             var len = Math.sqrt(dx * dx + dy * dy);
             if (len < 0.01) return;
@@ -525,8 +530,21 @@ try {
             if (head > len) head = len;
             var base = [b[0] - ux * head, b[1] - uy * head];
             var half = head * 0.35;
+            var left = [base[0] - uy * half, base[1] + ux * half];
+            var right = [base[0] + uy * half, base[1] - ux * half];
+            if (shape === 1) {
+                t.line(a, b, width, k);
+                t.path([left, b, right], false, null, k, width);
+                return;
+            }
+            if (shape === 2) {
+                var notch = [b[0] - ux * head * 0.7, b[1] - uy * head * 0.7];
+                if (len > head * 0.6) t.line(a, [b[0] - ux * head * 0.6, b[1] - uy * head * 0.6], width, k);
+                t.path([b, left, notch, right], true, k, null, 0);
+                return;
+            }
             if (len > head) t.line(a, [base[0] + ux * 0.2, base[1] + uy * 0.2], width, k);
-            t.path([b, [base[0] - uy * half, base[1] + ux * half], [base[0] + uy * half, base[1] - ux * half]], true, k, null, 0);
+            t.path([b, left, right], true, k, null, 0);
         };
         // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). sub: 글자 뒤 숫자를 아래 첨자로
         t.text = function(text, x, y, size, align, k, sub) {
