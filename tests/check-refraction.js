@@ -14,7 +14,7 @@ const end = source.indexOf("// ==== 순수 기하 끝");
 assert.ok(start > 0 && end > start, "pure geometry markers");
 const pure = source.slice(start, end);
 const geo = new Function(`${pure}
-return {DEG, polar, rayLines, arrowHead, arcPoints, angleArcs, normalSpan};`)();
+return {DEG, polar, rayLines, arrowHead, arcPoints, angleArcs, normalSpan, refractionAngle};`)();
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
 const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
@@ -90,6 +90,17 @@ const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
   assert.deepStrictEqual(geo.normalSpan(40, 60, 2), [[0, -28], [0, 28]]);
 }
 
+// 스넬 법칙: sin(입사각) = n·sin(굴절각). n = 1이면 그대로, 수직 입사는 0°, 스침 입사도 n ≥ 1이면 임계각
+{
+  near(geo.refractionAngle(45, 1.5), Math.asin(Math.sin(45 * geo.DEG) / 1.5) / geo.DEG, 1e-9, "snell 45 into glass");
+  near(geo.refractionAngle(45, 1.5), 28.1255, 1e-3, "45 into glass is about 28.1 degrees");
+  near(geo.refractionAngle(30, 1.33), 22.0824, 1e-3, "30 into water is about 22.1 degrees");
+  near(geo.refractionAngle(60, 1), 60, 1e-9, "n = 1 keeps the angle");
+  near(geo.refractionAngle(0, 2.42), 0, 1e-9, "normal incidence does not bend");
+  near(geo.refractionAngle(90, 1.5), Math.asin(1 / 1.5) / geo.DEG, 1e-9, "grazing incidence gives the critical angle");
+  assert.ok(geo.refractionAngle(85, 1.33) < 85, "denser medium bends toward the normal");
+}
+
 // 다이얼로그 규칙: 설정 저장 키, 위치 행, R 버튼, 탭 헬퍼, 기본 버튼 제거
 assert.ok(source.includes('"ObjectRefraction/settings"'), "pref key");
 assert.ok(source.includes("bindPositionRow(rows.offsetX"), "movable preview (x)");
@@ -98,6 +109,8 @@ assert.ok(source.includes('reset.helpTip = "처음 값으로 되돌리기"'), "R
 assert.ok(source.includes("ui_tab_helper.jsxinc"), "tab helper");
 assert.ok(source.includes("dlg.defaultElement = null"), "no default button");
 assert.ok(source.includes("var BOUNDARY_PT = 0.5;"), "boundary line is 0.5pt");
+assert.ok(source.includes('{name: "물", n: 1.33}') && source.includes('{name: "유리", n: 1.5}') && source.includes('{name: "다이아몬드", n: 2.42}'), "medium presets");
+assert.ok(source.includes('["v2", options.angleMode, options.medium]') && source.includes('p[0] !== "v2"'), "settings v2 with angle mode and medium");
 assert.ok(/medium1K: \{range: \[0, 100\], step: 10/.test(source) && /medium2K: \{range: \[0, 100\], step: 10/.test(source), "medium gray in K 10 steps");
 
 console.log("check-refraction: ok");

@@ -13,7 +13,8 @@ try {
 // 빛의 반사와 굴절: 두 매질의 경계면에 비스듬히 들어온 빛이 반사하고 굴절하는 모습을 그린다.
 //   - 틀(너비·높이)의 가운데 가로선이 경계면이고 그 가운데가 입사점이다. 위가 매질 1, 아래가 매질 2.
 //   - 입사광은 왼쪽 위에서 입사점으로, 반사광은 오른쪽 위로(반사각 = 입사각), 굴절광은 오른쪽 아래로 나간다.
-//     굴절각은 직접 정한다(공기→유리는 입사각보다 작게, 유리→공기는 크게).
+//     굴절각은 직접 정하거나(과장해서 그릴 때) 굴절률로 계산한다: 매질 1은 공기(n=1), 매질 2는 물·유리·다이아몬드 또는 직접 넣은 n.
+//     계산은 스넬 법칙 sin(입사각) = n·sin(굴절각). 매질 2를 고르면 매질 이름도 그에 맞춘다.
 //   - 광선 길이·빛 굵기·빛 색(K), 화살촉 크기와 위치(광선 길이의 %), 법선(점선)·경계면(0.5pt)을 켜고 끈다.
 //   - 매질 이름(공기·유리)과 색은 K값 10 단위 회색 음영. 모든 색은 회색 음영이다.
 //   - 글자: 입사광·반사광·굴절광, 각(호와 입사각·반사각·굴절각), 매질 이름, 법선·경계면 이름을 따로 켜고 끈다.
@@ -103,6 +104,13 @@ try {
         var half = Math.min(rayLen + 4, frameH / 2 - margin);
         return [[0, -half], [0, half]];
     }
+
+    // 스넬 법칙: 공기(n=1)에서 굴절률 n인 매질로 들어갈 때의 굴절각(도). n ≥ 1이라 항상 굴절한다
+    function refractionAngle(angleI, n) {
+        var ratio = Math.sin(angleI * DEG) / n;
+        if (ratio > 1) ratio = 1;
+        return Math.asin(ratio) / DEG;
+    }
     // ==== 순수 기하 끝 ====
 
     var MM = 2.834645669;
@@ -117,6 +125,16 @@ try {
     var ANGLE_LABEL_GAP_MM = 1;
     var TEXT_GAP_MM = 1.5;
     var LINE_K = 100;
+    var ANGLE_DIRECT = 0;
+    var ANGLE_SNELL = 1;
+    // 매질 2 후보와 굴절률. n이 null이면 직접 넣는다
+    var MEDIA = [
+        {name: "물", n: 1.33},
+        {name: "유리", n: 1.5},
+        {name: "다이아몬드", n: 2.42},
+        {name: "직접 입력", n: null}
+    ];
+    var AIR_NAME = "공기";
 
     var LABEL_WIDTH = 100;
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
@@ -127,11 +145,12 @@ try {
 
     var CHECK_KEYS = ["arrowOn", "normalOn", "boundaryOn", "rayLabelsOn", "angleOn", "mediumLabelsOn", "lineLabelsOn"];
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
-    var NUMBER_KEYS = ["angleI", "angleT", "rayLen", "rayWidth", "rayK", "headSize", "headPos",
+    var NUMBER_KEYS = ["angleI", "angleT", "index", "rayLen", "rayWidth", "rayK", "headSize", "headPos",
         "frameW", "frameH", "medium1K", "medium2K", "arcRadius", "offsetX", "offsetY"];
     var SPECS = {
         angleI: {range: [0, 85], step: 1, decimals: 0},
         angleT: {range: [0, 85], step: 1, decimals: 0},
+        index: {range: [1, 3], step: 0.01, decimals: 2},
         rayLen: {range: [5, 100], step: 0.5, decimals: 1},
         rayWidth: {range: [0.25, 4], step: 0.05, decimals: 2},
         rayK: {range: [0, 100], step: 10, decimals: 0},
@@ -154,8 +173,9 @@ try {
     var options = {
         arrowOn: true, normalOn: true, boundaryOn: true,
         rayLabelsOn: true, angleOn: true, mediumLabelsOn: true, lineLabelsOn: true,
+        angleMode: ANGLE_DIRECT, medium: 1,
         medium1Name: "공기", medium2Name: "유리",
-        angleI: 45, angleT: 28, rayLen: 30, rayWidth: 1, rayK: 100, headSize: 3, headPos: 50,
+        angleI: 45, angleT: 28, index: 1.5, rayLen: 30, rayWidth: 1, rayK: 100, headSize: 3, headPos: 50,
         frameW: 80, frameH: 60, medium1K: 0, medium2K: 20, arcRadius: 8,
         offsetX: 0, offsetY: 0,
         previewOn: true
@@ -181,18 +201,33 @@ try {
     var rayPanel = addPanel(dlg, "광선");
     addRow(rayPanel, "angleI", "입사각", "°");
     rows.angleI.input.helpTip = "법선과 입사광 사이의 각. 반사각은 입사각과 같습니다";
+    var modeRow = rayPanel.add("group");
+    modeRow.alignChildren = ["left", "center"];
+    modeRow.add("statictext", undefined, "굴절각 정하기:").preferredSize.width = LABEL_WIDTH;
+    var directRadio = modeRow.add("radiobutton", undefined, "직접 입력 (과장)");
+    var snellRadio = modeRow.add("radiobutton", undefined, "굴절률로 계산 (공기 → 매질 2)");
+    snellRadio.helpTip = "스넬 법칙 sin(입사각) = n·sin(굴절각). 매질 1은 공기(n = 1)";
+    var mediumRow = rayPanel.add("group");
+    mediumRow.alignChildren = ["left", "center"];
+    mediumRow.add("statictext", undefined, "매질 2:").preferredSize.width = LABEL_WIDTH;
+    var mediumRadios = [];
+    for (var m = 0; m < MEDIA.length; m++) {
+        var mediumRadio = mediumRow.add("radiobutton", undefined, MEDIA[m].name);
+        if (MEDIA[m].n !== null) mediumRadio.helpTip = "n = " + MEDIA[m].n;
+        mediumRadios.push(mediumRadio);
+    }
+    addRow(rayPanel, "index", "굴절률", "n");
+    rows.index.input.helpTip = "매질 2의 굴절률. 매질 2가 직접 입력일 때만 바꿀 수 있습니다";
     addRow(rayPanel, "angleT", "굴절각", "°");
-    rows.angleT.input.helpTip = "법선과 굴절광 사이의 각. 공기→유리는 입사각보다 작게, 유리→공기는 크게";
+    rows.angleT.input.helpTip = "법선과 굴절광 사이의 각. 직접 입력일 때만 바꿀 수 있습니다. 공기→유리는 입사각보다 작게";
     addRow(rayPanel, "rayLen", "광선 길이", "mm");
     addRow(rayPanel, "rayWidth", "빛 굵기", "pt");
     addRow(rayPanel, "rayK", "빛 색", "K");
-
-    var arrowPanel = addPanel(dlg, "화살촉");
-    var arrowRow = arrowPanel.add("group");
+    var arrowRow = rayPanel.add("group");
     arrowRow.alignChildren = ["left", "center"];
     addCheck(arrowRow, "arrowOn", "화살촉");
-    addRow(arrowPanel, "headSize", "크기", "mm");
-    addRow(arrowPanel, "headPos", "위치", "%");
+    addRow(rayPanel, "headSize", "화살촉 크기", "mm");
+    addRow(rayPanel, "headPos", "화살촉 위치", "%");
     rows.headPos.input.helpTip = "광선 시작점(입사광은 왼쪽 위 끝, 나머지는 입사점)에서 광선 길이의 몇 % 자리에 둘지";
 
     var framePanel = addPanel(dlg, "틀·매질");
@@ -217,12 +252,10 @@ try {
     var textPanel = addPanel(dlg, "글자");
     var textRow = textPanel.add("group");
     textRow.alignChildren = ["left", "center"];
-    addCheck(textRow, "rayLabelsOn", "입사광·반사광·굴절광");
-    addCheck(textRow, "angleOn", "각 (호와 이름)");
-    var textRow2 = textPanel.add("group");
-    textRow2.alignChildren = ["left", "center"];
-    addCheck(textRow2, "mediumLabelsOn", "매질 이름");
-    addCheck(textRow2, "lineLabelsOn", "법선·경계면 이름");
+    addCheck(textRow, "rayLabelsOn", "광선 이름").helpTip = "입사광·반사광·굴절광";
+    addCheck(textRow, "angleOn", "각 (호와 이름)").helpTip = "입사각·반사각·굴절각";
+    addCheck(textRow, "mediumLabelsOn", "매질 이름");
+    addCheck(textRow, "lineLabelsOn", "법선·경계면 이름");
     addRow(textPanel, "arcRadius", "각 호 반지름", "mm");
 
     var positionPanel = addPanel(dlg, "위치");
@@ -248,7 +281,15 @@ try {
         }
     }
     previewCheck.value = options.previewOn;
+    directRadio.value = options.angleMode === ANGLE_DIRECT;
+    snellRadio.value = options.angleMode === ANGLE_SNELL;
+    mediumRadios[options.medium].value = true;
     applyCheckModes();
+    applyAngleMode();
+
+    directRadio.onClick = function() { setAngleMode(ANGLE_DIRECT); };
+    snellRadio.onClick = function() { setAngleMode(ANGLE_SNELL); };
+    for (var r = 0; r < mediumRadios.length; r++) bindMediumRadio(r);
 
     medium1Input.onChange = function() { options.medium1Name = medium1Input.text; updatePreview(); };
     medium2Input.onChange = function() { options.medium2Name = medium2Input.text; updatePreview(); };
@@ -271,6 +312,51 @@ try {
         clearPreview();
     }
     app.redraw();
+
+    function setAngleMode(mode) {
+        options.angleMode = mode;
+        if (mode === ANGLE_SNELL) applyMediumNames();
+        applyAngleMode();
+        updatePreview();
+    }
+
+    function bindMediumRadio(index) {
+        mediumRadios[index].onClick = function() {
+            options.medium = index;
+            if (options.angleMode === ANGLE_SNELL) applyMediumNames();
+            applyAngleMode();
+            updatePreview();
+        };
+    }
+
+    // 매질 2를 고르면 매질 이름도 그에 맞춘다(직접 입력은 그대로 둔다). 매질 1은 공기
+    function applyMediumNames() {
+        if (MEDIA[options.medium].n === null) return;
+        options.medium1Name = AIR_NAME;
+        options.medium2Name = MEDIA[options.medium].name;
+        medium1Input.text = options.medium1Name;
+        medium2Input.text = options.medium2Name;
+    }
+
+    // 계산 모드: 고른 매질의 n을 굴절률 행에 넣고(직접 입력만 풀어 둔다) 굴절각 행은 계산값을 보여 주며 잠근다.
+    // 직접 입력 모드: 매질·굴절률 행을 잠그고 굴절각 행을 푼다
+    function applyAngleMode() {
+        var snell = options.angleMode === ANGLE_SNELL;
+        var preset = MEDIA[options.medium].n;
+        if (snell && preset !== null) {
+            options.index = preset;
+            showRowValue(rows.index, options.index);
+        }
+        for (var i = 0; i < mediumRadios.length; i++) mediumRadios[i].enabled = snell;
+        setRowEnabled(rows.index, snell && preset === null);
+        setRowEnabled(rows.angleT, !snell);
+        if (snell) showRowValue(rows.angleT, refractionAngle(options.angleI, options.index));
+    }
+
+    // 그릴 때 쓰는 굴절각: 계산 모드면 스넬 법칙 값(반올림하지 않음), 아니면 입력값
+    function currentAngleT() {
+        return options.angleMode === ANGLE_SNELL ? refractionAngle(options.angleI, options.index) : options.angleT;
+    }
 
     // 화살촉을 끄면 크기·위치 행을, 각을 끄면 호 반지름 행을 잠근다
     function applyCheckModes() {
@@ -309,7 +395,8 @@ try {
 
     function buildPreview() {
         var o = options;
-        var rays = rayLines(o.angleI, o.angleT, o.rayLen);
+        var angleT = currentAngleT();
+        var rays = rayLines(o.angleI, angleT, o.rayLen);
         var halfW = o.frameW / 2;
         var halfH = o.frameH / 2;
         var rayColor = makeGray(o.rayK);
@@ -337,7 +424,7 @@ try {
             normal.strokeDashes = NORMAL_DASH_PT;
         }
 
-        var arcs = angleArcs(o.angleI, o.angleT);
+        var arcs = angleArcs(o.angleI, angleT);
         var arcNames = {incident: "입사각", reflected: "반사각", refracted: "굴절각"};
         if (o.angleOn) {
             for (var key in arcs) {
@@ -576,6 +663,7 @@ try {
             showRowValue(controls, value);
             if (value === options[key]) return;
             options[key] = value;
+            if (key === "angleI" || key === "index") applyAngleMode();
             updatePreview();
         }
         controls.slider.onChanging = function() { commit(controls.slider.value); };
@@ -639,12 +727,12 @@ try {
 
     // -------------------------------------------------------
     // 설정 저장 · 복원
-    // "v1" + 체크(CHECK_KEYS 순서) + 미리보기 + 매질 이름 둘 + 숫자(NUMBER_KEYS 순서). 확인할 때만 저장
+    // "v2" + 굴절각 모드 + 매질 2 + 체크(CHECK_KEYS 순서) + 미리보기 + 매질 이름 둘 + 숫자(NUMBER_KEYS 순서). 확인할 때만 저장
     // -------------------------------------------------------
     function flag(value) { return value ? "1" : "0"; }
 
     function saveSettings() {
-        var parts = ["v1"];
+        var parts = ["v2", options.angleMode, options.medium];
         for (var c = 0; c < CHECK_KEYS.length; c++) parts.push(flag(options[CHECK_KEYS[c]]));
         parts.push(flag(options.previewOn));
         // 구분자 | 는 이름에 쓸 수 없다
@@ -659,12 +747,16 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        var head = 1 + CHECK_KEYS.length + 1 + 2;
-        if (p[0] !== "v1" || p.length !== head + NUMBER_KEYS.length) return;
-        for (var c = 0; c < CHECK_KEYS.length; c++) options[CHECK_KEYS[c]] = (p[1 + c] === "1");
-        options.previewOn = (p[1 + CHECK_KEYS.length] === "1");
-        options.medium1Name = p[2 + CHECK_KEYS.length];
-        options.medium2Name = p[3 + CHECK_KEYS.length];
+        var head = 3 + CHECK_KEYS.length + 1 + 2;
+        if (p[0] !== "v2" || p.length !== head + NUMBER_KEYS.length) return;
+        var mode = parseInt(p[1], 10);
+        if (mode === ANGLE_DIRECT || mode === ANGLE_SNELL) options.angleMode = mode;
+        var medium = parseInt(p[2], 10);
+        if (medium >= 0 && medium < MEDIA.length) options.medium = medium;
+        for (var c = 0; c < CHECK_KEYS.length; c++) options[CHECK_KEYS[c]] = (p[3 + c] === "1");
+        options.previewOn = (p[3 + CHECK_KEYS.length] === "1");
+        options.medium1Name = p[4 + CHECK_KEYS.length];
+        options.medium2Name = p[5 + CHECK_KEYS.length];
         for (var i = 0; i < NUMBER_KEYS.length; i++) {
             var spec = SPECS[NUMBER_KEYS[i]];
             var value = parseNumber(p[head + i]);
