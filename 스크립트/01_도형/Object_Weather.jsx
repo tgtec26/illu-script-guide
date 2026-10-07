@@ -24,7 +24,7 @@ try {
     var locale = "";
     try { locale = String(app.locale).toLowerCase(); } catch (localeError) {}
     var isKorean = (locale === "" || locale.indexOf("ko") === 0);
-    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다.
+    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다.
     // 층 묶음 기호는 중괄호용 촉(바깥 끝 7, 가운데 끝 6)으로 고정이다
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
 
@@ -37,7 +37,7 @@ try {
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
     var ARROW_PREFIX = isKorean ? "화살표 " : "Arrow ";
-    var ARROW_NUMBER = [3, 4, 2, 1];
+    var ARROW_NUMBER = [3, 9, 2, 1];
     function arrowNameOf(shape) { return ARROW_PREFIX + ARROW_NUMBER[shape]; }
     var ARROW_BRACE_OUTER = ARROW_PREFIX + 7;
     var ARROW_BRACE_INNER = ARROW_PREFIX + 6;

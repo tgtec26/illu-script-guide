@@ -39,9 +39,9 @@ try {
     var MAX_STEPS = 6;
     var BOX_STROKE = 0.3;
     var PREVIEW_NAME = "StepFlow_Preview";
-    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다. 이름은 UI 언어를 따른다
+    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다. 이름은 UI 언어를 따른다
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-    var ARROW_NUMBER = [3, 4, 2, 1];
+    var ARROW_NUMBER = [3, 9, 2, 1];
     var ARROW_PREFIX = (function() {
         var locale = getAppLocale();
         return locale === "" || locale.indexOf("ko") === 0 ? "화살표 " : "Arrow ";

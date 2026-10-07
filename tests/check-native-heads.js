@@ -5,8 +5,8 @@ const assert = require("assert");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, "스크립트", "01_도형", file), "utf8");
 const SHAPES = '["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"]';
-// 모양 목록 번호(삼각형 0, 꺾쇠 1, 제비꼬리 2, 작살형 3) → 일러스트레이터 커스텀 화살표(화살표.ai) 번호
-const NATIVE = '["화살표 3", "화살표 4", "화살표 2", "화살표 1"]';
+// 모양 목록 번호(삼각형 0, 꺾쇠 1, 제비꼬리 2, 작살형 3) → 일러스트레이터 커스텀 화살표(화살표.ai) 번호: 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형 1
+const NATIVE = '["화살표 3", "화살표 9", "화살표 2", "화살표 1"]';
 
 // 일러스트레이터 화살촉(액션으로 붙이는 것)을 쓰는 스크립트: 직접 그리는 스크립트와 같은 4종류 목록에서 고르고, 고른 모양의 커스텀 화살표 이름으로 액션을 쓴다
 const SIMPLE = {   // 저장 형식(태그·필드 수)
@@ -43,7 +43,7 @@ for (const [file, spec] of Object.entries(SIMPLE)) {
 // StepFlow: 기본은 삼각형(화살표 3), 저장 키 목록에 들어 있다
 {
   const source = read("Object_StepFlow.jsx");
-  assert.ok(source.includes(`var HEAD_SHAPES = ${SHAPES};`) && source.includes("var ARROW_NUMBER = [3, 4, 2, 1];"));
+  assert.ok(source.includes(`var HEAD_SHAPES = ${SHAPES};`) && source.includes("var ARROW_NUMBER = [3, 9, 2, 1];"));
   assert.ok(source.includes("ARROW_PREFIX + ARROW_NUMBER[options.headShape]"), "StepFlow: action uses the chosen arrow");
   assert.ok(source.includes("symbolSet: 1, headShape: 0,"), "StepFlow: default is the triangle (화살표 3) as before");
   assert.ok(source.includes('"symbolSet", "headShape"]') && source.includes("SYMBOL_SETS.length - 1, 3]"), "StepFlow: headShape is a saved key with range 0..3");
@@ -64,7 +64,7 @@ for (const [file, spec] of Object.entries(SIMPLE)) {
 {
   const source = read("Object_CellDivision.jsx");
   assert.ok(source.includes(`var HEAD_SHAPES = ${SHAPES};`) && source.includes(`var HEAD_SHAPES2 = ${SHAPES};`));
-  assert.ok(source.includes("var ARROW_NUMBER = [3, 4, 2, 1];") && source.includes("var ARROW_NUMBER2 = [3, 4, 2, 1];"));
+  assert.ok(source.includes("var ARROW_NUMBER = [3, 9, 2, 1];") && source.includes("var ARROW_NUMBER2 = [3, 9, 2, 1];"));
   assert.ok(source.includes("var headShape = 3;") && source.includes("var headShape2 = 0;"), "CellDivision: defaults as before");
   assert.ok(source.includes('(isKorean ? "화살표 " : "Arrow ") + ARROW_NUMBER[headShape];') && source.includes('(isKorean ? "화살표 " : "Arrow ") + ARROW_NUMBER2[headShape2];'), "CellDivision: both tabs name the chosen arrow");
   assert.ok(!/ARROW_NAME_(KO|EN)|ARROW_TYPES|headType/.test(source));
@@ -76,7 +76,7 @@ for (const [file, spec] of Object.entries(SIMPLE)) {
 {
   const source = read("Object_GraphTools.jsx");
   assert.strictEqual((source.match(/var HEAD_SHAPES = \[/g) || []).length, 2, "GraphTools: both tabs have the list");
-  assert.strictEqual((source.match(/var ARROW_NATIVE = \["화살표 3", "화살표 4", "화살표 2", "화살표 1"\];/g) || []).length, 2, "GraphTools: both tabs map shapes to custom arrows");
+  assert.strictEqual((source.match(/var ARROW_NATIVE = \["화살표 3", "화살표 9", "화살표 2", "화살표 1"\];/g) || []).length, 2, "GraphTools: both tabs map shapes to custom arrows");
   assert.ok(!/ARROW_NAME\b|ARROW_TYPES|headType/.test(source), "GraphTools: no old names left");
   assert.strictEqual((source.match(/toActionHex\(ARROW_NATIVE\[headShape\]\)/g) || []).length, 2, "GraphTools: both actions use the chosen arrow");
   assert.strictEqual((source.match(/\/value " \+ headScale\.toFixed\(1\)/g) || []).length, 2, "GraphTools: axis head sizes use the option");
@@ -88,7 +88,7 @@ for (const [file, spec] of Object.entries(SIMPLE)) {
 // Weather: 기권 탭 축과 기압과 바람 탭(기본 작살형), 층 묶음 중괄호 촉(7·6)은 고정
 {
   const source = read("Object_Weather.jsx");
-  assert.ok(source.includes(`var HEAD_SHAPES = ${SHAPES};`) && source.includes("var ARROW_NUMBER = [3, 4, 2, 1];"));
+  assert.ok(source.includes(`var HEAD_SHAPES = ${SHAPES};`) && source.includes("var ARROW_NUMBER = [3, 9, 2, 1];"));
   assert.ok(source.includes("function arrowNameOf(shape) { return ARROW_PREFIX + ARROW_NUMBER[shape]; }"));
   assert.ok(source.includes("var ARROW_BRACE_OUTER = ARROW_PREFIX + 7;") && source.includes("var ARROW_BRACE_INNER = ARROW_PREFIX + 6;"), "Weather: brace heads stay 7 and 6");
   assert.ok(source.includes('{key: "headShape", label: "축 화살촉 모양", items: HEAD_SHAPES, value: 3}'), "Weather: atmosphere axis default is the harpoon");

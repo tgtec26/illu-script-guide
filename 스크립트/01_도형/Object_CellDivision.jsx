@@ -1374,9 +1374,9 @@ try {
             // 머리는 달걀꼴: 앞(위)이 좁고 뒤(꼬리 쪽)가 넓다. 앞 끝 폭 = (1 - HEAD_TAPER) × 뒤 끝 폭.
             var HEAD_TAPER = 0.35;
             var HEAD_SAMPLES = 24;
-            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다. 이름은 UI 언어를 따른다
+            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다. 이름은 UI 언어를 따른다
             var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-            var ARROW_NUMBER = [3, 4, 2, 1];
+            var ARROW_NUMBER = [3, 9, 2, 1];
             var headShape = 3;
             var PREF_KEY = "ObjectMeiosis/settings";
             var FRAME_KEY = PREF_KEY + "/frame";
@@ -2361,7 +2361,7 @@ try {
             var headShape2 = 0;   // 기본 삼각형 (화살표 3)
             // 화살촉 모양 4종류와 일러스트레이터 커스텀 화살표 번호(위 감수 분열 탭과 같다)
             var HEAD_SHAPES2 = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-            var ARROW_NUMBER2 = [3, 4, 2, 1];
+            var ARROW_NUMBER2 = [3, 9, 2, 1];
             var gapDeg = 6;
             var startAngleDeg = 0;
             var offsetXmm = 0;

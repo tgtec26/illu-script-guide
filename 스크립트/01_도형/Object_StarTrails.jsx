@@ -38,9 +38,9 @@ try {
     // 도(°, U+00B0)는 GSMediumB1의 U+02D8(˘) 글리프로 넣는다 (02_문자/Text_degree.jsx)
     var DEGREE_GLYPH = "\u02D8";
     // 화살촉 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
-    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다
+    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-    var ARROW_NATIVE = ["화살표 3", "화살표 4", "화살표 2", "화살표 1"];
+    var ARROW_NATIVE = ["화살표 3", "화살표 9", "화살표 2", "화살표 1"];
     var headShape = 3;
     var DIRECTIONS = ["북쪽", "동쪽", "남쪽", "서쪽"];
     var DIRECTION_LETTERS = ["북", "동", "남", "서"];

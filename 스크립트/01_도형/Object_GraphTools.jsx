@@ -137,9 +137,9 @@ try {
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
         function addRows(page) {
             var PREF_KEY = "AxisTickMarks/settings";
-            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다
+            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다
             var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-            var ARROW_NATIVE = ["화살표 3", "화살표 4", "화살표 2", "화살표 1"];
+            var ARROW_NATIVE = ["화살표 3", "화살표 9", "화살표 2", "화살표 1"];
             var HEAD_SCALE_RANGE = [30, 300];
             var headShape = 3;
             var headScale = 100;
@@ -4186,9 +4186,9 @@ try {
         function addRows(page) {
             var PREF_KEY = "ObjectSolarSpectrum/settings";
             var MM = 2.834645669;
-            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 4, 제비꼬리 2, 작살형(평가원식) 1이다
+            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다
             var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-            var ARROW_NATIVE = ["화살표 3", "화살표 4", "화살표 2", "화살표 1"];
+            var ARROW_NATIVE = ["화살표 3", "화살표 9", "화살표 2", "화살표 1"];
             var HEAD_SCALE_RANGE = [30, 300];
 
             // ASTM G173-03 (NREL) 스펙트럼. 200~4000 nm, 5 nm 간격, 단위 mW/m²/nm
