@@ -180,6 +180,7 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 - 문서를 닫아 0개가 되면 일러가 홈 화면(HTML)을 새로 그리느라 1~2분 CPU를 30~80% 쓰고 스크립트 요청에 늦게 응답한다(2026-09-28 측정: 재시작 직후 1%, 빈 문서를 열었다 닫은 뒤 30~77%, 몇 분 뒤 다시 낮아짐). 프로브가 문서를 만들고 닫기를 반복하면 이 상태가 풀리지 않는다. 그래서 실행기는 테스트 문서 하나를 계속 열어 둔다. 프로브에서 문서를 새로 만들거나 닫지 않는다.
 - 일러의 ExtendScript 엔진은 `do javascript` 실행 사이에 전역 변수를 기억한다. 프로브나 감싸는 스크립트에서 `var x;`처럼 값 없이 선언하면 앞 실행의 값이 남는다(2026-09-28: 실행기가 앞 결과를 보고 프로브를 건너뛰어 0초에 "done"만 돌려줌). 전역은 항상 값을 넣어 선언하거나 IIFE 안에 둔다.
 - 프로브는 원본을 고치지 않는다. 설정 저장(`setStringPreference`)은 프로브 안에서 막아 사용자 설정을 덮지 않는다.
+- 2026-10-10부터 Mac 작업 기기는 Illustrator 2027 Beta(번들 ID `com.adobe.illustratorBeta`)를 쓴다. `tools/illu-probe.sh`는 기본이 베타이고 `ILLU_APP_ID`로 바꾼다. 베타에 스크립트를 등록하려면 `ILLUSTRATOR_APP_DIR="/Applications/Adobe Illustrator (Beta)" ILLUSTRATOR_VER="31.0.0 Beta" ./setup-mac.command`(연도가 없는 폴더라 자동 선택이 안 된다). 베타에서도 점검 프로브로 Convection을 돌리면 멈춘다(직접 열면 정상).
 - Windows 기기에는 osascript가 없다. 같은 원칙(짧게, 경고창 끄기, 한가할 때만)으로 사용자 테스트를 부탁한다.
 
 ## Escalation
