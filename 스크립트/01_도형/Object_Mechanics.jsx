@@ -843,9 +843,12 @@ try {
             // 앵커는 2개로 두고 핸들 길이를 시작 쪽 (1+skew)배, 끝 쪽 (1−skew)배로 바꿔 2차 꼴을 깬다.
             // 접선 방향과 양 끝점은 그대로. 0.1이면 포물선과의 오차가 최대 0.13pt(0.04mm)로 눈에 띄지 않는다.
             var HANDLE_SKEW = 0.1;
-            // 축·속도 화살표의 촉 크기(pt)와 축이 물체 범위 밖으로 나가는 길이(pt)
-            var HEAD_LENGTH = 6;
-            var HEAD_WIDTH = 3.6;
+            // 축·속도 화살표의 촉: 평가원 작살형 외곽(tools/arrowheads.json의 harpoon, 선 두께 1pt 기준).
+            // 끝이 원점, 뒤쪽이 +y. HEAD_SCALE은 같은 목록 삼각형(길이 8.6)을 6pt로 맞추던 배율.
+            // lineEnd는 선이 촉 속에서 끝나는 끝에서의 거리. AXIS_EXTRA는 축이 물체 범위 밖으로 나가는 길이(pt)
+            var HARPOON = [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]];
+            var HARPOON_LINE_END = 9;
+            var HEAD_SCALE = 6 / 8.6;
             var AXIS_EXTRA = 14;
             var CHECK_KEYS = ["sphere", "separate", "axes", "guides", "vectors", "preview"];
             if (!app.documents.length) {
@@ -872,8 +875,8 @@ try {
                 // 진하기: 평면 원은 안쪽 K값, 구는 가운데 K값(밝은 쪽 −30, 어두운 쪽 +45). 10 단위
                 { key: "shade", label: "진하기", unit: "%", min: 0, max: 100, step: 10, initial: 30 },
                 // 분리 표시: 세로 운동 물체는 시작점에서 왼쪽으로, 가로 운동 물체는 도착 높이에서 아래로 띄운다
-                { key: "gapX", label: "좌우 간격", unit: "mm", min: 0, max: 60, step: 0.5, initial: 10 },
-                { key: "gapY", label: "위아래 간격", unit: "mm", min: 0, max: 60, step: 0.5, initial: 8 },
+                { key: "gapX", label: "좌우 간격", unit: "mm", min: 0, max: 5, step: 0.1, initial: 4 },
+                { key: "gapY", label: "위아래 간격", unit: "mm", min: 0, max: 5, step: 0.1, initial: 4 },
                 // 속도 화살표 길이: 속력 1m/s당 mm
                 { key: "arrowScale", label: "화살표 길이", unit: "mm/(m/s)", min: 0.1, max: 2, step: 0.1, initial: 0.4 }
             ];
@@ -1123,12 +1126,17 @@ try {
                 if (length < 0.01) return;
                 var ux = dx / length;
                 var uy = dy / length;
-                var head = Math.min(HEAD_LENGTH, length);
-                var bx = x1 - ux * head;
-                var by = y1 - uy * head;
+                // 선이 촉보다 짧으면 촉만 비율대로 줄인다
+                var k = Math.min(HEAD_SCALE, length / HARPOON[2][1]);
+                var bx = x1 - ux * HARPOON_LINE_END * k;
+                var by = y1 - uy * HARPOON_LINE_END * k;
                 drawLine(container, x0, y0, bx, by, false);
+                var points = [];
+                for (var i = 0; i < HARPOON.length; i++) {
+                    points.push([x1 - ux * HARPOON[i][1] * k - uy * HARPOON[i][0] * k, y1 - uy * HARPOON[i][1] * k + ux * HARPOON[i][0] * k]);
+                }
                 var tip = container.pathItems.add();
-                tip.setEntirePath([[x1, y1], [bx - uy * HEAD_WIDTH / 2, by + ux * HEAD_WIDTH / 2], [bx + uy * HEAD_WIDTH / 2, by - ux * HEAD_WIDTH / 2]]);
+                tip.setEntirePath(points);
                 tip.closed = true;
                 tip.stroked = false;
                 tip.filled = true;
@@ -1153,8 +1161,11 @@ try {
                 var bottomY = options.separate ? rowY : groundY;
                 var i;
                 if (options.axes) {
-                    drawArrow(ballsGroup, x, groundY - AXIS_EXTRA, x, y + AXIS_EXTRA * 2);
-                    drawArrow(ballsGroup, x - AXIS_EXTRA, groundY, x + motion.width + AXIS_EXTRA * 2, groundY);
+                    // 실선은 원점(x, groundY)에서 위쪽·오른쪽만. 원점 왼쪽·아래쪽 연장은 점선
+                    drawArrow(ballsGroup, x, groundY, x, y + AXIS_EXTRA * 2);
+                    drawArrow(ballsGroup, x, groundY, x + motion.width + AXIS_EXTRA * 2, groundY);
+                    drawLine(ballsGroup, x, groundY - AXIS_EXTRA, x, groundY, true);
+                    drawLine(ballsGroup, x - AXIS_EXTRA, groundY, x, groundY, true);
                 }
                 if (options.guides) {
                     for (i = 0; i < spots.length; i++) {
