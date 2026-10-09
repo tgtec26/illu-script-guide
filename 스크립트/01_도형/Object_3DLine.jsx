@@ -130,21 +130,31 @@ try {
     win.alignChildren = "fill";
     win.margins = WINDOW_MARGINS;
 
-    var tabs = win.add("tabbedpanel");
-    tabs.alignChildren = "fill";
+    // 탭 줄(tabbedpanel)은 탭 수만큼 폭을 차지해 창이 넓어진다. 라디오 버튼 줄과 겹쳐 쌓은 페이지로 대신한다
+    var tabBar = win.add("group");
+    tabBar.alignChildren = ["left", "center"];
+    tabBar.spacing = 12;
+    var holder = win.add("group");
+    holder.orientation = "stack";
+    holder.alignChildren = ["fill", "top"];
+    var radios = [];
+    var pages = [];
     for (engineIndex = 0; engineIndex < engines.length; engineIndex++) {
-        var page = tabs.add("tab", undefined, engines[engineIndex].label);
+        var page = holder.add("group");
         page.orientation = "column";
         page.alignChildren = "fill";
-        page.helpTip = engines[engineIndex].hint;
+        pages.push(page);
+        var radio = tabBar.add("radiobutton", undefined, engines[engineIndex].label);
+        radio.helpTip = engines[engineIndex].hint;
+        radios.push(radio);
         // 엔진 행이 없는 탭(회전체)만 안내문을 글줄로 둔다. 있으면 첫 패널 제목이 안내문이다
-        if (!engines[engineIndex].addRows(page)) page.add("statictext", undefined, engines[engineIndex].hint);
+        if (!engines[engineIndex].addRows(page)) addNote(page, engines[engineIndex].hint);
         if (engines[engineIndex].error) {
             page.enabled = false;
-            page.helpTip = engines[engineIndex].error;
+            radio.helpTip = engines[engineIndex].error;
         }
     }
-    tabs.selection = tabIndex;
+    radios[tabIndex].value = true;
 
     var viewPanel = win.add("panel", undefined, "시점");
     viewPanel.orientation = "column";
@@ -298,27 +308,27 @@ try {
     try { win.defaultElement = null; } catch (defaultError) {}
     var cancelButton = buttonRow.add("button", undefined, "취소", {name: "cancel"});
 
-    tabs.onChange = function() {
-        // Tab에는 index가 없어 제목으로 찾는다
-        var next = tabIndex;
-        for (var i = 0; i < engines.length; i++) {
-            if (tabs.selection && tabs.selection.text === engines[i].label) next = i;
-        }
+    function selectTab(next) {
         if (next === tabIndex) return;
         if (engines[next].error) {
             // 꺼진 탭은 눌리지 않지만, 혹시 눌리면 되돌리고 이유를 알린다
-            tabs.selection = tabIndex;
+            radios[next].value = false;
+            radios[tabIndex].value = true;
             alert(engines[next].error);
             return;
         }
+        pages[tabIndex].visible = false;
         tabIndex = next;
+        pages[tabIndex].visible = true;
         engine = engines[tabIndex];
         originX = engine.originX;
         originY = engine.originY;
         syncEngineRows();
         win.layout.layout(true);
         updatePreview();
-    };
+    }
+    function radioHandler(index) { return function() { selectTab(index); }; }
+    for (engineIndex = 0; engineIndex < engines.length; engineIndex++) radios[engineIndex].onClick = radioHandler(engineIndex);
     perspectiveCheck.onClick = function() {
         perspectiveOn = perspectiveCheck.value;
         perspectiveControl.row.enabled = perspectiveOn;
@@ -360,6 +370,12 @@ try {
     updatePreview();
 
     tightenRows(win);
+    // 페이지는 겹쳐 쌓여 가장 큰 페이지 크기로 잡힌다. 선택되지 않은 페이지는 창이 뜬 뒤(onShow)에 숨긴다.
+    // 레이아웃 전에 layout()을 부르면 늘어난 크기가 굳어 창이 줄지 않는다
+    function hideInactivePages() {
+        for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) pages[pageIndex].visible = pageIndex === tabIndex;
+    }
+    win.onShow = hideInactivePages;
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     var result = win.show();
     if (result === 1) {
@@ -435,6 +451,13 @@ try {
     }
 
     // 세로로 쌓인 컨테이너(창·패널·탭)의 행 간격을 좁힌다. 가로 행 안의 간격은 그대로 둔다
+    // 안내문은 한 줄로 두면 글자 길이만큼 창이 넓어진다. 폭을 정해 줄바꿈한다
+    function addNote(parent, text) {
+        var note = parent.add("statictext", undefined, text, {multiline: true});
+        note.preferredSize = [340, 36];
+        return note;
+    }
+
     function tightenRows(container) {
         if (container.orientation === "column") container.spacing = ROW_SPACING;
         if (container.type === "panel") container.margins = PANEL_MARGINS;
@@ -4674,7 +4697,7 @@ try {
             fieldCount: 0,
             prepare: prepare,
             addRows: function(page) {
-                page.add("statictext", undefined, "선택한 평면을 회전합니다. 숨은선·면 음영은 만들지 않습니다.");
+                addNote(page, "선택한 평면을 회전합니다. 숨은선·면 음영은 만들지 않습니다.");
                 return false;
             },
             sync: function() {},

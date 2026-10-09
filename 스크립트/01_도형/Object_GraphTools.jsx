@@ -115,9 +115,11 @@ try {
     } else {
         tabList.onChange = function() { if (tabList.selection !== null) selectTab(tabList.selection.index); };
     }
-    // 페이지는 겹쳐 쌓여 가장 큰 페이지 크기로 잡힌다. 크기를 잡은 뒤에 선택되지 않은 페이지를 숨긴다
-    win.layout.layout(true);
-    for (engineIndex = 0; engineIndex < engines.length; engineIndex++) pages[engineIndex].visible = engineIndex === tabIndex;
+    // 페이지는 겹쳐 쌓여 가장 큰 페이지 크기로 잡힌다. 선택되지 않은 페이지는 창이 뜬 뒤(onShow)에 숨긴다.
+    // 레이아웃 전에 layout()을 부르면 늘어난 크기가 굳어 창이 줄지 않는다
+    function hideInactivePages() {
+        for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) pages[pageIndex].visible = pageIndex === tabIndex;
+    }
     previewCheck.onClick = function() { engine.setPreview(previewCheck.value); };
     okButton.onClick = function() {
         if (!engine.commit()) return;
@@ -127,7 +129,7 @@ try {
     cancelButton.onClick = function() { win.close(0); };
 
     // 초기 미리보기는 표시 시점(onShow)에 그려야 화면에 보인다
-    win.onShow = function() { engine.setPreview(previewCheck.value); };
+    win.onShow = function() { hideInactivePages(); engine.setPreview(previewCheck.value); };
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     var result = win.show();
     if (result !== 1) engine.clearPreview();

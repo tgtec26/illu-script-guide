@@ -67,6 +67,7 @@ function compactDialog(win) {
             if (win.spacing > 3) win.spacing = 3;
         } catch (e0) {}
         compactWalk(win);
+        compactButtons(win);
     } catch (e) {}
 }
 
@@ -78,6 +79,7 @@ function compactWalk(container) {
         child = children[i];
         try {
             if (child.type === "panel") {
+                compactPanelTitle(child);
                 var m = child.margins;
                 child.margins = [Math.min(m[0], 8), Math.max(12, Math.min(m[1], 14)), Math.min(m[2], 8), Math.min(m[3], 4)];
                 if (child.spacing > 2) child.spacing = 2;
@@ -85,7 +87,11 @@ function compactWalk(container) {
                 var limit = child.orientation === "row" ? 6 : 2;
                 if (child.spacing > limit) child.spacing = limit;
             } else if (child.type === "scrollbar") {
-                if (child.preferredSize.width > COMPACT_SLIDER_WIDTH) child.preferredSize.width = COMPACT_SLIDER_WIDTH;
+                // 이미 레이아웃이 잡힌 창은 preferredSize만으로는 줄지 않아 maximumSize도 건다
+                if (child.preferredSize.width > COMPACT_SLIDER_WIDTH) {
+                    child.preferredSize.width = COMPACT_SLIDER_WIDTH;
+                    child.maximumSize.width = COMPACT_SLIDER_WIDTH;
+                }
             } else if (child.type === "statictext") {
                 compactLabel(child);
             } else if (child.type === "button" && COMPACT_BUTTONS[child.text]) {
@@ -127,7 +133,10 @@ function compactLabelWidths(container) {
     }
     var width = Math.ceil(need) + 6;
     for (i = 0; i < rows.length; i++) {
-        if (width < rows[i].preferredSize.width) rows[i].preferredSize.width = width;
+        if (width < rows[i].preferredSize.width) {
+            rows[i].preferredSize.width = width;
+            rows[i].maximumSize.width = width;
+        }
     }
 }
 
@@ -141,4 +150,42 @@ function compactButtonRow(container) {
         else if (!(c.type === "group" && c.children.length === 0)) return;
     }
     if (any) container.alignment = ["right", "center"];
+}
+
+// 패널 제목이 길면 첫 문장만 남기고 나머지는 툴팁으로 ("관찰 각도 방식. 선택 없이…" → "관찰 각도 방식")
+function compactPanelTitle(panel) {
+    var text = panel.text;
+    if (!text || text.length <= 12) return;
+    var cut = text.search(/\. |\s—\s|\s\(/);
+    if (cut < 4) return;
+    if (!panel.helpTip) panel.helpTip = text;
+    panel.text = text.substr(0, cut);
+}
+
+// 글자보다 훨씬 넓게 지정된 버튼(프리셋 줄 등)을 글자 폭에 맞춘다. 폭이 따로 지정된 버튼 중 글자 폭 + 12보다 넓은 것만 줄이고,
+// 한 줄(그룹)의 버튼은 가장 긴 글자에 맞춰 같은 폭으로 한다 (R 버튼·격자처럼 원래 좁은 버튼은 그대로).
+// 주의: 여기서 layout()을 부르면 안 된다. 한 번 레이아웃이 잡히면 ScriptUI가 늘어난 크기를 preferredSize로 굳혀 이후에 줄여도 창이 줄지 않는다.
+function compactButtons(win) {
+    compactButtonWalk(win);
+}
+
+function compactButtonWalk(container) {
+    var i, k, group = [], need = 0, wide = false;
+    for (i = 0; i < container.children.length; i++) {
+        k = container.children[i];
+        if (k.type === "button" && k.text && k.text !== "R" && !COMPACT_BUTTONS[k.text]) {
+            var w = k.graphics.measureString(k.text)[0] + 28;
+            group.push(k);
+            if (w > need) need = w;
+            if (k.preferredSize.width > w + 12) wide = true;
+        }
+        if (k.children && k.children.length) compactButtonWalk(k);
+    }
+    if (!wide) return;
+    for (i = 0; i < group.length; i++) {
+        if (group[i].preferredSize.width > need) {
+            group[i].preferredSize.width = Math.ceil(need);
+            group[i].maximumSize.width = Math.ceil(need);
+        }
+    }
 }

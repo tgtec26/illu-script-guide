@@ -164,6 +164,7 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 - 탭 줄(`tabbedpanel`)은 탭 수만큼 폭을 차지해 창이 넓어진다(5개면 약 500, 11개면 1000 넘게). 2026-10-09부터 새 묶음은 `tabbedpanel` 대신 선택 줄 + 겹쳐 쌓은 페이지를 쓴다: 탭이 적으면 라디오 버튼 줄, 많으면 드롭다운, 페이지는 `stack` 그룹에 쌓고 레이아웃을 잡은 뒤 선택되지 않은 페이지를 숨긴다(`Object_Mechanics.jsx`, `Object_HighCommon.jsx` 참고). 기존 묶음은 `tools/tabs-to-selector.py`로 호스트 틀이 같은 것만 변환했다.
 - ScriptUI `tabbedpanel.selection`(Tab)에는 `index`가 없다. 제목(`text`)을 라벨과 비교해 찾는다.
 - Node 테스트는 스코프를 평탄화해 공통 함수가 엔진 상수를 쓰는 오류를 못 잡는다. 통합 뒤에는 일러에서 탭마다 미리보기를 그려 확인한다.
+- **창을 줄일 때 `layout()`을 미리 부르지 말 것**: 한 번 레이아웃이 잡히면 ScriptUI가 늘어난 크기를 `preferredSize`로 굳혀서 이후에 줄여도 창이 줄지 않는다(2026-10-09 측정: 탭 호스트가 먼저 레이아웃을 잡아 `compactDialog`가 스크롤바·버튼을 줄이지 못함). 선택되지 않은 페이지는 `win.onShow`에서 숨긴다. 크기를 줄이는 속성은 `preferredSize`와 `maximumSize`를 함께 건다.
 - 안내 홈페이지도 같은 구조다. 묶음을 만들거나 탭을 더하면 `docs/assets/app.js`의 그 항목에 `tabs`(필요하면 묶음 공통 옵션 `shared`, 선택 조건 `requires`)를 맞춘다. 목록 → 묶음 안내(`#script/<id>`) → 탭 세부(`#script/<id>/<탭id>`) 세 단계로 그려지고, 탭 이름(`name`)은 스크립트의 탭 라벨과 같게 둔다. 어드민의 세부 설명·이미지는 탭까지 따로 저장하므로(`content.json`의 `details["<id>/<탭id>"]`) 탭 `id`는 바꾸지 않는다.
 
 ## Verifying in Illustrator Without Freezing It (required)
