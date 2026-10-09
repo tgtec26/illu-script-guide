@@ -110,16 +110,25 @@ function publish(dialog) {
 }
 
 const PAGE = `<!doctype html><meta charset="utf-8"><title>대화상자 편집</title>
-<style>body{font:14px system-ui;margin:20px;word-break:keep-all}select,input{font:inherit}table{border-collapse:collapse;margin:6px 0 14px}
-td,th{border:.4px solid #888;padding:3px 8px;text-align:left;vertical-align:middle}th{background:#eee;border-top-width:.8px}
-.t{width:230px}.n{width:70px}.c{background:#fff3c4}.d{color:#888}.w{background:#fff8e6;border:1px solid #e6c36a;padding:8px 12px;margin:10px 0;max-width:900px}
-button{padding:5px 14px;margin-right:8px}</style>
+<style>
+body{font:14px system-ui;margin:20px;word-break:keep-all;background:#3b3b3b;color:#e4e4e4;color-scheme:dark}
+select,input,button{font:inherit;background:#2b2b2b;color:#eee;border:1px solid #777;border-radius:3px}
+table{border-collapse:collapse;margin:6px 0 14px}
+td,th{border:.4px solid #777;padding:3px 8px;text-align:left;vertical-align:middle}
+th{background:#4b4b4b;border-top-width:.8px}
+.t{width:230px}.n{width:70px}.c{background:#5c5330}.d{color:#a0a0a0}
+.w{background:#4d4631;border:1px solid #8c7b3c;padding:8px 12px;margin:10px 0;max-width:900px}
+.r{background:#4d3535;border-color:#8c5555}
+code{background:#2b2b2b;padding:0 4px;border-radius:3px}
+button{padding:5px 14px;margin-right:8px;background:#5a5a5a;cursor:pointer}button:hover{background:#6a6a6a}
+</style>
 <h3>대화상자 편집</h3>
-<div class="w" style="background:#fdeaea;border-color:#d98a8a"><b>저장하면 바로 GitHub에 올라가 동료 교사에게도 적용됩니다</b> (<code>git pull</code> 뒤). 되돌리려면 이 화면에서 다시 고치거나 <code>git revert</code> 하세요.</div>
+<div class="w r"><b>저장하면 바로 GitHub에 올라가 동료 교사에게도 적용됩니다</b> (<code>git pull</code> 뒤). 되돌리려면 이 화면에서 다시 고치거나 <code>git revert</code> 하세요.</div>
 <div class="w">제목·단추 글자를 바꿔도 스크립트가 글자로 항목을 구분하는 경우엔 동작이 달라질 수 있습니다. 슬라이더는 범위만 바뀌고, 입력칸이 받는 값의 한계(스크립트 안의 상수)는 그대로입니다.
 기본값은 R 단추를 눌렀을 때 되돌아가는 값입니다(비우면 원래대로). 일러에서 대화상자를 처음 열어 보면 그 창이 이 목록에 나타납니다.</div>
 <select id="dlg"></select> <button id="save">저장 + 올리기</button><button id="clear">이 대화상자 되돌리기 + 올리기</button><span id="msg"></span>
 <div id="body"></div>
+<div><button id="save2">저장 + 올리기</button><button id="clear2">이 대화상자 되돌리기 + 올리기</button><span id="msg2"></span></div>
 <script>
 let data = null, cur = null;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -164,16 +173,17 @@ function collect() {
 }
 async function post(rows) {
   const r = await fetch("/api", { method: "POST", body: JSON.stringify({ dialog: cur.dialog, rows }) });
-  const msg = document.getElementById("msg");
-  msg.textContent = "저장하고 올리는 중…";
-  if (!r.ok) { msg.textContent = await r.text(); return; }
+  const msgs = [document.getElementById("msg"), document.getElementById("msg2")];
+  const say = (t) => msgs.forEach((m) => (m.textContent = t));
+  say("저장하고 올리는 중…");
+  if (!r.ok) { say(await r.text()); return; }
   const j = await r.json();
-  msg.textContent = "저장했습니다. " + j.message + " 일러에서 대화상자를 다시 열면 반영됩니다.";
+  say("저장했습니다. " + j.message + " 일러에서 대화상자를 다시 열면 반영됩니다.");
   await load();
 }
 document.getElementById("dlg").onchange = (e) => show(e.target.value);
-document.getElementById("save").onclick = () => post(collect());
-document.getElementById("clear").onclick = () => post([]);
+for (const id of ["save", "save2"]) document.getElementById(id).onclick = () => post(collect());
+for (const id of ["clear", "clear2"]) document.getElementById(id).onclick = () => post([]);
 load();
 </script>`;
 
