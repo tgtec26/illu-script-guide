@@ -191,11 +191,15 @@ try {
 
     var gridPanel = addPanel(dlg, "보조선·눈금");
     var gridCheck = gridPanel.add("checkbox", undefined, "파선 보조선 (끄면 축에 눈금)");
-    var gridStepGroup = gridPanel.add("group");
+    // 보조선 간격과 눈금 위치는 둘 중 하나만 쓰이므로 한 자리에 겹쳐 두고 쓰이는 쪽만 보인다
+    var gridStack = gridPanel.add("group");
+    gridStack.orientation = "stack";
+    gridStack.alignChildren = ["left", "top"];
+    var gridStepGroup = gridStack.add("group");
     gridStepGroup.add("statictext", undefined, "보조선 간격:");
     var gridCoarseRadio = gridStepGroup.add("radiobutton", undefined, "20 단위");
     var gridFineRadio = gridStepGroup.add("radiobutton", undefined, "10 단위");
-    var tickGroup = gridPanel.add("group");
+    var tickGroup = gridStack.add("group");
     tickGroup.add("statictext", undefined, "눈금 위치:");
     var tickInRadio = tickGroup.add("radiobutton", undefined, "안쪽");
     var tickOutRadio = tickGroup.add("radiobutton", undefined, "바깥쪽");
@@ -231,8 +235,9 @@ try {
         curveRadios.push(radios);
     }
 
-    var namePanel = addPanel(dlg, "물질 이름");
-    var nameGroup = namePanel.add("group");
+    // 작은 패널 하나를 아끼려고 곡선 패널 아래에 둔다
+    var nameGroup = curvePanel.add("group");
+    nameGroup.add("statictext", undefined, "물질 이름");
     var nameKorRadio = nameGroup.add("radiobutton", undefined, "한글 이름");
     var nameFormulaRadio = nameGroup.add("radiobutton", undefined, "화학식");
     var nameNoneRadio = nameGroup.add("radiobutton", undefined, "넣지 않음");
@@ -278,6 +283,8 @@ try {
     tickInRadio.value = !tickOutside;
     tickOutRadio.value = tickOutside;
     tickGroup.enabled = !gridOn;
+    gridStepGroup.visible = gridOn;
+    tickGroup.visible = !gridOn;
     nameKorRadio.value = (nameMode === NAME_KOREAN);
     nameFormulaRadio.value = (nameMode === NAME_FORMULA);
     nameNoneRadio.value = (nameMode === NAME_NONE);
@@ -296,6 +303,8 @@ try {
         gridOn = gridCheck.value;
         gridStepGroup.enabled = gridOn;
         tickGroup.enabled = !gridOn;
+        gridStepGroup.visible = gridOn;
+        tickGroup.visible = !gridOn;
         updatePreview();
     };
     simpleCheck.onClick = function() {

@@ -207,10 +207,8 @@ try {
             var SLIDER_WIDTH = 196;
             var RESET_BUTTON_WIDTH = 34;
             var win = page;
-            var modeNote = win.add("statictext", undefined, objectMode ? "선택한 도형을 물체로 상을 작도합니다" : "평행 광선 그림 (도형을 선택하고 실행하면 상 작도)", {multiline: true});
-            modeNote.preferredSize = [330, 34];
-
             var kindPanel = win.add("panel", undefined, "종류");
+            kindPanel.helpTip = objectMode ? "선택한 도형을 물체로 상을 작도합니다" : "평행 광선 그림 (도형을 선택하고 실행하면 상 작도)";
             kindPanel.orientation = "row";
             var kindRadios = [];
             for (var k = 0; k < KIND_LABELS.length; k++) {

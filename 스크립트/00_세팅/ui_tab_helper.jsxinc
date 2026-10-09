@@ -98,6 +98,9 @@ function compactWalk(container) {
             } else if (child.type === "edittext") {
                 // 한 줄짜리 입력창은 기본 높이가 커서 행이 높아진다
                 if (!child.properties || !child.properties.multiline) { child.preferredSize.height = COMPACT_ROW_HEIGHT; child.maximumSize.height = COMPACT_ROW_HEIGHT; }
+            } else if (child.type === "dropdownlist") {
+                child.preferredSize.height = COMPACT_ROW_HEIGHT;
+                child.maximumSize.height = COMPACT_ROW_HEIGHT;
             } else if (child.type === "button" && child.text === "R") {
                 child.preferredSize.height = COMPACT_ROW_HEIGHT;
                 child.maximumSize.height = COMPACT_ROW_HEIGHT;
