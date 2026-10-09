@@ -595,7 +595,8 @@ try {
             countRadios[i].value = (i === selectedIndex);
         }
         siCount = counts[selectedIndex];
-        try { dlg.layout.layout(true); } catch (layoutError) {}
+        // 창이 뜨기 전에 layout()을 부르면 크기가 굳어 이후 정렬·축소가 안 먹는다. 뜬 뒤(라디오가 바뀔 때)만 다시 잡는다
+        if (dlg.visible) { try { dlg.layout.layout(true); } catch (layoutError) {} }
     }
 
     // -------------------------------------------------------

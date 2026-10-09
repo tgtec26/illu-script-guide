@@ -139,7 +139,6 @@ try {
         if (!committed) { clearPreview(); if (source) source.hidden = originalHidden; app.redraw(); }
     };
     syncTextControls();
-    win.layout.layout(true);
     updatePreview();
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     try { win.show(); }
