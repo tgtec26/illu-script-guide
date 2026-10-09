@@ -84,31 +84,46 @@ try {
     win.spacing = 4;
     win.margins = 8;
 
-    var tabs = win.add("tabbedpanel");
-    tabs.alignChildren = "fill";
+    // 탭 줄(tabbedpanel)은 탭 수만큼 폭을 차지해 창이 넓어진다. 라디오 버튼 한 줄과 겹쳐 쌓은 페이지로 대신한다
+    var tabBar = win.add("group");
+    tabBar.alignChildren = ["left", "center"];
+    tabBar.spacing = 12;
+    var holder = win.add("group");
+    holder.orientation = "stack";
+    holder.alignChildren = ["fill", "top"];
+    var radios = [];
+    var pages = [];
     for (var engineIndex = 0; engineIndex < engines.length; engineIndex++) {
-        var page = tabs.add("tab", undefined, engines[engineIndex].label);
+        var page = holder.add("group");
         page.orientation = "column";
         page.alignChildren = "fill";
         page.spacing = 4;
+        pages.push(page);
+        radios.push(tabBar.add("radiobutton", undefined, engines[engineIndex].label));
         engines[engineIndex].error = engines[engineIndex].addRows(page);
         if (engines[engineIndex].error) {
             page.enabled = false;
-            page.helpTip = engines[engineIndex].error;
+            radios[engineIndex].helpTip = engines[engineIndex].error;
         }
     }
 
     writeRangeCatalog();
 
     var footer = win.add("group");
-    var previewCheck = footer.add("checkbox", undefined, "미리보기");
+    footer.alignChildren = ["fill", "center"];
+    var previewGroup = footer.add("group");
+    previewGroup.alignment = ["left", "center"];
+    var previewCheck = previewGroup.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;
-    var footerSpacer = footer.add("group");
-    footerSpacer.alignment = ["fill", "center"];
+    var buttonGroup = footer.add("group");
+    buttonGroup.alignment = ["right", "center"];
     // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
-    var okButton = footer.add("button", undefined, "확인");
+    var okButton = buttonGroup.add("button", undefined, "확인");
     try { win.defaultElement = null; } catch (defaultError) {}
-    var cancelButton = footer.add("button", undefined, "취소", {name: "cancel"});
+    var cancelButton = buttonGroup.add("button", undefined, "취소", {name: "cancel"});
+    // 버튼은 남는 폭을 나눠 가지며 늘어나므로 폭을 고정한다
+    okButton.preferredSize.width = okButton.maximumSize.width = 64;
+    cancelButton.preferredSize.width = cancelButton.maximumSize.width = 64;
 
     // 저장된 탭이 선택에 맞지 않으면 선택을 쓰는 탭부터(뒤에서부터) 가능한 탭을 연다
     var tabIndex = 0;
@@ -121,7 +136,7 @@ try {
             if (!engines[engineIndex].error) { tabIndex = engineIndex; break; }
         }
     }
-    // 어느 탭도 선택에 맞지 않으면 여기서 끝낸다 — 꺼진 탭을 tabs.selection에 넣으면 ScriptUI가 유형 오류를 던진다
+    // 어느 탭도 선택에 맞지 않으면 여기서 끝낸다
     if (engines[tabIndex].error) {
         var problems = [];
         for (engineIndex = 0; engineIndex < engines.length; engineIndex++) problems.push("[" + engines[engineIndex].label + "] " + engines[engineIndex].error);
@@ -129,25 +144,28 @@ try {
         return;
     }
     var engine = engines[tabIndex];
-    tabs.selection = tabIndex;
+    radios[tabIndex].value = true;
 
-    tabs.onChange = function() {
-        // Tab에는 index가 없어 제목으로 찾는다
-        var next = tabIndex;
-        for (var i = 0; i < engines.length; i++) {
-            if (tabs.selection && tabs.selection.text === engines[i].label) next = i;
-        }
+    function selectTab(next) {
         if (next === tabIndex) return;
         if (engines[next].error) {
-            tabs.selection = tabIndex;
+            radios[next].value = false;
+            radios[tabIndex].value = true;
             alert(engines[next].error);
             return;
         }
         engine.clearPreview();
+        pages[tabIndex].visible = false;
         tabIndex = next;
+        pages[tabIndex].visible = true;
         engine = engines[tabIndex];
         engine.setPreview(previewCheck.value);
-    };
+    }
+    function radioHandler(index) { return function() { selectTab(index); }; }
+    for (engineIndex = 0; engineIndex < engines.length; engineIndex++) radios[engineIndex].onClick = radioHandler(engineIndex);
+    // 페이지는 겹쳐 쌓여 가장 큰 페이지 크기로 잡힌다. 크기를 잡은 뒤에 선택되지 않은 페이지를 숨긴다
+    win.layout.layout(true);
+    for (engineIndex = 0; engineIndex < engines.length; engineIndex++) pages[engineIndex].visible = engineIndex === tabIndex;
     previewCheck.onClick = function() { engine.setPreview(previewCheck.value); };
     okButton.onClick = function() {
         if (!engine.commit()) return;
@@ -1020,7 +1038,7 @@ try {
 
             function addRow(panel, field, positionOnly) {
                 var row = panel.add("group");
-                row.add("statictext", undefined, field.label + (field.unit ? " (" + field.unit + "):" : ":")).preferredSize.width = 100;
+                row.add("statictext", undefined, field.label + (field.unit ? " (" + field.unit + "):" : ":")).preferredSize.width = 118;
                 var input = row.add("edittext", undefined, String(options[field.key]));
                 input.characters = 6;
                 var slider = row.add("scrollbar", undefined, options[field.key], field.min, field.max);
