@@ -229,7 +229,7 @@ try {
 
             applySavedSettings();
 
-            var LABEL_WIDTH = 92;
+            var LABEL_WIDTH = 76;
             var RESET_BUTTON_WIDTH = 34;
             // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
             var SLIDER_WIDTH = 118;
@@ -768,7 +768,8 @@ try {
                 value = Math.min(maximum, Math.max(minimum, value));
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
-                var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
+                var label = row.add("statictext", undefined, labelText);
+                if (unit) label.helpTip = unit;
                 label.preferredSize.width = LABEL_WIDTH;
                 var input = row.add("edittext", undefined, formatValue(value));
                 input.characters = 5;
@@ -1038,7 +1039,9 @@ try {
 
             function addRow(panel, field, positionOnly) {
                 var row = panel.add("group");
-                row.add("statictext", undefined, field.label + (field.unit ? " (" + field.unit + "):" : ":")).preferredSize.width = 118;
+                var label = row.add("statictext", undefined, field.label);
+                if (field.unit) label.helpTip = field.unit;
+                label.preferredSize.width = 76;
                 var input = row.add("edittext", undefined, String(options[field.key]));
                 input.characters = 6;
                 var slider = row.add("scrollbar", undefined, options[field.key], field.min, field.max);
@@ -1107,7 +1110,7 @@ try {
                 pending = true;
                 if (dragging && new Date().getTime() - lastPreviewTime < PREVIEW_INTERVAL_MS) return true;
                 var motion = trajectory(options.height, options.speed);
-                resultText.text = "비행시간: " + motion.time.toFixed(2) + "s    수평 도달거리: " + motion.range.toFixed(2) + "m";
+                resultText.text = "비행시간 " + motion.time.toFixed(2) + "s    수평 도달거리 " + motion.range.toFixed(2) + "m";
                 status.text = " ";
                 try {
                     if (!options.preview && !forceVisible) {
@@ -1493,7 +1496,7 @@ try {
 
             applySavedSettings();
 
-            var LABEL_WIDTH = 80;
+            var LABEL_WIDTH = 68;
             var INPUT_WIDTH = 54;
             // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
             var SLIDER_WIDTH = 118;
@@ -2045,7 +2048,8 @@ try {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 row.spacing = 6;
-                var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
+                var label = row.add("statictext", undefined, labelText);
+                if (unit) label.helpTip = unit;
                 label.preferredSize.width = LABEL_WIDTH;
                 var input = row.add("edittext", undefined, formatValue(value));
                 input.preferredSize.width = INPUT_WIDTH;
@@ -2214,7 +2218,7 @@ try {
 
             var widthRow = sizePanel.add("group");
             widthRow.alignChildren = ["left", "center"];
-            widthRow.add("statictext", undefined, "너비 (mm):").preferredSize.width = 90;
+            widthRow.add("statictext", undefined, "너비").preferredSize.width = 76;
             var widthInput = widthRow.add("edittext", undefined, formatNumber(coilWidthMm, 2));
             widthInput.characters = 6;
             var widthSlider = addSliderWithSteps(widthRow, coilWidthMm, SIZE_STEP_MM, maxCoilWidthMm, SIZE_STEP_MM);
@@ -2222,7 +2226,7 @@ try {
 
             var heightRow = sizePanel.add("group");
             heightRow.alignChildren = ["left", "center"];
-            heightRow.add("statictext", undefined, "높이 (mm):").preferredSize.width = 90;
+            heightRow.add("statictext", undefined, "높이").preferredSize.width = 76;
             var heightInput = heightRow.add("edittext", undefined, formatNumber(coilHeightMm, 2));
             heightInput.characters = 6;
             var heightSlider = addSliderWithSteps(heightRow, coilHeightMm, SIZE_STEP_MM, maxCoilHeightMm, SIZE_STEP_MM);
@@ -2233,8 +2237,8 @@ try {
             turnsPanel.alignChildren = "fill";
             var turnsRow = turnsPanel.add("group");
             turnsRow.alignChildren = ["left", "center"];
-            var turnsLabel = turnsRow.add("statictext", undefined, "감는 횟수 (회):");
-            turnsLabel.preferredSize.width = 90;
+            var turnsLabel = turnsRow.add("statictext", undefined, "감는 횟수");
+            turnsLabel.preferredSize.width = 76;
             turnsLabel.helpTip = "5 ~ 30";
             var turnsInput = turnsRow.add("edittext", undefined, String(turnCount));
             turnsInput.characters = 6;
@@ -2243,8 +2247,8 @@ try {
 
             var loopRow = turnsPanel.add("group");
             loopRow.alignChildren = ["left", "center"];
-            var loopLabel = loopRow.add("statictext", undefined, "고리 높이 (mm):");
-            loopLabel.preferredSize.width = 90;
+            var loopLabel = loopRow.add("statictext", undefined, "고리 높이");
+            loopLabel.preferredSize.width = 76;
             loopLabel.helpTip = "고리(타원)의 세로 높이. 클수록 선이 더 내려갔다 올라온다. 높이를 늘려도 고리는 그대로";
             var loopInput = loopRow.add("edittext", undefined, formatNumber(loopMm, 2));
             loopInput.characters = 6;
@@ -2253,7 +2257,7 @@ try {
 
             var lineRow = turnsPanel.add("group");
             lineRow.alignChildren = ["left", "center"];
-            lineRow.add("statictext", undefined, "선 굵기 (pt):").preferredSize.width = 90;
+            lineRow.add("statictext", undefined, "선 굵기").preferredSize.width = 76;
             var lineInput = lineRow.add("edittext", undefined, formatNumber(lineWidthPt, 2));
             lineInput.characters = 6;
             var lineSlider = addSliderWithSteps(lineRow, lineWidthPt, LINE_MIN_PT, LINE_MAX_PT, LINE_STEP_PT);
@@ -2261,8 +2265,8 @@ try {
 
             var shadeRow = turnsPanel.add("group");
             shadeRow.alignChildren = ["left", "center"];
-            var shadeLabel = shadeRow.add("statictext", undefined, "진하기 (%):");
-            shadeLabel.preferredSize.width = 90;
+            var shadeLabel = shadeRow.add("statictext", undefined, "진하기");
+            shadeLabel.preferredSize.width = 76;
             shadeLabel.helpTip = "선 회색의 K값. 100이 검정";
             var shadeInput = shadeRow.add("edittext", undefined, String(shadeK));
             shadeInput.characters = 6;
@@ -2495,7 +2499,7 @@ try {
             function addOffsetControls(parent, label, value) {
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
-                row.add("statictext", undefined, label + " (mm):").preferredSize.width = 70;
+                row.add("statictext", undefined, label).preferredSize.width = 76;
                 var input = row.add("edittext", undefined, formatNumber(value, 1));
                 input.characters = 6;
                 var slider = row.add("scrollbar", undefined, value,
@@ -2868,7 +2872,9 @@ try {
             var decimals = ctl.step < 0.1 ? 2 : (ctl.step < 1 ? 1 : 0);
             var row = panel.add("group");
             row.alignChildren = ["left", "center"];
-            row.add("statictext", undefined, ctl.label + (ctl.unit ? " (" + ctl.unit + "):" : ":")).preferredSize.width = 100;
+            var label = row.add("statictext", undefined, ctl.label);
+            if (ctl.unit) label.helpTip = ctl.unit;
+            label.preferredSize.width = 76;
             var input = row.add("edittext", undefined, formFormat(o[ctl.key], decimals));
             input.characters = 6;
             var bar = row.add("scrollbar", undefined, o[ctl.key], ctl.min, ctl.max);
@@ -2903,7 +2909,7 @@ try {
         function addChoice(panel, ctl) {
             var row = panel.add("group");
             row.alignChildren = ["left", "center"];
-            row.add("statictext", undefined, ctl.label + ":").preferredSize.width = 100;
+            row.add("statictext", undefined, ctl.label).preferredSize.width = 76;
             var list = row.add("dropdownlist", undefined, ctl.items);
             list.selection = o[ctl.key];
             list.onChange = function() {
