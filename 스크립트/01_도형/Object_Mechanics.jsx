@@ -10,7 +10,8 @@ try {
 } catch (e) {}
 
 // 역학: 진자 운동·수평 던지기·사인 곡선·코일 스프링·역학적 에너지를 한 창의 탭으로 묶었다.
-// 탭마다 필요한 선택이 다르다 (진자: 수평선, 수평 던지기: 없음, 사인 곡선: 패스 하나, 코일 스프링: 원 하나 또는 없음, 역학적 에너지: 없음).
+// 어느 탭이든 선택 없이 열 수 있다. 선택하면 그에 맞춘다 (진자: 수평선 하나, 사인 곡선: 패스 하나, 코일 스프링: 원 하나).
+// 선택이 없으면 진자는 대지 가운데를 고정점으로 삼고, 사인 곡선은 대지 가운데에 임의 길이의 수평 축을 만든다(길이는 조절 가능).
 // 역학적 에너지 탭은 파일 끝의 '폼 탭 공용 부품'(makeFormEngine)으로 만든다. (다중 섬광은 Object_MotionPhoto.jsx로 합쳤다.)
 // 선택에 맞지 않는 탭은 흐리게 두고 툴팁에 이유를 적는다. 각 탭의 코드와 저장 키는 원래 스크립트 그대로다.
 (function() {
@@ -112,6 +113,9 @@ try {
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     var result = win.show();
     if (result !== 1) engine.clearPreview();
+    for (engineIndex = 0; engineIndex < engines.length; engineIndex++) {
+        if (engines[engineIndex].dispose) engines[engineIndex].dispose();
+    }
     try { app.redraw(); } catch (redrawError) {}
 
     // ==== 진자 운동 ====
@@ -124,9 +128,10 @@ try {
 
             var doc = app.activeDocument;
             var ceiling = getSelectedLine(doc.selection);
-            if (ceiling === null) return "천장이 될 수평선 하나를 선택해주세요. 선택 도구(V)로 직선 패스 하나를 선택한 뒤 실행하면 그 선의 가운데를 진자의 고정점으로 삼습니다.";
+            if (ceiling === null && doc.selection && doc.selection.length > 0) return "천장이 될 수평선 하나를 선택하거나 선택을 비워주세요. 직선 패스 하나를 선택하면 그 선의 가운데를 진자의 고정점으로 삼습니다.";
 
-            var ceilingBounds = ceiling.geometricBounds;
+            // 선택이 없으면 대지 가운데가 고정점이다 (위치 가로·세로로 옮길 수 있다)
+            var ceilingBounds = ceiling !== null ? ceiling.geometricBounds : doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
             var pivotX = (ceilingBounds[0] + ceilingBounds[2]) / 2;
             var pivotY = (ceilingBounds[1] + ceilingBounds[3]) / 2;
 
@@ -1359,7 +1364,33 @@ try {
 
             var doc = app.activeDocument;
             var source = getSelectedPath(doc.selection);
-            if (source === null) return "패스 하나만 선택해주세요. 직선도 곡선도 됩니다. 문자나 그룹은 먼저 패스로 만들어주세요.";
+            if (source === null && doc.selection && doc.selection.length > 0) return "패스 하나만 선택하거나 선택을 비워주세요. 직선도 곡선도 됩니다. 문자나 그룹은 먼저 패스로 만들어주세요.";
+
+            // 선택이 없으면 대지 가운데에 수평 직선 축을 임시로 만든다. 길이는 지난번 값(없으면 DEFAULT_AXIS_MM)이고 조절할 수 있다.
+            // 확정하면 이 축은 곡선으로 바뀌며 지워지고, 취소하면 api.dispose가 지운다.
+            var DEFAULT_AXIS_MM = 60;
+            var AXIS_MM_MIN = 5;
+            var AXIS_MM_MAX = 300;
+            var FRAME_KEY = PREF_KEY + "/frame";
+            var generated = source === null;
+            var axisMm = DEFAULT_AXIS_MM;
+            var axisCenter = null;
+            if (generated) {
+                try {
+                    var frameParts = String(app.preferences.getStringPreference(FRAME_KEY)).split("|");
+                    var savedAxis = Number(frameParts[1]);
+                    if (frameParts[0] === "v1" && frameParts.length === 2 && /\S/.test(frameParts[1]) && isFinite(savedAxis) &&
+                            savedAxis >= AXIS_MM_MIN && savedAxis <= AXIS_MM_MAX) axisMm = savedAxis;
+                } catch (frameError) {}
+                var board = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+                axisCenter = [(board[0] + board[2]) / 2, (board[1] + board[3]) / 2];
+                source = doc.activeLayer.pathItems.add();
+                source.name = "Sine Wave Axis";
+                source.filled = false;
+                source.stroked = false;
+                source.hidden = true;
+                placeAxis();
+            }
 
             var axis = buildAxis(source);
             if (axis === null || axis.length <= 0) return "길이가 0인 패스는 사용할 수 없습니다.";
@@ -1390,6 +1421,20 @@ try {
             var INFO_WIDTH = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
 
             var dlg = page;
+
+            var axisField = null;
+            if (generated) {
+                var axisPanel = addPanel(dlg, "축");
+                axisField = addNumberField(axisPanel, "축 길이", "mm", axisMm, 1,
+                    AXIS_MM_MIN, 100, AXIS_MM_MIN, AXIS_MM_MAX, DEFAULT_AXIS_MM);
+                axisField.onCommit = function() {
+                    var value = parseNumber(axisField.input.text);
+                    if (value === null) return;
+                    axisMm = clampValue(value, AXIS_MM_MIN, AXIS_MM_MAX);
+                    placeAxis();
+                    updatePreview();
+                };
+            }
 
             var wavePanel = addPanel(dlg, "파형");
             var amplitudeField = addNumberField(wavePanel, "진폭", "mm", amplitudeMm, AMPLITUDE_STEP,
@@ -1426,8 +1471,13 @@ try {
             api.updatePreview = updatePreview;
             api.clearPreview = function() {
                 clearPreview();
+                if (generated) { source.hidden = true; return; }
                 source.hidden = sourceWasHidden;
                 source.selected = true;
+            };
+            // 창이 닫힌 뒤 호스트가 부른다. 만들어 둔 임시 축이 남아 있으면 지운다
+            api.dispose = function() {
+                if (generated) { try { source.remove(); } catch (e) {} }
             };
             api.commit = function() {
                 if (!readFields(true)) return false;
@@ -1440,10 +1490,20 @@ try {
                 try { curve.move(source, ElementPlacement.PLACEBEFORE); } catch (moveError) {}
                 source.remove();
                 saveSettings();
+                if (generated) {
+                    try { app.preferences.setStringPreference(FRAME_KEY, ["v1", axisMm].join("|")); } catch (e) {}
+                }
                 doc.selection = null;
                 curve.selected = true;
                 return true;
             };
+
+            // 임시 축을 대지 가운데 수평 직선으로 (다시) 놓고 기준 축을 새로 계산한다
+            function placeAxis() {
+                var half = axisMm * MM / 2;
+                source.setEntirePath([[axisCenter[0] - half, axisCenter[1]], [axisCenter[0] + half, axisCenter[1]]]);
+                axis = buildAxis(source);
+            }
 
             // -------------------------------------------------------
             // 곡선 만들기
