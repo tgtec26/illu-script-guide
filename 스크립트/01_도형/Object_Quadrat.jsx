@@ -67,7 +67,7 @@ try {
     var offsetYmm = 0;
     var GAP_LIMIT_MM = 10;
     var GAP_STEP_MM = 0.1;
-    var gapMM = 1.2;
+    var gapMM = 0.7;
     var RESET_BUTTON_WIDTH = 34;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
     var DEFAULTS = {offsetXmm: offsetXmm, offsetYmm: offsetYmm, gapMM: gapMM};
