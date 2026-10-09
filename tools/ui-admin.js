@@ -115,15 +115,15 @@ body{font:14px system-ui;margin:20px;word-break:keep-all;background:#3b3b3b;colo
 select,input,button{font:inherit;background:#2b2b2b;color:#eee;border:1px solid #777;border-radius:3px}
 table{border-collapse:collapse;margin:6px 0 14px}
 td,th{border:.4px solid #777;padding:3px 8px;text-align:left;vertical-align:middle}
-th{background:#2f4448;color:#a9dde3;border-color:#4d777e;border-top-width:.8px}
+th{background:#1f5f69;color:#fff;border-color:#1f5f69;font-weight:600}
 .t{width:230px}.n{width:70px}.c{background:#5c5330}.d{color:#a0a0a0}
 .w{background:#4d4631;border:1px solid #8c7b3c;padding:8px 12px;margin:10px 0;max-width:900px}
 .r{background:#4d3535;border-color:#8c5555}
 code{background:#2b2b2b;padding:0 4px;border-radius:3px}
-h3{color:#8fd0d8;margin:0 0 8px;padding-bottom:6px;border-bottom:2px solid #2f7f8a}
+h3{color:#fff;margin:0 0 8px;padding-bottom:6px;border-bottom:2px solid #2f7f8a}
 #save,#save2{background:#2f7f8a;color:#fff;border-color:#4aa0ab;font-weight:600}#save:hover,#save2:hover{background:#38909c}
 input:focus,select:focus,button:focus-visible{outline:2px solid #4aa0ab;outline-offset:0}
-#msg,#msg2{color:#a9dde3;margin-left:6px}
+#msg,#msg2{color:#fff;margin-left:6px}
 button{padding:5px 14px;margin-right:8px;background:#5a5a5a;cursor:pointer}button:hover{background:#6a6a6a}
 </style>
 <h3>대화상자 편집</h3>
