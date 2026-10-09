@@ -5,6 +5,7 @@
 // 사용: 창을 다 만든 뒤 win.show() 전에 bindTabOrder(win). 각 스크립트는 이 파일을
 // $.evalFile로 읽고 typeof로 확인하므로, 파일이 없어도 스크립트는 그대로 동작한다.
 function bindTabOrder(win) {
+    compactDialog(win);
     var inputs = [];
     collectEditTexts(win, inputs);
     for (var k = 0; k < inputs.length; k++) {
@@ -43,4 +44,101 @@ function isTabTarget(win, control) {
         if (!c.enabled || !c.visible) return false;
     }
     return true;
+}
+
+// ---- 대화상자 다이어트 (bindTabOrder가 창을 띄우기 직전에 부른다) ----
+// 스크립트마다 손대지 않고 한 곳에서 줄인다. 줄이기만 하고 늘리지는 않는다.
+//  - 창·패널 여백, 그룹 간격
+//  - 스크롤바 폭 118 이하 (R 버튼은 그대로)
+//  - 라벨의 "(단위)"·콜론 제거 (단위는 마우스를 올리면 툴팁으로), 라벨 칸을 글자 폭에 맞춤
+//  - 확인·취소 버튼 폭 고정, 버튼만 있는 줄은 오른쪽 정렬
+// 검증용으로 $.global.__noCompact = true면 건너뛴다. 실패해도 대화상자는 그대로 뜬다.
+var COMPACT_SLIDER_WIDTH = 118;
+var COMPACT_BUTTON_WIDTH = 64;
+var COMPACT_UNIT = /^(mm|cm|m|pt|px|%|°|deg|s|ms|배|개|회|번|도|단계|줄|칸|N|J|g|kg|K|℃|°C|m\/s|m\/s²)$/;
+var COMPACT_BUTTONS = {"확인": true, "취소": true, "OK": true, "Cancel": true, "적용": true, "닫기": true};
+
+function compactDialog(win) {
+    try {
+        if ($.global.__noCompact) return;
+        try {
+            var wm = win.margins;
+            win.margins = [Math.min(wm[0], 8), Math.min(wm[1], 8), Math.min(wm[2], 8), Math.min(wm[3], 8)];
+            if (win.spacing > 3) win.spacing = 3;
+        } catch (e0) {}
+        compactWalk(win);
+    } catch (e) {}
+}
+
+function compactWalk(container) {
+    var children = container.children;
+    if (!children) return;
+    var i, child;
+    for (i = 0; i < children.length; i++) {
+        child = children[i];
+        try {
+            if (child.type === "panel") {
+                var m = child.margins;
+                child.margins = [Math.min(m[0], 8), Math.max(12, Math.min(m[1], 14)), Math.min(m[2], 8), Math.min(m[3], 4)];
+                if (child.spacing > 2) child.spacing = 2;
+            } else if (child.type === "group") {
+                var limit = child.orientation === "row" ? 6 : 2;
+                if (child.spacing > limit) child.spacing = limit;
+            } else if (child.type === "scrollbar") {
+                if (child.preferredSize.width > COMPACT_SLIDER_WIDTH) child.preferredSize.width = COMPACT_SLIDER_WIDTH;
+            } else if (child.type === "statictext") {
+                compactLabel(child);
+            } else if (child.type === "button" && COMPACT_BUTTONS[child.text]) {
+                child.preferredSize.width = COMPACT_BUTTON_WIDTH;
+                child.maximumSize.width = COMPACT_BUTTON_WIDTH;
+            }
+        } catch (e1) {}
+        if (child.children && child.children.length) compactWalk(child);
+    }
+    try { compactLabelWidths(container); } catch (e2) {}
+    try { compactButtonRow(container); } catch (e3) {}
+}
+
+// "크기 (mm):" → "크기" (단위는 툴팁), "각도:" → "각도". 긴 안내문은 건드리지 않는다
+function compactLabel(label) {
+    var text = label.text;
+    if (!text || text.length > 30) return;
+    var unit = text.match(/^(.*\S)\s*\(([^)]+)\)\s*[:：]?\s*$/);
+    if (unit && COMPACT_UNIT.test(unit[2])) {
+        label.text = unit[1];
+        if (!label.helpTip) label.helpTip = unit[2];
+        return;
+    }
+    var colon = text.match(/^(.*\S)\s*[:：]\s*$/);
+    if (colon) label.text = colon[1];
+}
+
+// 같은 컨테이너의 행(그룹)마다 첫 라벨 폭을 가장 긴 글자에 맞춰 줄인다 (원래 폭보다 늘리지는 않는다)
+function compactLabelWidths(container) {
+    var rows = [], i, need = 0;
+    for (i = 0; i < container.children.length; i++) {
+        var g = container.children[i];
+        if (g.type !== "group" || g.children.length < 2) continue;
+        var first = g.children[0];
+        if (first.type !== "statictext" || !(first.preferredSize.width > 0)) continue;
+        rows.push(first);
+        var w = first.graphics.measureString(first.text)[0];
+        if (w > need) need = w;
+    }
+    var width = Math.ceil(need) + 6;
+    for (i = 0; i < rows.length; i++) {
+        if (width < rows[i].preferredSize.width) rows[i].preferredSize.width = width;
+    }
+}
+
+// 확인·취소만 있는 줄은 오른쪽에 붙인다 (다른 컨트롤이 같이 있으면 정렬은 그대로)
+function compactButtonRow(container) {
+    if (container.type !== "group") return;
+    var any = false, i;
+    for (i = 0; i < container.children.length; i++) {
+        var c = container.children[i];
+        if (c.type === "button" && COMPACT_BUTTONS[c.text]) any = true;
+        else if (!(c.type === "group" && c.children.length === 0)) return;
+    }
+    if (any) container.alignment = ["right", "center"];
 }
