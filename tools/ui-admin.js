@@ -1,15 +1,21 @@
 // 대화상자 요소 편집용 로컬 서버. 실행: node tools/ui-admin.js  →  http://127.0.0.1:5200
 // 일러에서 대화상자를 열면 ui_tab_helper.jsxinc가 그 창의 요소 목록을 스크립트/00_세팅/ui_catalog/<창 제목>.json에 남긴다(이 서버는 읽기만 함).
 // 여기서 고친 값은 스크립트/00_세팅/ui_overrides.json에 저장하고, 일러는 대화상자를 열 때 그것을 적용한다. 원래 값과 같은 항목은 저장하지 않는다.
+// 저장하면 ui_overrides.json만 커밋해서 GitHub에 올린다(동료 교사는 git pull로 받는다). `--no-push`를 주면 커밋까지만 한다.
 // 고칠 수 있는 것: 제목·단추·체크·라디오 글자, 패널 제목, 드롭다운 항목 문구(개수·순서는 그대로), 스크롤바 최솟값·최댓값·단계, R 단추가 되돌리는 값
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { execFile } = require("child_process");
 
-const DIR = path.join(__dirname, "..", "스크립트", "00_세팅");
+const ROOT = process.env.UI_ADMIN_ROOT || path.join(__dirname, "..");
+const NO_PUSH = process.argv.includes("--no-push");
+const DIR = path.join(ROOT, "스크립트", "00_세팅");
 const CATALOG_DIR = path.join(DIR, "ui_catalog");
 const OVERRIDES = path.join(DIR, "ui_overrides.json");
-const PORT = 5200;
+const PORT = Number(process.env.UI_ADMIN_PORT) || 5200;
+// 커밋 작성자는 Vercel 배포 정책상 고정이다 (전역 지침 참고)
+const GIT_USER = ["-c", "user.name=tgtec26", "-c", "user.email=tgtec26@snu-g.ms.kr"];
 
 function readCatalogs() {
   let files = [];
@@ -64,15 +70,55 @@ function save(dialog, rows) {
   fs.writeFileSync(OVERRIDES, JSON.stringify(all, null, 2) + "\n", "utf8");
 }
 
+function git(args) {
+  return new Promise((resolve) => {
+    execFile("git", args, { cwd: ROOT, timeout: 60000 }, (err, stdout, stderr) => {
+      resolve({ ok: !err, code: err ? err.code : 0, out: String(stdout).trim(), err: String(stderr).trim() });
+    });
+  });
+}
+
+// 저장한 덮어쓰기 파일만 커밋해서 올린다. 다른 변경은 건드리지 않는다. 한 번에 하나씩 처리한다
+let queue = Promise.resolve();
+function publish(dialog) {
+  const run = async () => {
+    const rel = path.relative(ROOT, OVERRIDES);
+    const add = await git(["add", "--", rel]);
+    if (!add.ok) return { committed: false, pushed: false, message: "git add 실패: " + add.err };
+    const diff = await git(["diff", "--cached", "--quiet", "--", rel]);
+    if (diff.ok) return { committed: false, pushed: false, message: "바뀐 내용이 없어 올리지 않았습니다." };
+    const commit = await git([...GIT_USER, "commit", "-m", `UI overrides: ${dialog}`, "--", rel]);
+    if (!commit.ok) return { committed: false, pushed: false, message: "커밋 실패: " + (commit.err || commit.out) };
+    if (NO_PUSH) return { committed: true, pushed: false, message: "커밋했습니다 (--no-push라 올리지는 않았습니다)." };
+    let push = await git(["push", "origin", "HEAD"]);
+    if (!push.ok) {
+      // 원격이 앞서 있으면 받아 합친 뒤 다시 올린다
+      const pull = await git([...GIT_USER, "pull", "--rebase", "--autostash", "origin", "HEAD"]);
+      if (!pull.ok) {
+        await git(["rebase", "--abort"]);
+        return { committed: true, pushed: false, message: "커밋은 했지만 원격과 합치지 못했습니다. 터미널에서 git pull 후 git push 하세요: " + (pull.err || pull.out).slice(0, 200) };
+      }
+      push = await git(["push", "origin", "HEAD"]);
+    }
+    if (!push.ok) return { committed: true, pushed: false, message: "커밋은 했지만 push에 실패했습니다: " + push.err.slice(0, 200) };
+    const head = await git(["rev-parse", "--short", "HEAD"]);
+    return { committed: true, pushed: true, message: "GitHub에 올렸습니다 (" + head.out + "). 동료는 git pull로 받습니다." };
+  };
+  const next = queue.then(run, run);
+  queue = next.catch(() => {});
+  return next;
+}
+
 const PAGE = `<!doctype html><meta charset="utf-8"><title>대화상자 편집</title>
 <style>body{font:14px system-ui;margin:20px;word-break:keep-all}select,input{font:inherit}table{border-collapse:collapse;margin:6px 0 14px}
 td,th{border:.4px solid #888;padding:3px 8px;text-align:left;vertical-align:middle}th{background:#eee;border-top-width:.8px}
 .t{width:230px}.n{width:70px}.c{background:#fff3c4}.d{color:#888}.w{background:#fff8e6;border:1px solid #e6c36a;padding:8px 12px;margin:10px 0;max-width:900px}
 button{padding:5px 14px;margin-right:8px}</style>
 <h3>대화상자 편집</h3>
+<div class="w" style="background:#fdeaea;border-color:#d98a8a"><b>저장하면 바로 GitHub에 올라가 동료 교사에게도 적용됩니다</b> (<code>git pull</code> 뒤). 되돌리려면 이 화면에서 다시 고치거나 <code>git revert</code> 하세요.</div>
 <div class="w">제목·단추 글자를 바꿔도 스크립트가 글자로 항목을 구분하는 경우엔 동작이 달라질 수 있습니다. 슬라이더는 범위만 바뀌고, 입력칸이 받는 값의 한계(스크립트 안의 상수)는 그대로입니다.
 기본값은 R 단추를 눌렀을 때 되돌아가는 값입니다(비우면 원래대로). 일러에서 대화상자를 처음 열어 보면 그 창이 이 목록에 나타납니다.</div>
-<select id="dlg"></select> <button id="save">저장</button><button id="clear">이 대화상자 되돌리기</button><span id="msg"></span>
+<select id="dlg"></select> <button id="save">저장 + 올리기</button><button id="clear">이 대화상자 되돌리기 + 올리기</button><span id="msg"></span>
 <div id="body"></div>
 <script>
 let data = null, cur = null;
@@ -118,8 +164,12 @@ function collect() {
 }
 async function post(rows) {
   const r = await fetch("/api", { method: "POST", body: JSON.stringify({ dialog: cur.dialog, rows }) });
-  document.getElementById("msg").textContent = r.ok ? "저장했습니다. 일러에서 대화상자를 다시 열면 반영됩니다." : await r.text();
-  if (r.ok) { await load(); }
+  const msg = document.getElementById("msg");
+  msg.textContent = "저장하고 올리는 중…";
+  if (!r.ok) { msg.textContent = await r.text(); return; }
+  const j = await r.json();
+  msg.textContent = "저장했습니다. " + j.message + " 일러에서 대화상자를 다시 열면 반영됩니다.";
+  await load();
 }
 document.getElementById("dlg").onchange = (e) => show(e.target.value);
 document.getElementById("save").onclick = () => post(collect());
@@ -138,8 +188,10 @@ http.createServer((req, res) => {
       let body = "";
       req.on("data", (c) => (body += c));
       req.on("end", () => {
-        try { const j = JSON.parse(body); save(j.dialog, j.rows); res.writeHead(200); res.end("ok"); }
-        catch (e) { res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }); res.end(String(e.message)); }
+        let j;
+        try { j = JSON.parse(body); save(j.dialog, j.rows); }
+        catch (e) { res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }); res.end(String(e.message)); return; }
+        publish(j.dialog).then((result) => { res.writeHead(200, { "content-type": "application/json; charset=utf-8" }); res.end(JSON.stringify(result)); });
       });
     } else { res.writeHead(404); res.end(); }
   } catch (e) { res.writeHead(500); res.end(String(e.message)); }
