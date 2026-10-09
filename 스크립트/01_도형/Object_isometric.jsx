@@ -100,13 +100,16 @@ function drawIsometricBox() {
 
     var presetRow = anglePanel.add("group");
     presetRow.orientation = "row";
-    var btnPresetIso = presetRow.add("button", undefined, "Isometric (120/120)");
-    var btnPresetDi = presetRow.add("button", undefined, "Dimetric (110/110)");
-    var btnPresetTri = presetRow.add("button", undefined, "Trimetric (120/105)");
+    var btnPresetIso = presetRow.add("button", undefined, "등각 120/120");
+    var btnPresetDi = presetRow.add("button", undefined, "2등각 110/110");
+    var btnPresetTri = presetRow.add("button", undefined, "3등각 120/105");
 
     btnPresetIso.onClick = function() { setAngles(120, 120); };
     btnPresetDi.onClick = function() { setAngles(110, 110); };
     btnPresetTri.onClick = function() { setAngles(120, 105); };
+    btnPresetIso.helpTip = "Isometric";
+    btnPresetDi.helpTip = "Dimetric";
+    btnPresetTri.helpTip = "Trimetric";
 
     // 압축(휨) 패널: 좌우에서 눌러 압축했을 때의 휨을 원호로 표현.
     // 재료 길이(가로 W)는 보존되고 수평 폭이 (비율)로 줄어든다. 100% = 평평한 상자.
