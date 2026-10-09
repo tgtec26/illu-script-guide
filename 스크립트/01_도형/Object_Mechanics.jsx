@@ -29,50 +29,10 @@ try {
     var FORM_MM = 2.834645669;
     var FORM_KOR_FONT = formFindFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
-    // 슬라이더 범위 등록: 슬라이더를 만들 때 rangeOf를 부른다. 00_세팅/slider_ranges.json에 "Mechanics/<탭>/<이름>": {min, max, step}가
-    // 있으면 그 값을 쓰고, 없으면 코드의 값을 쓴다. 코드의 값은 창을 열 때 slider_ranges.catalog.json에 적어
-    // tools/range-admin.js(로컬 서버)가 표로 보여 준다. 파일이 없거나 이상해도 스크립트는 코드의 값으로 동작한다
-    var RANGES_DIR = new File($.fileName).parent.parent.fsName + "/00_세팅/";
-    var rangeOverrides = null;
-    var rangeCatalog = [];
+    // rangeOf는 슬라이더 범위를 코드의 값 그대로 돌려준다. 제목·범위·기본값·항목 문구의 편집은 이제 모든 대화상자 공통으로
+    // 00_세팅/ui_tab_helper.jsxinc가 ui_overrides.json을 적용해서 하고, 편집은 tools/ui-admin.js(로컬 서버)로 한다.
     function rangeOf(tab, name, label, unit, min, max, step) {
-        if (rangeOverrides === null) {
-            rangeOverrides = {};
-            try {
-                var file = new File(RANGES_DIR + "slider_ranges.json");
-                if (file.exists) {
-                    file.encoding = "UTF-8";
-                    file.open("r");
-                    var text = file.read();
-                    file.close();
-                    rangeOverrides = eval("(" + text + ")");
-                }
-            } catch (rangeError) { rangeOverrides = {}; }
-        }
-        var id = "Mechanics/" + tab + "/" + name;
-        rangeCatalog.push('{"id":"' + id + '","tab":"' + tab + '","label":"' + label + '","unit":"' + unit + '","min":' + min + ',"max":' + max + ',"step":' + step + '}');
-        var o = rangeOverrides[id];
-        if (o) {
-            var lo = Number(o.min), hi = Number(o.max), st = Number(o.step);
-            if (isFinite(lo) && isFinite(hi) && isFinite(st) && lo < hi && st > 0) return {min: lo, max: hi, step: st};
-        }
         return {min: min, max: max, step: step};
-    }
-    function writeRangeCatalog() {
-        try {
-            var text = "[\n" + rangeCatalog.join(",\n") + "\n]\n";
-            var file = new File(RANGES_DIR + "slider_ranges.catalog.json");
-            file.encoding = "UTF-8";
-            if (file.exists) {
-                file.open("r");
-                var old = file.read();
-                file.close();
-                if (old === text) return;
-            }
-            file.open("w");
-            file.write(text);
-            file.close();
-        } catch (catalogError) {}
     }
 
     var engines = [makePendulumEngine(), makeProjectileEngine(), makeSineWaveEngine(), makeCoilSpringEngine(),
@@ -106,8 +66,6 @@ try {
             radios[engineIndex].helpTip = engines[engineIndex].error;
         }
     }
-
-    writeRangeCatalog();
 
     var footer = win.add("group");
     footer.alignChildren = ["fill", "center"];
