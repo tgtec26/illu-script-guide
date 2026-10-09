@@ -111,17 +111,31 @@ try {
     win.spacing = 4;
     win.margins = 12;
 
-    var tabs = win.add("tabbedpanel");
-    tabs.alignChildren = "fill";
+    // 탭 줄(tabbedpanel)은 탭 수만큼 폭을 차지해 창이 넓어진다. 선택 줄과 겹쳐 쌓은 페이지로 대신한다
+    var holder;
+    var pages = [];
+    var tabBar;
+    var radios = [];
+    var tabList = null;
+    var tabLabels = [];
+    for (engineIndex = 0; engineIndex < engines.length; engineIndex++) tabLabels.push(engines[engineIndex].label);
+    tabList = win.add("dropdownlist", undefined, tabLabels);
+    tabList.alignment = ["left", "center"];
+    tabList.selection = 0;
+    holder = win.add("group");
+    holder.orientation = "stack";
+    holder.alignChildren = ["fill", "top"];
     for (var engineIndex = 0; engineIndex < engines.length; engineIndex++) {
-        var page = tabs.add("tab", undefined, engines[engineIndex].label);
+        var page = holder.add("group");
         page.orientation = "column";
         page.alignChildren = "fill";
         page.spacing = 4;
+        pages.push(page);
+        if (tabList === null) radios.push(tabBar.add("radiobutton", undefined, engines[engineIndex].label));
         engines[engineIndex].error = engines[engineIndex].addRows(page);
         if (engines[engineIndex].error) {
             page.enabled = false;
-            page.helpTip = engines[engineIndex].error;
+            if (tabList === null) radios[engineIndex].helpTip = engines[engineIndex].error;
         }
     }
 
@@ -172,25 +186,33 @@ try {
         return;
     }
     var engine = engines[tabIndex];
-    tabs.selection = tabIndex;
+    if (tabList === null) radios[tabIndex].value = true;
+    else tabList.selection = tabIndex;
 
-    tabs.onChange = function() {
-        // Tab에는 index가 없어 제목으로 찾는다
-        var next = tabIndex;
-        for (var i = 0; i < engines.length; i++) {
-            if (tabs.selection && tabs.selection.text === engines[i].label) next = i;
-        }
+    function selectTab(next) {
         if (next === tabIndex) return;
         if (engines[next].error) {
-            tabs.selection = tabIndex;
+            if (tabList === null) { radios[next].value = false; radios[tabIndex].value = true; }
+            else tabList.selection = tabIndex;
             alert(engines[next].error);
             return;
         }
         engine.clearPreview();
+        pages[tabIndex].visible = false;
         tabIndex = next;
+        pages[tabIndex].visible = true;
         engine = engines[tabIndex];
         engine.setPreview(previewCheck.value);
-    };
+    }
+    function radioHandler(index) { return function() { selectTab(index); }; }
+    if (tabList === null) {
+        for (engineIndex = 0; engineIndex < engines.length; engineIndex++) radios[engineIndex].onClick = radioHandler(engineIndex);
+    } else {
+        tabList.onChange = function() { if (tabList.selection !== null) selectTab(tabList.selection.index); };
+    }
+    // 페이지는 겹쳐 쌓여 가장 큰 페이지 크기로 잡힌다. 크기를 잡은 뒤에 선택되지 않은 페이지를 숨긴다
+    win.layout.layout(true);
+    for (engineIndex = 0; engineIndex < engines.length; engineIndex++) pages[engineIndex].visible = engineIndex === tabIndex;
     previewCheck.onClick = function() { engine.setPreview(previewCheck.value); };
     okButton.onClick = function() {
         if (!engine.commit()) return;
