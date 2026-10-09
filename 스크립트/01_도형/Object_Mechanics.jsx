@@ -843,6 +843,11 @@ try {
             // 앵커는 2개로 두고 핸들 길이를 시작 쪽 (1+skew)배, 끝 쪽 (1−skew)배로 바꿔 2차 꼴을 깬다.
             // 접선 방향과 양 끝점은 그대로. 0.1이면 포물선과의 오차가 최대 0.13pt(0.04mm)로 눈에 띄지 않는다.
             var HANDLE_SKEW = 0.1;
+            // 축·속도 화살표의 촉 크기(pt)와 축이 물체 범위 밖으로 나가는 길이(pt)
+            var HEAD_LENGTH = 6;
+            var HEAD_WIDTH = 3.6;
+            var AXIS_EXTRA = 14;
+            var CHECK_KEYS = ["sphere", "separate", "axes", "guides", "vectors", "preview"];
             if (!app.documents.length) {
                 alert("문서를 먼저 열어주세요.");
                 return;
@@ -865,7 +870,12 @@ try {
                 { key: "count", label: "물체 수", unit: "개", min: 0, max: 20, step: 1, initial: 0 },
                 { key: "diameter", label: "지름", unit: "mm", min: 0.5, max: 20, step: 0.1, initial: 4 },
                 // 진하기: 평면 원은 안쪽 K값, 구는 가운데 K값(밝은 쪽 −30, 어두운 쪽 +45). 10 단위
-                { key: "shade", label: "진하기", unit: "%", min: 0, max: 100, step: 10, initial: 30 }
+                { key: "shade", label: "진하기", unit: "%", min: 0, max: 100, step: 10, initial: 30 },
+                // 분리 표시: 세로 운동 물체는 시작점에서 왼쪽으로, 가로 운동 물체는 도착 높이에서 아래로 띄운다
+                { key: "gapX", label: "좌우 간격", unit: "mm", min: 0, max: 60, step: 0.5, initial: 10 },
+                { key: "gapY", label: "위아래 간격", unit: "mm", min: 0, max: 60, step: 0.5, initial: 8 },
+                // 속도 화살표 길이: 속력 1m/s당 mm
+                { key: "arrowScale", label: "화살표 길이", unit: "mm/(m/s)", min: 0.1, max: 2, step: 0.1, initial: 0.4 }
             ];
             var options = readSettings();
             var view = doc.activeView ? doc.activeView : doc.views[0];
@@ -907,6 +917,18 @@ try {
                 updatePreview(false, false);
             };
             ballPanel.add("statictext", undefined, "같은 시간 간격으로 궤적 위에 놓는다 (처음과 끝 포함)");
+            var extraPanel = win.add("panel", undefined, "분리·보조");
+            extraPanel.alignChildren = "fill";
+            var checkRow1 = extraPanel.add("group");
+            var checkRow2 = extraPanel.add("group");
+            addCheck(checkRow1, "separate", "수직·수평 운동 분리 표시");
+            addCheck(checkRow1, "axes", "축");
+            addCheck(checkRow2, "guides", "보조 점선");
+            addCheck(checkRow2, "vectors", "속도 화살표");
+            addRow(extraPanel, fields[8], false);
+            addRow(extraPanel, fields[9], false);
+            addRow(extraPanel, fields[10], false);
+            extraPanel.add("statictext", undefined, "분리: 왼쪽 열은 자유 낙하(등가속도), 아래쪽 줄은 등속도 운동");
             var positionPanel = win.add("panel", undefined, "위치");
             positionPanel.alignChildren = "fill";
             addRow(positionPanel, fields[2], true);
@@ -927,6 +949,15 @@ try {
                 committed = true;
                 return true;
             };
+
+            function addCheck(row, key, label) {
+                var box = row.add("checkbox", undefined, label);
+                box.value = options[key];
+                box.onClick = function() {
+                    options[key] = box.value;
+                    updatePreview(false, false);
+                };
+            }
 
             function addRow(panel, field, positionOnly) {
                 var row = panel.add("group");
@@ -1075,16 +1106,82 @@ try {
                 return out;
             }
 
-            // 물체는 매번 지우고 다시 그린다 (20개 이하라 빠르다). 선 위에 쌓인다
+            // 직선 하나. 겹치는 길이 0이면 만들지 않는다
+            function drawLine(container, x0, y0, x1, y1, dashed) {
+                if (Math.abs(x1 - x0) + Math.abs(y1 - y0) < 0.01) return;
+                var path = container.pathItems.add();
+                path.setEntirePath([[x0, y0], [x1, y1]]);
+                applyUniformStroke(path);
+                if (dashed) path.strokeDashes = [2, 2];
+            }
+
+            // 끝에 삼각형 촉이 달린 화살표
+            function drawArrow(container, x0, y0, x1, y1) {
+                var dx = x1 - x0;
+                var dy = y1 - y0;
+                var length = Math.sqrt(dx * dx + dy * dy);
+                if (length < 0.01) return;
+                var ux = dx / length;
+                var uy = dy / length;
+                var head = Math.min(HEAD_LENGTH, length);
+                var bx = x1 - ux * head;
+                var by = y1 - uy * head;
+                drawLine(container, x0, y0, bx, by, false);
+                var tip = container.pathItems.add();
+                tip.setEntirePath([[x1, y1], [bx - uy * HEAD_WIDTH / 2, by + ux * HEAD_WIDTH / 2], [bx + uy * HEAD_WIDTH / 2, by - ux * HEAD_WIDTH / 2]]);
+                tip.closed = true;
+                tip.stroked = false;
+                tip.filled = true;
+                tip.fillColor = blackColor();
+                tip.opacity = 100;
+            }
+
+            // 물체·축·점선·화살표는 매번 지우고 다시 그린다 (20개 이하라 빠르다). 선 위에 쌓인다
             function drawBalls(x, y, motion) {
                 if (ballsGroup) { try { ballsGroup.remove(); } catch (e) {} }
                 ballsGroup = null;
-                if (options.count < 1) return;
+                if (options.count < 1 && !options.axes) return;
                 ballsGroup = previewGroup.groupItems.add();
                 ballsGroup.name = "ProjectileBalls";
                 var r = options.diameter * MM_TO_PT / 2;
                 var spots = ballPositions(motion, options.count);
-                for (var i = 0; i < spots.length; i++) drawBall(ballsGroup, x + spots[i][0], y + spots[i][1], r);
+                var groundY = y - motion.height;
+                // 분리하면 세로 운동 열은 x축 왼쪽, 가로 운동 줄은 도착 높이 아래에 놓인다
+                var columnX = x - options.gapX * MM_TO_PT;
+                var rowY = groundY - options.gapY * MM_TO_PT;
+                var leftX = options.separate ? columnX : x;
+                var bottomY = options.separate ? rowY : groundY;
+                var i;
+                if (options.axes) {
+                    drawArrow(ballsGroup, x, groundY - AXIS_EXTRA, x, y + AXIS_EXTRA * 2);
+                    drawArrow(ballsGroup, x - AXIS_EXTRA, groundY, x + motion.width + AXIS_EXTRA * 2, groundY);
+                }
+                if (options.guides) {
+                    for (i = 0; i < spots.length; i++) {
+                        drawLine(ballsGroup, leftX, y + spots[i][1], x + spots[i][0], y + spots[i][1], true);
+                        drawLine(ballsGroup, x + spots[i][0], y + spots[i][1], x + spots[i][0], bottomY, true);
+                    }
+                }
+                if (options.vectors) {
+                    for (i = 0; i < spots.length; i++) {
+                        var t = motion.time * (spots.length > 1 ? i / (spots.length - 1) : 0);
+                        var vy = GRAVITY * t;
+                        var speed = Math.sqrt(options.speed * options.speed + vy * vy);
+                        if (speed < 0.000001) continue;
+                        var ux = options.speed / speed;
+                        var uy = -vy / speed;
+                        var cx = x + spots[i][0];
+                        var cy = y + spots[i][1];
+                        drawArrow(ballsGroup, cx + ux * r, cy + uy * r, cx + ux * (r + speed * options.arrowScale * MM_TO_PT), cy + uy * (r + speed * options.arrowScale * MM_TO_PT));
+                    }
+                }
+                for (i = 0; i < spots.length; i++) {
+                    drawBall(ballsGroup, x + spots[i][0], y + spots[i][1], r);
+                    if (options.separate) {
+                        drawBall(ballsGroup, columnX, y + spots[i][1], r);
+                        drawBall(ballsGroup, x + spots[i][0], rowY, r);
+                    }
+                }
             }
 
             // 구: 왼쪽 위로 치우친 큰 원형 그라데이션을 공 모양으로 잘라 쓴다 (Object_MotionPhoto 방식). 평면: 흰 원에 검은 테두리
@@ -1168,13 +1265,13 @@ try {
                 }
             }
 
-            // v6: 숫자 8개(높이·속도·가로·세로·선 두께·물체 수·지름·진하기) + 구 여부 + 미리보기
+            // v7: 숫자 11개(높이·속도·가로·세로·선 두께·물체 수·지름·진하기·좌우 간격·위아래 간격·화살표 길이) + 체크 6개(CHECK_KEYS 순서)
             function readSettings() {
-                var result = { preview: true, sphere: true };
+                var result = { sphere: true, separate: false, axes: false, guides: false, vectors: false, preview: true };
                 for (var i = 0; i < fields.length; i++) result[fields[i].key] = fields[i].initial;
                 try {
                     var parts = app.preferences.getStringPreference(PREF_KEY).split("|");
-                    if (parts[0] !== "v6" || parts.length !== fields.length + 3 || !/^[01]$/.test(parts[9]) || !/^[01]$/.test(parts[10])) return result;
+                    if (parts[0] !== "v7" || parts.length !== 1 + fields.length + CHECK_KEYS.length) return result;
                     for (var j = 0; j < fields.length; j++) {
                         var value = Number(parts[j + 1]);
                         if (!/\S/.test(parts[j + 1]) || !isFinite(value) || value < fields[j].min || value > fields[j].max) return result;
@@ -1182,18 +1279,21 @@ try {
                         if (fields[j].key === "count" && value !== Math.round(value)) return result;
                         if (fields[j].key === "shade" && value % 10 !== 0) return result;
                     }
+                    for (var m = 0; m < CHECK_KEYS.length; m++) {
+                        if (!/^[01]$/.test(parts[1 + fields.length + m])) return result;
+                    }
                     for (var k = 0; k < fields.length; k++) result[fields[k].key] = Number(parts[k + 1]);
-                    result.sphere = parts[9] === "1";
-                    result.preview = parts[10] === "1";
+                    for (var n = 0; n < CHECK_KEYS.length; n++) result[CHECK_KEYS[n]] = parts[1 + fields.length + n] === "1";
                 } catch (e) {}
                 return result;
             }
 
             function saveSettings() {
                 try {
-                    app.preferences.setStringPreference(PREF_KEY, ["v6", options.height, options.speed,
-                        options.offsetX, options.offsetY, options.strokeWidth, options.count, options.diameter, options.shade,
-                        options.sphere ? 1 : 0, options.preview ? 1 : 0].join("|"));
+                    var values = ["v7"];
+                    for (var i = 0; i < fields.length; i++) values.push(options[fields[i].key]);
+                    for (var j = 0; j < CHECK_KEYS.length; j++) values.push(options[CHECK_KEYS[j]] ? 1 : 0);
+                    app.preferences.setStringPreference(PREF_KEY, values.join("|"));
                 } catch (e) {}
             }
 
