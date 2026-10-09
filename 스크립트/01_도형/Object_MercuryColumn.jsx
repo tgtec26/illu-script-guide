@@ -233,7 +233,7 @@ try {
     var glassInput = glassRow.add("edittext", undefined, options.glassText);
     glassInput.characters = 14;
 
-    addRow(showPanel, "headSize", "치수선 화살촉 크기", "%");
+    addRow(showPanel, "headSize", "촉 크기", "%");
 
     var positionPanel = addPanel(dlg, "위치");
     addRow(positionPanel, "offsetX", "가로", "mm");

@@ -70,6 +70,8 @@ function compactDialog(win) {
         } catch (e0) {}
         compactWalk(win);
         compactButtons(win);
+        compactAlignRows(win);
+        compactArrowheadNames(win);
     } catch (e) {}
     // 로컬 서버(tools/ui-admin.js)로 고친 제목·슬라이더 범위·기본값·항목 문구를 적용하고, 화면 요소 목록을 남긴다
     try { uiCatalogAndOverrides(win); } catch (e2) {}
@@ -412,4 +414,65 @@ function uiCatalogAndOverrides(win) {
     file.open("w");
     file.write(text);
     file.close();
+}
+
+// ---- 줄 맞춤과 화살촉 이름 ----
+var COMPACT_EDIT_WIDTH = 62;
+
+// [라벨 | 입력창 | 스크롤바 (| R)] 줄을 창 전체에서 같은 칸 폭으로 맞춘다: 패널이 달라도 입력창·슬라이더·R 단추가 세로로 한 줄에 선다.
+// 라벨 칸은 창 안의 모든 그런 줄 중 가장 긴 글자에 맞춘다.
+function compactCollectRows(container, rows) {
+    for (var i = 0; i < container.children.length; i++) {
+        var child = container.children[i];
+        if (child.type === "group") {
+            var k = child.children;
+            if (k.length >= 3 && k[0].type === "statictext" && k[1].type === "edittext" && k[2].type === "scrollbar" &&
+                    (k.length === 3 || (k.length === 4 && k[3].type === "button"))) {
+                rows.push({label: k[0], edit: k[1]});
+            }
+        }
+        if (child.children && child.children.length) compactCollectRows(child, rows);
+    }
+}
+
+function compactAlignRows(win) {
+    var rows = [], i, need = 0, editWidth = COMPACT_EDIT_WIDTH;
+    compactCollectRows(win, rows);
+    if (rows.length < 2) return;
+    for (i = 0; i < rows.length; i++) {
+        var w = rows[i].label.graphics.measureString(rows[i].label.text)[0];
+        if (w > need) need = w;
+        if (rows[i].edit.preferredSize.width > editWidth) editWidth = rows[i].edit.preferredSize.width;
+    }
+    var width = Math.ceil(need) + 6;
+    for (i = 0; i < rows.length; i++) {
+        rows[i].label.preferredSize.width = width;
+        rows[i].label.maximumSize.width = width;
+        rows[i].edit.preferredSize.width = editWidth;
+        rows[i].edit.maximumSize.width = editWidth;
+    }
+}
+
+// 화살촉 모양 드롭다운(삼각형·꺾쇠·제비꼬리·작살형)은 모든 대화상자에서 번호로 보인다: 1 작살형(평가원식) 2 제비꼬리 3 삼각형 4 꺾쇠.
+// 항목 순서와 개수는 그대로이고 글자만 바꾼다.
+function compactArrowheadNames(container) {
+    for (var i = 0; i < container.children.length; i++) {
+        var child = container.children[i];
+        if (child.type === "dropdownlist" && child.items.length === 4) {
+            var map = [], hit = 0, k;
+            for (k = 0; k < 4; k++) {
+                var t = child.items[k].text;
+                if (/^작살형/.test(t)) { map.push("1"); hit++; }
+                else if (/^제비꼬리/.test(t)) { map.push("2"); hit++; }
+                else if (/^삼각형/.test(t)) { map.push("3"); hit++; }
+                else if (/^꺾쇠/.test(t)) { map.push("4"); hit++; }
+                else map.push(null);
+            }
+            if (hit === 4) {
+                for (k = 0; k < 4; k++) child.items[k].text = map[k];
+                if (!child.helpTip) child.helpTip = "화살촉 모양  1 작살형(평가원식)  2 제비꼬리  3 삼각형  4 꺾쇠";
+            }
+        }
+        if (child.children && child.children.length) compactArrowheadNames(child);
+    }
 }
