@@ -387,13 +387,7 @@ function uiApplyOverrides(container, path, over) {
 function uiCatalogAndOverrides(win) {
     if (!UI_HELPER_DIR || !win.text) return;
     var key = win.text;
-    var overText = uiReadFile(UI_HELPER_DIR + "/ui_overrides.json");
-    if (overText) {
-        var all = eval("(" + overText + ")");
-        if (all && all[key]) uiApplyOverrides(win, "", all[key]);
-    }
-    // 목록은 덮어쓴 뒤의 모습이 아니라 원래 모습을 남긴다: 덮어쓰기가 있으면 목록을 새로 쓰지 않는다
-    if (overText && all && all[key]) return;
+    // 목록은 덮어쓰기를 적용하기 전의 원래 모습으로 남긴다 (덮어쓰기가 있어도 항상 갱신해서 옛 목록이 남지 않게 한다)
     var list = [];
     uiCollect(win, "", "", list);
     var text = '{"dialog":' + uiJson(key) + ',"controls":[\n' + (function() {
@@ -401,19 +395,29 @@ function uiCatalogAndOverrides(win) {
         for (var i = 0; i < list.length; i++) rows.push(uiJson(list[i]));
         return rows.join(",\n");
     })() + "\n]}\n";
-    var dir = new Folder(UI_HELPER_DIR + "/ui_catalog");
-    if (!dir.exists) dir.create();
-    var file = new File(dir.fsName + "/" + uiSlug(key) + ".json");
-    file.encoding = "UTF-8";
-    if (file.exists) {
-        file.open("r");
-        var old = file.read();
-        file.close();
-        if (old === text) return;
+    try {
+        var dir = new Folder(UI_HELPER_DIR + "/ui_catalog");
+        if (!dir.exists) dir.create();
+        var file = new File(dir.fsName + "/" + uiSlug(key) + ".json");
+        file.encoding = "UTF-8";
+        var same = false;
+        if (file.exists) {
+            file.open("r");
+            var old = file.read();
+            file.close();
+            same = (old === text);
+        }
+        if (!same) {
+            file.open("w");
+            file.write(text);
+            file.close();
+        }
+    } catch (eCatalog) {}
+    var overText = uiReadFile(UI_HELPER_DIR + "/ui_overrides.json");
+    if (overText) {
+        var all = eval("(" + overText + ")");
+        if (all && all[key]) uiApplyOverrides(win, "", all[key]);
     }
-    file.open("w");
-    file.write(text);
-    file.close();
 }
 
 // ---- 줄 맞춤과 화살촉 이름 ----
@@ -470,7 +474,8 @@ function compactArrowheadNames(container) {
             }
             if (hit === 4) {
                 for (k = 0; k < 4; k++) child.items[k].text = map[k];
-                if (!child.helpTip) child.helpTip = "화살촉 모양  1 작살형(평가원식)  2 제비꼬리  3 삼각형  4 꺾쇠";
+                var legend = "1 작살형(평가원식)  2 제비꼬리  3 삼각형  4 꺾쇠";
+                child.helpTip = child.helpTip ? child.helpTip + "\n" + legend : "화살촉 모양  " + legend;
             }
         }
         if (child.children && child.children.length) compactArrowheadNames(child);
