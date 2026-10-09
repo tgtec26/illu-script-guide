@@ -217,9 +217,13 @@ try {
     heightRow.alignChildren = ["left", "center"];
     var heightCheck = heightRow.add("checkbox", undefined, "높이 표시 (치수선·점선)");
     var heightInput = heightRow.add("edittext", undefined, options.heightText);
-    heightInput.characters = 10;
+    heightInput.characters = 6;
     heightInput.helpTip = "치수선 가운데에 넣을 글자";
+    // 화살촉 모양: 제목을 달고 번호(1~4)만 고르는 작은 드롭다운으로 둔다. 줄이 R 단추 열 안에 들어오게 한다
+    var headShapeLabel = heightRow.add("statictext", undefined, "화살촉");
     var headShapeList = heightRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    headShapeList.preferredSize.width = 48;
+    headShapeList.maximumSize.width = 48;
     headShapeList.selection = options.headShape;
     headShapeList.helpTip = "치수선 화살촉 모양. 모두 일러스트레이터 화살촉을 측정한 모양";
     headShapeList.onChange = function() {
