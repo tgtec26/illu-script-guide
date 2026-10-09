@@ -55,6 +55,7 @@ function isTabTarget(win, control) {
 // 검증용으로 $.global.__noCompact = true면 건너뛴다. 실패해도 대화상자는 그대로 뜬다.
 var COMPACT_SLIDER_WIDTH = 118;
 var COMPACT_BUTTON_WIDTH = 64;
+var COMPACT_ROW_HEIGHT = 22;
 var COMPACT_UNIT = /^(mm|cm|m|pt|px|%|°|deg|s|ms|배|개|회|번|도|단계|줄|칸|N|J|g|kg|K|℃|°C|m\/s|m\/s²)$/;
 var COMPACT_BUTTONS = {"확인": true, "취소": true, "OK": true, "Cancel": true, "적용": true, "닫기": true};
 
@@ -81,10 +82,10 @@ function compactWalk(container) {
             if (child.type === "panel") {
                 compactPanelTitle(child);
                 var m = child.margins;
-                child.margins = [Math.min(m[0], 8), Math.max(12, Math.min(m[1], 14)), Math.min(m[2], 8), Math.min(m[3], 4)];
-                if (child.spacing > 2) child.spacing = 2;
+                child.margins = [Math.min(m[0], 8), Math.max(12, Math.min(m[1], 14)), Math.min(m[2], 8), Math.min(m[3], 3)];
+                if (child.spacing > 1) child.spacing = 1;
             } else if (child.type === "group") {
-                var limit = child.orientation === "row" ? 6 : 2;
+                var limit = child.orientation === "row" ? 6 : 1;
                 if (child.spacing > limit) child.spacing = limit;
             } else if (child.type === "scrollbar") {
                 // 이미 레이아웃이 잡힌 창은 preferredSize만으로는 줄지 않아 maximumSize도 건다
@@ -94,6 +95,12 @@ function compactWalk(container) {
                 }
             } else if (child.type === "statictext") {
                 compactLabel(child);
+            } else if (child.type === "edittext") {
+                // 한 줄짜리 입력창은 기본 높이가 커서 행이 높아진다
+                if (!child.properties || !child.properties.multiline) { child.preferredSize.height = COMPACT_ROW_HEIGHT; child.maximumSize.height = COMPACT_ROW_HEIGHT; }
+            } else if (child.type === "button" && child.text === "R") {
+                child.preferredSize.height = COMPACT_ROW_HEIGHT;
+                child.maximumSize.height = COMPACT_ROW_HEIGHT;
             } else if (child.type === "button" && COMPACT_BUTTONS[child.text]) {
                 child.preferredSize.width = COMPACT_BUTTON_WIDTH;
                 child.maximumSize.width = COMPACT_BUTTON_WIDTH;
