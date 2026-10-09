@@ -885,6 +885,7 @@ try {
                 // 속도 화살표 길이: 속력 1m/s당 mm
                 { key: "arrowScale", label: "화살표 길이", unit: "mm/(m/s)", min: 0.1, max: 2, step: 0.1, initial: 0.4 }
             ];
+            applyRangeOverrides("Mechanics/projectile", fields);
             var options = readSettings();
             var view = doc.activeView ? doc.activeView : doc.views[0];
             var viewCenter = view.centerPoint;
@@ -1013,6 +1014,30 @@ try {
                     if (!/\S/.test(input.text)) { input.text = String(options[field.key]); return; }
                     apply(Number(input.text), false);
                 };
+            }
+
+            // 슬라이더 범위: 00_세팅/slider_ranges.json에 "<prefix>/<key>": {min, max, step}가 있으면 코드의 값을 덮는다.
+            // 파일은 tools/range-admin.js(로컬 서버)로 편집한다. 파일이 없거나 값이 이상하면 코드의 값을 그대로 쓴다
+            function applyRangeOverrides(prefix, list) {
+                try {
+                    var file = new File(new File($.fileName).parent.parent.fsName + "/00_세팅/slider_ranges.json");
+                    if (!file.exists) return;
+                    file.encoding = "UTF-8";
+                    file.open("r");
+                    var text = file.read();
+                    file.close();
+                    var data = eval("(" + text + ")");
+                    for (var i = 0; i < list.length; i++) {
+                        var o = data[prefix + "/" + list[i].key];
+                        if (!o) continue;
+                        var lo = Number(o.min), hi = Number(o.max), st = Number(o.step);
+                        if (!isFinite(lo) || !isFinite(hi) || !isFinite(st) || lo >= hi || st <= 0) continue;
+                        list[i].min = lo;
+                        list[i].max = hi;
+                        list[i].step = st;
+                        list[i].initial = Math.min(hi, Math.max(lo, list[i].initial));
+                    }
+                } catch (e) {}
             }
 
             function trajectory(height, speed) {
