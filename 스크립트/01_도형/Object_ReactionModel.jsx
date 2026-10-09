@@ -908,6 +908,7 @@ try {
             row.alignChildren = ["left", "center"];
             row.add("statictext", undefined, ctl.label + ":").preferredSize.width = 100;
             var list = row.add("dropdownlist", undefined, ctl.items);
+            list.maximumSize.width = 230;
             list.selection = o[ctl.key];
             ui[ctl.key] = list;
             list.onChange = function() {
@@ -926,7 +927,7 @@ try {
             row.alignChildren = ["left", "center"];
             row.add("statictext", undefined, ctl.label + ":").preferredSize.width = 100;
             var input = row.add("edittext", undefined, o[ctl.key]);
-            input.characters = 34;
+            input.characters = 22;
             ui[ctl.key] = input;
             input.onChange = function() {
                 o[ctl.key] = String(input.text).replace(/\|/g, "");

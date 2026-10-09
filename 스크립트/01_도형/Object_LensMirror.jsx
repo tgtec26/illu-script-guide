@@ -207,7 +207,8 @@ try {
             var SLIDER_WIDTH = 196;
             var RESET_BUTTON_WIDTH = 34;
             var win = page;
-            win.add("statictext", undefined, objectMode ? "선택한 도형을 물체로 상을 작도합니다" : "평행 광선 그림 (도형을 선택하고 실행하면 상 작도)");
+            var modeNote = win.add("statictext", undefined, objectMode ? "선택한 도형을 물체로 상을 작도합니다" : "평행 광선 그림 (도형을 선택하고 실행하면 상 작도)", {multiline: true});
+            modeNote.preferredSize = [330, 34];
 
             var kindPanel = win.add("panel", undefined, "종류");
             kindPanel.orientation = "row";
@@ -273,7 +274,11 @@ try {
             var rayWidthRow = addRow(rayPanel, "광선 두께", "rayWidth", 0.1, 3, "pt", 0.1, false);
             var arrowSizeRow = addRow(rayPanel, "화살촉 크기", "arrowMm", 0.5, 5, "mm", 0.1, false);
             tip(arrowSizeRow, "길이. 폭은 길이의 0.8배");
-            var headShapeList = rayChecks.add("dropdownlist", undefined, HEAD_SHAPES);
+            // 체크 줄에 붙이면 한 줄이 너무 넓어져 따로 한 줄을 둔다
+            var headShapeRow = rayPanel.add("group");
+            var headShapeLabel = headShapeRow.add("statictext", undefined, "화살촉 모양");
+            headShapeLabel.preferredSize.width = LABEL_WIDTH;
+            var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
             headShapeList.selection = options.headShape;
             headShapeList.helpTip = "모두 일러스트레이터 화살촉을 측정한 모양";
             headShapeList.onChange = function() {
@@ -291,7 +296,7 @@ try {
             var offsetYRow = tip(addRow(positionPanel, "세로", "offsetY", -100, 100, "mm", 0.1, true), "양수: 위쪽");
 
             var status = win.add("statictext", undefined, " ");
-            status.preferredSize.width = 400;
+            status.preferredSize.width = 330;
 
             // 탭 호스트가 부르는 훅. 미리보기 체크는 호스트 것을 쓴다
             api.setPreview = function(on) { options.preview = on; updatePreview(); };

@@ -582,7 +582,8 @@ try {
 
             // --- 배치 옵션 ---
             var pnlLayout = page.add("panel", undefined, "배치");
-            pnlLayout.orientation = "row";
+            // 체크박스 3개를 한 줄에 두면 창이 넓어져 세로로 쌓는다
+            pnlLayout.orientation = "column";
             pnlLayout.alignChildren = ["left", "center"];
             chkHorizontalFirst = pnlLayout.add("checkbox", undefined, "1번 껍질 수평 배열");
             chkRotateShell2 = pnlLayout.add("checkbox", undefined, "2번 껍질 22.5° 이동");
