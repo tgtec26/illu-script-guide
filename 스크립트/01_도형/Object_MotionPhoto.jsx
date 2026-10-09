@@ -204,12 +204,12 @@ try {
     addCheck(guideRow, "눈금자", "rulerOn");
     addCheck(guideRow, "시간 표시", "timeOn");
     addCheck(guideRow, "운동 방향", "arrowOn");
-    var headShapeList = guideRow.add("dropdownlist", undefined, HEAD_SHAPES);
-    headShapeList.selection = options.headShape;
+    var headShapeList = guideRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+    headShapeList.selection = [2, 3, 1, 0][options.headShape];
     headShapeList.helpTip = "화살촉 모양(거리 표시·운동 방향). 작살형이 평가원식. 모두 일러스트레이터 화살촉을 측정한 모양";
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
-        options.headShape = headShapeList.selection.index;
+        options.headShape = [3, 2, 0, 1][headShapeList.selection.index];
         updatePreview();
     };
     checks.timeOn.helpTip = "사진마다 0초, 촬영 간격, 2×간격… 을 거리 표시의 맞은편에 쓴다";

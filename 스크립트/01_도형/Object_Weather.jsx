@@ -67,7 +67,7 @@ try {
                 {key: "braces", check: "층 묶음 기호", value: false},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
                 {panel: "화살촉"},
-                {key: "headShape", label: "축 화살촉 모양", items: HEAD_SHAPES, value: 3},
+                {key: "headShape", label: "축 화살촉 모양", items: HEAD_SHAPES, order: [3, 2, 0, 1], value: 3},
                 {key: "headScale", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100}
             ],
             draw: drawAtmosphere
@@ -244,7 +244,7 @@ try {
                 {panel: "화살표"},
                 {key: "arrowPt", label: "선 두께", unit: "pt", min: 0.3, max: 2, step: 0.05, value: 0.75},
                 {key: "headScale", label: "촉 크기", unit: "%", min: 30, max: 200, step: 5, value: 100},
-                {key: "headShape", label: "촉 모양", items: HEAD_SHAPES, value: 3},
+                {key: "headShape", label: "촉 모양", items: HEAD_SHAPES, order: [3, 2, 0, 1], value: 3},
                 {panel: "축 (옆에서 본 모습)"},
                 {key: "axes", check: "축", value: false},
                 {key: "axisArrows", check: "축 화살표", value: true},
@@ -361,7 +361,7 @@ try {
                 {key: "names", check: "육지·바다 이름", value: true},
                 {key: "pressure", check: "기압", value: true},
                 {key: "when", check: "때", value: false},
-                {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"], value: 0},
+                {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"], order: [3, 2, 0, 1], value: 0},
                 {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8}
             ],
@@ -585,11 +585,16 @@ try {
             var row = panel.add("group");
             row.alignChildren = ["left", "center"];
             row.add("statictext", undefined, ctl.label + ":").preferredSize.width = 100;
-            var list = row.add("dropdownlist", undefined, ctl.items);
-            list.selection = o[ctl.key];
+            // order: 목록에 보이는 순서 → 값 번호 (화살촉 모양은 1 작살형, 2 제비꼬리, 3 삼각형, 4 꺾쇠 순으로 보인다)
+            var order = ctl.order || null, shown = [], pos = o[ctl.key], k;
+            for (k = 0; k < ctl.items.length; k++) shown.push(order ? ctl.items[order[k]] : ctl.items[k]);
+            if (order) for (k = 0; k < order.length; k++) if (order[k] === o[ctl.key]) pos = k;
+            var list = row.add("dropdownlist", undefined, shown);
+            list.selection = pos;
             list.onChange = function() {
-                if (list.selection === null) { list.selection = o[ctl.key]; return; }
-                o[ctl.key] = list.selection.index;
+                if (list.selection === null) { list.selection = pos; return; }
+                pos = list.selection.index;
+                o[ctl.key] = order ? order[pos] : pos;
                 redraw();
             };
         }

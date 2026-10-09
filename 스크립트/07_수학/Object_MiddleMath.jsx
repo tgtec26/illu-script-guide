@@ -156,8 +156,8 @@ var SCRIPT_KEY = "MiddleMath";
     var footer = win.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;
-    var headShapeList = footer.add("dropdownlist", undefined, HEAD_SHAPES);
-    headShapeList.selection = headStyle.shape;
+    var headShapeList = footer.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+    headShapeList.selection = [2, 3, 1, 0][headStyle.shape];
     headShapeList.helpTip = "모든 탭의 화살촉 모양. 작살형이 평가원식(기본). 모두 일러스트레이터 화살촉을 측정한 모양";
     var footerSpacer = footer.add("group");
     footerSpacer.alignment = ["fill", "center"];
@@ -219,7 +219,7 @@ var SCRIPT_KEY = "MiddleMath";
     // 화살촉 모양·크기: 등록된 규격을 다시 쓰고 지금 탭의 미리보기를 다시 그린다
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
-        headStyle.shape = headShapeList.selection.index;
+        headStyle.shape = [3, 2, 0, 1][headShapeList.selection.index];
         applyHeadStyle();
         engine.updatePreview();
     };

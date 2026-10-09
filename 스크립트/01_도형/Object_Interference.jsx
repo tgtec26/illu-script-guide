@@ -346,8 +346,8 @@ try {
     arrowColorRow.add("statictext", undefined, "화살표 색:").preferredSize.width = LABEL_WIDTH;
     var colorArrow1List = addColorList(arrowColorRow, "colorArrow1", "파동 1 화살표");
     var colorArrow2List = addColorList(arrowColorRow, "colorArrow2", "파동 2 화살표");
-    var headShapeList = arrowColorRow.add("dropdownlist", undefined, HEAD_SHAPES);
-    headShapeList.selection = options.headShape;
+    var headShapeList = arrowColorRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+    headShapeList.selection = [2, 3, 1, 0][options.headShape];
     headShapeList.helpTip = "화살촉 모양. 모두 일러스트레이터 화살촉을 측정한 모양";
 
     var showRow = stylePanel.add("group");
@@ -401,7 +401,7 @@ try {
     destructiveButton.onClick = function() { setPhase2((options.phase1 + 180) % 360); };
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
-        options.headShape = headShapeList.selection.index;
+        options.headShape = [3, 2, 0, 1][headShapeList.selection.index];
         updatePreview();
     };
     arrowsCheck.onClick = function() { options.arrowsOn = arrowsCheck.value; applyArrowMode(); updatePreview(); };

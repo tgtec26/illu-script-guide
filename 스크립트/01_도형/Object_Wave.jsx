@@ -141,8 +141,8 @@ try {
     var headShapeRow = markPanel.add("group");
     headShapeRow.alignChildren = ["left", "center"];
     headShapeRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
-    var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
-    headShapeList.selection = headShape;
+    var headShapeList = headShapeRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+    headShapeList.selection = [2, 3, 1, 0][headShape];
     headShapeList.helpTip = "모두 일러스트레이터 화살촉을 측정한 모양";
     var headSizeRow = addValueRow(markPanel, "화살촉 크기", "%", headSizePct, HEAD_SIZE_RANGE[0], HEAD_SIZE_RANGE[1], 5, 0);
 
@@ -194,7 +194,7 @@ try {
     bindValueRow(headSizeRow, function() { return headSizePct; }, function(v) { headSizePct = v; setHeadSize(); }, defaults.headSizePct);
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
-        headShape = headShapeList.selection.index;
+        headShape = [3, 2, 0, 1][headShapeList.selection.index];
         updatePreview();
     };
     bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, defaults.offsetXmm);

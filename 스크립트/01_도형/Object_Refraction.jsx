@@ -244,8 +244,8 @@ try {
     var arrowRow = rayPanel.add("group");
     arrowRow.alignChildren = ["left", "center"];
     addCheck(arrowRow, "arrowOn", "화살촉");
-    var headShapeList = arrowRow.add("dropdownlist", undefined, HEAD_SHAPES);
-    headShapeList.selection = options.headShape;
+    var headShapeList = arrowRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+    headShapeList.selection = [2, 3, 1, 0][options.headShape];
     headShapeList.helpTip = "작살형이 평가원식. 모두 일러스트레이터 화살촉을 측정한 모양";
     addRow(rayPanel, "headSize", "화살촉 크기", "mm");
     addRow(rayPanel, "headDist", "화살촉 위치", "mm");
@@ -331,7 +331,7 @@ try {
     snellRadio.onClick = function() { setAngleMode(ANGLE_SNELL); };
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
-        options.headShape = headShapeList.selection.index;
+        options.headShape = [3, 2, 0, 1][headShapeList.selection.index];
         updatePreview();
     };
     previewCheck.onClick = function() {

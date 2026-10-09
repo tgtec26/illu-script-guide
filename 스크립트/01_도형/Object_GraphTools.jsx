@@ -353,12 +353,12 @@ try {
             var headShapeGroup = legendPanel.add("group");
             headShapeGroup.alignChildren = ["left", "center"];
             headShapeGroup.add("statictext", undefined, "화살촉 종류:");
-            var headShapeList = headShapeGroup.add("dropdownlist", undefined, HEAD_SHAPES);
-            headShapeList.selection = headShape;
+            var headShapeList = headShapeGroup.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+            headShapeList.selection = [2, 3, 1, 0][headShape];
             headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
             headShapeList.onChange = function() {
                 if (!headShapeList.selection) return;
-                headShape = headShapeList.selection.index;
+                headShape = [3, 2, 0, 1][headShapeList.selection.index];
             };
 
             var headScaleGroup = legendPanel.add("group");
@@ -934,7 +934,7 @@ try {
                         var savedShape = parseInt(p[22], 10);
                         if (savedShape >= 0 && savedShape < HEAD_SHAPES.length) {
                             headShape = savedShape;
-                            headShapeList.selection = headShape;
+                            headShapeList.selection = [2, 3, 1, 0][headShape];
                         }
                     }
                 } catch (e) {}
@@ -4400,12 +4400,12 @@ try {
             var headShapeRow = curvePanel.add("group");
             headShapeRow.alignChildren = ["left", "center"];
             headShapeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
-            var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
-            headShapeList.selection = headShape;
+            var headShapeList = headShapeRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+            headShapeList.selection = [2, 3, 1, 0][headShape];
             headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙이며, 확인할 때 붙는다";
             headShapeList.onChange = function() {
                 if (!headShapeList.selection) return;
-                headShape = headShapeList.selection.index;
+                headShape = [3, 2, 0, 1][headShapeList.selection.index];
             };
 
             var showPanel = addPanel(dlg, "표시");

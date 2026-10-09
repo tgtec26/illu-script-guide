@@ -168,8 +168,8 @@ try {
     var headShapeRow = headPanel.add("group");
     headShapeRow.alignChildren = ["left", "center"];
     headShapeRow.add("statictext", undefined, "모양:").preferredSize.width = LABEL_WIDTH;
-    var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
-    headShapeList.selection = options.headShape;
+    var headShapeList = headShapeRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+    headShapeList.selection = [2, 3, 1, 0][options.headShape];
     headShapeList.helpTip = "작살형이 평가원식. 모두 일러스트레이터 화살촉을 측정한 모양";
     addRow(headPanel, "headSize", "크기", "%");
 
@@ -199,7 +199,7 @@ try {
     syncRadios();
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
-        options.headShape = headShapeList.selection.index;
+        options.headShape = [3, 2, 0, 1][headShapeList.selection.index];
         updatePreview();
     };
 

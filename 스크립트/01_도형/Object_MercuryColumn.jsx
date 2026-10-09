@@ -221,14 +221,14 @@ try {
     heightInput.helpTip = "치수선 가운데에 넣을 글자";
     // 화살촉 모양: 제목을 달고 번호(1~4)만 고르는 작은 드롭다운으로 둔다. 줄이 R 단추 열 안에 들어오게 한다
     var headShapeLabel = heightRow.add("statictext", undefined, "화살촉");
-    var headShapeList = heightRow.add("dropdownlist", undefined, HEAD_SHAPES);
+    var headShapeList = heightRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
     headShapeList.preferredSize.width = 48;
     headShapeList.maximumSize.width = 48;
-    headShapeList.selection = options.headShape;
+    headShapeList.selection = [2, 3, 1, 0][options.headShape];
     headShapeList.helpTip = "치수선 화살촉 모양. 모두 일러스트레이터 화살촉을 측정한 모양";
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
-        options.headShape = headShapeList.selection.index;
+        options.headShape = [3, 2, 0, 1][headShapeList.selection.index];
         updatePreview();
     };
     var glassRow = showPanel.add("group");

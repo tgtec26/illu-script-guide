@@ -429,12 +429,12 @@ try {
         var headShapeRow = arrowPanel.add("group");
         headShapeRow.alignChildren = ["left", "center"];
         headShapeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
-        var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
-        headShapeList.selection = headShape;
+        var headShapeList = headShapeRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+        headShapeList.selection = [2, 3, 1, 0][headShape];
         headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
         headShapeList.onChange = function() {
             if (!headShapeList.selection) return;
-            headShape = headShapeList.selection.index;
+            headShape = [3, 2, 0, 1][headShapeList.selection.index];
             updatePreview();
         };
         var clearRow = addValueRow(arrowPanel, "그림과 간격", "mm", clearMm, CLEAR_RANGE[0], CLEAR_RANGE[1], 0.1, 1);

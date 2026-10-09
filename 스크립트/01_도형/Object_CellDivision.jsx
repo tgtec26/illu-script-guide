@@ -1504,12 +1504,12 @@ try {
             var headShapeRow = arrowPanel.add("group");
             headShapeRow.alignChildren = ["left", "center"];
             headShapeRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
-            var headShapeList = headShapeRow.add("dropdownlist", undefined, HEAD_SHAPES);
-            headShapeList.selection = headShape;
+            var headShapeList = headShapeRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+            headShapeList.selection = [2, 3, 1, 0][headShape];
             headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
             headShapeList.onChange = function() {
                 if (!headShapeList.selection) return;
-                headShape = headShapeList.selection.index;
+                headShape = [3, 2, 0, 1][headShapeList.selection.index];
                 // 화살촉은 확인할 때 적용된다 (미리보기는 직접 그린 화살촉)
             };
 
@@ -2476,12 +2476,12 @@ try {
             var headShapeRow2 = arrowPanel.add("group");
             headShapeRow2.alignChildren = ["left", "center"];
             headShapeRow2.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
-            var headShapeList2 = headShapeRow2.add("dropdownlist", undefined, HEAD_SHAPES2);
-            headShapeList2.selection = headShape2;
+            var headShapeList2 = headShapeRow2.add("dropdownlist", undefined, [HEAD_SHAPES2[3], HEAD_SHAPES2[2], HEAD_SHAPES2[0], HEAD_SHAPES2[1]]);
+            headShapeList2.selection = [2, 3, 1, 0][headShape2];
             headShapeList2.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
             headShapeList2.onChange = function() {
                 if (!headShapeList2.selection) return;
-                headShape2 = headShapeList2.selection.index;
+                headShape2 = [3, 2, 0, 1][headShapeList2.selection.index];
                 updatePreview();
             };
             var gapControls = addValueRow(arrowPanel, "간격", "°", gapDeg, 0, 60, 1, 0);
