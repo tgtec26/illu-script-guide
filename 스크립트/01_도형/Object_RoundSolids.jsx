@@ -334,8 +334,8 @@ try {
             var ratioLabel = ratioRow.add("statictext", undefined, "분할 비율");
             ratioLabel.preferredSize.width = LABEL_WIDTH;
             var ratioInput = ratioRow.add("edittext", undefined, divisionRatioText);
-            ratioInput.preferredSize.width = 200;
-            ratioRow.add("statictext", undefined, "(예: 43,11,40,6 · 빈칸=균등)");
+            ratioInput.preferredSize.width = 150;
+            ratioInput.helpTip = "예: 43,11,40,6 · 빈칸 = 균등";
 
             setDivisionControlsEnabled(divisionsEnabled);
 
@@ -347,15 +347,19 @@ try {
             var outerFaceRadio = colorRow.add("radiobutton", undefined, "외부");
             var waterFaceRadio = colorRow.add("radiobutton", undefined, "물");
             topFaceRadio.value = true;
-            var kValueText = colorRow.add("statictext", undefined, "000K");
+            var kRow = colorPanel.add("group");
+            kRow.alignChildren = ["left", "center"];
+            var kLabel = kRow.add("statictext", undefined, "");
+            kLabel.preferredSize.width = LABEL_WIDTH;
+            var kValueText = kRow.add("statictext", undefined, "000K");
             kValueText.preferredSize.width = 42;
             kValueText.justify = "center";
-            var kSlider = colorRow.add("scrollbar", undefined, faceK[activeFace], 0, 100);
+            var kSlider = kRow.add("scrollbar", undefined, faceK[activeFace], 0, 100);
             kSlider.preferredSize.width = 120;
             kSlider.stepdelta = K_STEP;
             kSlider.jumpdelta = K_STEP;
             kSlider.onChanging = function() { setK(Math.round(kSlider.value / K_STEP) * K_STEP); };
-            var kReset = colorRow.add("button", undefined, "R");
+            var kReset = kRow.add("button", undefined, "R");
             kReset.preferredSize.width = RESET_BUTTON_WIDTH;
             kReset.helpTip = "처음 값으로 되돌리기";
             kReset.onClick = function() {
@@ -1630,15 +1634,19 @@ try {
             var sideFaceRadio = colorRow.add("radiobutton", undefined, "옆면");
             var bottomFaceRadio = colorRow.add("radiobutton", undefined, "아랫면");
             topFaceRadio.value = true;
-            var kValueText = colorRow.add("statictext", undefined, "0K");
+            var kRow = extraPanel.add("group");
+            kRow.alignChildren = ["left", "center"];
+            var kLabel = kRow.add("statictext", undefined, "");
+            kLabel.preferredSize.width = LABEL_WIDTH;
+            var kValueText = kRow.add("statictext", undefined, "0K");
             kValueText.preferredSize.width = 42;
             kValueText.justify = "center";
-            var kSlider = colorRow.add("scrollbar", undefined, faceK[activeFace], 0, 100);
+            var kSlider = kRow.add("scrollbar", undefined, faceK[activeFace], 0, 100);
             kSlider.preferredSize.width = 120;
             kSlider.stepdelta = K_STEP;
             kSlider.jumpdelta = K_STEP;
             kSlider.onChanging = function() { setK(Math.round(kSlider.value / K_STEP) * K_STEP); };
-            var kReset = colorRow.add("button", undefined, "R");
+            var kReset = kRow.add("button", undefined, "R");
             kReset.preferredSize.width = RESET_BUTTON_WIDTH;
             kReset.helpTip = "처음 값으로 되돌리기";
             kReset.onClick = function() {

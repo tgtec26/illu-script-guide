@@ -157,7 +157,7 @@ function compactPanelTitle(panel) {
     var text = panel.text;
     if (!text || text.length <= 12) return;
     var cut = text.search(/\. |\s—\s|\s\(/);
-    if (cut < 4) return;
+    if (cut < 2) return;
     if (!panel.helpTip) panel.helpTip = text;
     panel.text = text.substr(0, cut);
 }
