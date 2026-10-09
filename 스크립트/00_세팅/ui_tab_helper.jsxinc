@@ -55,6 +55,7 @@ function isTabTarget(win, control) {
 // 검증용으로 $.global.__noCompact = true면 건너뛴다. 실패해도 대화상자는 그대로 뜬다.
 var COMPACT_SLIDER_WIDTH = 118;
 var COMPACT_BUTTON_WIDTH = 64;
+var COMPACT_BUTTON_PAD = 14;   // 글자 좌우 여백 합 (2026-10-09: 28 → 14로 절반)
 var COMPACT_ROW_HEIGHT = 22;
 var COMPACT_UNIT = /^(mm|cm|m|pt|px|%|°|deg|s|ms|배|개|회|번|도|단계|줄|칸|N|J|g|kg|K|℃|°C|m\/s|m\/s²)$/;
 var COMPACT_BUTTONS = {"확인": true, "취소": true, "OK": true, "Cancel": true, "적용": true, "닫기": true};
@@ -184,7 +185,7 @@ function compactButtonWalk(container) {
     for (i = 0; i < container.children.length; i++) {
         k = container.children[i];
         if (k.type === "button" && k.text && k.text !== "R" && !COMPACT_BUTTONS[k.text]) {
-            var w = k.graphics.measureString(k.text)[0] + 28;
+            var w = k.graphics.measureString(k.text)[0] + COMPACT_BUTTON_PAD;
             group.push(k);
             if (w > need) need = w;
             if (k.preferredSize.width > w + 12) wide = true;
