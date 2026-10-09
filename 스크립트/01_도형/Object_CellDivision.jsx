@@ -246,7 +246,9 @@ try {
             // -------------------------------------------------------
             function buildTab(parent, index) {
                 var c = chromosomes[index];
-                var tab = parent.add("tab", undefined, "염색체 " + (index + 1));
+                // 탭 줄이 넓어 창을 넓히므로 번호만 쓴다
+                var tab = parent.add("tab", undefined, String(index + 1));
+                tab.helpTip = "염색체 " + (index + 1);
                 tab.orientation = "column";
                 tab.alignChildren = "left";
                 tab.spacing = 4;
@@ -281,8 +283,8 @@ try {
                 rows.pBend = addValueRow(tab, "p암 휨", "°", c.pBend, -90, 90, 1, 0);
                 rows.qBend = addValueRow(tab, "q암 휨", "°", c.qBend, -90, 90, 1, 0);
                 rows.gray = addValueRow(tab, "음영", "K%", c.gray, 0, 100, 5, 0);
-                var note = tab.add("statictext", undefined, "중심절 위치는 위 끝 0%, 아래 끝 100%. 휨 양수는 바깥쪽(분체 1개면 오른쪽)으로 굽습니다.");
-                note.preferredSize.width = 420;
+                var note = tab.add("statictext", undefined, "중심절 위치는 위 끝 0%, 아래 끝 100%. 휨 양수는 바깥쪽(분체 1개면 오른쪽)으로 굽습니다.", {multiline: true});
+                note.preferredSize = [330, 34];
 
                 for (var key in rows) {
                     if (!rows.hasOwnProperty(key)) continue;
@@ -874,8 +876,8 @@ try {
             var widthControls = addValueRow(shapePanel, "좌우 두께", "mm", widthMm, 1, 60, 0.5, 1);
             var centromerePctControls = addValueRow(shapePanel, "중심절 위치", "%", centromerePct, 5, 95, 1, 0);
             var centromereDiaControls = addValueRow(shapePanel, "중심절 지름", "mm", centromereDiaMm, 0.5, 30, 0.1, 1);
-            var shapeNote = shapePanel.add("statictext", undefined, "p암·중심절·q암은 항상 접합니다. 지름을 바꾸면 암이 따라 붙습니다.");
-            shapeNote.preferredSize.width = 420;
+            var shapeNote = shapePanel.add("statictext", undefined, "p암·중심절·q암은 항상 접합니다. 지름을 바꾸면 암이 따라 붙습니다.", {multiline: true});
+            shapeNote.preferredSize = [330, 34];
 
             var layoutPanel = addPanel(dlg, "배치");
             var spacingControls = addValueRow(layoutPanel, "염색체 간격", "mm", spacingMm, 0, 120, 0.5, 1);
@@ -890,8 +892,8 @@ try {
             for (var i = 0; i < LOCUS_COUNT; i++) {
                 locusControls.push(addValueRow(locusPanel, "좌 " + (i + 1), "%", lociPct[i], 0, 100, 0.5, 1, true));
             }
-            var locusNote = locusPanel.add("statictext", undefined, "위치는 염색체 위 끝이 0%, 아래 끝이 100%입니다.");
-            locusNote.preferredSize.width = 420;
+            var locusNote = locusPanel.add("statictext", undefined, "위치는 염색체 위 끝이 0%, 아래 끝이 100%입니다.", {multiline: true});
+            locusNote.preferredSize = [330, 34];
 
             bindValueRow(widthControls,
                 function() { return widthMm; },
@@ -2426,7 +2428,9 @@ try {
             var startAngleNote = sectorPanel.add("statictext", undefined, "0° = 12시, +는 시계 방향");
             var sectorSlider = sectorPanel.add("customView");
             sectorSlider.alignment = ["fill", "top"];
-            sectorSlider.preferredSize.height = SECTOR_SLIDER_HEIGHT;
+            // customView는 기본 폭이 넓어 창을 넓힌다
+            sectorSlider.preferredSize = [310, SECTOR_SLIDER_HEIGHT];
+            sectorSlider.maximumSize = [310, SECTOR_SLIDER_HEIGHT];
             sectorSlider.onDraw = drawSectorSlider;
             var dragBoundary = -1;
             sectorSlider.addEventListener("mousedown", function(event) {
@@ -2455,14 +2459,13 @@ try {
                 sectorRow.add("statictext", undefined, "%");
                 sectorInputs.push(percentInput);
 
-                var radioGroup = sectorRow.add("group");
-                radioGroup.alignChildren = ["left", "center"];
-                radioGroup.spacing = 4;
-                for (var c = 0; c < LABEL_CHOICES.length; c++) {
-                    var radio = radioGroup.add("radiobutton", undefined, LABEL_CHOICES[c].display);
-                    radio.value = (labelIndexes[s] === c);
-                    radio.onClick = makeLabelHandler(s, c);
-                }
+                // 글자 선택 라디오 7개가 한 줄을 넓히므로 드롭다운 하나로 한다
+                var labelDisplays = [];
+                for (var c = 0; c < LABEL_CHOICES.length; c++) labelDisplays.push(LABEL_CHOICES[c].display);
+                var labelList = sectorRow.add("dropdownlist", undefined, labelDisplays);
+                labelList.selection = labelIndexes[s];
+                labelList.helpTip = "구간 글자";
+                labelList.onChange = makeLabelListHandler(s, labelList);
 
                 sectorInputs[s].onChange = makePercentHandler(s);
             }
@@ -2482,8 +2485,8 @@ try {
                 updatePreview();
             };
             var gapControls = addValueRow(arrowPanel, "간격", "°", gapDeg, 0, 60, 1, 0);
-            var arrowNote = arrowPanel.add("statictext", undefined, "미리보기는 슬라이더를 놓는 순간 화살촉까지 그립니다 (흰색 채움은 확인 후 적용).");
-            arrowNote.preferredSize.width = 380;
+            var arrowNote = arrowPanel.add("statictext", undefined, "미리보기는 슬라이더를 놓는 순간 화살촉까지 그립니다 (흰색 채움은 확인 후 적용).", {multiline: true});
+            arrowNote.preferredSize = [330, 34];
 
             bindValueRow(outerControls,
                 function() { return outerMm; },
@@ -3008,9 +3011,10 @@ try {
             // -------------------------------------------------------
             // 다이얼로그 도우미
             // -------------------------------------------------------
-            function makeLabelHandler(sectorIndex, choiceIndex) {
+            function makeLabelListHandler(sectorIndex, list) {
                 return function() {
-                    labelIndexes[sectorIndex] = choiceIndex;
+                    if (!list.selection) return;
+                    labelIndexes[sectorIndex] = list.selection.index;
                     updatePreview();
                 };
             }

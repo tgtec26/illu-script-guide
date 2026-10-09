@@ -1373,7 +1373,9 @@ try {
             var sectorPanel = addPanel(contentTab, "항목 (왼쪽부터)");
             var sectorSlider = sectorPanel.add("customView");
             sectorSlider.alignment = ["fill", "top"];
-            sectorSlider.preferredSize.height = SECTOR_SLIDER_HEIGHT;
+            // customView는 기본 폭이 넓어 창을 넓힌다. 다른 행(항목 행 약 315)과 맞춘다
+            sectorSlider.preferredSize = [310, SECTOR_SLIDER_HEIGHT];
+            sectorSlider.maximumSize = [310, SECTOR_SLIDER_HEIGHT];
             sectorSlider.onDraw = drawSectorSlider;
             var dragBoundary = -1;
             sectorSlider.addEventListener("mousedown", function(event) {
@@ -1524,7 +1526,9 @@ try {
 
             function buildArrowTab(parent, index) {
                 var a = arrows[index];
-                var tab = parent.add("tab", undefined, "화살표 " + (index + 1));
+                // 탭 줄이 넓어 창을 넓히므로 번호만 쓴다
+                var tab = parent.add("tab", undefined, String(index + 1));
+                tab.helpTip = "화살표 " + (index + 1);
                 tab.orientation = "column";
                 tab.alignChildren = "left";
                 tab.spacing = 4;
