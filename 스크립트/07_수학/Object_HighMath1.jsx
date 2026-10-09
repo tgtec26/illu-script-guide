@@ -10,6 +10,7 @@ try {
     __memo.write($.fileName);
     __memo.close();
 } catch (e) {}
+var SCRIPT_KEY = "HighMath1";
 
 // 고등학교 수학Ⅰ: 지수·로그 함수, 삼각함수(그래프·단위원·단위원과 그래프·사인법칙과 코사인법칙), 수열 그림을 한 창의 탭으로 묶는다 (중학교 수학 묶음과 같은 구조).
 // 고등학교 수학은 과목별 스크립트 다섯 개(공통수학·수학Ⅰ·수학Ⅱ·확률과 통계·기하)로 나뉘어 있고, 탭마다 저장 키는 예전 그대로다.
@@ -346,11 +347,11 @@ try {
             compareInput.preferredSize.width = 260;
             compareInput.helpTip = "3, 1/2처럼 쉼표로. 같은 m, n으로 밑만 바꾼 그래프를 겹친다 (역함수 모드에서는 지수함수만)";
 
-            var markPanel = addPanel(win, "표시");
+            var markPanel = addPanel(win, "표시", "fold1");
             addCheckRow(markPanel, [["asymptotes", "점근선"], ["points", "지나는 점"], ["coords", "점 좌표"]]);
             addCheckRow(markPanel, [["mirror", "대칭인 점 잇기"], ["formulas", "그래프 끝에 식"]]);
 
-            var rangePanel = addPanel(win, "범위 · 눈금");
+            var rangePanel = addPanel(win, "범위 · 눈금", "fold5");
             var xMinControls = addValueRow(rangePanel, "x 최솟값", "", xMin, -20, 0, 1, 0);
             var xMaxControls = addValueRow(rangePanel, "x 최댓값", "", xMax, 1, 20, 1, 0);
             var yMinControls = addValueRow(rangePanel, "y 최솟값", "", yMin, -20, 0, 1, 0);
@@ -1059,7 +1060,14 @@ try {
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            function addPanel(parent, title) {
+            function addPanel(parent, title, foldKey) {
+                // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
+                if (foldKey && typeof makeCollapsiblePanel === "function") {
+                    var body = makeCollapsiblePanel(parent, title, true, SCRIPT_KEY + "/" + foldKey);
+                    body.alignChildren = ["left", "top"];
+                    body.spacing = 6;
+                    return body;
+                }
                 var panel = parent.add("panel", undefined, title);
                 panel.alignChildren = ["left", "top"];
                 panel.margins = [12, 16, 12, 12];
@@ -1277,7 +1285,7 @@ try {
             var dControls = addValueRow(functionPanel, "d", "", graphs[0].d, -5, 5, 0.5, 1);
 
             var checks = {};
-            var markPanel = addPanel(win, "표시");
+            var markPanel = addPanel(win, "표시", "fold2");
             addCheckRow(markPanel, [["extremes", "최댓값·최솟값"], ["period", "주기"], ["asymptotes", "tan 점근선"]]);
             addCheckRow(markPanel, [["reference", "원래 그래프 점선"], ["formula", "식 글자"], ["second", "두 번째 그래프"]]);
 
@@ -1296,7 +1304,7 @@ try {
             var targetList = inequalityRow.add("dropdownlist", undefined, TARGETS);
             targetList.selection = target;
 
-            var rangePanel = addPanel(win, "범위 · 눈금");
+            var rangePanel = addPanel(win, "범위 · 눈금", "fold6");
             var xMinControls = addValueRow(rangePanel, "x 최솟값", "×π/2", xMinHalf, -8, 0, 1, 0);
             var xMaxControls = addValueRow(rangePanel, "x 최댓값", "×π/2", xMaxHalf, 1, 12, 1, 0);
             var piControls = addValueRow(rangePanel, "π의 길이", "mm", piMm, 8, 60, 1, 0);
@@ -2154,7 +2162,14 @@ try {
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            function addPanel(parent, title) {
+            function addPanel(parent, title, foldKey) {
+                // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
+                if (foldKey && typeof makeCollapsiblePanel === "function") {
+                    var body = makeCollapsiblePanel(parent, title, true, SCRIPT_KEY + "/" + foldKey);
+                    body.alignChildren = ["left", "top"];
+                    body.spacing = 6;
+                    return body;
+                }
                 var panel = parent.add("panel", undefined, title);
                 panel.alignChildren = ["left", "top"];
                 panel.margins = [12, 16, 12, 12];
@@ -2717,7 +2732,14 @@ try {
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            function addPanel(parent, title) {
+            function addPanel(parent, title, foldKey) {
+                // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
+                if (foldKey && typeof makeCollapsiblePanel === "function") {
+                    var body = makeCollapsiblePanel(parent, title, true, SCRIPT_KEY + "/" + foldKey);
+                    body.alignChildren = ["left", "top"];
+                    body.spacing = 6;
+                    return body;
+                }
                 var panel = parent.add("panel", undefined, title);
                 panel.alignChildren = ["left", "top"];
                 panel.margins = [12, 16, 12, 12];
@@ -2910,7 +2932,7 @@ try {
             divisionControls.input.helpTip = "한 바퀴를 몇 등분해 점을 옮길지. 12 = 30°마다";
             var thetaControls = addValueRow(functionPanel, "강조 각 θ", "°", thetaDeg, 0, 360, 5, 0);
 
-            var markPanel = addPanel(win, "표시");
+            var markPanel = addPanel(win, "표시", "fold3");
             addCheckRow(markPanel, [["divisions", "분할 점"], ["highlight", "각 θ 강조"], ["drops", "x축까지 수선"]]);
             addCheckRow(markPanel, [["numbers", "눈금 숫자"], ["formula", "식 글자"]]);
 
@@ -3459,7 +3481,14 @@ try {
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            function addPanel(parent, title) {
+            function addPanel(parent, title, foldKey) {
+                // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
+                if (foldKey && typeof makeCollapsiblePanel === "function") {
+                    var body = makeCollapsiblePanel(parent, title, true, SCRIPT_KEY + "/" + foldKey);
+                    body.alignChildren = ["left", "top"];
+                    body.spacing = 6;
+                    return body;
+                }
                 var panel = parent.add("panel", undefined, title);
                 panel.alignChildren = ["left", "top"];
                 panel.margins = [12, 16, 12, 12];
@@ -3660,7 +3689,7 @@ try {
             var resultText = valuePanel.add("statictext", undefined, " ", { multiline: true });
             resultText.preferredSize = [360, 34];
 
-            var stylePanel = addPanel(win, "표시");
+            var stylePanel = addPanel(win, "표시", "fold4");
             var styleRow = stylePanel.add("group");
             styleRow.add("statictext", undefined, "변 글자:");
             var sideList = styleRow.add("dropdownlist", undefined, SIDE_STYLES);
@@ -4030,7 +4059,14 @@ try {
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            function addPanel(parent, title) {
+            function addPanel(parent, title, foldKey) {
+                // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
+                if (foldKey && typeof makeCollapsiblePanel === "function") {
+                    var body = makeCollapsiblePanel(parent, title, true, SCRIPT_KEY + "/" + foldKey);
+                    body.alignChildren = ["left", "top"];
+                    body.spacing = 6;
+                    return body;
+                }
                 var panel = parent.add("panel", undefined, title);
                 panel.alignChildren = ["left", "top"];
                 panel.margins = [12, 16, 12, 12];
@@ -5041,7 +5077,14 @@ try {
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            function addPanel(parent, title) {
+            function addPanel(parent, title, foldKey) {
+                // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
+                if (foldKey && typeof makeCollapsiblePanel === "function") {
+                    var body = makeCollapsiblePanel(parent, title, true, SCRIPT_KEY + "/" + foldKey);
+                    body.alignChildren = ["left", "top"];
+                    body.spacing = 6;
+                    return body;
+                }
                 var panel = parent.add("panel", undefined, title);
                 panel.alignChildren = ["left", "top"];
                 panel.margins = [12, 16, 12, 12];

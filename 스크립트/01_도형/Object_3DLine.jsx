@@ -9,6 +9,12 @@ try {
     __memo.close();
 } catch (e) {}
 
+// 행이 많은 패널은 접을 수 있게 한다 (00_세팅/ui_tab_helper.jsxinc의 makeCollapsiblePanel, 없으면 일반 패널). 접힌 상태는 다음에도 기억한다
+function foldPanel(parent, title, collapsed, key) {
+    if (typeof makeCollapsiblePanel === "function") return makeCollapsiblePanel(parent, title, collapsed, "3DLine/" + key);
+    return parent.add("panel", undefined, title);
+}
+
 // 3D → 2D 라인: 입체 도형·돌출·회전체·평면 회전을 한 창의 탭으로 묶었다. 시점·위치는 공용이고, 숨은선·면 음영은 입체 탭에서 쓴다.
 // 입체 도형은 탭이 둘이다. 1은 시점(가로 회전·위아래 기울기·화면 회전·원근으로 물체를 돌리는 카메라 방식),
 // 2는 관찰 각도(결정 구조와 같은 제도 방식: 모서리의 화면 각도와 앞·뒤 면 거리로 그림을 정함. 원근 없음).
@@ -248,7 +254,7 @@ try {
         anglePresetRow.add("button", undefined, anglePresets[anglePresetIndex][0]).onClick = makeAnglePresetHandler(anglePresets[anglePresetIndex]);
     }
 
-    var linePanel = win.add("panel", undefined, "선과 면");
+    var linePanel = foldPanel(win, "선과 면", true, "line");
     linePanel.orientation = "column";
     linePanel.alignChildren = "fill";
     var hiddenRow = linePanel.add("group");

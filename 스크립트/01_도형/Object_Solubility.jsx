@@ -10,6 +10,12 @@ try {
     __memo.close();
 } catch (e) {}
 
+// 행이 많은 패널은 접을 수 있게 한다 (00_세팅/ui_tab_helper.jsxinc의 makeCollapsiblePanel, 없으면 일반 패널). 접힌 상태는 다음에도 기억한다
+function foldPanel(parent, title, collapsed, key) {
+    if (typeof makeCollapsiblePanel === "function") return makeCollapsiblePanel(parent, title, collapsed, "Solubility/" + key);
+    return parent.add("panel", undefined, title);
+}
+
 // 용해도 곡선 그래프를 그린다.
 // 사각형을 선택하고 실행하면 그 사각형의 왼쪽 위 모서리와 크기를 그래프 영역으로 쓰고(사각형은 확인 때 지운다),
 // 선택이 없으면 대지 가운데에 기본 크기로 그린다.
@@ -189,7 +195,7 @@ try {
     var widthControls = addValueRow(sizePanel, "너비", "mm", widthMm, SIZE_MIN_MM, SIZE_MAX_MM, 1, 0);
     var heightControls = addValueRow(sizePanel, "높이", "mm", heightMm, SIZE_MIN_MM, SIZE_MAX_MM, 1, 0);
 
-    var gridPanel = addPanel(dlg, "보조선·눈금");
+    var gridPanel = foldPanel(dlg, "보조선·눈금", true, "grid");
     var gridCheck = gridPanel.add("checkbox", undefined, "파선 보조선 (끄면 축에 눈금)");
     // 보조선 간격과 눈금 위치는 둘 중 하나만 쓰이므로 한 자리에 겹쳐 두고 쓰이는 쪽만 보인다
     var gridStack = gridPanel.add("group");

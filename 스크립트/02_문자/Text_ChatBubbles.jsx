@@ -9,6 +9,12 @@ try {
     __memo.close();
 } catch (e) {}
 
+// 행이 많은 패널은 접을 수 있게 한다 (00_세팅/ui_tab_helper.jsxinc의 makeCollapsiblePanel, 없으면 일반 패널). 접힌 상태는 다음에도 기억한다
+function foldPanel(parent, title, collapsed, key) {
+    if (typeof makeCollapsiblePanel === "function") return makeCollapsiblePanel(parent, title, collapsed, "ChatBubbles/" + key);
+    return parent.add("panel", undefined, title);
+}
+
 /*
   Text_ChatBubbles.jsx
   기능: 여러 사람이 주고받는 채팅 말풍선을 한 번에 만듭니다.
@@ -104,7 +110,7 @@ try {
         updatePreview();
     };
 
-    var textPanel = win.add("panel", undefined, "글자 · 배치");
+    var textPanel = foldPanel(win, "글자 · 배치", true, "text");
     textPanel.alignChildren = "fill";
     textPanel.spacing = 2;
     addRow(textPanel, "글자 크기", "fontSize", 4, 30, "pt", false);
@@ -120,13 +126,13 @@ try {
     };
 
     // ---- Text_AreaTextRoundedBox와 같은 옵션 ----
-    var boxPanel = win.add("panel", undefined, "사각형 · 텍스트 주변 여백");
+    var boxPanel = foldPanel(win, "사각형 · 텍스트 주변 여백", true, "box");
     boxPanel.alignChildren = "fill";
     boxPanel.spacing = 2;
     addRow(boxPanel, "좌우 여백", "paddingX", 0, 50, "mm", false);
     addRow(boxPanel, "상하 여백", "paddingY", 0, 50, "mm", false);
     addRow(boxPanel, "코너 라운딩", "radius", 0, 50, "mm", false);
-    var tailPanel = win.add("panel", undefined, "꼬리");
+    var tailPanel = foldPanel(win, "꼬리", true, "tail");
     tailPanel.alignChildren = "fill";
     tailPanel.spacing = 2;
     addRow(tailPanel, "붙는 위치", "tailOffset", 0, 100, "%", false).helpTip = "0 → 100%: 위 → 아래";
