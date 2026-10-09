@@ -207,6 +207,11 @@ try {
             var SLIDER_WIDTH = 196;
             var RESET_BUTTON_WIDTH = 34;
             var win = page;
+            // 행이 많은 패널은 접을 수 있게 한다 (헬퍼가 없으면 일반 패널). 접힌 상태는 다음에도 기억한다
+            function foldPanel(title, collapsed, key) {
+                if (typeof makeCollapsiblePanel === "function") return makeCollapsiblePanel(win, title, collapsed, "LensMirror/" + key);
+                return win.add("panel", undefined, title);
+            }
             var kindPanel = win.add("panel", undefined, "종류");
             kindPanel.helpTip = objectMode ? "선택한 도형을 물체로 상을 작도합니다" : "평행 광선 그림 (도형을 선택하고 실행하면 상 작도)";
             kindPanel.orientation = "row";
@@ -232,7 +237,7 @@ try {
             tip(indexRow, "렌즈만. 초점 거리 = 호 반지름 ÷ 2(굴절률−1). 유리 1.5, 교과서처럼 초점을 가깝게 두려면 올립니다");
             addRow(shapePanel, "선 두께", "outlineWidth", 0.1, 3, "pt", 0.1, false);
 
-            var linePanel = win.add("panel", undefined, "선 (광축·중심선·빗금 0.3pt)");
+            var linePanel = foldPanel("선 (광축·중심선·빗금 0.3pt)", true, "line");
             linePanel.alignChildren = "fill";
             linePanel.spacing = 2;
             var lineChecks = linePanel.add("group");
@@ -244,7 +249,7 @@ try {
             var reachRow = addRow(linePanel, "좌우 길이", "reach", 10, 150, "mm", 1, false);
             tip(reachRow, "중심에서 광축·광선 끝까지. 물체 작도에서는 물체·상이 더 멀면 광축을 거기까지 늘립니다");
 
-            var focusPanel = win.add("panel", undefined, "초점 · 글자");
+            var focusPanel = foldPanel("초점 · 글자", true, "focus");
             focusPanel.alignChildren = "fill";
             focusPanel.spacing = 2;
             var focusChecks = focusPanel.add("group");

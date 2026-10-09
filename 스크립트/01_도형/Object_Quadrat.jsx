@@ -65,9 +65,12 @@ try {
     var OFFSET_STEP_MM = 0.1;
     var offsetXmm = 0;
     var offsetYmm = 0;
+    var GAP_LIMIT_MM = 10;
+    var GAP_STEP_MM = 0.1;
+    var gapMM = 1.2;
     var RESET_BUTTON_WIDTH = 34;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-    var DEFAULTS = {offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    var DEFAULTS = {offsetXmm: offsetXmm, offsetYmm: offsetYmm, gapMM: gapMM};
 
     loadSettings();
 
@@ -119,6 +122,12 @@ try {
     speciesPanel.add("statictext", undefined,
         "실현 불가능한 값은 가장 가까운 배치 가능한 값으로 보정됩니다.");
 
+    var gapPanel = dlg.add("panel", undefined, "간격");
+    gapPanel.orientation = "column";
+    gapPanel.alignChildren = "left";
+    var gapControls = addOffsetControls(gapPanel, "칸 사이", gapMM, 0, GAP_LIMIT_MM, GAP_STEP_MM);
+    gapControls.input.helpTip = "mm. 위아래·좌우 간격이 같고, 전체 크기는 그대로라 칸이 그만큼 작아집니다";
+
     var info = dlg.add("statictext", undefined,
         "한 칸에는 종 A~C를 합쳐 최대 4개체를 배치합니다.");
 
@@ -150,6 +159,7 @@ try {
     // 위치는 도형을 다시 만들지 않고 미리보기 그룹만 옮긴다
     bindOffsetControls(offsetXControls, true);
     bindOffsetControls(offsetYControls, false);
+    bindGapControls(gapControls);
 
     grid4Radio.onClick = updatePreview;
     grid5Radio.onClick = updatePreview;
@@ -265,16 +275,17 @@ try {
 
     // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
     // 위치 행: 라벨 · 입력칸 · 단위 · 화살표 버튼 · 슬라이더
-    function addOffsetControls(parent, label, value) {
+    function addOffsetControls(parent, label, value, min, max, step) {
+        if (min === undefined) { min = -POSITION_LIMIT_MM; max = POSITION_LIMIT_MM; step = OFFSET_STEP_MM; }
         var row = parent.add("group");
         row.alignChildren = ["left", "center"];
         row.add("statictext", undefined, label + " (mm):").preferredSize.width = 70;
         var input = row.add("edittext", undefined, formatOffset(value));
         input.characters = 6;
         var slider = row.add("scrollbar", undefined, value,
-            -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-        slider.stepdelta = OFFSET_STEP_MM;
-        slider.jumpdelta = OFFSET_STEP_MM * 10;
+            min, max);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
         slider.preferredSize.width = 196;
         var reset = row.add("button", undefined, "R");
         reset.preferredSize.width = RESET_BUTTON_WIDTH;
@@ -305,6 +316,31 @@ try {
         controls.input.onChange = function() {
             var value = parseFloat(String(controls.input.text).replace(",", "."));
             commit(isNaN(value) ? current() : value);
+        };
+    }
+
+    // 간격은 칸 크기가 바뀌므로 미리보기를 다시 그린다
+    function bindGapControls(controls) {
+        function commit(value) {
+            if (value === null || !isFinite(value)) return;
+            value = Math.round(value / GAP_STEP_MM) * GAP_STEP_MM;
+            if (value < 0) value = 0;
+            if (value > GAP_LIMIT_MM) value = GAP_LIMIT_MM;
+            if (value === gapMM) {
+                controls.input.text = formatOffset(value);
+                return;
+            }
+            gapMM = value;
+            controls.input.text = formatOffset(value);
+            try { controls.slider.value = value; } catch (e) {}
+            updatePreview();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(DEFAULTS.gapMM); };
+        controls.input.onChange = function() {
+            var value = parseFloat(String(controls.input.text).replace(",", "."));
+            commit(isNaN(value) ? gapMM : value);
         };
     }
 
@@ -585,7 +621,7 @@ try {
         }
 
         var gridWidth = bounds[2] - bounds[0];
-        var gap = gridWidth * 0.015;
+        var gap = gapMM * MM;
         var cell = (gridWidth - (size - 1) * gap) / size;
         var pitch = cell + gap;
         var left = bounds[0];
@@ -954,11 +990,11 @@ try {
 
     function saveSettings() {
         var parts = [
-            "v3", gridSize, cellMeters,
+            "v4", gridSize, cellMeters,
             requestedDensity[0], requestedDensity[1], requestedDensity[2],
             requestedFrequency[0], requestedFrequency[1], requestedFrequency[2],
             previewEnabled ? 1 : 0,
-            offsetXmm, offsetYmm
+            offsetXmm, offsetYmm, gapMM
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -988,6 +1024,8 @@ try {
             if (parts.length !== 10) return;
         } else if (parts[0] === "v3") {
             if (parts.length !== 12) return;
+        } else if (parts[0] === "v4") {
+            if (parts.length !== 13) return;
         } else {
             return;
         }
@@ -1010,7 +1048,11 @@ try {
         requestedDensity = density;
         requestedFrequency = frequency;
         previewEnabled = parts[9] === "1";
-        if (parts[0] === "v3") {
+        if (parts[0] === "v4") {
+            var savedGap = parseFloat(parts[12]);
+            if (isFinite(savedGap) && savedGap >= 0 && savedGap <= GAP_LIMIT_MM) gapMM = savedGap;
+        }
+        if (parts[0] === "v3" || parts[0] === "v4") {
             var offX = parseFloat(parts[10]);
             var offY = parseFloat(parts[11]);
             if (isFinite(offX) && Math.abs(offX) <= POSITION_LIMIT_MM) offsetXmm = offX;

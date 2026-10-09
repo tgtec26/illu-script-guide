@@ -199,3 +199,49 @@ function compactButtonWalk(container) {
         }
     }
 }
+
+// ---- 접는 패널 ----
+// 행이 많은 패널을 접어 창 높이를 줄인다. 패널 맨 위에 [접기/펼치기] 단추가 있고, 행은 돌려받은 body 그룹에 넣는다
+// (parent.add("panel") 대신 body = makeCollapsiblePanel(parent, "제목", true, "스크립트/패널") 으로 만들고 body.add(...)).
+// 접힌 상태는 app.preferences "<key>"(1 = 접힘)에 기억한다. 헬퍼가 없는 환경에서는 일반 패널로 대신해도 된다:
+//   var body = typeof makeCollapsiblePanel === "function" ? makeCollapsiblePanel(...) : parent.add("panel", undefined, "제목");
+// 숨기는 건 visible이 아니라 maximumSize.height = 0이다 (visible=false는 공간을 비우지 않는다).
+function makeCollapsiblePanel(parent, title, collapsedDefault, key) {
+    var collapsed = collapsedDefault;
+    try {
+        var saved = app.preferences.getStringPreference("Fold/" + key);
+        if (saved === "1") collapsed = true;
+        else if (saved === "0") collapsed = false;
+    } catch (e0) {}
+    var panel = parent.add("panel", undefined, title);
+    panel.orientation = "column";
+    panel.alignChildren = "fill";
+    var head = panel.add("group");
+    head.alignChildren = ["left", "center"];
+    var toggle = head.add("button", undefined, "");
+    toggle.preferredSize.width = 60;
+    toggle.preferredSize.height = 20;
+    var body = panel.add("group");
+    body.orientation = "column";
+    body.alignChildren = "fill";
+    function apply() {
+        toggle.text = collapsed ? "펼치기" : "접기";
+        toggle.helpTip = collapsed ? "이 패널의 항목을 펼칩니다" : "이 패널의 항목을 접습니다";
+        body.visible = !collapsed;
+        body.maximumSize.height = collapsed ? 0 : 10000;
+    }
+    apply();
+    toggle.onClick = function() {
+        collapsed = !collapsed;
+        apply();
+        try { app.preferences.setStringPreference("Fold/" + key, collapsed ? "1" : "0"); } catch (e1) {}
+        try {
+            var win = panel.window;
+            // 줄일 때는 창을 작게 만든 뒤 다시 잡아야 줄어든다
+            win.size = [10, 10];
+            win.layout.layout(true);
+        } catch (e2) {}
+    };
+    body.panel = panel;
+    return body;
+}

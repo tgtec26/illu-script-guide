@@ -9,6 +9,12 @@ try {
     __memo.close();
 } catch (e) {}
 
+// 행이 많은 패널은 접을 수 있게 한다 (00_세팅/ui_tab_helper.jsxinc의 makeCollapsiblePanel, 없으면 일반 패널). 접힌 상태는 다음에도 기억한다
+function foldPanel(parent, title, collapsed, key) {
+    if (typeof makeCollapsiblePanel === "function") return makeCollapsiblePanel(parent, title, collapsed, "CrystalStructure/" + key);
+    return parent.add("panel", undefined, title);
+}
+
 // 결정 구조: 입방정계 단위세포·다이아몬드·흑연 생성기를 한 창의 탭으로 묶었다.
 // 구 3D 조명·외곽선·색상 표현·관찰 각도(오른쪽·왼쪽·앞뒤 거리)·위치는 탭들이 같이 쓴다.
 // 입방정계는 탭이 둘이다. 1은 관찰 각도(모서리 각도로 그림을 정하는 제도 방식), 2는 3D 라인과 같은 시점
@@ -63,7 +69,7 @@ try {
     radGray.value = true;
 
     // 관찰 각도(제도 방식)와 시점(3D 라인 방식) 행을 같은 자리에 겹쳐 두고, 탭이 쓰는 쪽만 보인다
-    var pnlView = win.add("panel", undefined, "관찰 각도 (오른쪽 + 왼쪽 + 상단 = 360°)");
+    var pnlView = foldPanel(win, "관찰 각도 (오른쪽 + 왼쪽 + 상단 = 360°)", true, "view");
     pnlView.alignChildren = ["fill", "top"];
     pnlView.spacing = 2;
     var viewStack = pnlView.add("group");
@@ -917,7 +923,7 @@ try {
             chkHiddenDashed.value = true;
             chkHiddenDashed.onClick = updatePreview;
 
-            var pnlSize = page.add("panel", undefined, "크기·밝기 조절");
+            var pnlSize = foldPanel(page, "크기·밝기 조절", false, "size1");
             pnlSize.alignChildren = "left";
             pnlSize.spacing = 2;
             // 라인은 mm 지름, 밀집·절단은 접촉 조건의 지름에 곱하는 배율을 쓴다.
@@ -2277,7 +2283,7 @@ try {
             chkCompleteBoundary.onClick = updatePreview;
             chkHiddenDashed.onClick = updatePreview;
 
-            var pnlSize = page.add("panel", undefined, "크기·밝기 조절");
+            var pnlSize = foldPanel(page, "크기·밝기 조절", false, "size2");
             pnlSize.orientation = "column";
             pnlSize.alignChildren = "left";
             pnlSize.spacing = 2;

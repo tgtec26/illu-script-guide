@@ -159,7 +159,7 @@ try {
                 {key: "molGap", label: "분자 간격", unit: "mm", min: 0, max: 8, step: 0.5, value: 1},
                 {key: "gap", label: "항 간격", unit: "mm", min: 1, max: 15, step: 0.5, value: 4},
                 {key: "arrowLen", label: "화살표 길이", unit: "mm", min: 6, max: 40, step: 1, value: 14},
-                {panel: "표시"},
+                {panel: "표시", fold: true},
                 {key: "label", label: "이름표", items: ["이름", "화학식", "이름(화학식)", "없음"], value: 0},
                 {key: "labelPos", label: "이름표 위치", items: ["아래", "위"], value: 0},
                 {key: "symbols", check: "원소 기호", value: false},
@@ -259,7 +259,7 @@ try {
                 {key: "colorMode", label: "색상", items: ["컬러", "회색 음영"], value: 0},
                 {key: "arrowColor", label: "화살표 색", items: ["파랑", "빨강", "검정"], value: 1},
                 {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 1},
-                {panel: "이름표"},
+                {panel: "이름표", fold: true},
                 {key: "label", label: "이름표", items: ["이름", "화학식", "이름(화학식)", "없음"], value: 0},
                 {key: "labelPos", label: "이름표 위치", items: ["아래", "위"], value: 0},
                 {key: "coef", check: "화학식에 계수", value: true},
@@ -833,10 +833,17 @@ try {
             for (var c = 0; c < controls.length; c++) {
                 var ctl = controls[c];
                 if (ctl.panel) {
-                    panel = page.add("panel", undefined, ctl.panel);
-                    panel.alignChildren = ["left", "top"];
-                    panel.margins = [12, 16, 12, 10];
-                    panel.spacing = 4;
+                    if (ctl.fold && typeof makeCollapsiblePanel === "function") {
+                        // fold: true면 기본으로 접어 두고 접힌 상태는 다음에도 기억한다 (행이 많은 패널)
+                        panel = makeCollapsiblePanel(page, ctl.panel, true, "ReactionModel/" + spec.name + "/" + ctl.panel);
+                        panel.alignChildren = ["left", "top"];
+                        panel.spacing = 4;
+                    } else {
+                        panel = page.add("panel", undefined, ctl.panel);
+                        panel.alignChildren = ["left", "top"];
+                        panel.margins = [12, 16, 12, 10];
+                        panel.spacing = 4;
+                    }
                     checkRow = null;
                 } else if (ctl.check) {
                     if (checkRow === null || checkRow.children.length >= 3) checkRow = panel.add("group");
