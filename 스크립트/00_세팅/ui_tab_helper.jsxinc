@@ -71,6 +71,8 @@ function compactDialog(win) {
         compactWalk(win);
         compactButtons(win);
     } catch (e) {}
+    // 로컬 서버(tools/ui-admin.js)로 고친 제목·슬라이더 범위·기본값·항목 문구를 적용하고, 화면 요소 목록을 남긴다
+    try { uiCatalogAndOverrides(win); } catch (e2) {}
 }
 
 function compactWalk(container) {
@@ -245,4 +247,169 @@ function makeCollapsiblePanel(parent, title, collapsedDefault, key) {
     };
     body.panel = panel;
     return body;
+}
+
+// ---- 화면 요소 목록(카탈로그)과 덮어쓰기 ----
+// 창이 뜨기 직전에 창 안의 요소를 훑어 00_세팅/ui_catalog/<창 제목>.json에 목록을 남기고(바뀐 때만),
+// 00_세팅/ui_overrides.json에 있는 덮어쓰기를 적용한다. 편집은 tools/ui-admin.js(로컬 서버)로 한다.
+// 요소는 창에서 시작하는 children 순번 경로(id, 예 "1/0/2")로 가리키고, 덮어쓰기에는 고칠 때의 원래 값(orig)이 같이 저장되어
+// 스크립트가 바뀌어 순번이 달라지면 orig가 어긋나 적용하지 않는다.
+// 덮어쓸 수 있는 것: 제목·단추·체크·라디오 글자, 패널 제목, 드롭다운 항목 문구(개수·순서는 그대로),
+// 스크롤바 최솟값·최댓값·단계, R 단추가 되돌리는 값(reset).
+// 한계: 스크립트가 글자로 항목을 구분하면(selection.text 비교) 문구를 바꾸었을 때 동작이 달라질 수 있다.
+//       입력창이 받는 값의 한계(스크립트 안의 상수)는 바뀌지 않고 스크롤바 범위만 바뀐다.
+var UI_HELPER_DIR = (function() { try { return new File($.fileName).parent.fsName; } catch (e) { return ""; } })();
+
+function uiJson(v) {
+    var t = typeof v, i, out;
+    if (v === null || v === undefined) return "null";
+    if (t === "number") return isFinite(v) ? String(v) : "null";
+    if (t === "boolean") return v ? "true" : "false";
+    if (t === "string") {
+        return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/\t/g, "\\t") + '"';
+    }
+    if (v instanceof Array) {
+        out = [];
+        for (i = 0; i < v.length; i++) out.push(uiJson(v[i]));
+        return "[" + out.join(",") + "]";
+    }
+    out = [];
+    for (var k in v) if (v.hasOwnProperty(k)) out.push(uiJson(k) + ":" + uiJson(v[k]));
+    return "{" + out.join(",") + "}";
+}
+
+function uiReadFile(path) {
+    var f = new File(path);
+    if (!f.exists) return null;
+    f.encoding = "UTF-8";
+    f.open("r");
+    var t = f.read();
+    f.close();
+    return t;
+}
+
+function uiSlug(text) {
+    return String(text).replace(/[^A-Za-z0-9가-힣]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+// 한 요소의 목록 항목 (지원하지 않는 종류는 null). orig는 덮어쓰기가 맞는 요소인지 확인하는 값
+function uiDescribe(child, id, panelTitle, group) {
+    var type = child.type, e = null, i;
+    if (type === "panel") e = {text: child.text, orig: child.text};
+    else if (type === "statictext" || type === "checkbox" || type === "radiobutton") {
+        if (child.text) e = {text: child.text, orig: child.text};
+    } else if (type === "button") {
+        if (child.text && child.text !== "R") e = {text: child.text, orig: child.text};
+    } else if (type === "scrollbar") {
+        var label = "";
+        for (i = 0; group && i < group.children.length; i++) {
+            if (group.children[i] === child) break;
+            if (group.children[i].type === "statictext" && group.children[i].text) label = group.children[i].text;
+        }
+        e = {label: label, min: child.minvalue, max: child.maxvalue, step: child.stepdelta, value: child.value,
+            orig: child.minvalue + "|" + child.maxvalue + "|" + child.stepdelta};
+    } else if (type === "dropdownlist") {
+        var items = [];
+        for (i = 0; i < child.items.length; i++) items.push(child.items[i].text);
+        e = {items: items, orig: items.join("|")};
+    }
+    if (e === null) return null;
+    e.id = id;
+    e.type = type;
+    e.panel = panelTitle;
+    return e;
+}
+
+function uiCollect(container, path, panelTitle, list) {
+    for (var i = 0; i < container.children.length; i++) {
+        var child = container.children[i];
+        var id = path ? path + "/" + i : String(i);
+        var entry = uiDescribe(child, id, panelTitle, container);
+        if (entry !== null) list.push(entry);
+        if (child.children && child.children.length) uiCollect(child, id, child.type === "panel" ? child.text : panelTitle, list);
+    }
+}
+
+// R 단추가 되돌리는 값을 덮어쓴다: 같은 줄의 입력창에 그 값을 치는 것과 같은 길로 간다
+function uiOverrideReset(scrollbar, value) {
+    var group = scrollbar.parent, input = null, reset = null, seen = false;
+    for (var i = 0; i < group.children.length; i++) {
+        var c = group.children[i];
+        if (c === scrollbar) { seen = true; continue; }
+        if (!seen && c.type === "edittext") input = c;
+        if (seen && c.type === "button" && c.text === "R") { reset = c; break; }
+    }
+    if (reset === null || input === null) return;
+    reset.onClick = function() {
+        input.text = String(value);
+        if (input.onChange) input.onChange();
+        else if (input.onChanging) input.onChanging();
+    };
+}
+
+function uiApplyOverrides(container, path, over) {
+    for (var i = 0; i < container.children.length; i++) {
+        var child = container.children[i];
+        var id = path ? path + "/" + i : String(i);
+        var o = over[id];
+        if (o) {
+            try {
+                var now = uiDescribe(child, id, "", container);
+                if (now !== null && now.orig === o.orig) {
+                    if (o.text !== undefined && o.text !== null && now.text !== undefined) child.text = o.text;
+                    if (child.type === "scrollbar") {
+                        var lo = o.min !== undefined ? Number(o.min) : child.minvalue;
+                        var hi = o.max !== undefined ? Number(o.max) : child.maxvalue;
+                        if (isFinite(lo) && isFinite(hi) && lo < hi) {
+                            child.minvalue = lo;
+                            child.maxvalue = hi;
+                            if (child.value < lo) child.value = lo;
+                            if (child.value > hi) child.value = hi;
+                        }
+                        var st = Number(o.step);
+                        if (o.step !== undefined && isFinite(st) && st > 0) { child.stepdelta = st; child.jumpdelta = st * 10; }
+                        if (o.reset !== undefined && o.reset !== null && isFinite(Number(o.reset))) uiOverrideReset(child, Number(o.reset));
+                    }
+                    if (child.type === "dropdownlist" && o.items) {
+                        for (var k = 0; k < child.items.length && k < o.items.length; k++) {
+                            if (o.items[k] !== null && o.items[k] !== "") child.items[k].text = o.items[k];
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+        if (child.children && child.children.length) uiApplyOverrides(child, id, over);
+    }
+}
+
+function uiCatalogAndOverrides(win) {
+    if (!UI_HELPER_DIR || !win.text) return;
+    var key = win.text;
+    var overText = uiReadFile(UI_HELPER_DIR + "/ui_overrides.json");
+    if (overText) {
+        var all = eval("(" + overText + ")");
+        if (all && all[key]) uiApplyOverrides(win, "", all[key]);
+    }
+    // 목록은 덮어쓴 뒤의 모습이 아니라 원래 모습을 남긴다: 덮어쓰기가 있으면 목록을 새로 쓰지 않는다
+    if (overText && all && all[key]) return;
+    var list = [];
+    uiCollect(win, "", "", list);
+    var text = '{"dialog":' + uiJson(key) + ',"controls":[\n' + (function() {
+        var rows = [];
+        for (var i = 0; i < list.length; i++) rows.push(uiJson(list[i]));
+        return rows.join(",\n");
+    })() + "\n]}\n";
+    var dir = new Folder(UI_HELPER_DIR + "/ui_catalog");
+    if (!dir.exists) dir.create();
+    var file = new File(dir.fsName + "/" + uiSlug(key) + ".json");
+    file.encoding = "UTF-8";
+    if (file.exists) {
+        file.open("r");
+        var old = file.read();
+        file.close();
+        if (old === text) return;
+    }
+    file.open("w");
+    file.write(text);
+    file.close();
 }
