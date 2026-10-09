@@ -29,6 +29,52 @@ try {
     var FORM_MM = 2.834645669;
     var FORM_KOR_FONT = formFindFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
+    // 슬라이더 범위 등록: 슬라이더를 만들 때 rangeOf를 부른다. 00_세팅/slider_ranges.json에 "Mechanics/<탭>/<이름>": {min, max, step}가
+    // 있으면 그 값을 쓰고, 없으면 코드의 값을 쓴다. 코드의 값은 창을 열 때 slider_ranges.catalog.json에 적어
+    // tools/range-admin.js(로컬 서버)가 표로 보여 준다. 파일이 없거나 이상해도 스크립트는 코드의 값으로 동작한다
+    var RANGES_DIR = new File($.fileName).parent.parent.fsName + "/00_세팅/";
+    var rangeOverrides = null;
+    var rangeCatalog = [];
+    function rangeOf(tab, name, label, unit, min, max, step) {
+        if (rangeOverrides === null) {
+            rangeOverrides = {};
+            try {
+                var file = new File(RANGES_DIR + "slider_ranges.json");
+                if (file.exists) {
+                    file.encoding = "UTF-8";
+                    file.open("r");
+                    var text = file.read();
+                    file.close();
+                    rangeOverrides = eval("(" + text + ")");
+                }
+            } catch (rangeError) { rangeOverrides = {}; }
+        }
+        var id = "Mechanics/" + tab + "/" + name;
+        rangeCatalog.push('{"id":"' + id + '","tab":"' + tab + '","label":"' + label + '","unit":"' + unit + '","min":' + min + ',"max":' + max + ',"step":' + step + '}');
+        var o = rangeOverrides[id];
+        if (o) {
+            var lo = Number(o.min), hi = Number(o.max), st = Number(o.step);
+            if (isFinite(lo) && isFinite(hi) && isFinite(st) && lo < hi && st > 0) return {min: lo, max: hi, step: st};
+        }
+        return {min: min, max: max, step: step};
+    }
+    function writeRangeCatalog() {
+        try {
+            var text = "[\n" + rangeCatalog.join(",\n") + "\n]\n";
+            var file = new File(RANGES_DIR + "slider_ranges.catalog.json");
+            file.encoding = "UTF-8";
+            if (file.exists) {
+                file.open("r");
+                var old = file.read();
+                file.close();
+                if (old === text) return;
+            }
+            file.open("w");
+            file.write(text);
+            file.close();
+        } catch (catalogError) {}
+    }
+
     var engines = [makePendulumEngine(), makeProjectileEngine(), makeSineWaveEngine(), makeCoilSpringEngine(),
         makeEnergyEngine()];
 
@@ -36,7 +82,7 @@ try {
     win.orientation = "column";
     win.alignChildren = "fill";
     win.spacing = 4;
-    win.margins = 12;
+    win.margins = 8;
 
     var tabs = win.add("tabbedpanel");
     tabs.alignChildren = "fill";
@@ -51,6 +97,8 @@ try {
             page.helpTip = engines[engineIndex].error;
         }
     }
+
+    writeRangeCatalog();
 
     var footer = win.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -120,7 +168,7 @@ try {
 
     // ==== 진자 운동 ====
     function makePendulumEngine() {
-        var api = {label: "진자 운동", error: null, addRows: addRows,
+        var api = {label: "진자", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
         function addRows(page) {
             var PREF_KEY = "ObjectPendulum/settings";
@@ -163,10 +211,10 @@ try {
 
             applySavedSettings();
 
-            var LABEL_WIDTH = 66;
+            var LABEL_WIDTH = 92;
             var RESET_BUTTON_WIDTH = 34;
             // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-            var SLIDER_WIDTH = 196;
+            var SLIDER_WIDTH = 118;
 
             var dlg = page;
 
@@ -695,6 +743,11 @@ try {
             // 라벨 · 입력칸 · 단위 · 슬라이더를 한 줄에 배치.
             // 슬라이더를 끌면 단위에 맞춰 연속으로 값이 바뀐다.
             function addNumberField(parent, labelText, unit, value, step, minimum, maximum, resetValue) {
+                var range = rangeOf("pendulum", labelText, labelText, unit, minimum, maximum, step);
+                minimum = range.min;
+                maximum = range.max;
+                step = range.step;
+                value = Math.min(maximum, Math.max(minimum, value));
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 var label = row.add("statictext", undefined, labelText + (unit ? " (" + unit + "):" : ":"));
@@ -885,7 +938,7 @@ try {
                 // 속도 화살표 길이: 속력 1m/s당 mm
                 { key: "arrowScale", label: "화살표 길이", unit: "mm/(m/s)", min: 0.1, max: 2, step: 0.1, initial: 0.4 }
             ];
-            applyRangeOverrides("Mechanics/projectile", fields);
+            applyRangeOverrides(fields);
             var options = readSettings();
             var view = doc.activeView ? doc.activeView : doc.views[0];
             var viewCenter = view.centerPoint;
@@ -907,13 +960,10 @@ try {
             shapePanel.alignChildren = "fill";
             addRow(shapePanel, fields[0], false);
             addRow(shapePanel, fields[1], false);
-            shapePanel.add("statictext", undefined, "오른쪽으로 투사 · 중력 9.8m/s² · 공기 저항 없음");
-            shapePanel.add("statictext", undefined, "도면 축척: 실제 1m = 도면 2mm (가로·세로 동일)");
+            addRow(shapePanel, fields[4], false);
+            shapePanel.helpTip = "오른쪽으로 투사 · 중력 9.8m/s² · 공기 저항 없음\n도면 축척: 실제 1m = 도면 2mm (가로·세로 동일)";
             var resultText = shapePanel.add("statictext", undefined, " ");
-            resultText.preferredSize.width = 440;
-            var strokePanel = win.add("panel", undefined, "선");
-            strokePanel.alignChildren = "fill";
-            addRow(strokePanel, fields[4], false);
+            resultText.preferredSize.width = 330;
             var ballPanel = win.add("panel", undefined, "물체");
             ballPanel.alignChildren = "fill";
             addRow(ballPanel, fields[5], false);
@@ -925,7 +975,7 @@ try {
                 options.sphere = sphereCheck.value;
                 updatePreview(false, false);
             };
-            ballPanel.add("statictext", undefined, "같은 시간 간격으로 궤적 위에 놓는다 (처음과 끝 포함)");
+            ballPanel.helpTip = "같은 시간 간격으로 궤적 위에 놓는다 (처음과 끝 포함)";
             var extraPanel = win.add("panel", undefined, "분리·보조");
             extraPanel.alignChildren = "fill";
             var checkRow1 = extraPanel.add("group");
@@ -937,14 +987,14 @@ try {
             addRow(extraPanel, fields[8], false);
             addRow(extraPanel, fields[9], false);
             addRow(extraPanel, fields[10], false);
-            extraPanel.add("statictext", undefined, "분리: 왼쪽 열은 자유 낙하(등가속도), 아래쪽 줄은 등속도 운동");
+            extraPanel.helpTip = "분리: 왼쪽 열은 자유 낙하(등가속도), 아래쪽 줄은 등속도 운동";
             var positionPanel = win.add("panel", undefined, "위치");
             positionPanel.alignChildren = "fill";
             addRow(positionPanel, fields[2], true);
             addRow(positionPanel, fields[3], true);
-            positionPanel.add("statictext", undefined, "양수: 오른쪽 / 위쪽");
+            positionPanel.helpTip = "양수: 오른쪽 / 위쪽";
             var status = win.add("statictext", undefined, " ");
-            status.preferredSize.width = 440;
+            status.preferredSize.width = 330;
             // 탭 호스트가 부르는 훅. 미리보기 체크는 호스트 것을 쓴다
             api.setPreview = function(on) { options.preview = on; updatePreview(false, false); };
             api.updatePreview = function() { updatePreview(false, false); };
@@ -970,13 +1020,13 @@ try {
 
             function addRow(panel, field, positionOnly) {
                 var row = panel.add("group");
-                row.add("statictext", undefined, field.label + (field.unit ? " (" + field.unit + "):" : ":")).preferredSize.width = 75;
+                row.add("statictext", undefined, field.label + (field.unit ? " (" + field.unit + "):" : ":")).preferredSize.width = 100;
                 var input = row.add("edittext", undefined, String(options[field.key]));
                 input.characters = 6;
                 var slider = row.add("scrollbar", undefined, options[field.key], field.min, field.max);
                 slider.stepdelta = field.step;
                 slider.jumpdelta = field.step * 10;
-                slider.preferredSize.width = 196;
+                slider.preferredSize.width = 118;
                 var reset = row.add("button", undefined, "R");
                 reset.preferredSize.width = 34;
                 reset.helpTip = "처음 값으로 되돌리기";
@@ -1016,28 +1066,15 @@ try {
                 };
             }
 
-            // 슬라이더 범위: 00_세팅/slider_ranges.json에 "<prefix>/<key>": {min, max, step}가 있으면 코드의 값을 덮는다.
-            // 파일은 tools/range-admin.js(로컬 서버)로 편집한다. 파일이 없거나 값이 이상하면 코드의 값을 그대로 쓴다
-            function applyRangeOverrides(prefix, list) {
-                try {
-                    var file = new File(new File($.fileName).parent.parent.fsName + "/00_세팅/slider_ranges.json");
-                    if (!file.exists) return;
-                    file.encoding = "UTF-8";
-                    file.open("r");
-                    var text = file.read();
-                    file.close();
-                    var data = eval("(" + text + ")");
-                    for (var i = 0; i < list.length; i++) {
-                        var o = data[prefix + "/" + list[i].key];
-                        if (!o) continue;
-                        var lo = Number(o.min), hi = Number(o.max), st = Number(o.step);
-                        if (!isFinite(lo) || !isFinite(hi) || !isFinite(st) || lo >= hi || st <= 0) continue;
-                        list[i].min = lo;
-                        list[i].max = hi;
-                        list[i].step = st;
-                        list[i].initial = Math.min(hi, Math.max(lo, list[i].initial));
-                    }
-                } catch (e) {}
+            // 슬라이더 범위는 rangeOf가 정한다 (파일 맨 위 설명 참고)
+            function applyRangeOverrides(list) {
+                for (var i = 0; i < list.length; i++) {
+                    var r = rangeOf("projectile", list[i].key, list[i].label, list[i].unit, list[i].min, list[i].max, list[i].step);
+                    list[i].min = r.min;
+                    list[i].max = r.max;
+                    list[i].step = r.step;
+                    list[i].initial = Math.min(r.max, Math.max(r.min, list[i].initial));
+                }
             }
 
             function trajectory(height, speed) {
@@ -1438,10 +1475,10 @@ try {
 
             applySavedSettings();
 
-            var LABEL_WIDTH = 62;
+            var LABEL_WIDTH = 80;
             var INPUT_WIDTH = 54;
             // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
-            var SLIDER_WIDTH = 196;
+            var SLIDER_WIDTH = 118;
             var RESET_BUTTON_WIDTH = 34;
             var INFO_WIDTH = LABEL_WIDTH + INPUT_WIDTH + SLIDER_WIDTH;
 
@@ -1981,6 +2018,12 @@ try {
             // 라벨 · 입력칸 · 단위 · 슬라이더를 한 줄에 배치.
             // 슬라이더는 요청 범위(sliderMin~sliderMax)까지만, 입력칸은 hardMin~hardMax까지 받는다.
             function addNumberField(parent, labelText, unit, value, step, sliderMin, sliderMax, hardMin, hardMax, resetValue) {
+                // 범위 편집은 슬라이더 범위만 바꾼다. 입력칸이 받는 한계(hardMin·hardMax) 안에서만
+                var range = rangeOf("sine", labelText, labelText, unit, sliderMin, sliderMax, step);
+                sliderMin = Math.max(hardMin, range.min);
+                sliderMax = Math.min(hardMax, range.max);
+                if (sliderMin >= sliderMax) { sliderMin = hardMin; sliderMax = hardMax; }
+                step = range.step;
                 var row = parent.add("group");
                 row.alignChildren = ["left", "center"];
                 row.spacing = 6;
@@ -2085,7 +2128,7 @@ try {
 
     // ==== 코일 스프링 ====
     function makeCoilSpringEngine() {
-        var api = {label: "코일 스프링", error: null, addRows: addRows,
+        var api = {label: "스프링", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
         function addRows(page) {
             var doc = app.activeDocument;
@@ -2109,14 +2152,17 @@ try {
             var MM_TO_PT = 2.83464567;
             var SIZE_STEP_MM = 0.05;
             var LINE_WIDTH_PT = 0.3;
-            var LINE_MIN_PT = 0.1, LINE_MAX_PT = 3, LINE_STEP_PT = 0.05;
-            var LOOP_MIN_MM = 0.2, LOOP_MAX_MM = 30, LOOP_STEP_MM = 0.05;   // 고리(타원) 높이
+            var lineRange = rangeOf("coil", "선 굵기", "선 굵기", "pt", 0.1, 3, 0.05);
+            var LINE_MIN_PT = lineRange.min, LINE_MAX_PT = lineRange.max, LINE_STEP_PT = lineRange.step;
+            var loopRange = rangeOf("coil", "고리 높이", "고리 높이", "mm", 0.2, 30, 0.05);   // 고리(타원) 높이
+            var LOOP_MIN_MM = loopRange.min, LOOP_MAX_MM = loopRange.max, LOOP_STEP_MM = loopRange.step;
             var POSITION_LIMIT_MM = 100;
             var OFFSET_STEP_MM = 0.1;
             var offsetXmm = 0;
             var offsetYmm = 0;
-            var MIN_TURNS = 5;
-            var MAX_TURNS = 30;
+            var turnsRange = rangeOf("coil", "감는 횟수", "감는 횟수", "회", 5, 30, 1);
+            var MIN_TURNS = turnsRange.min;
+            var MAX_TURNS = turnsRange.max;
             var centerX = (bounds[0] + bounds[2]) / 2;
             var centerY = (bounds[1] + bounds[3]) / 2;
             var sourceDiameterMm = sourceWidth / MM_TO_PT;
@@ -2412,7 +2458,7 @@ try {
                 var slider = row.add("scrollbar", undefined, value, minimum, maximum);
                 slider.stepdelta = step;
                 slider.jumpdelta = step * 10;
-                slider.preferredSize.width = 196;
+                slider.preferredSize.width = 118;
                 return slider;
             }
 
@@ -2438,7 +2484,7 @@ try {
                     -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 slider.stepdelta = OFFSET_STEP_MM;
                 slider.jumpdelta = OFFSET_STEP_MM * 10;
-                slider.preferredSize.width = 196;
+                slider.preferredSize.width = 118;
                 var reset = row.add("button", undefined, "R");
                 reset.preferredSize.width = RESET_BUTTON_WIDTH;
                 reset.helpTip = "처음 값으로 되돌리기";
@@ -2655,7 +2701,7 @@ try {
     // 자유 낙하하는 물체의 위치 에너지와 운동 에너지. 막대는 지점마다 쌓은 막대, 삼각형은 교과서식 비율 그림.
     function makeEnergyEngine() {
         return makeFormEngine({
-            label: "역학적 에너지", name: "MechanicalEnergy", prefKey: "ObjectMechanicalEnergy/settings",
+            label: "에너지", name: "MechanicalEnergy", prefKey: "ObjectMechanicalEnergy/settings",
             controls: [
                 {panel: "그림"},
                 {key: "kind", label: "모양", items: ["막대", "삼각형"], value: 0},
@@ -2756,7 +2802,17 @@ try {
                 if (problem) return problem;
             }
             try { center = doc.activeView.centerPoint; } catch (viewError) {}
-            for (var i = 0; i < controls.length; i++) if (controls[i].key) o[controls[i].key] = controls[i].value;
+            for (var i = 0; i < controls.length; i++) {
+                var ctl0 = controls[i];
+                if (ctl0.min !== undefined) {
+                    var range = rangeOf(spec.name, ctl0.key, ctl0.label, ctl0.unit || "", ctl0.min, ctl0.max, ctl0.step);
+                    ctl0.min = range.min;
+                    ctl0.max = range.max;
+                    ctl0.step = range.step;
+                    ctl0.value = Math.min(range.max, Math.max(range.min, ctl0.value));
+                }
+                if (ctl0.key) o[ctl0.key] = ctl0.value;
+            }
             loadSettings();
             var panel = page, checkRow = null;
             for (var c = 0; c < controls.length; c++) {
@@ -2800,7 +2856,7 @@ try {
             var bar = row.add("scrollbar", undefined, o[ctl.key], ctl.min, ctl.max);
             bar.stepdelta = ctl.step;
             bar.jumpdelta = ctl.step * 10;
-            bar.preferredSize.width = 196;
+            bar.preferredSize.width = 118;
             var reset = row.add("button", undefined, "R");
             reset.preferredSize.width = 34;
             reset.helpTip = "처음 값으로 되돌리기";
