@@ -46,7 +46,8 @@ try {
                 {panel: "실과 도르래"},
                 {key: "ropeLen", label: "물체~도르래", unit: "mm", min: 8, max: 80, step: 0.5, value: 28},
                 {key: "tableLeft", label: "바닥 왼쪽", unit: "mm", min: 0, max: 80, step: 0.5, value: 26},
-                {key: "pulleyR", label: "도르래 반지름", unit: "mm", min: 1.5, max: 8, step: 0.1, value: 3.5},
+                {key: "pulleyArm", check: "도르래 받침대", value: true},
+                {key: "pulleyR", label: "도르래 반지름", unit: "mm", min: 1.5, max: 8, step: 0.1, value: 4.2},
                 {key: "drop", label: "추까지 길이", unit: "mm", min: 8, max: 60, step: 0.5, value: 24},
                 {panel: "이전 위치 (점선)"},
                 {key: "ghostBlock", check: "점선 물체", value: true},
@@ -89,9 +90,9 @@ try {
         t.rect(0, bh, bw, 0, 0, 100, wBody);
         if (o.blockText !== "") t.text(o.blockText, bw / 2, bh / 2, size, "center");
         if (o.blockName !== "") t.text(o.blockName, bw / 2, bh + 3 * m + 2.6 * m, size, "center");
-        // 도르래
-        t.circle(cx, cy, R, 0, 100, wBody);
-        t.circle(cx, cy, R * 0.3, 0, 100, wRope);
+        // 도르래: 바닥에 받침대(막대 양 끝의 축 점)로 고정. 받침대는 도르래 가운데에서 왼쪽 아래 바닥으로 뻗는다
+        var armLen = R * 2.1, armDx = armLen * armLen > cy * cy ? Math.sqrt(armLen * armLen - cy * cy) : 0;
+        t.pulley(cx, cy, R, o.pulleyArm ? [cx - armDx, 0] : null, wBody, wRope);
         // 실: 물체 → 도르래 위 → 오른쪽 수직
         t.line([bw, attachY], [cx, cy + R], wRope);
         t.arc(cx, cy, R, 0, Math.PI / 2, wRope);
@@ -473,6 +474,22 @@ try {
             var p = g.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
             formPaint(p, fill, stroke, width);
             return p;
+        };
+        // 도르래: 바깥 테두리와 회색 홈 둘레, 흰 안쪽 원판, 가운데 축 점. mount([x, y])가 있으면 가운데에서 mount까지 받침대(양 끝이 둥근 막대)와 그 끝의 축 점을 그린다
+        t.pulley = function(cx, cy, R, mount, wBody, wRope) {
+            t.circle(cx, cy, R, 22, 100, wBody);
+            t.circle(cx, cy, R * 0.66, 0, 100, wRope);
+            var dot = R * 0.17;
+            if (mount) {
+                var dx = mount[0] - cx, dy = mount[1] - cy, len = Math.sqrt(dx * dx + dy * dy) || 1;
+                var ux = dx / len, uy = dy / len, half = R * 0.3, a = Math.atan2(uy, ux), pts = [], i;
+                // 받침대 윤곽: 가운데 쪽 반원 → 한쪽 변 → mount 쪽 반원 → 반대 변
+                for (i = 0; i <= 12; i++) pts.push([cx + half * Math.cos(a + Math.PI / 2 + Math.PI * i / 12), cy + half * Math.sin(a + Math.PI / 2 + Math.PI * i / 12)]);
+                for (i = 0; i <= 12; i++) pts.push([mount[0] + half * Math.cos(a - Math.PI / 2 + Math.PI * i / 12), mount[1] + half * Math.sin(a - Math.PI / 2 + Math.PI * i / 12)]);
+                t.path(pts, true, 0, 100, wRope);
+                t.circle(mount[0], mount[1], dot, 45, 100, wRope);
+            }
+            t.circle(cx, cy, dot, 45, 100, wRope);
         };
         // 원호 (a0 → a1, 라디안, 반시계가 +). 열린 선
         t.arc = function(cx, cy, r, a0, a1, width, k) {
