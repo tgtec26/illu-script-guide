@@ -1,6 +1,8 @@
 // 역학 장치.jsx
 // 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
 try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 파선 양 끝 정렬 (01_도형/Object_setdash_align_helper.jsxinc): 파선 도형은 항상 '파선을 모퉁이와 패스 끝에 정렬하고 길이를 조정하여 맞추기'를 켠다. 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.fsName + "/Object_setdash_align_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/마지막 실행 반복.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -41,7 +43,7 @@ try {
                 {key: "blockH", label: "물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 9},
                 {key: "weightText", label: "추 글자", text: true, value: "1 kg"},
                 {key: "weightName", label: "추 이름", text: true, value: "추"},
-                {key: "weightW", label: "추 너비", unit: "mm", min: 4, max: 20, step: 0.5, value: 7},
+                {key: "weightW", label: "추 너비", unit: "mm", min: 4, max: 20, step: 0.5, value: 9},
                 {key: "weightH", label: "추 높이", unit: "mm", min: 4, max: 20, step: 0.5, value: 8},
                 {panel: "실과 도르래"},
                 {key: "ropeLen", label: "물체~도르래", unit: "mm", min: 8, max: 80, step: 0.5, value: 28},
@@ -392,7 +394,9 @@ try {
             group = layer.groupItems.add();
             group.name = spec.name;
             try {
-                spec.draw(makeFormTools(group, o), o);
+                var tools = makeFormTools(group, o);
+                spec.draw(tools, o);
+                alignFormDashes(tools.dashed);
                 var b = group.geometricBounds;
                 group.translate(center[0] - (b[0] + b[2]) / 2 + o.offsetX * FORM_MM,
                     center[1] - (b[1] + b[3]) / 2 + o.offsetY * FORM_MM, true, true, true, true);
@@ -449,13 +453,27 @@ try {
         return api;
     }
 
+    // 파선 도형은 양 끝이 같도록 모퉁이·끝에 정렬한다 (헬퍼가 없으면 건너뛴다). 같은 파선 무늬끼리 한 번에 처리한다
+    function alignFormDashes(list) {
+        if (typeof applyDashPatternToItems !== "function") return;
+        var done = {};
+        for (var i = 0; i < list.length; i++) {
+            var key = list[i].dashes.join(",");
+            if (done[key]) continue;
+            done[key] = true;
+            var items = [];
+            for (var j = i; j < list.length; j++) if (list[j].dashes.join(",") === key) items.push(list[j].item);
+            applyDashPatternToItems(items, list[i].dashes, false);
+        }
+    }
+
     function formFormat(value, decimals) {
         return Number(value).toFixed(decimals);
     }
 
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다. 색은 K값(0~100, null이면 없음)
     function makeFormTools(g, o) {
-        var t = {mm: FORM_MM, group: g};
+        var t = {mm: FORM_MM, group: g, dashed: []};
         // 베지어 경로. points는 {a: 앵커, l: 들어오는 핸들, r: 나가는 핸들}
         t.curve = function(points, closed, fill, stroke, width, dashes) {
             var anchors = [], i;
@@ -475,6 +493,7 @@ try {
             p.setEntirePath(points);
             p.closed = !!closed;
             formPaint(p, fill, stroke, width, dashes);
+            if (dashes && dashes.length > 0) t.dashed.push({item: p, dashes: dashes});
             return p;
         };
         t.line = function(a, b, width, k, dashes) {
@@ -499,7 +518,7 @@ try {
                 var ux = dx / len, uy = dy / len, half = R * 0.3, nx = -uy, ny = ux, k = 0.5523 * half;
                 // 받침대 윤곽: 앵커 6개 (양 끝 반원은 꼭짓점 앵커 하나씩과 베지어 핸들)
                 var pts = [
-                    {a: [cx + nx * half, cy + ny * half], l: [cx + nx * half, cy + ny * half], r: [cx + nx * half, cy + ny * half]},
+                    {a: [cx + nx * half, cy + ny * half], l: [cx + nx * half - ux * k, cy + ny * half - uy * k], r: [cx + nx * half, cy + ny * half]},
                     {a: [mount[0] + nx * half, mount[1] + ny * half], l: [mount[0] + nx * half, mount[1] + ny * half], r: [mount[0] + nx * half + ux * k, mount[1] + ny * half + uy * k]},
                     {a: [mount[0] + ux * half, mount[1] + uy * half], l: [mount[0] + ux * half + nx * k, mount[1] + uy * half + ny * k], r: [mount[0] + ux * half - nx * k, mount[1] + uy * half - ny * k]},
                     {a: [mount[0] - nx * half, mount[1] - ny * half], l: [mount[0] - nx * half + ux * k, mount[1] - ny * half + uy * k], r: [mount[0] - nx * half, mount[1] - ny * half]},
