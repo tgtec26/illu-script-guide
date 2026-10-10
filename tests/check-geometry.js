@@ -27,7 +27,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readChains", "readPairTexts", "circumcircle", "readCircles", "readEllipses", "readAngles",
+const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readChains", "readPairTexts", "circumcircle", "readCircles", "readEllipses", "readAngles", "trimText", "curvePoints", "ccwSweep", "readArcs", "readFills",
   "display", "straight", "circleLine", "unitVector", "offsetPoint", "arcPoints", "rightAnglePoints", "buildGeometry", "clamp", "parseNumber"];
 const make = new Function("state", `
 var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, KAPPA = 0.5522847498;
@@ -37,7 +37,7 @@ var text = state.text, showNames = state.showNames, showAxes = state.showAxes, s
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
 const api = (text = {}, extra = {}) => make(Object.assign({
-  text: Object.assign({ pointsText: "", segmentText: "", dashedText: "", circleText: "", ellipseText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "" }, text),
+  text: Object.assign({ pointsText: "", segmentText: "", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "" }, text),
   showNames: true, showAxes: false, sizeMm: 50,
 }, extra));
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
@@ -102,5 +102,21 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   const labels = d.texts.map((t) => t.text);
   for (const n of ["x", "y", "O", "F", "G", "A"]) assert.ok(labels.includes(n), n);
   assert.ok(api({ pointsText: "A(0,0)", ellipseText: "6" }).buildGeometry().notes.length > 0, "못 읽는 타원");
+}
+// 화살표 선분·호·색칠
+{
+  const g = api({ pointsText: "O(0,0) A(-2,0) B(2,0)", arrowText: "O-B", arcText: "O:A<B, AB:d", fillText: "A>arc+(O,B):30, circle(O,A)" });
+  const d = g.buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  assert.strictEqual(d.arrows.length, 1);
+  const fills = d.lines.filter((l) => l.kind === "fill");
+  assert.deepStrictEqual(fills.map((l) => l.fillK), [30, 20]);
+  assert.strictEqual(d.lines[0].kind, "fill");                         // 색칠이 맨 아래
+  // O:A<B: A(왼)에서 B(오른)로 시계 → 위쪽을 지난다. AB:d: 아래쪽 반원
+  const arcs = d.lines.filter((l) => l.kind === "main" && !l.closed && l.points.length > 8);
+  assert.strictEqual(arcs.length, 2);
+  const midY = (l) => l.points[Math.floor(l.points.length / 2)].anchor[1];
+  assert.ok(midY(arcs[0]) > 0 && midY(arcs[1]) < 0, "위쪽 호·아래쪽 반원");
+  assert.ok(api({ pointsText: "O(0,0) A(1,0)", arcText: "O:A>X", fillText: "A>O" }).buildGeometry().notes.length === 2);
 }
 console.log("geometry checks passed");
