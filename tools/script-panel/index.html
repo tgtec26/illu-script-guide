@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>스크립트 패널</title>
+<style>
+:root { --bg: #323232; --fg: #e6e6e6; --dim: #9a9a9a; --line: #4a4a4a; --hover: #3f3f3f; --accent: #4a9eff; --star: #f5c542; --input: #262626; }
+:root.light { --fg: #1f1f1f; --dim: #666; --line: #c8c8c8; --hover: #e4e4e4; --input: #fff; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 12px/1.35 -apple-system, "Apple SD Gothic Neo", sans-serif; word-break: keep-all; overflow-wrap: break-word; display: flex; flex-direction: column; user-select: none; }
+#bar { display: flex; gap: 4px; padding: 6px 6px 3px; }
+button { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+button:hover { background: var(--hover); }
+#path { padding: 0 8px 4px; color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+#q { margin: 0 6px 4px; padding: 4px 8px; font: inherit; color: var(--fg); background: var(--input); border: 1px solid var(--line); border-radius: 4px; user-select: text; }
+#q:focus { outline: 1px solid var(--accent); }
+#list { flex: 1; overflow-y: auto; padding-bottom: 6px; }
+.group { padding: 4px 8px 2px; margin-top: 4px; color: var(--dim); font-size: 11px; cursor: pointer; border-top: 1px solid var(--line); }
+.group:first-child { margin-top: 0; border-top: 0; }
+.group .n { float: right; }
+.row { display: flex; align-items: center; padding: 2px 4px 2px 12px; cursor: pointer; }
+.row:hover { background: var(--hover); }
+.row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .dir { color: var(--dim); font-size: 10px; margin-left: 6px; }
+.star { border: 0; padding: 0 4px; color: var(--dim); font-size: 14px; line-height: 1; }
+.star.on { color: var(--star); }
+.empty { padding: 12px; color: var(--dim); }
+#status { padding: 3px 8px; min-height: 22px; color: var(--dim); border-top: 1px solid var(--line); font-size: 11px; }
+#status.err { color: #ff6b6b; }
+</style>
+</head>
+<body>
+<div id="bar">
+    <button id="pick" title="스크립트가 들어 있는 폴더를 고릅니다">폴더 지정</button>
+    <button id="refresh" title="폴더를 다시 읽습니다">새로고침</button>
+</div>
+<div id="path" title=""></div>
+<input id="q" type="text" placeholder="스크립트 검색" spellcheck="false">
+<div id="list"></div>
+<div id="status"></div>
+<script src="main.js"></script>
+</body>
+</html>
