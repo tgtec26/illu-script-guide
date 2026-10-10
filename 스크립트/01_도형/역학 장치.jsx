@@ -456,6 +456,20 @@ try {
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다. 색은 K값(0~100, null이면 없음)
     function makeFormTools(g, o) {
         var t = {mm: FORM_MM, group: g};
+        // 베지어 경로. points는 {a: 앵커, l: 들어오는 핸들, r: 나가는 핸들}
+        t.curve = function(points, closed, fill, stroke, width, dashes) {
+            var anchors = [], i;
+            for (i = 0; i < points.length; i++) anchors.push(points[i].a);
+            var p = g.pathItems.add();
+            p.setEntirePath(anchors);
+            for (i = 0; i < points.length; i++) {
+                p.pathPoints[i].leftDirection = points[i].l;
+                p.pathPoints[i].rightDirection = points[i].r;
+            }
+            p.closed = !!closed;
+            formPaint(p, fill, stroke, width, dashes);
+            return p;
+        };
         t.path = function(points, closed, fill, stroke, width, dashes) {
             var p = g.pathItems.add();
             p.setEntirePath(points);
@@ -482,21 +496,32 @@ try {
             var dot = R * 0.17;
             if (mount) {
                 var dx = mount[0] - cx, dy = mount[1] - cy, len = Math.sqrt(dx * dx + dy * dy) || 1;
-                var ux = dx / len, uy = dy / len, half = R * 0.3, a = Math.atan2(uy, ux), pts = [], i;
-                // 받침대 윤곽: 가운데 쪽 반원 → 한쪽 변 → mount 쪽 반원 → 반대 변
-                for (i = 0; i <= 12; i++) pts.push([cx + half * Math.cos(a + Math.PI / 2 + Math.PI * i / 12), cy + half * Math.sin(a + Math.PI / 2 + Math.PI * i / 12)]);
-                for (i = 0; i <= 12; i++) pts.push([mount[0] + half * Math.cos(a - Math.PI / 2 + Math.PI * i / 12), mount[1] + half * Math.sin(a - Math.PI / 2 + Math.PI * i / 12)]);
-                t.path(pts, true, 0, 100, wRope);
+                var ux = dx / len, uy = dy / len, half = R * 0.3, nx = -uy, ny = ux, k = 0.5523 * half;
+                // 받침대 윤곽: 앵커 6개 (양 끝 반원은 꼭짓점 앵커 하나씩과 베지어 핸들)
+                var pts = [
+                    {a: [cx + nx * half, cy + ny * half], l: [cx + nx * half, cy + ny * half], r: [cx + nx * half, cy + ny * half]},
+                    {a: [mount[0] + nx * half, mount[1] + ny * half], l: [mount[0] + nx * half, mount[1] + ny * half], r: [mount[0] + nx * half + ux * k, mount[1] + ny * half + uy * k]},
+                    {a: [mount[0] + ux * half, mount[1] + uy * half], l: [mount[0] + ux * half + nx * k, mount[1] + uy * half + ny * k], r: [mount[0] + ux * half - nx * k, mount[1] + uy * half - ny * k]},
+                    {a: [mount[0] - nx * half, mount[1] - ny * half], l: [mount[0] - nx * half + ux * k, mount[1] - ny * half + uy * k], r: [mount[0] - nx * half, mount[1] - ny * half]},
+                    {a: [cx - nx * half, cy - ny * half], l: [cx - nx * half, cy - ny * half], r: [cx - nx * half - ux * k, cy - ny * half - uy * k]},
+                    {a: [cx - ux * half, cy - uy * half], l: [cx - ux * half - nx * k, cy - uy * half - ny * k], r: [cx - ux * half + nx * k, cy - uy * half + ny * k]}
+                ];
+                t.curve(pts, true, 0, 100, wRope);
                 t.circle(mount[0], mount[1], dot, 45, 100, wRope);
             }
             t.circle(cx, cy, dot, 45, 100, wRope);
         };
         // 원호 (a0 → a1, 라디안, 반시계가 +). 열린 선
         t.arc = function(cx, cy, r, a0, a1, width, k) {
-            var steps = Math.max(8, Math.ceil(Math.abs(a1 - a0) / (Math.PI / 36)));
+            // 90° 이하로 나눈 베지어 한 조각씩 (앵커는 조각 수 + 1개)
+            var n = Math.max(1, Math.ceil(Math.abs(a1 - a0) / (Math.PI / 2) - 1e-9)), step = (a1 - a0) / n, h = 4 / 3 * Math.tan(step / 4) * r;
             var pts = [];
-            for (var i = 0; i <= steps; i++) pts.push([cx + r * Math.cos(a0 + (a1 - a0) * i / steps), cy + r * Math.sin(a0 + (a1 - a0) * i / steps)]);
-            return t.path(pts, false, null, k === undefined ? 100 : k, width);
+            for (var i = 0; i <= n; i++) {
+                var ang = a0 + step * i, c = Math.cos(ang), sn = Math.sin(ang);
+                var anchor = [cx + r * c, cy + r * sn];
+                pts.push({a: anchor, l: [anchor[0] + h * sn, anchor[1] - h * c], r: [anchor[0] - h * sn, anchor[1] + h * c]});
+            }
+            return t.curve(pts, false, null, k === undefined ? 100 : k, width);
         };
         // a → b 화살표: 선은 촉 뿌리까지, 촉은 채운 삼각형
         t.arrow = function(a, b, width, k, headLength) {

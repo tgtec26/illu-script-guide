@@ -30,7 +30,7 @@ function defaultsOf(engineName) {
 function record(o, fn) {
   const calls = [];
   const t = { mm: 1 };
-  for (const k of ["line", "rect", "circle", "arc", "arrow", "text", "path", "pulley"]) t[k] = (...a) => { calls.push({ k, a }); };
+  for (const k of ["line", "rect", "circle", "arc", "arrow", "text", "path", "curve", "pulley"]) t[k] = (...a) => { calls.push({ k, a }); };
   fn(t, o);
   return calls;
 }
