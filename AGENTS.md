@@ -182,6 +182,7 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 - 프로브는 원본을 고치지 않는다. 설정 저장(`setStringPreference`)은 프로브 안에서 막아 사용자 설정을 덮지 않는다.
 - 2026-10-10부터 Mac 작업 기기는 Illustrator 2027 Beta(번들 ID `com.adobe.illustratorBeta`)를 쓴다. `tools/illu-probe.sh`는 기본이 베타이고 `ILLU_APP_ID`로 바꾼다. 베타에 스크립트를 등록하려면 `ILLUSTRATOR_APP_DIR="/Applications/Adobe Illustrator (Beta)" ILLUSTRATOR_VER="31.0.0 Beta" ./setup-mac.command`(연도가 없는 폴더라 자동 선택이 안 된다). 베타에서도 점검 프로브로 Convection을 돌리면 멈춘다(직접 열면 정상).
 - 일러가 모달(Wacom 경고, 충돌 복구 등)에서 멈추면 `tools/illu-dismiss.sh`로 닫는다(접근성으로 Wacom 경고는 확인, 복구 창은 문서가 전부 `무제-N`일 때만 취소, 모르는 창은 두고 보고). 프로브·MCP 실행 중 자리를 비울 땐 `tools/illu-dismiss.sh --watch`를 백그라운드로 켠다. 2026-10-10 확인: ScriptUI `new Window("dialog")`는 접근성 창 목록에 안 잡히므로 이 스크립트 대상이 아니다. 화면 캡처(screencapture)는 Claude 앱 화면 녹화 권한 창을 띄우니 쓰지 않는다.
+- 일러 MCP 두 개(2026-10-10 시험): `illustrator-run`(`mcp__illustrator-run__run`, 오픈소스 krVatsal/illustrator-mcp, osascript로 ExtendScript 실행)은 프로브가 멈추는 위 문제를 그대로 가진다(doScript 금지, 한글 경로는 ASCII 심볼릭 링크로, 30초 타임아웃). 공식 MCP `illustrator`(`mcp__illustrator__*`, 베타 앱 내장, HTTP)는 스크립트·다이얼로그를 실행하지 못하지만 결과 확인에 좋다: `CapturePreview`가 저장한 PNG(`~/Library/Caches/AI_31_0/illustrator_preview.png`)를 바로 읽을 수 있고(화면 녹화 권한 불필요, 멈춤 없음) `GetCanvasStructure`가 개체·좌표를 준다(Y축이 아래로 향하는 캔버스 좌표). 검증은 실행=`illustrator-run`, 결과 확인=공식 MCP, 다이얼로그 레이아웃=창을 띄운 직후 컨트롤 위치 측정(`dlg.onShow`에서 쓰고 `dlg.close(2)`) 순으로 한다.
 - Windows 기기에는 osascript가 없다. 같은 원칙(짧게, 경고창 끄기, 한가할 때만)으로 사용자 테스트를 부탁한다.
 
 ## Escalation
