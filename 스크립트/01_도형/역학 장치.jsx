@@ -56,6 +56,7 @@ try {
                 {key: "tableEdge", check: "테이블 세로선", value: true},
                 {key: "pulleyArm", check: "도르래 받침대", value: true},
                 {key: "ropeLen", label: "물체~도르래", unit: "mm", min: 8, max: 80, step: 0.5, value: 28},
+                {key: "cornerDist", label: "모서리~도르래", unit: "mm", min: 1, max: 15, step: 0.1, value: 4.3},
                 {key: "tableLeft", label: "바닥 왼쪽 여유", unit: "mm", min: 0, max: 40, step: 0.5, value: 8},
                 {key: "pulleyR", label: "도르래 반지름", unit: "mm", min: 1.5, max: 6, step: 0.1, value: 3.6},
                 {key: "drop", label: "추까지 길이", unit: "mm", min: 8, max: 90, step: 0.5, value: 42},
@@ -85,8 +86,9 @@ try {
         var bw = o.blockW * m, bh = o.blockH * m, R = o.pulleyR * m, shift = o.shift * m;
         var attachY = bh / 2;
         var cx = bw + o.ropeLen * m, cy = attachY - R;
-        var armLen = R * 1.5, armDx = armLen * armLen > cy * cy ? Math.sqrt(armLen * armLen - cy * cy) : 0;
-        var mountX = o.pulleyArm ? cx - armDx : cx - R;              // 테이블 모서리
+        // 테이블 모서리(받침대 끝)에서 도르래 가운데까지 거리 cornerDist. 모서리는 윗면(y=0) 위에 있다
+        var armLen = Math.max(o.cornerDist * m, Math.abs(cy) + 0.01), armDx = Math.sqrt(armLen * armLen - cy * cy);
+        var mountX = cx - armDx;                                     // 테이블 모서리
         var wx = cx + R, wTop = cy - o.drop * m, ww = o.weightW * m, wh = o.weightH * m;
         var ghostLeft = -shift, ghostRight = bw - shift;             // 이전 위치의 물체
         // 테이블 윗면과 모서리의 세로선
