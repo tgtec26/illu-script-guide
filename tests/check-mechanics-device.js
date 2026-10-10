@@ -15,7 +15,7 @@ function extractFunction(name) {
   }
   throw new Error(`unbalanced: ${name}`);
 }
-const names = ["drawHorizontalPulley", "drawInclinePulley"];
+const names = ["drawHorizontalPulley", "drawInclinePulley", "drawTwoIncline"];
 const scenes = new Function(`var GHOST_DASH = [2, 1], HEAD_HARPOON = 1, NAME_GAP_MM = 1, ARROW_GAP_MM = 1, ARROW_HEAD_MM = 1.4, ARROW_HALF_MM = 1.4 * 0.35;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 컨트롤 기본값을 소스의 controls 배열에서 읽는다 (+ 엔진이 붙이는 선 두께 기본값)
@@ -140,4 +140,21 @@ console.log("mechanics device checks passed");
   const arcs = calls.filter((x) => x.k === "arc");
   near(arcs[0].a[4], Math.PI / 2 + th, "실 호 끝");
   near(arcs[1].a[4], th, "각도 호");
+}
+
+// 두 빗면: 두 실은 각각 자기 빗면과 나란하고 도르래 둘레에 접하며, 호는 두 접점을 잇는다
+{
+  const o = defaultsOf("makeTwoInclineEngine");
+  assert.strictEqual(o.angleA, 30); assert.strictEqual(o.angleB, 60); assert.strictEqual(o.textAngleA, "θ1");
+  const calls = record(o, scenes.drawTwoIncline);
+  const tA = Math.PI / 6, tB = Math.PI / 3, R = 3.6;
+  const [cx, cy] = calls.find((x) => x.k === "pulley").a;
+  const ropes = calls.filter((x) => x.k === "line" && x.a[2] === 0.4);
+  assert.strictEqual(ropes.length, 2);
+  for (const r of ropes) near(Math.hypot(r.a[1][0] - cx, r.a[1][1] - cy), R, "실 끝은 도르래 둘레");
+  const slope = (r) => (r.a[1][1] - r.a[0][1]) / (r.a[1][0] - r.a[0][0]);
+  near(slope(ropes[0]), Math.tan(tA), "왼쪽 실은 왼쪽 빗면과 나란함");
+  near(slope(ropes[1]), -Math.tan(tB), "오른쪽 실은 오른쪽 빗면과 나란함");
+  const arc = calls.filter((x) => x.k === "arc")[0];
+  near(arc.a[3], Math.PI / 2 - tB, "호 시작"); near(arc.a[4], Math.PI / 2 + tA, "호 끝");
 }
