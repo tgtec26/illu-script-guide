@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_Circulation.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "순환·배설.jsx"), "utf8");
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -70,6 +70,6 @@ assert.ok(source.includes('var PREF_KEY = "ObjectCirculation/settings";'));
   // 모든 혈관이 둥글려도 NaN 없이 그려진다
   for (const v of c.vessels) for (const p of lib.roundCorners(v.points, 8)) for (const q of [p.anchor, p.left, p.right]) assert.ok(isFinite(q[0]) && isFinite(q[1]));
 }
-assert.ok(source.includes('p[0] !== "v2" || p.length !== 15'), "settings field count");
+assert.ok(source.includes('p[0] !== "v3" || p.length !== 16'), "settings field count");
 assert.ok(source.includes("HEAD_LENGTH = BASE_HEAD_LENGTH * headPct / 100;"), "head size scales every arrowhead");
 console.log("circulation checks passed");

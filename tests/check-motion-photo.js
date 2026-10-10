@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_MotionPhoto.jsx");
+const scriptPath = path.join(root, "스크립트", "01_도형", "연속 촬영 운동.jsx");
 const source = fs.readFileSync(scriptPath, "utf8");
 
 // 문법만 확인 (실행하지 않는다)
@@ -29,18 +29,18 @@ function extractVar(name) {
   return `var ${name} = ${match[1]};`;
 }
 
-const constants = ["ARROW", "SPAN_MAX_MM", "RULER_MAX_TICKS", "PREF_KEY", "DIRECTIONS", "MOTIONS", "BALLS", "POSITION_LIMIT_MM", "RADIO_KEYS",
+const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_EXAM", "HEAD_CATALOG", "HEAD_SHAPES", "SPAN_MAX_MM", "RULER_MAX_TICKS", "PREF_KEY", "DIRECTIONS", "MOTIONS", "BALLS", "POSITION_LIMIT_MM", "RADIO_KEYS",
   "CHECK_KEYS", "NUMBER_KEYS", "SPECS"];
-const names = ["framePositions", "clampOptions", "gapRatio", "rulerMarks", "formatSeconds", "distanceLabel", "trimText", "arrowHeadPoints",
+const names = ["framePositions", "clampOptions", "gapRatio", "rulerMarks", "formatSeconds", "distanceLabel", "trimText", "catalogPoints", "arrowHeadShape", "shaftInset",
   "cleanDistText", "saveSettings", "applySettings", "parseNumber", "roundTo", "clamp"];
 const make = (options, prefs) => new Function("app", "options", `${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
-  `return {${[...names, "SPAN_MAX_MM", "ARROW"].join(",")}};`)(
+  `return {${[...names, "SPAN_MAX_MM", "ARROW", "HEAD_CATALOG"].join(",")}};`)(
   {preferences: {setStringPreference: (k, v) => { prefs[k] = v; }, getStringPreference: (k) => prefs[k] || ""}}, options);
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
-const base = {direction: 0, motion: 0, ball: 0, bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false,
+const base = {direction: 0, motion: 0, ball: 0, headShape: 2, bgOn: true, startOn: true, surfaceOn: false, distOn: true, ghostOn: false,
   rulerOn: false, timeOn: false, arrowOn: false, bottomOn: false, touchOn: false, guideWhite: false,
-  speed: 100, startSpeed: 0, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, tick: 5, distText: "d", offsetX: 0, offsetY: 0, previewOn: true};
+  speed: 100, startSpeed: 0, accel: 500, interval: 0.1, count: 7, size: 8, ballK: 30, bgK: 90, tick: 5, distText: "d", offsetX: 0, offsetY: 0, headSize: 100, previewOn: true};
 const lib = make({...base}, {});
 
 // 위치: 등속은 같은 간격, 가속은 구간 거리가 1:3:5…
@@ -118,24 +118,32 @@ assert.strictEqual(lib.formatSeconds(1.5), "1.5");
   assert.strictEqual(lib.distanceLabel("  0.5m ", 1).text, "0.5m", "whitespace around the value is trimmed");
 }
 
-// 화살촉: 끝점이 맨 앞, 날개는 축에 대칭, scale로 줄어든다
+// 화살촉: 일러스트레이터 화살촉 4종류(tools/arrowheads.json). 제비꼬리 길이 ARROW.length를 기준으로 배율 scale(좁은 구간에는 줄인다)을 정한다
 {
-  const head = lib.arrowHeadPoints([100, 50], [1, 0], 1);
-  assert.deepStrictEqual(head[0], [100, 50], "tip first");
-  near(head[1][0], 100 - lib.ARROW.length, 1e-9, "wing is one arrow length back");
-  near(head[1][1] + head[3][1], 100, 1e-9, "wings mirror across the axis");
-  const small = lib.arrowHeadPoints([100, 50], [1, 0], 0.5);
-  near(small[1][0], 98, 1e-9, "half scale halves the length");
+  const {catalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
+  const k1 = lib.ARROW.length / 12.1;   // 평가원식(작살형) 길이가 ARROW.length
+  for (let shape = 0; shape < 4; shape++) {
+    const h = lib.arrowHeadShape([100, 50], [1, 0], 1, shape);
+    assert.strictEqual(h.closed, true);
+    assert.deepStrictEqual(h.points[0], [100, 50], `shape ${shape}: tip first`);
+    nearPoints(h.points, expectedPoints(shape, [100, 50], [1, 0], k1), `shape ${shape}`);
+    nearPoints(lib.arrowHeadShape([100, 50], [1, 0], 0.5, shape).points, expectedPoints(shape, [100, 50], [1, 0], 0.5 * k1), `shape ${shape} at half scale`);
+    near(lib.shaftInset(1, shape), catalog.types[shape].lineEnd * k1, 1e-9, `shape ${shape}: line stops at lineEnd`);
+    near(lib.shaftInset(0.5, shape), 0.5 * catalog.types[shape].lineEnd * k1, 1e-9, `shape ${shape}: lineEnd scales`);
+    assert.ok(lib.shaftInset(1, shape) < catalog.types[shape].length * k1, `shape ${shape}: line ends inside the head`);
+  }
+  nearPoints(lib.arrowHeadShape([100, 50], [0, -1], 1, 3).points, expectedPoints(3, [100, 50], [0, -1], k1), "downward harpoon");
+  assert.deepStrictEqual(lib.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), "same data as tools/arrowheads.json");
 }
 
 // 설정 저장·복원
 {
   const prefs = {};
-  const saved = {...base, direction: 1, motion: 1, ball: 2, bgOn: false, surfaceOn: true, ghostOn: true, rulerOn: true, timeOn: true, arrowOn: true, bottomOn: true, touchOn: true, guideWhite: true,
-    speed: 250, startSpeed: 40, accel: -1200, interval: 0.05, count: 9, size: 6.5, ballK: 50, bgK: 70, tick: 2.5, distText: "12 cm", offsetX: -2, offsetY: 4.5,
+  const saved = {...base, direction: 1, motion: 1, ball: 2, headShape: 1, bgOn: false, surfaceOn: true, ghostOn: true, rulerOn: true, timeOn: true, arrowOn: true, bottomOn: true, touchOn: true, guideWhite: true,
+    speed: 250, startSpeed: 40, accel: -1200, interval: 0.05, count: 9, size: 6.5, ballK: 50, bgK: 70, tick: 2.5, distText: "12 cm", offsetX: -2, offsetY: 4.5, headSize: 150,
     previewOn: false};
   make({...saved}, prefs).saveSettings();
-  assert.ok(prefs["ObjectMotionPhoto/settings"].startsWith("v5|1|1|2|0|"), "settings start with the version tag and radios");
+  assert.ok(prefs["ObjectMotionPhoto/settings"].startsWith("v6|1|1|2|1|0|"), "settings start with the version tag and radios");
   const restored = {...base};
   make(restored, prefs).applySettings();
   assert.deepStrictEqual(restored, saved, "saved options come back");
@@ -146,21 +154,22 @@ assert.strictEqual(lib.formatSeconds(1.5), "1.5");
   make(back, prefs).applySettings();
   assert.strictEqual(back.distText, "ab", "separator is stripped from the text");
   // 필드 수가 다르면 무시
-  prefs["ObjectMotionPhoto/settings"] = "v5|1|1";
+  prefs["ObjectMotionPhoto/settings"] = "v6|1|1";
   const untouched = {...base};
   make(untouched, prefs).applySettings();
   assert.deepStrictEqual(untouched, base, "a different field count is ignored");
   // 범위를 벗어난 값은 줄인다
-  // 지난 v2·v3·v4 저장값은 필드 구성이 달라 버린다
+  // 지난 v2·v3·v4·v5 저장값은 필드 구성이 달라 버린다
   for (const stale of ["v2|1|1|1|0|0|1|0|0|250|1200|0.05|9|6.5|50|70|-2|4.5|12 cm|0",
     "v3|1|1|2|0|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0",
-    "v4|1|1|2|0|1|1|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0"]) {
+    "v4|1|1|2|0|1|1|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0",
+    "v5|1|1|2|0|1|1|1|1|1|1|1|1|1|1|250|40|-1200|0.05|9|6.5|50|70|2.5|-2|4.5|12 cm|0"]) {
     prefs["ObjectMotionPhoto/settings"] = stale;
     const oldFormat = {...base};
     make(oldFormat, prefs).applySettings();
     assert.deepStrictEqual(oldFormat, base, `an old ${stale.slice(0, 2)} string falls back to the defaults`);
   }
-  prefs["ObjectMotionPhoto/settings"] = "v5|9|9|9|1|1|1|1|1|1|1|1|1|1|1|99999|99999|-99999|99|99|99|999|999|999|999|999|x|1";
+  prefs["ObjectMotionPhoto/settings"] = "v6|9|9|9|9|1|1|1|1|1|1|1|1|1|1|1|99999|99999|-99999|99|99|99|999|999|999|999|999|999|x|1";
   const clamped = {...base};
   make(clamped, prefs).applySettings();
   assert.strictEqual(clamped.direction, 0, "out-of-range radio is ignored");

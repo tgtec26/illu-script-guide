@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_UTube.jsx");
+const scriptPath = path.join(root, "스크립트", "01_도형", "J자관·U자관.jsx");
 const source = fs.readFileSync(scriptPath, "utf8");
 
 function extractFunction(name) {

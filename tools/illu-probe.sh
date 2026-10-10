@@ -1,4 +1,6 @@
 #!/bin/bash
+# 대상 일러스트레이터 번들 ID. 기본은 2027 베타, 정식판이면 ILLU_APP_ID=com.adobe.illustrator
+APP_ID="${ILLU_APP_ID:-com.adobe.illustratorBeta}"
 # 일러스트레이터 프로브 실행기 (macOS). AI가 스크립트를 일러에서 검증할 때 이것으로만 돌린다.
 # 배경: osascript의 do javascript가 주 스레드를 몇 초 이상 막으면 일러의 AIHangMonitor(응답 없음 감시)가 걸려
 #       Dock 아이콘이 튀고, 끝난 뒤에도 그 스레드가 CPU 한 코어를 헛돌며 쓴다 (11초짜리 한 번으로도 걸렸다).
@@ -56,7 +58,7 @@ if (__out === undefined) {
 __out;
 JS
 start=$(date +%s)
-osascript -e "with timeout of 600 seconds" -e "tell application id \"com.adobe.illustrator\" to do javascript (POSIX file \"$wrap\")" -e "end timeout"
+osascript -e "with timeout of 600 seconds" -e "tell application id \"$APP_ID\" to do javascript (POSIX file \"$wrap\")" -e "end timeout"
 took=$(( $(date +%s) - start ))
 for i in $(seq 1 15); do idle && break; sleep 2; done
 state="한가"; idle || state="바쁨 (다음 실행 때 원인을 다시 본다)"

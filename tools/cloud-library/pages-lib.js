@@ -109,7 +109,7 @@ for (const key of Object.keys(pages).map(Number).sort((a, b) => a - b)) {
   library.push(entry);
 }
 
-let inc = `// Object_Cloud_library.jsxinc\r\n// 구름 라이브러리. Object_Cloud.jsx가 #include로 읽는다.\r\n`;
+let inc = `// Object_Cloud_library.jsxinc\r\n// 구름 라이브러리. 구름.jsx가 #include로 읽는다.\r\n`;
 inc += `// 사용자가 일러스트레이터에서 아트보드마다 하나씩 그린 구름을 tools/cloud-library(ai-extract.js → pages-lib.js)로 뽑은 것.\r\n`;
 inc += `// 구름마다 {name, aspect, items}. 좌표는 높이 1 기준(x 0~aspect, y 0~1, 위가 +). items는 그리는 순서(뒤→앞).\r\n`;
 inc += `// item = {role: cloud|shadow1|shadow2|outline|ink|line, kind: fill|stroke, width(pt, 획만), subpaths: [{closed, anchors: [[x, y, 왼쪽 핸들 x, y, 오른쪽 핸들 x, y], ...]}]}\r\n`;

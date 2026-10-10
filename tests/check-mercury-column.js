@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_MercuryColumn.jsx");
+const scriptPath = path.join(root, "스크립트", "01_도형", "수은주.jsx");
 const source = fs.readFileSync(scriptPath, "utf8");
 
 // 문법만 확인 (실행하지 않는다)
@@ -30,8 +30,9 @@ function extractVar(name) {
 }
 
 const constants = ["MM", "KAPPA", "MOUTH_MARGIN_MM", "MIN_VACUUM_MM", "CORNER_R_MM", "FRAME_W_RANGE", "FRAME_H_RANGE",
-  "TROUGH_W_RANGE", "TROUGH_H_RANGE", "DEPTH_RANGE", "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE"];
-const names = ["clampOptions", "mouthHeights", "mercuryGeometry", "uPath", "corner", "cornerAt", "clamp"];
+  "TROUGH_W_RANGE", "TROUGH_H_RANGE", "DEPTH_RANGE", "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE",
+  "DIM_HEAD_LEN_MM", "HEAD_TRIANGLE", "HEAD_CATALOG"];
+const names = ["clampOptions", "mouthHeights", "mercuryGeometry", "uPath", "corner", "cornerAt", "clamp", "catalogPoints", "dimHeadPoints", "dimLineInset"];
 const lib = new Function(`${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
   `return {${[...constants, ...names].join(",")}};`)();
 
@@ -113,36 +114,57 @@ for (const tilt of [-45, -20, 0, 10, 30, 60]) {
   assert.deepStrictEqual(g.troughFill[0].anchor, [-50, 40], "mercury fill stops at the surface");
   near(g.troughOutline[2].left[0], -42 - lib.KAPPA * 8, 1e-9, "corner handle uses KAPPA");
 }
+// 치수선 화살촉: 일러스트레이터 화살촉 4종류(tools/arrowheads.json). 삼각형 머리 길이가 DIM_HEAD_LEN_MM × scale이고 다른 모양도 같은 배율, 위·아래 방향
+{
+  const {catalog, nearPoints} = require("./arrowhead-catalog.js");
+  assert.deepStrictEqual(lib.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), "same data as tools/arrowheads.json");
+  const len = lib.DIM_HEAD_LEN_MM * MM;
+  const k = len / 8.6;
+  for (let shape = 0; shape < 4; shape++) {
+    for (const dir of [1, -1]) {
+      const h = lib.dimHeadPoints(10, 50, dir, shape, 1);
+      assert.strictEqual(h.closed, true);
+      nearPoints(h.points, catalog.types[shape].poly.map((p) => [10 + p[0] * k, 50 - dir * p[1] * k]), `shape ${shape} dir ${dir}`);
+    }
+    nearPoints(lib.dimHeadPoints(10, 50, 1, shape, 2).points, catalog.types[shape].poly.map((p) => [10 + p[0] * 2 * k, 50 - p[1] * 2 * k]), `shape ${shape} at 200%`);
+    near(lib.dimLineInset(len, shape), catalog.types[shape].lineEnd * k, 1e-9, `shape ${shape}: line stops at lineEnd`);
+    assert.ok(lib.dimLineInset(len, shape) < catalog.types[shape].length * k, `shape ${shape}: line ends inside the head`);
+  }
+}
+
 // 설정 저장·복원: 저장한 값이 그대로 돌아오고, 형식이 다르거나 범위를 벗어난 값은 무시·보정한다
 {
+  const ioBase = {...base, headSize: 100, headShape: 0};
   const arrays = ["POSITION_LIMIT_MM", "FRAME_W_RANGE", "FRAME_H_RANGE", "TROUGH_W_RANGE", "TROUGH_H_RANGE", "DEPTH_RANGE",
-    "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE", "NUMBER_KEYS", "BOOL_KEYS", "TEXT_KEYS", "SPECS", "PREF_KEY", "TEXT_MAX"];
+    "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE", "NUMBER_KEYS", "CHOICE_KEYS", "BOOL_KEYS", "TEXT_KEYS", "SPECS", "PREF_KEY", "TEXT_MAX", "HEAD_SHAPES"];
   const ioNames = ["saveSettings", "applySettings", "parseNumber", "roundTo", "clamp"];
   const prefs = {};
   const make = (options) => new Function("app", "options", `${arrays.map(extractVar).join("\n")}\n` +
     `${ioNames.map(extractFunction).join("\n")}\n` +
     "return {save: saveSettings, load: applySettings};")(
     {preferences: {setStringPreference: (k, v) => { prefs[k] = v; }, getStringPreference: (k) => prefs[k] || ""}}, options);
-  const saved = {...base, arrowsOn: false, vacuumOn: true, columnOn: false, surfaceOn: true, mercuryOn: false,
-    glassOn: true, glassText: "유리관|A", heightOn: false, heightText: "760 mm", previewOn: false, tilt: -15, offsetX: 3.5};
+  const saved = {...ioBase, arrowsOn: false, vacuumOn: true, columnOn: false, surfaceOn: true, mercuryOn: false,
+    glassOn: true, glassText: "유리관|A", heightOn: false, heightText: "760 mm", previewOn: false, tilt: -15, offsetX: 3.5, headSize: 150, headShape: 2};
   make(saved).save();
-  assert.ok(prefs["ObjectMercuryColumn/settings"].startsWith("v1|"), "settings start with the version tag");
-  const restored = {...base, arrowsOn: true, heightText: "x", glassText: "y", previewOn: true};
+  assert.ok(prefs["ObjectMercuryColumn/settings"].startsWith("v2|"), "settings start with the version tag");
+  const restored = {...ioBase, arrowsOn: true, heightText: "x", glassText: "y", previewOn: true};
   make(restored).load();
   assert.strictEqual(restored.tilt, -15, "numbers come back");
   assert.strictEqual(restored.offsetX, 3.5, "offset comes back");
+  assert.strictEqual(restored.headSize, 150, "head size comes back");
+  assert.strictEqual(restored.headShape, 2, "head shape comes back");
   assert.strictEqual(restored.arrowsOn, false, "flags come back");
   assert.strictEqual(restored.previewOn, false, "preview flag comes back");
   assert.strictEqual(restored.glassText, "유리관A", "the separator is stripped from text");
   assert.strictEqual(restored.heightText, "760 mm", "text comes back");
   // 칸 수가 다르면 기본값 그대로
-  prefs["ObjectMercuryColumn/settings"] = "v1|1|2|3";
-  const untouched = {...base, arrowsOn: true};
+  prefs["ObjectMercuryColumn/settings"] = "v2|1|2|3";
+  const untouched = {...ioBase, arrowsOn: true};
   make(untouched).load();
-  assert.deepStrictEqual(untouched, {...base, arrowsOn: true}, "a different field count is ignored");
+  assert.deepStrictEqual(untouched, {...ioBase, arrowsOn: true}, "a different field count is ignored");
   // 범위를 벗어난 값은 범위 안으로
-  prefs["ObjectMercuryColumn/settings"] = "v1|999|60|60|20|15|0.8|5.5|50|0|0.4|30|0|0|1|1|1|1|1|1|1|1|a|b";
-  const clamped = {...base};
+  prefs["ObjectMercuryColumn/settings"] = "v2|999|60|60|20|15|0.8|5.5|50|0|0.4|30|0|0|999|9|1|1|1|1|1|1|1|1|a|b";
+  const clamped = {...ioBase};
   make(clamped).load();
   assert.strictEqual(clamped.frameW, 300, "out-of-range value is clamped");
 }

@@ -3,8 +3,8 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-// 원그래프 탭은 Object_GraphTools.jsx 안의 makePieChartEngine에 들어 있다 (태양 스펙트럼 엔진 앞)
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_GraphTools.jsx");
+// 원그래프 탭은 그래프·표.jsx 안의 makePieChartEngine에 들어 있다 (태양 스펙트럼 엔진 앞)
+const scriptPath = path.join(root, "스크립트", "01_도형", "그래프·표.jsx");
 const wholeSource = fs.readFileSync(scriptPath, "utf8");
 const engineStart = wholeSource.indexOf("function makePieChartEngine(");
 const engineEnd = wholeSource.indexOf("function makeSolarSpectrumEngine(");

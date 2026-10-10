@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_Cloud.jsx");
+const scriptPath = path.join(root, "스크립트", "01_도형", "구름.jsx");
 const libraryPath = path.join(root, "스크립트", "01_도형", "Object_Cloud_library.jsxinc");
 const source = fs.readFileSync(scriptPath, "utf8");
 const librarySource = fs.readFileSync(libraryPath, "utf8");

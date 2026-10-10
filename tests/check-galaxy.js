@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_Galaxy.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "우리은하.jsx"), "utf8");
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -48,5 +48,5 @@ const coreShare = globular.filter((d) => Math.hypot(d.x - 60, d.y) < 15).length 
 // 반지름 15(성단 반지름의 30%) 안: 고르게 흩으면 9%, 가운데로 모이면 그보다 훨씬 많다
 assert.ok(coreShare > 0.3, `globular cluster is concentrated: ${coreShare}`);
 assert.ok(source.includes('var PREF_KEY = "ObjectGalaxy/settings";'));
-assert.ok(source.includes('p[0] !== "v1" || p.length !== 16'), "settings field count");
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 18'), "settings field count");
 console.log("galaxy checks passed");

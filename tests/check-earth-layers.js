@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_EarthLayers.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "지구 내부 구조.jsx"), "utf8");
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);

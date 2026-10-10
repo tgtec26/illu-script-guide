@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_expand_arrow.jsx");
+const scriptPath = path.join(root, "스크립트", "01_도형", "확장 화살표.jsx");
 const source = fs.readFileSync(scriptPath, "utf8");
 
 // K 색은 CMY 없이 생성하고, 저장값은 새 형식과 10K 간격만 허용한다.

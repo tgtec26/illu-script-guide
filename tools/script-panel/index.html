@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+<meta charset="utf-8">
+<title>스크립트 패널</title>
+<style>
+:root { --bg: #2e2e2e; --fg: #ececec; --dim: #9a9a9a; --line: #444; --hover: #3b3b3b; --input: #232323; --accent: #4a9eff; --folder: #8db9ec; --file: #77b168; --star: #f5c542; --switch: #5a5a5a; }
+:root.light { --bg: #f5f5f5; --fg: #1f1f1f; --dim: #707070; --line: #d2d2d2; --hover: #e6e6e6; --input: #ffffff; --accent: #1473e6; --folder: #3671b8; --file: #3d8d52; --star: #e0a100; --switch: #b8b8b8; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.35 -apple-system, "Apple SD Gothic Neo", sans-serif; word-break: keep-all; overflow-wrap: break-word; display: flex; flex-direction: column; user-select: none; }
+#bar { display: flex; align-items: center; gap: 4px; padding: 8px 8px 4px; }
+button { font: inherit; color: var(--fg); background: transparent; border: 0; padding: 0; cursor: pointer; }
+.ib { width: 28px; height: 28px; flex: none; border: 1px solid var(--line); border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+.ib:hover { background: var(--hover); }
+.ib svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#q { flex: 1; min-width: 0; height: 28px; padding: 0 8px; font: inherit; color: var(--fg); background: var(--input); border: 1px solid var(--line); border-radius: 5px; user-select: text; }
+#q:focus { outline: 1px solid var(--accent); }
+#theme { display: flex; align-items: center; gap: 4px; flex: none; color: var(--dim); }
+#theme .sw { width: 28px; height: 16px; border-radius: 8px; background: var(--switch); position: relative; transition: background .15s; }
+#theme .sw i { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: left .15s; }
+.light #theme .sw { background: var(--accent); }
+.light #theme .sw i { left: 14px; }
+#theme svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#path { padding: 0 10px 6px; color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--line); }
+/* 즐겨찾기는 목록 위에 고정한다. 많으면 자기 안에서만 스크롤한다 */
+#favs { flex: none; max-height: 40vh; overflow-y: auto; padding: 4px 0; border-bottom: 1px solid var(--line); }
+#favs:empty { display: none; }
+#list { flex: 1; overflow-y: auto; padding: 4px 0 8px; }
+.row { display: flex; align-items: center; gap: 6px; height: 26px; padding-right: 8px; cursor: pointer; }
+.row:hover { background: var(--hover); }
+.row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .dir { color: var(--dim); font-size: 11px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .cnt { color: var(--dim); font-size: 11px; }
+.chev { width: 10px; height: 10px; flex: none; fill: var(--dim); transition: transform .1s; }
+.chev.open { transform: rotate(90deg); }
+.spacer { width: 10px; flex: none; }
+.ico { width: 18px; height: 18px; flex: none; }
+.ico.folder { fill: var(--folder); }
+.ico.file path:first-child { fill: var(--file); }
+.ico.file .g { fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sect { display: flex; align-items: center; gap: 6px; padding: 4px 10px 2px; color: var(--dim); font-size: 11px; }
+.sect svg { width: 12px; height: 12px; fill: var(--star); stroke: var(--star); stroke-width: 2; stroke-linejoin: round; }
+.grip { width: 10px; height: 16px; flex: none; fill: var(--dim); opacity: .6; cursor: grab; }
+.grip:hover { opacity: 1; }
+.row.dragging { opacity: .5; }
+.row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.star { width: 24px; height: 24px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
+.star:hover { background: var(--line); }
+.star svg { width: 12.8px; height: 12.8px; fill: none; stroke: var(--star); stroke-width: 2; stroke-linejoin: round; }
+.star.on svg { fill: var(--star); }
+.empty { padding: 12px 10px; color: var(--dim); }
+#status { padding: 4px 10px; min-height: 24px; color: var(--dim); border-top: 1px solid var(--line); font-size: 11px; }
+#status.err { color: #ff6b6b; }
+</style>
+</head>
+<body>
+<div id="bar">
+    <button id="pick" class="ib" title="스크립트 폴더 지정"></button>
+    <button id="refresh" class="ib" title="새로고침"></button>
+    <input id="q" type="text" placeholder="검색" spellcheck="false">
+    <button id="theme" title="다크 / 화이트 테마 전환"><span class="sw"><i></i></span><span id="themeIcon"></span></button>
+</div>
+<div id="path" title=""></div>
+<div id="favs"></div>
+<div id="list"></div>
+<div id="status"></div>
+<script src="main.js"></script>
+</body>
+</html>

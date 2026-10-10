@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_MagneticField.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "자기장.jsx"), "utf8");
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -57,7 +57,7 @@ assert.ok(south[1].right[0] > south[1].anchor[0] && south[4].left[0] > south[4].
 // 호출 결과에 바로 textRange를 대입하면 일러스트레이터가 종료된다
 assert.ok(!/addText\([^;]*\)\.textRange/.test(source), "no chained textRange assignment");
 assert.ok(source.includes('var PREF_KEY = "ObjectMagneticField/settings";'));
-assert.ok(source.includes('p[0] !== "v5" || p.length !== 20'), "settings field count");
+assert.ok(source.includes('p[0] !== "v6" || p.length !== 21'), "settings field count");
 console.log("magnetic field checks passed");
 
 // 모든 극 조합, 좁은 간격, 분포 양끝에서 유한한 좌표와 몸체 외부를 보장한다.

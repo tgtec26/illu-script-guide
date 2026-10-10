@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_SeparationSetup.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "혼합물 분리 장치.jsx"), "utf8");
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -54,5 +54,5 @@ near(c.spots[0].y, c.baseY, 1e-9, "0% on the start line");
 near(c.spots[1].y, c.frontY, 1e-9, "100% on the solvent front");
 assert.ok(c.baseY > c.solventTop, "start line above the solvent");
 assert.ok(source.includes('var PREF_KEY = "ObjectSeparationSetup/settings";'));
-assert.ok(source.includes('p[0] !== "v1" || p.length !== 13'), "settings field count");
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 15'), "settings field count");
 console.log("separation setup checks passed");

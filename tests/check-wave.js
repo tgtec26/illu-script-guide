@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_Wave.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "파동.jsx"), "utf8");
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -19,10 +19,10 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["harmonicWave", "wavePoints", "extremaX", "longitudinalXs", "compressionXs", "soundPanels", "arrowHeadPoints"];
+const names = ["harmonicWave", "wavePoints", "extremaX", "longitudinalXs", "compressionXs", "soundPanels", "catalogPoints", "arrowHeadPoints", "arrowHeadShape"];
 const lib = new Function(
-  "var TIMBRES = [[[1, 1]], [[1, 1], [2, 0.5]], [[1, 1], [3, 0.45], [5, 0.25]]]; var HEAD_LENGTH = 4, HEAD_WIDTH = 3;\n" +
-  `${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`
+  "var TIMBRES = [[[1, 1]], [[1, 1], [2, 0.5]], [[1, 1], [3, 0.45], [5, 0.25]]]; var HEAD_LENGTH = 4, HEAD_WIDTH = 3, headShape = 0;\n" +
+  `${source.slice(source.indexOf("var HEAD_CATALOG = ["), source.indexOf("];", source.indexOf("var HEAD_CATALOG = [")) + 2)}\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}, setShape: function(v) { headShape = v; }};`
 )();
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= (tol || 1e-9), `${label}: expected ${b}, got ${a}`);
 
@@ -103,6 +103,18 @@ function bezierAt(a, b, t) {
   near(Math.abs(a[1] - b[1]), 3, 1e-9, "base width");
 }
 
+// 화살촉 모양: 일러스트레이터 화살촉 4종류(tools/arrowheads.json)를 삼각형 머리(길이 4)의 배율로 그린다
+{
+  const {assertSameCatalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
+  assertSameCatalog(source, "wave");
+  for (let shape = 0; shape < 4; shape++) {
+    lib.setShape(shape);
+    const h = lib.arrowHeadShape([10, 0], 1, 0);
+    assert.strictEqual(h.closed, true);
+    nearPoints(h.points, expectedPoints(shape, [10, 0], [1, 0], 4 / 8.6), `wave shape ${shape}`);
+  }
+}
+
 assert.ok(source.includes('var PREF_KEY = "ObjectWave/settings";'));
-assert.ok(source.includes('p[0] !== "v1" || p.length !== 18'), "settings field count");
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 20'), "settings field count");
 console.log("wave checks passed");

@@ -47,7 +47,8 @@ if [ ! -d "$SOURCE_DIR" ]; then
   exit 1
 fi
 
-APP_DIR="$(
+# 베타 등 연도가 없는 폴더는 ILLUSTRATOR_APP_DIR(+ILLUSTRATOR_VER, 예: "31.0.0 Beta")로 직접 지정한다
+APP_DIR="${ILLUSTRATOR_APP_DIR:-$(
   find /Applications -maxdepth 1 -type d -name 'Adobe Illustrator*' 2>/dev/null \
     | awk '
       {
@@ -59,14 +60,16 @@ APP_DIR="$(
     | sort -rn \
     | head -n 1 \
     | cut -f2-
-)"
+)}"
 
 if [ -z "$APP_DIR" ]; then
   echo "Illustrator 설치 폴더를 찾지 못했습니다."
   exit 1
 fi
 
-if [[ "$(basename "$APP_DIR")" =~ (20[0-9][0-9]) ]]; then
+if [ -n "${ILLUSTRATOR_VER:-}" ]; then
+  VER="$ILLUSTRATOR_VER"
+elif [[ "$(basename "$APP_DIR")" =~ (20[0-9][0-9]) ]]; then
   YEAR="${BASH_REMATCH[1]}"
   VER=$((YEAR - 1996))
 else

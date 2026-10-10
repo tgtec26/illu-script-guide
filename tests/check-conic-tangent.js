@@ -3,8 +3,8 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-// 기하 묶음(Object_HighGeometry.jsx)의 "ConicTangent" 탭 엔진만 잘라 읽는다
-const bundle = fs.readFileSync(path.join(root, "스크립트", "07_수학", "Object_HighGeometry.jsx"), "utf8");
+// 기하 묶음(기하.jsx)의 "ConicTangent" 탭 엔진만 잘라 읽는다
+const bundle = fs.readFileSync(path.join(root, "스크립트", "07_수학", "기하.jsx"), "utf8");
 const source = (() => {
   const start = bundle.indexOf("function makeConicTangentEngine(");
   assert.ok(start >= 0, "missing engine: makeConicTangentEngine");

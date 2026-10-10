@@ -3,8 +3,8 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-// 중학교 수학 묶음(Object_MiddleMath.jsx)의 "ShadedArea" 탭 엔진만 잘라 읽는다
-const bundle = fs.readFileSync(path.join(root, "스크립트", "07_수학", "Object_MiddleMath.jsx"), "utf8");
+// 중학교 수학 묶음(중학교 수학.jsx)의 "ShadedArea" 탭 엔진만 잘라 읽는다
+const bundle = fs.readFileSync(path.join(root, "스크립트", "07_수학", "중학교 수학.jsx"), "utf8");
 const source = (() => {
   const start = bundle.indexOf("function makeShadedAreaEngine(");
   assert.ok(start >= 0, "missing engine: makeShadedAreaEngine");

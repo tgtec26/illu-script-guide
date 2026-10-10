@@ -4,9 +4,9 @@ const vm = require("vm");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "10_기타", "Image_LockAllRaster.jsx");
+const scriptPath = path.join(root, "스크립트", "10_기타", "래스터 모두 잠금.jsx");
 
-assert.ok(fs.existsSync(scriptPath), "Image_LockAllRaster.jsx must exist");
+assert.ok(fs.existsSync(scriptPath), "래스터 모두 잠금.jsx must exist");
 
 const source = fs.readFileSync(scriptPath, "utf8").replace(/^#target[^\r\n]*(?:\r?\n)?/, "");
 

@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_StarTrails.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "별의 일주 운동.jsx"), "utf8");
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -204,7 +204,7 @@ const skyAt = (key, day, hour) => altAz(lib.skyPosition(stars[key].ra, stars[key
 }
 
 assert.ok(source.includes('var PREF_KEY = "ObjectStarTrails/settings";'));
-assert.ok(source.includes('["v2", direction') && source.includes('p[0] !== "v2" || p.length !== 21'), "settings v2");
+assert.ok(source.includes('["v3", direction') && source.includes('p[0] !== "v3" || p.length !== 22'), "settings v3");
 // 안내 홈페이지 탭 이름은 스크립트의 탭 라벨과 같다
 const app = fs.readFileSync(path.join(root, "docs", "assets", "app.js"), "utf8");
 for (const name of ["개념도", "실제 별"]) {

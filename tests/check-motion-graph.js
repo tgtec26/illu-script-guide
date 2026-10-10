@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_MotionGraph.jsx");
+const scriptPath = path.join(root, "스크립트", "01_도형", "직선 운동 그래프.jsx");
 const source = fs.readFileSync(scriptPath, "utf8");
 
 // 문법만 확인 (실행하지 않는다)
@@ -29,9 +29,9 @@ function extractVar(name) {
   return `var ${name} = ${match[1]};`;
 }
 
-const constants = ["ARROW", "GRAPH_X_RATIO", "Y_TOP_RATIO", "Y_START_DOWN_RATIO", "CURVE_START_HANDLE", "CURVE_END_HANDLE",
+const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_EXAM", "HEAD_CATALOG", "GRAPH_X_RATIO", "Y_TOP_RATIO", "Y_START_DOWN_RATIO", "CURVE_START_HANDLE", "CURVE_END_HANDLE",
   "Y_CONST_MAX_RATIO", "WIDTH_RANGE", "HEIGHT_RANGE", "Y_VALUE_RANGE"];
-const names = ["graphGeometry", "arrowHeadPoints", "corner", "clampOptions", "clamp"];
+const names = ["graphGeometry", "catalogPoints", "arrowHeadShape", "shaftInset", "corner", "clampOptions", "clamp"];
 const lib = new Function(`${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
   `return {${[...constants, ...names].join(",")}};`)();
 
@@ -50,17 +50,25 @@ const geo = (pattern) => lib.graphGeometry({...box, pattern});
   near(g.axes[1].to[1], 280 - (lib.ARROW.length - lib.ARROW.notch), 1e-9, "y axis line stops at the notch");
 }
 
-// 화살촉: 끝점, 날개 둘(대칭), 오목한 점
+// 화살촉: 일러스트레이터 화살촉 4종류(tools/arrowheads.json). 제비꼬리 길이 ARROW.length를 기준으로 배율 scale을 정하고, 선은 머리 속(lineEnd)에서 끝난다
 {
-  const head = lib.arrowHeadPoints([190, 200], [1, 0]);
-  assert.strictEqual(head.length, 4, "arrow head has four points");
-  assert.deepStrictEqual(head[0].anchor, [190, 200], "tip first");
-  near(head[1].anchor[0], 190 - lib.ARROW.length, 1e-9, "wing is one arrow length back");
-  near(head[1].anchor[1] + head[3].anchor[1], 400, 1e-9, "wings mirror across the axis");
-  near(Math.abs(head[1].anchor[1] - 200), lib.ARROW.halfWidth, 1e-9, "wing half width");
-  near(head[2].anchor[0], 190 - lib.ARROW.length + lib.ARROW.notch, 1e-9, "notch point");
-  const up = lib.arrowHeadPoints([100, 280], [0, 1]);
-  near(up[1].anchor[1], 280 - lib.ARROW.length, 1e-9, "upward arrow wing is back along y");
+  const {catalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
+  assert.deepStrictEqual(lib.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), "same data as tools/arrowheads.json");
+  const k1 = lib.ARROW.length / 12.1;   // 평가원식(작살형) 길이가 ARROW.length
+  for (let shape = 0; shape < 4; shape++) {
+    const h = lib.arrowHeadShape([190, 200], [1, 0], 1, shape);
+    assert.strictEqual(h.closed, true);
+    assert.deepStrictEqual(h.points[0].anchor, [190, 200], `shape ${shape}: tip`);
+    nearPoints(h.points.map((p) => p.anchor), expectedPoints(shape, [190, 200], [1, 0], k1), `shape ${shape}`);
+    near(lib.shaftInset(shape, 1), catalog.types[shape].lineEnd * k1, 1e-9, `shape ${shape}: line stops at lineEnd`);
+    near(lib.shaftInset(shape, 2), 2 * catalog.types[shape].lineEnd * k1, 1e-9, `shape ${shape}: scales with the size`);
+    const bigHead = lib.arrowHeadShape([190, 200], [1, 0], 2, shape);
+    nearPoints(bigHead.points.map((p) => p.anchor), expectedPoints(shape, [190, 200], [1, 0], 2 * k1), `shape ${shape} at 200%`);
+  }
+  // 위쪽을 가리키는 화살촉
+  nearPoints(lib.arrowHeadShape([100, 280], [0, 1], 1, lib.HEAD_EXAM).points.map((p) => p.anchor), expectedPoints(3, [100, 280], [0, 1], k1), "upward swallowtail");
+  // 선이 머리에서 삐져나오지 않는다: 몸통 끝이 모든 모양에서 머리 길이 안쪽이다
+  for (let shape = 0; shape < 4; shape++) assert.ok(lib.shaftInset(shape, 1) < catalog.types[shape].length * k1, `shape ${shape}: line ends inside the head`);
 }
 
 // 모양: 일정 / 직선 증가 / 직선 감소 / 아래로 볼록 곡선 / 위로 볼록 곡선
@@ -122,21 +130,21 @@ const geo = (pattern) => lib.graphGeometry({...box, pattern});
   const ioNames = ["saveSettings", "applySettings", "parseNumber", "roundTo", "clamp"];
   const prefs = {};
   const make = (options) => new Function("app", "options", `${["PREF_KEY", "PATTERNS", "Y_NAMES", "POSITION_LIMIT_MM", "WIDTH_RANGE",
-    "HEIGHT_RANGE", "Y_VALUE_RANGE", "NUMBER_KEYS", "SPECS"].map(extractVar).join("\n")}\n${ioNames.map(extractFunction).join("\n")}\n` +
+    "HEIGHT_RANGE", "Y_VALUE_RANGE", "NUMBER_KEYS", "SPECS", "HEAD_SHAPES"].map(extractVar).join("\n")}\n${ioNames.map(extractFunction).join("\n")}\n` +
     "return {save: saveSettings, load: applySettings};")(
     {preferences: {setStringPreference: (k, v) => { prefs[k] = v; }, getStringPreference: (k) => prefs[k] || ""}}, options);
-  const saved = {pattern: 3, yKind: 0, yValue: 12.5, width: 40, height: 33, offsetX: -2, offsetY: 4.5, previewOn: false};
+  const saved = {pattern: 3, yKind: 0, yValue: 12.5, width: 40, height: 33, offsetX: -2, offsetY: 4.5, headSize: 150, headShape: 1, previewOn: false};
   make(saved).save();
-  assert.ok(prefs["ObjectMotionGraph/settings"].startsWith("v1|3|0|"), "settings start with the version tag");
-  const restored = {pattern: 0, yKind: 1, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, previewOn: true};
+  assert.ok(prefs["ObjectMotionGraph/settings"].startsWith("v2|3|0|1|"), "settings start with the version tag");
+  const restored = {pattern: 0, yKind: 1, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, headSize: 100, headShape: 2, previewOn: true};
   make(restored).load();
   assert.deepStrictEqual(restored, saved, "saved options come back");
-  prefs["ObjectMotionGraph/settings"] = "v1|1|2";
-  const untouched = {pattern: 0, yKind: 1, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, previewOn: true};
+  prefs["ObjectMotionGraph/settings"] = "v2|1|2";
+  const untouched = {pattern: 0, yKind: 1, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, headSize: 100, headShape: 2, previewOn: true};
   make(untouched).load();
   assert.strictEqual(untouched.pattern, 0, "a different field count is ignored");
-  prefs["ObjectMotionGraph/settings"] = "v1|9|9|999|999|999|999|999|0";
-  const clamped = {pattern: 1, yKind: 0, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, previewOn: true};
+  prefs["ObjectMotionGraph/settings"] = "v2|9|9|9|999|999|999|999|999|999|0";
+  const clamped = {pattern: 1, yKind: 0, yValue: 18, width: 32, height: 29, offsetX: 0, offsetY: 0, headSize: 100, headShape: 2, previewOn: true};
   make(clamped).load();
   assert.strictEqual(clamped.pattern, 1, "out-of-range pattern is ignored");
   assert.strictEqual(clamped.width, 200, "out-of-range number is clamped");
