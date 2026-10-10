@@ -16,7 +16,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced: ${name}`);
 }
 const names = ["drawHorizontalPulley"];
-const scenes = new Function(`var GHOST_DASH = [2, 1], HEAD_HARPOON = 1;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+const scenes = new Function(`var GHOST_DASH = [2, 1], HEAD_HARPOON = 1, NAME_GAP_MM = 1;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 컨트롤 기본값을 소스의 controls 배열에서 읽는다 (+ 엔진이 붙이는 선 두께 기본값)
 function defaultsOf(engineName) {
@@ -30,7 +30,7 @@ function defaultsOf(engineName) {
 function record(o, fn) {
   const calls = [];
   const t = { mm: 1 };
-  for (const k of ["line", "rect", "circle", "arc", "arrow", "text", "path", "curve", "pulley", "dashLine", "dashRect", "headArrow"]) t[k] = (...a) => { calls.push({ k, a }); };
+  for (const k of ["line", "rect", "circle", "arc", "arrow", "text", "path", "curve", "pulley", "dashLine", "dashRect", "headArrow", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); };
   fn(t, o);
   return calls;
 }
@@ -87,7 +87,11 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   const ends = heads.map((h) => h.a[1][0]).sort((a, b) => a - b);
   near(ends[1] - ends[0], shift, "표시한 거리 = 이동 거리");
   // 글자
-  const texts = calls.filter((c) => c.k === "text").map((c) => c.a[0]);
+  // 이름 글자는 도형에서 1mm 떨어진 자리에 윤곽 기준으로 놓는다 (나무도막: 물체 위, 추: 오른쪽)
+  const nameBlock = calls.find((c) => c.k === "textAt" && c.a[0] === "나무도막"), nameWeight = calls.find((c) => c.k === "textAt" && c.a[0] === "추");
+  near(nameBlock.a[1], bw / 2, "물체 이름 가운데"); near(nameBlock.a[2], bh + 1, "물체 이름 아래 간격 1mm"); assert.strictEqual(nameBlock.a[4], "above");
+  near(nameWeight.a[1], wx + 9 / 2 + 1, "추 이름 왼쪽 간격 1mm"); near(nameWeight.a[2], wTop - wh / 2, "추 이름 세로 가운데"); assert.strictEqual(nameWeight.a[4], "right");
+  const texts = calls.filter((c) => c.k === "text" || c.k === "textAt").map((c) => c.a[0]);
   for (const s of ["4 kg", "나무도막", "1 kg", "추", "1 m", "P", "Q"]) assert.ok(texts.includes(s), s);
   assert.strictEqual(texts.filter((s) => s === "2 m/s").length, 2);
   assert.ok(!/NaN/.test(JSON.stringify(calls)));

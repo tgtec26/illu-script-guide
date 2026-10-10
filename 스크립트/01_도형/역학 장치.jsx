@@ -27,6 +27,7 @@ try {
     var FORM_ITALIC_FONT = formFindFont(["GSMediItaC1", "GSMediumB1"]);
     var FORM_MATH_FONT = formFindFont(["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular", "GSMediumB1"]);
     var TAB_PREF_KEY = "MechanicsDevice/tab";
+    var NAME_GAP_MM = 1;   // 물체·추 이름과 도형 사이 간격(글자 윤곽 기준)
     var GHOST_DASH = [2, 1];   // 파선 2-1 (선 2pt, 간격 1pt)
     // 화살촉 모양: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽. 끝이 원점, 뒤쪽이 +y. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리
     var HEAD_CATALOG = [
@@ -103,7 +104,7 @@ try {
         // 물체
         t.rect(0, bh, bw, 0, 0, 100, wObj);
         if (o.blockText !== "") t.text(o.blockText, bw / 2, bh / 2, size, "center");
-        if (o.blockName !== "") t.text(o.blockName, bw / 2, bh + 3 * m + 2.6 * m, size, "center");
+        if (o.blockName !== "") t.textAt(o.blockName, bw / 2, bh + NAME_GAP_MM * m, size, "above");
         // 도르래: 겉 테두리 wObj, 안쪽 원판·받침대·축 점 wGuide
         t.pulley(cx, cy, R, o.pulleyArm ? [mountX, 0] : null, wObj, wGuide);
         // 실: 물체 가운데 → 도르래 위 → 오른쪽 수직
@@ -120,7 +121,7 @@ try {
         }
         t.rect(wx - ww / 2, wTop, wx + ww / 2, wTop - wh, 0, 100, wObj);
         if (o.weightText !== "") t.text(o.weightText, wx, wTop - wh / 2, size, "center");
-        if (o.weightName !== "") t.text(o.weightName, wx + ww / 2 + 2 * m, wTop - wh / 2, size, "left");
+        if (o.weightName !== "") t.textAt(o.weightName, wx + ww / 2 + NAME_GAP_MM * m, wTop - wh / 2, size, "right");
         // 거리 표시: 이전 위치 오른쪽 끝(P)에서 지금 오른쪽 끝(Q)까지 = 이동 거리. P·Q의 보조선은 파선, 화살촉은 평가원 작살형
         if (o.dim) {
             var px = ghostRight, qx = bw;
@@ -622,7 +623,32 @@ try {
             frame.translate(x - anchorX, y - (b[1] + b[3]) / 2);
             return frame;
         };
+        // 이름 글자: 글자 윤곽(글상자 여백 제외)이 도형에서 정확히 간격만큼 떨어지게 놓는다.
+        // anchor "above": (x, y)가 글자 윤곽의 아래 가운데, "right": (x, y)가 글자 윤곽의 왼쪽 끝 세로 가운데
+        t.textAt = function(text, x, y, size, anchor, k, opts) {
+            var frame = t.text(text, x, y, size, "center", k, opts);
+            var ink = formInkBounds(frame);
+            var cx = (ink[0] + ink[2]) / 2, cy = (ink[1] + ink[3]) / 2;
+            if (anchor === "above") frame.translate(x - cx, y - ink[3]);
+            else frame.translate(x - ink[0], y - cy);
+            return frame;
+        };
         return t;
+    }
+
+    // 글자 윤곽의 경계: 복사본을 윤곽선으로 바꿔 재고 지운다. 실패하면 글상자 경계를 쓴다
+    function formInkBounds(frame) {
+        try {
+            var copy = frame.duplicate();
+            var outlined = copy.createOutline();
+            var b = outlined.geometricBounds;
+            var out = [b[0], b[1], b[2], b[3]];
+            outlined.remove();
+            return out;
+        } catch (e) {
+            var f = frame.geometricBounds;
+            return [f[0], f[1], f[2], f[3]];
+        }
     }
 
     function formPaint(p, fill, stroke, width, dashes) {
