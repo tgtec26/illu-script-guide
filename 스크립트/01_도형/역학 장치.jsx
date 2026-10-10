@@ -235,7 +235,7 @@ try {
             t.arc(0, 0, o.arcR * m, 0, th, wGuide);
             if (o.angleText !== "") {
                 var half = th / 2, tr = (o.arcR + 3.2) * m;
-                t.text(o.angleText, tr * Math.cos(half), tr * Math.sin(half), size, "center");
+                t.textAt(o.angleText, tr * Math.cos(half), tr * Math.sin(half), size, "center");
             }
         }
     }
@@ -720,6 +720,7 @@ try {
             var ink = formInkBounds(frame);
             var cx = (ink[0] + ink[2]) / 2, cy = (ink[1] + ink[3]) / 2;
             if (anchor === "above") frame.translate(x - cx, y - ink[3]);
+            else if (anchor === "center") frame.translate(x - cx, y - cy);
             else frame.translate(x - ink[0], y - cy);
             return frame;
         };
