@@ -10,9 +10,9 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 에너지 준위: 수소 원자 모형의 에너지 준위(E_n = -13.6/n² eV)와 전이 화살표, 방출·흡수하는 빛의 스펙트럼선을 그린다. 선택 없이 화면 가운데에 만든다.
+// 에너지 준위: 에너지 축(화살표)과 준위 선, 전이 화살표(a, b…)를 그린다. 왼쪽에 에너지(eV 값·E0 비율·En 기호 중 선택), 오른쪽에 n을 쓴다. E_n = -13.6/n² eV. 선택 없이 화면 가운데에 만든다.
 //   전이는 '3-1, 4-2'처럼 높은 준위-낮은 준위로 쓰고, 이름은 'a, b'처럼 같은 순서로 쓴다. 스펙트럼선은 파장(1/에너지 차)에 비례해 놓고 파장이 긴 쪽이 오른쪽이다.
-// 선 두께는 준위 선 0.8pt, 전이 화살표 0.4pt, 스펙트럼 띠 겉 0.4pt, 스펙트럼선 0.8pt이고 '선 두께' 패널에서 고친다.
+// 선 두께는 준위 선 0.8pt, 전이 화살표·축 0.4pt, 스펙트럼 띠 겉 0.4pt, 스펙트럼선 0.8pt이고 '선 두께' 패널에서 고친다.
 // 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, 변수(n) GSMediItaC1, GSMediumB1에 없는 기호(−, ∞)는 HancomEQN이다.
 
 (function() {
@@ -39,21 +39,23 @@ try {
                 {key: "count", label: "준위 수", unit: "개", min: 2, max: 7, step: 1, value: 4},
                 {key: "proportional", check: "에너지에 비례한 간격", value: true},
                 {key: "infinity", check: "n=∞ 선", value: true},
-                {key: "showN", check: "n 글자", value: true},
-                {key: "showE", check: "에너지 값", value: true},
-                {key: "showUnit", check: "단위 eV", value: true},
+                {key: "showAxis", check: "에너지 축", value: true},
                 {key: "width", label: "준위 선 길이", unit: "mm", min: 20, max: 120, step: 1, value: 50},
                 {key: "height", label: "전체 높이", unit: "mm", min: 30, max: 120, step: 1, value: 60},
+                {panel: "글자"},
+                {key: "energy", label: "에너지 글자", items: ["eV 값", "E0 비율", "En 기호", "없음"], value: 0},
+                {key: "showUnit", check: "단위 eV", value: true},
+                {key: "showN", check: "n 글자", value: true},
+                {key: "showHead", check: "양자수 머리글", value: false},
+                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 14, step: 0.5, value: 8},
                 {panel: "전이"},
                 {key: "transitions", label: "전이", text: true, value: "3-1, 4-2, 2-1"},
                 {key: "names", label: "이름", text: true, value: "a, b, c"},
                 {key: "absorb", check: "흡수(위로)", value: false},
                 {panel: "스펙트럼선"},
-                {key: "spectrum", check: "스펙트럼선", value: true},
+                {key: "spectrum", check: "스펙트럼선", value: false},
                 {key: "stripGap", label: "준위와 띠 간격", unit: "mm", min: 4, max: 30, step: 0.5, value: 14},
-                {key: "stripH", label: "띠 높이", unit: "mm", min: 3, max: 20, step: 0.5, value: 8},
-                {panel: "글자"},
-                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 14, step: 0.5, value: 8}
+                {key: "stripH", label: "띠 높이", unit: "mm", min: 3, max: 20, step: 0.5, value: 8}
             ],
             draw: drawLevels
         });
@@ -86,38 +88,57 @@ try {
         return out;
     }
 
-    // 좌표는 pt(y 위쪽 +). n=1 준위가 y=0, 왼쪽 끝이 x=0. 에너지 E_n = -13.6/n² (n=∞가 0).
+    // 좌표는 pt(y 위쪽 +). n=1 준위가 y=0, 에너지 축이 x=0. 에너지 글자는 축 왼쪽, n 글자는 준위 선 오른쪽 끝에 둔다.
+    // 에너지 글자: eV 값(−13.60 eV), E0 비율(−1/9E0), En 기호(E2), 없음. 에너지 E_n = -13.6/n² (n=∞가 0).
     function drawLevels(t, o) {
         var m = t.mm, size = o.font, W = o.width * m, H = o.height * m;
         var n, y = [];
         for (n = 1; n <= o.count; n++) {
             y.push(o.proportional ? (1 - 1 / (n * n)) * H : (n - 1) * H / o.count);
         }
-        var infAt = H;
-        // 준위 선과 글자
-        var lastLabelY = null, colRight = null, unit = o.showUnit ? " eV" : "";
-        // 에너지 값 글자는 오른쪽 끝(윤곽)을 맞춘 한 열로 놓는다: 첫 값(가장 긴 글자)이 열 너비를 정한다
-        function putEnergy(text, yy) {
-            if (colRight === null) colRight = formInkBounds(t.textAt(text, W + 1.5 * m, yy, size, "right"))[2];
-            else t.textAt(text, colRight, yy, size, "left");
+        var infAt = H, unit = o.showUnit && o.energy === 0 ? " eV" : "";
+        // 에너지 글자 하나 (nn이 0이면 n=∞). 쓰지 않으면 null
+        function energyLabel(nn) {
+            if (o.energy === 0) return {text: nn === 0 ? "0" + unit : "−" + formFormat(RYDBERG_EV / (nn * nn), 2) + unit};
+            if (o.energy === 1) return nn === 0 ? {text: "0"} : {text: nn === 1 ? "−E0" : "−1/" + (nn * nn) + "E0", opts: {italic: true, sub: true}};
+            if (o.energy === 2) return nn === 0 ? null : {text: "E" + nn, opts: {italic: true, sub: true}};
+            return null;
+        }
+        // 에너지 글자는 오른쪽 끝을 축 왼쪽에 맞춘다. 아래 글자와 너무 가까우면 생략한다
+        var lastLabelY = null;
+        function energyAt(nn, yy) {
+            var label = energyLabel(nn);
+            if (label === null || (lastLabelY !== null && yy - lastLabelY < size * 0.95)) return;
+            t.textAt(label.text, -2 * m, yy, size, "left", label.opts);
+            lastLabelY = yy;
         }
         for (n = 1; n <= o.count; n++) {
             t.line([0, y[n - 1]], [W, y[n - 1]], o.wBody);
-            if (o.showN) t.textAt("n=" + n, -1.5 * m, y[n - 1], size, "left", {italic: true});
-            if (o.showE) {
-                // 위 준위와 너무 가까우면 값 글자를 생략한다
-                var gapPt = lastLabelY === null ? 1e9 : y[n - 1] - lastLabelY;
-                if (lastLabelY === null || gapPt >= size * 0.95) {
-                    var e = -RYDBERG_EV / (n * n);
-                    putEnergy("−" + formFormat(-e, 2) + unit, y[n - 1]);
-                    lastLabelY = y[n - 1];
-                }
-            }
+            if (o.showN) t.textAt("n=" + n, W + 2 * m, y[n - 1], size, "right", {italic: true});
+            energyAt(n, y[n - 1]);
         }
         if (o.infinity) {
             t.line([0, infAt], [W, infAt], o.wBody);
-            if (o.showN) t.textAt("n=∞", -1.5 * m, infAt, size, "left", {italic: true});
-            if (o.showE) putEnergy("0" + unit, infAt);
+            if (o.showN) t.textAt("n=∞", W + 2 * m, infAt, size, "right", {italic: true});
+            energyAt(0, infAt);
+        }
+        var topAt = Math.max.apply(null, o.infinity ? y.concat([infAt]) : y);
+        if (o.showHead) t.textAt("양자수", W + 2 * m, topAt + 4 * m, size, "right");
+        // 에너지 축: 맨 아래 준위 밑에서 위로 화살표, 머리 위에 '에너지'
+        if (o.showAxis) {
+            var axisTop = topAt + 6 * m;
+            t.arrow([0, -3 * m], [0, axisTop], o.wRope, ARROW_HEAD_MM * m);
+            t.text("에너지", 0, axisTop + 1 * m + size * 0.6, size, "center");
+        }
+        // 전이 이름 높이: 가운데에서 시작해 준위 선(글자 높이 안)과 겹치지 않는 자리를 찾는다
+        function nameHeight(yLo, yHi) {
+            var fractions = [0.5, 0.35, 0.65, 0.25, 0.75], levelYs = o.infinity ? y.concat([infAt]) : y;
+            for (var f = 0; f < fractions.length; f++) {
+                var at = yLo + (yHi - yLo) * fractions[f], clear = true;
+                for (var q = 0; q < levelYs.length; q++) if (Math.abs(at - levelYs[q]) < size * 0.6) clear = false;
+                if (clear) return at;
+            }
+            return (yLo + yHi) / 2;
         }
         // 전이 화살표: 목록 순서대로 준위 선 폭을 (K+1)등분한 자리에 놓는다
         var list = parseTransitions(o.transitions, o.count), names = splitNames(o.names), k, positions = [];
@@ -127,7 +148,7 @@ try {
             if (o.absorb) t.arrow([x, yLo], [x, yHi], o.wRope, ARROW_HEAD_MM * m);
             else t.arrow([x, yHi], [x, yLo], o.wRope, ARROW_HEAD_MM * m);
             var name = k < names.length ? names[k] : "";
-            if (name !== "") t.textAt(name, x + NAME_GAP_MM * m, (yHi + yLo) / 2, size, "right");
+            if (name !== "") t.textAt(name, x + NAME_GAP_MM * m, nameHeight(yLo, yHi), size, "right");
             // 광자 에너지(eV 단위 비례값): 파장은 1/(1/lo² - 1/hi²)에 비례
             positions.push(1 / (1 / (list[k].lo * list[k].lo) - 1 / (list[k].hi * list[k].hi)));
         }

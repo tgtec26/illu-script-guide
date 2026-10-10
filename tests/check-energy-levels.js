@@ -15,19 +15,21 @@ function extractFunction(name) {
   throw new Error(`unbalanced: ${name}`);
 }
 const names = ["parseTransitions", "splitNames", "drawLevels"];
-const f = new Function(`var ARROW_HEAD_MM = 1.6, NAME_GAP_MM = 1, RYDBERG_EV = 13.6;\nfunction formFormat(v, d) { return Number(v).toFixed(d); }
-function formInkBounds() { return [0, 0, 10, 0]; }\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+const f = new Function(`var ARROW_HEAD_MM = 1.6, NAME_GAP_MM = 1, RYDBERG_EV = 13.6;\nfunction formFormat(v, d) { return Number(v).toFixed(d); }\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 function run(o) {
   const calls = [];
   const t = { mm: 2.834645669 };
   for (const k of ["line", "rect", "arrow", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
-  f.drawLevels(t, { wBody: 0.8, wObj: 0.4, wRope: 0.4, wGuide: 0.8, font: 8, count: 4, proportional: true, infinity: true, showN: true, showE: true, width: 50, height: 60,
-    showUnit: true, transitions: "3-1, 4-2, 2-1", names: "a, b, c", absorb: false, spectrum: true, stripGap: 14, stripH: 8, ...o });
+  f.drawLevels(t, { wBody: 0.8, wObj: 0.4, wRope: 0.4, wGuide: 0.8, font: 8, count: 4, proportional: true, infinity: true, showAxis: true, showN: true,
+    showHead: false, energy: 0, showUnit: true, width: 50, height: 60, transitions: "3-1, 4-2, 2-1", names: "a, b, c", absorb: false,
+    spectrum: true, stripGap: 14, stripH: 8, ...o });
   return calls;
 }
 const MM = 2.834645669;
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
+// 축 왼쪽(오른쪽 끝이 x=-2mm)에 놓인 에너지 글자만
+const energyTexts = (calls) => calls.filter((c) => c.k === "textAt" && c.a[4] === "left").map((c) => c.a[0]);
 
 // 전이 읽기: 잘못된 칸은 건너뛰고 높은 준위가 먼저
 assert.deepStrictEqual(f.parseTransitions("3-1, 2-4, 5-1, 2-2, x, 1", 4), [{ hi: 3, lo: 1 }, { hi: 4, lo: 2 }]);
@@ -39,22 +41,54 @@ const levels = calls.filter((c) => c.k === "line" && c.a[0][0] === 0 && Math.abs
 assert.strictEqual(levels.length, 5, "준위 4개 + n=∞");
 for (let n = 1; n <= 4; n++) near(levels[n - 1].a[0][1], (1 - 1 / (n * n)) * 60 * MM, `n=${n} 높이`);
 near(levels[4].a[0][1], 60 * MM, "n=∞ 높이");
-// 화살표: 서로 다른 x, 위 준위에서 아래 준위로
-const arrows = calls.filter((c) => c.k === "arrow");
+// 같은 간격
+calls = run({ proportional: false });
+const even = calls.filter((c) => c.k === "line" && c.a[2] === 0.8 && Math.abs(c.a[1][0] - 50 * MM) < 1e-6);
+near(even[2].a[0][1], 2 * 60 / 4 * MM, "같은 간격 n=3");
+
+// 축: 맨 아래 준위 밑(−3mm)에서 맨 위 준위 위(+6mm)까지 화살표, 머리 위에 '에너지'. 끄면 둘 다 없다
+calls = run({});
+const axis = calls.filter((c) => c.k === "arrow" && c.a[0][0] === 0);
+assert.strictEqual(axis.length, 1);
+near(axis[0].a[0][1], -3 * MM, "축 아래 끝"); near(axis[0].a[1][1], 66 * MM, "축 위 끝");
+assert.ok(calls.some((c) => c.k === "text" && c.a[0] === "에너지" && c.a[1] === 0 && c.a[2] > 66 * MM), "에너지 머리글");
+calls = run({ showAxis: false });
+assert.ok(!calls.some((c) => c.k === "arrow" && c.a[0][0] === 0) && !calls.some((c) => c.a[0] === "에너지"));
+
+// 전이 화살표: 축이 아닌 것, 서로 다른 x, 위 준위에서 아래 준위로
+calls = run({});
+const arrows = calls.filter((c) => c.k === "arrow" && c.a[0][0] > 0);
 assert.strictEqual(arrows.length, 3);
 near(arrows[0].a[0][1], (1 - 1 / 9) * 60 * MM, "3→1 시작"); near(arrows[0].a[1][1], 0, "3→1 끝");
 near(arrows[1].a[0][0] - arrows[0].a[0][0], 50 / 4 * MM, "화살표 간격");
 // 흡수는 방향이 반대
 calls = run({ absorb: true });
-near(calls.filter((c) => c.k === "arrow")[0].a[1][1], (1 - 1 / 9) * 60 * MM, "흡수 3←1 끝은 위 준위");
+near(calls.filter((c) => c.k === "arrow" && c.a[0][0] > 0)[0].a[1][1], (1 - 1 / 9) * 60 * MM, "흡수 3←1 끝은 위 준위");
+
+// 에너지 글자: eV 값은 왼쪽, n은 준위 선 오른쪽 끝(+2mm)
+calls = run({});
+assert.deepStrictEqual(energyTexts(calls), ["−13.60 eV", "−3.40 eV", "−1.51 eV", "−0.85 eV", "0 eV"]);
+near(calls.find((c) => c.a[0] === "−3.40 eV").a[1], -2 * MM, "에너지 글자 x");
+const nLabel = calls.find((c) => c.a[0] === "n=4");
+assert.strictEqual(nLabel.a[4], "right"); near(nLabel.a[1], 52 * MM, "n 글자 x"); assert.ok(nLabel.a[5].italic);
+assert.deepStrictEqual(energyTexts(run({ showUnit: false })), ["−13.60", "−3.40", "−1.51", "−0.85", "0"]);
+// E0 비율, En 기호(아래 첨자·기울임 옵션), 없음
+calls = run({ energy: 1 });
+assert.deepStrictEqual(energyTexts(calls), ["−E0", "−1/4E0", "−1/9E0", "−1/16E0", "0"]);
+assert.ok(calls.find((c) => c.a[0] === "−1/4E0").a[5].sub);
+calls = run({ energy: 2 });
+assert.deepStrictEqual(energyTexts(calls), ["E1", "E2", "E3", "E4"]);
+assert.deepStrictEqual(energyTexts(run({ energy: 3 })), []);
+// 양자수 머리글은 켰을 때만
+assert.ok(!run({}).some((c) => c.a[0] === "양자수") && run({ showHead: true }).some((c) => c.a[0] === "양자수"));
+// 빽빽한 준위는 에너지 글자를 건너뛴다(7개·높이 30)
+assert.ok(energyTexts(run({ count: 7, height: 30 })).length < 8);
+
 // 스펙트럼선: 파장이 긴 전이(4-2)가 가장 오른쪽
 calls = run({});
 const spectrum = calls.filter((c) => c.k === "line" && c.a[2] === 0.8 && Math.abs(c.a[0][1] + 14 * MM) < 1e-6);
 assert.strictEqual(spectrum.length, 3);
 assert.ok(spectrum[1].a[0][0] > spectrum[0].a[0][0] && spectrum[1].a[0][0] > spectrum[2].a[0][0], "4-2(b)가 오른쪽");
-// 에너지 값 글자: -13.6, -3.40, -1.51, -0.85, 0
-const energies = calls.filter((c) => c.k === "textAt" && / eV$/.test(c.a[0])).map((c) => c.a[0]);
-assert.deepStrictEqual(energies, ["−13.60 eV", "−3.40 eV", "−1.51 eV", "−0.85 eV", "0 eV"]);
 // 스펙트럼선을 끄면 띠도 없다
 assert.ok(!run({ spectrum: false }).some((c) => c.k === "rect"));
 console.log("energy levels checks passed");
