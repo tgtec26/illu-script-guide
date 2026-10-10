@@ -14,7 +14,7 @@ try {
 
 // 역학 장치: 물리Ⅰ 시험지의 도르래·빗면·수평면 장치 그림을 장면별 탭으로 그린다. 선택 없이 화면 가운데에 만든다.
 //   수평면 도르래 탭: 수평면 위 물체가 실로 도르래를 지나 매달린 추와 이어진 장면. 이전 위치(점선 물체)와 속도 화살표, 두 지점 사이 거리 표시를 고른다.
-// 선 두께는 물체·면 0.8pt, 실·도르래 0.4pt, 보조선(점선·치수선) 0.3pt이고 '선 두께' 패널에서 고친다.
+// 선 두께는 테이블·바닥 0.8pt, 물체·도르래 겉 0.4pt, 실 0.4pt, 보조선·파선·도르래 안쪽 0.3pt이고 '선 두께' 패널에서 고친다. 파선은 2-1이다.
 // 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, 변수 GSMediItaC1, GSMediumB1에 없는 기호(θ)는 HancomEQN이다.
 
 (function() {
@@ -27,7 +27,13 @@ try {
     var FORM_ITALIC_FONT = formFindFont(["GSMediItaC1", "GSMediumB1"]);
     var FORM_MATH_FONT = formFindFont(["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular", "GSMediumB1"]);
     var TAB_PREF_KEY = "MechanicsDevice/tab";
-    var GHOST_DASH = [3, 2];
+    var GHOST_DASH = [2, 1];   // 파선 2-1 (선 2pt, 간격 1pt)
+    // 화살촉 모양: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽. 끝이 원점, 뒤쪽이 +y. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
+    var HEAD_HARPOON = 1;   // 작살형(평가원식). 화살촉 목록의 1번
 
     runFormHost("역학 장치", [makeHorizontalPulleyEngine()], TAB_PREF_KEY);
 
@@ -39,26 +45,25 @@ try {
                 {panel: "물체와 추"},
                 {key: "blockText", label: "물체 글자", text: true, value: "4 kg"},
                 {key: "blockName", label: "물체 이름", text: true, value: "나무도막"},
-                {key: "blockW", label: "물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 12},
-                {key: "blockH", label: "물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 9},
+                {key: "blockW", label: "물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 13},
+                {key: "blockH", label: "물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 11},
                 {key: "weightText", label: "추 글자", text: true, value: "1 kg"},
                 {key: "weightName", label: "추 이름", text: true, value: "추"},
                 {key: "weightW", label: "추 너비", unit: "mm", min: 4, max: 20, step: 0.5, value: 9},
                 {key: "weightH", label: "추 높이", unit: "mm", min: 4, max: 20, step: 0.5, value: 8},
-                {panel: "실과 도르래"},
-                {key: "ropeLen", label: "물체~도르래", unit: "mm", min: 8, max: 80, step: 0.5, value: 28},
-                {key: "tableLeft", label: "바닥 왼쪽", unit: "mm", min: 0, max: 80, step: 0.5, value: 26},
+                {panel: "테이블·실·도르래"},
+                {key: "tableEdge", check: "테이블 세로선", value: true},
                 {key: "pulleyArm", check: "도르래 받침대", value: true},
-                {key: "pulleyR", label: "도르래 반지름", unit: "mm", min: 1.5, max: 8, step: 0.1, value: 4.2},
-                {key: "drop", label: "추까지 길이", unit: "mm", min: 8, max: 60, step: 0.5, value: 24},
-                {panel: "이전 위치 (점선)"},
+                {key: "ropeLen", label: "물체~도르래", unit: "mm", min: 8, max: 80, step: 0.5, value: 28},
+                {key: "tableLeft", label: "바닥 왼쪽 여유", unit: "mm", min: 0, max: 40, step: 0.5, value: 8},
+                {key: "pulleyR", label: "도르래 반지름", unit: "mm", min: 1.5, max: 6, step: 0.1, value: 3.6},
+                {key: "drop", label: "추까지 길이", unit: "mm", min: 8, max: 90, step: 0.5, value: 42},
+                {panel: "이동 (점선·거리)"},
+                {key: "shift", label: "이동 거리", unit: "mm", min: 4, max: 60, step: 0.5, value: 24},
                 {key: "ghostBlock", check: "점선 물체", value: true},
                 {key: "ghostWeight", check: "점선 추", value: true},
-                {key: "ghostGap", label: "물체와 간격", unit: "mm", min: 2, max: 60, step: 0.5, value: 14},
                 {key: "ghostSpeed", label: "물체 속력", text: true, value: "2 m/s"},
-                {key: "weightUp", label: "점선 추 높이", unit: "mm", min: 3, max: 40, step: 0.5, value: 12},
                 {key: "weightSpeed", label: "추 속력", text: true, value: "2 m/s"},
-                {panel: "거리 표시"},
                 {key: "dim", check: "거리 표시", value: true},
                 {key: "dimText", label: "거리", text: true, value: "1 m"},
                 {key: "pName", label: "왼쪽 지점", text: true, value: "P"},
@@ -71,62 +76,66 @@ try {
         });
     }
 
-    // 좌표는 pt(y 위쪽 +), 바닥이 y=0, 물체 왼쪽 끝이 x=0. 실은 물체 위쪽에서 수평으로 나가 도르래 위를 지나 오른쪽에서 수직으로 내려온다
+    // 좌표는 pt(y 위쪽 +), 테이블 윗면이 y=0, 물체 왼쪽 끝이 x=0. 실은 물체 옆면 가운데에서 수평으로 나가 도르래 위를 지나 오른쪽에서 수직으로 내려온다.
+    // 도르래는 받침대로 테이블 모서리(받침대 끝)에 고정한다. 이동 거리(shift)만큼 물체는 왼쪽(점선)에서 오른쪽으로, 추는 위(점선)에서 아래로 왔다 —
+    // 실이 늘어나지 않으므로 물체가 간 거리와 추가 간 거리는 늘 같다.
     function drawHorizontalPulley(t, o) {
-        var m = t.mm, wBody = o.wBody, wRope = o.wRope, wGuide = o.wGuide, size = o.font;
-        var bw = o.blockW * m, bh = o.blockH * m, R = o.pulleyR * m;
-        var attachY = bh * 0.78;
+        var m = t.mm, wBody = o.wBody, wObj = o.wObj, wRope = o.wRope, wGuide = o.wGuide, size = o.font;
+        var bw = o.blockW * m, bh = o.blockH * m, R = o.pulleyR * m, shift = o.shift * m;
+        var attachY = bh / 2;
         var cx = bw + o.ropeLen * m, cy = attachY - R;
-        // 바닥
-        t.line([-o.tableLeft * m, 0], [cx, 0], wBody);
-        // 이전 위치의 물체: 점선 상자와 속도 화살표
-        var ghostRight = -o.ghostGap * m;
+        var armLen = R * 1.5, armDx = armLen * armLen > cy * cy ? Math.sqrt(armLen * armLen - cy * cy) : 0;
+        var mountX = o.pulleyArm ? cx - armDx : cx - R;              // 테이블 모서리
+        var wx = cx + R, wTop = cy - o.drop * m, ww = o.weightW * m, wh = o.weightH * m;
+        var ghostLeft = -shift, ghostRight = bw - shift;             // 이전 위치의 물체
+        // 테이블 윗면과 모서리의 세로선
+        var left = Math.min(0, o.ghostBlock ? ghostLeft : 0) - o.tableLeft * m;
+        t.line([left, 0], [mountX, 0], wBody);
+        if (o.tableEdge) t.line([mountX, 0], [mountX, wTop - wh - 4 * m], wBody);
+        // 이전 위치의 물체: 파선 상자와 속도 화살표
         if (o.ghostBlock) {
-            var ghostLeft = ghostRight - bw;
-            t.rect(ghostLeft, bh, ghostRight, 0, null, 100, wGuide, GHOST_DASH);
-            var ay = bh + 3 * m;
-            t.arrow([ghostLeft + bw * 0.1, ay], [ghostLeft + bw * 0.1 + 7 * m, ay], wRope, 100, 1.4 * m);
-            if (o.ghostSpeed !== "") t.text(o.ghostSpeed, ghostLeft + bw * 0.1 + 3.5 * m, ay + 2.6 * m, size, "center");
+            t.dashRect(ghostLeft, bh, ghostRight, 0, wGuide);
+            // 속도 화살표와 글자는 이전 위치 물체의 가운데 위에 맞춘다
+            var ay = bh + 3 * m, gcx = (ghostLeft + ghostRight) / 2, halfArrow = Math.min(3.5 * m, bw * 0.45);
+            t.arrow([gcx - halfArrow, ay], [gcx + halfArrow, ay], wRope, 100, 1.4 * m);
+            if (o.ghostSpeed !== "") t.text(o.ghostSpeed, gcx, ay + 2.6 * m, size, "center");
         }
         // 물체
-        t.rect(0, bh, bw, 0, 0, 100, wBody);
+        t.rect(0, bh, bw, 0, 0, 100, wObj);
         if (o.blockText !== "") t.text(o.blockText, bw / 2, bh / 2, size, "center");
         if (o.blockName !== "") t.text(o.blockName, bw / 2, bh + 3 * m + 2.6 * m, size, "center");
-        // 도르래: 바닥에 받침대(막대 양 끝의 축 점)로 고정. 받침대는 도르래 가운데에서 왼쪽 아래 바닥으로 뻗는다
-        var armLen = R * 2.1, armDx = armLen * armLen > cy * cy ? Math.sqrt(armLen * armLen - cy * cy) : 0;
-        t.pulley(cx, cy, R, o.pulleyArm ? [cx - armDx, 0] : null, wBody, wRope);
-        // 실: 물체 → 도르래 위 → 오른쪽 수직
+        // 도르래: 겉 테두리 wObj, 안쪽 원판·받침대·축 점 wGuide
+        t.pulley(cx, cy, R, o.pulleyArm ? [mountX, 0] : null, wObj, wGuide);
+        // 실: 물체 가운데 → 도르래 위 → 오른쪽 수직
         t.line([bw, attachY], [cx, cy + R], wRope);
         t.arc(cx, cy, R, 0, Math.PI / 2, wRope);
-        var wx = cx + R, wTop = cy - o.drop * m;
         t.line([wx, cy], [wx, wTop], wRope);
-        // 추
-        var ww = o.weightW * m, wh = o.weightH * m;
+        // 추: 점선은 shift만큼 위
         if (o.ghostWeight) {
-            var gTop = wTop + o.weightUp * m;
-            t.rect(wx - ww / 2, gTop, wx + ww / 2, gTop - wh, null, 100, wGuide, GHOST_DASH);
+            var gTop = wTop + shift;
+            t.dashRect(wx - ww / 2, gTop, wx + ww / 2, gTop - wh, wGuide);
             var gmid = gTop - wh / 2, arrowX = wx + ww / 2 + 2.5 * m;
             t.arrow([arrowX, gmid + 3.5 * m], [arrowX, gmid - 3.5 * m], wRope, 100, 1.4 * m);
             if (o.weightSpeed !== "") t.text(o.weightSpeed, arrowX + 1.8 * m, gmid, size, "left");
         }
-        t.rect(wx - ww / 2, wTop, wx + ww / 2, wTop - wh, 0, 100, wBody);
+        t.rect(wx - ww / 2, wTop, wx + ww / 2, wTop - wh, 0, 100, wObj);
         if (o.weightText !== "") t.text(o.weightText, wx, wTop - wh / 2, size, "center");
         if (o.weightName !== "") t.text(o.weightName, wx + ww / 2 + 2 * m, wTop - wh / 2, size, "left");
-        // 거리 표시: 점선 물체의 오른쪽 끝(없으면 물체 왼쪽 끝)에서 물체의 오른쪽 끝까지
+        // 거리 표시: 이전 위치 오른쪽 끝(P)에서 지금 오른쪽 끝(Q)까지 = 이동 거리. P·Q의 보조선은 파선, 화살촉은 평가원 작살형
         if (o.dim) {
-            var px = o.ghostBlock ? ghostRight : 0, qx = bw;
-            var dy = -o.dimDrop * m, tick = (o.dimDrop + 1.5) * m;
-            t.line([px, 0], [px, -tick], wGuide);
-            t.line([qx, 0], [qx, -tick], wGuide);
+            var px = ghostRight, qx = bw;
+            var dy = -o.dimDrop * m, tick = (o.dimDrop + 1.5) * m, head = 1.3 * m;
+            t.dashLine([px, 0], [px, -tick], wGuide);
+            t.dashLine([qx, 0], [qx, -tick], wGuide);
             var textW = o.dimText === "" ? 0 : (o.dimText.length * 0.55 + 0.6) * size;
             var mid = (px + qx) / 2;
             if (textW > 0 && textW < qx - px - 4 * m) {
-                t.arrow([mid - textW / 2, dy], [px, dy], wGuide, 100, 1.2 * m);
-                t.arrow([mid + textW / 2, dy], [qx, dy], wGuide, 100, 1.2 * m);
+                t.headArrow([mid - textW / 2, dy], [px, dy], wGuide, 100, head, HEAD_HARPOON);
+                t.headArrow([mid + textW / 2, dy], [qx, dy], wGuide, 100, head, HEAD_HARPOON);
                 t.text(o.dimText, mid, dy, size, "center");
             } else {
-                t.arrow([mid, dy], [px, dy], wGuide, 100, 1.2 * m);
-                t.arrow([mid, dy], [qx, dy], wGuide, 100, 1.2 * m);
+                t.headArrow([mid, dy], [px, dy], wGuide, 100, head, HEAD_HARPOON);
+                t.headArrow([mid, dy], [qx, dy], wGuide, 100, head, HEAD_HARPOON);
             }
             var ny = -(o.dimDrop + 1.5) * m - 2.6 * m;
             // 글자가 선 사이에 안 들어가면 P·Q 이름 아래에 쓴다
@@ -229,6 +238,7 @@ try {
         };
         if (typeof bindTabOrder === "function") bindTabOrder(win);
         if (win.show() !== 1) engines[tabIndex].clearPreview();
+        else engines[tabIndex].finish();
         try { app.redraw(); } catch (redrawError) {}
     }
 
@@ -237,22 +247,23 @@ try {
     // 컨트롤: {panel: "제목", fold: true} 새 패널(fold면 기본으로 접힘) / {key, label, unit, min, max, step, value} 숫자 행 /
     //         {key, check: "라벨", value: true} 체크(이어진 것은 한 행에 셋까지) / {key, label, items: [...], value} 드롭다운 /
     //         {key, label, text: true, value: "글"} 글 입력
-    // '선 두께' 패널(물체·면 wBody, 실·도르래 wRope, 보조선 wGuide)과 '위치' 패널(가로·세로 이동)은 끝에 저절로 붙고,
+    // '선 두께' 패널(wBody 테이블·바닥, wObj 물체·도르래 겉, wRope 실, wGuide 보조선·파선·도르래 안)과 '위치' 패널(가로·세로 이동)은 끝에 저절로 붙고,
     // 위치 이동은 다시 그리지 않고 그룹만 옮긴다. draw는 어디에 그려도 된다. 그린 뒤 그룹을 화면 가운데로 옮긴다.
     function makeFormEngine(spec) {
         var api = {label: spec.label, error: null, addRows: addRows,
-            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, finish: function() {}, commit: function() { return false; }};
         var controls = spec.controls.concat([
             {panel: "선 두께", fold: true},
-            {key: "wBody", label: "물체·면", unit: "pt", min: 0.1, max: 2, step: 0.1, value: 0.8},
-            {key: "wRope", label: "실·도르래", unit: "pt", min: 0.1, max: 2, step: 0.1, value: 0.4},
-            {key: "wGuide", label: "보조선", unit: "pt", min: 0.1, max: 2, step: 0.1, value: 0.3},
+            {key: "wBody", label: "테이블·바닥", unit: "pt", min: 0.1, max: 2, step: 0.1, value: 0.8},
+            {key: "wObj", label: "물체·도르래 겉", unit: "pt", min: 0.1, max: 2, step: 0.1, value: 0.4},
+            {key: "wRope", label: "실", unit: "pt", min: 0.1, max: 2, step: 0.1, value: 0.4},
+            {key: "wGuide", label: "보조선·파선·도르래 안", unit: "pt", min: 0.1, max: 2, step: 0.1, value: 0.3},
             {panel: "위치"},
             {key: "offsetX", label: "가로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 0},
             {key: "offsetY", label: "세로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 1}
         ]);
         var o = {};
-        var group = null, committed = false, previewOn = true, center = [0, 0], ui = {};
+        var group = null, committed = false, previewOn = true, center = [0, 0], ui = {}, lastDashed = [];
 
         function addRows(page) {
             try { center = doc.activeView.centerPoint; } catch (viewError) {}
@@ -287,6 +298,8 @@ try {
             api.setPreview = function(on) { previewOn = on; redraw(); };
             api.updatePreview = redraw;
             api.clearPreview = function() { if (!committed) removeGroup(); };
+            // 창이 닫힌 뒤 확정한 그림의 파선에 일러스트레이터의 '모퉁이·끝에 정렬' 옵션을 건다 (창이 떠 있는 동안에는 액션이 먹지 않는다)
+            api.finish = function() { if (committed && group !== null) alignFormDashes(lastDashed); };
             api.commit = function() {
                 if (group === null) build();
                 if (group === null) return false;
@@ -396,7 +409,7 @@ try {
             try {
                 var tools = makeFormTools(group, o);
                 spec.draw(tools, o);
-                alignFormDashes(tools.dashed);
+                lastDashed = tools.dashed;
                 var b = group.geometricBounds;
                 group.translate(center[0] - (b[0] + b[2]) / 2 + o.offsetX * FORM_MM,
                     center[1] - (b[1] + b[3]) / 2 + o.offsetY * FORM_MM, true, true, true, true);
@@ -453,18 +466,27 @@ try {
         return api;
     }
 
-    // 파선 도형은 양 끝이 같도록 모퉁이·끝에 정렬한다 (헬퍼가 없으면 건너뛴다). 같은 파선 무늬끼리 한 번에 처리한다
+    // 파선은 일러스트레이터의 '파선을 모퉁이와 패스 끝에 정렬하고 길이를 조정하여 맞추기'를 건다 (헬퍼가 없으면 건너뛴다).
+    // 액션은 전체를 한 번에 돌리고, 끝나면 각 선의 파선 값(양 끝이 대시가 되게 길이를 맞춘 값)을 되돌려 놓는다
     function alignFormDashes(list) {
-        if (typeof applyDashPatternToItems !== "function") return;
-        var done = {};
-        for (var i = 0; i < list.length; i++) {
-            var key = list[i].dashes.join(",");
-            if (done[key]) continue;
-            done[key] = true;
-            var items = [];
-            for (var j = i; j < list.length; j++) if (list[j].dashes.join(",") === key) items.push(list[j].item);
-            applyDashPatternToItems(items, list[i].dashes, false);
+        if (list.length === 0 || typeof alignDashToCornersBatch !== "function") return;
+        var paths = [], i;
+        for (i = 0; i < list.length; i++) paths.push(list[i].item);
+        alignDashToCornersBatch(paths, GHOST_DASH);
+        for (i = 0; i < list.length; i++) {
+            try { list[i].item.strokeDashes = list[i].dashes; } catch (e) {}
         }
+    }
+
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
     }
 
     function formFormat(value, decimals) {
@@ -473,12 +495,12 @@ try {
 
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다. 색은 K값(0~100, null이면 없음)
     function makeFormTools(g, o) {
-        var t = {mm: FORM_MM, group: g, dashed: []};
+        var t = {mm: FORM_MM, group: g, dashed: []}, parent = g;
         // 베지어 경로. points는 {a: 앵커, l: 들어오는 핸들, r: 나가는 핸들}
         t.curve = function(points, closed, fill, stroke, width, dashes) {
             var anchors = [], i;
             for (i = 0; i < points.length; i++) anchors.push(points[i].a);
-            var p = g.pathItems.add();
+            var p = parent.pathItems.add();
             p.setEntirePath(anchors);
             for (i = 0; i < points.length; i++) {
                 p.pathPoints[i].leftDirection = points[i].l;
@@ -489,12 +511,32 @@ try {
             return p;
         };
         t.path = function(points, closed, fill, stroke, width, dashes) {
-            var p = g.pathItems.add();
+            var p = parent.pathItems.add();
             p.setEntirePath(points);
             p.closed = !!closed;
             formPaint(p, fill, stroke, width, dashes);
             if (dashes && dashes.length > 0) t.dashed.push({item: p, dashes: dashes});
             return p;
+        };
+        // 양 끝이 대시로 끝나게 파선(GHOST_DASH 비율, 2-1)의 길이를 이 선에 맞춘 선분. 대시 n개와 간격 n-1개가 선 길이를 정확히 채운다
+        t.dashLine = function(a, b, width) {
+            var len = Math.sqrt((b[0] - a[0]) * (b[0] - a[0]) + (b[1] - a[1]) * (b[1] - a[1]));
+            var d = GHOST_DASH[0], gap = GHOST_DASH[1];
+            var n = Math.max(1, Math.round((len + gap) / (d + gap)));
+            var k = len / (n * d + (n - 1) * gap);
+            return t.line(a, b, width, 100, n === 1 ? null : [d * k, gap * k]);
+        };
+        // 파선 상자: 네 변을 모퉁이에서 모퉁이까지 따로 맞춘 파선으로 그려 한 그룹으로 묶는다 (모퉁이마다 대시가 L자로 만난다)
+        t.dashRect = function(left, top, right, bottom, width) {
+            var sub = g.groupItems.add();
+            sub.name = "파선 상자";
+            parent = sub;
+            t.dashLine([left, top], [right, top], width);
+            t.dashLine([right, top], [right, bottom], width);
+            t.dashLine([right, bottom], [left, bottom], width);
+            t.dashLine([left, bottom], [left, top], width);
+            parent = g;
+            return sub;
         };
         t.line = function(a, b, width, k, dashes) {
             return t.path([a, b], false, null, k === undefined ? 100 : k, width, dashes);
@@ -504,14 +546,14 @@ try {
             return t.path([[left, top], [right, top], [right, bottom], [left, bottom]], true, fill, stroke, width, dashes);
         };
         t.circle = function(cx, cy, r, fill, stroke, width) {
-            var p = g.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
+            var p = parent.pathItems.ellipse(cy + r, cx - r, r * 2, r * 2);
             formPaint(p, fill, stroke, width);
             return p;
         };
         // 도르래: 바깥 테두리와 회색 홈 둘레, 흰 안쪽 원판, 가운데 축 점. mount([x, y])가 있으면 가운데에서 mount까지 받침대(양 끝이 둥근 막대)와 그 끝의 축 점을 그린다
-        t.pulley = function(cx, cy, R, mount, wBody, wRope) {
-            t.circle(cx, cy, R, 22, 100, wBody);
-            t.circle(cx, cy, R * 0.66, 0, 100, wRope);
+        t.pulley = function(cx, cy, R, mount, wOuter, wInner) {
+            t.circle(cx, cy, R, 22, 100, wOuter);
+            t.circle(cx, cy, R * 0.66, 0, 100, wInner);
             var dot = R * 0.17;
             if (mount) {
                 var dx = mount[0] - cx, dy = mount[1] - cy, len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -525,10 +567,10 @@ try {
                     {a: [cx - nx * half, cy - ny * half], l: [cx - nx * half, cy - ny * half], r: [cx - nx * half - ux * k, cy - ny * half - uy * k]},
                     {a: [cx - ux * half, cy - uy * half], l: [cx - ux * half - nx * k, cy - uy * half - ny * k], r: [cx - ux * half + nx * k, cy - uy * half + ny * k]}
                 ];
-                t.curve(pts, true, 0, 100, wRope);
-                t.circle(mount[0], mount[1], dot, 45, 100, wRope);
+                t.curve(pts, true, 0, 100, wInner);
+                t.circle(mount[0], mount[1], dot, 45, 100, wInner);
             }
-            t.circle(cx, cy, dot, 45, 100, wRope);
+            t.circle(cx, cy, dot, 45, 100, wInner);
         };
         // 원호 (a0 → a1, 라디안, 반시계가 +). 열린 선
         t.arc = function(cx, cy, r, a0, a1, width, k) {
@@ -555,6 +597,17 @@ try {
             var half = head * 0.35;
             if (len > head) t.line(a, [base[0] + ux * 0.2, base[1] + uy * 0.2], width, k);
             t.path([b, [base[0] - uy * half, base[1] + ux * half], [base[0] + uy * half, base[1] - ux * half]], true, k, null, 0);
+        };
+        // a → b 화살촉 카탈로그 모양(HEAD_HARPOON 등) 화살표. headLength는 삼각형 머리 길이 기준(pt), 선은 머리 속(lineEnd)에서 끝나 틈이 없다
+        t.headArrow = function(a, b, width, k, headLength, shape) {
+            if (k === undefined) k = 100;
+            var dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx * dx + dy * dy);
+            if (len < 0.01) return;
+            var ux = dx / len, uy = dy / len;
+            var head = Math.min(headLength || 1.6 * FORM_MM, len);
+            var unit = head / HEAD_CATALOG[0].length, lineEnd = HEAD_CATALOG[shape].lineEnd * unit;
+            if (len > lineEnd) t.line(a, [b[0] - ux * lineEnd, b[1] - uy * lineEnd], width, k);
+            t.path(catalogPoints(shape, b, [ux, uy], unit), true, k, null, 0);
         };
         // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). opts: italic 변수 글자(이탤릭), sub 글자 뒤 숫자를 아래 첨자로
         t.text = function(text, x, y, size, align, k, opts) {
