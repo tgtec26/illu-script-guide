@@ -122,11 +122,6 @@ function foldPanel(parent, title, collapsed, key) {
             if (!engines[engineIndex].error) { tabIndex = engineIndex; break; }
         }
     }
-    // 기존 Rotate3d 메뉴는 이 탭을 바로 여는 진입점으로 남긴다.
-    if (typeof __3DLineStartTab !== "undefined" && __3DLineStartTab === "평면 회전") {
-        if (engines[4].error) { alert(engines[4].error); return; }
-        tabIndex = 4;
-    }
     var engine = engines[tabIndex];
     originX = engine.originX;
     originY = engine.originY;
