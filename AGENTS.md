@@ -1,5 +1,7 @@
 # Working Preferences
 
+> 새 세션·다른 기기에서 시작하면 먼저 `HANDOFF.md`(이어갈 작업·확정된 규칙·다음 작업)를 읽는다.
+
 ## Lightweight Illustrator Script Workflow
 
 For contained Adobe Illustrator JSX requests, default to direct implementation in the current checkout.
