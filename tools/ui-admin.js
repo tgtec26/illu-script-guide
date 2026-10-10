@@ -27,6 +27,28 @@ function readCatalogs() {
   return out.sort((a, b) => a.dialog.localeCompare(b.dialog, "ko"));
 }
 
+// 스크립트 폴더의 .jsx를 읽어, 창 제목이 큰따옴표 글자로 들어 있는 스크립트를 그 창의 스크립트로 본다
+// (예: 새 Window("dialog", "대류 순환 화살표")). 파일 이름을 바꿔도 따라가고, 하나의 창을 여러 스크립트가 쓰면 모두 적는다.
+function scriptsByDialog(dialogs) {
+  const root = path.join(ROOT, "스크립트");
+  const texts = [];
+  let folders = [];
+  try { folders = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { return new Map(); }
+  for (const folder of folders) {
+    let names = [];
+    try { names = fs.readdirSync(path.join(root, folder)).filter((f) => f.endsWith(".jsx")); } catch { continue; }
+    for (const name of names) {
+      try { texts.push({ folder, name: name.normalize("NFC").replace(/\.jsx$/, ""), text: fs.readFileSync(path.join(root, folder, name), "utf8") }); } catch { /* 못 읽는 파일은 건너뜀 */ }
+    }
+  }
+  const out = new Map();
+  for (const d of dialogs) {
+    const quoted = JSON.stringify(d.dialog);
+    out.set(d.dialog, texts.filter((t) => t.text.includes(quoted)).map((t) => ({ folder: t.folder, name: t.name })));
+  }
+  return out;
+}
+
 function readOverrides() {
   try { return JSON.parse(fs.readFileSync(OVERRIDES, "utf8")); } catch { return {}; }
 }
@@ -131,6 +153,7 @@ button{padding:5px 14px;margin-right:8px;background:#5a5a5a;cursor:pointer}butto
 <div class="w">제목·단추 글자를 바꿔도 스크립트가 글자로 항목을 구분하는 경우엔 동작이 달라질 수 있습니다. 슬라이더는 범위만 바뀌고, 입력칸이 받는 값의 한계(스크립트 안의 상수)는 그대로입니다.
 기본값은 R 단추를 눌렀을 때 되돌아가는 값입니다(비우면 원래대로). 일러에서 대화상자를 처음 열어 보면 그 창이 이 목록에 나타납니다.</div>
 <select id="dlg"></select> <button id="save">저장 + 올리기</button><button id="clear">이 대화상자 되돌리기 + 올리기</button><span id="msg"></span>
+<div id="who" class="d" style="margin:8px 0 2px"></div>
 <div id="body"></div>
 <div><button id="save2">저장 + 올리기</button><button id="clear2">이 대화상자 되돌리기 + 올리기</button><span id="msg2"></span></div>
 <script>
@@ -140,13 +163,23 @@ async function load() {
   data = await (await fetch("/api")).json();
   const sel = document.getElementById("dlg");
   const prev = sel.value;
-  sel.innerHTML = data.dialogs.map((d) => "<option>" + esc(d.dialog) + "</option>").join("");
+  sel.textContent = "";
+  for (const d of data.dialogs) { const o = document.createElement("option"); o.value = d.dialog; o.textContent = label(d); sel.appendChild(o); }
   if (prev && data.dialogs.some((d) => d.dialog === prev)) sel.value = prev;
   if (!data.dialogs.length) document.getElementById("body").textContent = "목록이 없습니다. 일러에서 대화상자를 한 번 열었다 닫은 뒤 새로고침하세요.";
   else show(sel.value);
 }
+// 목록에는 "스크립트 이름  (창 제목)"으로 보인다 (스크립트 메뉴에서 보이는 이름으로 찾기 쉽게)
+function label(d) {
+  if (!d.scripts.length) return d.dialog + "  (스크립트 없음)";
+  const names = d.scripts.map((s) => s.name).join(", ");
+  return names === d.dialog ? names : names + "  (" + d.dialog + ")";
+}
 function show(name) {
   cur = data.dialogs.find((d) => d.dialog === name);
+  document.getElementById("who").innerHTML = cur.scripts.length
+    ? "스크립트: " + cur.scripts.map((s) => "<code>" + esc(s.folder + "/" + s.name + ".jsx") + "</code>").join(" ") + " · 창 제목: <code>" + esc(cur.dialog) + "</code>"
+    : "이 창을 여는 스크립트를 찾지 못했습니다. 지금은 없는 옛 창일 수 있습니다. 창 제목: <code>" + esc(cur.dialog) + "</code>";
   const ov = data.overrides[name] || {};
   let html = "", last = null, open = false;
   for (const c of cur.controls) {
@@ -197,7 +230,13 @@ http.createServer((req, res) => {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE);
     } else if (req.method === "GET" && req.url === "/api") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ dialogs: readCatalogs(), overrides: readOverrides() }));
+      const dialogs = readCatalogs();
+      const scripts = scriptsByDialog(dialogs);
+      for (const d of dialogs) d.scripts = scripts.get(d.dialog) || [];
+      // 일러 스크립트 메뉴 순서(폴더, 스크립트 이름)로 늘어놓고, 스크립트를 못 찾은 창(옛 목록)은 맨 뒤에 둔다
+      const key = (d) => (d.scripts.length ? d.scripts[0].folder + "/" + d.scripts[0].name : "") + "|" + d.dialog;
+      dialogs.sort((a, b) => (a.scripts.length ? 0 : 1) - (b.scripts.length ? 0 : 1) || key(a).localeCompare(key(b), "ko"));
+      res.end(JSON.stringify({ dialogs, overrides: readOverrides() }));
     } else if (req.method === "POST" && req.url === "/api") {
       let body = "";
       req.on("data", (c) => (body += c));
