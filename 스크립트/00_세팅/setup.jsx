@@ -16,12 +16,13 @@ try {
     6) 키보드 증감: 0.05mm
     7) 문자 크기/행간 증감: 1pt
     8) 고정점·핸들: 가장 크게
-    2) 기본 액션 세트 제거 + 내 액션(cjhaction*.aia) 로드
+    2) 기본 액션 세트 제거 + 옛 '최종훈' 세트 제거 + 내 액션(cjhaction*.aia) 로드
 
   적용 후 현재값을 다시 읽어 alert로 자가검증한다.
 */
 (function () {
     var P = app.preferences;
+    var MY_ACTION_SET = "최종훈";   // cjhaction*.aia 안의 액션 세트 이름
 
     function si(k, v) { try { P.setIntegerPreference(k, v); } catch (e) {} }
     function sr(k, v) { try { P.setRealPreference(k, v); } catch (e) {} }
@@ -73,8 +74,14 @@ try {
             for (var i = 0; i < defaults.length; i++) {
                 try { app.unloadAction(defaults[i], ""); } catch (e) {}
             }
+            // 내 액션 세트를 먼저 모두 내린다: loadAction은 같은 이름의 세트를 더하기만 해서, setup을 되풀이하면 세트가 쌓이고
+            // 옛 이름(영문 스크립트 이름 등)을 부르는 옛 세트가 먼저 잡혀 액션이 안 먹는다. 하나도 없으면 오류가 나므로 거기서 멈춘다
+            var removed = 0;
+            for (var k = 0; k < 20; k++) {
+                try { app.unloadAction(MY_ACTION_SET, ""); removed++; } catch (e) { break; }
+            }
             app.loadAction(aias[0]);
-            return "로드됨 (" + aias[0].name + ")";
+            return "로드됨 (" + aias[0].name + (removed > 0 ? ", 옛 '" + MY_ACTION_SET + "' 세트 " + removed + "개 교체" : "") + ")";
         } catch (e) {
             return "실패: " + e;
         }
