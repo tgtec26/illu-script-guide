@@ -30,7 +30,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["buildVectors", "combinationParts", "coefText", "arcPoints", "pairText", "add", "sub", "scale", "dot", "len", "unit", "clampValue", "formatValue", "straight"];
+const names = ["buildVectors", "combinationParts", "coefText", "coefLabel", "arcPoints", "pairText", "add", "sub", "scale", "dot", "len", "unit", "clampValue", "formatValue", "straight"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, VECTOR_ARROW = { length: 3.2, halfWidth: 1.2, notch: 0.8 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 const base = { a: [3, 1], b: [1, 2], operation: 1, k: 2, l: -1, unit: 10, tick: 2, mark: 4, angle: true, projection: false, components: false,

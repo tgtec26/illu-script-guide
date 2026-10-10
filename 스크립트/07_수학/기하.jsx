@@ -4008,17 +4008,51 @@ try {
 
             // 글자: {text 또는 parts:[{text, vector}], at, dir, clear, upright}. parts면 조각마다 글상자를 만들어 한 줄로 잇고,
             // vector인 조각(a, b) 위에 작은 화살표를 그린다. at에서 dir 쪽으로 간격을 두고 전체의 가까운 가장자리가 오게 둔다
+            // 쌓은 분수 라벨(\frac{1}{2}, frac(1,2))의 글상자와 막대 (07_수학/math_label_helper.jsxinc의 buildStackedLabel이 부른다)
+            function stackFrame(group, str, size, upright) {
+                var frame = group.textFrames.add();
+                frame.contents = str.replace(/\u00B0/g, "\u02D8");
+                var attributes = frame.textRange.characterAttributes;
+                attributes.size = size;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, upright);
+                return frame;
+            }
+
+            function stackBar(group, x0, x1, y) {
+                var bar = group.pathItems.add();
+                bar.setEntirePath([[x0, y], [x1, y]]);
+                bar.filled = false;
+                bar.stroked = true;
+                bar.strokeColor = makeGray(100);
+                bar.strokeWidth = 0.4;
+                return bar;
+            }
+
             function addLabel(label) {
                 var parts = label.parts || [{ text: label.text, vector: false }];
                 var itemsBefore = previewGroup.pageItems.length;
                 var frames = [], x = 0;
+                var baseY = null;
                 for (var i = 0; i < parts.length; i++) {
-                    var frame = previewGroup.textFrames.add();
-                    frame.contents = parts[i].text;
-                    var attributes = frame.textRange.characterAttributes;
-                    attributes.size = fontPt;
-                    attributes.fillColor = makeGray(100);
-                    applyTextFonts(frame, label.upright);
+                    var frame;
+                    if (typeof buildStackedLabel === "function" && hasFractionText(parts[i].text)) {
+                        // 쌓은 분수 계수(1/2 a⃗): 막대가 이웃 글자의 기준선 위 0.3em에 오게 놓는다
+                        if (baseY === null) {
+                            var probe = previewGroup.textFrames.add();
+                            probe.contents = "x";
+                            baseY = probe.anchor[1];
+                            probe.remove();
+                        }
+                        frame = buildStackedLabel(previewGroup, {text: parts[i].text, upright: label.upright, at: [0, baseY + fontPt * 0.3], dir: [0, 0]}, fontPt, 0, stackFrame, stackBar);
+                    } else {
+                        frame = previewGroup.textFrames.add();
+                        frame.contents = parts[i].text;
+                        var attributes = frame.textRange.characterAttributes;
+                        attributes.size = fontPt;
+                        attributes.fillColor = makeGray(100);
+                        applyTextFonts(frame, label.upright);
+                    }
                     var fb = frame.geometricBounds;
                     frame.translate(x - fb[0], 0);
                     x += fb[2] - fb[0] + fontPt * 0.05;
@@ -4042,7 +4076,7 @@ try {
                     if (!parts[m].vector) continue;
                     // 글자 위 화살표: 글자 폭의 가운데 80%, 윗변에서 조금 위
                     var fb2 = frames[m].geometricBounds, w = fb2[2] - fb2[0];
-                    var y = top + dy + fontPt * 0.12, x0 = fb2[0] + w * 0.1, x1 = fb2[2] - w * 0.02 + fontPt * 0.1;
+                    var y = fb2[1] + fontPt * 0.12, x0 = fb2[0] + w * 0.1, x1 = fb2[2] - w * 0.02 + fontPt * 0.1;
                     var scale = fontPt / 9;
                     addPath({ points: [plain([x0, y]), plain([x1 - OVER_ARROW.length * scale + OVER_ARROW.notch * scale, y])], kind: "mark" });
                     addArrow({ tip: [x1, y], dir: [1, 0], shape: "over", scale: scale });
@@ -4053,6 +4087,8 @@ try {
                     var holder = previewGroup.groupItems.add();
                     for (var k = made; k >= 1; k--) previewGroup.pageItems[k].move(holder, ElementPlacement.PLACEATEND);
                     label.item = holder;
+                } else if (made === 1 && frames.length === 1 && frames[0].typename === "GroupItem") {
+                    label.item = frames[0];
                 }
             }
 
@@ -4142,8 +4178,8 @@ try {
                 } else {
                     var kA = scale(A, o.k), lB = scale(B, o.l), R = add(kA, lB);
                     drawn.push([O, A, "main", vA], [O, B, "main", vB]);
-                    if (o.k !== 0 && o.k !== 1) drawn.push([O, kA, "thin", [{ text: coefText(o.k) }].concat(vA)]);
-                    if (o.l !== 0 && o.l !== 1) drawn.push([O, lB, "thin", [{ text: coefText(o.l) }].concat(vB)]);
+                    if (o.k !== 0 && o.k !== 1) drawn.push([O, kA, "thin", [{ text: coefLabel(o.k) }].concat(vA)]);
+                    if (o.l !== 0 && o.l !== 1) drawn.push([O, lB, "thin", [{ text: coefLabel(o.l) }].concat(vB)]);
                     if (o.k !== 0 && o.l !== 0) out.lines.push(straight([S(kA), S(R)], "guide"), straight([S(lB), S(R)], "guide"));
                     if (Math.abs(R[0]) + Math.abs(R[1]) > 1e-9) drawn.push([O, R, "main", combinationParts(o.k, o.l)]);
                 }
@@ -4253,14 +4289,27 @@ try {
             // 2a-b, -a+3b … 글자 조각
             function combinationParts(k, l) {
                 var parts = [];
-                if (k !== 0) parts.push({ text: coefText(k) }, { text: "a", vector: true });
-                if (l !== 0) parts.push({ text: (l < 0 ? "-" : (k !== 0 ? "+" : "")) + coefText(Math.abs(l)) }, { text: "b", vector: true });
+                if (k !== 0) parts.push({ text: coefLabel(k) }, { text: "a", vector: true });
+                if (l !== 0) parts.push({ text: (l < 0 ? "-" : (k !== 0 ? "+" : "")) + coefLabel(Math.abs(l)) }, { text: "b", vector: true });
                 var cleaned = [];
                 for (var i = 0; i < parts.length; i++) if (parts[i].text !== "") cleaned.push(parts[i]);
                 return cleaned;
             }
 
             // 계수 글자: 1은 비우고 -1은 -
+            // 라벨에 쓰는 계수: 분수(1/2, 3/2)는 쌓은 분수로, 나머지는 coefText 그대로
+            function coefLabel(k) {
+                var sign = k < 0 ? "-" : "";
+                var abs = Math.abs(k);
+                if (Math.abs(abs - Math.round(abs)) > 1e-9) {
+                    for (var d = 2; d <= 12; d++) {
+                        var n = abs * d;
+                        if (Math.abs(n - Math.round(n)) < 1e-9) return sign + "frac(" + Math.round(n) + "," + d + ")";
+                    }
+                }
+                return coefText(k);
+            }
+
             function coefText(k) {
                 var text = formatValue(k);
                 return text === "1" ? "" : (text === "-1" ? "-" : text);
