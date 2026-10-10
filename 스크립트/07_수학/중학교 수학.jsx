@@ -1596,11 +1596,20 @@ var SCRIPT_KEY = "MiddleMath";
             var showIntersections = false;
             var showIdentity = false;
             var asymptoteText = "";
+            var nameTexts = ["", "", "", "", ""];   // 그래프마다 직접 쓰는 이름(l, C_1 …)
+            var nameAts = [0, 0, 0, 0, 0];           // 이름 자리: 0 오른쪽 끝, 1 왼쪽 끝(바깥), 2 왼쪽 끝(안쪽)
+            var lineText = "";                        // 실선 수직·수평선 x=2, y=-1
+            var showLineNames = true;
+            var labelText = "";                       // 자유 글자 A(0.4,1.5) B(2,3): 점·선 없이 글자만
+            var segmentText = "";                     // 선분 O-P, P-Q (점 이름으로)
+            var regionText2 = "";
+            var regionK2 = 35;
+            var showTicks = true;
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-            var initial = {xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unitMm: unitMm, fontPt: fontPt, regionK: regionK, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+            var initial = {xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unitMm: unitMm, fontPt: fontPt, regionK: regionK, regionK2: regionK2, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
 
             var previewGroup = null;
@@ -1624,6 +1633,8 @@ var SCRIPT_KEY = "MiddleMath";
             piCheck.helpTip = "x 최솟값·최댓값을 π/2 단위로 본다 (4 → 2π). 눈금은 π/2, π, 3π/2 …";
             var hideAxesCheck = axisChecks.add("checkbox", undefined, "축 없이 모눈");
             hideAxesCheck.helpTip = "축·화살촉·눈금 숫자를 빼고 격자만 그린다 (모눈종이 위 도형, 격자점 위 꼭짓점)";
+            var tickCheck = axisChecks.add("checkbox", undefined, "눈금선");
+            tickCheck.helpTip = "축의 짧은 눈금선(눈금 숫자와 따로). 끄면 눈금선 없이 축만 그린다";
 
             var functionPanel = addPanel(win, "함수 그래프");
             var functionInputs = [];
@@ -1647,19 +1658,59 @@ var SCRIPT_KEY = "MiddleMath";
             var asymptoteInput = asymptoteRow.add("edittext", undefined, asymptoteText);
             asymptoteInput.preferredSize.width = 290;
             asymptoteInput.helpTip = "x=1, y=2처럼 쉼표로 나눈다 (x=π/2도 된다). 점선으로 그린다";
+            var lineRow = functionPanel.add("group");
+            lineRow.add("statictext", undefined, "실선:");
+            var lineInput = lineRow.add("edittext", undefined, lineText);
+            lineInput.preferredSize.width = 200;
+            lineInput.helpTip = "x=2, y=-1처럼 쉼표로 나눈다. 그래프와 같은 굵기의 실선 수직·수평선 (점근선은 점선)";
+            var lineNamesCheck = lineRow.add("checkbox", undefined, "식 글자");
+            lineNamesCheck.helpTip = "실선 옆에 그 식(x=2)을 쓴다";
             var regionRow = functionPanel.add("group");
             regionRow.add("statictext", undefined, "칠하기:");
             var regionInput = regionRow.add("edittext", undefined, regionText);
             regionInput.preferredSize.width = 290;
             regionInput.helpTip = "모두 만족하는 영역을 칠한다. y<=-x+4, y>=0, x>=0처럼 쉼표로 나눈다 (y 부등식은 식, x 부등식은 수). 두 직선과 축으로 둘러싸인 도형 등";
             var regionKControls = addValueRow(functionPanel, "칠하기 농도", "K", regionK, 5, 60, 5, 0);
+            var region2Row = functionPanel.add("group");
+            region2Row.add("statictext", undefined, "둘째 칠하기:");
+            var region2Input = region2Row.add("edittext", undefined, regionText2);
+            region2Input.preferredSize.width = 250;
+            region2Input.helpTip = "첫째와 따로 한 영역을 더 칠한다 (영역 A, B를 서로 다른 농도로). 쓰는 법은 칠하기와 같다";
+            var regionK2Controls = addValueRow(functionPanel, "둘째 농도", "K", regionK2, 5, 60, 5, 0);
+
+            // 그래프 이름 직접 쓰기: 식을 넣은 그래프마다 이름과 자리 (비우면 위 '이름' 설정대로)
+            var namePanel = addPanel(win, "그래프 이름 (직접 쓰기)", "fold4");
+            var nameInputs = [], placeLists = [];
+            var PLACE_NAMES = ["끝 (오른쪽)", "시작 (왼쪽 바깥)", "시작 (오른쪽 안쪽)"];
+            for (var nf = 0; nf < FUNCTION_COUNT; nf++) {
+                var nameRow = namePanel.add("group");
+                nameRow.add("statictext", undefined, (nf + 1) + ":").preferredSize.width = 20;
+                var nameInput = nameRow.add("edittext", undefined, nameTexts[nf]);
+                nameInput.preferredSize.width = 150;
+                nameInput.helpTip = "그래프 옆에 쓸 이름 (l, C_1, y=f(x) 등). 쓰면 '이름' 설정과 상관없이 붙는다. 한글은 곧게 쓴다";
+                var placeList = nameRow.add("dropdownlist", undefined, PLACE_NAMES);
+                placeList.selection = nameAts[nf];
+                placeList.preferredSize.width = 150;
+                nameInputs.push(nameInput);
+                placeLists.push(placeList);
+            }
 
             var pointPanel = addPanel(win, "점");
             var pointsRow = pointPanel.add("group");
             pointsRow.add("statictext", undefined, "점:").preferredSize.width = 20;
             var pointsInput = pointsRow.add("edittext", undefined, pointsText);
             pointsInput.preferredSize.width = 320;
-            pointsInput.helpTip = "A(2,3) B(-1,-2) P(1/2,√2). 이름 없이 (2,3)만 써도 된다";
+            pointsInput.helpTip = "A(2,3) B(-1,-2) P(1/2,√2). 이름 없이 (2,3)만 써도 된다. 좌표에 f(3)처럼 쓰면 1번 식(g는 2번, h는 3번)의 값을 계산해 넣는다: P(3,f(3))";
+            var segmentRow = pointPanel.add("group");
+            segmentRow.add("statictext", undefined, "선분:").preferredSize.width = 20;
+            var segmentInput = segmentRow.add("edittext", undefined, segmentText);
+            segmentInput.preferredSize.width = 320;
+            segmentInput.helpTip = "점 이름으로 선분을 긋는다 (원점은 O). 쉼표로 여러 개: O-P, P-Q. 이름이 _로 시작하는 점은 점·이름 없이 선분·안내선의 기준으로만 쓴다";
+            var labelRow = pointPanel.add("group");
+            labelRow.add("statictext", undefined, "글자:").preferredSize.width = 20;
+            var labelInput = labelRow.add("edittext", undefined, labelText);
+            labelInput.preferredSize.width = 320;
+            labelInput.helpTip = "점이나 점선 없이 그 자리 가운데에 글자만 쓴다: A(0.4,1.5) B(2,3). 좌표에 f(3)처럼 1번 식의 값을 쓸 수 있다 (g는 2번, h는 3번)";
             var pointChecks = pointPanel.add("group");
             var coordsCheck = pointChecks.add("checkbox", undefined, "좌표 함께 표시");
             var guidesCheck = pointChecks.add("checkbox", undefined, "축까지 점선");
@@ -1679,6 +1730,8 @@ var SCRIPT_KEY = "MiddleMath";
             piCheck.value = piAxis;
             intersectCheck.value = showIntersections;
             identityCheck.value = showIdentity;
+            tickCheck.value = showTicks;
+            lineNamesCheck.value = showLineNames;
 
             bindValueRow(xMinControls, function(value) { xMin = value; }, initial.xMin);
             bindValueRow(xMaxControls, function(value) { xMax = value; }, initial.xMax);
@@ -1698,6 +1751,14 @@ var SCRIPT_KEY = "MiddleMath";
             intersectCheck.onClick = function() { showIntersections = intersectCheck.value; updatePreview(); };
             identityCheck.onClick = function() { showIdentity = identityCheck.value; updatePreview(); };
             asymptoteInput.onChanging = function() { asymptoteText = asymptoteInput.text; updatePreview(); };
+            tickCheck.onClick = function() { showTicks = tickCheck.value; updatePreview(); };
+            lineInput.onChanging = function() { lineText = lineInput.text; updatePreview(); };
+            lineNamesCheck.onClick = function() { showLineNames = lineNamesCheck.value; updatePreview(); };
+            region2Input.onChanging = function() { regionText2 = region2Input.text; updatePreview(); };
+            bindValueRow(regionK2Controls, function(value) { regionK2 = value; }, initial.regionK2);
+            segmentInput.onChanging = function() { segmentText = segmentInput.text; updatePreview(); };
+            labelInput.onChanging = function() { labelText = labelInput.text; updatePreview(); };
+            for (var ni = 0; ni < FUNCTION_COUNT; ni++) bindNameRow(ni);
             for (var fi = 0; fi < FUNCTION_COUNT; fi++) bindFunctionInput(fi);
             pointsInput.onChanging = function() { pointsText = pointsInput.text; updatePreview(); };
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
@@ -1723,6 +1784,14 @@ var SCRIPT_KEY = "MiddleMath";
                 app.redraw();
             };
             return null;
+
+            function bindNameRow(index) {
+                nameInputs[index].onChanging = function() { nameTexts[index] = nameInputs[index].text; updatePreview(); };
+                placeLists[index].onChange = function() {
+                    nameAts[index] = placeLists[index].selection ? placeLists[index].selection.index : 0;
+                    updatePreview();
+                };
+            }
 
             function bindFunctionInput(index) {
                 functionInputs[index].onChanging = function() {
@@ -1754,10 +1823,20 @@ var SCRIPT_KEY = "MiddleMath";
                     if (String(functionTexts[i]).replace(/\s/g, "") === "") continue;
                     var compiled = compileFunction(functionTexts[i]);
                     if (compiled === null) problems.push((i + 1) + "번 식");
-                    else functions.push({ fn: compiled, label: functionTexts[i] });
+                    else functions.push({ fn: compiled, label: functionTexts[i], name: String(nameTexts[i]).replace(/^\s+|\s+$/g, ""), at: nameAts[i] });
                 }
-                var points = parsePointList(pointsText);
+                // 점·글자 좌표 안의 f(3), g(1/2) 같은 함수값을 식의 값으로 바꾼다
+                var values = functionValueTable(functionTexts);
+                var points = parsePointList(substituteFunctionValues(pointsText, values));
                 if (points.bad.length > 0) problems.push("점 " + points.bad.join(", "));
+                var notes = parsePointList(substituteFunctionValues(labelText, values));
+                if (notes.bad.length > 0) problems.push("글자 " + notes.bad.join(", "));
+                var segments = parseSegments(segmentText, points.list);
+                if (segments === null) problems.push("선분");
+                var solidLines = parseSolidLines(lineText);
+                if (solidLines === null) problems.push("실선");
+                var region2 = parseRegion(regionText2);
+                if (region2 === null) problems.push("둘째 칠하기");
                 var asymptotes = parseAsymptotes(asymptoteText);
                 if (asymptotes === null) problems.push("점근선");
                 var region = parseRegion(regionText);
@@ -1769,7 +1848,9 @@ var SCRIPT_KEY = "MiddleMath";
                     tick: TICK_MM * MM_TO_PT, grid: showGrid, numbers: showNumbers,
                     functions: functions, nameStyle: nameStyle, hideAxes: hideAxes, region: region || [],
                     points: points.list, coords: showCoords, guides: showGuides,
-                    piAxis: piAxis, intersections: showIntersections, identity: showIdentity, asymptotes: asymptotes || [], fontSize: fontPt
+                    piAxis: piAxis, intersections: showIntersections, identity: showIdentity, asymptotes: asymptotes || [], fontSize: fontPt,
+                    ticks: showTicks, solidLines: solidLines || [], lineNames: showLineNames, notes: notesWithNames(notes.list),
+                    segments: segments || [], region2: region2 || []
                 });
 
                 previewGroup = layer.groupItems.add();
@@ -1780,7 +1861,8 @@ var SCRIPT_KEY = "MiddleMath";
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
                 if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 // 칠한 영역은 격자보다 뒤로
-                for (var r = 0; r < drawing.fills.length; r++) addFill(drawing.fills[r]);
+                for (var r = 0; r < drawing.fills.length; r++) addFill(drawing.fills[r], regionK);
+                for (var r2 = 0; r2 < drawing.fills2.length; r2++) addFill(drawing.fills2[r2], regionK2);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -1809,13 +1891,13 @@ var SCRIPT_KEY = "MiddleMath";
             }
 
             // 칠한 영역: 선 없는 닫힌 패스, K regionK, 맨 뒤
-            function addFill(points) {
+            function addFill(points, fillK) {
                 var path = previewGroup.pathItems.add();
                 path.setEntirePath(points);
                 path.closed = true;
                 path.stroked = false;
                 path.filled = true;
-                path.fillColor = makeGray(regionK);
+                path.fillColor = makeGray(fillK);
                 path.zOrder(ZOrderMethod.SENDTOBACK);
             }
 
@@ -1976,12 +2058,12 @@ var SCRIPT_KEY = "MiddleMath";
                     for (var tx = opt.xMin; tx <= opt.xMax; tx++) {
                         if (tx === 0) continue;
                         var tickX = tx * xStep * u;
-                        lines.push(straight([[tickX, -opt.tick / 2], [tickX, opt.tick / 2]], "axis"));
+                        if (opt.ticks !== false) lines.push(straight([[tickX, -opt.tick / 2], [tickX, opt.tick / 2]], "axis"));
                         if (opt.numbers) texts.push({ text: opt.piAxis ? piLabel(tx) : String(tx), at: [tickX, 0], dir: [0, -1], clear: opt.tick / 2 });
                     }
                     for (var ty = opt.yMin; ty <= opt.yMax; ty++) {
                         if (ty === 0) continue;
-                        lines.push(straight([[-opt.tick / 2, ty * u], [opt.tick / 2, ty * u]], "axis"));
+                        if (opt.ticks !== false) lines.push(straight([[-opt.tick / 2, ty * u], [opt.tick / 2, ty * u]], "axis"));
                         if (opt.numbers) texts.push({ text: String(ty), at: [0, ty * u], dir: [-1, 0], clear: opt.tick / 2 });
                     }
                 }
@@ -1990,6 +2072,19 @@ var SCRIPT_KEY = "MiddleMath";
                     var line = opt.asymptotes[a];
                     if (line.axis === "x") lines.push(straight([[line.value * u, opt.yMin * u], [line.value * u, opt.yMax * u]], "guide"));
                     else lines.push(straight([[xLo * u, line.value * u], [xHi * u, line.value * u]], "guide"));
+                }
+                // 실선 수직·수평선: 그래프와 같은 굵기. 식 글자는 수직선은 위쪽 끝 오른쪽에, 수평선은 오른쪽 끝 위에
+                var solid = opt.solidLines || [];
+                for (var sl = 0; sl < solid.length; sl++) {
+                    var solidLine = solid[sl];
+                    var vertical = solidLine.axis === "x";
+                    if (vertical) lines.push(straight([[solidLine.value * u, opt.yMin * u], [solidLine.value * u, opt.yMax * u]], "graph"));
+                    else lines.push(straight([[xLo * u, solidLine.value * u], [xHi * u, solidLine.value * u]], "graph"));
+                    if (opt.lineNames) {
+                        var lineDisplay = formulaDisplay(solidLine.text);
+                        texts.push({ text: lineDisplay.text, sup: lineDisplay.sup, sub: lineDisplay.sub, roman: lineDisplay.roman,
+                            at: vertical ? [solidLine.value * u, opt.yMax * u] : [xHi * u, solidLine.value * u], dir: vertical ? [1, 0] : [0, 1], clear: 0 });
+                    }
                 }
                 if (opt.identity) {
                     var lo = Math.max(xLo, opt.yMin), hi = Math.min(xHi, opt.yMax);
@@ -2003,14 +2098,23 @@ var SCRIPT_KEY = "MiddleMath";
                         if (segments[s].length < 2) continue;
                         lines.push({ points: toBezier(segments[s], u), kind: "graph" });
                     }
-                    if (opt.nameStyle > 0 && segments.length > 0) {
+                    var custom = opt.functions[f].name || "";
+                    if ((opt.nameStyle > 0 || custom !== "") && segments.length > 0) {
+                        // 놓는 자리: 0 오른쪽 끝(기본), 1·2 왼쪽 끝(바깥·안쪽)
+                        var place = opt.functions[f].at || 0;
                         var lastSegment = segments[segments.length - 1];
-                        var end = lastSegment[lastSegment.length - 1];
-                        if (opt.nameStyle === 1) {
+                        var anchor = place === 0 ? lastSegment[lastSegment.length - 1] : segments[0][0];
+                        var nameDir = place === 1 ? [-1, 0] : [1, 0];
+                        if (custom !== "") {
+                            // 직접 쓴 이름은 '이름' 설정과 상관없이 붙인다. 한글이 들면 곧게(이탤릭 없이) 쓴다
+                            var own = formulaDisplay(custom), uprightAll = [];
+                            if (hasHangul(custom)) for (var ri = 0; ri < own.text.length; ri++) uprightAll.push(ri);
+                            formulaLabels.push({ text: own.text, sup: own.sup, sub: own.sub, roman: uprightAll.length ? uprightAll : own.roman, at: [anchor.x * u, anchor.y * u], dir: nameDir, clear: 0 });
+                        } else if (opt.nameStyle === 1) {
                             var display = formulaDisplay(opt.functions[f].label);
-                            formulaLabels.push({ text: display.text, sup: display.sup, sub: display.sub, roman: display.roman, at: [end.x * u, end.y * u], dir: [1, 0], clear: 0 });
+                            formulaLabels.push({ text: display.text, sup: display.sup, sub: display.sub, roman: display.roman, at: [anchor.x * u, anchor.y * u], dir: nameDir, clear: 0 });
                         } else {
-                            formulaLabels.push({ text: graphSymbol(opt.nameStyle, f), symbol: true, at: [end.x * u, end.y * u], dir: [1, 0], clear: 0 });
+                            formulaLabels.push({ text: graphSymbol(opt.nameStyle, f), symbol: true, at: [anchor.x * u, anchor.y * u], dir: nameDir, clear: 0 });
                         }
                     }
                 }
@@ -2043,21 +2147,31 @@ var SCRIPT_KEY = "MiddleMath";
                         if (point.y !== 0) lines.push(straight([at, [at[0], 0]], "guide"));
                         if (point.x !== 0) lines.push(straight([at, [0, at[1]]], "guide"));
                     }
+                    // 이름이 _로 시작하는 점은 점도 이름도 그리지 않고 선분·안내선의 기준으로만 쓴다
+                    if (point.name.charAt(0) === "_") continue;
                     dots.push(at);
                     var name = point.name;
                     if (opt.coords) name += "(" + point.xText + ", " + point.yText + ")";
                     if (name) texts.push({ text: name, at: at, dir: [point.x < 0 ? -0.7071 : 0.7071, 0.7071], clear: 0, upright: true });
                 }
-                var fills = [];
-                if (opt.region.length > 0) {
-                    var polygons = regionPolygons(opt.region, xLo, xHi, opt.yMin, opt.yMax);
+                // 선분: 점 이름으로 이은 그래프 굵기 선
+                var segs = opt.segments || [];
+                for (var sg = 0; sg < segs.length; sg++) lines.push(straight([[segs[sg][0][0] * u, segs[sg][0][1] * u], [segs[sg][1][0] * u, segs[sg][1][1] * u]], "graph"));
+                // 자유 글자: 그 자리 가운데에 글자만 (점·점선 없음)
+                var notes = opt.notes || [];
+                for (var nt = 0; nt < notes.length; nt++) texts.push({ text: notes[nt].name, at: [notes[nt].x * u, notes[nt].y * u], dir: [0, 0], clear: 0 });
+                function regionFills(conditions) {
+                    var out = [];
+                    if (!conditions || conditions.length === 0) return out;
+                    var polygons = regionPolygons(conditions, xLo, xHi, opt.yMin, opt.yMax);
                     for (var rp = 0; rp < polygons.length; rp++) {
                         var scaled = [];
                         for (var rq = 0; rq < polygons[rp].length; rq++) scaled.push([polygons[rp][rq][0] * u, polygons[rp][rq][1] * u]);
-                        fills.push(scaled);
+                        out.push(scaled);
                     }
+                    return out;
                 }
-                return { lines: lines, arrows: arrows, dots: dots, texts: texts, fills: fills };
+                return { lines: lines, arrows: arrows, dots: dots, texts: texts, fills: regionFills(opt.region), fills2: regionFills(opt.region2) };
             }
 
             // 그래프 이름 기호: ㉠㉡㉢… (2) 또는 (가)(나)(다)… (3). index는 0부터
@@ -2223,6 +2337,76 @@ var SCRIPT_KEY = "MiddleMath";
             }
 
             // "x=1, y=2" → [{axis, value}]. 빈 칸은 [], 못 읽으면 null
+            // 1번~5번 식의 함수값표: f·f1=1번, g·f2=2번, h·f3=3번, f4, f5. 읽지 못한 칸은 null
+            function functionValueTable(functionTexts) {
+                var table = {}, names = [["f", "f1"], ["g", "f2"], ["h", "f3"], ["f4"], ["f5"]];
+                for (var i = 0; i < names.length; i++) {
+                    var text = (functionTexts || [])[i] || "";
+                    var fn = text.replace(/\s/g, "") === "" ? null : compileFunction(text);
+                    for (var k = 0; k < names[i].length; k++) table[names[i][k]] = fn;
+                }
+                return table;
+            }
+
+            // 점·글자 입력 안의 f(3), g(1/2) 같은 함수값을 숫자로 바꾼다. 못 계산하면(없는 식, 정의역 밖) 그대로 두어 읽기 오류로 보이게 한다
+            function substituteFunctionValues(text, table) {
+                return String(text).replace(/\b(f[1-5]?|g|h)\(([^()]*)\)/g, function(whole, name, arg) {
+                    var fn = table[name];
+                    if (!fn) return whole;
+                    var x = evaluateNumber(arg);
+                    if (x === null) return whole;
+                    var y;
+                    try { y = fn(x); } catch (e) { return whole; }
+                    if (typeof y !== "number" || !isFinite(y)) return whole;
+                    return String(Math.round(y * 10000) / 10000);
+                });
+            }
+
+            // 실선 수직·수평선 "x=2, y=-1" → [{axis, value, text}] (text는 식 글자로 쓸 원래 글). 빈 글이면 [], 못 읽으면 null
+            function parseSolidLines(text) {
+                var parts = String(text).split(","), list = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var part = parts[i].replace(/\s/g, "");
+                    if (part === "") continue;
+                    var axis = part.charAt(0);
+                    if ((axis !== "x" && axis !== "y") || part.charAt(1) !== "=") return null;
+                    var value = evaluateNumber(part.substring(2));
+                    if (value === null) return null;
+                    list.push({ axis: axis, value: value, text: part });
+                }
+                return list;
+            }
+
+            // 선분 "O-P, P-Q" → [[[x, y], [x, y]], …]. 점 이름은 점 목록의 이름(원점은 O). 모르는 이름이면 null
+            function parseSegments(text, points) {
+                var table = { O: [0, 0] }, i;
+                for (i = 0; i < points.length; i++) if (points[i].name) table[points[i].name] = [points[i].x, points[i].y];
+                var parts = String(text).split(","), list = [];
+                for (i = 0; i < parts.length; i++) {
+                    var part = parts[i].replace(/\s/g, "").split("–").join("-").split("−").join("-");
+                    if (part === "") continue;
+                    var ends = part.split("-");
+                    if (ends.length !== 2 || !table[ends[0]] || !table[ends[1]]) return null;
+                    list.push([table[ends[0]], table[ends[1]]]);
+                }
+                return list;
+            }
+
+            function hasHangul(text) {
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    if (code >= 0xAC00 && code <= 0xD7A3) return true;
+                }
+                return false;
+            }
+
+            // 자유 글자 목록에서 이름이 있는 것만
+            function notesWithNames(list) {
+                var out = [];
+                for (var i = 0; i < list.length; i++) if (list[i].name !== "") out.push(list[i]);
+                return out;
+            }
+
             function parseAsymptotes(text) {
                 var parts = String(text).split(","), list = [];
                 for (var i = 0; i < parts.length; i++) {
@@ -2678,13 +2862,15 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             function saveSettings() {
                 var parts = [
-                    "v3", xMin, xMax, yMin, yMax, unitMm, fontPt,
+                    "v4", xMin, xMax, yMin, yMax, unitMm, fontPt,
                     showGrid ? "1" : "0", showNumbers ? "1" : "0", nameStyle,
                     encodeList(functionTexts),
                     encodeURIComponent(pointsText), showCoords ? "1" : "0", showGuides ? "1" : "0",
                     offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
                     piAxis ? "1" : "0", showIntersections ? "1" : "0", showIdentity ? "1" : "0", encodeURIComponent(asymptoteText),
-                    hideAxes ? "1" : "0", encodeURIComponent(regionText), regionK
+                    hideAxes ? "1" : "0", encodeURIComponent(regionText), regionK,
+                    encodeList(nameTexts), nameAts.join(","), encodeURIComponent(lineText), showLineNames ? "1" : "0",
+                    encodeURIComponent(labelText), encodeURIComponent(segmentText), encodeURIComponent(regionText2), regionK2, showTicks ? "1" : "0"
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -2700,7 +2886,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v3" || p.length !== 24) return;
+                // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다
+                if (!((p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
                 try {
                     xMin = Math.round(restoreNumber(p[1], xMin, -20, 0));
                     xMax = Math.round(restoreNumber(p[2], xMax, 1, 20));
@@ -2728,6 +2915,23 @@ var SCRIPT_KEY = "MiddleMath";
                     hideAxes = p[21] === "1";
                     regionText = decodeURIComponent(p[22]);
                     regionK = restoreNumber(p[23], regionK, 5, 60);
+                    if (p[0] === "v4") {
+                        var savedNames = p[24].split(",");
+                        if (savedNames.length === FUNCTION_COUNT) {
+                            for (var sn = 0; sn < FUNCTION_COUNT; sn++) nameTexts[sn] = decodeURIComponent(savedNames[sn]);
+                        }
+                        var savedPlaces = p[25].split(",");
+                        if (savedPlaces.length === FUNCTION_COUNT) {
+                            for (var sp = 0; sp < FUNCTION_COUNT; sp++) nameAts[sp] = Math.round(restoreNumber(savedPlaces[sp], 0, 0, 2));
+                        }
+                        lineText = decodeURIComponent(p[26]);
+                        showLineNames = p[27] === "1";
+                        labelText = decodeURIComponent(p[28]);
+                        segmentText = decodeURIComponent(p[29]);
+                        regionText2 = decodeURIComponent(p[30]);
+                        regionK2 = restoreNumber(p[31], regionK2, 5, 60);
+                        showTicks = p[32] === "1";
+                    }
                 } catch (restoreError) {}
             }
 

@@ -31,7 +31,8 @@ function extractFunction(name) {
 }
 
 const names = ["compileFunction", "evaluateNumber", "parsePointList", "plotFunction", "toBezier", "formulaDisplay", "buildPlane", "straight",
-  "piLabel", "findIntersections", "parseAsymptotes", "graphSymbol", "parseRegion", "regionPolygons", "dropCollinear"];
+  "piLabel", "findIntersections", "parseAsymptotes", "graphSymbol", "parseRegion", "regionPolygons", "dropCollinear",
+  "functionValueTable", "substituteFunctionValues", "parseSolidLines", "parseSegments", "hasHangul", "notesWithNames"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
@@ -229,6 +230,54 @@ assert.ok(source.includes("var FUNCTION_COUNT = 5;"));
     nameStyle: 0, hideAxes: false, region: region, points: [], coords: false, guides: false, piAxis: false, intersections: false, identity: false, asymptotes: [] });
   assert.strictEqual(d.fills.length, 1);
   assert.ok(d.fills[0].some((p) => Math.abs(p[0] - 40) < 1e-4 && Math.abs(p[1]) < 1e-4));
+}
+
+
+// ── 그래프 이름 직접 쓰기 · 실선 · 자유 글자 · 둘째 칠하기 · 함수값 점 · 선분 · 숨은 점 (웹 생성기와 같은 규칙) ──
+{
+  const base = { xMin: -5, xMax: 5, yMin: -5, yMax: 5, unit: 10, tick: 2, grid: false, numbers: false, functions: [], nameStyle: 0, hideAxes: false,
+    region: [], points: [], coords: false, guides: false, piAxis: false, intersections: false, identity: false, asymptotes: [], fontSize: 8 };
+  // 함수값
+  const table = g.functionValueTable(["y=x^3-7x+6", "y=2x", "", "", ""]);
+  assert.strictEqual(g.substituteFunctionValues("P(3,f(3)) Q(1,g(1/2))", table), "P(3,12) Q(1,1)");
+  assert.strictEqual(g.substituteFunctionValues("R(2,h(2))", table), "R(2,h(2))");
+  assert.strictEqual(g.substituteFunctionValues("T(0,f1(0))", table), "T(0,6)");
+  // 실선
+  assert.deepStrictEqual(g.parseSolidLines("x=2, y=-1"), [{ axis: "x", value: 2, text: "x=2" }, { axis: "y", value: -1, text: "y=-1" }]);
+  assert.strictEqual(g.parseSolidLines("z=1"), null);
+  const solid = g.buildPlane(Object.assign({}, base, { solidLines: g.parseSolidLines("x=2, y=-1"), lineNames: true }));
+  assert.strictEqual(solid.lines.filter((l) => l.kind === "graph").length, 2);
+  assert.deepStrictEqual(solid.texts.filter((t) => t.text === "x=2" || t.text === "y=-1").map((t) => t.dir), [[1, 0], [0, 1]]);
+  assert.ok(!g.buildPlane(Object.assign({}, base, { solidLines: g.parseSolidLines("x=2"), lineNames: false })).texts.some((t) => t.text === "x=2"));
+  // 직접 쓴 이름과 자리
+  const fn = g.compileFunction("y=2x+1");
+  const named = (at, name) => g.buildPlane(Object.assign({}, base, { functions: [{ fn: fn, label: "y=2x+1", name: name, at: at }] })).texts.filter((t) => t.text === "l" || t.text === "접선");
+  assert.strictEqual(named(0, "").length, 0, "이름 설정이 없음이고 직접 쓴 이름도 없으면 안 붙는다");
+  const end = named(0, "l")[0], startOut = named(1, "l")[0], startIn = named(2, "l")[0];
+  assert.ok(end.at[0] > startOut.at[0]);
+  assert.deepStrictEqual([end.dir, startOut.dir, startIn.dir], [[1, 0], [-1, 0], [1, 0]]);
+  assert.strictEqual(named(0, "접선")[0].roman.length, 2, "한글 이름은 곧게");
+  // 자유 글자·선분·숨은 점
+  const pts = g.parsePointList("_p(3,2) _q(5,0) P(1,1)").list;
+  const segs = g.parseSegments("O-_p, _p-_q", pts);
+  assert.deepStrictEqual(segs, [[[0, 0], [3, 2]], [[3, 2], [5, 0]]]);
+  assert.strictEqual(g.parseSegments("O-Z", pts), null);
+  const plane = g.buildPlane(Object.assign({}, base, { points: pts, segments: segs, guides: true, notes: g.notesWithNames(g.parsePointList("A(0.4,1.5) (2,2)").list) }));
+  assert.ok(!plane.texts.some((t) => t.text.charAt(0) === "_"), "숨은 점은 이름이 없다");
+  assert.strictEqual(plane.dots.length, 1, "점은 P 하나만");
+  const noteLabel = plane.texts.find((t) => t.text === "A");
+  assert.deepStrictEqual(noteLabel.dir, [0, 0]);
+  assert.strictEqual(plane.texts.filter((t) => t.dir && t.dir[0] === 0 && t.dir[1] === 0).length, 1, "이름 없는 글자는 쓰지 않는다");
+  // 둘째 칠하기
+  const two = g.buildPlane(Object.assign({}, base, { region: g.parseRegion("x>=0, x<=2, y>=0, y<=x"), region2: g.parseRegion("x>=2, x<=4, y>=0, y<=2") }));
+  assert.strictEqual(two.fills.length, 1);
+  assert.strictEqual(two.fills2.length, 1);
+  // 눈금선
+  const withTicks = g.buildPlane(Object.assign({}, base, { ticks: true })), noTicks = g.buildPlane(Object.assign({}, base, { ticks: false }));
+  assert.strictEqual(withTicks.lines.length - noTicks.lines.length, 20);
+  assert.strictEqual(g.buildPlane(base).lines.length, withTicks.lines.length, "옛 호출은 눈금선이 있다");
+  // 설정 저장 형식: v4와 옛 v3를 모두 읽는다
+  assert.ok(source.includes('"v4", xMin, xMax,') && source.includes('p[0] === "v3" && p.length === 24'));
 }
 
 console.log("coord plane checks passed");
