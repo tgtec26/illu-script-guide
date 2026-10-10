@@ -103,7 +103,7 @@ var SCRIPT_KEY = "HighStatistics";
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
-    var engines = [makeCountEngine(), makeProbTreeEngine(), makeDistributionEngine()];
+    var engines = [makeCountEngine(), makeProbTreeEngine(), makeDistributionEngine(), makeTableEngine()];
 
     var win = new Window("dialog", "확률과 통계");
     win.orientation = "column";
@@ -2413,6 +2413,557 @@ var SCRIPT_KEY = "HighStatistics";
 
             function restoreNumber(text, fallback, minimum, maximum) {
                 var value = parseNumber(text);
+                return value === null ? fallback : clamp(value, minimum, maximum);
+            }
+        }
+        return api;
+    }
+    // ==== 표 ====
+    // 수능·모의평가의 분할표·자료 표(왼쪽 위 칸에 대각선이 있는 교차표, 확률분포표). 웹 도구 "표"와 같은 글 형식이다.
+    //   윗줄 머리 "찬성 | 반대 | 계", 왼쪽 머리 "10년 미만 | 10년 이상 | 계", 칸 "a | b | 120 ; c | d | 240 ; 150 | 210 | 360"
+    //   (| 로 칸을, ; 로 줄을 나눈다), 대각선 이름 "찬반 여부 / 재직 연수"(앞은 윗줄 머리의 이름(오른쪽 위), 뒤는 왼쪽 머리의 이름(왼쪽 아래), 비우면 대각선 없음).
+    // 칸 글자에 frac(a,b)·\frac{a}{b}로 쌓은 분수, x^2·a_1 같은 첨자를 쓸 수 있다. 열 너비는 글자 길이에 맞춰 넓어진다.
+    // 선은 모두 0.4pt(축 두께, 선 두께 패널에서 조절). 선택은 필요 없다.
+    function makeTableEngine() {
+        var api = {label: "표", error: null, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        function addRows(page) {
+            var PREF_KEY = "HighMathTable/settings";
+            var MM_TO_PT = 2.834645669;
+            var POSITION_LIMIT_MM = 100;
+            var LABEL_WIDTH = 100;
+            var INPUT_WIDTH = 50;
+            var SLIDER_WIDTH = 196;
+            var RESET_BUTTON_WIDTH = 34;
+            var TEXT_WIDTH = 300;
+            var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
+            var ENG_FONT_NAME = "GSMediumB1";
+            var ITALIC_FONT_NAME = "GSMediItaC1";
+            var EQN_FONT_NAME = "HancomEQN";
+            var GS_SYMBOLS = "˘°±·";
+            var ENG_BASELINE_PT = 0.5;
+            var GUIDE_DASH = [2, 1.5];
+            var AXIS_PT = 0.4;
+            var MARK_PT = 0.3;
+            var DOT_RADIUS_MM = 0.6;
+            var labelGapMm = 0;
+            var strokePt = 0.8;
+            var TEXT_KEYS = ["headText", "sideText", "cornerText", "cellsText"];
+
+            var doc = app.activeDocument;
+            var viewCenter = doc.activeView.centerPoint;
+            var layer = findEditableLayer();
+            var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
+            var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+            var italicFont = findTextFont([ITALIC_FONT_NAME, ENG_FONT_NAME]);
+            var eqnFont = findTextFont([EQN_FONT_NAME, ENG_FONT_NAME]);
+
+            // 옵션
+            var text = {headText: "찬성 | 반대 | 계", sideText: "10년 미만 | 10년 이상 | 계", cornerText: "찬반 여부 / 재직 연수",
+                cellsText: "a | b | 120 ; c | d | 240 ; 150 | 210 | 360"};
+            var cellWmm = 16;
+            var cellHmm = 7;
+            var sideWmm = 24;
+            var fontPt = 8;
+            var offsetXmm = 0;
+            var offsetYmm = 0;
+            var previewEnabled = true;
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var DEFAULTS = {cellWmm: cellWmm, cellHmm: cellHmm, sideWmm: sideWmm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+            applySettings();
+            var LINE_DEFAULTS = {axis: AXIS_PT};
+            loadLineWidths();
+
+            var previewGroup = null;
+
+            var win = page;   // 탭 페이지에 그대로 쌓는다
+
+            var headPanel = addPanel(win, "머리와 칸");
+            var inputs = {};
+            addTextRow(headPanel, "윗줄 머리", "headText", "윗줄 머리 칸들을 | 로 나눠 쓴다. 비우면 윗줄이 없다");
+            addTextRow(headPanel, "왼쪽 머리", "sideText", "왼쪽 머리 칸들을 | 로 나눠 쓴다. 비우면 왼쪽 머리가 없다");
+            addTextRow(headPanel, "대각선 이름", "cornerText", "왼쪽 위 칸의 대각선. 앞은 윗줄 머리의 이름(오른쪽 위), 뒤는 왼쪽 머리의 이름(왼쪽 아래). 비우면 대각선이 없다");
+            addTextRow(headPanel, "칸", "cellsText", "칸 글자를 | 로 나누고 줄은 ; 로 나눈다. 분수는 frac(1,2), 첨자는 x^2·a_1. 변수(a, b)는 기울어진 글자로 나온다");
+
+            var sizePanel = addPanel(win, "크기");
+            var cellWControls = addValueRow(sizePanel, "칸 너비", "mm", cellWmm, 8, 40, 1, 0);
+            var cellHControls = addValueRow(sizePanel, "칸 높이", "mm", cellHmm, 5, 20, 0.5, 1);
+            var sideWControls = addValueRow(sizePanel, "왼쪽 머리 너비", "mm", sideWmm, 10, 50, 1, 0);
+            var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+
+            var messageText = win.add("statictext", undefined, " ", {multiline: true});
+            messageText.preferredSize = [380, 32];
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var axisWidthControls = addValueRow(lineWidthPanel, "표 선", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+
+            var positionPanel = addPanel(win, "위치");
+            var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+            var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+
+            bindValueRow(cellWControls, function(value) { cellWmm = value; }, DEFAULTS.cellWmm);
+            bindValueRow(cellHControls, function(value) { cellHmm = value; }, DEFAULTS.cellHmm);
+            bindValueRow(sideWControls, function(value) { sideWmm = value; }, DEFAULTS.sideWmm);
+            bindValueRow(fontControls, function(value) { fontPt = value; }, DEFAULTS.fontPt);
+            // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, DEFAULTS.offsetXmm);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, DEFAULTS.offsetYmm);
+
+            // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다. 그릴 것이 없으면 확정하지 않는다
+            api.commit = function() {
+                if (previewGroup === null) buildPreview();
+                if (previewGroup === null) {
+                    alert(messageText.text);
+                    return false;
+                }
+                saveSettings();
+                doc.selection = null;
+                previewGroup.selected = true;
+                return true;
+            };
+            api.setPreview = function(on) {
+                previewEnabled = on;
+                updatePreview();
+            };
+            api.updatePreview = updatePreview;
+            api.clearPreview = function() {
+                clearPreview();
+                app.redraw();
+            };
+            return null;
+
+            function addTextRow(parent, label, key, tip) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.add("statictext", undefined, label + ":").preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, text[key]);
+                input.preferredSize.width = TEXT_WIDTH;
+                input.helpTip = tip;
+                input.onChange = function() { text[key] = input.text; updatePreview(); };
+                inputs[key] = input;
+            }
+            function updatePreview() {
+                clearPreview();
+                if (previewEnabled) buildPreview();
+                app.redraw();
+            }
+            function clearPreview() {
+                if (previewGroup !== null) {
+                    try { previewGroup.remove(); } catch (e) {}
+                }
+                previewGroup = null;
+            }
+
+            function buildPreview() {
+                var drawing = buildTable();
+                messageText.text = drawing.notes.length > 0 ? drawing.notes.join("\n") : " ";
+                if (drawing.lines.length === 0) return;
+                previewGroup = layer.groupItems.add();
+                previewGroup.name = "표";
+                for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
+                for (var t = 0; t < drawing.texts.length; t++) addTableLabel(drawing.texts[t]);
+                previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
+            }
+
+            function addPath(line) {
+                var path = previewGroup.pathItems.add();
+                var anchors = [], curved = false;
+                for (var i = 0; i < line.points.length; i++) {
+                    anchors.push(line.points[i].anchor);
+                    if (line.points[i].left !== line.points[i].anchor || line.points[i].right !== line.points[i].anchor) curved = true;
+                }
+                path.setEntirePath(anchors);
+                if (curved) {
+                    for (var j = 0; j < line.points.length; j++) {
+                        var point = path.pathPoints[j];
+                        point.leftDirection = line.points[j].left;
+                        point.rightDirection = line.points[j].right;
+                    }
+                }
+                path.closed = !!line.closed;
+                path.filled = false;
+                path.stroked = true;
+                path.strokeColor = makeGray(100);
+                path.strokeWidth = line.kind === "mark" ? Math.min(MARK_PT, strokePt) : (line.kind === "axis" ? AXIS_PT : strokePt);
+                path.strokeCap = StrokeCap.BUTTENDCAP;
+                path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
+                if (line.kind === "dashed") path.strokeDashes = GUIDE_DASH;
+            }
+
+            // 칸 글자: 가운데에 놓는다. corner가 [sx, sy]이면 글자 상자의 모서리가 at에 오게(sx=-1이면 오른쪽 가장자리가 at, sy=-1이면 윗변이 at)
+            function addTableLabel(label) {
+                if (typeof buildStackedLabel === "function" && hasFractionText(label.text) && !label.corner) {
+                    buildStackedLabel(previewGroup, label, fontPt, 0, stackFrame, stackBar);
+                    return;
+                }
+                var frame = previewGroup.textFrames.add();
+                frame.contents = label.text.replace(/°/g, "˘");
+                var attributes = frame.textRange.characterAttributes;
+                attributes.size = fontPt;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, label.upright);
+                var s;
+                for (s = 0; label.sup && s < label.sup.length; s++) frame.textRange.characters[label.sup[s]].characterAttributes.baselinePosition = FontBaselineOption.SUPERSCRIPT;
+                for (s = 0; label.sub && s < label.sub.length; s++) frame.textRange.characters[label.sub[s]].characterAttributes.baselinePosition = FontBaselineOption.SUBSCRIPT;
+                var b = frame.geometricBounds;
+                var halfW = (b[2] - b[0]) / 2, halfH = (b[1] - b[3]) / 2;
+                var cx = label.at[0], cy = label.at[1];
+                if (label.corner) { cx += label.corner[0] * halfW; cy += label.corner[1] * halfH; }
+                frame.translate(cx - (b[0] + b[2]) / 2, cy - (b[1] + b[3]) / 2);
+            }
+
+            // 쌓은 분수 라벨(\frac{1}{2}, frac(1,2))의 글상자와 막대 (07_수학/math_label_helper.jsxinc의 buildStackedLabel이 부른다)
+            function stackFrame(group, str, size, upright) {
+                var frame = group.textFrames.add();
+                frame.contents = str.replace(/°/g, "˘");
+                var attributes = frame.textRange.characterAttributes;
+                attributes.size = size;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, upright);
+                return frame;
+            }
+
+            function stackBar(group, x0, x1, y) {
+                var bar = group.pathItems.add();
+                bar.setEntirePath([[x0, y], [x1, y]]);
+                bar.filled = false;
+                bar.stroked = true;
+                bar.strokeColor = makeGray(100);
+                bar.strokeWidth = 0.4;
+                return bar;
+            }
+
+            function applyTextFonts(frame, upright) {
+                var contents = frame.contents;
+                for (var i = 0; i < contents.length; i++) {
+                    var code = contents.charCodeAt(i);
+                    var attributes = frame.textRange.characters[i].characterAttributes;
+                    if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
+                        attributes.textFont = korFont;
+                        attributes.baselineShift = 0;
+                    } else if (code > 126 && GS_SYMBOLS.indexOf(contents.charAt(i)) < 0) {
+                        attributes.textFont = eqnFont;
+                        attributes.baselineShift = 0;
+                    } else if (!upright && /[a-z]/.test(contents.charAt(i)) && !/[A-Za-z]/.test(contents.charAt(i - 1)) && !/[A-Za-z]/.test(contents.charAt(i + 1))) {
+                        attributes.textFont = italicFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    } else {
+                        attributes.textFont = engFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    }
+                }
+            }
+            function findTextFont(names) {
+                for (var i = 0; i < names.length; i++) {
+                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
+                }
+                return app.textFonts[0];
+            }
+            function findEditableLayer() {
+                var active = doc.activeLayer;
+                if (!active.locked && active.visible) return active;
+                for (var i = 0; i < doc.layers.length; i++) {
+                    if (!doc.layers[i].locked && doc.layers[i].visible) return doc.layers[i];
+                }
+                return doc.layers.add();
+            }
+            function makeGray(k) {
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    cmyk.cyan = 0;
+                    cmyk.magenta = 0;
+                    cmyk.yellow = 0;
+                    cmyk.black = k;
+                    return cmyk;
+                }
+                var value = Math.round(255 * (1 - k / 100));
+                var rgb = new RGBColor();
+                rgb.red = value;
+                rgb.green = value;
+                rgb.blue = value;
+                return rgb;
+            }
+            function straight(anchors, kind, closed) {
+                var points = [];
+                for (var i = 0; i < anchors.length; i++) points.push({anchor: anchors[i], left: anchors[i], right: anchors[i]});
+                return {points: points, kind: kind, closed: closed};
+            }
+
+            // -------------------------------------------------------
+            // 계산 (일러 DOM을 쓰지 않는다 → tests/check-table.js)
+            // -------------------------------------------------------
+            function trimText(s) { return String(s).replace(/^\s+|\s+$/g, ""); }
+
+            function splitCells(source) {
+                var parts = String(source).split("|"), out = [];
+                for (var i = 0; i < parts.length; i++) out.push(trimText(parts[i]));
+                return out;
+            }
+
+            function splitRows(source) {
+                var parts = String(source).split(";"), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var row = trimText(parts[i]);
+                    if (row !== "" || i < parts.length - 1) out.push(row);
+                }
+                return out;
+            }
+
+            // 글에 ^(위첨자)·_(아래첨자)가 있으면 첨자로 나눈다 (x_1 → x₁). 없으면 글자 그대로
+            function display(source) {
+                if (source.indexOf("^") < 0 && source.indexOf("_") < 0) return {text: source};
+                var out = "", sup = [], sub = [];
+                for (var i = 0; i < source.length; i++) {
+                    var ch = source.charAt(i);
+                    if (ch === "*") continue;
+                    if (ch === "^" || ch === "_") {
+                        var marks = ch === "^" ? sup : sub;
+                        var next = source.charAt(i + 1);
+                        if (next === "(") {
+                            var close = source.indexOf(")", i + 2);
+                            if (close < 0) close = source.length;
+                            for (var j = i + 2; j < close; j++) { marks.push(out.length); out += source.charAt(j); }
+                            i = close;
+                        } else if (next >= "0" && next <= "9") {
+                            while (i + 1 < source.length && source.charAt(i + 1) >= "0" && source.charAt(i + 1) <= "9") { marks.push(out.length); out += source.charAt(++i); }
+                        } else if (next !== "") {
+                            marks.push(out.length);
+                            out += source.charAt(++i);
+                        }
+                        continue;
+                    }
+                    out += ch;
+                }
+                return {text: out, sup: sup, sub: sub};
+            }
+
+            // 글자 너비 어림 (한글 1em, 그 밖 0.55em). 쌓은 분수는 분자·분모 중 긴 쪽
+            function textWidth(source) {
+                var plain = String(source);
+                if (hasFractionTextLocal(plain)) {
+                    var parts = splitFractionTextLocal(plain), w = 0;
+                    for (var p = 0; p < parts.length; p++) w += parts[p].text !== undefined ? textWidth(parts[p].text) : Math.max(textWidth(parts[p].num), textWidth(parts[p].den)) * 0.85;
+                    return w;
+                }
+                var d = display(plain), width = 0;
+                for (var i = 0; i < d.text.length; i++) {
+                    var code = d.text.charCodeAt(i);
+                    width += ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E)) ? 1 : 0.55;
+                }
+                return width * fontPt;
+            }
+
+            function hasFractionTextLocal(s) { return typeof hasFractionText === "function" && hasFractionText(s); }
+            function splitFractionTextLocal(s) { return splitFractionText(s); }
+
+            function buildTable() {
+                var out = {lines: [], arrows: [], dots: [], texts: [], notes: []};
+                var notes = out.notes, i, j;
+                var heads = trimText(text.headText) === "" ? [] : splitCells(text.headText);
+                var sides = trimText(text.sideText) === "" ? [] : splitCells(text.sideText);
+                var rows = [];
+                if (trimText(text.cellsText) !== "") {
+                    var rowTexts = splitRows(text.cellsText);
+                    for (i = 0; i < rowTexts.length; i++) rows.push(splitCells(rowTexts[i]));
+                }
+                var cols = heads.length, nRows = Math.max(sides.length, rows.length);
+                for (i = 0; i < rows.length; i++) cols = Math.max(cols, rows[i].length);
+                if (cols === 0 || nRows === 0) { notes.push("표의 칸을 적어 주세요"); return out; }
+                if (heads.length > 0 && heads.length !== cols) notes.push("윗줄 머리 " + heads.length + "칸, 칸 " + cols + "열: 열 수를 맞춰 주세요");
+                if (sides.length > 0 && sides.length !== nRows) notes.push("왼쪽 머리 " + sides.length + "칸, 칸 " + rows.length + "줄: 줄 수를 맞춰 주세요");
+                var hasHead = heads.length > 0, hasSide = sides.length > 0;
+                var cornerParts = String(text.cornerText).split("/");
+                var corner = [trimText(cornerParts[0] || ""), trimText(cornerParts[1] || "")];
+                var withDiagonal = hasHead && hasSide && corner[0] !== "";
+
+                var pad = 4 * MM_TO_PT;
+                var colW = [];
+                for (j = 0; j < cols; j++) {
+                    var w = Math.max(cellWmm * MM_TO_PT, textWidth(heads[j] || "") + pad);
+                    for (i = 0; i < rows.length; i++) w = Math.max(w, textWidth(rows[i][j] || "") + pad);
+                    colW.push(w);
+                }
+                var sideW = 0;
+                if (hasSide) {
+                    sideW = sideWmm * MM_TO_PT;
+                    for (i = 0; i < sides.length; i++) sideW = Math.max(sideW, textWidth(sides[i]) + pad);
+                    if (withDiagonal) sideW = Math.max(sideW, textWidth(corner[1]) + textWidth(corner[0]) * 0.5 + pad);
+                }
+                var rowH = cellHmm * MM_TO_PT, headH = hasHead ? rowH * (withDiagonal ? 1.3 : 1) : 0;
+                var totalW = sideW, totalH = headH + nRows * rowH;
+                for (j = 0; j < cols; j++) totalW += colW[j];
+
+                // 왼쪽 위가 원점(y 아래쪽)이 되게 좌표를 잡고 T로 가운데·y 위쪽으로 옮긴다
+                var X = [0, sideW], Y = [0, headH];
+                for (j = 0; j < cols; j++) X.push(X[X.length - 1] + colW[j]);
+                for (i = 0; i < nRows; i++) Y.push(Y[Y.length - 1] + rowH);
+                function T(x, y) { return [x - totalW / 2, totalH / 2 - y]; }
+                var xs = hasSide ? X : X.slice(1), ys = hasHead ? Y : Y.slice(1);
+                for (i = 0; i < ys.length; i++) out.lines.push(straight([T(xs[0], ys[i]), T(xs[xs.length - 1], ys[i])], "axis", false));
+                for (i = 0; i < xs.length; i++) out.lines.push(straight([T(xs[i], ys[0]), T(xs[i], ys[ys.length - 1])], "axis", false));
+
+                function cellLabel(source, x0, x1, y0, y1) {
+                    if (source === "") return;
+                    var d = display(source);
+                    d.at = T((x0 + x1) / 2, (y0 + y1) / 2);
+                    out.texts.push(d);
+                }
+                if (hasHead) for (j = 0; j < heads.length; j++) cellLabel(heads[j], X[j + 1], X[j + 2], Y[0], Y[1]);
+                if (hasSide) for (i = 0; i < sides.length; i++) cellLabel(sides[i], X[0], X[1], Y[i + 1], Y[i + 2]);
+                for (i = 0; i < rows.length; i++) for (j = 0; j < rows[i].length; j++) cellLabel(rows[i][j], X[j + 1], X[j + 2], Y[i + 1], Y[i + 2]);
+                if (withDiagonal) {
+                    out.lines.push(straight([T(0, 0), T(sideW, headH)], "axis", false));
+                    var g = 1.2 * MM_TO_PT;
+                    var d0 = display(corner[0]); d0.at = T(sideW - g, g); d0.corner = [-1, -1]; out.texts.push(d0);
+                    if (corner[1] !== "") { var d1 = display(corner[1]); d1.at = T(g, headH - g); d1.corner = [1, 1]; out.texts.push(d1); }
+                }
+                return out;
+            }
+
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "axis") { AXIS_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "axis") return AXIS_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
+            function addPanel(parent, title, foldKey) {
+                // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
+                if (foldKey && typeof makeCollapsiblePanel === "function") {
+                    var body = makeCollapsiblePanel(parent, title, true, SCRIPT_KEY + "/" + foldKey);
+                    body.alignChildren = ["left", "top"];
+                    body.spacing = 6;
+                    return body;
+                }
+                var panel = parent.add("panel", undefined, title);
+                panel.alignChildren = ["left", "top"];
+                panel.margins = [12, 16, 12, 12];
+                panel.spacing = 6;
+                return panel;
+            }
+            function addValueRow(parent, label, unitText, value, minimum, maximum, step, decimals) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.add("statictext", undefined, label + (unitText ? " (" + unitText + "):" : ":")).preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, formatNumber(value, decimals));
+                input.preferredSize.width = INPUT_WIDTH;
+                var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+                slider.stepdelta = step;
+                slider.jumpdelta = step * 10;
+                slider.preferredSize.width = SLIDER_WIDTH;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
+                return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
+            }
+            function setRowValue(controls, value) {
+                controls.input.text = formatNumber(value, controls.decimals);
+                try { controls.slider.value = value; } catch (e) {}
+            }
+            function bindValueRow(controls, setter, initial) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    setRowValue(controls, value);
+                    setter(value);
+                    updatePreview();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(initial); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? controls.slider.value : value);
+                };
+            }
+            function bindPositionRow(controls, getter, setter, isX, initial) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    var delta = (value - getter()) * MM_TO_PT;
+                    setter(value);
+                    setRowValue(controls, value);
+                    if (delta === 0 || previewGroup === null) return;
+                    previewGroup.translate(isX ? delta : 0, isX ? 0 : delta);
+                    app.redraw();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(initial); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? getter() : value);
+                };
+            }
+            function parseNumber(source) {
+                var value = parseFloat(String(source).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+                return isNaN(value) ? null : value;
+            }
+            function clamp(value, minimum, maximum) {
+                if (value < minimum) return minimum;
+                if (value > maximum) return maximum;
+                return value;
+            }
+            function roundTo(value, step) {
+                return Math.round(value / step) * step;
+            }
+            function formatNumber(value, decimals) {
+                return (Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
+            }
+
+            // -------------------------------------------------------
+            // 설정 저장 · 복원 (글은 encodeURIComponent로 | 가 섞이지 않게)
+            // -------------------------------------------------------
+            function saveSettings() {
+                saveLineWidths();
+                var parts = ["v1"];
+                for (var i = 0; i < TEXT_KEYS.length; i++) parts.push(encodeURIComponent(text[TEXT_KEYS[i]]));
+                parts.push(cellWmm, cellHmm, sideWmm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0");
+                try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+            }
+
+            function applySettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+                if (!raw) return;
+                var p = raw.split("|");
+                if (p[0] !== "v1" || p.length !== 12) return;
+                try {
+                    var restored = {};
+                    for (var i = 0; i < TEXT_KEYS.length; i++) restored[TEXT_KEYS[i]] = decodeURIComponent(p[1 + i]);
+                    for (i = 0; i < TEXT_KEYS.length; i++) text[TEXT_KEYS[i]] = restored[TEXT_KEYS[i]];
+                    cellWmm = restoreNumber(p[5], cellWmm, 8, 40);
+                    cellHmm = restoreNumber(p[6], cellHmm, 5, 20);
+                    sideWmm = restoreNumber(p[7], sideWmm, 10, 50);
+                    fontPt = restoreNumber(p[8], fontPt, 5, 14);
+                    offsetXmm = restoreNumber(p[9], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[10], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[11] === "1";
+                } catch (restoreError) {}
+            }
+
+            function restoreNumber(source, fallback, minimum, maximum) {
+                var value = parseNumber(source);
                 return value === null ? fallback : clamp(value, minimum, maximum);
             }
         }
