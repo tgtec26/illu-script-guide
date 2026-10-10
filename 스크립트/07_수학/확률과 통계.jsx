@@ -320,6 +320,8 @@ var SCRIPT_KEY = "HighStatistics";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var defaults = {townGapMm: townGapMm, roadGapMm: roadGapMm, mapMm: mapMm, gridCols: gridCols, gridRows: gridRows, gridCellMm: gridCellMm, seatCount: seatCount, sideA: sideA, sideB: sideB, tableMm: tableMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {graph: MAIN_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -386,6 +388,10 @@ var SCRIPT_KEY = "HighStatistics";
             namesInput.helpTip = "위 가운데 자리부터 시계 방향으로 쉼표로 (A, B, 엄마, 아빠). 비우면 A, B, C …, 모자라면 빈 자리";
             var seatMessage = seatPanel.add("statictext", undefined, " ");
             seatMessage.preferredSize.width = 360;
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
 
             var sizePanel = addPanel(win, "글자 · 위치");
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
@@ -879,6 +885,34 @@ var SCRIPT_KEY = "HighStatistics";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "graph") { MAIN_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "graph") return MAIN_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -973,6 +1007,7 @@ var SCRIPT_KEY = "HighStatistics";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var parts = ["v3", mode, encodeURIComponent(roadsText), townGapMm, roadGapMm, mapIndex, mapMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
                     gridCols, gridRows, gridCellMm, encodeURIComponent(passText), encodeURIComponent(blockedText), gridNumbers ? "1" : "0",
                     tableShape, seatCount, sideA, sideB, tableMm, encodeURIComponent(seatNames), rotationArrow ? "1" : "0"];
@@ -1084,6 +1119,8 @@ var SCRIPT_KEY = "HighStatistics";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var defaults = {mean: mean, sigma: sigma, mean2: mean2, sigma2: sigma2, trials: trials, chance: chance, aValue: aValue, bValue: bValue, shadeK: shadeK, widthMm: widthMm, heightMm: heightMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {axis: AXIS_PT, graph: CURVE_PT, guide: GUIDE_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -1134,6 +1171,14 @@ var SCRIPT_KEY = "HighStatistics";
 
             var messageText = win.add("statictext", undefined, " ", {multiline: true});
             messageText.preferredSize = [380, 32];
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
+            bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -1619,6 +1664,38 @@ var SCRIPT_KEY = "HighStatistics";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "axis") { AXIS_PT = value; }
+                if (group === "graph") { CURVE_PT = value; }
+                if (group === "guide") { GUIDE_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "axis") return AXIS_PT;
+                if (group === "graph") return CURVE_PT;
+                if (group === "guide") return GUIDE_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -1714,6 +1791,7 @@ var SCRIPT_KEY = "HighStatistics";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
                 var parts = ["v1", mode, axisName, mean, sigma, mean2, sigma2, trials, chance, shade, labelKind, aValue, bValue, shadeK,
@@ -1804,6 +1882,8 @@ var SCRIPT_KEY = "HighStatistics";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var defaults = {stageMm: stageMm, rowMm: rowMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {graph: LINE_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -1833,6 +1913,10 @@ var SCRIPT_KEY = "HighStatistics";
 
             var messageText = win.add("statictext", undefined, " ", {multiline: true});
             messageText.preferredSize = [380, 46];
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -2178,6 +2262,34 @@ var SCRIPT_KEY = "HighStatistics";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "graph") { LINE_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "graph") return LINE_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -2273,6 +2385,7 @@ var SCRIPT_KEY = "HighStatistics";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var parts = ["v1", encodeURIComponent(firstText), encodeURIComponent(secondText), encodeURIComponent(eventText), showProducts ? "1" : "0",
                     stageMm, rowMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}

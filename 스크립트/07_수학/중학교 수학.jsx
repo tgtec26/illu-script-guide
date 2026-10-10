@@ -1008,6 +1008,8 @@ var SCRIPT_KEY = "MiddleMath";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var initial = {minValue: minValue, maxValue: maxValue, unitMm: unitMm, subdivisions: subdivisions, tickMm: tickMm, fontPt: fontPt, solutionMm: solutionMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {axis: AXIS_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -1040,6 +1042,10 @@ var SCRIPT_KEY = "MiddleMath";
             var solutionControls = addValueRow(markPanel, "해 선 높이", "mm", solutionMm, 1, 15, 0.5, 1);
             var messageText = markPanel.add("statictext", undefined, " ");
             messageText.preferredSize.width = 340;
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -1411,6 +1417,34 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "axis") { AXIS_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "axis") return AXIS_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -1505,6 +1539,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var parts = [
                     "v1", minValue, maxValue, unitMm, subdivisions, tickMm, solutionMm, fontPt,
                     showNumbers ? "1" : "0", encodeURIComponent(pointsText), encodeURIComponent(inequalityText),
@@ -1636,6 +1671,8 @@ var SCRIPT_KEY = "MiddleMath";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var initial = {xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unitMm: unitMm, fontPt: fontPt, regionK: regionK, regionK2: regionK2, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {axis: AXIS_PT, graph: GRAPH_PT, guide: GUIDE_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -1741,6 +1778,14 @@ var SCRIPT_KEY = "MiddleMath";
             var guidesCheck = pointChecks.add("checkbox", undefined, "축까지 점선");
             var messageText = win.add("statictext", undefined, " ");
             messageText.preferredSize.width = 360;
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
+            bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -2817,6 +2862,38 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "axis") { AXIS_PT = value; }
+                if (group === "graph") { GRAPH_PT = value; }
+                if (group === "guide") { GUIDE_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "axis") return AXIS_PT;
+                if (group === "graph") return GRAPH_PT;
+                if (group === "guide") return GUIDE_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -2911,6 +2988,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var parts = [
                     "v4", xMin, xMax, yMin, yMax, unitMm, fontPt,
                     showGrid ? "1" : "0", showNumbers ? "1" : "0", nameStyle,
@@ -3065,6 +3143,8 @@ var SCRIPT_KEY = "MiddleMath";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var initial = {widthMm: widthMm, heightMm: heightMm, fontPt: fontPt, classStart: classStart, classWidth: classWidth, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {axis: AXIS_PT, graph: MAIN_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -3102,6 +3182,12 @@ var SCRIPT_KEY = "MiddleMath";
             var yNameInput = addTextRow(axisPanel, "세로:", yName, "세로축 위에 붙는 글자 (명). 상대도수를 켜면 비워도 된다");
             var messageText = win.add("statictext", undefined, " ");
             messageText.preferredSize.width = 360;
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -3561,6 +3647,36 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "axis") { AXIS_PT = value; }
+                if (group === "graph") { MAIN_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "axis") return AXIS_PT;
+                if (group === "graph") return MAIN_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -3664,6 +3780,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var parts = [
                     "v1", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
                     showBars ? "1" : "0", showPolygon ? "1" : "0", relative ? "1" : "0",
@@ -3786,6 +3903,8 @@ var SCRIPT_KEY = "MiddleMath";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var initial = {extendMm: opt.extendMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {graph: MAIN_PT, guide: GUIDE_PT};
+            loadLineWidths();
 
             var previewGroup = null;
             var originalStroked = target.stroked;
@@ -3821,6 +3940,12 @@ var SCRIPT_KEY = "MiddleMath";
             normalizeCheck.helpTip = "평가원 그림의 도형 선(약 0.84pt)·과학 메인 선 기준. 끄면 원래 두께 그대로";
             var extendControls = addValueRow(stylePanel, "보조선 연장", "mm", opt.extendMm, 0, 15, 0.5, 1);
             var fontControls = addValueRow(stylePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
+            bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
@@ -4228,6 +4353,36 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "graph") { MAIN_PT = value; }
+                if (group === "guide") { GUIDE_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "graph") return MAIN_PT;
+                if (group === "guide") return GUIDE_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -4322,6 +4477,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
                 var parts = ["v1", flags, opt.extendMm, normalizeStroke ? "1" : "0", fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
@@ -4401,6 +4557,8 @@ var SCRIPT_KEY = "MiddleMath";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var initial = {net: values.net, count: values.count, side: values.side, depth: values.depth, height: values.height, lateral: values.lateral, radius: values.radius, slant: values.slant, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {graph: OUTLINE_PT, guide: FOLD_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -4429,6 +4587,12 @@ var SCRIPT_KEY = "MiddleMath";
             var dashedCheck = sizePanel.add("checkbox", undefined, "접는 선 점선");
             var messageText = win.add("statictext", undefined, " ");
             messageText.preferredSize.width = 360;
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
+            bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -4829,6 +4993,36 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "graph") { OUTLINE_PT = value; }
+                if (group === "guide") { FOLD_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "graph") return OUTLINE_PT;
+                if (group === "guide") return FOLD_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -4923,6 +5117,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var parts = ["v1", kind, values.net, values.count, values.side, values.depth, values.height, values.lateral,
                     values.radius, values.slant, dashedFolds ? "1" : "0", offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
@@ -5041,6 +5236,8 @@ var SCRIPT_KEY = "MiddleMath";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var initial = {a: opt.a, b: opt.b, p: opt.p, t: opt.t, q: opt.q, c: opt.c, d: opt.d, qDistance: opt.qDistance, markMm: opt.markMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {graph: MAIN_PT, guide: GUIDE_PT};
+            loadLineWidths();
 
             var previewGroup = null;
             var originalStroked = target ? target.stroked : true;
@@ -5080,6 +5277,12 @@ var SCRIPT_KEY = "MiddleMath";
             var sizePanel = addPanel(win, "크기");
             var markControls = addValueRow(sizePanel, "각 표시 반지름", "mm", opt.markMm, 1, 10, 0.1, 1);
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
+            bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
@@ -5515,6 +5718,36 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "graph") { MAIN_PT = value; }
+                if (group === "guide") { GUIDE_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "graph") return MAIN_PT;
+                if (group === "guide") return GUIDE_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -5609,6 +5842,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
                 var angles = [];
@@ -5709,6 +5943,8 @@ var SCRIPT_KEY = "MiddleMath";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var initial = {lengthValue: lengthValue, ratioPercent: ratioPercent, angleDeg: angleDeg, sizeMm: sizeMm, shadeK: shadeK, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {graph: MAIN_PT, guide: GUIDE_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -5743,6 +5979,12 @@ var SCRIPT_KEY = "MiddleMath";
 
             var messageText = win.add("statictext", undefined, " ", {multiline: true});
             messageText.preferredSize = [380, 32];
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
+            bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -6241,6 +6483,36 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "graph") { MAIN_PT = value; }
+                if (group === "guide") { GUIDE_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "graph") return MAIN_PT;
+                if (group === "guide") return GUIDE_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -6336,6 +6608,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
                 var parts = ["v1", shape, lengthValue, ratioPercent, angleDeg, sizeMm, shadeK, fontPt, flags, encodeURIComponent(unitText),
@@ -6450,6 +6723,8 @@ var SCRIPT_KEY = "MiddleMath";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var initial = {unitMm: unitMm, shadeK: shadeK, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {graph: MAIN_PT, guide: GUIDE_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -6485,6 +6760,12 @@ var SCRIPT_KEY = "MiddleMath";
 
             var messageText = win.add("statictext", undefined, " ", {multiline: true});
             messageText.preferredSize = [380, 32];
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
+            bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -7299,6 +7580,36 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "graph") { MAIN_PT = value; }
+                if (group === "guide") { GUIDE_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "graph") return MAIN_PT;
+                if (group === "guide") return GUIDE_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -7394,6 +7705,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var flags = "", values = [];
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
                 for (var k = 0; k < KINDS.length; k++) values.push(params[k].join(","));
@@ -7499,6 +7811,8 @@ var SCRIPT_KEY = "MiddleMath";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var initial = {xMax: xMax, xStep: xStep, yMax: yMax, yStep: yStep, widthMm: widthMm, heightMm: heightMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {axis: AXIS_PT, graph: GRAPH_PT, guide: GUIDE_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -7540,6 +7854,14 @@ var SCRIPT_KEY = "MiddleMath";
 
             var messageText = win.add("statictext", undefined, " ");
             messageText.preferredSize.width = 360;
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
+            bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -7887,6 +8209,38 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "axis") { AXIS_PT = value; }
+                if (group === "graph") { GRAPH_PT = value; }
+                if (group === "guide") { GUIDE_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "axis") return AXIS_PT;
+                if (group === "graph") return GRAPH_PT;
+                if (group === "guide") return GUIDE_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -7982,6 +8336,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
                 var parts = ["v1", encodeURIComponent(pointsText), encodeURIComponent(xName), encodeURIComponent(yName), xMax, xStep, yMax, yStep,
@@ -8074,6 +8429,8 @@ var SCRIPT_KEY = "MiddleMath";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var initial = {stageGapMm: stageGapMm, rowGapMm: rowGapMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
+            var LINE_DEFAULTS = {graph: LINE_PT};
+            loadLineWidths();
 
             var previewGroup = null;
 
@@ -8099,6 +8456,10 @@ var SCRIPT_KEY = "MiddleMath";
             var stageControls = addValueRow(sizePanel, "단계 간격", "mm", stageGapMm, 6, 40, 0.5, 1);
             var rowControls = addValueRow(sizePanel, "줄 간격", "mm", rowGapMm, 2, 15, 0.5, 1);
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
+            bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -8331,6 +8692,34 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
+            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "graph") { LINE_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "graph") return LINE_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -8425,6 +8814,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 설정 저장 · 복원
             // -------------------------------------------------------
             function saveSettings() {
+                saveLineWidths();
                 var parts = ["v1", encodeURIComponent(stagesText), noRepeat ? "1" : "0", resultStyle, stageGapMm, rowGapMm, fontPt,
                     offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
