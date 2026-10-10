@@ -28,6 +28,8 @@ try {
     var FORM_MATH_FONT = formFindFont(["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular", "GSMediumB1"]);
     var TAB_PREF_KEY = "MechanicsDevice/tab";
     var NAME_GAP_MM = 1;   // 물체·추 이름과 도형 사이 간격(글자 윤곽 기준)
+    var ARROW_GAP_MM = 1;  // 속도 화살표와 물체 사이, 화살표와 속도 글자 사이 간격(화살촉 가장자리 기준)
+    var ARROW_HEAD_MM = 1.4, ARROW_HALF_MM = 1.4 * 0.35;   // 속도 화살촉 길이와 반폭
     var GHOST_DASH = [2, 1];   // 파선 2-1 (선 2pt, 간격 1pt)
     // 화살촉 모양: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽. 끝이 원점, 뒤쪽이 +y. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리
     var HEAD_CATALOG = [
@@ -98,10 +100,10 @@ try {
         // 이전 위치의 물체: 파선 상자와 속도 화살표
         if (o.ghostBlock) {
             t.dashRect(ghostLeft, bh, ghostRight, 0, wGuide);
-            // 속도 화살표와 글자는 이전 위치 물체의 가운데 위에 맞춘다
-            var ay = bh + 3 * m, gcx = (ghostLeft + ghostRight) / 2, halfArrow = Math.min(3.5 * m, bw * 0.45);
-            t.arrow([gcx - halfArrow, ay], [gcx + halfArrow, ay], wRope, 100, 1.4 * m);
-            if (o.ghostSpeed !== "") t.text(o.ghostSpeed, gcx, ay + 2.6 * m, size, "center");
+            // 속도 화살표는 이전 위치 물체의 가운데 위에, 물체에서 1mm(화살촉 가장자리 기준) 띄우고 글자는 화살표에서 1mm 위에 둔다
+            var ay = bh + (ARROW_GAP_MM + ARROW_HALF_MM) * m, gcx = (ghostLeft + ghostRight) / 2, halfArrow = Math.min(3.5 * m, bw * 0.45);
+            t.arrow([gcx - halfArrow, ay], [gcx + halfArrow, ay], wRope, 100, ARROW_HEAD_MM * m);
+            if (o.ghostSpeed !== "") t.textAt(o.ghostSpeed, gcx, ay + (ARROW_HALF_MM + ARROW_GAP_MM) * m, size, "above");
         }
         // 물체
         t.rect(0, bh, bw, 0, 0, 100, wObj);
@@ -117,9 +119,10 @@ try {
         if (o.ghostWeight) {
             var gTop = wTop + shift;
             t.dashRect(wx - ww / 2, gTop, wx + ww / 2, gTop - wh, wGuide);
-            var gmid = gTop - wh / 2, arrowX = wx + ww / 2 + 2.5 * m;
-            t.arrow([arrowX, gmid + 3.5 * m], [arrowX, gmid - 3.5 * m], wRope, 100, 1.4 * m);
-            if (o.weightSpeed !== "") t.text(o.weightSpeed, arrowX + 1.8 * m, gmid, size, "left");
+            // 속도 화살표는 점선 추의 오른쪽, 추에서 1mm(화살촉 가장자리 기준) 띄우고 글자는 화살표에서 1mm 오른쪽에 둔다
+            var gmid = gTop - wh / 2, arrowX = wx + ww / 2 + (ARROW_GAP_MM + ARROW_HALF_MM) * m;
+            t.arrow([arrowX, gmid + 3.5 * m], [arrowX, gmid - 3.5 * m], wRope, 100, ARROW_HEAD_MM * m);
+            if (o.weightSpeed !== "") t.textAt(o.weightSpeed, arrowX + (ARROW_HALF_MM + ARROW_GAP_MM) * m, gmid, size, "right");
         }
         t.rect(wx - ww / 2, wTop, wx + ww / 2, wTop - wh, 0, 100, wObj);
         if (o.weightText !== "") t.text(o.weightText, wx, wTop - wh / 2, size, "center");

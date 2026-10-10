@@ -16,7 +16,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced: ${name}`);
 }
 const names = ["drawHorizontalPulley"];
-const scenes = new Function(`var GHOST_DASH = [2, 1], HEAD_HARPOON = 1, NAME_GAP_MM = 1;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+const scenes = new Function(`var GHOST_DASH = [2, 1], HEAD_HARPOON = 1, NAME_GAP_MM = 1, ARROW_GAP_MM = 1, ARROW_HEAD_MM = 1.4, ARROW_HALF_MM = 1.4 * 0.35;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 컨트롤 기본값을 소스의 controls 배열에서 읽는다 (+ 엔진이 붙이는 선 두께 기본값)
 function defaultsOf(engineName) {
@@ -75,9 +75,16 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   near(ghostBlock[4], 0.3, "파선 상자 두께");
   // 속도 화살표·글자는 이전 위치 물체의 가운데 위에 있다
   const gcx = (ghostBlock[0] + ghostBlock[2]) / 2;
-  const speedArrow = calls.find((c) => c.k === "arrow" && c.a[0][1] === bh + 3 && c.a[0][0] < c.a[1][0]);
+  const half = 1.4 * 0.35;
+  const speedArrow = calls.find((c) => c.k === "arrow" && c.a[0][0] < c.a[1][0] && c.a[0][1] === c.a[1][1]);
   near((speedArrow.a[0][0] + speedArrow.a[1][0]) / 2, gcx, "속도 화살표 가운데");
-  near(calls.find((c) => c.k === "text" && c.a[0] === "2 m/s").a[1], gcx, "속도 글자 가운데");
+  near(speedArrow.a[0][1], bh + 1 + half, "물체 속도 화살표는 물체 위 1mm (화살촉 가장자리 기준)");
+  const speedText = calls.filter((c) => c.k === "textAt" && c.a[0] === "2 m/s");
+  near(speedText[0].a[1], gcx, "속도 글자 가운데"); near(speedText[0].a[2], speedArrow.a[0][1] + half + 1, "속도 글자는 화살표 위 1mm");
+  // 추 속도 화살표: 점선 추 오른쪽 1mm, 글자는 화살표 오른쪽 1mm
+  const downArrow = calls.find((c) => c.k === "arrow" && c.a[0][0] === c.a[1][0]);
+  near(downArrow.a[0][0], wx + 9 / 2 + 1 + half, "추 속도 화살표는 추 오른쪽 1mm");
+  near(speedText[1].a[1], downArrow.a[0][0] + half + 1, "추 속도 글자는 화살표 오른쪽 1mm");
   // 거리 표시: P(파선 물체 오른쪽 끝)~Q(물체 오른쪽 끝) = 이동 거리, 보조선 파선, 화살촉 평가원 작살형
   const ticks = calls.filter((c) => c.k === "dashLine");
   assert.deepStrictEqual(ticks.map((c) => c.a[0][0]).sort((a, b) => a - b), [bw - shift, bw]);
