@@ -40,16 +40,16 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   const o = defaultsOf("makeHorizontalPulleyEngine");
   assert.strictEqual(o.blockText, "4 kg"); assert.strictEqual(o.ropeLen, 28); assert.strictEqual(o.dim, true); assert.strictEqual(o.shift, 24);
   const calls = record(o, scenes.drawHorizontalPulley);
-  const bw = 13, bh = 11, R = 3.6, attachY = bh / 2, cx = bw + 28, cy = attachY - R, shift = 24, drop = 42, wh = 8;
+  const bw = 13, bh = 15, R = 3.6, attachY = bh / 2, cx = bw + 28, cy = attachY - R, shift = 24, drop = 42, wh = 8;
   const wx = cx + R, wTop = cy - drop;
   // 도르래: 가운데·반지름, 받침대 끝은 바닥(y=0) 위 도르래 왼쪽(볼트는 모서리보다 안쪽)
   const pulley = calls.find((c) => c.k === "pulley");
   near(pulley.a[0], cx, "도르래 x"); near(pulley.a[1], cy, "도르래 y"); near(pulley.a[2], R, "도르래 반지름");
   const mount = pulley.a[3];
-  near(mount[1], 0, "받침대 끝 높이"); assert.ok(mount[0] < cx, "받침대는 왼쪽으로");
+  near(mount[1], -2.2, "볼트는 윗면 아래 볼트 깊이"); assert.ok(mount[0] < cx, "받침대는 왼쪽으로");
   near(Math.hypot(mount[0] - cx, mount[1] - cy), 9, "받침대 길이");
-  const edgeX = cx - 2;
-  assert.ok(mount[0] < edgeX - 3, "볼트는 테이블 모서리보다 안쪽(왼쪽)");
+  const edgeX = cx - 3.8;
+  assert.ok(mount[0] < edgeX - 2, "볼트는 테이블 모서리보다 안쪽(왼쪽)");
   near(pulley.a[4], 0.4, "도르래 겉 두께"); near(pulley.a[5], 0.3, "도르래 안쪽 두께");
   // 실은 물체 옆면 가운데(높이 절반)에서 수평으로 도르래 꼭대기까지
   const rope = calls.find((c) => c.k === "line" && c.a[0][0] === bw && c.a[0][1] === attachY);
@@ -115,6 +115,6 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   assert.ok(!calls.some((c) => c.k === "text" && (c.a[0] === "P" || c.a[0] === "1 m" || c.a[0] === "2 m/s")));
   const on = Object.assign(defaultsOf("makeHorizontalPulleyEngine"), { shift: 31 });
   const c2 = record(on, scenes.drawHorizontalPulley).filter((c) => c.k === "dashRect");
-  near(0 - c2[0].a[0], 31, "이동 거리 31 (물체)"); near(c2[1].a[1] - (1.9 - 42), 31, "이동 거리 31 (추)");
+  near(0 - c2[0].a[0], 31, "이동 거리 31 (물체)"); near(c2[1].a[1] - (3.9 - 42), 31, "이동 거리 31 (추)");
 }
 console.log("mechanics device checks passed");

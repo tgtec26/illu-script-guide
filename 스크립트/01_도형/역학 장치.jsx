@@ -49,7 +49,7 @@ try {
                 {key: "blockText", label: "물체 글자", text: true, value: "4 kg"},
                 {key: "blockName", label: "물체 이름", text: true, value: "나무도막"},
                 {key: "blockW", label: "물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 13},
-                {key: "blockH", label: "물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 11},
+                {key: "blockH", label: "물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 15},
                 {key: "weightText", label: "추 글자", text: true, value: "1 kg"},
                 {key: "weightName", label: "추 이름", text: true, value: "추"},
                 {key: "weightW", label: "추 너비", unit: "mm", min: 4, max: 20, step: 0.5, value: 9},
@@ -58,8 +58,9 @@ try {
                 {key: "tableEdge", check: "테이블 세로선", value: true},
                 {key: "pulleyArm", check: "도르래 받침대", value: true},
                 {key: "ropeLen", label: "물체~도르래", unit: "mm", min: 8, max: 80, step: 0.5, value: 28},
-                {key: "cornerDist", label: "모서리~도르래 가운데", unit: "mm", min: -5, max: 15, step: 0.1, value: 2},
+                {key: "cornerDist", label: "모서리~도르래 가운데", unit: "mm", min: -5, max: 15, step: 0.1, value: 3.8},
                 {key: "armLen", label: "받침대 길이", unit: "mm", min: 3, max: 25, step: 0.5, value: 9},
+                {key: "boltDepth", label: "볼트 깊이", unit: "mm", min: 0, max: 8, step: 0.1, value: 2.2},
                 {key: "tableLeft", label: "바닥 왼쪽 여유", unit: "mm", min: 0, max: 40, step: 0.5, value: 8},
                 {key: "pulleyR", label: "도르래 반지름", unit: "mm", min: 1.5, max: 6, step: 0.1, value: 3.6},
                 {key: "drop", label: "추까지 길이", unit: "mm", min: 8, max: 90, step: 0.5, value: 42},
@@ -89,9 +90,10 @@ try {
         var bw = o.blockW * m, bh = o.blockH * m, R = o.pulleyR * m, shift = o.shift * m;
         var attachY = bh / 2;
         var cx = bw + o.ropeLen * m, cy = attachY - R;
-        // 도르래는 받침대(길쭉한 둥근 막대)로 테이블 윗면(y=0)에 볼트로 고정한다. 받침대 끝의 볼트는 모서리보다 안쪽(왼쪽)에 있고,
-        // 모서리는 도르래 가운데에서 cornerDist만큼 왼쪽이다. armLen은 볼트에서 도르래 가운데까지의 길이
-        var armLen = Math.max(o.armLen * m, Math.abs(cy) + 0.01), armDx = Math.sqrt(armLen * armLen - cy * cy);
+        // 도르래는 받침대(길쭉한 둥근 막대)로 테이블 안쪽에 볼트로 고정한다. 받침대 양 끝은 같은 볼트(도르래 가운데, 테이블 안)이고,
+        // 테이블 쪽 볼트는 윗면 아래 boltDepth, 모서리보다 안쪽(왼쪽)에 있다. 모서리는 도르래 가운데에서 cornerDist만큼 왼쪽, armLen은 볼트~도르래 가운데 길이
+        var boltY = -o.boltDepth * m, dyBolt = cy - boltY;
+        var armLen = Math.max(o.armLen * m, dyBolt + 0.01), armDx = Math.sqrt(armLen * armLen - dyBolt * dyBolt);
         var mountX = cx - armDx;                                     // 볼트 x
         var edgeX = cx - o.cornerDist * m;                           // 테이블 모서리 x
         var wx = cx + R, wTop = cy - o.drop * m, ww = o.weightW * m, wh = o.weightH * m;
@@ -113,7 +115,7 @@ try {
         if (o.blockText !== "") t.text(o.blockText, bw / 2, bh / 2, size, "center");
         if (o.blockName !== "") t.textAt(o.blockName, bw / 2, bh + NAME_GAP_MM * m, size, "above");
         // 도르래: 겉 테두리 wObj, 안쪽 원판·받침대·축 점 wGuide
-        t.pulley(cx, cy, R, o.pulleyArm ? [mountX, 0] : null, wObj, wGuide);
+        t.pulley(cx, cy, R, o.pulleyArm ? [mountX, boltY] : null, wObj, wGuide);
         // 실: 물체 가운데 → 도르래 위 → 오른쪽 수직
         t.line([bw, attachY], [cx, cy + R], wRope);
         t.arc(cx, cy, R, 0, Math.PI / 2, wRope);
@@ -535,17 +537,13 @@ try {
             var k = len / (n * d + (n - 1) * gap);
             return t.line(a, b, width, 100, n === 1 ? null : [d * k, gap * k]);
         };
-        // 파선 상자: 네 변을 모퉁이에서 모퉁이까지 따로 맞춘 파선으로 그려 한 그룹으로 묶는다 (모퉁이마다 대시가 L자로 만난다)
+        // 파선 상자: 하나의 닫힌 사각형 패스. 둘레를 파선 한 바퀴에 맞춰 시작 모퉁이가 대시로 이어지게 길이를 조정하고,
+        // 창이 닫힌 뒤 일러스트레이터의 '모퉁이·끝에 정렬' 옵션을 건다
         t.dashRect = function(left, top, right, bottom, width) {
-            var sub = g.groupItems.add();
-            sub.name = "파선 상자";
-            parent = sub;
-            t.dashLine([left, top], [right, top], width);
-            t.dashLine([right, top], [right, bottom], width);
-            t.dashLine([right, bottom], [left, bottom], width);
-            t.dashLine([left, bottom], [left, top], width);
-            parent = g;
-            return sub;
+            var perimeter = 2 * ((right - left) + (top - bottom));
+            var d = GHOST_DASH[0], gap = GHOST_DASH[1];
+            var n = Math.max(1, Math.round(perimeter / (d + gap))), k = perimeter / (n * (d + gap));
+            return t.rect(left, top, right, bottom, null, 100, width, [d * k, gap * k]);
         };
         t.line = function(a, b, width, k, dashes) {
             return t.path([a, b], false, null, k === undefined ? 100 : k, width, dashes);
