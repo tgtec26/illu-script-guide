@@ -10,9 +10,10 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 피스톤 실린더: 기출에 가장 흔한 '피스톤으로 나뉜 가로 실린더'(칸 A·B(·C)에 기체, 피스톤이 움직인 장면 (가)(나)(다))를 그린다. 선택 없이 화면 가운데에 만든다.
-//   장면마다 피스톤 위치(%)를 따로 적고(칸 수 − 1개, 왼쪽부터), 칸마다 기체 입자 점과 칸 이름(A, B, C)을 넣는다.
-//   첫 장면에 '단열된 실린더'·'단열된 피스톤' 지시선 글자를, 장면마다 열 Q 화살표(칸 A로 들어옴)를 넣을 수 있다.
+// 피스톤 실린더: 기출에 가장 흔한 '피스톤으로 나뉜 가로 실린더'(칸 A·B(·C)에 기체)를 그린다. 선택 없이 화면 가운데에 만든다.
+//   피스톤 위치(%)는 슬라이더로 정하고(칸이 셋이면 피스톤 둘), 칸마다 기체 분자 점과 칸 이름(A, B, C)을 넣는다.
+//   분자 점은 칸 안에 고르게 퍼지게 놓는다(촘촘한 후보 격자에서 이미 놓은 점과 가장 먼 자리를 차례로 고른다).
+//   '단열된 실린더'·'단열된 피스톤' 지시선 글자와 열 Q 화살표(칸 A로 들어옴)를 넣을 수 있다.
 //   화살촉은 측정한 일러스트레이터 화살촉 4종 중에서 고르고(기본 작살형) 크기를 %로 정한다.
 // 선 두께는 실린더 벽 1pt, 칸막이 테두리 0, 화살표·지시선 0.4pt이고 '선 두께' 패널에서 고친다.
 // 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, 변수(Q)는 GSMediItaC1, GSMediumB1에 없는 기호는 HancomEQN이다.
@@ -46,16 +47,13 @@ try {
             label: "피스톤 실린더", name: "PistonCylinder", prefKey: "PistonCylinder/settings",
             controls: [
                 {panel: "실린더"},
-                {key: "scenes", label: "장면 수", unit: "개", min: 1, max: 3, step: 1, value: 2},
                 {key: "chambers", label: "칸 수", unit: "개", min: 2, max: 3, step: 1, value: 2},
                 {key: "length", label: "실린더 길이", unit: "mm", min: 20, max: 120, step: 1, value: 45},
                 {key: "height", label: "실린더 높이", unit: "mm", min: 6, max: 50, step: 1, value: 14},
-                {key: "sceneGap", label: "장면 간격", unit: "mm", min: 6, max: 40, step: 1, value: 12},
                 {key: "pistonMm", label: "피스톤 두께", unit: "mm", min: 0.5, max: 4, step: 0.1, value: 1.2},
-                {panel: "피스톤 위치 (% · 왼쪽부터 칸 수 − 1개)"},
-                {key: "pos1", label: "(가)", text: true, value: "50"},
-                {key: "pos2", label: "(나)", text: true, value: "62"},
-                {key: "pos3", label: "(다)", text: true, value: "38"},
+                {panel: "피스톤 위치"},
+                {key: "pos1", label: "피스톤 1", unit: "%", min: 5, max: 95, step: 1, value: 50},
+                {key: "pos2", label: "피스톤 2 (칸 3개)", unit: "%", min: 5, max: 95, step: 1, value: 75},
                 {panel: "기체"},
                 {key: "showDots", check: "분자 점", value: true},
                 {key: "dots", label: "칸당 점 수", unit: "개", min: 1, max: 30, step: 1, value: 6},
@@ -64,14 +62,11 @@ try {
                 {panel: "글자"},
                 {key: "showNames", check: "칸 이름", value: true},
                 {key: "chamberNames", label: "칸 이름", text: true, value: "A, B, C"},
-                {key: "sceneNames", label: "장면 이름", text: true, value: "(가), (나), (다)"},
                 {key: "cylLabel", label: "실린더 지시선", text: true, value: "단열된 실린더"},
                 {key: "pistLabel", label: "피스톤 지시선", text: true, value: "단열된 피스톤"},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 14, step: 0.5, value: 8},
                 {panel: "열 Q 화살표 (칸 A로 들어옴)"},
-                {key: "heat1", check: "(가)", value: false},
-                {key: "heat2", check: "(나)", value: true},
-                {key: "heat3", check: "(다)", value: false},
+                {key: "heat", check: "열 Q 화살표", value: false},
                 {key: "arrowMm", label: "화살표 길이", unit: "mm", min: 3, max: 20, step: 0.5, value: 8},
                 {key: "headShape", label: "화살촉 모양", items: HEAD_SHAPES, order: [3, 2, 0, 1], value: 3},
                 {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100}
@@ -89,13 +84,11 @@ try {
         return out;
     }
 
-    // 피스톤 위치 글("50" 또는 "30, 70")을 칸 수 − 1개의 퍼센트로: 읽지 못한 칸은 같은 간격 자리, 5~95로 막고 앞 피스톤보다 오른쪽에 둔다
-    function parsePositions(text, chambers) {
-        var parts = splitNames(String(text)), out = [], i;
-        for (i = 0; i < chambers - 1; i++) {
-            var v = i < parts.length ? parseFloat(parts[i]) : NaN;
-            if (!isFinite(v)) v = (i + 1) * 100 / chambers;
-            v = Math.max(5, Math.min(95, v));
+    // 피스톤 위치(%)를 칸 수 − 1개로: 5~95로 막고 앞 피스톤보다 8% 이상 오른쪽에 둔다
+    function clampPositions(values, chambers) {
+        var out = [];
+        for (var i = 0; i < chambers - 1; i++) {
+            var v = Math.max(5, Math.min(95, values[i]));
             if (i > 0 && v < out[i - 1] + 8) v = Math.min(95, out[i - 1] + 8);
             out.push(v);
         }
@@ -127,64 +120,77 @@ try {
         return HEAD_EXAM_LENGTH_PT * o.headSize / 100 / HEAD_CATALOG[HEAD_EXAM].length;
     }
 
-    // 좌표는 pt(y 위쪽 +). 첫 장면 실린더의 왼쪽 위가 (0, 0)이고 장면은 아래로 쌓는다.
-    function drawPiston(t, o) {
-        var m = t.mm, size = o.font, L = o.length * m, H = o.height * m, pw = o.pistonMm * m;
-        var names = splitNames(o.chamberNames), sceneNames = splitNames(o.sceneNames);
-        var posTexts = [o.pos1, o.pos2, o.pos3], heat = [o.heat1, o.heat2, o.heat3];
-        var s, i, k, firstPistonX = null;
-        for (s = 0; s < o.scenes; s++) {
-            var top = -s * (H + o.sceneGap * m), bottom = top - H, mid = top - H / 2;
-            // 칸막이(피스톤): 위치(%)는 실린더 길이에 대한 비율
-            var pcts = parsePositions(posTexts[s], o.chambers), xs = [];
-            for (i = 0; i < pcts.length; i++) xs.push(L * pcts[i] / 100);
-            if (s === 0) firstPistonX = xs[0];
-            t.rect(0, top, L, bottom, null, 100, o.wBody);
-            for (i = 0; i < xs.length; i++) t.rect(xs[i] - pw / 2, top, xs[i] + pw / 2, bottom, 100, o.wObj > 0 ? 100 : null, o.wObj);
-            // 칸: 왼쪽 벽·피스톤·오른쪽 벽 사이
-            for (i = 0; i < o.chambers; i++) {
-                var left = i === 0 ? 0 : xs[i - 1] + pw / 2, right = i === o.chambers - 1 ? L : xs[i] - pw / 2;
-                var cx = (left + right) / 2;
-                if (o.showNames && i < names.length && names[i] !== "") t.text(names[i], cx, mid, size, "center");
-                if (o.showDots) {
-                    var random = seededRandom(o.seed + s * 7 + i * 13), r = o.dotMm * m / 2, placed = [], tries = 0;
-                    var pad = r * 1.6 + o.wBody * 0.5, labelRoom = size * 0.9;
-                    while (placed.length < o.dots && tries < o.dots * 40) {
-                        tries++;
-                        var px = left + pad + random() * Math.max(0, right - left - 2 * pad);
-                        var py = bottom + pad + random() * Math.max(0, H - 2 * pad), ok = true;
-                        if (o.showNames && Math.abs(px - cx) < labelRoom && Math.abs(py - mid) < labelRoom * 0.8) ok = false;
-                        for (k = 0; ok && k < placed.length; k++) {
-                            if (Math.sqrt(Math.pow(px - placed[k][0], 2) + Math.pow(py - placed[k][1], 2)) < r * 3) ok = false;
-                        }
-                        if (ok) placed.push([px, py]);
-                    }
-                    for (k = 0; k < placed.length; k++) t.dot(placed[k][0], placed[k][1], r, 100);
-                }
-            }
-            // 장면 이름은 실린더 아래 가운데
-            if (s < sceneNames.length && sceneNames[s] !== "") t.text(sceneNames[s], L / 2, bottom - 3 * m - size * 0.5, size, "center");
-            // 열 Q: 왼쪽 벽 바깥에서 칸 A로 들어오는 화살표와 글자
-            if (heat[s]) {
-                var armLen = o.arrowMm * m;
-                t.arrow([-armLen, mid], [0, mid], o.wRope);
-                t.textAt("Q", -armLen - 1 * m, mid, size, "left", {italic: true});
+    // 직사각형 [left, right] × [bottom, top] 안에 점 count개를 고르게 놓는다: 촘촘한 후보 격자(조금씩 흔든다)에서 이미 놓은 점과 가장 먼 후보를 차례로 고른다.
+    // avoid는 비워 둘 가운데 영역 {x, y, rx, ry}(없으면 null). 첫 점과 흔들림이 난수로 정해져 번호마다 모양이 달라진다
+    function spreadDots(random, left, right, bottom, top, count, avoid) {
+        var area = (right - left) * (top - bottom), step = Math.sqrt(area / (count * 8)), candidates = [], x, y, i, j;
+        if (!(step > 0)) return [];
+        for (x = left + step / 2; x < right; x += step) {
+            for (y = bottom + step / 2; y < top; y += step) {
+                var px = x + (random() - 0.5) * step * 0.7, py = y + (random() - 0.5) * step * 0.7;
+                px = Math.max(left, Math.min(right, px));
+                py = Math.max(bottom, Math.min(top, py));
+                if (avoid !== null && Math.abs(px - avoid.x) < avoid.rx && Math.abs(py - avoid.y) < avoid.ry) continue;
+                candidates.push([px, py]);
             }
         }
-        // 첫 장면의 지시선 글자: 실린더 위로 띄우고 지시선을 벽·피스톤 윗변까지 긋는다
-        var rise = 7 * m, labelY = rise;
+        if (candidates.length === 0) return [];
+        var chosen = [candidates.splice(Math.floor(random() * candidates.length), 1)[0]];
+        while (chosen.length < count && candidates.length > 0) {
+            var best = 0, bestDist = -1;
+            for (i = 0; i < candidates.length; i++) {
+                var near = 1e18;
+                for (j = 0; j < chosen.length; j++) {
+                    var d = Math.pow(candidates[i][0] - chosen[j][0], 2) + Math.pow(candidates[i][1] - chosen[j][1], 2);
+                    if (d < near) near = d;
+                }
+                if (near > bestDist) { bestDist = near; best = i; }
+            }
+            chosen.push(candidates.splice(best, 1)[0]);
+        }
+        return chosen;
+    }
+
+    // 좌표는 pt(y 위쪽 +). 실린더의 왼쪽 위가 (0, 0).
+    function drawPiston(t, o) {
+        var m = t.mm, size = o.font, L = o.length * m, H = o.height * m, pw = o.pistonMm * m;
+        var names = splitNames(o.chamberNames);
+        var top = 0, bottom = -H, mid = -H / 2, i, k;
+        var pcts = clampPositions([o.pos1, o.pos2], o.chambers), xs = [];
+        for (i = 0; i < pcts.length; i++) xs.push(L * pcts[i] / 100);
+        t.rect(0, top, L, bottom, null, 100, o.wBody);
+        for (i = 0; i < xs.length; i++) t.rect(xs[i] - pw / 2, top, xs[i] + pw / 2, bottom, 100, o.wObj > 0 ? 100 : null, o.wObj);
+        // 칸: 왼쪽 벽·피스톤·오른쪽 벽 사이
+        for (i = 0; i < o.chambers; i++) {
+            var left = i === 0 ? 0 : xs[i - 1] + pw / 2, right = i === o.chambers - 1 ? L : xs[i] - pw / 2;
+            var cx = (left + right) / 2;
+            if (o.showNames && i < names.length && names[i] !== "") t.text(names[i], cx, mid, size, "center");
+            if (o.showDots) {
+                var r = o.dotMm * m / 2, pad = r * 1.6 + o.wBody * 0.5, labelRoom = size * 0.9;
+                var avoid = o.showNames ? {x: cx, y: mid, rx: labelRoom, ry: labelRoom * 0.8} : null;
+                var dots = spreadDots(seededRandom(o.seed + i * 13), left + pad, right - pad, bottom + pad, top - pad, o.dots, avoid);
+                for (k = 0; k < dots.length; k++) t.dot(dots[k][0], dots[k][1], r, 100);
+            }
+        }
+        // 열 Q: 왼쪽 벽 바깥에서 칸 A로 들어오는 화살표와 글자
+        if (o.heat) {
+            var armLen = o.arrowMm * m;
+            t.arrow([-armLen, mid], [0, mid], o.wRope);
+            t.textAt("Q", -armLen - 1 * m, mid, size, "left", {italic: true});
+        }
+        // 지시선 글자: 실린더 위로 띄우고 지시선을 벽·피스톤 윗변까지 긋는다. 실린더 글자는 피스톤 지시선과 겹치지 않게 왼쪽으로 비킨다
+        var labelY = 7 * m;
         function callout(text, x, raise) {
             if (text === "") return;
             var y = labelY + raise;
             t.text(text, x, y, size, "center");
             t.line([x, y - size * 0.5 - 0.8 * m], [x, 0], o.wRope);
         }
-        // 실린더 지시선 글자는 왼쪽 앞쪽에 두되 피스톤 지시선과 겹치지 않게 왼쪽으로 비키고, 그래도 겹치면 피스톤 글자를 위로 올린다
         var cylHalf = o.cylLabel.length * size * 0.45, pistHalf = o.pistLabel.length * size * 0.45, cylX = L * 0.2;
-        if (firstPistonX !== null) cylX = Math.max(3 * m, Math.min(cylX, firstPistonX - cylHalf - 1 * m));
-        var overlap = firstPistonX !== null && Math.abs(firstPistonX - cylX) < cylHalf + pistHalf;
+        cylX = Math.max(3 * m, Math.min(cylX, xs[0] - cylHalf - 1 * m));
+        var overlap = Math.abs(xs[0] - cylX) < cylHalf + pistHalf;
         callout(o.cylLabel, cylX, 0);
-        if (firstPistonX !== null) callout(o.pistLabel, firstPistonX, overlap ? size * 1.8 : 0);
+        callout(o.pistLabel, xs[0], overlap ? size * 1.8 : 0);
     }
 
     // ==== 창 ====
