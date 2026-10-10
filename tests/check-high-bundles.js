@@ -7,7 +7,7 @@ const dir = path.resolve(__dirname, "..", "스크립트", "07_수학");
 const bundles = {
   "공통수학.jsx": ["공통수학", ["Quadratic", "Move", "CircleLine", "Inequality", "Venn", "Rational"]],
   "수학1.jsx": ["수학Ⅰ", ["ExpLog", "Trig", "UnitCircle", "CircleGraph", "Triangle", "Sequence"]],
-  "수학2.jsx": ["수학Ⅱ", ["Piecewise", "Extrema", "Calculus", "Motion"]],
+  "수학2.jsx": ["수학Ⅱ", ["Piecewise", "Extrema", "Calculus", "SolidSection", "Motion"]],
   "확률과 통계.jsx": ["확률과 통계", ["Count", "ProbTree", "Distribution"]],
   "기하.jsx": ["기하", ["Geometry", "Conic", "ConicTangent", "Vector", "Space"]],
 };
@@ -34,5 +34,5 @@ for (const [file, [title, engines]] of Object.entries(bundles)) {
     assert.ok(engine.includes("            return null;") && !late, file + ": constant declared after return null: " + late);
   }
 }
-assert.strictEqual(seen.size, 24);
+assert.strictEqual(seen.size, 25);
 console.log("high-school bundle checks passed");
