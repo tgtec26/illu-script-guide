@@ -8,6 +8,9 @@
 2. 이 폴더를 확장 폴더에 연결한다: `ln -sfn "$PWD" ~/Library/Application\ Support/Adobe/CEP/extensions/com.snug.scriptpanel`
 3. 일러를 껐다 켜고 `창 > 확장 프로그램 > 스크립트 패널`을 연다.
 
+## 설치 (Windows)
+`setup-windows.cmd`를 실행하면 스크립트 등록과 함께 패널도 설치된다(개발자 모드 레지스트리 + `%APPDATA%\Adobe\CEP\extensions\com.snug.scriptpanel` 폴더 연결). 일러를 다시 켜고 `창 > 확장 프로그램 > 스크립트 패널`을 연다. 처음 경로는 setup이 내려받은 사본(`~/.illu-script-updater/illu-script-guide/스크립트`)을 먼저 찾고, 없으면 `폴더 지정`으로 고른다.
+
 처음에는 `~/agent/illu-script-guide/스크립트`가 있으면 그 폴더를 쓰고, 없으면 `폴더 지정`으로 고른다.
 
 ## 개발
