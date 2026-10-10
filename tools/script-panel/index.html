@@ -38,6 +38,11 @@ button { font: inherit; color: var(--fg); background: transparent; border: 0; pa
 .ico.file .g { fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .sect { display: flex; align-items: center; gap: 6px; padding: 4px 10px 2px; color: var(--dim); font-size: 11px; }
 .sect svg { width: 12px; height: 12px; fill: var(--star); stroke: var(--star); stroke-width: 2; stroke-linejoin: round; }
+.grip { width: 10px; height: 16px; flex: none; fill: var(--dim); opacity: .6; cursor: grab; }
+.grip:hover { opacity: 1; }
+.row.dragging { opacity: .5; }
+.row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
 .star { width: 24px; height: 24px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
 .star:hover { background: var(--line); }
 .star svg { width: 16px; height: 16px; fill: none; stroke: var(--star); stroke-width: 2; stroke-linejoin: round; }
