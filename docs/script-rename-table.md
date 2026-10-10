@@ -62,7 +62,7 @@
 | 01_도형 | Object_RoundSolids.jsx | 원 입체.jsx |
 | 01_도형 | Object_Semiconductor.jsx | 반도체 모형.jsx |
 | 01_도형 | Object_SeparationSetup.jsx | 혼합물 분리 장치.jsx |
-| 01_도형 | Object_SilicateStructure.jsx | 규산염 광물 결합 구조.jsx |
+| 01_도형 | Object_SilicateStructure.jsx | 규산염 광물.jsx |
 | 01_도형 | Object_SmoothPath_v2.jsx | 패스 정리.jsx |
 | 01_도형 | Object_SolarSystem.jsx | 태양계 행성.jsx |
 | 01_도형 | Object_Solubility.jsx | 용해도 곡선.jsx |
