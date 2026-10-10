@@ -275,6 +275,34 @@ if (Test-Path $WidthProfileSrc) {
     Write-Host "  폭 프로파일 파일 없음(건너뜀): $WidthProfileSrc"
 }
 
+# 스크립트 패널(CEP): 개발자 모드를 켜고 확장 폴더에 원본의 tools\script-panel을 연결한다. 원본이 갱신되면 패널도 같이 갱신된다
+$PanelSrc = Join-Path $RepoDir "tools\script-panel"
+if (Test-Path (Join-Path $PanelSrc "CSXS\manifest.xml")) {
+    try {
+        foreach ($CsxsVer in 9..12) {
+            $Key = "HKCU:\Software\Adobe\CSXS.$CsxsVer"
+            if (-not (Test-Path $Key)) { New-Item -Path $Key -Force | Out-Null }
+            Set-ItemProperty -Path $Key -Name PlayerDebugMode -Value "1" -Type String
+        }
+        $ExtRoot = Join-Path $env:APPDATA "Adobe\CEP\extensions"
+        $PanelDst = Join-Path $ExtRoot "com.snug.scriptpanel"
+        New-Item -ItemType Directory -Force -Path $ExtRoot | Out-Null
+        $Linked = $true
+        if (Test-Path $PanelDst) {
+            if ((Get-Item -LiteralPath $PanelDst).LinkType) { Remove-Item -LiteralPath $PanelDst -Force }
+            else { $Linked = $false; Write-Host "  스크립트 패널 건너뜀 (같은 이름의 일반 폴더가 이미 있음): $PanelDst" }
+        }
+        if ($Linked) {
+            New-Item -ItemType Junction -Path $PanelDst -Target $PanelSrc | Out-Null
+            Write-Host "  스크립트 패널 설치 완료 -> $PanelDst (일러 재시작 후 창 > 확장 프로그램 > 스크립트 패널)"
+        }
+    } catch {
+        Write-Host "  스크립트 패널 설치 실패(건너뜀): $($_.Exception.Message)"
+    }
+} else {
+    Write-Host "  스크립트 패널 폴더 없음(건너뜀): $PanelSrc"
+}
+
 Write-Host ""
 Write-Host "설치 끝. 남은 단계:"
 Write-Host "  1) 일러스트 실행"
@@ -282,6 +310,7 @@ Write-Host "  2) 파일 > 스크립트 > setup 실행 (환경설정 + 액션 적
 Write-Host "  3) 편집 > 키보드 단축키 에서 'cjh250907' 세트 1회 선택"
 Write-Host "  4) 일러스트 재시작"
 Write-Host "  5) 획 패널의 프로파일 목록에 '폭 속성1'이 보이는지 확인"
+Write-Host "  6) 창 > 확장 프로그램 > 스크립트 패널 (처음이면 폴더 지정으로 스크립트 폴더 선택)"
 Write-Host ""
 Write-Host "이후 스크립트 내용 수정은 원본만 고치면 바로 반영됩니다."
 Write-Host "스크립트 파일을 추가·삭제·이름변경했을 때만 이 명령을 다시 실행하세요."

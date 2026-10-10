@@ -57,12 +57,14 @@ function spPickFolder(startPath) {
     }
 }
 
-// 이 저장소의 스크립트 폴더가 있으면 처음 경로로 쓴다 (스크립트 = 스크립트)
+// 이 저장소의 스크립트 폴더가 있으면 처음 경로로 쓴다 (Mac 작업 폴더, Windows setup이 내려받은 사본 순서)
 function spDefaultRoot() {
-    try {
-        var f = new Folder("~/agent/illu-script-guide/스크립트");
-        return f.exists ? f.fsName : "";
-    } catch (e) {
-        return "";
+    var candidates = ["~/agent/illu-script-guide/스크립트", "~/.illu-script-updater/illu-script-guide/스크립트"];
+    for (var i = 0; i < candidates.length; i++) {
+        try {
+            var f = new Folder(candidates[i]);
+            if (f.exists) return f.fsName;
+        } catch (e) {}
     }
+    return "";
 }
