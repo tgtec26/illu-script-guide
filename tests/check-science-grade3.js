@@ -36,10 +36,8 @@ function load(file, names) {
 
 // 날씨
 {
-  const { source, h } = load("날씨.jsx", ["atmosphereProfile", "atmosphereSpans", "isobarRadius", "windDirection", "breezeArrows", "actionHex"]);
+  const { source, h } = load("날씨.jsx", ["atmosphereProfile", "atmosphereSpans", "isobarRadius", "windDirection", "breezeArrows"]);
   assert.deepStrictEqual(h.atmosphereSpans(120), [[0, 11], [11, 50], [50, 80], [80, 120]], "brace spans cover every layer");
-  assert.deepStrictEqual(h.actionHex("패스 끝의 팁"), { hex: "ED8CA8EC8AA420EB819DEC9D9820ED8C81", length: 17 }, "same bytes as GraphTools");
-  assert.deepStrictEqual(h.actionHex("화살표 1"), { hex: "ED9994EC82B4ED919C2031", length: 11 }, "AGENTS.md arrow name bytes");
   const full = h.atmosphereProfile(150);
   assert.deepStrictEqual(full[full.length - 1], [20, 120], "stops at the right edge of the temperature axis");
   const cut = h.atmosphereProfile(100);
@@ -61,32 +59,48 @@ function load(file, names) {
   const land = h.breezeArrows(100, 50, 9, false);
   assert.ok(land[0][1][0] > land[0][0][0], "land breeze blows toward sea");
   for (const key of ["ObjectAtmosphere", "ObjectPressureSystem", "ObjectSeaLandBreeze"]) assert.ok(source.includes(`"${key}/settings"`));
-  // 화살촉 액션 파일: 시작 화살촉이 없으면 끝 화살촉·끝 크기만 적고, 순서는 기록된 액션(두께→시작→끝→크기→정렬)과 같다
+  // 화살촉은 액션 없이 직접 그린다: 선 끝을 촉 뿌리까지 줄이고 같은 그룹에 촉 도형을 더한다
   {
-    const src = ["setStrokeArrowheads", "actionHex"].map((name) => {
+    const grab = (name) => {
       const i = source.indexOf(`function ${name}(`);
       let depth = 0;
       for (let k = source.indexOf("{", i); ; k++) {
         if (source[k] === "{") depth++;
         if (source[k] === "}" && --depth === 0) return source.slice(i, k + 1);
       }
-    }).join("\n");
-    const written = [], ran = [];
-    function File() { this.open = () => {}; this.close = () => {}; this.remove = () => {}; this.write = (t) => written.push(t); }
-    const app = { loadAction() {}, unloadAction() {}, doScript: (a, b) => ran.push([a, b]) };
-    const make = new Function("File", "Folder", "app", "doc", "ARROW_ALIGN_TIP", `${src}\nreturn setStrokeArrowheads;`);
-    const set = make(File, { temp: "/tmp" }, app, { selection: null }, "패스 끝의 팁");
-    set([{}], null, "화살표 1", 0.75, 80);
-    const one = written[0];
-    assert.ok(one.includes("/parameterCount 4"));
-    assert.ok(!one.includes("/key 1634231345") && !one.includes("/key 1634951985"), "no start arrowhead");
-    assert.ok(one.indexOf("/key 1634231346") < one.indexOf("/key 1634951986") && one.includes("/value 80.0"));
-    set([{}], "화살표 7", "화살표 6", 0.5, 100);
-    const two = written[1];
-    assert.ok(two.includes("/parameterCount 6"));
-    const order = ["2003072104", "1634231345", "1634231346", "1634951985", "1634951986", "1634230636"].map((k) => two.indexOf(`/key ${k}`));
-    assert.deepStrictEqual([...order].sort((x, y) => x - y), order, "recorded parameter order");
-    assert.strictEqual(ran.length, 2);
+    };
+    const catalog = source.slice(source.indexOf("var HEAD_CATALOG = ["), source.indexOf("];", source.indexOf("var HEAD_CATALOG = [")) + 2);
+    const brace = source.slice(source.indexOf("var BRACE_HEAD_BACK"), source.indexOf("    };", source.indexOf("var BRACE_HEADS")) + 7);
+    const make = new Function(`${catalog}\n${brace}\n${["catalogPoints", "braceHeadPoints", "setStrokeArrowheads"].map(grab).join("\n")}\nreturn setStrokeArrowheads;`);
+    const set = make();
+    const makePath = (points) => {
+      const heads = [];
+      const container = { pathItems: { add() { const head = { setEntirePath(p) { this.points = p; this.pathPoints = p.map(() => ({})); } }; heads.push(head); return head; } } };
+      return { path: { pathPoints: points.map((a) => ({ anchor: a, leftDirection: a, rightDirection: a })), strokeColor: "K", parent: container }, heads };
+    };
+    const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
+    // 끝에만 작살형(3), 선 두께 0.75pt·크기 80% → 배율 0.6, 선은 끝에서 lineEnd(9)×0.6 = 5.4pt 물러난다
+    const one = makePath([[0, 0], [100, 0]]);
+    set([one.path], null, 3, 0.75, 80);
+    assert.deepStrictEqual(one.path.pathPoints[0].anchor, [0, 0], "no start arrowhead");
+    near(one.path.pathPoints[1].anchor[0], 94.6, "shaft ends inside the head");
+    assert.strictEqual(one.heads.length, 1);
+    assert.deepStrictEqual(one.heads[0].points[0], [100, 0], "tip at the path end");
+    assert.strictEqual(one.heads[0].points.length, 6, "harpoon outline");
+    assert.strictEqual(one.heads[0].fillColor, "K"); assert.strictEqual(one.heads[0].stroked, false);
+    // 중괄호 갈고리: 양 끝, 선 두께 0.5pt·100% → 뿌리까지 2.1707×0.5
+    const brace2 = makePath([[0, 0], [0, -50]]);
+    set([brace2.path], "outer", "inner", 0.5, 100);
+    near(brace2.path.pathPoints[0].anchor[1], -2.1707 * 0.5, "start trimmed");
+    near(brace2.path.pathPoints[1].anchor[1], -50 + 2.1707 * 0.5, "end trimmed");
+    assert.strictEqual(brace2.heads.length, 2);
+    assert.ok(brace2.heads.every((hd) => hd.points.length === 6 && hd.pathPoints.every((q) => q.leftDirection && q.rightDirection)), "Bezier hooks with handles");
+    near(brace2.heads[0].points[3][1], 0, "hook end sits at the path end");
+    // 갈고리가 옆으로 가장 벌어진 폭은 2.88pt(1pt·100%) × 0.5
+    const spread = Math.max(...brace2.heads[1].points.map((q) => Math.abs(q[0])));
+    near(spread, 2.8881 * 0.5, "hook width");
+    // 날씨는 액션을 쓰지 않는다
+    assert.ok(!source.includes("doScript") && !source.includes("loadAction"), "weather: no actions");
   }
 }
 

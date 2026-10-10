@@ -161,9 +161,16 @@ try {
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
         function addRows(page) {
             var PREF_KEY = "AxisTickMarks/settings";
-            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다
+            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 작살형(평가원식)이 1번이다
             var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-            var ARROW_NATIVE = ["화살표 3", "화살표 9", "화살표 2", "화살표 1"];
+            // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(tools/arrowheads.json과 같은 데이터). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+            // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+            var HEAD_CATALOG = [
+                {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+                {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+                {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+                {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+            ];
             var HEAD_SCALE_RANGE = [30, 300];
             var headShape = 3;
             var headScale = 100;
@@ -348,14 +355,14 @@ try {
 
             var arrowCheck = legendPanel.add("checkbox", undefined, "축 양 끝에 화살촉 넣기");
             arrowCheck.value = true;
-            arrowCheck.helpTip = "화살촉은 확인할 때 붙는다";
+            arrowCheck.helpTip = "축의 두 끝에 화살촉 도형을 넣는다";
 
             var headShapeGroup = legendPanel.add("group");
             headShapeGroup.alignChildren = ["left", "center"];
             headShapeGroup.add("statictext", undefined, "화살촉 종류:");
             var headShapeList = headShapeGroup.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
             headShapeList.selection = [2, 3, 1, 0][headShape];
-            headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
+            headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 측정한 일러스트레이터 화살촉 모양을 그린다";
             headShapeList.onChange = function() {
                 if (!headShapeList.selection) return;
                 headShape = [3, 2, 0, 1][headShapeList.selection.index];
@@ -810,9 +817,9 @@ try {
                     gridLineGroup.remove();
                 }
 
-                // 축 양 끝 화살표: DOM에 노출되지 않는 속성이라 액션으로 적용. 미리보기에서는 생략
-                if (isFinal && useArrow) {
-                    applyAxisArrowheads(axis);
+                // 축 양 끝 화살촉: 측정한 일러스트레이터 화살촉을 직접 그린다 (미리보기에서도 보인다)
+                if (useArrow) {
+                    addBothEndHeads(axis, axisWeight, headScale);
                 }
 
                 return group;
@@ -951,142 +958,60 @@ try {
                 }
             }
 
-            // -------------------------------------------------------
-            // 화살표 액션
-            // -------------------------------------------------------
-            function applyAxisArrowheads(axisPath) {
-                var actionSetName = "Codex_AxisTools";
-                var actionName = "AxisArrowheads";
-                var actionFile = new File(Folder.temp + "/Codex_AxisArrowheads.aia");
-
-                try {
-                    doc.selection = null;
-                    axisPath.selected = true;
-
-                    writeArrowheadAction(actionFile, actionSetName, actionName);
-                    try { app.unloadAction(actionSetName, ""); } catch (e) {}
-                    app.loadAction(actionFile);
-                    app.doScript(actionName, actionSetName);
-                } catch (actionError) {
-                    // 화살표 이름은 UI 언어에 따라 다르다. 실패해도 축 자체는 그대로 남는다.
+            // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+            function catalogPoints(shape, tip, d, k) {
+                var n = [-d[1], d[0]];
+                var poly = HEAD_CATALOG[shape].poly;
+                var out = [];
+                for (var i = 0; i < poly.length; i++) {
+                    out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
                 }
-
-                try { app.unloadAction(actionSetName, ""); } catch (e2) {}
-                try { actionFile.remove(); } catch (e3) {}
-                doc.selection = null;
+                return out;
             }
 
-            // 액션 파일의 문자열은 UTF-8 바이트를 16진수로 적는다
-            function toActionHex(text) {
-                var bytes = [];
-                for (var i = 0; i < text.length; i++) {
-                    var code = text.charCodeAt(i);
-                    if (code < 0x80) {
-                        bytes.push(code);
-                    } else if (code < 0x800) {
-                        bytes.push(0xC0 | (code >> 6), 0x80 | (code & 0x3F));
-                    } else {
-                        bytes.push(0xE0 | (code >> 12), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F));
+            // 화살촉 크기: 선 두께(pt) × 크기% (일러스트레이터 화살촉과 같다). 카탈로그 1pt가 이 값이다
+            function headUnit(weight, scalePct) {
+                return weight * scalePct / 100;
+            }
+
+            // 선이 화살촉 속에서 끝나는, 끝에서의 거리(pt)
+            function headBack(shape, weight, scalePct) {
+                return HEAD_CATALOG[shape].lineEnd * headUnit(weight, scalePct);
+            }
+
+            // 화살촉 도형 하나를 group에 채워 그린다. tip은 끝, d는 방향 단위 벡터
+            function addHeadShape(group, shape, tip, d, weight, scalePct, color) {
+                var head = group.pathItems.add();
+                head.setEntirePath(catalogPoints(shape, tip, d, headUnit(weight, scalePct)));
+                head.closed = true;
+                head.stroked = false;
+                head.filled = true;
+                head.fillColor = color;
+                return head;
+            }
+
+            // 양 끝 화살촉: 두 끝이 모서리인 직선·꺾은선 경로의 양 끝을 촉 속(lineEnd)까지 자르고 같은 그룹에 촉 도형을 더한다
+            function addBothEndHeads(path, weight, scale) {
+                var pp = path.pathPoints, n = pp.length;
+                if (n < 2) return;
+                var back = headBack(headShape, weight, scale);
+                var first = pp[0].anchor, second = pp[1].anchor, last = pp[n - 1].anchor, prev = pp[n - 2].anchor;
+                var color = path.strokeColor, container = path.parent;
+                var ends = [{tip: first, from: second, index: 0}, {tip: last, from: prev, index: n - 1}];
+                for (var i = 0; i < ends.length; i++) {
+                    var tip = ends[i].tip, dx = tip[0] - ends[i].from[0], dy = tip[1] - ends[i].from[1], len = Math.sqrt(dx * dx + dy * dy);
+                    if (len === 0) continue;
+                    var d = [dx / len, dy / len];
+                    if (len > back) {
+                        var cut = [tip[0] - d[0] * back, tip[1] - d[1] * back];
+                        pp[ends[i].index].anchor = cut;
+                        pp[ends[i].index].leftDirection = cut;
+                        pp[ends[i].index].rightDirection = cut;
                     }
+                    addHeadShape(container, headShape, tip, d, weight, scale, color).name = "화살촉";
                 }
-                var hex = "";
-                for (var j = 0; j < bytes.length; j++) {
-                    var part = bytes[j].toString(16).toUpperCase();
-                    if (part.length < 2) part = "0" + part;
-                    hex += part;
-                }
-                return {hex: hex, length: bytes.length};
             }
 
-            function writeArrowheadAction(actionFile, actionSetName, actionName) {
-                var setName = toActionHex(actionSetName);
-                var name = toActionHex(actionName);
-                var arrow = toActionHex(ARROW_NATIVE[headShape]);
-                var lines = [];
-
-                lines.push("/version 3");
-                lines.push("/name [ " + setName.length);
-                lines.push("    " + setName.hex);
-                lines.push("]");
-                lines.push("/isOpen 1");
-                lines.push("/actionCount 1");
-                lines.push("/action-1 {");
-                lines.push("    /name [ " + name.length);
-                lines.push("        " + name.hex);
-                lines.push("    ]");
-                lines.push("    /keyIndex 0");
-                lines.push("    /colorIndex 0");
-                lines.push("    /isOpen 1");
-                lines.push("    /eventCount 1");
-                lines.push("    /event-1 {");
-                lines.push("        /useRulersIn1stQuadrant 0");
-                lines.push("        /internalName (ai_plugin_setStroke)");
-                lines.push("        /localizedName [ 10");
-                lines.push("            536574205374726F6B65");
-                lines.push("        ]");
-                lines.push("        /isOpen 1");
-                lines.push("        /isOn 1");
-                lines.push("        /hasDialog 0");
-                lines.push("        /parameterCount 6");
-
-                // 선 두께 (pt)
-                lines.push("        /parameter-1 {");
-                lines.push("            /key 2003072104");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (unit real)");
-                lines.push("            /value " + axisWeight);
-                lines.push("            /unit 592476268");
-                lines.push("        }");
-                // 시작 화살표
-                lines.push("        /parameter-2 {");
-                lines.push("            /key 1634231345");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (ustring)");
-                lines.push("            /value [ " + arrow.length);
-                lines.push("                " + arrow.hex);
-                lines.push("            ]");
-                lines.push("        }");
-                // 끝 화살표
-                lines.push("        /parameter-3 {");
-                lines.push("            /key 1634231346");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (ustring)");
-                lines.push("            /value [ " + arrow.length);
-                lines.push("                " + arrow.hex);
-                lines.push("            ]");
-                lines.push("        }");
-                // 시작/끝 화살표 크기 (%)
-                lines.push("        /parameter-4 {");
-                lines.push("            /key 1634951985");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (real)");
-                lines.push("            /value " + headScale.toFixed(1));
-                lines.push("        }");
-                lines.push("        /parameter-5 {");
-                lines.push("            /key 1634951986");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (real)");
-                lines.push("            /value " + headScale.toFixed(1));
-                lines.push("        }");
-                // 화살표 정렬: 패스 끝의 팁
-                lines.push("        /parameter-6 {");
-                lines.push("            /key 1634230636");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (enumerated)");
-                lines.push("            /name [ 17");
-                lines.push("                ED8CA8EC8AA420EB819DEC9D9820ED8C81");
-                lines.push("            ]");
-                lines.push("            /value 0");
-                lines.push("        }");
-
-                lines.push("    }");
-                lines.push("}");
-
-                actionFile.encoding = "UTF-8";
-                actionFile.open("w");
-                actionFile.write(lines.join("\n"));
-                actionFile.close();
-            }
             return null;
         }
         return api;
@@ -4210,9 +4135,16 @@ try {
         function addRows(page) {
             var PREF_KEY = "ObjectSolarSpectrum/settings";
             var MM = 2.834645669;
-            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다
+            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 작살형(평가원식)이 1번이다
             var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-            var ARROW_NATIVE = ["화살표 3", "화살표 9", "화살표 2", "화살표 1"];
+            // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(tools/arrowheads.json과 같은 데이터). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+            // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+            var HEAD_CATALOG = [
+                {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+                {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+                {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+                {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+            ];
             var HEAD_SCALE_RANGE = [30, 300];
 
             // ASTM G173-03 (NREL) 스펙트럼. 200~4000 nm, 5 nm 간격, 단위 mW/m²/nm
@@ -4396,13 +4328,13 @@ try {
             sigmaField.input.helpTip = "가우시안 평활 폭. 0이면 데이터 그대로, 클수록 잔 요철과 얕은 흡수 골이 사라진다";
             var strokeField = addNumberField(curvePanel, "선 두께", "pt", strokePt, 0.1, STROKE_RANGE[0], STROKE_RANGE[1], DEFAULTS.strokePt);
             var headScaleField = addNumberField(curvePanel, "화살촉 크기", "%", headScale, 5, HEAD_SCALE_RANGE[0], HEAD_SCALE_RANGE[1], DEFAULTS.headScale);
-            headScaleField.input.helpTip = "파장 영역 화살표의 화살촉. 확인할 때 붙는다";
+            headScaleField.input.helpTip = "파장 영역 화살표의 화살촉";
             var headShapeRow = curvePanel.add("group");
             headShapeRow.alignChildren = ["left", "center"];
             headShapeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
             var headShapeList = headShapeRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
             headShapeList.selection = [2, 3, 1, 0][headShape];
-            headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙이며, 확인할 때 붙는다";
+            headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 측정한 일러스트레이터 화살촉 모양을 그린다";
             headShapeList.onChange = function() {
                 if (!headShapeList.selection) return;
                 headShape = [3, 2, 0, 1][headShapeList.selection.index];
@@ -4425,7 +4357,7 @@ try {
             tickCheck.value = showTicks;
             legendCheck.value = showLegend;
             rangeCheck.value = showRanges;
-            rangeCheck.helpTip = "자외선·가시광선·적외선 구간을 축 아래에 양쪽 화살표로 표시한다. 화살촉은 확인할 때 붙는다";
+            rangeCheck.helpTip = "자외선·가시광선·적외선 구간을 축 아래에 양쪽 화살표로 표시한다";
             var fillRow = showPanel.add("group");
             fillRow.add("statictext", undefined, "흡수 영역 위쪽:");
             var fillToETRadio = fillRow.add("radiobutton", undefined, "대기 밖 곡선까지");
@@ -4633,7 +4565,7 @@ try {
                 strokeOnly(addPath(curveGroup, etAnchors, false), etColor, strokePt);
 
                 // 축·영역 화살촉: DOM에 노출되지 않는 속성이라 액션으로 적용. 미리보기에서는 생략
-                if (isFinal) applyArrowheads([axis].concat(rangeLines), strokePt, headScale);
+                applyArrowheads([axis].concat(rangeLines), strokePt, headScale);
 
                 return group;
             }
@@ -4959,139 +4891,62 @@ try {
                 list.push(value);
             }
 
-            // 화살촉: 임시 액션 파일(ai_plugin_setStroke)로 양끝에 붙인다. 실패해도 선 자체는 그대로 남는다
-            function applyArrowheads(paths, weight, scale) {
-                var actionSetName = "Codex_SolarSpectrum";
-                var actionName = "Arrowheads";
-                var actionFile = new File(Folder.temp + "/Codex_SolarSpectrumArrowheads.aia");
-
-                try {
-                    doc.selection = null;
-                    for (var i = 0; i < paths.length; i++) paths[i].selected = true;
-
-                    writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale);
-                    try { app.unloadAction(actionSetName, ""); } catch (e) {}
-                    app.loadAction(actionFile);
-                    app.doScript(actionName, actionSetName);
-                } catch (actionError) {
-                    // 화살표 이름은 UI 언어에 따라 다르다
+            // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+            function catalogPoints(shape, tip, d, k) {
+                var n = [-d[1], d[0]];
+                var poly = HEAD_CATALOG[shape].poly;
+                var out = [];
+                for (var i = 0; i < poly.length; i++) {
+                    out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
                 }
-
-                try { app.unloadAction(actionSetName, ""); } catch (e2) {}
-                try { actionFile.remove(); } catch (e3) {}
-                doc.selection = null;
+                return out;
             }
 
-            // 액션 파일의 문자열은 UTF-8 바이트를 16진수로 적는다
-            function toActionHex(text) {
-                var bytes = [];
-                for (var i = 0; i < text.length; i++) {
-                    var code = text.charCodeAt(i);
-                    if (code < 0x80) {
-                        bytes.push(code);
-                    } else if (code < 0x800) {
-                        bytes.push(0xC0 | (code >> 6), 0x80 | (code & 0x3F));
-                    } else {
-                        bytes.push(0xE0 | (code >> 12), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F));
+            // 화살촉 크기: 선 두께(pt) × 크기% (일러스트레이터 화살촉과 같다). 카탈로그 1pt가 이 값이다
+            function headUnit(weight, scalePct) {
+                return weight * scalePct / 100;
+            }
+
+            // 선이 화살촉 속에서 끝나는, 끝에서의 거리(pt)
+            function headBack(shape, weight, scalePct) {
+                return HEAD_CATALOG[shape].lineEnd * headUnit(weight, scalePct);
+            }
+
+            // 화살촉 도형 하나를 group에 채워 그린다. tip은 끝, d는 방향 단위 벡터
+            function addHeadShape(group, shape, tip, d, weight, scalePct, color) {
+                var head = group.pathItems.add();
+                head.setEntirePath(catalogPoints(shape, tip, d, headUnit(weight, scalePct)));
+                head.closed = true;
+                head.stroked = false;
+                head.filled = true;
+                head.fillColor = color;
+                return head;
+            }
+
+            // 양 끝 화살촉: 두 끝이 모서리인 직선·꺾은선 경로의 양 끝을 촉 속(lineEnd)까지 자르고 같은 그룹에 촉 도형을 더한다
+            function addBothEndHeads(path, weight, scale) {
+                var pp = path.pathPoints, n = pp.length;
+                if (n < 2) return;
+                var back = headBack(headShape, weight, scale);
+                var first = pp[0].anchor, second = pp[1].anchor, last = pp[n - 1].anchor, prev = pp[n - 2].anchor;
+                var color = path.strokeColor, container = path.parent;
+                var ends = [{tip: first, from: second, index: 0}, {tip: last, from: prev, index: n - 1}];
+                for (var i = 0; i < ends.length; i++) {
+                    var tip = ends[i].tip, dx = tip[0] - ends[i].from[0], dy = tip[1] - ends[i].from[1], len = Math.sqrt(dx * dx + dy * dy);
+                    if (len === 0) continue;
+                    var d = [dx / len, dy / len];
+                    if (len > back) {
+                        var cut = [tip[0] - d[0] * back, tip[1] - d[1] * back];
+                        pp[ends[i].index].anchor = cut;
+                        pp[ends[i].index].leftDirection = cut;
+                        pp[ends[i].index].rightDirection = cut;
                     }
+                    addHeadShape(container, headShape, tip, d, weight, scale, color).name = "화살촉";
                 }
-                var hex = "";
-                for (var j = 0; j < bytes.length; j++) {
-                    var part = bytes[j].toString(16).toUpperCase();
-                    if (part.length < 2) part = "0" + part;
-                    hex += part;
-                }
-                return {hex: hex, length: bytes.length};
             }
 
-            function writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale) {
-                var setName = toActionHex(actionSetName);
-                var name = toActionHex(actionName);
-                var arrow = toActionHex(ARROW_NATIVE[headShape]);
-                var lines = [];
-
-                lines.push("/version 3");
-                lines.push("/name [ " + setName.length);
-                lines.push("    " + setName.hex);
-                lines.push("]");
-                lines.push("/isOpen 1");
-                lines.push("/actionCount 1");
-                lines.push("/action-1 {");
-                lines.push("    /name [ " + name.length);
-                lines.push("        " + name.hex);
-                lines.push("    ]");
-                lines.push("    /keyIndex 0");
-                lines.push("    /colorIndex 0");
-                lines.push("    /isOpen 1");
-                lines.push("    /eventCount 1");
-                lines.push("    /event-1 {");
-                lines.push("        /useRulersIn1stQuadrant 0");
-                lines.push("        /internalName (ai_plugin_setStroke)");
-                lines.push("        /localizedName [ 10");
-                lines.push("            536574205374726F6B65");
-                lines.push("        ]");
-                lines.push("        /isOpen 1");
-                lines.push("        /isOn 1");
-                lines.push("        /hasDialog 0");
-                lines.push("        /parameterCount 6");
-
-                // 선 두께 (pt)
-                lines.push("        /parameter-1 {");
-                lines.push("            /key 2003072104");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (unit real)");
-                lines.push("            /value " + weight);
-                lines.push("            /unit 592476268");
-                lines.push("        }");
-                // 시작 화살표
-                lines.push("        /parameter-2 {");
-                lines.push("            /key 1634231345");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (ustring)");
-                lines.push("            /value [ " + arrow.length);
-                lines.push("                " + arrow.hex);
-                lines.push("            ]");
-                lines.push("        }");
-                // 끝 화살표
-                lines.push("        /parameter-3 {");
-                lines.push("            /key 1634231346");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (ustring)");
-                lines.push("            /value [ " + arrow.length);
-                lines.push("                " + arrow.hex);
-                lines.push("            ]");
-                lines.push("        }");
-                // 시작/끝 화살표 크기 100%
-                lines.push("        /parameter-4 {");
-                lines.push("            /key 1634951985");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (real)");
-                lines.push("            /value " + scale.toFixed(1));
-                lines.push("        }");
-                lines.push("        /parameter-5 {");
-                lines.push("            /key 1634951986");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (real)");
-                lines.push("            /value " + scale.toFixed(1));
-                lines.push("        }");
-                // 화살표 정렬: 패스 끝의 팁
-                lines.push("        /parameter-6 {");
-                lines.push("            /key 1634230636");
-                lines.push("            /showInPalette -1");
-                lines.push("            /type (enumerated)");
-                lines.push("            /name [ 17");
-                lines.push("                ED8CA8EC8AA420EB819DEC9D9820ED8C81");
-                lines.push("            ]");
-                lines.push("            /value 0");
-                lines.push("        }");
-
-                lines.push("    }");
-                lines.push("}");
-
-                actionFile.encoding = "UTF-8";
-                actionFile.open("w");
-                actionFile.write(lines.join("\n"));
-                actionFile.close();
+            function applyArrowheads(paths, weight, scale) {
+                for (var i = 0; i < paths.length; i++) addBothEndHeads(paths[i], weight, scale);
             }
 
             // -------------------------------------------------------

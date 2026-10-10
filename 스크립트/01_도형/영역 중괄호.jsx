@@ -12,7 +12,7 @@ try {
 
 // 어떤 영역을 묶어서 가리키는 중괄호 선을 만든다.
 // 직선 선택 → 0.5pt로 맞추고 가운데를 잘라 두 선으로 나눈 뒤,
-// 바깥 끝에는 화살표 7, 가운데(자른) 끝에는 화살표 6을 붙이고 그룹으로 묶는다.
+// 바깥 끝에는 갈고리 촉(화살표 7 모양), 가운데(자른) 끝에는 갈고리 촉(화살표 6 모양)을 직접 그려 붙이고 그룹으로 묶는다.
 // 가로선은 왼쪽·오른쪽, 세로선은 위쪽·아래쪽을 바깥으로 본다.
 
 (function() {
@@ -47,15 +47,14 @@ try {
         originalHidden.push(targets[t].hidden);
     }
 
-    // 화살표 이름과 정렬 이름은 Illustrator UI 언어를 따른다
-    var locale = "";
-    try { locale = String(app.locale).toLowerCase(); } catch (localeError) {}
-    var isKorean = (locale === "" || locale.indexOf("ko") === 0);
-    // 중괄호 양 끝은 커스텀 화살표(화살표.ai)의 중괄호용 촉이다. 종류는 고정이고 크기만 고른다
-    var ARROW_OUTER = isKorean ? "화살표 7" : "Arrow 7";
-    var ARROW_INNER = isKorean ? "화살표 6" : "Arrow 6";
+    // 중괄호 끝의 갈고리 촉: 일러스트레이터 화살표 6(안쪽 끝)·7(바깥 끝)의 아트워크를 선 두께 1pt·100%로 잰 베지어(화살표.ai).
+    // 좌표는 (옆, 뒤) pt이고 끝(tip)이 원점, 뒤쪽이 +뒤, 옆은 진행 방향의 왼쪽이 +다. 선은 촉 뿌리(뒤 BRACE_HEAD_BACK)에서 끝난다
+    var BRACE_HEAD_BACK = 2.1707;
+    var BRACE_HEADS = {
+        inner: [{a: [0.4988, 2.1707], l: [0.4988, 2.1707], r: [0.4988, 2.1707]}, {a: [-0.4988, 2.1707], l: [-0.4988, 2.1707], r: [-0.4988, 2.1707]}, {a: [-0.4988, 2.0155], l: [-0.4988, 2.0155], r: [-0.4988, 1.4577]}, {a: [2.8881, 0.0], l: [-0.1797, 0.3105], r: [2.8881, 0.0]}, {a: [2.8881, 0.1668], l: [2.8881, 0.1668], r: [0.9962, 0.4744]}, {a: [0.4988, 2.1679], l: [0.4988, 1.127], r: [0.4988, 2.1679]}],
+        outer: [{a: [-0.4934, 2.1707], l: [-0.4934, 2.1707], r: [-0.4934, 2.1707]}, {a: [0.5043, 2.1707], l: [0.5043, 2.1707], r: [0.5043, 2.1707]}, {a: [0.5043, 2.0155], l: [0.5043, 2.0155], r: [0.5043, 1.4577]}, {a: [-2.8826, 0.0], l: [0.1851, 0.3105], r: [-2.8826, 0.0]}, {a: [-2.8826, 0.1668], l: [-2.8826, 0.1668], r: [-0.9908, 0.4744]}, {a: [-0.4934, 2.1679], l: [-0.4934, 1.127], r: [-0.4934, 2.1679]}]
+    };
     var HEAD_RANGE = [30, 300];
-    var ALIGN_TIP_NAME = isKorean ? "패스 끝의 팁" : "Tip of arrow at end of path";
 
     // 다이얼로그가 다루는 옵션 값
     // 가로선은 상하로, 세로선은 좌우로 뒤집힌다
@@ -230,8 +229,8 @@ try {
         }
 
         var swap = horizontal ? flipHorizontalLine : flipVerticalLine;
-        var outerName = swap ? ARROW_INNER : ARROW_OUTER;
-        var innerName = swap ? ARROW_OUTER : ARROW_INNER;
+        var outerKind = swap ? "inner" : "outer";
+        var innerKind = swap ? "outer" : "inner";
 
         var mid = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2];
 
@@ -243,8 +242,8 @@ try {
         var tail = makeSegment(path, group, mid, second);
 
         // 시작점이 바깥, 끝점이 가운데인 조각 / 그 반대인 조각
-        applyArrowheads(head, outerName, innerName);
-        applyArrowheads(tail, innerName, outerName);
+        addBraceHeads(group, head, outerKind, innerKind);
+        addBraceHeads(group, tail, innerKind, outerKind);
 
         return group;
     }
@@ -427,142 +426,51 @@ try {
         return clamp(value, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
     }
 
-    // -------------------------------------------------------
-    // 화살표 액션 (화살촉은 DOM에 없어서 임시 .aia로 처리한다)
-    // -------------------------------------------------------
-    function applyArrowheads(pathItem, startName, endName) {
-        var actionSetName = "Codex_RegionBrace";
-        var actionName = "BraceArrowheads";
-        var actionFile = new File(Folder.temp + "/Codex_RegionBrace.aia");
-
-        try {
-            doc.selection = null;
-            pathItem.selected = true;
-
-            writeArrowheadAction(actionFile, actionSetName, actionName, startName, endName);
-            try { app.unloadAction(actionSetName, ""); } catch (e) {}
-            app.loadAction(actionFile);
-            app.doScript(actionName, actionSetName);
-        } catch (actionError) {
-            // 화살표 이름은 UI 언어에 따라 다르다. 실패해도 잘린 선은 그대로 남는다.
+    // 끝 tip, 방향 단위 벡터 d(바깥쪽), 배율 k로 갈고리 촉의 베지어 점 [{a, l, r}]
+    function braceHeadPoints(kind, tip, d, k) {
+        var n = [-d[1], d[0]], poly = BRACE_HEADS[kind], out = [];
+        function at(p) {
+            return [tip[0] - d[0] * p[1] * k + n[0] * p[0] * k, tip[1] - d[1] * p[1] * k + n[1] * p[0] * k];
         }
-
-        try { app.unloadAction(actionSetName, ""); } catch (e2) {}
-        try { actionFile.remove(); } catch (e3) {}
-        doc.selection = null;
+        for (var i = 0; i < poly.length; i++) out.push({a: at(poly[i].a), l: at(poly[i].l), r: at(poly[i].r)});
+        return out;
     }
 
-    // 액션 파일의 문자열은 UTF-8 바이트를 16진수로 적는다
-    function toActionHex(text) {
-        var bytes = [];
-        for (var i = 0; i < text.length; i++) {
-            var code = text.charCodeAt(i);
-            if (code < 0x80) {
-                bytes.push(code);
-            } else if (code < 0x800) {
-                bytes.push(0xC0 | (code >> 6), 0x80 | (code & 0x3F));
-            } else {
-                bytes.push(0xE0 | (code >> 12), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F));
-            }
+    // 갈고리 촉 도형 하나를 group에 채워 그린다
+    function addBraceHead(group, kind, tip, d, k, color) {
+        var pts = braceHeadPoints(kind, tip, d, k), anchors = [], i;
+        for (i = 0; i < pts.length; i++) anchors.push(pts[i].a);
+        var head = group.pathItems.add();
+        head.setEntirePath(anchors);
+        for (i = 0; i < pts.length; i++) {
+            head.pathPoints[i].leftDirection = pts[i].l;
+            head.pathPoints[i].rightDirection = pts[i].r;
         }
-        var hex = "";
-        for (var j = 0; j < bytes.length; j++) {
-            var part = bytes[j].toString(16).toUpperCase();
-            if (part.length < 2) part = "0" + part;
-            hex += part;
-        }
-        return { hex: hex, length: bytes.length };
+        head.closed = true;
+        head.stroked = false;
+        head.filled = true;
+        head.fillColor = color;
+        return head;
     }
 
-    function writeArrowheadAction(actionFile, actionSetName, actionName, startName, endName) {
-        var setName = toActionHex(actionSetName);
-        var name = toActionHex(actionName);
-        var startArrow = toActionHex(startName);
-        var endArrow = toActionHex(endName);
-        var alignName = toActionHex(ALIGN_TIP_NAME);
-        var lines = [];
-
-        lines.push("/version 3");
-        lines.push("/name [ " + setName.length);
-        lines.push("    " + setName.hex);
-        lines.push("]");
-        lines.push("/isOpen 1");
-        lines.push("/actionCount 1");
-        lines.push("/action-1 {");
-        lines.push("    /name [ " + name.length);
-        lines.push("        " + name.hex);
-        lines.push("    ]");
-        lines.push("    /keyIndex 0");
-        lines.push("    /colorIndex 0");
-        lines.push("    /isOpen 1");
-        lines.push("    /eventCount 1");
-        lines.push("    /event-1 {");
-        lines.push("        /useRulersIn1stQuadrant 0");
-        lines.push("        /internalName (ai_plugin_setStroke)");
-        lines.push("        /localizedName [ 10");
-        lines.push("            536574205374726F6B65");
-        lines.push("        ]");
-        lines.push("        /isOpen 1");
-        lines.push("        /isOn 1");
-        lines.push("        /hasDialog 0");
-        lines.push("        /parameterCount 6");
-
-        // 선 두께 (pt)
-        lines.push("        /parameter-1 {");
-        lines.push("            /key 2003072104");
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (unit real)");
-        lines.push("            /value " + STROKE_WIDTH);
-        lines.push("            /unit 592476268");
-        lines.push("        }");
-        // 시작 화살표
-        lines.push("        /parameter-2 {");
-        lines.push("            /key 1634231345");
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (ustring)");
-        lines.push("            /value [ " + startArrow.length);
-        lines.push("                " + startArrow.hex);
-        lines.push("            ]");
-        lines.push("        }");
-        // 끝 화살표
-        lines.push("        /parameter-3 {");
-        lines.push("            /key 1634231346");
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (ustring)");
-        lines.push("            /value [ " + endArrow.length);
-        lines.push("                " + endArrow.hex);
-        lines.push("            ]");
-        lines.push("        }");
-        // 시작/끝 화살표 크기
-        lines.push("        /parameter-4 {");
-        lines.push("            /key 1634951985");
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (real)");
-        lines.push("            /value " + headScale);
-        lines.push("        }");
-        lines.push("        /parameter-5 {");
-        lines.push("            /key 1634951986");
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (real)");
-        lines.push("            /value " + headScale);
-        lines.push("        }");
-        // 화살표 정렬: 패스 끝의 팁
-        lines.push("        /parameter-6 {");
-        lines.push("            /key 1634230636");
-        lines.push("            /showInPalette -1");
-        lines.push("            /type (enumerated)");
-        lines.push("            /name [ " + alignName.length);
-        lines.push("                " + alignName.hex);
-        lines.push("            ]");
-        lines.push("            /value 0");
-        lines.push("        }");
-
-        lines.push("    }");
-        lines.push("}");
-
-        actionFile.encoding = "UTF-8";
-        actionFile.open("w");
-        actionFile.write(lines.join("\n"));
-        actionFile.close();
+    // 두 점 직선(segment)의 양 끝에 갈고리 촉을 단다: 선 끝을 촉 뿌리까지 줄이고 같은 그룹에 촉 도형을 더한다
+    function addBraceHeads(group, segment, startKind, endKind) {
+        var a = segment.pathPoints[0].anchor, b = segment.pathPoints[1].anchor;
+        var dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx * dx + dy * dy);
+        if (len === 0) return;
+        var u = [dx / len, dy / len], k = STROKE_WIDTH * headScale / 100, back = BRACE_HEAD_BACK * k;
+        var color = segment.strokeColor;
+        if (len > 2 * back) {
+            var first = [a[0] + u[0] * back, a[1] + u[1] * back], last = [b[0] - u[0] * back, b[1] - u[1] * back];
+            segment.pathPoints[0].anchor = first;
+            segment.pathPoints[0].leftDirection = first;
+            segment.pathPoints[0].rightDirection = first;
+            segment.pathPoints[1].anchor = last;
+            segment.pathPoints[1].leftDirection = last;
+            segment.pathPoints[1].rightDirection = last;
+        }
+        addBraceHead(group, startKind, a, [-u[0], -u[1]], k, color).name = "중괄호 촉";
+        addBraceHead(group, endKind, b, u, k, color).name = "중괄호 촉";
     }
+
 })();

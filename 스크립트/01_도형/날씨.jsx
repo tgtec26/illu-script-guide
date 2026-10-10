@@ -20,12 +20,8 @@ try {
     var FORM_MM = 2.834645669;
     var FORM_KOR_FONT = formFindFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
-    // 화살표·정렬 이름은 Illustrator UI 언어를 따른다 (영역 중괄호.jsx와 같은 판정)
-    var locale = "";
-    try { locale = String(app.locale).toLowerCase(); } catch (localeError) {}
-    var isKorean = (locale === "" || locale.indexOf("ko") === 0);
-    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다.
-    // 층 묶음 기호는 중괄호용 촉(바깥 끝 7, 가운데 끝 6)으로 고정이다
+    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 작살형(평가원식)이 1번이다.
+    // 층 묶음 기호는 중괄호용 갈고리 촉(바깥 끝 화살표 7 모양, 가운데 끝 화살표 6 모양)으로 고정이다
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
 
     // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
@@ -36,12 +32,17 @@ try {
         {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
-    var ARROW_PREFIX = isKorean ? "화살표 " : "Arrow ";
-    var ARROW_NUMBER = [3, 9, 2, 1];
-    function arrowNameOf(shape) { return ARROW_PREFIX + ARROW_NUMBER[shape]; }
-    var ARROW_BRACE_OUTER = ARROW_PREFIX + 7;
-    var ARROW_BRACE_INNER = ARROW_PREFIX + 6;
-    var ARROW_ALIGN_TIP = isKorean ? "패스 끝의 팁" : "Tip of arrow at end of path";
+    // 화살촉 종류: 카탈로그 번호(0~3)이거나 중괄호 갈고리 "outer"(화살표 7 모양)·"inner"(화살표 6 모양)
+    function headKindOf(shape) { return shape; }
+    var HEAD_BRACE_OUTER = "outer";
+    var HEAD_BRACE_INNER = "inner";
+    // 중괄호 끝의 갈고리 촉: 일러스트레이터 화살표 6(안쪽 끝)·7(바깥 끝)의 아트워크를 선 두께 1pt·100%로 잰 베지어(화살표.ai).
+    // 좌표는 (옆, 뒤) pt이고 끝(tip)이 원점, 뒤쪽이 +뒤, 옆은 진행 방향의 왼쪽이 +다. 선은 촉 뿌리(뒤 BRACE_HEAD_BACK)에서 끝난다
+    var BRACE_HEAD_BACK = 2.1707;
+    var BRACE_HEADS = {
+        inner: [{a: [0.4988, 2.1707], l: [0.4988, 2.1707], r: [0.4988, 2.1707]}, {a: [-0.4988, 2.1707], l: [-0.4988, 2.1707], r: [-0.4988, 2.1707]}, {a: [-0.4988, 2.0155], l: [-0.4988, 2.0155], r: [-0.4988, 1.4577]}, {a: [2.8881, 0.0], l: [-0.1797, 0.3105], r: [2.8881, 0.0]}, {a: [2.8881, 0.1668], l: [2.8881, 0.1668], r: [0.9962, 0.4744]}, {a: [0.4988, 2.1679], l: [0.4988, 1.127], r: [0.4988, 2.1679]}],
+        outer: [{a: [-0.4934, 2.1707], l: [-0.4934, 2.1707], r: [-0.4934, 2.1707]}, {a: [0.5043, 2.1707], l: [0.5043, 2.1707], r: [0.5043, 2.1707]}, {a: [0.5043, 2.0155], l: [0.5043, 2.0155], r: [0.5043, 1.4577]}, {a: [-2.8826, 0.0], l: [0.1851, 0.3105], r: [-2.8826, 0.0]}, {a: [-2.8826, 0.1668], l: [-2.8826, 0.1668], r: [-0.9908, 0.4744]}, {a: [-0.4934, 2.1679], l: [-0.4934, 1.127], r: [-0.4934, 2.1679]}]
+    };
     var BRACE_PT = 0.5;
 
     runFormHost("날씨", [makeAtmosphereEngine(), makePressureEngine(), makeBreezeEngine()], "Weather/tab");
@@ -145,12 +146,12 @@ try {
         for (var p = 0; p < points.length; p++) line.push([X(points[p][0]), Y(points[p][1])]);
         t.path(line, false, null, 100, GRAPH_PT);
 
-        // 축은 한 패스(Y축 끝 → 원점 → X축 끝). 화살촉은 DOM에 없어 액션으로 단다
+        // 축은 한 패스(Y축 끝 → 원점 → X축 끝). 화살촉은 직접 그린 도형으로 단다
         var axis = t.path([[0, H + ARROW_MARGIN], [0, 0], [W + ARROW_MARGIN, 0]], false, null, 100, AXIS_PT);
-        if (o.arrows) setStrokeArrowheads([axis], arrowNameOf(o.headShape), arrowNameOf(o.headShape), AXIS_PT, o.headScale);
+        if (o.arrows) setStrokeArrowheads([axis], headKindOf(o.headShape), headKindOf(o.headShape), AXIS_PT, o.headScale);
 
         // 층 묶음 기호 (영역 중괄호.jsx): 층 높이만큼의 세로선을 가운데에서 잘라
-        // 바깥 끝에 화살표 7, 가운데 끝에 화살표 6. 이웃한 기호가 붙지 않게 0.2mm씩 띄운다
+        // 바깥 끝에 갈고리 촉(7 모양), 가운데 끝에 갈고리 촉(6 모양). 이웃한 기호가 붙지 않게 0.2mm씩 띄운다
         if (o.braces) {
             var bx = W + ARROW_MARGIN + 2 * mm, inset = 0.2 * mm;
             var heads = [], tails = [];
@@ -160,67 +161,64 @@ try {
                 tails.push(t.line([bx, ym], [bx, y0], BRACE_PT));
                 if (o.names) t.text(NAMES[b], bx + 2 * mm, ym, F, "left");
             }
-            setStrokeArrowheads(heads, ARROW_BRACE_OUTER, ARROW_BRACE_INNER, BRACE_PT, o.headScale);
-            setStrokeArrowheads(tails, ARROW_BRACE_INNER, ARROW_BRACE_OUTER, BRACE_PT, o.headScale);
+            setStrokeArrowheads(heads, HEAD_BRACE_OUTER, HEAD_BRACE_INNER, BRACE_PT, o.headScale);
+            setStrokeArrowheads(tails, HEAD_BRACE_INNER, HEAD_BRACE_OUTER, BRACE_PT, o.headScale);
         }
     }
 
-    // 선택한 패스들에 한 번에 화살촉을 단다 (임시 .aia 액션, AGENTS.md 'Stroke Properties Missing From the DOM').
-    // startName이 null이면 시작 화살촉은 건드리지 않는다(새 선이라 없음). scale은 촉 크기 %. 실패해도 선은 그대로 남는다
-    function setStrokeArrowheads(paths, startName, endName, width, scale) {
-        var setName = "Codex_WeatherArrow", actionName = "Arrowheads";
-        var file = new File(Folder.temp + "/Codex_WeatherArrow.aia");
-        try {
-            doc.selection = null;
-            for (var i = 0; i < paths.length; i++) paths[i].selected = true;
-            var hexSet = actionHex(setName), hexName = actionHex(actionName);
-            var end = actionHex(endName), align = actionHex(ARROW_ALIGN_TIP);
-            // 순서는 기록된 액션과 같게: 두께, 시작·끝 화살촉, 시작·끝 크기, 정렬
-            var params = [["            /key 2003072104", "            /showInPalette -1", "            /type (unit real)", "            /value " + width, "            /unit 592476268"]];
-            if (startName !== null) {
-                var start = actionHex(startName);
-                params.push(["            /key 1634231345", "            /showInPalette -1", "            /type (ustring)", "            /value [ " + start.length, "                " + start.hex, "            ]"]);
+    // 끝 tip, 방향 단위 벡터 d(바깥쪽), 배율 k로 갈고리 촉의 베지어 점 [{a, l, r}]
+    function braceHeadPoints(kind, tip, d, k) {
+        var n = [-d[1], d[0]], poly = BRACE_HEADS[kind], out = [];
+        function at(p) {
+            return [tip[0] - d[0] * p[1] * k + n[0] * p[0] * k, tip[1] - d[1] * p[1] * k + n[1] * p[0] * k];
+        }
+        for (var i = 0; i < poly.length; i++) out.push({a: at(poly[i].a), l: at(poly[i].l), r: at(poly[i].r)});
+        return out;
+    }
+
+    // 직선·꺾은선 패스들의 끝에 화살촉을 직접 그려 단다: 선 끝을 촉 뿌리까지 줄이고 같은 그룹에 촉 도형을 더한다.
+    // startKind·endKind는 headKindOf(카탈로그 번호) 또는 HEAD_BRACE_*, null이면 그 끝에는 달지 않는다. width는 선 두께(pt), scale은 촉 크기 %.
+    // 두 끝이 모서리인 패스(직선, 축처럼 꺾인 선)에만 쓴다
+    function setStrokeArrowheads(paths, startKind, endKind, width, scale) {
+        for (var i = 0; i < paths.length; i++) {
+            var path = paths[i], pp = path.pathPoints, n = pp.length;
+            if (n < 2) continue;
+            var color = path.strokeColor, container = path.parent;
+            var ends = [{kind: startKind, tip: pp[0].anchor, from: pp[1].anchor, index: 0},
+                {kind: endKind, tip: pp[n - 1].anchor, from: pp[n - 2].anchor, index: n - 1}];
+            for (var e = 0; e < ends.length; e++) {
+                var end = ends[e];
+                if (end.kind === null) continue;
+                var dx = end.tip[0] - end.from[0], dy = end.tip[1] - end.from[1], len = Math.sqrt(dx * dx + dy * dy);
+                if (len === 0) continue;
+                var d = [dx / len, dy / len], unit = width * scale / 100;
+                var isBrace = typeof end.kind === "string";
+                var back = isBrace ? BRACE_HEAD_BACK * unit : HEAD_CATALOG[end.kind].lineEnd * unit;
+                if (len > back) {
+                    var cut = [end.tip[0] - d[0] * back, end.tip[1] - d[1] * back];
+                    pp[end.index].anchor = cut;
+                    pp[end.index].leftDirection = cut;
+                    pp[end.index].rightDirection = cut;
+                }
+                var head = container.pathItems.add();
+                if (isBrace) {
+                    var pts = braceHeadPoints(end.kind, end.tip, d, unit), anchors = [], q;
+                    for (q = 0; q < pts.length; q++) anchors.push(pts[q].a);
+                    head.setEntirePath(anchors);
+                    for (q = 0; q < pts.length; q++) {
+                        head.pathPoints[q].leftDirection = pts[q].l;
+                        head.pathPoints[q].rightDirection = pts[q].r;
+                    }
+                } else {
+                    head.setEntirePath(catalogPoints(end.kind, end.tip, d, unit));
+                }
+                head.closed = true;
+                head.stroked = false;
+                head.filled = true;
+                head.fillColor = color;
+                head.name = "화살촉";
             }
-            params.push(["            /key 1634231346", "            /showInPalette -1", "            /type (ustring)", "            /value [ " + end.length, "                " + end.hex, "            ]"]);
-            if (startName !== null) params.push(["            /key 1634951985", "            /showInPalette -1", "            /type (real)", "            /value " + scale.toFixed(1)]);
-            params.push(["            /key 1634951986", "            /showInPalette -1", "            /type (real)", "            /value " + scale.toFixed(1)]);
-            params.push(["            /key 1634230636", "            /showInPalette -1", "            /type (enumerated)", "            /name [ " + align.length, "                " + align.hex, "            ]", "            /value 0"]);
-            var lines = [
-                "/version 3", "/name [ " + hexSet.length, "    " + hexSet.hex, "]", "/isOpen 1", "/actionCount 1",
-                "/action-1 {", "    /name [ " + hexName.length, "        " + hexName.hex, "    ]",
-                "    /keyIndex 0", "    /colorIndex 0", "    /isOpen 1", "    /eventCount 1",
-                "    /event-1 {", "        /useRulersIn1stQuadrant 0", "        /internalName (ai_plugin_setStroke)",
-                "        /localizedName [ 10", "            536574205374726F6B65", "        ]",
-                "        /isOpen 1", "        /isOn 1", "        /hasDialog 0", "        /parameterCount " + params.length
-            ];
-            for (var n = 0; n < params.length; n++) lines = lines.concat(["        /parameter-" + (n + 1) + " {"], params[n], ["        }"]);
-            lines = lines.concat(["    }", "}"]);
-
-            file.encoding = "UTF-8";
-            file.open("w");
-            file.write(lines.join("\n"));
-            file.close();
-            try { app.unloadAction(setName, ""); } catch (e) {}
-            app.loadAction(file);
-            app.doScript(actionName, setName);
-        } catch (actionError) {}
-        try { app.unloadAction(setName, ""); } catch (e2) {}
-        try { file.remove(); } catch (e3) {}
-        doc.selection = null;
-    }
-
-    // 액션 파일의 문자열은 UTF-8 바이트를 대문자 16진수로, 길이는 바이트 수
-    function actionHex(text) {
-        var bytes = [];
-        for (var i = 0; i < text.length; i++) {
-            var code = text.charCodeAt(i);
-            if (code < 0x80) bytes.push(code);
-            else if (code < 0x800) bytes.push(0xC0 | (code >> 6), 0x80 | (code & 0x3F));
-            else bytes.push(0xE0 | (code >> 12), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F));
         }
-        var hex = "";
-        for (var j = 0; j < bytes.length; j++) hex += (bytes[j] < 16 ? "0" : "") + bytes[j].toString(16).toUpperCase();
-        return {hex: hex, length: bytes.length};
     }
 
     // ==== 기압과 바람 ====
@@ -305,8 +303,8 @@ try {
             var d = windDirection(theta, high);
             winds.push(t.line([c[0] - d[0] * length / 2, c[1] - d[1] * length / 2], [c[0] + d[0] * length / 2, c[1] + d[1] * length / 2], o.arrowPt));
         }
-        // 화살촉은 고른 종류(기본 화살표 1, 패스 끝의 팁)
-        if (winds.length) setStrokeArrowheads(winds, null, arrowNameOf(o.headShape), o.arrowPt, o.headScale);
+        // 화살촉은 고른 종류(기본 작살형)
+        if (winds.length) setStrokeArrowheads(winds, null, headKindOf(o.headShape), o.arrowPt, o.headScale);
     }
 
     // 옆 모습: 가운데 하강(고기압)·상승(저기압) 기류, 지면에서 불어 나가거나 들어오는 바람, 위에서 반대로.
@@ -328,7 +326,7 @@ try {
                 flow([near, H], [far, H]);
             }
         }
-        setStrokeArrowheads(flows, null, arrowNameOf(o.headShape), o.arrowPt, o.headScale);
+        setStrokeArrowheads(flows, null, headKindOf(o.headShape), o.arrowPt, o.headScale);
         t.text(high ? "하강 기류" : "상승 기류", 1.5 * mm, H / 2, F, "left");
 
         if (o.axes) {
@@ -339,7 +337,7 @@ try {
                 t.line([-half, ty], [-half + sign * TICK, ty], AXIS_PT);
             }
             var axis = t.path([[-half, H + ARROW_MARGIN], [-half, 0], [half + ARROW_MARGIN, 0]], false, null, 100, AXIS_PT);
-            if (o.axisArrows) setStrokeArrowheads([axis], arrowNameOf(o.headShape), arrowNameOf(o.headShape), AXIS_PT, 100);
+            if (o.axisArrows) setStrokeArrowheads([axis], headKindOf(o.headShape), headKindOf(o.headShape), AXIS_PT, 100);
             t.text("높이", -half, H + ARROW_MARGIN + F * 0.7, F);
         } else {
             t.line([-half, 0], [half, 0], 0.5);

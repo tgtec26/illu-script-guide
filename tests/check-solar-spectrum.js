@@ -150,9 +150,10 @@ assert.ok(wholeSource.includes("var noSelection = selectedItems.length === 0;"),
 assert.ok(source.includes("if (rect !== null) rect.remove();"));
 assert.ok(source.includes("widthField.row.enabled = false;"));
 assert.ok(source.includes("if (rect === null && (!inRange(width, WIDTH_RANGE)"), "rectangle size is not range-checked");
-// 미리보기: 위치는 그룹만 옮기고, 화살촉은 확인 때만 액션으로
+// 미리보기: 위치는 그룹만 옮기고, 화살촉도 직접 그린 도형이라 미리보기에서 보인다
 assert.ok(source.includes("previewGroup.translate(isX ? delta : 0, isX ? 0 : delta)"));
-assert.ok(source.includes("if (isFinal) applyArrowheads([axis].concat(rangeLines), strokePt, headScale);"));
+assert.ok(source.includes("applyArrowheads([axis].concat(rangeLines), strokePt, headScale);") && !source.includes("if (isFinal) applyArrowheads("), "heads are drawn shapes, so previews show them too");
+assert.ok(!wholeSource.includes("writeArrowheadAction") && !wholeSource.includes("ARROW_NATIVE"), "no arrowhead actions");
 
 // 순수 문법 검사 (#지시문 제외)
 new Function(wholeSource.replace(/^#.*$/mg, ""));

@@ -14,7 +14,7 @@ try {
 //   - 중력: 가운데에서 아래로. 부력: 가운데에서 위로. 수직항력: 바닥에서 위로 (중력과 겹치지 않게 너비의 20% 비켜서).
 //   - 마찰력: 바닥 가운데에서 운동 방향과 반대로. 작용한 힘: 밀기는 뒤쪽 옆면을 향해 들어오고, 당기기는 앞쪽 옆면에서 나간다.
 //   - 운동 방향 화살표: 물체(와 위로 뻗은 화살표 끝) 위에 떨어져서 운동 방향으로.
-//   - 화살표는 선 + 끝 화살촉(임시 액션), 이름은 화살표 끝 옆에 둔다. 결과는 물체와 따로 된 그룹 하나.
+//   - 화살표는 선 + 끝 화살촉(측정한 일러스트레이터 화살촉 4종을 직접 그린 도형), 이름은 화살표 끝 옆에 둔다. 결과는 물체와 따로 된 그룹 하나.
 
 (function() {
     if (app.documents.length === 0) {
@@ -26,10 +26,16 @@ try {
     var MM = 2.834645669;
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
-    // 화살촉 이름은 UI 언어를 따른다 (한국어판 '화살표 1')
-    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 이름은 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다
+    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 작살형(평가원식)이 1번이다
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-    var ARROW_NATIVE = ["화살표 3", "화살표 9", "화살표 2", "화살표 1"];
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(tools/arrowheads.json과 같은 데이터). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
     var headShape = 3;
     // 힘 종류: 이름, 기본 길이(mm)
     var FORCES = [
@@ -112,7 +118,7 @@ try {
     headShapeRow.add("statictext", undefined, "화살촉 종류:").preferredSize.width = LABEL_WIDTH;
     var headShapeList = headShapeRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
     headShapeList.selection = [2, 3, 1, 0][headShape];
-    headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
+    headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 측정한 일러스트레이터 화살촉 모양을 그린다";
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
         headShape = [3, 2, 0, 1][headShapeList.selection.index];
@@ -201,19 +207,23 @@ try {
         previewGroup.name = "힘 화살표";
         previewGroup.move(target, ElementPlacement.PLACEBEFORE);
         var black = makeGray(100);
-        var paths = [];
         for (var i = 0; i < arrows.length; i++) {
-            var line = previewGroup.pathItems.add();
-            line.setEntirePath([arrows[i].from, arrows[i].to]);
-            line.name = arrows[i].name;
-            line.filled = false;
-            line.stroked = true;
-            line.strokeColor = black;
-            line.strokeWidth = lineWidth;
-            paths.push(line);
+            // 선은 화살촉 속에서 끝나고, 촉은 고른 모양의 채운 도형이다
+            var dx = arrows[i].to[0] - arrows[i].from[0], dy = arrows[i].to[1] - arrows[i].from[1];
+            var len = Math.sqrt(dx * dx + dy * dy), dir = [dx / len, dy / len];
+            var back = headBack(headShape, lineWidth, headScale);
+            if (len > back) {
+                var line = previewGroup.pathItems.add();
+                line.setEntirePath([arrows[i].from, [arrows[i].to[0] - dir[0] * back, arrows[i].to[1] - dir[1] * back]]);
+                line.name = arrows[i].name;
+                line.filled = false;
+                line.stroked = true;
+                line.strokeColor = black;
+                line.strokeWidth = lineWidth;
+            }
+            addHeadShape(previewGroup, headShape, arrows[i].to, dir, lineWidth, headScale, black).name = arrows[i].name + " 화살촉";
             if (labelsOn) addLabel(arrows[i]);
         }
-        applyArrowheads(paths, lineWidth, headScale);
         if (offsetXmm !== 0 || offsetYmm !== 0) previewGroup.translate(offsetXmm * MM, offsetYmm * MM);
     }
 
@@ -292,109 +302,36 @@ try {
     // -------------------------------------------------------
     // 일러스트레이터 개체
     // -------------------------------------------------------
-    // 화살촉은 DOM에 없는 속성이라 임시 액션으로 끝 화살촉만 넣는다
-    function applyArrowheads(paths, weight, scale) {
-        if (paths.length === 0) return;
-        var actionSetName = "Codex_ForceDiagram";
-        var actionName = "ForceArrowheads";
-        var actionFile = new File(Folder.temp + "/Codex_ForceArrowheads.aia");
-        try {
-            doc.selection = null;
-            for (var i = 0; i < paths.length; i++) paths[i].selected = true;
-            writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale);
-            try { app.unloadAction(actionSetName, ""); } catch (e) {}
-            app.loadAction(actionFile);
-            app.doScript(actionName, actionSetName);
-        } catch (actionError) {
-            // 화살촉 이름은 UI 언어에 따라 다르다. 실패해도 선은 그대로 남는다
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
         }
-        try { app.unloadAction(actionSetName, ""); } catch (e2) {}
-        try { actionFile.remove(); } catch (e3) {}
-        doc.selection = null;
+        return out;
     }
 
-    // 액션 파일의 문자열은 UTF-8 바이트를 16진수로 적는다
-    function toActionHex(text) {
-        var bytes = [];
-        for (var i = 0; i < text.length; i++) {
-            var code = text.charCodeAt(i);
-            if (code < 0x80) {
-                bytes.push(code);
-            } else if (code < 0x800) {
-                bytes.push(0xC0 | (code >> 6), 0x80 | (code & 0x3F));
-            } else {
-                bytes.push(0xE0 | (code >> 12), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F));
-            }
-        }
-        var hex = "";
-        for (var j = 0; j < bytes.length; j++) {
-            var part = bytes[j].toString(16).toUpperCase();
-            if (part.length < 2) part = "0" + part;
-            hex += part;
-        }
-        return {hex: hex, length: bytes.length};
+    // 화살촉 크기: 선 두께(pt) × 크기% (일러스트레이터 화살촉과 같다). 카탈로그 1pt가 이 값이다
+    function headUnit(weight, scalePct) {
+        return weight * scalePct / 100;
     }
 
-    function writeArrowheadAction(actionFile, actionSetName, actionName, weight, scale) {
-        var setName = toActionHex(actionSetName);
-        var name = toActionHex(actionName);
-        var arrow = toActionHex(ARROW_NATIVE[headShape]);
-        var lines = [
-            "/version 3",
-            "/name [ " + setName.length, "    " + setName.hex, "]",
-            "/isOpen 1",
-            "/actionCount 1",
-            "/action-1 {",
-            "    /name [ " + name.length, "        " + name.hex, "    ]",
-            "    /keyIndex 0",
-            "    /colorIndex 0",
-            "    /isOpen 1",
-            "    /eventCount 1",
-            "    /event-1 {",
-            "        /useRulersIn1stQuadrant 0",
-            "        /internalName (ai_plugin_setStroke)",
-            "        /localizedName [ 10", "            536574205374726F6B65", "        ]",
-            "        /isOpen 1",
-            "        /isOn 1",
-            "        /hasDialog 0",
-            "        /parameterCount 4",
-            // 선 두께 (pt)
-            "        /parameter-1 {",
-            "            /key 2003072104",
-            "            /showInPalette -1",
-            "            /type (unit real)",
-            "            /value " + weight,
-            "            /unit 592476268",
-            "        }",
-            // 끝 화살촉
-            "        /parameter-2 {",
-            "            /key 1634231346",
-            "            /showInPalette -1",
-            "            /type (ustring)",
-            "            /value [ " + arrow.length, "                " + arrow.hex, "            ]",
-            "        }",
-            // 끝 화살촉 크기 (%)
-            "        /parameter-3 {",
-            "            /key 1634951986",
-            "            /showInPalette -1",
-            "            /type (real)",
-            "            /value " + scale + ".0",
-            "        }",
-            // 화살촉 정렬: 패스 끝의 팁
-            "        /parameter-4 {",
-            "            /key 1634230636",
-            "            /showInPalette -1",
-            "            /type (enumerated)",
-            "            /name [ 17", "                ED8CA8EC8AA420EB819DEC9D9820ED8C81", "            ]",
-            "            /value 0",
-            "        }",
-            "    }",
-            "}"
-        ];
-        actionFile.encoding = "UTF-8";
-        actionFile.open("w");
-        actionFile.write(lines.join("\n"));
-        actionFile.close();
+    // 선이 화살촉 속에서 끝나는, 끝에서의 거리(pt)
+    function headBack(shape, weight, scalePct) {
+        return HEAD_CATALOG[shape].lineEnd * headUnit(weight, scalePct);
+    }
+
+    // 화살촉 도형 하나를 group에 채워 그린다. tip은 끝, d는 방향 단위 벡터
+    function addHeadShape(group, shape, tip, d, weight, scalePct, color) {
+        var head = group.pathItems.add();
+        head.setEntirePath(catalogPoints(shape, tip, d, headUnit(weight, scalePct)));
+        head.closed = true;
+        head.stroked = false;
+        head.filled = true;
+        head.fillColor = color;
+        return head;
     }
 
     // 글자 서체 (02_문자/한글·영문 서체 적용.jsx·텍스트 삽입.jsx 규칙): 한글·공백은 Spoqa(기준선 0), 영문·숫자·기호는

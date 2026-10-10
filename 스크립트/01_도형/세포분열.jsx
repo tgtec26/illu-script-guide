@@ -18,6 +18,14 @@ try {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
 
     var doc = app.activeDocument;
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(tools/arrowheads.json과 같은 데이터). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
     var TAB_PREF_KEY = "CellDivision/tab";   // 마지막에 쓴 탭. 각 탭의 옵션은 원래 스크립트의 키에 그대로 남는다
 
     var selectedItems = [];
@@ -132,6 +140,108 @@ try {
     var result = win.show();
     if (result !== 1) engine.clearPreview();
     try { app.redraw(); } catch (redrawError) {}
+
+    // -------------------------------------------------------
+    // 화살촉 (측정한 일러스트레이터 화살촉을 직접 그린다)
+    // -------------------------------------------------------
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
+    }
+
+    // 화살촉 크기: 선 두께(pt) × 크기% (일러스트레이터 화살촉과 같다). 카탈로그 1pt가 이 값이다
+    function headUnit(weight, scalePct) {
+        return weight * scalePct / 100;
+    }
+
+    // 선이 화살촉 속에서 끝나는, 끝에서의 거리(pt)
+    function headBack(shape, weight, scalePct) {
+        return HEAD_CATALOG[shape].lineEnd * headUnit(weight, scalePct);
+    }
+
+    function arrowDist(p, q) {
+        return Math.sqrt((p[0] - q[0]) * (p[0] - q[0]) + (p[1] - q[1]) * (p[1] - q[1]));
+    }
+
+    function arrowLerp(p, q, t) {
+        return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    }
+
+    // 경로 끝에서 화살촉 길이(back)만큼 선을 자른다. pts는 경로 끝쪽 점들 [{a, l, r}](마지막이 끝점).
+    // 끝점에서 back 이상 떨어진 점을 찾아 그 구간을 베지어 분할한다. 못 찾으면 {found: false}.
+    // 찾으면 j(남는 마지막 구간의 시작 점 번호), jRight(그 점의 새 오른쪽 핸들), cut·cutLeft(새 끝점과 왼쪽 핸들), dir(끝점 방향)
+    function cutPathEnd(pts, back) {
+        var e = pts[pts.length - 1].a, j = pts.length - 2, k;
+        while (j >= 0 && arrowDist(pts[j].a, e) < back) j--;
+        if (j < 0) return {found: false};
+        var p0 = pts[j].a, p1 = pts[j].r, p2 = pts[j + 1].l, p3 = pts[j + 1].a;
+        var lo = 0, hi = 1, t = 0.5;
+        for (k = 0; k < 40; k++) {
+            t = (lo + hi) / 2;
+            var a01 = arrowLerp(p0, p1, t), a12 = arrowLerp(p1, p2, t), a23 = arrowLerp(p2, p3, t);
+            var at = arrowLerp(arrowLerp(a01, a12, t), arrowLerp(a12, a23, t), t);
+            if (arrowDist(at, e) > back) lo = t; else hi = t;
+        }
+        var b01 = arrowLerp(p0, p1, t), b12 = arrowLerp(p1, p2, t), b23 = arrowLerp(p2, p3, t);
+        var b012 = arrowLerp(b01, b12, t), b123 = arrowLerp(b12, b23, t), cut = arrowLerp(b012, b123, t);
+        var len = arrowDist(cut, e);
+        return {found: true, j: j, jRight: b01, cut: cut, cutLeft: b012, dir: [(e[0] - cut[0]) / len, (e[1] - cut[1]) / len]};
+    }
+
+    // 화살촉 도형 하나를 group에 채워 그린다. tip은 끝, d는 방향 단위 벡터
+    function addHeadShape(group, shape, tip, d, weight, scalePct, color) {
+        var head = group.pathItems.add();
+        head.setEntirePath(catalogPoints(shape, tip, d, headUnit(weight, scalePct)));
+        head.closed = true;
+        head.stroked = false;
+        head.filled = true;
+        head.fillColor = color;
+        return head;
+    }
+
+    // 각 경로의 끝에 화살촉(모양 shape)을 단다: 선 끝을 촉 속(lineEnd)까지 잘라내고 같은 그룹에 촉 도형을 더한다. 경로마다 촉 도형(못 달면 null) 목록을 돌려준다
+    function applyHeadShapes(paths, weight, scale, shape) {
+        var heads = [];
+        for (var i = 0; i < paths.length; i++) heads.push(addArrowHead(paths[i], weight, scale, shape));
+        return heads;
+    }
+
+    function addArrowHead(path, weight, scale, shape) {
+        var pp = path.pathPoints, n = pp.length;
+        if (n < 2) return null;
+        var back = headBack(shape, weight, scale), m = Math.min(n, 3), pts, k, result;
+        while (true) {
+            pts = [];
+            for (k = n - m; k < n; k++) pts.push({a: pp[k].anchor, l: pp[k].leftDirection, r: pp[k].rightDirection});
+            result = cutPathEnd(pts, back);
+            if (result.found || m === n) break;
+            m = Math.min(n, m * 2);
+        }
+        var tip = pts[pts.length - 1].a, dir;
+        if (result.found) {
+            var jIndex = n - m + result.j;
+            for (k = n - 1; k > jIndex + 1; k--) pp[k].remove();
+            pp[jIndex].rightDirection = result.jRight;
+            var last = pp[jIndex + 1];
+            last.anchor = result.cut;
+            last.leftDirection = result.cutLeft;
+            last.rightDirection = result.cut;
+            dir = result.dir;
+        } else {
+            var dx = tip[0] - pts[0].a[0], dy = tip[1] - pts[0].a[1], len = Math.sqrt(dx * dx + dy * dy);
+            if (len === 0) return null;
+            dir = [dx / len, dy / len];
+        }
+        var head = addHeadShape(path.parent, shape, tip, dir, weight, scale, path.strokeColor);
+        head.name = "화살촉";
+        return head;
+    }
 
     // ==== 염색체 모형 ====
     function makeChromosomeEngine() {
@@ -1398,9 +1508,8 @@ try {
             // 머리는 달걀꼴: 앞(위)이 좁고 뒤(꼬리 쪽)가 넓다. 앞 끝 폭 = (1 - HEAD_TAPER) × 뒤 끝 폭.
             var HEAD_TAPER = 0.35;
             var HEAD_SAMPLES = 24;
-            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다. 이름은 UI 언어를 따른다
+            // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 작살형(평가원식)이 1번이다. 이름은 UI 언어를 따른다
             var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-            var ARROW_NUMBER = [3, 9, 2, 1];
             var headShape = 3;
             var PREF_KEY = "ObjectMeiosis/settings";
             var FRAME_KEY = PREF_KEY + "/frame";
@@ -1506,11 +1615,10 @@ try {
             headShapeRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
             var headShapeList = headShapeRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
             headShapeList.selection = [2, 3, 1, 0][headShape];
-            headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
+            headShapeList.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 측정한 일러스트레이터 화살촉 모양을 그린다";
             headShapeList.onChange = function() {
                 if (!headShapeList.selection) return;
                 headShape = [3, 2, 0, 1][headShapeList.selection.index];
-                // 화살촉은 확인할 때 적용된다 (미리보기는 직접 그린 화살촉)
             };
 
             var spermPanel = addPanel(dlg, "정자 (mm)");
@@ -1610,7 +1718,7 @@ try {
             // -------------------------------------------------------
             // 미리보기
             // -------------------------------------------------------
-            // 화살촉은 액션으로만 붙일 수 있어 느리다. 미리보기는 몸통만 그리고 확인을 눌렀을 때 화살촉을 붙인다.
+            // 화살촉은 직접 그린 도형이라 미리보기에서도 그린다.
             // 정자 몸통(점 73개 × 속성 4개)이 DOM 비용의 대부분이라 세포·화살표와 따로 둔다.
             // 배치만 바뀌면 몸통은 새 머리 위치로 옮기기만 하고, 꼬리처럼 몸통만 바뀌면 세포·화살표는 그대로 둔다.
             function updatePreview() {
@@ -1625,7 +1733,7 @@ try {
                 try {
                     if (previewGroup === null || layoutKey !== previewSignature) {
                         var heads = [];
-                        var group = buildDiagram(false, heads);
+                        var group = buildDiagram(true, heads);
                         removeItem(previewGroup);
                         previewGroup = group;
                         previewGroup.name = PREVIEW_NAME;
@@ -2073,71 +2181,9 @@ try {
                 return rgb;
             }
 
-            // -------------------------------------------------------
-            // 화살촉
-            // -------------------------------------------------------
-            // 화살촉은 DOM에 없어 임시 액션으로 적용한다 (AGENTS.md 참고)
+            // 화살촉: 측정한 일러스트레이터 화살촉을 직접 그린다 (감수 분열 탭: 선 두께 ARROW_WIDTH_PT, 크기 arrowScale%)
             function applyArrowheads(paths) {
-                var actionSetName = "Codex_Meiosis";
-                var actionName = "MeiosisArrow";
-                var actionFile = new File(Folder.temp + "/Codex_MeiosisArrow.aia");
-                var locale = getAppLocale();
-                var isKorean = locale === "" || locale.indexOf("ko") === 0;
-                var arrowName = (isKorean ? "화살표 " : "Arrow ") + ARROW_NUMBER[headShape];
-
-                try {
-                    doc.selection = null;
-                    for (var i = 0; i < paths.length; i++) {
-                        paths[i].selected = true;
-                    }
-                    removeActionSetIfLoaded(actionSetName);
-                    writeArrowheadAction(actionFile, actionSetName, actionName, arrowName);
-                    app.loadAction(actionFile);
-                    app.doScript(actionName, actionSetName);
-                } catch (e) {
-                    // 화살표 이름은 UI 언어를 따른다. 실패해도 선 자체는 그대로 남는다.
-                }
-
-                removeActionSetIfLoaded(actionSetName);
-                try { actionFile.remove(); } catch (removeError) {}
-                doc.selection = null;
-            }
-
-            function writeArrowheadAction(actionFile, actionSetName, actionName, arrowName) {
-                var lines = [];
-                lines.push("/version 3");
-                lines.push("/name [ " + actionSetName.length);
-                lines.push("    " + asciiHex(actionSetName));
-                lines.push("]");
-                lines.push("/isOpen 1");
-                lines.push("/actionCount 1");
-                lines.push("/action-1 {");
-                lines.push("    /name [ " + actionName.length);
-                lines.push("        " + asciiHex(actionName));
-                lines.push("    ]");
-                lines.push("    /keyIndex 0");
-                lines.push("    /colorIndex 0");
-                lines.push("    /isOpen 1");
-                lines.push("    /eventCount 1");
-                lines.push("    /event-1 {");
-                lines.push("        /useRulersIn1stQuadrant 0");
-                lines.push("        /internalName (ai_plugin_setStroke)");
-                lines.push("        /localizedName [ 10");
-                lines.push("            536574205374726F6B65");
-                lines.push("        ]");
-                lines.push("        /isOpen 1");
-                lines.push("        /isOn 1");
-                lines.push("        /hasDialog 0");
-                lines.push("        /parameterCount 5");
-                addUnitRealParameter(lines, 1, 2003072104, ARROW_WIDTH_PT);
-                addUStringParameter(lines, 2, 1634231345, getNoneArrowName());
-                addUStringParameter(lines, 3, 1634231346, arrowName);
-                addRealParameter(lines, 4, 1634951986, arrowScale);
-                addEnumeratedParameter(lines, 5, 1634230636, "패스 끝의 팁", 0);
-                lines.push("    }");
-                lines.push("}");
-
-                writeActionFile(actionFile, lines);
+                return applyHeadShapes(paths, ARROW_WIDTH_PT, arrowScale, headShape);
             }
 
             // -------------------------------------------------------
@@ -2382,10 +2428,9 @@ try {
             var labelIndexes = [0, 1, 2, 3];
             var arrowWidthPt = 3;
             var arrowScale = 200;
-            var headShape2 = 0;   // 기본 삼각형 (화살표 3)
-            // 화살촉 모양 4종류와 일러스트레이터 커스텀 화살표 번호(위 감수 분열 탭과 같다)
+            var headShape2 = 0;   // 기본 삼각형
+            // 화살촉 모양 4종류(위 감수 분열 탭과 같다)
             var HEAD_SHAPES2 = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-            var ARROW_NUMBER2 = [3, 9, 2, 1];
             var gapDeg = 6;
             var startAngleDeg = 0;
             var offsetXmm = 0;
@@ -2478,14 +2523,14 @@ try {
             headShapeRow2.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
             var headShapeList2 = headShapeRow2.add("dropdownlist", undefined, [HEAD_SHAPES2[3], HEAD_SHAPES2[2], HEAD_SHAPES2[0], HEAD_SHAPES2[1]]);
             headShapeList2.selection = [2, 3, 1, 0][headShape2];
-            headShapeList2.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
+            headShapeList2.helpTip = "화살촉 모양. 작살형이 평가원식(기본). 측정한 일러스트레이터 화살촉 모양을 그린다";
             headShapeList2.onChange = function() {
                 if (!headShapeList2.selection) return;
                 headShape2 = [3, 2, 0, 1][headShapeList2.selection.index];
                 updatePreview();
             };
             var gapControls = addValueRow(arrowPanel, "간격", "°", gapDeg, 0, 60, 1, 0);
-            var arrowNote = arrowPanel.add("statictext", undefined, "미리보기는 슬라이더를 놓는 순간 화살촉까지 그립니다 (흰색 채움은 확인 후 적용).", {multiline: true});
+            var arrowNote = arrowPanel.add("statictext", undefined, "화살촉은 미리보기에서도 보입니다 (흰색 채움은 확인 후 적용).", {multiline: true});
             arrowNote.preferredSize = [330, 34];
 
             bindValueRow(outerControls,
@@ -2547,8 +2592,6 @@ try {
             // -------------------------------------------------------
             // 미리보기
             // -------------------------------------------------------
-            // 화살촉은 액션으로만 붙일 수 있어 느리다. 슬라이더를 끄는 동안(withArrowheads=false)은
-            // 굵기만 보여주고, 손을 뗀 순간 화살촉까지 그린다.
             // Illustrator는 연속 DOM 수정 중 간헐적으로 "Target layer cannot be modified" / PARM을
             // 던진다. 여기서 잡지 않으면 스크립트가 통째로 죽어 미리보기가 캔버스에 남는다.
             function updatePreview(withArrowheads) {
@@ -2562,7 +2605,7 @@ try {
                 if (previewGroup !== null && signature === previewSignature) return;
                 clearPreview();
                 try {
-                    previewGroup = buildDiagram(!lightweight, false, lightweight);
+                    previewGroup = buildDiagram(true, false, lightweight);
                     previewGroup.name = PREVIEW_NAME;
                     previewSignature = signature;
                 } catch (e) {
@@ -2609,7 +2652,7 @@ try {
             // -------------------------------------------------------
             // 도형 생성
             // -------------------------------------------------------
-            // withArrowheads: 화살촉 액션을 적용할지, expandArrows: 면으로 확장·병합해 흰색으로 채울지
+            // withArrowheads: 화살촉을 그릴지, expandArrows: 면으로 확장·병합해 흰색으로 채울지
             // 그리다 실패하면 반쯤 만든 그룹을 지우고 오류를 다시 던진다 (유령 조각 방지)
             function buildDiagram(withArrowheads, expandArrows, lightweight) {
                 var group = doc.groupItems.add();
@@ -2664,11 +2707,9 @@ try {
                     arcs.push(arc);
                 }
 
-                if (withArrowheads) {
-                    applyArrowheadAction(arcs);
-                }
+                var arrowHeads = withArrowheads ? applyArrowheadAction(arcs) : [];
                 if (expandArrows) {
-                    outlineArrows(group, arcs);
+                    outlineArrows(group, arcs, arrowHeads);
                 }
             }
 
@@ -2827,91 +2868,25 @@ try {
                 }
             }
 
-            // -------------------------------------------------------
-            // 화살촉 · 확장
-            // -------------------------------------------------------
-            // 화살촉은 DOM에 없어 임시 액션으로 적용한다 (AGENTS.md 참고)
+            // 화살촉: 측정한 일러스트레이터 화살촉을 직접 그린다 (세포 주기 탭). 호마다 촉 도형 목록을 돌려준다
             function applyArrowheadAction(paths) {
-                var actionSetName = "Codex_CellCycle";
-                var actionName = "CellCycleArrow";
-                var actionFile = new File(Folder.temp + "/Codex_CellCycleArrow.aia");
-                var locale = getAppLocale();
-                var isKorean = locale === "" || locale.indexOf("ko") === 0;
-                var arrowName = (isKorean ? "화살표 " : "Arrow ") + ARROW_NUMBER2[headShape2];
-
-                try {
-                    doc.selection = null;
-                    for (var i = 0; i < paths.length; i++) {
-                        paths[i].selected = true;
-                    }
-                    removeActionSetIfLoaded(actionSetName);
-                    writeArrowheadAction(actionFile, actionSetName, actionName, arrowName);
-                    app.loadAction(actionFile);
-                    app.doScript(actionName, actionSetName);
-                } catch (e) {
-                    // 화살표 이름은 UI 언어를 따른다. 실패해도 호 자체는 그대로 남는다.
-                }
-
-                removeActionSetIfLoaded(actionSetName);
-                try { actionFile.remove(); } catch (e2) {}
-                doc.selection = null;
+                return applyHeadShapes(paths, arrowWidthPt, arrowScale, headShape2);
             }
 
-            function writeArrowheadAction(actionFile, actionSetName, actionName, arrowName) {
-                var lines = [];
-                lines.push("/version 3");
-                lines.push("/name [ " + actionSetName.length);
-                lines.push("    " + asciiHex(actionSetName));
-                lines.push("]");
-                lines.push("/isOpen 1");
-                lines.push("/actionCount 1");
-                lines.push("/action-1 {");
-                lines.push("    /name [ " + actionName.length);
-                lines.push("        " + asciiHex(actionName));
-                lines.push("    ]");
-                lines.push("    /keyIndex 0");
-                lines.push("    /colorIndex 0");
-                lines.push("    /isOpen 1");
-                lines.push("    /eventCount 1");
-                lines.push("    /event-1 {");
-                lines.push("        /useRulersIn1stQuadrant 0");
-                lines.push("        /internalName (ai_plugin_setStroke)");
-                lines.push("        /localizedName [ 10");
-                lines.push("            536574205374726F6B65");
-                lines.push("        ]");
-                lines.push("        /isOpen 1");
-                lines.push("        /isOn 1");
-                lines.push("        /hasDialog 0");
-                lines.push("        /parameterCount 5");
-                addUnitRealParameter(lines, 1, 2003072104, arrowWidthPt);
-                addUStringParameter(lines, 2, 1634231345, getNoneArrowName());
-                addUStringParameter(lines, 3, 1634231346, arrowName);
-                addRealParameter(lines, 4, 1634951986, arrowScale);
-                addEnumeratedParameter(lines, 5, 1634230636, "패스 끝의 팁", 0);
-                lines.push("    }");
-                lines.push("}");
-
-                writeActionFile(actionFile, lines);
-            }
-
-            // 손으로 만들 때와 같은 순서: 모양 확장(화살촉을 패스로) → 확장(획을 면으로) → 병합.
+            // 손으로 만들 때와 같은 순서(화살촉은 이미 도형): 확장(획을 면으로) → 병합.
             // 화살표를 하나씩 처리해야 병합 대상이 그 화살표의 몸통과 화살촉으로만 좁혀진다.
             // 여러 개를 한꺼번에 확장하면 선택 항목이 전체 조각의 목록이 되어 병합이 헛돈다.
-            function outlineArrows(group, paths) {
+            function outlineArrows(group, paths, headShapes) {
                 for (var i = 0; i < paths.length; i++) {
                     doc.selection = null;
                     try {
                         paths[i].selected = true;
+                        if (headShapes && headShapes[i]) headShapes[i].selected = true;
                     } catch (e) {
                         continue;
                     }
 
-                    // 모양 확장: 화살촉이 패스가 되고 몸통은 획인 채로 그룹에 묶인다
-                    try {
-                        app.executeMenuCommand("expandStyle");
-                    } catch (expandError) {
-                        continue;
-                    }
+                    // 화살촉은 이미 도형이라 모양 확장이 필요 없다. 호와 촉을 함께 골라 확장 → 병합한다
 
                     // 확장(획 → 면). 메뉴 명령("outline", "OffsetPath v22", "Expand3")과
                     // 임시 .aia 재현은 먹히지 않았고, 설치된 확장 액션 클릭은 잘 되는 것을 확인함.

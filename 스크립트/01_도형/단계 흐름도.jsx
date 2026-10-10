@@ -1,5 +1,3 @@
-#include "Object_expand_arrow_helper.jsxinc"
-
 // 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
 try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 10_기타/마지막 실행 반복.jsx(F4)가 다시 실행
@@ -39,13 +37,16 @@ try {
     var MAX_STEPS = 6;
     var BOX_STROKE = 0.3;
     var PREVIEW_NAME = "StepFlow_Preview";
-    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 일러스트레이터 커스텀 화살표(화살표.ai)의 번호는 삼각형 3, 꺾쇠 9, 제비꼬리 2, 작살형(평가원식) 1이다. 이름은 UI 언어를 따른다
+    // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 작살형(평가원식)이 1번이다
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
-    var ARROW_NUMBER = [3, 9, 2, 1];
-    var ARROW_PREFIX = (function() {
-        var locale = getAppLocale();
-        return locale === "" || locale.indexOf("ko") === 0 ? "화살표 " : "Arrow ";
-    })();
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(tools/arrowheads.json과 같은 데이터). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
     // 프레임 범위 안에서 실제 글자가 차지하는 자리 (채팅 말풍선와 같은 실측 배수)
     var GLYPH_BOTTOM = 0.23;
     var GLYPH_HEIGHT = 0.896;
@@ -71,10 +72,10 @@ try {
     var options = readSettings();
     var previewGroup = null;
     var boxes = [];             // {group, frame, path} 순서대로
-    var arrows = [];            // 화살표 패스
+    var arrows = [];            // 화살표 선 패스
+    var arrowHeads = [];        // 화살표 촉 도형(arrows와 같은 순서)
     var previewPending = false;
     var rebuildPending = true;  // 수·글·글자 크기가 바뀌면 글자부터 다시 만든다
-    var arrowheadPending = true; // 화살촉 액션을 다시 걸어야 하는지
     var lastPreviewTime = 0;
     var PREVIEW_INTERVAL_MS = 40;
     var committed = false;
@@ -165,11 +166,10 @@ try {
     headShapeRow.add("statictext", undefined, "화살촉 모양:").preferredSize.width = LABEL_WIDTH;
     var headShapeList = headShapeRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
     headShapeList.selection = [2, 3, 1, 0][options.headShape];
-    headShapeList.helpTip = "화살촉 모양. 일러스트레이터 커스텀 화살표(화살표.ai)를 그대로 붙인다";
+    headShapeList.helpTip = "화살촉 모양. 측정한 일러스트레이터 화살촉 모양을 그린다";
     headShapeList.onChange = function() {
         if (!headShapeList.selection) return;
         options.headShape = [3, 2, 0, 1][headShapeList.selection.index];
-        arrowheadPending = true;
         updatePreview();
     };
     addRow(arrowPanel, "색 (K)", "arrowK", 0, 100, "", false).helpTip = "10 단위";
@@ -198,7 +198,6 @@ try {
         snapshotTexts();
         previewPending = true;
         rebuildPending = true;
-        arrowheadPending = true;
         if (previewPending && !updatePreview()) return;
         if (previewGroup === null && !buildPreview()) return;
         committed = true;
@@ -309,7 +308,6 @@ try {
                 } catch (e) { clearPreview(); status.text = "이동 오류: " + e; }
             } else {
                 if (key === "fontSize") rebuildPending = true;
-                if (key === "arrowScale" || key === "arrowWidth") arrowheadPending = true;
                 updatePreview(dragging);
             }
         }
@@ -337,10 +335,6 @@ try {
                 if (!buildPreview()) return false;
             } else {
                 layoutItems();
-            }
-            // 화살촉 액션은 느리므로 끄는 동안은 건너뛰고 손을 뗀 뒤 붙인다
-            if (previewGroup !== null && arrowheadPending && dragging !== true) {
-                applyArrowheads();
             }
             previewPending = false;
             app.redraw();
@@ -371,8 +365,7 @@ try {
                         if (j < options.count - 1) arrows.push(makeArrow(previewGroup));
                     }
                     for (var n = 0; n < boxes.length; n++) measureGlyph(boxes[n]);
-                    arrowheadPending = true;
-                }
+                            }
                 rebuildPending = false;
                 layoutItems();
                 return true;
@@ -414,6 +407,14 @@ try {
         path.closed = false;
         path.filled = false;
         path.stroked = true;
+        // 촉은 따로 채운 도형이다 (모양·크기는 layoutItems가 정한다)
+        var head = container.pathItems.add();
+        head.name = "StepArrowHead";
+        head.setEntirePath(catalogPoints(options.headShape, [10, 0], [1, 0], 1));
+        head.closed = true;
+        head.stroked = false;
+        head.filled = true;
+        arrowHeads.push(head);
         return path;
     }
 
@@ -485,10 +486,15 @@ try {
             if (i < arrows.length) {
                 x += gapPt;
                 var arrow = arrows[i];
-                arrow.setEntirePath([[x, 0], [x + arrowLen, 0]]);
+                // 선은 화살촉 속(lineEnd)에서 끝나고, 촉은 고른 모양의 채운 도형이다
+                var headSize = headUnit(options.arrowWidth, options.arrowScale);
+                var shaft = Math.max(0, arrowLen - HEAD_CATALOG[options.headShape].lineEnd * headSize);
+                arrow.setEntirePath([[x, 0], [x + shaft, 0]]);
                 arrow.strokeColor = arrowColor;
                 arrow.strokeWidth = options.arrowWidth;
                 arrow.strokeDashes = [];
+                arrowHeads[i].setEntirePath(catalogPoints(options.headShape, [x + arrowLen, 0], [1, 0], headSize));
+                arrowHeads[i].fillColor = arrowColor;
                 x += arrowLen + gapPt;
             }
         }
@@ -500,6 +506,7 @@ try {
     function clearPreview() {
         boxes = [];
         arrows = [];
+        arrowHeads = [];
         if (previewGroup !== null) {
             try { previewGroup.remove(); } catch (e) {
                 try { app.redraw(); previewGroup.remove(); } catch (e2) {}
@@ -522,63 +529,27 @@ try {
     }
 
     // -------------------------------------------------------
-    // 화살촉 (DOM에 없어 임시 액션으로 적용, AGENTS.md 참고)
+    // 화살촉 (측정한 일러스트레이터 화살촉을 직접 그린다)
     // -------------------------------------------------------
-    function applyArrowheads() {
-        if (arrows.length === 0) { arrowheadPending = false; return; }
-        var actionSetName = "Codex_StepFlow";
-        var actionName = "StepFlowArrow";
-        var actionFile = new File(Folder.temp + "/Codex_StepFlowArrow.aia");
-        try {
-            doc.selection = null;
-            for (var i = 0; i < arrows.length; i++) arrows[i].selected = true;
-            removeActionSetIfLoaded(actionSetName);
-            writeArrowheadAction(actionFile, actionSetName, actionName);
-            app.loadAction(actionFile);
-            app.doScript(actionName, actionSetName);
-            arrowheadPending = false;
-        } catch (e) {
-            // 화살표 이름은 UI 언어를 따른다. 실패해도 선 자체는 그대로 남는다
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
         }
-        removeActionSetIfLoaded(actionSetName);
-        try { actionFile.remove(); } catch (e2) {}
-        doc.selection = null;
+        return out;
     }
 
-    function writeArrowheadAction(actionFile, actionSetName, actionName) {
-        var lines = [];
-        lines.push("/version 3");
-        lines.push("/name [ " + actionSetName.length);
-        lines.push("    " + asciiHex(actionSetName));
-        lines.push("]");
-        lines.push("/isOpen 1");
-        lines.push("/actionCount 1");
-        lines.push("/action-1 {");
-        lines.push("    /name [ " + actionName.length);
-        lines.push("        " + asciiHex(actionName));
-        lines.push("    ]");
-        lines.push("    /keyIndex 0");
-        lines.push("    /colorIndex 0");
-        lines.push("    /isOpen 1");
-        lines.push("    /eventCount 1");
-        lines.push("    /event-1 {");
-        lines.push("        /useRulersIn1stQuadrant 0");
-        lines.push("        /internalName (ai_plugin_setStroke)");
-        lines.push("        /localizedName [ 10");
-        lines.push("            536574205374726F6B65");
-        lines.push("        ]");
-        lines.push("        /isOpen 1");
-        lines.push("        /isOn 1");
-        lines.push("        /hasDialog 0");
-        lines.push("        /parameterCount 5");
-        addUnitRealParameter(lines, 1, 2003072104, options.arrowWidth);
-        addUStringParameter(lines, 2, 1634231345, getNoneArrowName());
-        addUStringParameter(lines, 3, 1634231346, ARROW_PREFIX + ARROW_NUMBER[options.headShape]);
-        addRealParameter(lines, 4, 1634951986, options.arrowScale);
-        addEnumeratedParameter(lines, 5, 1634230636, "패스 끝의 팁", 0);
-        lines.push("    }");
-        lines.push("}");
-        writeActionFile(actionFile, lines);
+    // 화살촉 크기: 선 두께(pt) × 크기% (일러스트레이터 화살촉과 같다). 카탈로그 1pt가 이 값이다
+    function headUnit(weight, scalePct) {
+        return weight * scalePct / 100;
+    }
+
+    // 선이 화살촉 속에서 끝나는, 끝에서의 거리(pt)
+    function headBack(shape, weight, scalePct) {
+        return HEAD_CATALOG[shape].lineEnd * headUnit(weight, scalePct);
     }
 
     // -------------------------------------------------------

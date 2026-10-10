@@ -10,9 +10,9 @@ assert.strictEqual(catalog.types.length, 4);
 function loadCatalog(source, label) {
   const start = source.indexOf("var HEAD_CATALOG = [");
   assert.ok(start >= 0, `${label}: HEAD_CATALOG`);
-  const end = source.indexOf("\n    ];", start);
-  const endAlt = source.indexOf("\n];", start);
-  const stop = [end, endAlt].filter((i) => i > 0).sort((a, b) => a - b)[0];
+  // 들여쓰기가 다른(탭 안쪽에 있는) 선언도 찾는다
+  const closing = /\n\s*\];/.exec(source.slice(start));
+  const stop = closing ? start + closing.index : -1;
   assert.ok(stop > start, `${label}: HEAD_CATALOG end`);
   return new Function(`${source.slice(start, stop)}\n];\nreturn HEAD_CATALOG;`)();
 }
