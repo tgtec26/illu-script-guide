@@ -1,42 +1,60 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" class="dark">
 <head>
 <meta charset="utf-8">
 <title>스크립트 패널</title>
 <style>
-:root { --bg: #323232; --fg: #e6e6e6; --dim: #9a9a9a; --line: #4a4a4a; --hover: #3f3f3f; --accent: #4a9eff; --star: #f5c542; --input: #262626; }
-:root.light { --fg: #1f1f1f; --dim: #666; --line: #c8c8c8; --hover: #e4e4e4; --input: #fff; }
+:root { --bg: #2e2e2e; --fg: #ececec; --dim: #9a9a9a; --line: #444; --hover: #3b3b3b; --input: #232323; --accent: #4a9eff; --folder: #7ab7ff; --file: #6fbf5a; --star: #f5c542; --switch: #5a5a5a; }
+:root.light { --bg: #f5f5f5; --fg: #1f1f1f; --dim: #707070; --line: #d2d2d2; --hover: #e6e6e6; --input: #ffffff; --accent: #1473e6; --folder: #1d6fd1; --file: #2d9d4a; --star: #e0a100; --switch: #b8b8b8; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
-body { background: var(--bg); color: var(--fg); font: 12px/1.35 -apple-system, "Apple SD Gothic Neo", sans-serif; word-break: keep-all; overflow-wrap: break-word; display: flex; flex-direction: column; user-select: none; }
-#bar { display: flex; gap: 4px; padding: 6px 6px 3px; }
-button { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
-button:hover { background: var(--hover); }
-#path { padding: 0 8px 4px; color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
-#q { margin: 0 6px 4px; padding: 4px 8px; font: inherit; color: var(--fg); background: var(--input); border: 1px solid var(--line); border-radius: 4px; user-select: text; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.35 -apple-system, "Apple SD Gothic Neo", sans-serif; word-break: keep-all; overflow-wrap: break-word; display: flex; flex-direction: column; user-select: none; }
+#bar { display: flex; align-items: center; gap: 4px; padding: 8px 8px 4px; }
+button { font: inherit; color: var(--fg); background: transparent; border: 0; padding: 0; cursor: pointer; }
+.ib { width: 28px; height: 28px; flex: none; border: 1px solid var(--line); border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+.ib:hover { background: var(--hover); }
+.ib svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#q { flex: 1; min-width: 0; height: 28px; padding: 0 8px; font: inherit; color: var(--fg); background: var(--input); border: 1px solid var(--line); border-radius: 5px; user-select: text; }
 #q:focus { outline: 1px solid var(--accent); }
-#list { flex: 1; overflow-y: auto; padding-bottom: 6px; }
-.group { padding: 4px 8px 2px; margin-top: 4px; color: var(--dim); font-size: 11px; cursor: pointer; border-top: 1px solid var(--line); }
-.group:first-child { margin-top: 0; border-top: 0; }
-.group .n { float: right; }
-.row { display: flex; align-items: center; padding: 2px 4px 2px 12px; cursor: pointer; }
+#theme { display: flex; align-items: center; gap: 4px; flex: none; color: var(--dim); }
+#theme .sw { width: 28px; height: 16px; border-radius: 8px; background: var(--switch); position: relative; transition: background .15s; }
+#theme .sw i { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: left .15s; }
+.light #theme .sw { background: var(--accent); }
+.light #theme .sw i { left: 14px; }
+#theme svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#path { padding: 0 10px 6px; color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--line); }
+#list { flex: 1; overflow-y: auto; padding: 4px 0 8px; }
+.row { display: flex; align-items: center; gap: 6px; height: 26px; padding-right: 8px; cursor: pointer; }
 .row:hover { background: var(--hover); }
-.row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row .dir { color: var(--dim); font-size: 10px; margin-left: 6px; }
-.star { border: 0; padding: 0 4px; color: var(--dim); font-size: 14px; line-height: 1; }
-.star.on { color: var(--star); }
-.empty { padding: 12px; color: var(--dim); }
-#status { padding: 3px 8px; min-height: 22px; color: var(--dim); border-top: 1px solid var(--line); font-size: 11px; }
+.row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .dir { color: var(--dim); font-size: 11px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .cnt { color: var(--dim); font-size: 11px; }
+.chev { width: 10px; height: 10px; flex: none; fill: var(--dim); transition: transform .1s; }
+.chev.open { transform: rotate(90deg); }
+.spacer { width: 10px; flex: none; }
+.ico { width: 18px; height: 18px; flex: none; }
+.ico.folder { fill: var(--folder); }
+.ico.file path:first-child { fill: var(--file); }
+.ico.file .g { fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sect { display: flex; align-items: center; gap: 6px; padding: 4px 10px 2px; color: var(--dim); font-size: 11px; }
+.sect svg { width: 12px; height: 12px; fill: var(--star); stroke: var(--star); stroke-width: 2; stroke-linejoin: round; }
+.star { width: 24px; height: 24px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
+.star:hover { background: var(--line); }
+.star svg { width: 16px; height: 16px; fill: none; stroke: var(--star); stroke-width: 2; stroke-linejoin: round; }
+.star.on svg { fill: var(--star); }
+.empty { padding: 12px 10px; color: var(--dim); }
+#status { padding: 4px 10px; min-height: 24px; color: var(--dim); border-top: 1px solid var(--line); font-size: 11px; }
 #status.err { color: #ff6b6b; }
 </style>
 </head>
 <body>
 <div id="bar">
-    <button id="pick" title="스크립트가 들어 있는 폴더를 고릅니다">폴더 지정</button>
-    <button id="refresh" title="폴더를 다시 읽습니다">새로고침</button>
+    <button id="pick" class="ib" title="스크립트 폴더 지정"></button>
+    <button id="refresh" class="ib" title="새로고침"></button>
+    <input id="q" type="text" placeholder="검색" spellcheck="false">
+    <button id="theme" title="다크 / 화이트 테마 전환"><span class="sw"><i></i></span><span id="themeIcon"></span></button>
 </div>
 <div id="path" title=""></div>
-<input id="q" type="text" placeholder="스크립트 검색" spellcheck="false">
 <div id="list"></div>
 <div id="status"></div>
 <script src="main.js"></script>
