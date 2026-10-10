@@ -5,39 +5,39 @@ const assert = require("assert");
 const root = path.resolve(__dirname, "..");
 
 const alignFiles = [
-  "스크립트/05_정렬/Align_1mmHcenterB.jsx",
-  "스크립트/05_정렬/Align_1mmHcenterS.jsx",
-  "스크립트/05_정렬/Align_1mmVcenterB.jsx",
-  "스크립트/05_정렬/Align_1mmVcenterS.jsx",
+  "스크립트/05_정렬/1mm 간격 가로 정렬 (큰 것 기준).jsx",
+  "스크립트/05_정렬/1mm 간격 가로 정렬 (작은 것 기준).jsx",
+  "스크립트/05_정렬/1mm 간격 세로 정렬 (큰 것 기준).jsx",
+  "스크립트/05_정렬/1mm 간격 세로 정렬 (작은 것 기준).jsx",
 ];
-const centerAlignBig = "스크립트/05_정렬/Align_CenterB.jsx";
-const centerAlignSmall = "스크립트/05_정렬/Align_CenterS.jsx";
-const visibleAlign = "스크립트/05_정렬/Align_VisibleBounds.jsx";
+const centerAlignBig = "스크립트/05_정렬/가운데 정렬 (큰 것 기준).jsx";
+const centerAlignSmall = "스크립트/05_정렬/가운데 정렬 (작은 것 기준).jsx";
+const visibleAlign = "스크립트/05_정렬/보이는 영역 정렬.jsx";
 
-const artboardGenerator = "스크립트/04_삽입/Input_setborard.jsx";
-const textInput = "스크립트/02_문자/Text_input.jsx";
-const subscriptedVariable = "스크립트/02_문자/Text_SubscriptedVariable.jsx";
-const graySelection = "스크립트/03_색상/Color_graysel.jsx";
-const fitToMargin = "스크립트/10_기타/fit2mm.jsx";
-const findSimilar = "스크립트/10_기타/find-replace.jsx";
-const embedLinkedImages = "스크립트/10_기타/embed.jsx";
-const extUngroup = "스크립트/10_기타/ExtUngroup.jsx";
+const artboardGenerator = "스크립트/04_삽입/대지 생성기.jsx";
+const textInput = "스크립트/02_문자/텍스트 삽입.jsx";
+const subscriptedVariable = "스크립트/02_문자/첨자 문자.jsx";
+const graySelection = "스크립트/03_색상/음영(K) 적용.jsx";
+const fitToMargin = "스크립트/10_기타/2mm 맞춤.jsx";
+const findSimilar = "스크립트/10_기타/찾아 바꾸기.jsx";
+const embedLinkedImages = "스크립트/10_기타/링크 이미지 포함(embed).jsx";
+const extUngroup = "스크립트/10_기타/그룹 해제.jsx";
 const dashAlignHelper = "스크립트/01_도형/Object_setdash_align_helper.jsxinc";
-const dashShift = "스크립트/01_도형/Object_dashshift.jsx";
-const cylinder = "스크립트/01_도형/Object_RoundSolids.jsx";
-const cone = "스크립트/01_도형/Object_RoundSolids.jsx";
-const sphere = "스크립트/01_도형/Object_RoundSolids.jsx";
-const coilSpring = "스크립트/01_도형/Object_Mechanics.jsx";
-const sineWave = "스크립트/01_도형/Object_Mechanics.jsx";
-const weatherFront = "스크립트/01_도형/Object_front.jsx";
-const phospholipid = "스크립트/01_도형/Object_PhospholipidBilayer.jsx";
-const cellCycle = "스크립트/01_도형/Object_CellDivision.jsx";
-const anchorAngle = "스크립트/01_도형/Object_AnchorAngle.jsx";
-const lewisDots = "스크립트/02_문자/Text_LewisDots.jsx";
-const cubicLattice = "스크립트/01_도형/Object_CrystalStructure.jsx";
-const graphiteCrystal = "스크립트/01_도형/Object_CrystalStructure.jsx";
-const diamondCrystal = "스크립트/01_도형/Object_CrystalStructure.jsx";
-const cabinetFiles = ["스크립트/01_도형/Object_cabinet_Out.jsx", "스크립트/01_도형/Object_cabinet_InOut.jsx"];
+const dashShift = "스크립트/01_도형/파선 패턴 이동.jsx";
+const cylinder = "스크립트/01_도형/원 입체.jsx";
+const cone = "스크립트/01_도형/원 입체.jsx";
+const sphere = "스크립트/01_도형/원 입체.jsx";
+const coilSpring = "스크립트/01_도형/역학.jsx";
+const sineWave = "스크립트/01_도형/역학.jsx";
+const weatherFront = "스크립트/01_도형/오브젝트 전선.jsx";
+const phospholipid = "스크립트/01_도형/인지질 2중층.jsx";
+const cellCycle = "스크립트/01_도형/세포분열.jsx";
+const anchorAngle = "스크립트/01_도형/수평.jsx";
+const lewisDots = "스크립트/02_문자/루이스 전자점식.jsx";
+const cubicLattice = "스크립트/01_도형/결정 구조.jsx";
+const graphiteCrystal = "스크립트/01_도형/결정 구조.jsx";
+const diamondCrystal = "스크립트/01_도형/결정 구조.jsx";
+const cabinetFiles = ["스크립트/01_도형/캐비넷 깊이 (밖).jsx", "스크립트/01_도형/캐비넷 깊이 (안·밖).jsx"];
 const updaterFiles = ["setup-mac.command", "setup-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -213,7 +213,7 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 
   if (!source.includes('Folder.temp + "/illu_last_script.txt"') ||
       !source.includes("__memo.write($.fileName)")) {
-    console.error(`${file}: must record itself for RepeatLast.jsx`);
+    console.error(`${file}: must record itself for 마지막 실행 반복.jsx`);
     failures++;
   }
 
@@ -2036,7 +2036,7 @@ for (const file of updaterFiles) {
 
 // 세포 주기: 시작 경계, 경량 미리보기, 위치 이동, 옵션 저장의 실행 가능한 회귀 검사.
 {
-  // 세포 주기 탭은 Object_CellDivision.jsx 안의 makeCellCycleEngine에 있다. 다른 탭의 같은 이름 함수를 피해 엔진 구간만 본다
+  // 세포 주기 탭은 세포분열.jsx 안의 makeCellCycleEngine에 있다. 다른 탭의 같은 이름 함수를 피해 엔진 구간만 본다
   const source = read(cellCycle).slice(read(cellCycle).indexOf("function makeCellCycleEngine("));
   try {
     const numberConstant = (name) => {
@@ -2171,7 +2171,7 @@ for (const file of updaterFiles) {
 // 세포 주기: Illustrator가 연속 DOM 수정 중 간헐적으로 던지는 오류(Target layer cannot be
 // modified / PARM)가 미리보기를 캔버스에 고아로 남기거나 스크립트를 죽이지 않아야 한다.
 {
-  // 세포 주기 탭은 Object_CellDivision.jsx 안의 makeCellCycleEngine에 있다. 다른 탭의 같은 이름 함수를 피해 엔진 구간만 본다
+  // 세포 주기 탭은 세포분열.jsx 안의 makeCellCycleEngine에 있다. 다른 탭의 같은 이름 함수를 피해 엔진 구간만 본다
   const source = read(cellCycle).slice(read(cellCycle).indexOf("function makeCellCycleEngine("));
   try {
     // 그리다 실패하면 반쯤 만든 그룹을 지우고 오류를 다시 던진다
@@ -2587,8 +2587,8 @@ for (const file of cabinetFiles) {
 
 // DNA·RNA 염기 서열: 상보·전사·입력 정리와 설정 문자열 검증
 {
-  // 염기 서열 탭은 Object_DnaModel.jsx 안의 makeSequenceEngine에 원래 코드 그대로 들어 있다
-  const file = "스크립트/01_도형/Object_DnaModel.jsx";
+  // 염기 서열 탭은 DNA 모형.jsx 안의 makeSequenceEngine에 원래 코드 그대로 들어 있다
+  const file = "스크립트/01_도형/DNA 모형.jsx";
   const source = read(file);
   const required = [
     'label: "염기 서열"',
@@ -2620,7 +2620,7 @@ for (const file of cabinetFiles) {
 }
 
 {
-  const file = "스크립트/01_도형/Object_PeriodicTable.jsx";
+  const file = "스크립트/01_도형/주기율표.jsx";
   const source = read(file);
   const required = [
     'new Window("dialog", "주기율표")',

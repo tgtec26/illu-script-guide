@@ -3,9 +3,9 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "03_색상", "Color_SpectrumGray.jsx");
+const scriptPath = path.join(root, "스크립트", "03_색상", "스펙트럼.jsx");
 
-assert.ok(fs.existsSync(scriptPath), "Color_SpectrumGray.jsx must exist");
+assert.ok(fs.existsSync(scriptPath), "스펙트럼.jsx must exist");
 const source = fs.readFileSync(scriptPath, "utf8");
 
 function extractFunction(name) {
@@ -126,7 +126,7 @@ for (let i = 1; i < twoElements.length; i++) assert.ok(twoElements[i] >= twoElem
 assert.deepStrictEqual(helpers.lineWavelengths([byName("O")], false, 770, 780, 1), [(777.2 + 777.4 + 777.5) / 3], "the O triplet collapses to one line");
 assert.deepStrictEqual(helpers.lineWavelengths([byName("Na")], false, 600, 610, 1), [], "nothing in range gives no lines");
 
-// 띠 기호: 없음 + 원문자·영문·로마 숫자, 세트마다 3개. 서체·크기는 Text_input.jsx와 같다
+// 띠 기호: 없음 + 원문자·영문·로마 숫자, 세트마다 3개. 서체·크기는 텍스트 삽입.jsx와 같다
 assert.deepStrictEqual(helpers.LABEL_SETS.map((set) => set.name), ["없음", "㉠ ㉡ ㉢", "A B C", "Ⅰ Ⅱ Ⅲ"]);
 assert.strictEqual(helpers.LABEL_SETS[0].items, null);
 for (const set of helpers.LABEL_SETS.slice(1)) assert.strictEqual(set.items.length, 3, `${set.name} has 3 labels`);
@@ -148,7 +148,7 @@ assert.ok(source.includes("var textBottom = y + tick + 0.5 * MM;"), "numbers sit
 assert.ok(source.includes('placeGlyph(addText(scaleGroup, leftValue, numberFont, TEXT_SIZE), xl, textBottom, "center", "bottom");'), "left value centred on the tick");
 assert.ok(source.includes('placeGlyph(addText(scaleGroup, rightValue, numberFont, TEXT_SIZE), xr, textBottom, "center", "bottom");'), "right value centred on the tick");
 assert.ok(source.includes('addKoEnText(scaleGroup, "파장(nm)")'), "axis title uses the ko/en font rule");
-assert.ok(source.includes("chars[i].characterAttributes.baselineShift = 0.5;"), "Latin characters get the +0.5pt baseline shift like Text_koen.jsx");
+assert.ok(source.includes("chars[i].characterAttributes.baselineShift = 0.5;"), "Latin characters get the +0.5pt baseline shift like 한글·영문 서체 적용.jsx");
 // 파선 보조선: 0.3pt, 2pt 선·1pt 간격, 그룹 맨 뒤, 확인 때만 끝 정렬 액션
 assert.ok(source.includes("var GUIDE_WIDTH = 0.3;") && source.includes("var GUIDE_DASH = [2, 1];"), "guide dash spec");
 assert.ok(source.includes("guideGroup.zOrder(ZOrderMethod.SENDTOBACK);"), "guides go to the back so bands cover them");

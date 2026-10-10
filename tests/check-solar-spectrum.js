@@ -3,8 +3,8 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-// 태양 스펙트럼 탭은 Object_GraphTools.jsx 안의 makeSolarSpectrumEngine에 들어 있다 (마지막 엔진)
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_GraphTools.jsx");
+// 태양 스펙트럼 탭은 그래프·표.jsx 안의 makeSolarSpectrumEngine에 들어 있다 (마지막 엔진)
+const scriptPath = path.join(root, "스크립트", "01_도형", "그래프·표.jsx");
 const wholeSource = fs.readFileSync(scriptPath, "utf8");
 const engineStart = wholeSource.indexOf("function makeSolarSpectrumEngine(");
 assert.ok(engineStart > 0, "solar spectrum engine not found");

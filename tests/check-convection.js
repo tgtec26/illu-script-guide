@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_Convection.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "대류.jsx"), "utf8");
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -147,15 +147,15 @@ for (const clockwise of [true, false]) {
   assert.deepStrictEqual(b.ends, [b.outline[0].anchor, b.outline[b.outline.length - 1].anchor]);
   assert.deepStrictEqual(b.box, [18, 90, 82, 8], "box reaches the outer glass");
 }
-// 유리 두께 0이면 안쪽 벽 그대로 한 줄 선, 벽 옮기기는 Object_LabGlassware.jsx와 같은 함수
+// 유리 두께 0이면 안쪽 벽 그대로 한 줄 선, 벽 옮기기는 실험 기구.jsx와 같은 함수
 {
   const zero = lib.beakerShape([50, 50], 60, 80, 0.5, 0);
   assert.strictEqual(zero.glass, 0);
   near(Math.max(...zero.outline.map((p) => p.anchor[0])), 80, 1e-9, "single line on the inner wall");
   assert.ok(source.includes("var GLASS_RANGE = [0, 5];"), "glass can be zero");
-  const lab = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_LabGlassware.jsx"), "utf8");
+  const lab = fs.readFileSync(path.join(root, "스크립트", "01_도형", "실험 기구.jsx"), "utf8");
   const pick = (src) => { const i = src.indexOf("    function offsetWall("); return src.slice(i, src.indexOf("\n    }\n", i)); };
-  assert.strictEqual(pick(source), pick(lab), "offsetWall matches Object_LabGlassware.jsx");
+  assert.strictEqual(pick(source), pick(lab), "offsetWall matches 실험 기구.jsx");
 }
 assert.ok(source.includes('if (p[0] !== "v5" || p.length !== 18) return;'), "settings bumped to v5");
 assert.ok(source.includes('var PREF_KEY = "ObjectConvection/settings";'));

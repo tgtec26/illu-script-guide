@@ -3,8 +3,8 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-// 수학Ⅰ 묶음(Object_HighMath1.jsx)의 "ExpLog" 탭 엔진만 잘라 읽는다
-const bundle = fs.readFileSync(path.join(root, "스크립트", "07_수학", "Object_HighMath1.jsx"), "utf8");
+// 수학Ⅰ 묶음(수학1.jsx)의 "ExpLog" 탭 엔진만 잘라 읽는다
+const bundle = fs.readFileSync(path.join(root, "스크립트", "07_수학", "수학1.jsx"), "utf8");
 const source = (() => {
   const start = bundle.indexOf("function makeExpLogEngine(");
   assert.ok(start >= 0, "missing engine: makeExpLogEngine");

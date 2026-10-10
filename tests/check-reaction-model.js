@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_ReactionModel.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "화학 반응 모형.jsx"), "utf8");
 
 // 중괄호·대괄호·따옴표를 따라가며 시작 위치부터 균형 잡힌 끝까지 자른다
 function balancedEnd(start, openChar) {

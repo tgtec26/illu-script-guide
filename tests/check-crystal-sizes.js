@@ -1,6 +1,6 @@
 const fs = require('fs');
 const assert = require('assert');
-const source = fs.readFileSync('스크립트/01_도형/Object_CrystalStructure.jsx', 'utf8');
+const source = fs.readFileSync('스크립트/01_도형/결정 구조.jsx', 'utf8');
 assert.ok(source.includes('function packedDiameterRatio('), 'packed spheres need independent size controls');
 const geometry = source.slice(source.indexOf('        function latticePoints('), source.indexOf('        function cellEdgeSegments('));
 const draw = source.slice(source.indexOf('        function drawCell('), source.indexOf('        function drawCells('));

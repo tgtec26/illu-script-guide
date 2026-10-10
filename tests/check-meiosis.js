@@ -3,10 +3,10 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-// 이 탭은 Object_CellDivision.jsx 안의 makeMeiosisEngine에 원래 코드 그대로 들어 있다
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_CellDivision.jsx");
+// 이 탭은 세포분열.jsx 안의 makeMeiosisEngine에 원래 코드 그대로 들어 있다
+const scriptPath = path.join(root, "스크립트", "01_도형", "세포분열.jsx");
 
-assert.ok(fs.existsSync(scriptPath), "Object_CellDivision.jsx must exist");
+assert.ok(fs.existsSync(scriptPath), "세포분열.jsx must exist");
 
 const wholeSource = fs.readFileSync(scriptPath, "utf8");
 const engineStart = wholeSource.indexOf("function makeMeiosisEngine(");

@@ -10,11 +10,11 @@ const NATIVE = '["화살표 3", "화살표 9", "화살표 2", "화살표 1"]';
 
 // 일러스트레이터 화살촉(액션으로 붙이는 것)을 쓰는 스크립트: 직접 그리는 스크립트와 같은 4종류 목록에서 고르고, 고른 모양의 커스텀 화살표 이름으로 액션을 쓴다
 const SIMPLE = {   // 저장 형식(태그·필드 수)
-  "Object_Convection.jsx": {tag: "v5", count: 18},
-  "Object_FoodChain.jsx": {tag: "v2", count: 8},
-  "Object_ForceDiagram.jsx": {tag: "v2", count: 13},
-  "Object_ParticleState.jsx": {tag: "v3", count: 16},
-  "Object_StarTrails.jsx": {tag: "v3", count: 22},
+  "대류.jsx": {tag: "v5", count: 18},
+  "먹이 사슬.jsx": {tag: "v2", count: 8},
+  "힘 화살표.jsx": {tag: "v2", count: 13},
+  "입자 상태 모형.jsx": {tag: "v3", count: 16},
+  "별의 일주 운동.jsx": {tag: "v3", count: 22},
 };
 for (const [file, spec] of Object.entries(SIMPLE)) {
   const source = read(file);
@@ -32,7 +32,7 @@ for (const [file, spec] of Object.entries(SIMPLE)) {
 
 // MoonPhase: 모양과 크기를 새로 넣었다
 {
-  const source = read("Object_MoonPhase.jsx");
+  const source = read("달 위상.jsx");
   assert.ok(source.includes(`var HEAD_SHAPES = ${SHAPES};`) && source.includes(`var ARROW_NATIVE = ${NATIVE};`));
   assert.ok(source.includes("applyArrowheads(paths, rayWeight, headScale);"), "MoonPhase: size is the option, not 100");
   assert.ok(source.includes("toActionHex(ARROW_NATIVE[headShape])") && source.includes("var headShape = 3;"));
@@ -42,7 +42,7 @@ for (const [file, spec] of Object.entries(SIMPLE)) {
 
 // StepFlow: 기본은 삼각형(화살표 3), 저장 키 목록에 들어 있다
 {
-  const source = read("Object_StepFlow.jsx");
+  const source = read("단계 흐름도.jsx");
   assert.ok(source.includes(`var HEAD_SHAPES = ${SHAPES};`) && source.includes("var ARROW_NUMBER = [3, 9, 2, 1];"));
   assert.ok(source.includes("ARROW_PREFIX + ARROW_NUMBER[options.headShape]"), "StepFlow: action uses the chosen arrow");
   assert.ok(source.includes("symbolSet: 1, headShape: 0,"), "StepFlow: default is the triangle (화살표 3) as before");
@@ -53,7 +53,7 @@ for (const [file, spec] of Object.entries(SIMPLE)) {
 
 // RegionBrace: 중괄호용 촉(바깥 7, 가운데 6)은 고정, 크기만 고른다
 {
-  const source = read("Object_RegionBrace.jsx");
+  const source = read("영역 중괄호.jsx");
   assert.ok(source.includes('var ARROW_OUTER = isKorean ? "화살표 7" : "Arrow 7";') && source.includes('var ARROW_INNER = isKorean ? "화살표 6" : "Arrow 6";'), "RegionBrace: brace heads stay 7 and 6");
   assert.strictEqual((source.match(/\/value " \+ headScale/g) || []).length, 2, "RegionBrace: both head sizes use the option");
   assert.ok(source.includes("var headScale = ARROW_SCALE;") && source.includes('p[0] !== "v3" || p.length < 7'));
@@ -62,7 +62,7 @@ for (const [file, spec] of Object.entries(SIMPLE)) {
 
 // CellDivision: 감수 분열(기본 작살형 = 화살표 1)과 세포 주기(기본 삼각형 = 화살표 3) 탭이 따로 고른다
 {
-  const source = read("Object_CellDivision.jsx");
+  const source = read("세포분열.jsx");
   assert.ok(source.includes(`var HEAD_SHAPES = ${SHAPES};`) && source.includes(`var HEAD_SHAPES2 = ${SHAPES};`));
   assert.ok(source.includes("var ARROW_NUMBER = [3, 9, 2, 1];") && source.includes("var ARROW_NUMBER2 = [3, 9, 2, 1];"));
   assert.ok(source.includes("var headShape = 3;") && source.includes("var headShape2 = 0;"), "CellDivision: defaults as before");
@@ -74,7 +74,7 @@ for (const [file, spec] of Object.entries(SIMPLE)) {
 
 // GraphTools: 축 탭과 복사 탭(둘 다 기본 작살형 = 화살표 1): 모양과 크기
 {
-  const source = read("Object_GraphTools.jsx");
+  const source = read("그래프·표.jsx");
   assert.strictEqual((source.match(/var HEAD_SHAPES = \[/g) || []).length, 2, "GraphTools: both tabs have the list");
   assert.strictEqual((source.match(/var ARROW_NATIVE = \["화살표 3", "화살표 9", "화살표 2", "화살표 1"\];/g) || []).length, 2, "GraphTools: both tabs map shapes to custom arrows");
   assert.ok(!/ARROW_NAME\b|ARROW_TYPES|headType/.test(source), "GraphTools: no old names left");
@@ -87,7 +87,7 @@ for (const [file, spec] of Object.entries(SIMPLE)) {
 
 // Weather: 기권 탭 축과 기압과 바람 탭(기본 작살형), 층 묶음 중괄호 촉(7·6)은 고정
 {
-  const source = read("Object_Weather.jsx");
+  const source = read("날씨.jsx");
   assert.ok(source.includes(`var HEAD_SHAPES = ${SHAPES};`) && source.includes("var ARROW_NUMBER = [3, 9, 2, 1];"));
   assert.ok(source.includes("function arrowNameOf(shape) { return ARROW_PREFIX + ARROW_NUMBER[shape]; }"));
   assert.ok(source.includes("var ARROW_BRACE_OUTER = ARROW_PREFIX + 7;") && source.includes("var ARROW_BRACE_INNER = ARROW_PREFIX + 6;"), "Weather: brace heads stay 7 and 6");

@@ -1,0 +1,349 @@
+// 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 마지막 실행 스크립트 기록 → 10_기타/마지막 실행 반복.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
+(function() {
+    if (app.documents.length === 0) {
+        alert("문서를 먼저 열어주세요.");
+        return;
+    }
+
+    var doc = app.activeDocument;
+    var MM = 2.83464567;
+    var FONT_NAME = "GSMediItaC1";
+    var NUCLEUS_FONT_NAMES = ["Spoqa Han Sans Neo", "SpoqaHanSansNeo-Regular", "SpoqaHanSansNeo"];
+    var PREF_KEY = "ObjectBohrQuantumOrbit/settings";
+
+    var options = showDialog();
+    if (!options) {
+        return;
+    }
+
+    drawBohrQuantumOrbit(options.maxQuantumNumber, options.displayAngle);
+
+    function showDialog() {
+        var saved = readSavedSettings();
+        var win = new Window("dialog", "보어 양자 궤도");
+        win.orientation = "column";
+        win.alignChildren = ["fill", "top"];
+        win.spacing = 12;
+        win.margins = 18;
+
+        var quantumPanel = win.add("panel", undefined, "양자 수");
+        quantumPanel.orientation = "column";
+        quantumPanel.alignChildren = "left";
+        quantumPanel.margins = 12;
+
+        var quantumRadios = quantumPanel.add("group");
+        quantumRadios.orientation = "row";
+        var q2 = quantumRadios.add("radiobutton", undefined, "2");
+        var q3 = quantumRadios.add("radiobutton", undefined, "3");
+        var q4 = quantumRadios.add("radiobutton", undefined, "4");
+        q2.value = (saved.quantumPreset === 2);
+        q3.value = (saved.quantumPreset === 3);
+        q4.value = !q2.value && !q3.value;
+
+        var quantumCustomRow = quantumPanel.add("group");
+        quantumCustomRow.orientation = "row";
+        quantumCustomRow.add("statictext", undefined, "직접 입력");
+        var quantumInput = quantumCustomRow.add("edittext", undefined, saved.quantumCustom);
+        quantumInput.characters = 6;
+
+        var anglePanel = win.add("panel", undefined, "표시 각도");
+        anglePanel.orientation = "column";
+        anglePanel.alignChildren = "left";
+        anglePanel.margins = 12;
+
+        var angleRadios = anglePanel.add("group");
+        angleRadios.orientation = "row";
+        var a30 = angleRadios.add("radiobutton", undefined, "30");
+        var a45 = angleRadios.add("radiobutton", undefined, "45");
+        var a60 = angleRadios.add("radiobutton", undefined, "60");
+        a30.value = (saved.anglePreset === 30);
+        a60.value = (saved.anglePreset === 60);
+        a45.value = !a30.value && !a60.value;
+
+        var angleCustomRow = anglePanel.add("group");
+        angleCustomRow.orientation = "row";
+        angleCustomRow.add("statictext", undefined, "직접 입력");
+        var angleInput = angleCustomRow.add("edittext", undefined, saved.angleCustom);
+        angleInput.characters = 6;
+
+        var buttons = win.add("group");
+        buttons.alignment = "right";
+        buttons.add("button", undefined, "취소", { name: "cancel" });
+        // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+        var okButton = buttons.add("button", undefined, "확인");
+        okButton.onClick = function() { win.close(1); };
+        try { win.defaultElement = null; } catch (defaultError) {}
+
+        if (typeof bindTabOrder === "function") bindTabOrder(win);
+        if (win.show() !== 1) {
+            return null;
+        }
+
+        var maxQuantumNumber = parseNumber(quantumInput.text);
+        if (maxQuantumNumber === null) {
+            maxQuantumNumber = q2.value ? 2 : (q3.value ? 3 : 4);
+        }
+
+        var displayAngle = parseNumber(angleInput.text);
+        if (displayAngle === null) {
+            displayAngle = a30.value ? 30 : (a60.value ? 60 : 45);
+        }
+
+        maxQuantumNumber = Math.round(maxQuantumNumber);
+        if (maxQuantumNumber < 1) {
+            alert("양자 수는 1 이상의 숫자로 입력해주세요.");
+            return null;
+        }
+        if (displayAngle <= 0 || displayAngle >= 90) {
+            alert("표시 각도는 0보다 크고 90보다 작은 숫자로 입력해주세요.");
+            return null;
+        }
+
+        var options = {
+            maxQuantumNumber: maxQuantumNumber,
+            displayAngle: displayAngle
+        };
+        saveSettings(options);
+        return options;
+    }
+
+    // 라디오 프리셋과 직접 입력 중 마지막으로 쓴 쪽을 그대로 되살린다
+    function saveSettings(options) {
+        var quantumIsPreset = (options.maxQuantumNumber === 2 ||
+            options.maxQuantumNumber === 3 || options.maxQuantumNumber === 4);
+        var angleIsPreset = (options.displayAngle === 30 ||
+            options.displayAngle === 45 || options.displayAngle === 60);
+        var parts = [
+            "v1",
+            quantumIsPreset ? options.maxQuantumNumber : 4,
+            quantumIsPreset ? "" : options.maxQuantumNumber,
+            angleIsPreset ? options.displayAngle : 45,
+            angleIsPreset ? "" : options.displayAngle
+        ];
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function readSavedSettings() {
+        var settings = {quantumPreset: 4, quantumCustom: "", anglePreset: 45, angleCustom: ""};
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return settings; }
+        if (!raw) return settings;
+        var p = raw.split("|");
+        if (p[0] !== "v1" || p.length < 5) return settings;
+
+        var quantumPreset = parseInt(p[1], 10);
+        if (quantumPreset === 2 || quantumPreset === 3 || quantumPreset === 4) {
+            settings.quantumPreset = quantumPreset;
+        }
+        var quantumCustom = parseNumber(p[2]);
+        if (quantumCustom !== null && quantumCustom >= 1) {
+            settings.quantumCustom = String(Math.round(quantumCustom));
+        }
+        var anglePreset = parseFloat(p[3]);
+        if (anglePreset === 30 || anglePreset === 45 || anglePreset === 60) {
+            settings.anglePreset = anglePreset;
+        }
+        var angleCustom = parseNumber(p[4]);
+        if (angleCustom !== null && angleCustom > 0 && angleCustom < 90) {
+            settings.angleCustom = String(angleCustom);
+        }
+        return settings;
+    }
+
+    function drawBohrQuantumOrbit(maxQuantumNumber, displayAngle) {
+        var group = doc.activeLayer.groupItems.add();
+        group.name = "BohrQuantumOrbit_n" + maxQuantumNumber;
+
+        var center = doc.activeView.centerPoint;
+        var cx = center[0];
+        var cy = center[1];
+        var radiusValuesMM = [3, 7, 14, 25];
+        var strokeWidth = 0.8;
+        var nucleusStrokeWidth = 0.3;
+        var black = makeCMYK(0, 0, 0, 100);
+        var gray20 = makeCMYK(0, 0, 0, 20);
+        var font = getFont(FONT_NAME);
+        var nucleusFont = getFirstFont(NUCLEUS_FONT_NAMES);
+
+        drawNucleus(group, cx, cy, black, gray20, nucleusStrokeWidth, nucleusFont);
+
+        for (var n = 1; n <= maxQuantumNumber; n++) {
+            var radius = getOrbitRadius(n, maxQuantumNumber, radiusValuesMM) * MM;
+            var arc = drawArc(group, cx, cy, radius, displayAngle, 180 - displayAngle, black, strokeWidth);
+            arc.name = "n=" + n + " Orbit";
+            drawOrbitLabel(group, "n=" + n, cx, cy, radius, 180 - displayAngle, font, black);
+        }
+
+        doc.selection = null;
+        group.selected = true;
+    }
+
+    function getOrbitRadius(n, maxQuantumNumber, radiusValuesMM) {
+        if (n <= radiusValuesMM.length) {
+            return radiusValuesMM[n - 1];
+        }
+
+        return radiusValuesMM[radiusValuesMM.length - 1] * n / maxQuantumNumber;
+    }
+
+    function drawArc(container, cx, cy, radius, startDeg, endDeg, strokeColor, strokeWidth) {
+        var arc = container.pathItems.add();
+        // 90도 이하 구간마다 3차 베지어 1개로 근사한다. 앵커 수를 최소로 유지한다.
+        var segments = Math.max(1, Math.ceil(Math.abs(endDeg - startDeg) / 90));
+        var segDeg = (endDeg - startDeg) / segments;
+        var handleLength = radius * (4 / 3) * Math.tan((segDeg * Math.PI / 180) / 4);
+
+        for (var i = 0; i <= segments; i++) {
+            var rad = (startDeg + (segDeg * i)) * Math.PI / 180;
+            var cos = Math.cos(rad);
+            var sin = Math.sin(rad);
+            var anchorX = cx + (radius * cos);
+            var anchorY = cy + (radius * sin);
+            var point = arc.pathPoints.add();
+            point.anchor = [anchorX, anchorY];
+            point.leftDirection = [anchorX + (sin * handleLength), anchorY - (cos * handleLength)];
+            point.rightDirection = [anchorX - (sin * handleLength), anchorY + (cos * handleLength)];
+            point.pointType = PointType.SMOOTH;
+        }
+
+        arc.closed = false;
+        arc.filled = false;
+        arc.stroked = true;
+        arc.strokeColor = strokeColor;
+        arc.strokeWidth = strokeWidth;
+
+        try {
+            arc.strokeCap = StrokeCap.ROUNDENDCAP;
+            arc.strokeJoin = StrokeJoin.ROUNDENDJOIN;
+        } catch (e) {}
+
+        return arc;
+    }
+
+    function drawOrbitLabel(container, text, cx, cy, radius, labelDeg, font, color) {
+        var rad = labelDeg * Math.PI / 180;
+        var x = cx + (radius * Math.cos(rad));
+        var y = cy + (radius * Math.sin(rad));
+        var label = container.textFrames.add();
+        label.contents = text;
+
+        var attrs = label.textRange.characterAttributes;
+        attrs.size = 8;
+        attrs.fillColor = color;
+
+        if (font) {
+            try {
+                attrs.textFont = font;
+            } catch (e) {}
+        }
+
+        label.left = x - label.width - (0.8 * MM);
+        label.top = y + (label.height * 0.35);
+
+        return label;
+    }
+
+    function drawNucleus(container, cx, cy, strokeColor, fillColor, strokeWidth, font) {
+        var nucleusRadius = 1.5 * MM;
+        var crossHalfLength = 0.9 * MM;
+        var crossStrokeWidth = 0.5;
+        var nucleus = container.pathItems.ellipse(
+            cy + nucleusRadius,
+            cx - nucleusRadius,
+            nucleusRadius * 2,
+            nucleusRadius * 2
+        );
+        nucleus.name = "원자핵";
+        nucleus.filled = true;
+        nucleus.fillColor = fillColor;
+        nucleus.stroked = true;
+        nucleus.strokeColor = strokeColor;
+        nucleus.strokeWidth = strokeWidth;
+
+        drawLine(container, cx - crossHalfLength, cy, cx + crossHalfLength, cy, strokeColor, crossStrokeWidth);
+        drawLine(container, cx, cy + crossHalfLength, cx, cy - crossHalfLength, strokeColor, crossStrokeWidth);
+        drawNucleusLabel(container, cx, cy - nucleusRadius - (1 * MM), font, strokeColor);
+    }
+
+    function drawNucleusLabel(container, cx, topY, font, color) {
+        var label = container.textFrames.add();
+        label.contents = "원자핵";
+
+        var attrs = label.textRange.characterAttributes;
+        attrs.size = 8;
+        attrs.fillColor = color;
+
+        if (font) {
+            try {
+                attrs.textFont = font;
+            } catch (e) {}
+        }
+
+        label.left = cx - (label.width / 2);
+        label.top = topY;
+        return label;
+    }
+
+    function drawLine(container, x1, y1, x2, y2, strokeColor, strokeWidth) {
+        var line = container.pathItems.add();
+        line.setEntirePath([[x1, y1], [x2, y2]]);
+        line.filled = false;
+        line.stroked = true;
+        line.strokeColor = strokeColor;
+        line.strokeWidth = strokeWidth;
+
+        try {
+            line.strokeCap = StrokeCap.ROUNDENDCAP;
+        } catch (e) {}
+
+        return line;
+    }
+
+    function makeCMYK(c, m, y, k) {
+        var color = new CMYKColor();
+        color.cyan = c;
+        color.magenta = m;
+        color.yellow = y;
+        color.black = k;
+        return color;
+    }
+
+    function getFont(fontName) {
+        try {
+            return app.textFonts.getByName(fontName);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getFirstFont(fontNames) {
+        for (var i = 0; i < fontNames.length; i++) {
+            var font = getFont(fontNames[i]);
+            if (font) {
+                return font;
+            }
+        }
+
+        return null;
+    }
+
+    function parseNumber(value) {
+        var text = String(value).replace(/^\s+|\s+$/g, "");
+        if (text === "") {
+            return null;
+        }
+
+        var number = Number(text);
+        return isNaN(number) ? null : number;
+    }
+})();

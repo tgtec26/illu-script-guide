@@ -28,8 +28,8 @@ function extractCatalogVar(source) {
 const near = (a, b, label) => assert.ok(Math.abs(a - b) <= 1e-9, `${label}: expected ${b}, got ${a}`);
 
 // 삼각형 머리에서 카탈로그 모양을 만드는 스크립트(머리 길이 4, 폭 3의 삼각형을 줬을 때)
-const TRIANGLE_DERIVED = ["Object_Wave.jsx", "Object_Galaxy.jsx", "Object_PlateBoundary.jsx", "Object_SeparationSetup.jsx",
-  "Object_Circulation.jsx", "Object_MagneticField.jsx", "Object_LensMirror.jsx"];
+const TRIANGLE_DERIVED = ["파동.jsx", "우리은하.jsx", "판의 경계.jsx", "혼합물 분리 장치.jsx",
+  "순환·배설.jsx", "자기장.jsx", "렌즈·거울.jsx"];
 for (const file of TRIANGLE_DERIVED) {
   const source = read(file);
   new Function(source);
@@ -59,7 +59,7 @@ for (const file of TRIANGLE_DERIVED) {
 
 // 렌즈·거울 렌즈 탭: 삼각형 세 점에서 만드는 최상위 함수
 {
-  const source = read("Object_LensMirror.jsx");
+  const source = read("렌즈·거울.jsx");
   const lib = new Function(
     `${extractCatalogVar(source)}\n${extractFunction(source, "catalogPoints")}\n${extractFunction(source, "headFromTriangle")}\nreturn {headFromTriangle: headFromTriangle};`
   )();
@@ -72,7 +72,7 @@ for (const file of TRIANGLE_DERIVED) {
 }
 
 // 그리기 도구(t.arrow)를 쓰는 탭 묶음: 모양에 따라 선과 머리가 달라진다
-for (const file of ["Object_ReactionModel.jsx", "Object_Neuron.jsx", "Object_Weather.jsx"]) {
+for (const file of ["화학 반응 모형.jsx", "뉴런.jsx", "날씨.jsx"]) {
   const source = read(file);
   new Function(source.replace("#include", "//include"));
   assertSameCatalog(source, file);
@@ -86,7 +86,7 @@ for (const file of ["Object_ReactionModel.jsx", "Object_Neuron.jsx", "Object_Wea
     "var FORM_MM = 1; function formGray() {} function formPaint(p, fillK, strokeK, width) { p.fillK = fillK; p.strokeK = strokeK; p.width = width; }\n" +
     `${extractCatalogVar(source)}\n${extractFunction(source, "catalogPoints")}\n${extractFunction(source, "makeFormTools")}\nreturn makeFormTools(g, o);`);
   // 화학 반응 모형은 기존 단순 화살표(arrow)를 그대로 두고 화살촉을 고르는 headArrow를 따로 쓴다
-  const arrowTool = file === "Object_ReactionModel.jsx" ? "headArrow" : "arrow";
+  const arrowTool = file === "화학 반응 모형.jsx" ? "headArrow" : "arrow";
   const arrow = (o) => { paths.length = 0; make(g, o)[arrowTool]([0, 0], [20, 0], 1, 100, 4); return paths.map((p) => ({points: p.points, closed: p.closed, fill: p.fillK, stroke: p.strokeK})); };
 
   // o에 값이 없어도 삼각형(기본). 머리 길이 4가 카탈로그 삼각형 8.6에 해당하고 선은 lineEnd에서 끝난다

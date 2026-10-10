@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_MotionGraph.jsx");
+const scriptPath = path.join(root, "스크립트", "01_도형", "직선 운동 그래프.jsx");
 const source = fs.readFileSync(scriptPath, "utf8");
 
 // 문법만 확인 (실행하지 않는다)

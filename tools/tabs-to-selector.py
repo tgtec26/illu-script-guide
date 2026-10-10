@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """탭 묶음 스크립트의 tabbedpanel 호스트를 선택 줄(라디오 또는 드롭다운) + 겹쳐 쌓은 페이지로 바꾼다.
-탭 줄은 탭 수만큼 폭을 차지해 창이 넓어진다. 호스트 코드가 Object_Mechanics.jsx 이전 틀과 글자 그대로 같은 파일만 바꾼다."""
+탭 줄은 탭 수만큼 폭을 차지해 창이 넓어진다. 호스트 코드가 역학.jsx 이전 틀과 글자 그대로 같은 파일만 바꾼다."""
 import re, sys
 
 A = re.compile(r'    var tabs = win\.add\("tabbedpanel"\);\n    tabs\.alignChildren = "fill";\n    for \(var engineIndex = 0; engineIndex < engines\.length; engineIndex\+\+\) \{\n        var page = tabs\.add\("tab", undefined, engines\[engineIndex\]\.label\);\n        page\.orientation = "column";\n        page\.alignChildren = "fill";\n        page\.spacing = 4;\n        engines\[engineIndex\]\.error = engines\[engineIndex\]\.addRows\(page\);\n        if \(engines\[engineIndex\]\.error\) \{\n            page\.enabled = false;\n            page\.helpTip = engines\[engineIndex\]\.error;\n        \}\n    \}\n')

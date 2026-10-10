@@ -3,8 +3,8 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-// 모델 곡선 탭은 Object_GraphTools.jsx 안의 makeModelCurvesEngine에 들어 있다
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_GraphTools.jsx");
+// 모델 곡선 탭은 그래프·표.jsx 안의 makeModelCurvesEngine에 들어 있다
+const scriptPath = path.join(root, "스크립트", "01_도형", "그래프·표.jsx");
 const wholeSource = fs.readFileSync(scriptPath, "utf8");
 const engineStart = wholeSource.indexOf("function makeModelCurvesEngine(");
 assert.ok(engineStart > 0, "model curves engine not found");

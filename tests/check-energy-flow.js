@@ -3,8 +3,8 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-// 에너지 흐름 탭은 Object_Electricity.jsx 안의 makeEnergyFlowEngine에 원래 코드 그대로 들어 있다
-const scriptPath = path.join(root, "스크립트", "01_도형", "Object_Electricity.jsx");
+// 에너지 흐름 탭은 전기.jsx 안의 makeEnergyFlowEngine에 원래 코드 그대로 들어 있다
+const scriptPath = path.join(root, "스크립트", "01_도형", "전기.jsx");
 const wholeSource = fs.readFileSync(scriptPath, "utf8");
 const engineStart = wholeSource.indexOf("function makeEnergyFlowEngine(");
 assert.ok(engineStart > 0, "energy flow engine not found");

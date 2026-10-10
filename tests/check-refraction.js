@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "Object_Refraction.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "빛의 반사와 굴절.jsx"), "utf8");
 
 // 문법만 확인 (실행하지 않는다)
 new Function(source);

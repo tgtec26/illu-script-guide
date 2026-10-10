@@ -49,7 +49,7 @@ assert.strictEqual(shift(fakeFrame("(-2, 1)"), [0, -1]), 0, "coordinates");
 
 // 그래프 도구 축 탭: x축 음수 눈금도 빼기를 지운 사본의 너비로 숫자 가운데를 맞춘다
 {
-  const graph = fs.readFileSync(path.resolve(__dirname, "..", "스크립트", "01_도형", "Object_GraphTools.jsx"), "utf8");
+  const graph = fs.readFileSync(path.resolve(__dirname, "..", "스크립트", "01_도형", "그래프·표.jsx"), "utf8");
   const label = graph.slice(graph.indexOf("function createAlignedLabel("), graph.indexOf("function createLegendText("));
   assert.ok(label.includes('if (alignMode === "bottom" && /^[\\-\\u2212][0-9.]/.test(text)) {'), "graph tools: negative check");
   assert.ok(label.includes("digits.textRange.characters[0].remove();"), "graph tools: minus removed on a copy");

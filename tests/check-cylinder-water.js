@@ -2,8 +2,8 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-// 원 입체(Object_RoundSolids.jsx)의 원기둥 탭: 물 높이
-const bundle = fs.readFileSync(path.join(__dirname, "..", "스크립트", "01_도형", "Object_RoundSolids.jsx"), "utf8");
+// 원 입체(원 입체.jsx)의 원기둥 탭: 물 높이
+const bundle = fs.readFileSync(path.join(__dirname, "..", "스크립트", "01_도형", "원 입체.jsx"), "utf8");
 const source = bundle.slice(bundle.indexOf("function makeCylinderEngine()"), bundle.indexOf("function makeConeEngine()"));
 
 function extractFunction(name) {

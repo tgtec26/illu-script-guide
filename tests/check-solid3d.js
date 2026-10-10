@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const file = "스크립트/01_도형/Object_3DLine.jsx";
+const file = "스크립트/01_도형/3D.jsx";
 const source = fs.readFileSync(path.join(root, file), "utf8");
 
 // 다이얼로그 뒤의 기하·그리기 함수 전체를 잘라내 상태 변수와 함께 평가한다

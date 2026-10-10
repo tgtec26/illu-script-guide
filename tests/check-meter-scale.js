@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const assert = require('assert');
-const source = fs.readFileSync(path.join(__dirname, '../스크립트/01_도형/Object_MeterScale.jsx'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../스크립트/01_도형/계기 눈금.jsx'), 'utf8');
 new vm.Script(source);
 
 function run(show, saved, preferenceFailure = false) {

@@ -21,12 +21,12 @@ function load(file, names) {
 
 // 역학: 역학적 에너지·수평 던지기 물체
 {
-  const { source, h } = load("Object_Mechanics.jsx", ["energyFractions"]);
+  const { source, h } = load("역학.jsx", ["energyFractions"]);
   assert.deepStrictEqual(h.energyFractions(3), [1, 0.5, 0]);
   assert.ok(source.includes("makeEnergyEngine()]"), "tabs registered");
   assert.ok(!source.includes("makeStrobeEngine"), "multi-flash lives in Object_MotionPhoto now");
   // 수평 던지기 물체: 같은 시간 간격 → 가로 균등, 세로는 제곱
-  const ballPositions = load("Object_Mechanics.jsx", ["ballPositions"]).h.ballPositions;
+  const ballPositions = load("역학.jsx", ["ballPositions"]).h.ballPositions;
   const motion = { time: 2, width: 40, height: 20 };
   assert.deepStrictEqual(ballPositions(motion, 3), [[0, -0], [20, -5], [40, -20]]);
   assert.deepStrictEqual(ballPositions(motion, 1), [[0, -0]]);
@@ -36,7 +36,7 @@ function load(file, names) {
 
 // 날씨
 {
-  const { source, h } = load("Object_Weather.jsx", ["atmosphereProfile", "atmosphereSpans", "isobarRadius", "windDirection", "breezeArrows", "actionHex"]);
+  const { source, h } = load("날씨.jsx", ["atmosphereProfile", "atmosphereSpans", "isobarRadius", "windDirection", "breezeArrows", "actionHex"]);
   assert.deepStrictEqual(h.atmosphereSpans(120), [[0, 11], [11, 50], [50, 80], [80, 120]], "brace spans cover every layer");
   assert.deepStrictEqual(h.actionHex("패스 끝의 팁"), { hex: "ED8CA8EC8AA420EB819DEC9D9820ED8C81", length: 17 }, "same bytes as GraphTools");
   assert.deepStrictEqual(h.actionHex("화살표 1"), { hex: "ED9994EC82B4ED919C2031", length: 11 }, "AGENTS.md arrow name bytes");
@@ -92,7 +92,7 @@ function load(file, names) {
 
 // 뉴런: 말이집 조각은 5mm, 틈 1.2mm, 제외 구간에는 없다
 {
-  const { h } = load("Object_Neuron.jsx", ["myelinSegments"]);
+  const { h } = load("뉴런.jsx", ["myelinSegments"]);
   const segs = h.myelinSegments(0, 30, null);
   assert.deepStrictEqual(segs.slice(0, 2), [[0, 5], [6.2, 11.2]]);
   assert.ok(segs[segs.length - 1][1] <= 30);
@@ -101,7 +101,7 @@ function load(file, names) {
 }
 
 // 공통: 새 스크립트는 메모·탭 이동·저장 규칙을 따른다
-for (const file of ["Object_Weather.jsx", "Object_ReactionModel.jsx", "Object_Neuron.jsx"]) {
+for (const file of ["날씨.jsx", "화학 반응 모형.jsx", "뉴런.jsx"]) {
   const s = fs.readFileSync(path.join(root, "스크립트", "01_도형", file), "utf8");
   assert.ok(s.includes("illu_last_script.txt") && s.includes("ui_tab_helper.jsxinc") && s.includes("bindTabOrder(win)"), file);
   assert.ok(s.includes("win.defaultElement = null"), file);

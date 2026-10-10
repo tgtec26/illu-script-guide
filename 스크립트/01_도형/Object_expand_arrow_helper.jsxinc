@@ -1,6 +1,6 @@
 // Object_expand_arrow_helper.jsxinc
 // 확장 화살표(선 + 끝 화살표 3 + 가변 폭 프로파일) 적용 로직.
-// Object_expand_arrow.jsx 가 사용한다.
+// 확장 화살표.jsx 가 사용한다.
 
 // 지정한 패스들에 확장 화살표를 적용한다.
 // strokeWidth: 선 굵기(pt), arrowScale: 화살표 크기(%)

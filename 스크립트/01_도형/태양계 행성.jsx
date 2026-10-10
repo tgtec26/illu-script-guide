@@ -1,0 +1,838 @@
+// 태양계 행성.jsx
+// 입력창 사이 탭 이동 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 마지막 실행 스크립트 기록 → 10_기타/마지막 실행 반복.jsx(F4)가 다시 실행
+try {
+    var __memo = new File(Folder.temp + "/illu_last_script.txt");
+    __memo.encoding = "UTF-8";
+    __memo.open("w");
+    __memo.write($.fileName);
+    __memo.close();
+} catch (e) {}
+
+// 태양계 행성: 화면 가운데에 여덟 행성을 그린다.
+//   - 일렬: 크기 비교. 행성 가운데를 한 줄에 두고 가장자리 사이를 간격만큼 띄운다. 태양을 넣으면 왼쪽에 큰 원의 일부(호).
+//     화성과 목성 사이에 파선과 '지구형 행성'·'목성형 행성' 글자를 넣을 수 있다.
+//   - 궤도: 태양을 가운데 두고 같은 간격의 동심원 궤도(파선) 위에 행성을 놓는다. 행성마다 각도 슬라이더(0° = 오른쪽,
+//     시계 반대)로 자리를 정하고 '무작위' 버튼으로 흩는다. 거리는 실제 비율이 아니다.
+//   - 시점(궤도): 위아래 기울기(0° 위에서 → 85° 거의 옆에서)만큼 궤도가 납작한 타원이 되고 화면 회전으로 돌린다.
+//     궤도면이 평면이라 가로 회전은 행성 각도와 같아서 두지 않는다. 행성·태양은 원 그대로이고, 기울이면 태양 뒤쪽(먼)
+//     행성 → 태양 → 앞쪽 행성 순으로 그려 겹침이 맞는다.
+//   - 크기 비율: 실제(지구 반지름 기준 수성 0.38 ~ 목성 11.2)나 완화(제곱근. 목성형이 너무 커지지 않게).
+//     지구 지름(mm)이 기준이다. 토성 고리는 기울어진 타원 테.
+//   - 행성 면은 회색 음영(행성마다 정한 K) 또는 흰색.
+
+(function() {
+    if (app.documents.length === 0) {
+        alert("문서를 열어주세요.");
+        return;
+    }
+
+    var PREF_KEY = "ObjectSolarSystem/settings";
+    var MM = 2.834645669;
+    var LINE_WIDTH_PT = 0.3;
+    var ORBIT_DASH = [2, 1.5];
+    var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
+    var ENG_FONT_NAME = "GSMediumB1";
+    // 이름, 반지름(지구 = 1), 회색 음영 K
+    var PLANETS = [
+        {name: "수성", radius: 0.383, k: 40},
+        {name: "금성", radius: 0.949, k: 20},
+        {name: "지구", radius: 1, k: 50},
+        {name: "화성", radius: 0.532, k: 60},
+        {name: "목성", radius: 11.21, k: 30},
+        {name: "토성", radius: 9.45, k: 20},
+        {name: "천왕성", radius: 4.01, k: 15},
+        {name: "해왕성", radius: 3.88, k: 45}
+    ];
+    var SUN_RADIUS = 109;
+    var SATURN = 5;
+    var SATURN_RING_RATIO = 1.7;
+    var LAYOUTS = ["일렬 (크기 비교)", "궤도"];
+    var SCALES = ["실제 비율", "완화 (제곱근)"];
+    var LABEL_WIDTH = 100;
+    // 폭을 좁히면 둥근 모서리가 맞붙어 버튼이 타원으로 보인다. 사각 버튼이 유지되는 너비.
+    var SLIDER_WIDTH = 196;
+    var POSITION_LIMIT_MM = 100;
+    var EARTH_RANGE = [1, 40];
+    var GAP_RANGE = [0, 40];
+    var ORBIT_RANGE = [3, 40];
+    var ANGLE_RANGE = [0, 360];
+    var TILT_RANGE = [0, 85];
+    var SPIN_RANGE = [-180, 180];
+    var RESET_BUTTON_WIDTH = 28;
+    // 시점 프리셋: 위아래 기울기·화면 회전
+    var VIEW_PRESETS = [{name: "위에서", tilt: 0, spin: 0}, {name: "비스듬히", tilt: 60, spin: 0}, {name: "옆에서", tilt: 80, spin: 0}];
+    var DEFAULT_ANGLES = [20, 200, 320, 110, 250, 40, 160, 290];
+    var FONT_RANGE = [5, 20];
+
+    var doc = app.activeDocument;
+    var viewCenter = doc.activeView.centerPoint;
+    var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
+    var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+    var batangFont = findOptionalFont("Batang");
+    var ENG_BASELINE_PT = 0.5;
+
+    // 옵션
+    var layout = 0;
+    var scaleMode = 0;
+    var earthMm = 4;
+    var gapMm = 4;
+    var orbitGapMm = 8;
+    var planetAngles = DEFAULT_ANGLES.slice();
+    var halfOrbit = false;
+    var sameAngle = false;
+    var tiltDeg = 0;
+    var spinDeg = 0;
+    var withSun = true;
+    var shading = true;
+    var groupMark = true;
+    var labelsOn = true;
+    var fontPt = 7;
+    var offsetXmm = 0;
+    var offsetYmm = 0;
+    var previewEnabled = true;
+    // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+    var DEFAULTS = {earthMm: earthMm, gapMm: gapMm, orbitGapMm: orbitGapMm, tiltDeg: tiltDeg, spinDeg: spinDeg, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    readSettings();
+
+    var layer = findEditableLayer();
+    var previewGroup = null;
+
+    // -------------------------------------------------------
+    // 다이얼로그
+    // -------------------------------------------------------
+    var dlg = new Window("dialog", "태양계 행성");
+    dlg.orientation = "column";
+    dlg.alignChildren = "fill";
+    dlg.spacing = 6;
+    dlg.margins = 12;
+
+    var layoutPanel = addPanel(dlg, "배치");
+    var layoutRow = layoutPanel.add("group");
+    layoutRow.add("statictext", undefined, "배치:").preferredSize.width = LABEL_WIDTH;
+    var layoutRadios = [];
+    for (var l = 0; l < LAYOUTS.length; l++) layoutRadios.push(layoutRow.add("radiobutton", undefined, LAYOUTS[l]));
+    var scaleRow = layoutPanel.add("group");
+    scaleRow.add("statictext", undefined, "크기:").preferredSize.width = LABEL_WIDTH;
+    var scaleRadios = [];
+    for (var sc = 0; sc < SCALES.length; sc++) scaleRadios.push(scaleRow.add("radiobutton", undefined, SCALES[sc]));
+    var earthRow = addValueRow(layoutPanel, "지구 지름", "mm", earthMm, EARTH_RANGE[0], EARTH_RANGE[1], 0.5, 1);
+    var gapRow = addValueRow(layoutPanel, "행성 간격", "mm", gapMm, GAP_RANGE[0], GAP_RANGE[1], 0.5, 1);
+    gapRow.input.helpTip = "일렬: 이웃한 행성 가장자리 사이 거리";
+    var orbitRow = addValueRow(layoutPanel, "궤도 간격", "mm", orbitGapMm, ORBIT_RANGE[0], ORBIT_RANGE[1], 0.5, 1);
+    var halfOrbitCheck = layoutPanel.add("checkbox", undefined, "오른쪽 반원 궤도·행성 배치");
+
+    // 시점 (3D.jsx 입체 도형과 같은 방식). 궤도면이 평면이라 가로 회전은 행성 각도와 같아 두지 않는다
+    var viewPanel = addPanel(dlg, "시점 (궤도)");
+    var tiltRow = addValueRow(viewPanel, "위아래 기울기", "°", tiltDeg, TILT_RANGE[0], TILT_RANGE[1], 1, 0);
+    tiltRow.input.helpTip = "0이면 위에서 본 원, 올릴수록 납작한 타원";
+    var spinRow = addValueRow(viewPanel, "화면 회전", "°", spinDeg, SPIN_RANGE[0], SPIN_RANGE[1], 1, 0);
+    var presetRow = viewPanel.add("group");
+    presetRow.add("statictext", undefined, "시점 프리셋:").preferredSize.width = LABEL_WIDTH;
+    var presetButtons = [];
+    for (var pr = 0; pr < VIEW_PRESETS.length; pr++) presetButtons.push(presetRow.add("button", undefined, VIEW_PRESETS[pr].name));
+
+    var anglePanel = addPanel(dlg, "행성 각도 (궤도)");
+    var angleRows = [];
+    var shuffleButton, sameAngleCheck;
+    for (var ar = 0; ar < PLANETS.length; ar++) {
+        var angleRow = addValueRow(anglePanel, PLANETS[ar].name, "°", planetAngles[ar], ANGLE_RANGE[0], ANGLE_RANGE[1], 1, 0);
+        angleRow.input.helpTip = "0°는 태양 오른쪽, 시계 반대 방향으로 늘어난다";
+        angleRows.push(angleRow);
+        if (ar === 0) {
+            shuffleButton = angleRow.input.parent.add("button", undefined, "무작위");
+            shuffleButton.preferredSize.width = 64;
+            shuffleButton.maximumSize.width = 64;
+            shuffleButton.helpTip = "여덟 행성의 각을 무작위로 흩는다";
+        } else if (ar === 1) {
+            sameAngleCheck = angleRow.input.parent.add("checkbox", undefined, "모두 동일");
+            sameAngleCheck.helpTip = "수성 각도를 모든 행성에 적용합니다";
+        }
+    }
+
+    var stylePanel = addPanel(dlg, "모양");
+    var checkRow1 = stylePanel.add("group");
+    var sunCheck = checkRow1.add("checkbox", undefined, "태양");
+    var shadeCheck = checkRow1.add("checkbox", undefined, "회색 음영");
+    var markCheck = checkRow1.add("checkbox", undefined, "지구형·목성형 구분 (일렬)");
+    var labelCheck = checkRow1.add("checkbox", undefined, "행성 이름");
+    var fontRow = addValueRow(stylePanel, "글자 크기", "pt", fontPt, FONT_RANGE[0], FONT_RANGE[1], 0.5, 1);
+
+    var positionPanel = addPanel(dlg, "위치");
+    var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+    var offsetYRow = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
+
+    var footer = dlg.add("group");
+    var previewCheck = footer.add("checkbox", undefined, "미리보기");
+    previewCheck.value = previewEnabled;
+    var footerSpacer = footer.add("group");
+    footerSpacer.alignment = ["fill", "center"];
+    // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    var okButton = footer.add("button", undefined, "확인");
+    try { dlg.defaultElement = null; } catch (defaultError) {}
+    footer.add("button", undefined, "취소", {name: "cancel"});
+
+    layoutRadios[layout].value = true;
+    scaleRadios[scaleMode].value = true;
+    sunCheck.value = withSun;
+    halfOrbitCheck.value = halfOrbit;
+    sameAngleCheck.value = sameAngle;
+    shadeCheck.value = shading;
+    markCheck.value = groupMark;
+    labelCheck.value = labelsOn;
+    syncEnabled();
+
+    for (var lr = 0; lr < layoutRadios.length; lr++) {
+        layoutRadios[lr].onClick = (function(index) {
+            return function() { layout = index; syncEnabled(); updatePreview(); };
+        })(lr);
+    }
+    for (var sr = 0; sr < scaleRadios.length; sr++) {
+        scaleRadios[sr].onClick = (function(index) {
+            return function() { scaleMode = index; updatePreview(); };
+        })(sr);
+    }
+    sunCheck.onClick = function() { withSun = sunCheck.value; updatePreview(); };
+    shadeCheck.onClick = function() { shading = shadeCheck.value; updatePreview(); };
+    halfOrbitCheck.onClick = function() {
+        halfOrbit = halfOrbitCheck.value;
+        for (var i = 0; i < planetAngles.length; i++) {
+            planetAngles[i] = halfOrbit ? planetAngles[i] / 2 : planetAngles[i] * 2;
+        }
+        syncAngleRows();
+        updatePreview();
+    };
+    sameAngleCheck.onClick = function() {
+        sameAngle = sameAngleCheck.value;
+        syncEnabled();
+        updatePreview();
+    };
+    markCheck.onClick = function() { groupMark = markCheck.value; updatePreview(); };
+    labelCheck.onClick = function() { labelsOn = labelCheck.value; syncEnabled(); updatePreview(); };
+    bindValueRow(earthRow, function() { return earthMm; }, function(v) { earthMm = v; }, DEFAULTS.earthMm);
+    bindValueRow(gapRow, function() { return gapMm; }, function(v) { gapMm = v; }, DEFAULTS.gapMm);
+    bindValueRow(orbitRow, function() { return orbitGapMm; }, function(v) { orbitGapMm = v; }, DEFAULTS.orbitGapMm);
+    bindValueRow(tiltRow, function() { return tiltDeg; }, function(v) { tiltDeg = v; }, DEFAULTS.tiltDeg);
+    bindValueRow(spinRow, function() { return spinDeg; }, function(v) { spinDeg = v; }, DEFAULTS.spinDeg);
+    for (var pb = 0; pb < presetButtons.length; pb++) {
+        presetButtons[pb].onClick = (function(preset) {
+            return function() { setView(preset.tilt, preset.spin); };
+        })(VIEW_PRESETS[pb]);
+    }
+    for (var ab = 0; ab < angleRows.length; ab++) {
+        bindValueRow(angleRows[ab], (function(index) {
+            return function() { return planetAngles[index]; };
+        })(ab), (function(index) {
+            return function(v) { planetAngles[index] = v; if (index === 0 && sameAngle) syncAngleRows(); };
+        })(ab), (function(index) {
+            // 처음 각도는 전체 궤도 기준. 반원이면 켤 때와 같이 절반
+            return function() { return halfOrbit ? DEFAULT_ANGLES[index] / 2 : DEFAULT_ANGLES[index]; };
+        })(ab));
+    }
+    shuffleButton.onClick = function() {
+        for (var i = 0; i < planetAngles.length; i++) {
+            planetAngles[i] = Math.floor(Math.random() * (halfOrbit ? 181 : 361));
+            setRowValue(angleRows[i], planetAngles[i]);
+        }
+        updatePreview();
+    };
+    bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; }, DEFAULTS.fontPt);
+    bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
+    bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
+    previewCheck.onClick = function() {
+        previewEnabled = previewCheck.value;
+        updatePreview();
+    };
+    okButton.onClick = function() {
+        if (previewGroup === null) buildPreview();
+        saveSettings();
+        dlg.close(1);
+    };
+
+    doc.selection = null;
+    updatePreview();
+
+    if (typeof bindTabOrder === "function") bindTabOrder(dlg);
+    var confirmed = dlg.show() === 1;
+    if (!confirmed) clearPreview();
+    if (confirmed && previewGroup !== null) {
+        doc.selection = null;
+        try { previewGroup.selected = true; } catch (selectError) {}
+    }
+    app.redraw();
+
+    // 행성 간격·구분은 일렬에서만, 궤도 간격·시점·행성 각도는 궤도에서만
+    function syncEnabled() {
+        setRowEnabled(gapRow, layout === 0);
+        markCheck.enabled = layout === 0;
+        setRowEnabled(orbitRow, layout === 1);
+        halfOrbitCheck.enabled = layout === 1;
+        setRowEnabled(tiltRow, layout === 1);
+        setRowEnabled(spinRow, layout === 1);
+        for (var i = 0; i < presetButtons.length; i++) presetButtons[i].enabled = layout === 1;
+        sameAngleCheck.enabled = layout === 1;
+        for (var a = 0; a < angleRows.length; a++) setRowEnabled(angleRows[a], layout === 1 && (!sameAngle || a === 0));
+        shuffleButton.enabled = layout === 1 && !sameAngle;
+        setRowEnabled(fontRow, labelsOn);
+        syncAngleRows();
+    }
+
+    function syncAngleRows() {
+        for (var i = 0; i < angleRows.length; i++) {
+            angleRows[i].max = halfOrbit ? 180 : 360;
+            angleRows[i].step = halfOrbit ? 0.5 : 1;
+            angleRows[i].decimals = halfOrbit ? 1 : 0;
+            angleRows[i].slider.maxvalue = angleRows[i].max;
+            angleRows[i].slider.stepdelta = angleRows[i].step;
+            angleRows[i].input.helpTip = halfOrbit
+                ? "반원: 0° 아래 끝, 90° 오른쪽, 180° 위 끝"
+                : "전체: 0° 태양 오른쪽, 시계 반대 방향";
+            setRowValue(angleRows[i], sameAngle ? planetAngles[0] : planetAngles[i]);
+        }
+    }
+
+    function setRowEnabled(controls, enabled) {
+        controls.input.enabled = enabled;
+        controls.slider.enabled = enabled;
+        controls.reset.enabled = enabled;
+    }
+
+    function setView(tilt, spin) {
+        tiltDeg = tilt;
+        spinDeg = spin;
+        setRowValue(tiltRow, tiltDeg);
+        setRowValue(spinRow, spinDeg);
+        updatePreview();
+    }
+
+    function setRowValue(controls, value) {
+        controls.input.text = formatNumber(value, controls.decimals);
+        try { controls.slider.value = value; } catch (e) {}
+    }
+
+    // -------------------------------------------------------
+    // 미리보기
+    // -------------------------------------------------------
+    function updatePreview() {
+        clearPreview();
+        if (previewEnabled) buildPreview();
+        app.redraw();
+    }
+
+    function buildPreview() {
+        var radii = planetRadii(earthMm * MM / 2, scaleMode === 1);
+        previewGroup = layer.groupItems.add();
+        previewGroup.name = "태양계";
+        var placed = layout === 0
+            ? rowLayout(radii, gapMm * MM, withSun ? sunRadius(earthMm * MM / 2, scaleMode === 1) : 0)
+            : orbitLayout(radii, orbitGapMm * MM, withSun ? earthMm * MM * 1.5 : 0, planetAngles, tiltDeg, spinDeg, halfOrbit, sameAngle);
+
+        if (layout === 1) {
+            // 궤도는 기울기만큼 납작한 타원을 화면 회전만큼 돌린 것
+            var squash = Math.cos(tiltDeg * Math.PI / 180);
+            for (var o = 0; o < placed.orbits.length; o++) {
+                var r = placed.orbits[o];
+                var orbit = halfOrbit
+                    ? drawBezier(previewGroup, projectedOrbitArc(r, tiltDeg, spinDeg), false)
+                    : previewGroup.pathItems.ellipse(r * squash, -r, 2 * r, 2 * r * squash);
+                orbit.filled = false;
+                orbit.stroked = true;
+                orbit.strokeColor = makeGray(100);
+                orbit.strokeWidth = LINE_WIDTH_PT;
+                orbit.strokeDashes = ORBIT_DASH;
+                if (!halfOrbit && spinDeg !== 0) orbit.rotate(spinDeg);
+            }
+            // 먼 행성부터. 태양은 깊이 0이라 뒤쪽 행성 다음, 앞쪽 행성 앞에 그린다
+            var order = depthOrder(placed.planets);
+            var sunDrawn = !withSun;
+            for (var k = 0; k < order.length; k++) {
+                if (!sunDrawn && placed.planets[order[k]].depth >= 0) {
+                    drawSun(placed.sun);
+                    sunDrawn = true;
+                }
+                drawPlanetAndLabel(order[k], placed, radii);
+            }
+            if (!sunDrawn) drawSun(placed.sun);
+        } else {
+            if (withSun) drawSun(placed.sun);
+            for (var i = 0; i < PLANETS.length; i++) drawPlanetAndLabel(i, placed, radii);
+        }
+        if (layout === 0 && groupMark) {
+            // 화성과 목성 사이
+            var x = (placed.planets[3].x + radii[3] + placed.planets[4].x - radii[4]) / 2;
+            var top = placed.maxRadius + fontPt;
+            var bottom = -placed.maxRadius - fontPt * 2.8;
+            var line = previewGroup.pathItems.add();
+            line.setEntirePath([[x, top], [x, bottom]]);
+            line.filled = false;
+            line.stroked = true;
+            line.strokeColor = makeGray(100);
+            line.strokeWidth = LINE_WIDTH_PT;
+            line.strokeDashes = ORBIT_DASH;
+            var labelY = -placed.maxRadius - fontPt * 2.3;
+            addText("지구형 행성", (placed.planets[0].x + placed.planets[3].x) / 2, labelY);
+            addText("목성형 행성", (placed.planets[4].x + placed.planets[7].x) / 2, labelY);
+        }
+        previewGroup.translate(viewCenter[0] - placed.centerX + offsetXmm * MM, viewCenter[1] + offsetYmm * MM);
+    }
+
+    function drawPlanetAndLabel(i, placed, radii) {
+        var p = placed.planets[i];
+        drawPlanet(i, p.x, p.y, radii[i]);
+        if (labelsOn) {
+            var below = layout === 0 ? -placed.maxRadius - fontPt : -radii[i] - fontPt * 0.8;
+            addText(PLANETS[i].name, p.x, layout === 0 ? below : p.y + below);
+        }
+    }
+
+    function drawPlanet(index, x, y, r) {
+        var group = previewGroup.groupItems.add();
+        group.name = PLANETS[index].name;
+        // 토성 고리: 가로 1.7배·세로 0.5배 타원을 15° 기울인다. 타원 전체는 행성 뒤에, 아래(앞) 절반만 행성 위에 한 번 더
+        if (index === SATURN) strokeRing(group, ringPoints(x, y, r, 0, 2 * Math.PI), true);
+        var disk = group.pathItems.ellipse(y + r, x - r, 2 * r, 2 * r);
+        disk.stroked = true;
+        disk.strokeColor = makeGray(100);
+        disk.strokeWidth = LINE_WIDTH_PT;
+        disk.filled = true;
+        disk.fillColor = makeGray(shading ? PLANETS[index].k : 0);
+        if (index === SATURN) strokeRing(group, ringPoints(x, y, r, Math.PI, 2 * Math.PI), false);
+    }
+
+    function strokeRing(container, points, closed) {
+        var ring = drawBezier(container, points, closed);
+        ring.filled = false;
+        ring.stroked = true;
+        ring.strokeColor = makeGray(100);
+        ring.strokeWidth = LINE_WIDTH_PT;
+    }
+
+    // 토성 고리 타원의 from → to 부분 (가로 반지름 1.7r, 세로 0.5r, 15° 기울임). π → 2π가 아래(앞) 절반
+    function ringPoints(x, y, r, from, to) {
+        var tilt = 15 * Math.PI / 180;
+        var cos = Math.cos(tilt);
+        var sin = Math.sin(tilt);
+        var unitArc = arcPoints(0, 0, 1, from, to);
+        function map(p) {
+            var px = p[0] * r * SATURN_RING_RATIO;
+            var py = p[1] * r * 0.5;
+            return [x + px * cos - py * sin, y + px * sin + py * cos];
+        }
+        var out = [];
+        for (var i = 0; i < unitArc.length; i++) {
+            out.push({anchor: map(unitArc[i].anchor), left: map(unitArc[i].left), right: map(unitArc[i].right)});
+        }
+        // 닫힌 타원이면 겹친 끝 점을 하나로 (끝 점의 왼쪽 손잡이를 첫 점에)
+        if (to - from >= 2 * Math.PI - 1e-9) {
+            var last = out.pop();
+            out[0] = {anchor: out[0].anchor, left: last.left, right: out[0].right};
+        }
+        return out;
+    }
+
+    // 태양: 일렬이면 왼쪽 끝에 큰 원의 오른쪽 조각만 보이게(호), 궤도면 가운데 원
+    function drawSun(sun) {
+        var path;
+        if (sun.arc) {
+            var half = sun.visibleHalfHeight;
+            var angle = Math.asin(Math.min(1, half / sun.r));
+            path = drawBezier(previewGroup, arcPoints(sun.x, 0, sun.r, -angle, angle), false);
+            path.filled = true;
+        } else {
+            path = previewGroup.pathItems.ellipse(sun.r, sun.x - sun.r, 2 * sun.r, 2 * sun.r);
+            path.filled = true;
+        }
+        path.name = "태양";
+        path.fillColor = makeGray(shading ? 5 : 0);
+        path.stroked = true;
+        path.strokeColor = makeGray(100);
+        path.strokeWidth = LINE_WIDTH_PT;
+        // 일렬이면 행성 이름과 같은 줄, 궤도면 가운데
+        if (labelsOn) addText("태양", sun.labelX, sun.arc ? sun.labelY - fontPt : sun.labelY);
+    }
+
+    function clearPreview() {
+        if (previewGroup === null) return;
+        try { previewGroup.remove(); } catch (e) {}
+        previewGroup = null;
+    }
+
+    function movePreview(deltaX, deltaY) {
+        if (previewGroup === null || (deltaX === 0 && deltaY === 0)) return;
+        try { previewGroup.translate(deltaX, deltaY); } catch (e) {}
+    }
+
+    // -------------------------------------------------------
+    // 배치 (순수 계산, 한 줄의 가운데 y = 0)
+    // -------------------------------------------------------
+    // 행성 반지름(pt). 완화면 지구 반지름 × √(실제 비율)
+    function planetRadii(earthRadius, softened) {
+        var list = [];
+        for (var i = 0; i < PLANETS.length; i++) {
+            list.push(earthRadius * (softened ? Math.sqrt(PLANETS[i].radius) : PLANETS[i].radius));
+        }
+        return list;
+    }
+
+    function sunRadius(earthRadius, softened) {
+        return earthRadius * (softened ? Math.sqrt(SUN_RADIUS) : SUN_RADIUS);
+    }
+
+    // 일렬: 태양 조각(가장 큰 행성 높이의 1.3배만큼 보임)부터 오른쪽으로 가장자리 사이를 gap만큼 띄운다
+    function rowLayout(radii, gap, sunR) {
+        var maxRadius = 0;
+        for (var i = 0; i < radii.length; i++) maxRadius = Math.max(maxRadius, radii[i]);
+        var x = 0;
+        var sun = null;
+        if (sunR > 0) {
+            var half = maxRadius * 1.3;
+            var depth = sunR - Math.sqrt(Math.max(0, sunR * sunR - half * half));   // 보이는 조각의 너비
+            sun = {arc: true, x: -sunR + depth, r: sunR, visibleHalfHeight: half, labelX: depth / 2, labelY: -maxRadius};
+            x = depth + gap;
+        }
+        // 토성은 고리까지 자리를 잡는다
+        var planets = [];
+        for (var p = 0; p < radii.length; p++) {
+            var half = p === SATURN ? radii[p] * SATURN_RING_RATIO : radii[p];
+            planets.push({x: x + half, y: 0});
+            x += 2 * half + gap;
+        }
+        var left = sun ? 0 : planets[0].x - radii[0];
+        var right = planets[planets.length - 1].x + radii[radii.length - 1];
+        return {sun: sun, planets: planets, maxRadius: maxRadius, centerX: (left + right) / 2};
+    }
+
+    // 궤도: 태양(반지름 sunR, 없으면 0) 둘레에 같은 간격으로. 첫 궤도는 태양 가장자리 + 간격 + 수성 반지름 바깥.
+    // 행성은 제 궤도 위 anglesDeg[i](0° 오른쪽, 시계 반대)에 두고 시점(tiltDeg·spinDeg)으로 화면에 옮긴다
+    function orbitLayout(radii, gap, sunR, anglesDeg, tiltDeg, spinDeg, half, sharedAngle) {
+        var orbits = [];
+        var planets = [];
+        var r = sunR;
+        for (var i = 0; i < radii.length; i++) {
+            r += gap + radii[i] + (i > 0 ? radii[i - 1] : 0) * 0.5;
+            orbits.push(r);
+            var selectedAngle = sharedAngle ? anglesDeg[0] : anglesDeg[i];
+            var angle = (half ? selectedAngle - 90 : selectedAngle) * Math.PI / 180;
+            planets.push(projectOrbit(r * Math.cos(angle), r * Math.sin(angle), tiltDeg, spinDeg));
+        }
+        var sun = sunR > 0 ? {arc: false, x: 0, r: sunR, labelX: 0, labelY: 0} : null;
+        var centerX = 0;
+        if (half) {
+            var arc = projectedOrbitArc(r, tiltDeg, spinDeg);
+            var minX = 0, maxX = 0;
+            for (var j = 0; j < arc.length; j++) {
+                minX = Math.min(minX, arc[j].anchor[0]);
+                maxX = Math.max(maxX, arc[j].anchor[0]);
+            }
+            centerX = (minX + maxX) / 2;
+        }
+        return {sun: sun, planets: planets, orbits: orbits, maxRadius: 0, centerX: centerX};
+    }
+
+    function projectedOrbitArc(r, tiltDeg, spinDeg) {
+        var arc = arcPoints(0, 0, r, -Math.PI / 2, Math.PI / 2);
+        var points = [];
+        function map(p) {
+            var result = projectOrbit(p[0], p[1], tiltDeg, spinDeg);
+            return [result.x, result.y];
+        }
+        for (var i = 0; i < arc.length; i++) {
+            points.push({anchor: map(arc[i].anchor), left: map(arc[i].left), right: map(arc[i].right)});
+        }
+        return points;
+    }
+
+    // 궤도면의 점 (x, y)를 시점으로 옮긴다. 위아래 기울기 tilt는 궤도면 위쪽(y > 0)이 멀어지게 눕히므로 화면 y는 cos만큼
+    // 줄고 깊이(+가 보는 쪽)는 −y·sin이다. 화면 회전 spin은 그 뒤에 화면에서 시계 반대로 돌린다
+    function projectOrbit(x, y, tiltDeg, spinDeg) {
+        var tilt = tiltDeg * Math.PI / 180;
+        var spin = spinDeg * Math.PI / 180;
+        var sy = y * Math.cos(tilt);
+        return {
+            x: x * Math.cos(spin) - sy * Math.sin(spin),
+            y: x * Math.sin(spin) + sy * Math.cos(spin),
+            depth: -y * Math.sin(tilt)
+        };
+    }
+
+    // 먼 것(깊이 작은 것)부터 순서대로 번호 목록
+    function depthOrder(planets) {
+        var order = [];
+        for (var i = 0; i < planets.length; i++) order.push(i);
+        order.sort(function(a, b) { return planets[a].depth - planets[b].depth; });
+        return order;
+    }
+
+    // 중심 (cx, cy), 반지름 r인 원호를 from → to(라디안, 반시계)로 90° 이하 조각마다 베지어 하나
+    function arcPoints(cx, cy, r, from, to) {
+        var sweep = to - from;
+        var pieces = Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2) - 1e-9));
+        var step = sweep / pieces;
+        var handle = 4 / 3 * Math.tan(step / 4) * r;
+        var points = [];
+        for (var i = 0; i <= pieces; i++) {
+            var angle = from + step * i;
+            var p = [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+            var tangent = [-Math.sin(angle) * handle, Math.cos(angle) * handle];
+            points.push({
+                anchor: p,
+                left: i === 0 ? p : [p[0] - tangent[0], p[1] - tangent[1]],
+                right: i === pieces ? p : [p[0] + tangent[0], p[1] + tangent[1]]
+            });
+        }
+        return points;
+    }
+
+    // -------------------------------------------------------
+    // 일러스트레이터 개체
+    // -------------------------------------------------------
+    function drawBezier(container, points, closed) {
+        var path = container.pathItems.add();
+        var anchors = [];
+        for (var i = 0; i < points.length; i++) anchors.push(points[i].anchor);
+        path.setEntirePath(anchors);
+        for (var j = 0; j < points.length; j++) {
+            var point = path.pathPoints[j];
+            point.leftDirection = points[j].left;
+            point.rightDirection = points[j].right;
+            point.pointType = PointType.CORNER;
+        }
+        path.closed = closed;
+        return path;
+    }
+
+    // 가운데가 (x, y)인 글자
+    function addText(text, x, y) {
+        var frame = previewGroup.textFrames.add();
+        frame.contents = text;
+        frame.textRange.characterAttributes.size = fontPt;
+        frame.textRange.characterAttributes.fillColor = makeGray(100);
+        applyTextFonts(frame);
+        var b = frame.geometricBounds;
+        frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+        return frame;
+    }
+
+    // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
+    function findEditableLayer() {
+        var active = doc.activeLayer;
+        if (!active.locked && active.visible) return active;
+        for (var i = 0; i < doc.layers.length; i++) {
+            if (!doc.layers[i].locked && doc.layers[i].visible) return doc.layers[i];
+        }
+        return doc.layers.add();
+    }
+
+    // 글자 서체 (02_문자/한글·영문 서체 적용.jsx·텍스트 삽입.jsx 규칙): 한글·공백은 Spoqa(기준선 0), 영문·숫자·기호는
+    // GSMediumB1(기준선 +0.5pt). 항목 기호 (가)(나)는 바탕 1.25배, ㉠·ⓐ는 바탕 1.125배 (8pt 기준 10pt·9pt).
+    // 크기를 정한 뒤에 부른다
+    function applyTextFonts(frame) {
+        var text = frame.contents;
+        for (var i = 0; i < text.length; i++) {
+            var code = text.charCodeAt(i);
+            var attributes = frame.textRange.characters[i].characterAttributes;
+            var bracket = batangFont !== null && isBracketLabel(text, i);
+            if (bracket || (batangFont !== null && isCircledLabel(code))) {
+                attributes.textFont = batangFont;
+                attributes.size = attributes.size * (bracket ? 1.25 : 1.125);
+                attributes.baselineShift = 0;
+            } else if (isKoreanOrSpace(code)) {
+                attributes.textFont = korFont;
+                attributes.baselineShift = 0;
+            } else {
+                attributes.textFont = engFont;
+                attributes.baselineShift = ENG_BASELINE_PT;
+            }
+        }
+    }
+
+    function isKoreanOrSpace(code) {
+        return (code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160;
+    }
+
+    // i번째 글자가 "(한글 한 글자)" 세 글자 안에 드는가
+    function isBracketLabel(text, i) {
+        for (var start = i - 2; start <= i; start++) {
+            if (start < 0 || start + 2 >= text.length) continue;
+            var inner = text.charCodeAt(start + 1);
+            if (text.charAt(start) === "(" && text.charAt(start + 2) === ")" && inner >= 0xAC00 && inner <= 0xD7A3) return true;
+        }
+        return false;
+    }
+
+    // ㉠㉡… ⓐⓑ…
+    function isCircledLabel(code) {
+        return (code >= 0x3260 && code <= 0x327F) || (code >= 0x24D0 && code <= 0x24E9);
+    }
+
+    // 없으면 null (바탕이 없으면 항목 기호도 Spoqa로 둔다)
+    function findOptionalFont(name) {
+        try { return app.textFonts.getByName(name); } catch (e) { return null; }
+    }
+
+    function findTextFont(names) {
+        for (var i = 0; i < names.length; i++) {
+            try { return app.textFonts.getByName(names[i]); } catch (e) {}
+        }
+        return app.textFonts[0];
+    }
+
+    // K값(0~100)만 있는 회색. RGB 문서면 같은 밝기의 회색으로
+    function makeGray(k) {
+        if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+            var cmyk = new CMYKColor();
+            cmyk.cyan = 0;
+            cmyk.magenta = 0;
+            cmyk.yellow = 0;
+            cmyk.black = k;
+            return cmyk;
+        }
+        var value = Math.round(255 * (1 - k / 100));
+        var rgb = new RGBColor();
+        rgb.red = value;
+        rgb.green = value;
+        rgb.blue = value;
+        return rgb;
+    }
+
+    // -------------------------------------------------------
+    // 다이얼로그 부품
+    // -------------------------------------------------------
+    function addPanel(parent, title) {
+        var panel = parent.add("panel", undefined, title);
+        panel.alignChildren = ["left", "top"];
+        panel.margins = [12, 16, 12, 12];
+        panel.spacing = 6;
+        return panel;
+    }
+
+    function addValueRow(parent, label, unit, value, minimum, maximum, step, decimals) {
+        var row = parent.add("group");
+        row.alignChildren = ["left", "center"];
+        row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":")).preferredSize.width = LABEL_WIDTH;
+        var input = row.add("edittext", undefined, formatNumber(value, decimals));
+        input.characters = 6;
+        input.justify = "center";
+        var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+        slider.stepdelta = step;
+        slider.jumpdelta = step * 10;
+        slider.preferredSize.width = SLIDER_WIDTH;
+        var reset = row.add("button", undefined, "R");
+        reset.preferredSize.width = RESET_BUTTON_WIDTH;
+        reset.helpTip = "처음 값으로 되돌리기";
+        return {input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals};
+    }
+
+    // 값이 바뀌면 상태에 쓰고 미리보기를 다시 그린다
+    function bindValueRow(controls, getter, setter, initial) {
+        function commit(value) {
+            value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+            controls.input.text = formatNumber(value, controls.decimals);
+            try { controls.slider.value = value; } catch (e) {}
+            if (value === getter()) return;
+            setter(value);
+            updatePreview();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(typeof initial === "function" ? initial() : initial); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? getter() : value);
+        };
+    }
+
+    // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
+    function bindPositionRow(controls, getter, setter, isX, initial) {
+        function commit(value) {
+            value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+            var delta = (value - getter()) * MM;
+            setter(value);
+            controls.input.text = formatNumber(value, controls.decimals);
+            try { controls.slider.value = value; } catch (e) {}
+            if (delta === 0) return;
+            movePreview(isX ? delta : 0, isX ? 0 : delta);
+            app.redraw();
+        }
+        controls.slider.onChanging = function() { commit(controls.slider.value); };
+        controls.slider.onChange = function() { commit(controls.slider.value); };
+        controls.reset.onClick = function() { commit(initial); };
+        controls.input.onChange = function() {
+            var value = parseNumber(controls.input.text);
+            commit(value === null ? getter() : value);
+        };
+    }
+
+    function parseNumber(text) {
+        var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+        return isNaN(value) ? null : value;
+    }
+
+    function clamp(value, minimum, maximum) {
+        if (value < minimum) return minimum;
+        if (value > maximum) return maximum;
+        return value;
+    }
+
+    function roundTo(value, step) {
+        if (step <= 0) return value;
+        return Math.round(value / step) * step;
+    }
+
+    function formatNumber(value, decimals) {
+        var factor = Math.pow(10, decimals);
+        var rounded = Math.round(value * factor) / factor;
+        var text = String(rounded);
+        if (decimals <= 0) return text;
+        var dot = text.indexOf(".");
+        if (dot === -1) {
+            text += ".";
+            dot = text.length - 1;
+        }
+        while (text.length - dot - 1 < decimals) text += "0";
+        return text;
+    }
+
+    // -------------------------------------------------------
+    // 설정 저장 · 복원
+    // -------------------------------------------------------
+    function saveSettings() {
+        var parts = ["v4", layout, scaleMode, earthMm, gapMm, orbitGapMm, withSun ? "1" : "0", shading ? "1" : "0",
+            groupMark ? "1" : "0", labelsOn ? "1" : "0", fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
+            tiltDeg, spinDeg, halfOrbit ? "1" : "0", sameAngle ? "1" : "0"].concat(planetAngles);
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+    }
+
+    function readSettings() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+        if (!raw) return;
+        var p = raw.split("|");
+        if (p[0] !== "v4" || p.length !== 18 + PLANETS.length) return;
+        layout = restoreNumber(p[1], layout, [0, LAYOUTS.length - 1], 1);
+        scaleMode = restoreNumber(p[2], scaleMode, [0, SCALES.length - 1], 1);
+        earthMm = restoreNumber(p[3], earthMm, EARTH_RANGE, 0.5);
+        gapMm = restoreNumber(p[4], gapMm, GAP_RANGE, 0.5);
+        orbitGapMm = restoreNumber(p[5], orbitGapMm, ORBIT_RANGE, 0.5);
+        withSun = p[6] === "1";
+        shading = p[7] === "1";
+        groupMark = p[8] === "1";
+        labelsOn = p[9] === "1";
+        fontPt = restoreNumber(p[10], fontPt, FONT_RANGE, 0.5);
+        offsetXmm = restoreNumber(p[11], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
+        offsetYmm = restoreNumber(p[12], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
+        previewEnabled = p[13] === "1";
+        tiltDeg = restoreNumber(p[14], tiltDeg, TILT_RANGE, 1);
+        spinDeg = restoreNumber(p[15], spinDeg, SPIN_RANGE, 1);
+        halfOrbit = p[16] === "1";
+        sameAngle = p[17] === "1";
+        for (var i = 0; i < PLANETS.length; i++) planetAngles[i] = restoreNumber(p[18 + i], planetAngles[i], [0, halfOrbit ? 180 : 360], halfOrbit ? 0.5 : 1);
+    }
+
+    function restoreNumber(text, fallback, range, step) {
+        var value = parseNumber(text);
+        if (value === null) return fallback;
+        return clamp(roundTo(value, step), range[0], range[1]);
+    }
+})();

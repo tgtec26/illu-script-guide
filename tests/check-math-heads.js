@@ -4,8 +4,8 @@ const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
 const {catalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
-const FILES = ["Object_HighCommon.jsx", "Object_HighGeometry.jsx", "Object_HighMath1.jsx", "Object_HighMath2.jsx",
-  "Object_HighStatistics.jsx", "Object_MiddleMath.jsx"];
+const FILES = ["공통수학.jsx", "기하.jsx", "수학1.jsx", "수학2.jsx",
+  "확률과 통계.jsx", "중학교 수학.jsx"];
 
 function extractFunction(source, name) {
   const start = source.indexOf(`function ${name}(`);
