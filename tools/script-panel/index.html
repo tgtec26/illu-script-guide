@@ -23,6 +23,9 @@ button { font: inherit; color: var(--fg); background: transparent; border: 0; pa
 .light #theme .sw i { left: 14px; }
 #theme svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 #path { padding: 0 10px 6px; color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--line); }
+/* 즐겨찾기는 목록 위에 고정한다. 많으면 자기 안에서만 스크롤한다 */
+#favs { flex: none; max-height: 40vh; overflow-y: auto; padding: 4px 0; border-bottom: 1px solid var(--line); }
+#favs:empty { display: none; }
 #list { flex: 1; overflow-y: auto; padding: 4px 0 8px; }
 .row { display: flex; align-items: center; gap: 6px; height: 26px; padding-right: 8px; cursor: pointer; }
 .row:hover { background: var(--hover); }
@@ -60,6 +63,7 @@ button { font: inherit; color: var(--fg); background: transparent; border: 0; pa
     <button id="theme" title="다크 / 화이트 테마 전환"><span class="sw"><i></i></span><span id="themeIcon"></span></button>
 </div>
 <div id="path" title=""></div>
+<div id="favs"></div>
 <div id="list"></div>
 <div id="status"></div>
 <script src="main.js"></script>

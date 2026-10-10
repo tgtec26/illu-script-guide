@@ -250,8 +250,9 @@
     }
 
     function render() {
-        var list = $("list");
+        var list = $("list"), favBox = $("favs");
         list.textContent = "";
+        favBox.textContent = "";
         $("path").textContent = shortPath(S.root);
         $("path").title = S.root;
         var q = S.query.trim().toLowerCase();
@@ -273,8 +274,8 @@
             sect.className = "sect";
             sect.appendChild(icon("star"));
             sect.appendChild(document.createTextNode("즐겨찾기"));
-            list.appendChild(sect);
-            favs.forEach(function (it) { list.appendChild(makeRow(it, false, 0, true)); });
+            favBox.appendChild(sect);
+            favs.forEach(function (it) { favBox.appendChild(makeRow(it, false, 0, true)); });
         }
         if (!S.scripts.length) { emptyMessage(list, "스크립트가 없습니다."); return; }
         renderNode(buildTree(S.scripts), 0, list);
