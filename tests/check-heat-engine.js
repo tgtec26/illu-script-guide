@@ -14,9 +14,10 @@ function extractFunction(name) {
   }
   throw new Error(`unbalanced: ${name}`);
 }
-const names = ["splitNames", "solveCycle", "plotPoint", "sampleProcess", "midOnPolyline", "distinctSorted", "insidePolygon", "drawCycle"];
-const f = new Function(`var ARROW_HEAD_MM = 1.6, GAMMA = 5 / 3, PROCESS_NAMES = ["등압", "등적", "등온", "단열"];
-var PROCESS_AB = [[0, 1], [1, 0], [1, 1], [GAMMA, 1]];\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+const names = ["splitNames", "solveCycle", "plotPoint", "sampleProcess", "midOnPolyline", "distinctSorted", "insidePolygon", "processPoint", "curvePieces", "cycleAnchors", "catalogPoints", "headUnit", "drawCycle"];
+const catalogSource = source.slice(source.indexOf("var HEAD_SHAPES"), source.indexOf("var HEAD_EXAM_LENGTH_PT = 4;") + "var HEAD_EXAM_LENGTH_PT = 4;".length);
+const f = new Function(`var GAMMA = 5 / 3, PROCESS_NAMES = ["등압", "등적", "등온", "단열"];
+var PROCESS_AB = [[0, 1], [1, 0], [1, 1], [GAMMA, 1]];\n${catalogSource}\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 const MM = 2.834645669, GAMMA = 5 / 3;
 const base = { axes: 0, width: 55, height: 45, p1: 2, r1: 2, p2: 3, r2: 1.5, p3: 2, p4: 3, names: "A, B, C, D", showProcess: false, showGuides: false,
@@ -25,8 +26,8 @@ const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}
 const invariant = (type, s) => [s.P, s.V, s.P * s.V, s.P * Math.pow(s.V, GAMMA)][type];
 function run(o) {
   const calls = [];
-  const t = { mm: MM };
-  for (const k of ["line", "path", "arrow", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
+  const t = { mm: MM, headBack: () => 3, headLength: () => 4 };
+  for (const k of ["line", "path", "curve", "arrow", "head", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   f.drawCycle(t, { ...base, ...o });
   return calls;
 }
@@ -60,14 +61,34 @@ f.sampleProcess(a, b, 2, 0).forEach((q) => near(q[0] * q[1], 1, "등온 곡선 P
 
 // 그리기: 축 화살표 2개, 순환은 닫힌 패스 하나, 가운데 화살촉 4개(삼각형), 점 이름 A~D
 let calls = run({});
-assert.strictEqual(calls.filter((c) => c.k === "arrow").length, 2);
-const cycle = calls.filter((c) => c.k === "path" && c.a[1] === true && c.a[2] === null);
-assert.strictEqual(cycle.length, 1);
-assert.strictEqual(calls.filter((c) => c.k === "path" && c.a[0].length === 3 && c.a[2] === 100).length, 4, "화살촉 4개");
+// 축은 꺾은선 패스 하나(위 끝 → 원점 → 오른쪽 끝, 선은 화살촉 속(headBack)에서 끝남)이고 양 끝에 고른 화살촉을 놓는다
+const axisPath = calls.find((c) => c.k === "path" && c.a[1] === false && c.a[0].length === 3 && c.a[0][1][0] === 0 && c.a[0][1][1] === 0);
+assert.deepStrictEqual(axisPath.a[0], [[0, 45 * MM - 3], [0, 0], [55 * MM - 3, 0]]);
+const heads = calls.filter((c) => c.k === "head");
+assert.deepStrictEqual(heads.slice(0, 2).map((c) => c.a), [[[0, 45 * MM], [0, 1]], [[55 * MM, 0], [1, 0]]]);
+assert.strictEqual(heads.length, 2 + 4, "축 2 + 곡선 가운데 4");
+assert.ok(!calls.some((c) => c.k === "arrow"), "선과 삼각형을 따로 그리는 화살표를 쓰지 않는다");
+const curves = calls.filter((c) => c.k === "curve");
+assert.strictEqual(curves.length, 1, "순환은 베지어 패스 하나");
+const anchors = curves[0].a[0];
+assert.ok(anchors.length >= 4 && anchors.length <= 14, `앵커가 적다: ${anchors.length}`);
+assert.strictEqual(anchors.filter((q) => q.smooth).length, anchors.length - 4, "상태 꼭짓점 네 개만 모서리");
 assert.deepStrictEqual(calls.filter((c) => c.k === "text" && c.a[4] === "center").map((c) => c.a[0]), ["압력", "A", "B", "C", "D"]);
 // 순환이 축 길이 안(최대 82%)에 들어간다
-const xs = cycle[0].a[0].map((p) => p[0]), ys = cycle[0].a[0].map((p) => p[1]);
+const xs = anchors.map((q) => q.a[0]), ys = anchors.map((q) => q.a[1]);
 near(Math.max(...xs), 0.82 * 55 * MM, "가로 최대", 1e-6); near(Math.max(...ys), 0.82 * 45 * MM, "세로 최대", 1e-6);
+// 베지어가 실제 곡선에 붙어 있다: 조각을 잘게 찍은 점이 네 과정의 불변량 중 하나를 (거의) 지킨다
+const bez = (a, r, l, b, u) => [0, 1].map((j) => (1 - u) ** 3 * a[j] + 3 * (1 - u) ** 2 * u * r[j] + 3 * (1 - u) * u * u * l[j] + u ** 3 * b[j]);
+const sampled = [];
+anchors.forEach((q, i) => { const nx = anchors[(i + 1) % anchors.length]; for (let u = 0; u < 1; u += 0.02) sampled.push(bez(q.a, q.r, nx.l, nx.a, u)); });
+const cs = f.solveCycle(base), types = [2, 3, 2, 3];
+const sx = 0.82 * 55 * MM / Math.max(...cs.map((q) => q.V)), sy = 0.82 * 45 * MM / Math.max(...cs.map((q) => q.P));
+const dev = (pt) => Math.min(...types.map((type, i) => Math.abs(Math.log(invariant(type, { V: pt[0] / sx, P: pt[1] / sy }) / invariant(type, cs[i])))));
+sampled.forEach((pt) => assert.ok(dev(pt) < 2e-3, `곡선에서 벗어남: ${dev(pt)}`));
+// 직사각형은 앵커 네 개, 핸들 없음(직선)
+const rectCurve = run({ p1: 0, r1: 2, p2: 1, r2: 0.5, p3: 0, p4: 1 }).find((c) => c.k === "curve").a[0];
+assert.strictEqual(rectCurve.length, 4);
+assert.ok(rectCurve.every((q) => q.l[0] === q.a[0] && q.l[1] === q.a[1] && q.r[0] === q.a[0] && q.r[1] === q.a[1] && !q.smooth));
 // 축 이름
 assert.ok(run({ axes: 1 }).some((c) => c.k === "textAt" && c.a[0] === "절대 온도"));
 assert.ok(run({ axes: 2 }).some((c) => c.k === "text" && c.a[0] === "절대 온도"));
@@ -77,8 +98,17 @@ calls = run({ p1: 0, r1: 2, p2: 1, r2: 0.5, p3: 0, p4: 1, showGuides: true, xTic
 assert.strictEqual(calls.filter((c) => c.k === "line" && c.a[3]).length, 4, "x 두 곳 + y 두 곳의 점선");
 assert.deepStrictEqual(calls.filter((c) => c.k === "textAt" && c.a[4] === "below").map((c) => c.a[0]), ["V0", "2V0"]);
 assert.deepStrictEqual(calls.filter((c) => c.k === "textAt" && c.a[4] === "left" && c.a[0] !== "0").map((c) => c.a[0]), ["P0", "2P0"]);
+// 화살촉: 기본은 작살형이고 길이 4pt(100%). 선은 lineEnd(9)만큼, 모양은 카탈로그 그대로
+const o100 = { headShape: 3, headSize: 100 }, k = f.headUnit(o100);
+near(k, 4 / 12.1, "배율");
+const harpoon = f.catalogPoints(3, [10, 0], [1, 0], k);
+assert.strictEqual(harpoon.length, 6);
+near(harpoon[0][0], 10, "끝점 x"); near(Math.min(...harpoon.map((q) => q[0])), 10 - 12 * k, "뒤 끝", 1e-9);
+near(f.headUnit({ headShape: 3, headSize: 200 }), 2 * k, "크기 200%");
 console.log("heat engine cycle checks passed");
-// 과정 이름은 순환 바깥쪽에 놓인다 (등온 곡선 이름은 곡선 위쪽, 단열 곡선 이름은 아래쪽 오른쪽 바깥)
+// 과정 이름은 순환 바깥쪽에 놓인다
 const outsideCalls = run({ showProcess: true });
-const poly = outsideCalls.find((c) => c.k === "path" && c.a[1] === true && c.a[2] === null).a[0];
+const outAnchors = outsideCalls.find((c) => c.k === "curve").a[0];
+const poly = [];
+outAnchors.forEach((q, i) => { const nx = outAnchors[(i + 1) % outAnchors.length]; for (let u = 0; u < 1; u += 0.05) poly.push(bez(q.a, q.r, nx.l, nx.a, u)); });
 outsideCalls.filter((c) => c.k === "text" && /^(등|단)/.test(c.a[0])).forEach((c) => assert.ok(!f.insidePolygon(c.a[1], c.a[2], poly), `${c.a[0]} 이름이 순환 안`));

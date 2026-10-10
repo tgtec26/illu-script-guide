@@ -14,7 +14,7 @@ try {
 //   과정은 등압·등적·등온·단열 중에서 고르고, A→B(와 B→C)는 배율로 끝점을 정하며 마지막 두 과정은 교점으로 닫는다.
 //   로그 좌표(x=ln V, y=ln P)에서 네 과정이 모두 직선이라 서로 다른 두 종류면 반드시 한 점에서 만난다. 단열 지수는 5/3.
 //   그래프는 압력-부피 외에 압력-절대온도, 절대온도-부피로도 그린다(T는 P·V에 비례). 곡선 위 화살표, 점 이름(A, B…),
-//   과정 이름(등온 등), 점선 안내선과 눈금 글(P0, 2V0 …)을 넣을 수 있다.
+//   과정 이름(등온 등), 점선 안내선과 눈금 글(P0, 2V0 …)을 넣을 수 있다. 화살촉은 측정한 일러스트레이터 화살촉 4종 중에서 고르고(기본 작살형) 크기를 %로 정한다.
 // 선 두께는 순환 곡선 0.8pt, 축 0.4pt, 점선 0.3pt이고 '선 두께' 패널에서 고친다.
 // 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, 변수(P, V, T)는 GSMediItaC1(아래 첨자 포함), GSMediumB1에 없는 기호는 HancomEQN이다.
 
@@ -27,7 +27,17 @@ try {
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
     var FORM_ITALIC_FONT = formFindFont(["GSMediItaC1", "GSMediumB1"]);
     var FORM_MATH_FONT = formFindFont(["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular", "GSMediumB1"]);
-    var ARROW_HEAD_MM = 1.6;   // 화살촉 길이
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(tools/arrowheads.json과 같은 데이터). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
+    var HEAD_EXAM = 3;            // 작살형(평가원식). 화살촉 목록의 1번
+    var HEAD_EXAM_LENGTH_PT = 4;  // 크기 100%일 때 작살형의 길이(pt). 다른 모양도 같은 배율로 그린다
     var GAMMA = 5 / 3;         // 단열 지수
     var PROCESS_NAMES = ["등압", "등적", "등온", "단열"];
     // 로그 좌표(x=ln V, y=ln P)에서 과정은 직선 a·x + b·y = c. 계수 (a, b): 등압 P=c, 등적 V=c, 등온 PV=c, 단열 PV^γ=c
@@ -44,6 +54,8 @@ try {
                 {key: "axes", label: "축", items: ["압력-부피", "압력-절대온도", "절대온도-부피"], value: 0},
                 {key: "width", label: "가로 길이", unit: "mm", min: 20, max: 120, step: 1, value: 55},
                 {key: "height", label: "세로 길이", unit: "mm", min: 20, max: 120, step: 1, value: 45},
+                {key: "headShape", label: "화살촉 모양", items: HEAD_SHAPES, order: [3, 2, 0, 1], value: 3},
+                {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
                 {panel: "과정"},
                 {key: "p1", label: "A→B", items: PROCESS_NAMES, value: 2},
                 {key: "r1", label: "A→B 배율", unit: "배", min: 0.2, max: 5, step: 0.05, value: 2},
@@ -110,6 +122,71 @@ try {
         return out;
     }
 
+    // 과정 곡선 위의 점(그래프 좌표 × 축척 = pt). u는 0(시작 상태)~1(끝 상태)이고 로그 좌표에서 고르게 움직인다
+    function processPoint(a, b, axes, sx, sy, u) {
+        var p = plotPoint({
+            V: Math.exp(Math.log(a.V) + u * (Math.log(b.V) - Math.log(a.V))),
+            P: Math.exp(Math.log(a.P) + u * (Math.log(b.P) - Math.log(a.P)))
+        }, axes);
+        return [p[0] * sx, p[1] * sy];
+    }
+
+    // u0~u1 구간을 에르미트 베지어(양 끝의 실제 접선)로 맞춘다. 직선인 과정은 한 조각, 곡선은 오차가 tol(pt) 안이 될 때까지 반으로 나눈다.
+    // 점을 찍어 꺾은선으로 그리면 앵커가 수십 개가 되어 나중에 손으로 고치기 어렵다. 조각은 {p0, c1, c2, p3}
+    function curvePieces(a, b, straight, axes, sx, sy, u0, u1, tol, depth) {
+        var h = u1 - u0, e = 1e-5, k, j;
+        var p0 = processPoint(a, b, axes, sx, sy, u0), p3 = processPoint(a, b, axes, sx, sy, u1);
+        if (straight) return [{p0: p0, c1: p0, c2: p3, p3: p3}];
+        function slope(u) {
+            var f1 = processPoint(a, b, axes, sx, sy, u + e), f0 = processPoint(a, b, axes, sx, sy, u - e);
+            return [(f1[0] - f0[0]) / (2 * e), (f1[1] - f0[1]) / (2 * e)];
+        }
+        var d0 = slope(u0), d3 = slope(u1);
+        var c1 = [p0[0] + d0[0] * h / 3, p0[1] + d0[1] * h / 3], c2 = [p3[0] - d3[0] * h / 3, p3[1] - d3[1] * h / 3];
+        var worst = 0;
+        for (k = 1; k <= 4; k++) {
+            var tt = k / 5, mt = 1 - tt, want = processPoint(a, b, axes, sx, sy, u0 + tt * h), got = [0, 0];
+            for (j = 0; j < 2; j++) got[j] = mt * mt * mt * p0[j] + 3 * mt * mt * tt * c1[j] + 3 * mt * tt * tt * c2[j] + tt * tt * tt * p3[j];
+            worst = Math.max(worst, Math.sqrt(Math.pow(got[0] - want[0], 2) + Math.pow(got[1] - want[1], 2)));
+        }
+        if (worst <= tol || depth >= 5) return [{p0: p0, c1: c1, c2: c2, p3: p3}];
+        var mid = (u0 + u1) / 2;
+        return curvePieces(a, b, straight, axes, sx, sy, u0, mid, tol, depth + 1).concat(curvePieces(a, b, straight, axes, sx, sy, mid, u1, tol, depth + 1));
+    }
+
+    // 순환 전체의 베지어 앵커 [{a, l, r, smooth}] (pt). 상태 꼭짓점은 모서리, 한 과정 안에서 나뉜 자리는 매끄러운 점
+    function cycleAnchors(states, types, axes, sx, sy, tol) {
+        var n = states.length, pieces = [], i, j;
+        for (i = 0; i < n; i++) {
+            var straight = types[i] !== 3 && !(axes === 0 && types[i] === 2);
+            var list = curvePieces(states[i], states[(i + 1) % n], straight, axes, sx, sy, 0, 1, tol, 0);
+            for (j = 0; j < list.length; j++) { list[j].joint = j === list.length - 1 ? "corner" : "smooth"; pieces.push(list[j]); }
+        }
+        var anchors = [{a: pieces[0].p0, l: pieces[0].p0, r: pieces[0].c1, smooth: false}];
+        for (i = 0; i < pieces.length; i++) {
+            anchors[anchors.length - 1].r = pieces[i].c1;
+            if (i === pieces.length - 1) anchors[0].l = pieces[i].c2;
+            else anchors.push({a: pieces[i].p3, l: pieces[i].c2, r: pieces[i].p3, smooth: pieces[i].joint === "smooth"});
+        }
+        return anchors;
+    }
+
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
+    }
+
+    // 고른 화살촉의 배율 k: 작살형 길이 HEAD_EXAM_LENGTH_PT × 크기%를 카탈로그 작살형 길이(12.1)로 나눈다
+    function headUnit(o) {
+        return HEAD_EXAM_LENGTH_PT * o.headSize / 100 / HEAD_CATALOG[HEAD_EXAM].length;
+    }
+
     // 꺾은선의 길이 가운데 점과 그 방향 {x, y, ux, uy}. 너무 짧으면 null
     function midOnPolyline(pts, minLength) {
         var total = 0, k, d = [];
@@ -161,8 +238,11 @@ try {
         var sx = 0.82 * W / xMax, sy = 0.82 * H / yMax;
         function toPt(p) { return [p[0] * sx, p[1] * sy]; }
         // 축과 이름
-        t.arrow([0, 0], [W, 0], o.wObj, ARROW_HEAD_MM * m);
-        t.arrow([0, 0], [0, H], o.wObj, ARROW_HEAD_MM * m);
+        // 축은 꺾은선 하나(위 끝 → 원점 → 오른쪽 끝)이고 선은 화살촉 속에서 끝난다
+        var back = t.headBack();
+        t.path([[0, H - back], [0, 0], [W - back, 0]], false, null, 100, o.wObj);
+        t.head([0, H], [0, 1]);
+        t.head([W, 0], [1, 0]);
         t.text(o.axes === 2 ? "절대 온도" : "압력", 0, H + 1.5 * m + size * 0.7, size, "center");
         t.textAt(o.axes === 1 ? "절대 온도" : "부피", W + 2 * m, -2 * m, size, "right");
         t.textAt("0", -1.5 * m, -2 * m, size, "left");
@@ -183,30 +263,28 @@ try {
             }
             if (k < yLabels.length && yLabels[k] !== "") t.textAt(yLabels[k], -1.5 * m, yTicks[k], size, "left", tickFont);
         }
-        // 순환 곡선: 이어진 한 개의 닫힌 패스
-        var path = [];
-        for (i = 0; i < n; i++) for (k = 0; k < segs[i].length - 1; k++) path.push(toPt(segs[i][k]));
-        t.path(path, true, null, 100, o.wBody);
+        // 순환 곡선: 닫힌 베지어 패스 하나. 표본 점(samplePath)은 안팎 판정과 기준점 계산에만 쓴다
+        var samplePath = [];
+        for (i = 0; i < n; i++) for (k = 0; k < segs[i].length - 1; k++) samplePath.push(toPt(segs[i][k]));
+        t.curve(cycleAnchors(states, types, o.axes, sx, sy, 0.02 * m), true, null, 100, o.wBody);
         // 곡선 위 화살표(길이 가운데)와 과정 이름
         var cx = 0, cy = 0;   // 안쪽 기준점: 곡선 점들의 평균
-        for (k = 0; k < path.length; k++) { cx += path[k][0] / path.length; cy += path[k][1] / path.length; }
+        for (k = 0; k < samplePath.length; k++) { cx += samplePath[k][0] / samplePath.length; cy += samplePath[k][1] / samplePath.length; }
         function outward(x, y) {
             var dx = x - cx, dy = y - cy, len = Math.sqrt(dx * dx + dy * dy);
             return len < 0.01 ? [0, 1] : [dx / len, dy / len];
         }
-        var head = ARROW_HEAD_MM * m, half = head * 0.35;
+        var head = t.headLength();
         for (i = 0; i < n; i++) {
             var line = [];
             for (k = 0; k < segs[i].length; k++) line.push(toPt(segs[i][k]));
             var mid = midOnPolyline(line, 1.5 * m);
             if (mid === null) continue;
-            t.path([[mid.x + mid.ux * head / 2, mid.y + mid.uy * head / 2],
-                [mid.x - mid.ux * head / 2 - mid.uy * half, mid.y - mid.uy * head / 2 + mid.ux * half],
-                [mid.x - mid.ux * head / 2 + mid.uy * half, mid.y - mid.uy * head / 2 - mid.ux * half]], true, 100, null, 0);
+            t.head([mid.x + mid.ux * head / 2, mid.y + mid.uy * head / 2], [mid.ux, mid.uy]);
             if (o.showProcess) {
                 // 곡선에 수직이고 순환 안쪽을 피하는 쪽
                 var nx = -mid.uy, ny = mid.ux;
-                if (insidePolygon(mid.x + nx * 2 * m, mid.y + ny * 2 * m, path)) { nx = -nx; ny = -ny; }
+                if (insidePolygon(mid.x + nx * 2 * m, mid.y + ny * 2 * m, samplePath)) { nx = -nx; ny = -ny; }
                 t.text(PROCESS_NAMES[types[i]], mid.x + nx * 4.5 * m, mid.y + ny * 4.5 * m, size, "center");
             }
         }
@@ -549,14 +627,36 @@ try {
             return p;
         };
         t.line = function(a, b, width, dash) { return t.path([a, b], false, null, 100, width, dash); };
-        // a → b 화살표: 선은 촉 뿌리까지, 촉은 채운 삼각형
-        t.arrow = function(a, b, width, headLength) {
+        // 베지어 경로. points는 {a: 앵커, l: 들어오는 핸들, r: 나가는 핸들, smooth: 매끄러운 점이면 true}
+        t.curve = function(points, closed, fill, stroke, width) {
+            var anchors = [], i;
+            for (i = 0; i < points.length; i++) anchors.push(points[i].a);
+            var p = g.pathItems.add();
+            p.setEntirePath(anchors);
+            for (i = 0; i < points.length; i++) {
+                p.pathPoints[i].leftDirection = points[i].l;
+                p.pathPoints[i].rightDirection = points[i].r;
+            }
+            for (i = 0; i < points.length; i++) {
+                if (points[i].smooth) { try { p.pathPoints[i].pointType = PointType.SMOOTH; } catch (e) {} }
+            }
+            p.closed = !!closed;
+            formPaint(p, fill, stroke, width);
+            return p;
+        };
+        // 화살촉: 끝 tip, 방향 단위 벡터 d. 고른 모양(작살형이 기본)의 채운 도형. 선은 headBack()만큼 물러나 촉 속에서 끝낸다
+        t.head = function(tip, d) {
+            return t.path(catalogPoints(o.headShape, tip, d, headUnit(o)), true, 100, null, 0);
+        };
+        t.headBack = function() { return HEAD_CATALOG[o.headShape].lineEnd * headUnit(o); };
+        t.headLength = function() { return HEAD_CATALOG[o.headShape].length * headUnit(o); };
+        // a → b 화살표: 선은 촉 속에서 끝난다
+        t.arrow = function(a, b, width) {
             var dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx * dx + dy * dy);
             if (len < 0.01) return;
-            var head = Math.min(headLength, len), ux = dx / len, uy = dy / len;
-            var base = [b[0] - ux * head, b[1] - uy * head], half = head * 0.35;
-            if (len > head) t.line(a, [base[0] + ux * 0.2, base[1] + uy * 0.2], width);
-            t.path([b, [base[0] - uy * half, base[1] + ux * half], [base[0] + uy * half, base[1] - ux * half]], true, 100, null, 0);
+            var d = [dx / len, dy / len], back = t.headBack();
+            if (len > back) t.line(a, [b[0] - d[0] * back, b[1] - d[1] * back], width);
+            t.head(b, d);
         };
         // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). opts: italic 변수 글자(이탤릭), sub 글자 뒤 숫자를 아래 첨자로
         t.text = function(text, x, y, size, align, opts) {

@@ -15,12 +15,12 @@ function extractFunction(name) {
   throw new Error(`unbalanced: ${name}`);
 }
 const names = ["parseTransitions", "splitNames", "drawLevels"];
-const f = new Function(`var ARROW_HEAD_MM = 1.6, NAME_GAP_MM = 1, RYDBERG_EV = 13.6;\nfunction formFormat(v, d) { return Number(v).toFixed(d); }\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+const f = new Function(`var NAME_GAP_MM = 1, RYDBERG_EV = 13.6;\nfunction formFormat(v, d) { return Number(v).toFixed(d); }\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 function run(o) {
   const calls = [];
   const t = { mm: 2.834645669 };
-  for (const k of ["line", "rect", "arrow", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
+  for (const k of ["line", "rect", "arrow", "path", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   f.drawLevels(t, { wBody: 0.8, wObj: 0.4, wRope: 0.4, wGuide: 0.8, font: 8, count: 4, proportional: true, infinity: true, showAxis: true, showN: true,
     showHead: false, energy: 0, showUnit: true, width: 50, height: 60, transitions: "3-1, 4-2, 2-1", names: "a, b, c", absorb: false,
     spectrum: true, stripGap: 14, stripH: 8, ...o });

@@ -24,7 +24,17 @@ try {
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
     var FORM_ITALIC_FONT = formFindFont(["GSMediItaC1", "GSMediumB1"]);
     var FORM_MATH_FONT = formFindFont(["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular", "GSMediumB1"]);
-    var ARROW_HEAD_MM = 1.6;   // 전이 화살촉 길이
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(tools/arrowheads.json과 같은 데이터). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
+    var HEAD_EXAM = 3;            // 작살형(평가원식). 화살촉 목록의 1번
+    var HEAD_EXAM_LENGTH_PT = 4;  // 크기 100%일 때 작살형의 길이(pt). 다른 모양도 같은 배율로 그린다
     var NAME_GAP_MM = 1;       // 전이 이름과 화살표·스펙트럼선 사이 간격(글자 윤곽 기준)
     var RYDBERG_EV = 13.6;
 
@@ -52,6 +62,8 @@ try {
                 {key: "transitions", label: "전이", text: true, value: "3-1, 4-2, 2-1"},
                 {key: "names", label: "이름", text: true, value: "a, b, c"},
                 {key: "absorb", check: "흡수(위로)", value: false},
+                {key: "headShape", label: "화살촉 모양", items: HEAD_SHAPES, order: [3, 2, 0, 1], value: 3},
+                {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
                 {panel: "스펙트럼선"},
                 {key: "spectrum", check: "스펙트럼선", value: false},
                 {key: "stripGap", label: "준위와 띠 간격", unit: "mm", min: 4, max: 30, step: 0.5, value: 14},
@@ -59,6 +71,22 @@ try {
             ],
             draw: drawLevels
         });
+    }
+
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
+    }
+
+    // 고른 화살촉의 배율 k: 작살형 길이 HEAD_EXAM_LENGTH_PT × 크기%를 카탈로그 작살형 길이(12.1)로 나눈다
+    function headUnit(o) {
+        return HEAD_EXAM_LENGTH_PT * o.headSize / 100 / HEAD_CATALOG[HEAD_EXAM].length;
     }
 
     // 전이 목록: "3-1, 4-2"를 글자 단위로 읽는다 (게으른 정규식은 일러가 멈출 수 있다). 준위 수를 벗어나거나 같은 준위끼리는 건너뛴다
@@ -127,7 +155,7 @@ try {
         // 에너지 축: 맨 아래 준위 밑에서 위로 화살표, 머리 위에 '에너지'
         if (o.showAxis) {
             var axisTop = topAt + 6 * m;
-            t.arrow([0, -3 * m], [0, axisTop], o.wRope, ARROW_HEAD_MM * m);
+            t.arrow([0, -3 * m], [0, axisTop], o.wRope);
             t.text("에너지", 0, axisTop + 1 * m + size * 0.6, size, "center");
         }
         // 전이 이름 높이: 가운데에서 시작해 준위 선(글자 높이 안)과 겹치지 않는 자리를 찾는다
@@ -145,8 +173,8 @@ try {
         for (k = 0; k < list.length; k++) {
             var x = W * (k + 1) / (list.length + 1);
             var yHi = y[list[k].hi - 1], yLo = y[list[k].lo - 1];
-            if (o.absorb) t.arrow([x, yLo], [x, yHi], o.wRope, ARROW_HEAD_MM * m);
-            else t.arrow([x, yHi], [x, yLo], o.wRope, ARROW_HEAD_MM * m);
+            if (o.absorb) t.arrow([x, yLo], [x, yHi], o.wRope);
+            else t.arrow([x, yHi], [x, yLo], o.wRope);
             var name = k < names.length ? names[k] : "";
             if (name !== "") t.textAt(name, x + NAME_GAP_MM * m, nameHeight(yLo, yHi), size, "right");
             // 광자 에너지(eV 단위 비례값): 파장은 1/(1/lo² - 1/hi²)에 비례
@@ -500,14 +528,19 @@ try {
         t.rect = function(left, top, right, bottom, fill, stroke, width) {
             return t.path([[left, top], [right, top], [right, bottom], [left, bottom]], true, fill, stroke, width);
         };
-        // a → b 화살표: 선은 촉 뿌리까지, 촉은 채운 삼각형
-        t.arrow = function(a, b, width, headLength) {
+        // 화살촉: 끝 tip, 방향 단위 벡터 d. 고른 모양(작살형이 기본)의 채운 도형. 선은 headBack()만큼 물러나 촉 속에서 끝낸다
+        t.head = function(tip, d) {
+            return t.path(catalogPoints(o.headShape, tip, d, headUnit(o)), true, 100, null, 0);
+        };
+        t.headBack = function() { return HEAD_CATALOG[o.headShape].lineEnd * headUnit(o); };
+        t.headLength = function() { return HEAD_CATALOG[o.headShape].length * headUnit(o); };
+        // a → b 화살표: 선은 촉 속에서 끝난다
+        t.arrow = function(a, b, width) {
             var dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx * dx + dy * dy);
             if (len < 0.01) return;
-            var head = Math.min(headLength, len), ux = dx / len, uy = dy / len;
-            var base = [b[0] - ux * head, b[1] - uy * head], half = head * 0.35;
-            if (len > head) t.line(a, [base[0] + ux * 0.2, base[1] + uy * 0.2], width);
-            t.path([b, [base[0] - uy * half, base[1] + ux * half], [base[0] + uy * half, base[1] - ux * half]], true, 100, null, 0);
+            var d = [dx / len, dy / len], back = t.headBack();
+            if (len > back) t.line(a, [b[0] - d[0] * back, b[1] - d[1] * back], width);
+            t.head(b, d);
         };
         // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). opts: italic 변수 글자(이탤릭), sub 글자 뒤 숫자를 아래 첨자로
         t.text = function(text, x, y, size, align, opts) {
