@@ -275,6 +275,31 @@ else
   echo "  폭 프로파일 파일 없음(건너뜀): $WIDTH_PROFILE_SRC"
 fi
 
+# 스크립트 패널(CEP): 서명 없는 패널을 불러오도록 개발자 모드를 켜고, 확장 폴더에 원본의 tools/script-panel을 연결한다.
+# 원본이 갱신되면 패널도 같이 갱신된다. 이미 설치돼 있으면 건너뛴다.
+PANEL_SRC="$REPO_DIR/tools/script-panel"
+PANEL_EXT_DIR="$HOME/Library/Application Support/Adobe/CEP/extensions"
+PANEL_DST="$PANEL_EXT_DIR/com.snug.scriptpanel"
+if [ -f "$PANEL_SRC/CSXS/manifest.xml" ]; then
+  PANEL_CHANGED=0
+  for CSXS_VER in 9 10 11 12; do
+    if [ "$(defaults read "com.adobe.CSXS.$CSXS_VER" PlayerDebugMode 2>/dev/null || true)" != "1" ]; then
+      defaults write "com.adobe.CSXS.$CSXS_VER" PlayerDebugMode 1 && PANEL_CHANGED=1 || echo "  스크립트 패널 개발자 모드 설정 실패(CSXS.$CSXS_VER, 건너뜀)"
+    fi
+  done
+  if [ -L "$PANEL_DST" ] && [ "$(readlink "$PANEL_DST")" = "$PANEL_SRC" ] && [ "$PANEL_CHANGED" = "0" ]; then
+    echo "  스크립트 패널: 이미 설치되어 있어 건너뜀 ($PANEL_DST)"
+  elif [ -e "$PANEL_DST" ] && [ ! -L "$PANEL_DST" ]; then
+    echo "  스크립트 패널 건너뜀 (같은 이름의 일반 폴더가 이미 있음): $PANEL_DST"
+  else
+    mkdir -p "$PANEL_EXT_DIR"
+    ln -sfn "$PANEL_SRC" "$PANEL_DST"
+    echo "  스크립트 패널 설치 완료 -> $PANEL_DST (일러 재시작 후 창 > 확장 프로그램 > 스크립트 패널)"
+  fi
+else
+  echo "  스크립트 패널 폴더 없음(건너뜀): $PANEL_SRC"
+fi
+
 echo ""
 echo "설치 끝. 남은 단계:"
 echo "  1) 일러스트 실행"
@@ -282,6 +307,7 @@ echo "  2) 파일 > 스크립트 > setup 실행 (환경설정 + 액션 적용)"
 echo "  3) 편집 > 키보드 단축키 에서 'cjh250907' 세트 1회 선택"
 echo "  4) 일러스트 재시작"
 echo "  5) 획 패널의 프로파일 목록에 '폭 속성1'이 보이는지 확인"
+echo "  6) 창 > 확장 프로그램 > 스크립트 패널 (처음이면 폴더 지정으로 스크립트 폴더 선택)"
 echo ""
 echo "이후 스크립트 내용 수정은 원본만 고치면 바로 반영됩니다."
 echo "스크립트 파일을 추가·삭제·이름변경했을 때만 이 명령을 다시 실행하세요."
