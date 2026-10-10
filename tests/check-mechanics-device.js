@@ -15,7 +15,7 @@ function extractFunction(name) {
   }
   throw new Error(`unbalanced: ${name}`);
 }
-const names = ["drawHorizontalPulley"];
+const names = ["drawHorizontalPulley", "drawInclinePulley"];
 const scenes = new Function(`var GHOST_DASH = [2, 1], HEAD_HARPOON = 1, NAME_GAP_MM = 1, ARROW_GAP_MM = 1, ARROW_HEAD_MM = 1.4, ARROW_HALF_MM = 1.4 * 0.35;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 컨트롤 기본값을 소스의 controls 배열에서 읽는다 (+ 엔진이 붙이는 선 두께 기본값)
@@ -118,3 +118,26 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   near(0 - c2[0].a[0], 31, "이동 거리 31 (물체)"); near(c2[1].a[1] - (3.9 - 42), 31, "이동 거리 31 (추)");
 }
 console.log("mechanics device checks passed");
+
+// 빗면 도르래: 실은 빗면과 나란하고 도르래 꼭대기에 접하며, 추는 수직선에서 떨어져 매달리고, 볼트는 빗면 안쪽
+{
+  const o = defaultsOf("makeInclinePulleyEngine");
+  assert.strictEqual(o.angle, 30); assert.strictEqual(o.angleMark, true);
+  const calls = record(o, scenes.drawInclinePulley);
+  const th = Math.PI / 6, c = Math.cos(th), s = Math.sin(th), R = 3.6, bh = 15, L = 60;
+  const pulley = calls.find((x) => x.k === "pulley");
+  const [cx, cy] = pulley.a;
+  const rope = calls.find((x) => x.k === "line" && Math.abs(x.a[1][0] - cx + R * s) < 1e-6);
+  assert.ok(rope, "빗면과 나란한 실");
+  near((rope.a[1][1] - rope.a[0][1]) / (rope.a[1][0] - rope.a[0][0]), Math.tan(th), "실 기울기");
+  near(Math.hypot(rope.a[1][0] - cx, rope.a[1][1] - cy), R, "실 끝은 도르래 둘레");
+  const mount = pulley.a[3];
+  const v = -mount[0] * s + mount[1] * c;
+  near(v, -2.2, "볼트는 빗면 아래 볼트 깊이");
+  assert.ok(mount[0] < L * c, "볼트는 수직선보다 안쪽");
+  const weightRect = calls.filter((x) => x.k === "rect")[0];
+  assert.ok(weightRect.a[0] > L * c + 1.4, "추는 꼭대기 수직선에서 떨어짐");
+  const arcs = calls.filter((x) => x.k === "arc");
+  near(arcs[0].a[4], Math.PI / 2 + th, "실 호 끝");
+  near(arcs[1].a[4], th, "각도 호");
+}

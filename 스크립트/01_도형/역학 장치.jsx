@@ -14,6 +14,7 @@ try {
 
 // 역학 장치: 물리Ⅰ 시험지의 도르래·빗면·수평면 장치 그림을 장면별 탭으로 그린다. 선택 없이 화면 가운데에 만든다.
 //   수평면 도르래 탭: 수평면 위 물체가 실로 도르래를 지나 매달린 추와 이어진 장면. 이전 위치(점선 물체)와 속도 화살표, 두 지점 사이 거리 표시를 고른다.
+//   빗면 도르래 탭: 빗면 위 물체가 빗면과 나란한 실로 꼭대기 도르래를 지나 매달린 추와 이어진 장면. 빗면 각도(θ) 표시를 고른다.
 // 선 두께는 테이블·바닥 0.8pt, 물체·도르래 겉 0.4pt, 실 0.4pt, 보조선·파선·도르래 안쪽 0.3pt이고 '선 두께' 패널에서 고친다. 파선은 2-1이다.
 // 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, 변수 GSMediItaC1, GSMediumB1에 없는 기호(θ)는 HancomEQN이다.
 
@@ -38,7 +39,7 @@ try {
     ];
     var HEAD_HARPOON = 1;   // 작살형(평가원식). 화살촉 목록의 1번
 
-    runFormHost("역학 장치", [makeHorizontalPulleyEngine()], TAB_PREF_KEY);
+    runFormHost("역학 장치", [makeHorizontalPulleyEngine(), makeInclinePulleyEngine()], TAB_PREF_KEY);
 
     // ==== 수평면 도르래 탭 ====
     function makeHorizontalPulleyEngine() {
@@ -153,6 +154,89 @@ try {
             if (textW > 0 && !(textW < qx - px - 4 * m)) t.text(o.dimText, mid, ny - 3.6 * m, size, "center");
             if (o.pName !== "") t.text(o.pName, px, ny, size, "center");
             if (o.qName !== "") t.text(o.qName, qx, ny, size, "center");
+        }
+    }
+
+    // ==== 빗면 도르래 탭 ====
+    function makeInclinePulleyEngine() {
+        return makeFormEngine({
+            label: "빗면 도르래", name: "InclinePulley", prefKey: "MechanicsDevice/inclinePulley",
+            controls: [
+                {panel: "물체와 추"},
+                {key: "blockText", label: "물체 글자", text: true, value: "4 kg"},
+                {key: "blockName", label: "물체 이름", text: true, value: "나무도막"},
+                {key: "blockW", label: "물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 13},
+                {key: "blockH", label: "물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 15},
+                {key: "weightText", label: "추 글자", text: true, value: "1 kg"},
+                {key: "weightName", label: "추 이름", text: true, value: "추"},
+                {key: "weightW", label: "추 너비", unit: "mm", min: 4, max: 20, step: 0.5, value: 9},
+                {key: "weightH", label: "추 높이", unit: "mm", min: 4, max: 20, step: 0.5, value: 8},
+                {panel: "빗면·실·도르래"},
+                {key: "angle", label: "빗면 각도", unit: "°", min: 10, max: 60, step: 1, value: 30},
+                {key: "slopeLen", label: "빗면 길이", unit: "mm", min: 30, max: 120, step: 0.5, value: 60},
+                {key: "ropeLen", label: "물체~도르래", unit: "mm", min: 8, max: 80, step: 0.5, value: 28},
+                {key: "groundLeft", label: "바닥 왼쪽 여유", unit: "mm", min: 0, max: 40, step: 0.5, value: 8},
+                {key: "pulleyR", label: "도르래 반지름", unit: "mm", min: 1.5, max: 6, step: 0.1, value: 3.6},
+                {key: "pulleyArm", check: "도르래 받침대", value: true},
+                {key: "armLen", label: "받침대 길이", unit: "mm", min: 3, max: 25, step: 0.5, value: 13},
+                {key: "boltDepth", label: "볼트 깊이", unit: "mm", min: 0, max: 8, step: 0.1, value: 2.2},
+                {key: "drop", label: "추까지 길이", unit: "mm", min: 8, max: 90, step: 0.5, value: 18},
+                {panel: "각도 표시"},
+                {key: "angleMark", check: "각도 표시", value: true},
+                {key: "angleText", label: "각도 글자", text: true, value: "θ"},
+                {key: "arcR", label: "호 반지름", unit: "mm", min: 3, max: 20, step: 0.5, value: 9},
+                {panel: "글자"},
+                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 14, step: 0.5, value: 8}
+            ],
+            draw: drawInclinePulley
+        });
+    }
+
+    // 좌표는 pt(y 위쪽 +), 바닥이 y=0, 빗면 아래 끝이 원점이고 오른쪽 위로 올라간다. 빗면 좌표 (u, v)는 u가 빗면을 따라 올라가는 거리, v가 빗면에서 수직으로 뜬 높이다.
+    // 도르래는 꼭대기 위에 얹혀 실이 빗면과 나란히(물체 옆면 가운데 높이) 들어오고, 받침대 볼트는 빗면 몸통 안쪽에 있다. 추는 꼭대기 오른쪽에 수직으로 매달린다.
+    function drawInclinePulley(t, o) {
+        var m = t.mm, wBody = o.wBody, wObj = o.wObj, wRope = o.wRope, wGuide = o.wGuide, size = o.font;
+        var th = o.angle * Math.PI / 180, c = Math.cos(th), s = Math.sin(th);
+        var bw = o.blockW * m, bh = o.blockH * m, R = o.pulleyR * m, L = o.slopeLen * m;
+        function W(u, v) { return [u * c - v * s, u * s + v * c]; }
+        var off = bh / 2 - R;                                         // 도르래 가운데가 빗면에서 뜬 높이 (실이 물체 옆면 가운데 높이로 들어오게)
+        var ww = o.weightW * m, wh = o.weightH * m;
+        // 추가 꼭대기 아래 수직선에서 1.5mm 떨어져 매달리도록 도르래를 꼭대기보다 빗면 방향으로 ext만큼 내민다
+        var ext = Math.max(0, (off * s - R + ww / 2 + 1.5 * m) / c), uP = L + ext;
+        var apex = W(L, 0), C = W(uP, off), cx = C[0], cy = C[1], wx = cx + R;
+        var ub = Math.max(uP - o.ropeLen * m, bw + 1.5 * m);          // 물체 위쪽 끝
+        var wTop = cy - o.drop * m;
+        // 바닥과 빗면, 꼭대기 아래 수직선
+        t.line([-o.groundLeft * m, 0], [wx + ww / 2 + 8 * m, 0], wBody);
+        t.path([[0, 0], apex, [apex[0], 0]], true, null, 100, wBody);
+        // 물체 (빗면 위에 기울어져 놓임), 글자는 수평
+        var b0 = W(ub - bw, 0), b1 = W(ub, 0), b2 = W(ub, bh), b3 = W(ub - bw, bh);
+        t.path([b0, b1, b2, b3], true, null, 100, wObj);
+        var bc = W(ub - bw / 2, bh / 2);
+        if (o.blockText !== "") t.text(o.blockText, bc[0], bc[1], size, "center");
+        var topY = Math.max(b2[1], b3[1]);
+        if (o.blockName !== "") t.textAt(o.blockName, (Math.min(b0[0], b3[0]) + Math.max(b1[0], b2[0])) / 2, topY + NAME_GAP_MM * m, size, "above");
+        // 도르래와 받침대 볼트(빗면 안쪽 boltDepth, 도르래 가운데에서 armLen)
+        var mount = null;
+        if (o.pulleyArm) {
+            var dv = off + o.boltDepth * m, armLen = Math.max(o.armLen * m, dv + 0.01);
+            mount = W(uP - Math.sqrt(armLen * armLen - dv * dv), -o.boltDepth * m);
+        }
+        t.pulley(cx, cy, R, mount, wObj, wGuide);
+        // 실: 물체 옆면 가운데 → 빗면과 나란히 도르래 위 → 오른쪽 수직
+        t.line(W(ub, bh / 2), W(uP, bh / 2), wRope);
+        t.arc(cx, cy, R, 0, Math.PI / 2 + th, wRope);
+        t.line([wx, cy], [wx, wTop], wRope);
+        t.rect(wx - ww / 2, wTop, wx + ww / 2, wTop - wh, 0, 100, wObj);
+        if (o.weightText !== "") t.text(o.weightText, wx, wTop - wh / 2, size, "center");
+        if (o.weightName !== "") t.textAt(o.weightName, wx + ww / 2 + NAME_GAP_MM * m, wTop - wh / 2, size, "right");
+        // 빗면 각도: 아래 끝의 호와 글자
+        if (o.angleMark) {
+            t.arc(0, 0, o.arcR * m, 0, th, wGuide);
+            if (o.angleText !== "") {
+                var half = th / 2, tr = (o.arcR + 3.2) * m;
+                t.text(o.angleText, tr * Math.cos(half), tr * Math.sin(half), size, "center");
+            }
         }
     }
 
