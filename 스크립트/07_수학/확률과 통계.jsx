@@ -546,7 +546,32 @@ var SCRIPT_KEY = "HighStatistics";
             }
 
             // dir이 [0,0]이면 at에 가운데를 맞추고, 아니면 dir 쪽으로 간격을 둔다
+            // 쌓은 분수 라벨(\frac{1}{2}, frac(1,2))의 글상자와 막대 (07_수학/math_label_helper.jsxinc의 buildStackedLabel이 부른다)
+            function stackFrame(group, str, size, upright) {
+                var frame = group.textFrames.add();
+                frame.contents = str.replace(/\u00B0/g, "\u02D8");
+                var attributes = frame.textRange.characterAttributes;
+                attributes.size = size;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, upright);
+                return frame;
+            }
+
+            function stackBar(group, x0, x1, y) {
+                var bar = group.pathItems.add();
+                bar.setEntirePath([[x0, y], [x1, y]]);
+                bar.filled = false;
+                bar.stroked = true;
+                bar.strokeColor = makeGray(100);
+                bar.strokeWidth = 0.4;
+                return bar;
+            }
+
             function addLabel(label) {
+                if (typeof buildStackedLabel === "function" && hasFractionText(label.text)) {
+                    buildStackedLabel(previewGroup, label, (label.small ? fontPt * 0.8 : fontPt), LABEL_GAP_MM * MM_TO_PT, stackFrame, stackBar);
+                    return;
+                }
                 var frame = previewGroup.textFrames.add();
                 frame.contents = label.text;
                 var range = frame.textRange;
@@ -1282,7 +1307,32 @@ var SCRIPT_KEY = "HighStatistics";
             }
 
             // at에서 dir 쪽으로 간격(+clear)을 두고 글자의 가까운 가장자리가 오게 둔다. sub: 아래첨자 글자 위치
+            // 쌓은 분수 라벨(\frac{1}{2}, frac(1,2))의 글상자와 막대 (07_수학/math_label_helper.jsxinc의 buildStackedLabel이 부른다)
+            function stackFrame(group, str, size, upright) {
+                var frame = group.textFrames.add();
+                frame.contents = str.replace(/\u00B0/g, "\u02D8");
+                var attributes = frame.textRange.characterAttributes;
+                attributes.size = size;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, upright);
+                return frame;
+            }
+
+            function stackBar(group, x0, x1, y) {
+                var bar = group.pathItems.add();
+                bar.setEntirePath([[x0, y], [x1, y]]);
+                bar.filled = false;
+                bar.stroked = true;
+                bar.strokeColor = makeGray(100);
+                bar.strokeWidth = 0.4;
+                return bar;
+            }
+
             function addLabel(label) {
+                if (typeof buildStackedLabel === "function" && hasFractionText(label.text)) {
+                    buildStackedLabel(previewGroup, label, fontPt, LABEL_GAP_MM * MM_TO_PT, stackFrame, stackBar);
+                    return;
+                }
                 var frame = previewGroup.textFrames.add();
                 frame.contents = label.text;
                 var range = frame.textRange;
@@ -1868,7 +1918,32 @@ var SCRIPT_KEY = "HighStatistics";
             }
 
             // at에서 dir 쪽으로 간격을 두고 글자의 가까운 가장자리가 오게 둔다. small: 80% 크기 (가지 위 확률)
+            // 쌓은 분수 라벨(\frac{1}{2}, frac(1,2))의 글상자와 막대 (07_수학/math_label_helper.jsxinc의 buildStackedLabel이 부른다)
+            function stackFrame(group, str, size, upright) {
+                var frame = group.textFrames.add();
+                frame.contents = str.replace(/\u00B0/g, "\u02D8");
+                var attributes = frame.textRange.characterAttributes;
+                attributes.size = size;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, upright);
+                return frame;
+            }
+
+            function stackBar(group, x0, x1, y) {
+                var bar = group.pathItems.add();
+                bar.setEntirePath([[x0, y], [x1, y]]);
+                bar.filled = false;
+                bar.stroked = true;
+                bar.strokeColor = makeGray(100);
+                bar.strokeWidth = 0.4;
+                return bar;
+            }
+
             function addLabel(label) {
+                if (typeof buildStackedLabel === "function" && hasFractionText(label.text)) {
+                    buildStackedLabel(previewGroup, label, (label.small ? fontPt * 0.8 : fontPt), LABEL_GAP_MM * MM_TO_PT, stackFrame, stackBar);
+                    return;
+                }
                 var frame = previewGroup.textFrames.add();
                 frame.contents = label.text;
                 var range = frame.textRange;

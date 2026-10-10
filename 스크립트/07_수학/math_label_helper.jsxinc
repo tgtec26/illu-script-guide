@@ -85,7 +85,8 @@ function buildStackedLabel(group, label, fontPt, gapPt, makeFrame, makeBar) {
     var gb = inner.geometricBounds;
     var halfW = (gb[2] - gb[0]) / 2, halfH = (gb[1] - gb[3]) / 2;
     var dir = label.dir || [0, 0];
-    var reach = (label.clear || 0) + gapPt + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
+    var centered = dir[0] === 0 && dir[1] === 0;
+    var reach = centered ? 0 : (label.clear || 0) + gapPt + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
     inner.translate(label.at[0] + dir[0] * reach - (gb[0] + gb[2]) / 2, label.at[1] + dir[1] * reach - (gb[1] + gb[3]) / 2);
     label.item = inner;
     return inner;
