@@ -27,17 +27,18 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readChains", "readPairTexts", "circumcircle", "readCircles", "readAngles",
+const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readChains", "readPairTexts", "circumcircle", "readCircles", "readEllipses", "readAngles",
   "display", "straight", "circleLine", "unitVector", "offsetPoint", "arcPoints", "rightAnglePoints", "buildGeometry", "clamp", "parseNumber"];
 const make = new Function("state", `
 var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, KAPPA = 0.5522847498;
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
-var text = state.text, showNames = state.showNames, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
+var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+var text = state.text, showNames = state.showNames, showAxes = state.showAxes, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
 const api = (text = {}, extra = {}) => make(Object.assign({
-  text: Object.assign({ pointsText: "", segmentText: "", dashedText: "", circleText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "" }, text),
-  showNames: true, sizeMm: 50,
+  text: Object.assign({ pointsText: "", segmentText: "", dashedText: "", circleText: "", ellipseText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "" }, text),
+  showNames: true, showAxes: false, sizeMm: 50,
 }, extra));
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
@@ -86,5 +87,20 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   const g = api({ pointsText: "A(0,0) B(1,0) X", segmentText: "A-B-Q", circleText: "AB~", lengthText: "AB" });
   const d = g.buildGeometry();
   assert.ok(d.notes.length >= 3, d.notes.join("|"));
+}
+// 타원과 좌표축: 타원 1개(가로로 긴 베지어), 축 2개, 화살촉 2개, x·y·O
+{
+  const g = api({ pointsText: "F(4,0) G(-4,0) A(6,0)", ellipseText: "6x√20" }, { showAxes: true });
+  const d = g.buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  const ellipse = d.lines.find((l) => l.closed && l.points.length === 4);
+  assert.ok(ellipse, "타원");
+  const w = Math.abs(ellipse.points[0].anchor[0] - ellipse.points[2].anchor[0]), h = Math.abs(ellipse.points[1].anchor[1] - ellipse.points[3].anchor[1]);
+  near(w / h, 12 / (2 * Math.sqrt(20)), "타원 비율");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 2);
+  assert.strictEqual(d.arrows.length, 2);
+  const labels = d.texts.map((t) => t.text);
+  for (const n of ["x", "y", "O", "F", "G", "A"]) assert.ok(labels.includes(n), n);
+  assert.ok(api({ pointsText: "A(0,0)", ellipseText: "6" }).buildGeometry().notes.length > 0, "못 읽는 타원");
 }
 console.log("geometry checks passed");
