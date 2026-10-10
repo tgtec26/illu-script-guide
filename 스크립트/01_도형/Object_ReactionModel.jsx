@@ -10,8 +10,8 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 화학 반응 채움 모형: 분자를 공간 채움 모형(하이라이트가 있는 구)으로 그린다. 선택 없이 화면 가운데에 그린다.
-// 화학 반응 탭: 반응물 + 반응물 → 생성물을 분자 모형으로 늘어놓고 +·화살표로 잇고 이름을 단다 (이온 반응 포함).
+// 화학 반응 모형: 분자를 공간 채움 모형(하이라이트가 있는 구)으로 그린다. 선택 없이 화면 가운데에 그린다.
+// 화학 반응 탭: 반응물 + 반응물 → 생성물을 분자 모형으로 늘어놓고 +·화살표로 잇고 이름을 단다 (이온 반응 포함). 분자 배치를 "상자 (반응 전·후)"로 하면 계수 × 배수만큼 상자에 담고, 화살표는 큰 화살표 또는 화살촉을 고르는 선 화살표다.
 // 기체 반응 탭: 분자를 정육면체 안에 담는다. 계수만큼 칸을 이어 붙이고(모서리는 경사 연결), 표 선·값은 그리지 않는다. 이름표는 고를 수 있다.
 // 두 탭 모두 컬러 / 회색 음영으로 바꿀 수 있다.
 // 공간 채움 모형: 구 반지름 = 반데르발스 반지름(Bondi: H 1.20, C 1.70, N 1.55, O 1.52, Cl 1.75 Å), 구 중심 간격 = 실제 결합 길이·각도(NIST CCCBDB)라
@@ -34,6 +34,15 @@ try {
     // 교재 비율: 결합한 두 구의 중심 간격 = 반지름 합 × 이 값, 수소 반지름 0.88 Å (참고 그림 실측: H 지름 ≈ O의 0.58배, 중심 간격 ≈ 반지름 합의 0.76배)
     var TEXTBOOK_OVERLAP = 0.76;
     var TEXTBOOK_H_RADIUS = 0.88;
+
+    // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(사용자가 준 SVG). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
+    // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
+    var HEAD_CATALOG = [
+        {length: 8.6, lineEnd: 7.7, poly: [[0, 0], [4.95, 8.6], [-4.95, 8.6]]},
+        {length: 8, lineEnd: 0.8, poly: [[0, 0], [4.8, 7.3], [4.84, 7.6], [4.8, 8], [4.45, 8], [4.1, 7.8], [0, 1.3], [-4.1, 7.8], [-4.45, 8], [-4.8, 8], [-4.84, 7.6], [-4.8, 7.3]]},
+        {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
+        {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
+    ];
 
     // ==== 표 ====
     // 공간 채움 모형의 구 지름 = 반데르발스 반지름(Bondi 1964)의 두 배. 이온 결합은 이온 반지름(Shannon). 산소 지름(2 × 1.52 Å = 3.04 Å)을 1로 둔다
@@ -140,7 +149,7 @@ try {
         4: [[-0.22, 0.2], [0.22, 0.2], [-0.22, -0.2], [0.22, -0.2]]
     };
 
-    runFormHost("화학 반응 채움 모형", [makeReactEngine(), makeGasEngine()], TAB_PREF_KEY);
+    runFormHost("화학 반응 모형", [makeReactEngine(), makeGasEngine()], TAB_PREF_KEY);
 
     // ==== 화학 반응 탭 ====
     function makeReactEngine() {
@@ -151,7 +160,8 @@ try {
                 {panel: "반응"},
                 {key: "reaction", label: "반응", items: presetTitles(REACT_PRESETS), value: 3},
                 {key: "formula", label: "반응식", text: true, value: REACT_PRESETS[3].eq},
-                {key: "arrange", label: "분자 배치", items: ["한 줄", "모아서"], value: 0},
+                {key: "arrange", label: "분자 배치", items: ["한 줄", "모아서", "상자 (반응 전·후)"], value: 0},
+                {key: "mult", label: "배수", unit: "배", min: 1, max: 3, step: 1, value: 1},
                 {panel: "크기·간격"},
                 {key: "proportion", label: "원자 비율", items: ["교재 비율", "실제(반데르발스)"], value: 0},
                 {key: "size", label: "원자 크기", unit: "mm", min: 2, max: 15, step: 0.5, value: 7},
@@ -164,10 +174,14 @@ try {
                 {key: "labelPos", label: "이름표 위치", items: ["아래", "위"], value: 0},
                 {key: "symbols", check: "원소 기호", value: false},
                 {key: "coef", check: "화학식에 계수", value: false},
+                {key: "equation", check: "반응식", value: false},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
                 {key: "labelGap", label: "이름표 간격", unit: "mm", min: 0, max: 10, step: 0.5, value: 2.5},
                 {key: "colorMode", label: "색상", items: ["컬러", "회색 음영"], value: 0},
+                {key: "arrowStyle", label: "화살표 모양", items: ["큰 화살표", "선 화살표"], value: 0},
                 {key: "arrowColor", label: "화살표 색", items: ["파랑", "빨강", "검정"], value: 0},
+                {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"], order: [3, 2, 0, 1], value: 0},
+                {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
                 {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 0}
             ],
             draw: drawReact
@@ -182,48 +196,115 @@ try {
         var mm = t.mm, F = o.font, unit = o.size * mm;
         var molGap = o.molGap * mm, gap = o.gap * mm, plusW = unit * 0.8, arrowL = o.arrowLen * mm;
         var sides = [reaction.left, reaction.right];
-        var groups = [], plusX = [], arrowSpan = null, x = 0, lowest = 0, highest = 0;
+        var bottom, width;
 
-        for (var s = 0; s < 2; s++) {
-            for (var j = 0; j < sides[s].length; j++) {
-                if (j > 0) {
-                    x += gap;
-                    plusX.push(x + plusW / 2);
-                    x += plusW + gap;
+        // 큰 화살표, 또는 화살촉 모양·크기를 고르는 선 화살표 (선과 촉은 화살표 색을 따른다)
+        function mainArrow(x0, x1, y) {
+            if (o.arrowStyle === 0) { t.blockArrow(x0, x1, y, o.arrowColor); return; }
+            var color = ARROW_COLORS[o.arrowColor];
+            t.headArrow([x0, y], [x1, y], 1, color === null ? 100 : (t.mode === 1 ? color.grayBottom : color.bottom), 2.2 * mm);
+        }
+
+        if (o.arrange === 2) {
+            // 반응 전·후 상자: 분자를 계수 × 배수만큼 상자에 격자로 담는다. 두 상자는 크기가 같다
+            var lists = [], grids = [], cellW = 0, cellH = 0, cols = 1, rows = 1, s, j, n, i;
+            for (s = 0; s < 2; s++) {
+                var list = [];
+                for (j = 0; j < sides[s].length; j++) {
+                    for (n = 0; n < sides[s][j][0] * o.mult; n++) {
+                        var lay = molLayout(sides[s][j][1], o.tilt * (list.length % 2 === 0 ? 1 : -1), o.proportion === 0);
+                        list.push(lay);
+                        cellW = Math.max(cellW, lay.w * unit);
+                        cellH = Math.max(cellH, lay.h * unit);
+                    }
                 }
-                var group = arrangeSpecies(sides[s][j][1], sides[s][j][0], o.arrange, o.tilt, unit, molGap, o.proportion === 0);
-                group.cx = x + group.w / 2;
-                group.formula = sides[s][j][1];
-                group.coef = sides[s][j][0];
-                x += group.w;
-                groups.push(group);
-                lowest = Math.min(lowest, -group.h / 2);
-                highest = Math.max(highest, group.h / 2);
+                var gridCols = Math.ceil(Math.sqrt(list.length));
+                lists.push(list);
+                grids.push([gridCols, Math.ceil(list.length / gridCols)]);
+                cols = Math.max(cols, gridCols);
+                rows = Math.max(rows, Math.ceil(list.length / gridCols));
             }
-            if (s === 0) {
-                x += gap;
-                arrowSpan = [x, x + arrowL];
-                x += arrowL + gap;
+            var cell = Math.max(cellW, cellH) + molGap, pad = Math.max(molGap, 0.3 * unit);
+            var boxW = cols * cell + pad * 2, boxH = rows * cell + pad * 2;
+            width = boxW * 2 + gap * 2 + arrowL;
+            for (s = 0; s < 2; s++) {
+                var left = s * (boxW + gap * 2 + arrowL), g = grids[s];
+                t.path([[left, boxH / 2], [left + boxW, boxH / 2], [left + boxW, -boxH / 2], [left, -boxH / 2]], true, null, 100, 0.5);
+                for (i = 0; i < lists[s].length; i++) {
+                    var cx = left + pad + (cols - g[0]) * cell / 2 + (i % g[0] + 0.5) * cell;
+                    var cy = boxH / 2 - pad - (rows - g[1]) * cell / 2 - (Math.floor(i / g[0]) + 0.5) * cell;
+                    paintMolecule(t, lists[s][i], cx, cy, unit, o.symbols, F);
+                }
+            }
+            mainArrow(boxW + gap, boxW + gap + arrowL, 0);
+            bottom = -boxH / 2;
+            if (o.label < 3) {
+                var capBase = o.labelPos === 1 ? boxH / 2 + o.labelGap * mm + F * 0.25 : -boxH / 2 - o.labelGap * mm - F * 0.72;
+                t.text("반응 전", boxW / 2, capBase, F, "center", 100);
+                t.text("반응 후", boxW + gap * 2 + arrowL + boxW / 2, capBase, F, "center", 100);
+                if (o.labelPos !== 1) bottom = capBase - F * 0.3;
+            }
+        } else {
+            var groups = [], plusX = [], arrowSpan = null, x = 0, lowest = 0, highest = 0;
+            for (var s2 = 0; s2 < 2; s2++) {
+                for (var j2 = 0; j2 < sides[s2].length; j2++) {
+                    if (j2 > 0) {
+                        x += gap;
+                        plusX.push(x + plusW / 2);
+                        x += plusW + gap;
+                    }
+                    var group = arrangeSpecies(sides[s2][j2][1], sides[s2][j2][0] * o.mult, o.arrange, o.tilt, unit, molGap, o.proportion === 0);
+                    group.cx = x + group.w / 2;
+                    group.formula = sides[s2][j2][1];
+                    group.coef = sides[s2][j2][0] * o.mult;
+                    x += group.w;
+                    groups.push(group);
+                    lowest = Math.min(lowest, -group.h / 2);
+                    highest = Math.max(highest, group.h / 2);
+                }
+                if (s2 === 0) {
+                    x += gap;
+                    arrowSpan = [x, x + arrowL];
+                    x += arrowL + gap;
+                }
+            }
+            width = x;
+
+            for (var g2 = 0; g2 < groups.length; g2++) {
+                for (var i2 = 0; i2 < groups[g2].items.length; i2++) {
+                    var item = groups[g2].items[i2];
+                    paintMolecule(t, item.lay, groups[g2].cx + item.x, item.y, unit, o.symbols, F);
+                }
+            }
+            for (var p = 0; p < plusX.length; p++) t.plus(plusX[p], 0, plusW, o.plusColor);
+            mainArrow(arrowSpan[0], arrowSpan[1], 0);
+            bottom = lowest;
+
+            if (o.label < 3) {
+                // 위쪽이면 가장 높은 분자 위에, 아래 첨자가 분자 쪽으로 내려오는 만큼(0.25 F) 더 띄운다
+                var baseline = o.labelPos === 1 ? highest + o.labelGap * mm + F * 0.25 : lowest - o.labelGap * mm - F * 0.72;
+                for (var m = 0; m < groups.length; m++) {
+                    var info = molLabel(o.label, groups[m].formula, groups[m].coef, o.coef);
+                    t.text(info, groups[m].cx, baseline, F, "center", 100, {sub: true});
+                }
+                if (o.labelPos !== 1) bottom = baseline - F * 0.3;
             }
         }
 
-        for (var g = 0; g < groups.length; g++) {
-            for (var i = 0; i < groups[g].items.length; i++) {
-                var item = groups[g].items[i];
-                paintMolecule(t, item.lay, groups[g].cx + item.x, item.y, unit, o.symbols, F);
-            }
+        if (o.equation) {
+            // 반응식: 가운데에 한 줄. 계수는 배수를 곱한 값
+            var eqBase = bottom - o.labelGap * mm - F * 0.72, eqCx = width / 2;
+            t.text(equationText(sides[0], o.mult), eqCx - 5 * mm, eqBase, F, "right", 100, {sub: true});
+            t.arrow([eqCx - 3 * mm, eqBase + F * 0.3], [eqCx + 3 * mm, eqBase + F * 0.3], 0.5, 100, 1.4 * mm);
+            t.text(equationText(sides[1], o.mult), eqCx + 5 * mm, eqBase, F, "left", 100, {sub: true});
         }
-        for (var p = 0; p < plusX.length; p++) t.plus(plusX[p], 0, plusW, o.plusColor);
-        t.blockArrow(arrowSpan[0], arrowSpan[1], 0, o.arrowColor);
+    }
 
-        if (o.label < 3) {
-            // 위쪽이면 가장 높은 분자 위에, 아래 첨자가 분자 쪽으로 내려오는 만큼(0.25 F) 더 띄운다
-            var baseline = o.labelPos === 1 ? highest + o.labelGap * mm + F * 0.25 : lowest - o.labelGap * mm - F * 0.72;
-            for (var n = 0; n < groups.length; n++) {
-                var info = molLabel(o.label, groups[n].formula, groups[n].coef, o.coef);
-                t.text(info, groups[n].cx, baseline, F, "center", 100, {sub: true});
-            }
-        }
+    // 반응식 한 쪽의 글: "2H2 + O2" (계수 1은 생략, 배수를 곱한다)
+    function equationText(side, mult) {
+        var parts = [];
+        for (var i = 0; i < side.length; i++) parts.push((side[i][0] * mult > 1 ? side[i][0] * mult : "") + side[i][1]);
+        return parts.join(" + ");
     }
 
     // 이름표 글: 0 이름, 1 화학식, 2 이름(화학식)
@@ -914,13 +995,18 @@ try {
             var row = panel.add("group");
             row.alignChildren = ["left", "center"];
             row.add("statictext", undefined, ctl.label + ":").preferredSize.width = 100;
-            var list = row.add("dropdownlist", undefined, ctl.items);
+            // order: 목록에 보이는 순서 → 값 번호 (화살촉 모양은 1 작살형, 2 제비꼬리, 3 삼각형, 4 꺾쇠 순으로 보인다)
+            var order = ctl.order || null, shown = [], pos = o[ctl.key], k;
+            for (k = 0; k < ctl.items.length; k++) shown.push(order ? ctl.items[order[k]] : ctl.items[k]);
+            if (order) for (k = 0; k < order.length; k++) if (order[k] === o[ctl.key]) pos = k;
+            var list = row.add("dropdownlist", undefined, shown);
             list.maximumSize.width = 230;
-            list.selection = o[ctl.key];
+            list.selection = pos;
             ui[ctl.key] = list;
             list.onChange = function() {
-                if (list.selection === null) { list.selection = o[ctl.key]; return; }
-                o[ctl.key] = list.selection.index;
+                if (list.selection === null) { list.selection = pos; return; }
+                pos = list.selection.index;
+                o[ctl.key] = order ? order[pos] : pos;
                 if (spec.presets && ctl.key === "reaction" && spec.presets[o.reaction].eq) {
                     o.formula = spec.presets[o.reaction].eq;
                     if (ui.formula) ui.formula.text = o.formula;
@@ -968,7 +1054,7 @@ try {
             group = layer.groupItems.add();
             group.name = spec.name;
             try {
-                spec.draw(makeFormTools(group), o);
+                spec.draw(makeFormTools(group, o), o);
                 var b = group.geometricBounds;
                 group.translate(center[0] - (b[0] + b[2]) / 2 + o.offsetX * FORM_MM,
                     center[1] - (b[1] + b[3]) / 2 + o.offsetY * FORM_MM, true, true, true, true);
@@ -985,7 +1071,7 @@ try {
         }
 
         function saveSettings() {
-            var parts = ["v6"];
+            var parts = ["v7"];
             for (var i = 0; i < controls.length; i++) {
                 var ctl = controls[i];
                 if (!ctl.key) continue;
@@ -1002,7 +1088,7 @@ try {
             var p = String(raw).split("|");
             var keyed = [];
             for (var i = 0; i < controls.length; i++) if (controls[i].key) keyed.push(controls[i]);
-            if (p[0] !== "v6" || p.length !== keyed.length + 1) return;
+            if (p[0] !== "v7" || p.length !== keyed.length + 1) return;
             var values = [];
             for (var k = 0; k < keyed.length; k++) {
                 var ctl = keyed[k], text = p[k + 1];
@@ -1029,8 +1115,19 @@ try {
         return Number(value).toFixed(decimals);
     }
 
+    // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
+    function catalogPoints(shape, tip, d, k) {
+        var n = [-d[1], d[0]];
+        var poly = HEAD_CATALOG[shape].poly;
+        var out = [];
+        for (var i = 0; i < poly.length; i++) {
+            out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
+        }
+        return out;
+    }
+
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다. 색은 K값(숫자) 또는 [r, g, b]
-    function makeFormTools(g) {
+    function makeFormTools(g, o) {
         var t = {mm: FORM_MM, group: g, mode: 0, molecules: {}};
         // 0 컬러 / 1 회색 음영. 그리기 전에 한 번 정한다
         t.setMode = function(mode) { t.mode = mode; };
@@ -1064,6 +1161,23 @@ try {
             var half = head * 0.35;
             if (len > head) t.line(a, [base[0] + ux * 0.2, base[1] + uy * 0.2], width, k);
             t.path([b, [base[0] - uy * half, base[1] + ux * half], [base[0] + uy * half, base[1] - ux * half]], true, k, null, 0);
+        };
+        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리, 3 작살형), 크기는 o.headSize(%): 삼각형 머리 길이가 headLength × 크기이고 다른 모양도 같은 배율을 쓴다.
+        // 선은 머리 속(lineEnd)에서 끝나 틈이 없다
+        t.headArrow = function(a, b, width, k, headLength) {
+            if (k === undefined) k = 100;
+            var scale = o && o.headSize ? o.headSize / 100 : 1;
+            var shape = o && o.headShape ? o.headShape : 0;
+            var head = (headLength || 1.6 * FORM_MM) * scale;
+            var dx = b[0] - a[0], dy = b[1] - a[1];
+            var len = Math.sqrt(dx * dx + dy * dy);
+            if (len < 0.01) return;
+            var ux = dx / len, uy = dy / len;
+            if (head > len) head = len;
+            var unit = head / HEAD_CATALOG[0].length;
+            var lineEnd = HEAD_CATALOG[shape].lineEnd * unit;
+            if (len > lineEnd) t.line(a, [b[0] - ux * lineEnd, b[1] - uy * lineEnd], width, k);
+            t.path(catalogPoints(shape, b, [ux, uy], unit), true, k, null, 0);
         };
         // 속 채운 화살표(위가 밝고 아래가 어두운 그라데이션). x0 → x1, 세로 가운데 y
         t.blockArrow = function(x0, x1, y, colorIndex) {

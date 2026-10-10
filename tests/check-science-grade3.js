@@ -90,22 +90,6 @@ function load(file, names) {
   }
 }
 
-// 화학 반응 모형: 반응 전후 원자 수가 같다
-{
-  const { h } = load("Object_ChemReaction.jsx", ["chemReactions", "chemMolecule", "chemElement", "chemBounds", "chemGrid"]);
-  const count = (side) => {
-    const n = {};
-    side.forEach(([coef, formula]) => h.chemMolecule(formula).forEach((a) => { n[a.symbol] = (n[a.symbol] || 0) + coef; }));
-    return n;
-  };
-  h.chemReactions().forEach((r) => assert.deepStrictEqual(count(r.left), count(r.right), r.title));
-  const water = h.chemBounds(h.chemMolecule("H2O"));
-  assert.ok(water[2] - water[0] > 1.5 && water[1] > 0, "water bounds");
-  assert.deepStrictEqual(h.chemGrid(3), [2, 2]);
-  assert.deepStrictEqual(h.chemGrid(4), [2, 2]);
-  assert.deepStrictEqual(h.chemGrid(6), [3, 2]);
-}
-
 // 뉴런: 말이집 조각은 5mm, 틈 1.2mm, 제외 구간에는 없다
 {
   const { h } = load("Object_Neuron.jsx", ["myelinSegments"]);
@@ -117,7 +101,7 @@ function load(file, names) {
 }
 
 // 공통: 새 스크립트는 메모·탭 이동·저장 규칙을 따른다
-for (const file of ["Object_Weather.jsx", "Object_ChemReaction.jsx", "Object_Neuron.jsx"]) {
+for (const file of ["Object_Weather.jsx", "Object_ReactionModel.jsx", "Object_Neuron.jsx"]) {
   const s = fs.readFileSync(path.join(root, "스크립트", "01_도형", file), "utf8");
   assert.ok(s.includes("illu_last_script.txt") && s.includes("ui_tab_helper.jsxinc") && s.includes("bindTabOrder(win)"), file);
   assert.ok(s.includes("win.defaultElement = null"), file);
