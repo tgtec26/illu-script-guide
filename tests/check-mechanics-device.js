@@ -15,7 +15,7 @@ function extractFunction(name) {
   }
   throw new Error(`unbalanced: ${name}`);
 }
-const names = ["drawHorizontalPulley", "drawInclinePulley", "drawTwoIncline"];
+const names = ["drawHorizontalPulley", "drawInclinePulley", "drawTwoIncline", "drawBlocks"];
 const scenes = new Function(`var GHOST_DASH = [2, 1], HEAD_HARPOON = 1, NAME_GAP_MM = 1, ARROW_GAP_MM = 1, ARROW_HEAD_MM = 1.4, ARROW_HALF_MM = 1.4 * 0.35;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 컨트롤 기본값을 소스의 controls 배열에서 읽는다 (+ 엔진이 붙이는 선 두께 기본값)
@@ -157,4 +157,19 @@ console.log("mechanics device checks passed");
   near(slope(ropes[1]), -Math.tan(tB), "오른쪽 실은 오른쪽 빗면과 나란함");
   const arc = calls.filter((x) => x.k === "arc")[0];
   near(arc.a[3], Math.PI / 2 - tB, "호 시작"); near(arc.a[4], Math.PI / 2 + tA, "호 끝");
+}
+
+// 물체 A·B: 실은 두 물체 사이 가운데 높이, 힘 화살표는 A의 왼쪽 면 가운데에서 끝나고 간격 0이면 실이 없다
+{
+  const o = defaultsOf("makeBlocksEngine");
+  assert.strictEqual(o.gap, 10); assert.strictEqual(o.rope, true); assert.strictEqual(o.force, true);
+  let calls = record(o, scenes.drawBlocks);
+  const rect = calls.filter((x) => x.k === "rect");
+  assert.strictEqual(rect.length, 2); near(rect[1].a[0] - rect[0].a[2], 10, "물체 사이 간격");
+  const rope = calls.find((x) => x.k === "line" && x.a[2] === 0.4);
+  near(rope.a[0][1], 5, "실 높이"); near(rope.a[0][0], 13, "실 시작"); near(rope.a[1][0], 23, "실 끝");
+  const arrow = calls.find((x) => x.k === "arrow");
+  near(arrow.a[1][0], 0, "화살촉은 A 왼쪽 면"); near(arrow.a[1][1], 5, "화살표 높이"); near(arrow.a[0][0], -14, "화살표 길이");
+  calls = record({ ...o, gap: 0 }, scenes.drawBlocks);
+  assert.ok(!calls.some((x) => x.k === "line" && x.a[2] === 0.4), "맞닿으면 실 없음");
 }

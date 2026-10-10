@@ -15,6 +15,7 @@ try {
 // 역학 장치: 물리Ⅰ 시험지의 도르래·빗면·수평면 장치 그림을 장면별 탭으로 그린다. 선택 없이 화면 가운데에 만든다.
 //   수평면 도르래 탭: 수평면 위 물체가 실로 도르래를 지나 매달린 추와 이어진 장면. 이전 위치(점선 물체)와 속도 화살표, 두 지점 사이 거리 표시를 고른다.
 //   빗면 도르래 탭: 빗면 위 물체가 빗면과 나란한 실로 꼭대기 도르래를 지나 매달린 추와 이어진 장면. 빗면 각도(θ) 표시를 고른다.
+//   물체 A·B 탭: 수평면 위에 나란한 물체 A·B. 사이는 간격(0이면 맞닿음)과 실, 물체 A에 미는 힘 화살표를 고른다.
 //   두 빗면 탭: 맞붙은 두 빗면 위의 물체 A·B가 빗면과 나란한 실로 꼭대기 도르래를 지나 이어진 장면. 두 빗면의 각도(θ1·θ2) 표시를 고른다.
 // 선 두께는 테이블·바닥 0.8pt, 물체·도르래 겉 0.4pt, 실 0.4pt, 보조선·파선·도르래 안쪽 0.3pt이고 '선 두께' 패널에서 고친다. 파선은 2-1이다.
 // 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, 변수 GSMediItaC1, GSMediumB1에 없는 기호(θ)는 HancomEQN이다.
@@ -40,7 +41,7 @@ try {
     ];
     var HEAD_HARPOON = 1;   // 작살형(평가원식). 화살촉 목록의 1번
 
-    runFormHost("역학 장치", [makeHorizontalPulleyEngine(), makeInclinePulleyEngine(), makeTwoInclineEngine()], TAB_PREF_KEY);
+    runFormHost("역학 장치", [makeHorizontalPulleyEngine(), makeInclinePulleyEngine(), makeTwoInclineEngine(), makeBlocksEngine()], TAB_PREF_KEY);
 
     // ==== 수평면 도르래 탭 ====
     function makeHorizontalPulleyEngine() {
@@ -318,6 +319,51 @@ try {
             if (o.textAngleA !== "") t.textAt(o.textAngleA, tr * Math.cos(tA / 2), tr * Math.sin(tA / 2), size, "center", undefined, {sub: true});
             t.arc(xR, 0, o.arcR * m, Math.PI - tB, Math.PI, wGuide);
             if (o.textAngleB !== "") t.textAt(o.textAngleB, xR + tr * Math.cos(Math.PI - tB / 2), tr * Math.sin(Math.PI - tB / 2), size, "center", undefined, {sub: true});
+        }
+    }
+
+    // ==== 물체 A·B 탭 ====
+    function makeBlocksEngine() {
+        return makeFormEngine({
+            label: "물체 A·B", name: "BlocksAB", prefKey: "MechanicsDevice/blocksAB",
+            controls: [
+                {panel: "물체"},
+                {key: "textA", label: "왼쪽 물체 글자", text: true, value: "A"},
+                {key: "textB", label: "오른쪽 물체 글자", text: true, value: "B"},
+                {key: "widthA", label: "왼쪽 물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 13},
+                {key: "heightA", label: "왼쪽 물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 10},
+                {key: "widthB", label: "오른쪽 물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 13},
+                {key: "heightB", label: "오른쪽 물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 10},
+                {panel: "연결·힘"},
+                {key: "gap", label: "물체 사이 간격", unit: "mm", min: 0, max: 40, step: 0.5, value: 10},
+                {key: "rope", check: "실로 연결", value: true},
+                {key: "force", check: "힘 화살표", value: true},
+                {key: "forceText", label: "힘 글자", text: true, value: "F"},
+                {key: "forceLen", label: "힘 화살표 길이", unit: "mm", min: 6, max: 40, step: 0.5, value: 14},
+                {key: "groundSide", label: "바닥 양쪽 여유", unit: "mm", min: 0, max: 40, step: 0.5, value: 6},
+                {panel: "글자"},
+                {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 14, step: 0.5, value: 8}
+            ],
+            draw: drawBlocks
+        });
+    }
+
+    // 좌표는 pt(y 위쪽 +), 바닥이 y=0, 왼쪽 물체 A의 왼쪽 끝이 x=0. 실은 두 물체 옆면의 가운데(낮은 쪽 높이의 절반)를 수평으로 잇고, 힘 화살표는 A의 왼쪽 면 가운데로 오른쪽을 향한다.
+    function drawBlocks(t, o) {
+        var m = t.mm, wBody = o.wBody, wObj = o.wObj, wRope = o.wRope, size = o.font;
+        var wa = o.widthA * m, ha = o.heightA * m, wb = o.widthB * m, hb = o.heightB * m, gap = o.gap * m;
+        var bx = wa + gap, endX = bx + wb;
+        var force = o.force ? o.forceLen * m : 0;
+        t.line([-(force + o.groundSide * m), 0], [endX + o.groundSide * m, 0], wBody);
+        t.rect(0, ha, wa, 0, 0, 100, wObj);
+        t.rect(bx, hb, endX, 0, 0, 100, wObj);
+        if (o.textA !== "") t.text(o.textA, wa / 2, ha / 2, size, "center");
+        if (o.textB !== "") t.text(o.textB, bx + wb / 2, hb / 2, size, "center");
+        if (o.rope && gap > 0) { var ry = Math.min(ha, hb) / 2; t.line([wa, ry], [bx, ry], wRope); }
+        if (o.force) {
+            var fy = ha / 2;
+            t.arrow([-force, fy], [0, fy], wRope, 100, ARROW_HEAD_MM * m);
+            if (o.forceText !== "") t.textAt(o.forceText, -force / 2, fy + (ARROW_HALF_MM + ARROW_GAP_MM) * m, size, "above", undefined, {italic: true});
         }
     }
 
