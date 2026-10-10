@@ -87,12 +87,29 @@ calls = run({ chambers: 3, pos1: 34, pos2: 67 });
 assert.strictEqual(calls.filter((c) => c.k === "rect" && c.a[4] === 100).length, 2, "칸 3개면 피스톤 2개");
 assert.deepStrictEqual(calls.filter((c) => c.k === "text" && c.a[4] === "center").slice(0, 3).map((c) => c.a[0]), ["A", "B", "C"]);
 assert.strictEqual(run({ showNames: false }).filter((c) => c.k === "text" && /^[ABC]$/.test(c.a[0])).length, 0);
-// 지시선: 글자 둘과 지시선 둘(실린더 윗변까지), 피스톤이 왼쪽에 붙으면 글자가 겹치지 않는다
-calls = run({ pos1: 20 });
-const labels = calls.filter((c) => c.k === "text" && /^단열된/.test(c.a[0]));
-assert.strictEqual(labels.length, 2);
-assert.ok(calls.filter((c) => c.k === "line").every((c) => c.a[1][1] === 0), "지시선은 실린더 윗변까지");
-const cyl = labels.find((c) => c.a[0] === "단열된 실린더"), pis = labels.find((c) => c.a[0] === "단열된 피스톤");
-assert.ok(Math.abs(cyl.a[1] - pis.a[1]) > 7 * 8 * 0.9 * 0.9 || pis.a[2] > cyl.a[2], "글자가 겹치지 않거나 위로 올림");
+// 지시선: 글자 둘과 지시선 둘. 피스톤이 어디에 있어도 두 글자는 가로로 겹치지 않고, 지시선은 윗벽(y=0)에 닿는다
+for (const pos1 of [5, 12, 20, 30, 50, 70, 90]) {
+  calls = run({ pos1 });
+  const labels = calls.filter((c) => c.k === "text" && /^단열된/.test(c.a[0]));
+  assert.strictEqual(labels.length, 2, `pos ${pos1}`);
+  const cyl = labels.find((c) => c.a[0] === "단열된 실린더"), pis = labels.find((c) => c.a[0] === "단열된 피스톤");
+  const cylRight = cyl.a[1] + 7 * 8 * 0.9 / 2, pisLeft = pis.a[1] - 7 * 8 * 0.9 / 2;
+  assert.ok(cylRight + 1 < pisLeft, `pos ${pos1}: labels do not overlap (${cylRight.toFixed(1)} < ${pisLeft.toFixed(1)})`);
+  assert.strictEqual(cyl.a[2], pis.a[2], "같은 높이");
+  const leaders = calls.filter((c) => c.k === "line");
+  assert.strictEqual(leaders.length, 2);
+  assert.ok(leaders.every((c) => c.a[1][1] === 0 && c.a[0][1] > 0), "지시선은 글자 아래에서 윗벽까지");
+  const pistonX = (calls.filter((c) => c.k === "rect" && c.a[4] === 100)[0].a[0] + calls.filter((c) => c.k === "rect" && c.a[4] === 100)[0].a[2]) / 2;
+  const pistLeader = leaders.find((c) => Math.abs(c.a[0][0] - pis.a[1]) < 1e-9);
+  near(pistLeader.a[1][0], pistonX, "피스톤 지시선은 피스톤 위로 수직");
+  near(pistLeader.a[0][0], pistLeader.a[1][0], "수직");
+  const cylLeader = leaders.find((c) => Math.abs(c.a[0][0] - cyl.a[1]) < 1e-9);
+  assert.ok(cylLeader.a[1][0] > 0 && cylLeader.a[1][0] < pistonX, "실린더 지시선은 윗벽 안쪽, 피스톤 왼쪽에 닿는다");
+}
+// 피스톤이 왼쪽에 붙으면 실린더 지시선이 사선이고, 멀면 수직이다
+let slanted = run({ pos1: 20 }).filter((c) => c.k === "line");
+assert.ok(slanted.some((c) => Math.abs(c.a[0][0] - c.a[1][0]) > 1), "close piston: slanted leader");
+let straight = run({ pos1: 70 }).filter((c) => c.k === "line");
+assert.ok(straight.every((c) => Math.abs(c.a[0][0] - c.a[1][0]) < 1e-9), "far piston: both leaders vertical");
 assert.strictEqual(run({ cylLabel: "", pistLabel: "" }).filter((c) => c.k === "line").length, 0);
 console.log("piston cylinder checks passed");

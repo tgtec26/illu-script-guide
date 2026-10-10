@@ -15,7 +15,7 @@ try {
 //   분자 점은 칸 안에 고르게 퍼지게 놓는다(촘촘한 후보 격자에서 이미 놓은 점과 가장 먼 자리를 차례로 고른다).
 //   '단열된 실린더'·'단열된 피스톤' 지시선 글자와 열 Q 화살표(칸 A로 들어옴)를 넣을 수 있다.
 //   화살촉은 측정한 일러스트레이터 화살촉 4종 중에서 고르고(기본 작살형) 크기를 %로 정한다.
-// 선 두께는 실린더 벽 1pt, 칸막이 테두리 0, 화살표·지시선 0.4pt이고 '선 두께' 패널에서 고친다.
+// 선 두께는 실린더 벽 1pt, 화살표·지시선 0.4pt이고 '선 두께' 패널에서 고친다.
 // 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, 변수(Q)는 GSMediItaC1, GSMediumB1에 없는 기호는 HancomEQN이다.
 
 (function() {
@@ -159,7 +159,7 @@ try {
         var pcts = clampPositions([o.pos1, o.pos2], o.chambers), xs = [];
         for (i = 0; i < pcts.length; i++) xs.push(L * pcts[i] / 100);
         t.rect(0, top, L, bottom, null, 100, o.wBody);
-        for (i = 0; i < xs.length; i++) t.rect(xs[i] - pw / 2, top, xs[i] + pw / 2, bottom, 100, o.wObj > 0 ? 100 : null, o.wObj);
+        for (i = 0; i < xs.length; i++) t.rect(xs[i] - pw / 2, top, xs[i] + pw / 2, bottom, 100, null, 0);
         // 칸: 왼쪽 벽·피스톤·오른쪽 벽 사이
         for (i = 0; i < o.chambers; i++) {
             var left = i === 0 ? 0 : xs[i - 1] + pw / 2, right = i === o.chambers - 1 ? L : xs[i] - pw / 2;
@@ -178,19 +178,21 @@ try {
             t.arrow([-armLen, mid], [0, mid], o.wRope);
             t.textAt("Q", -armLen - 1 * m, mid, size, "left", {italic: true});
         }
-        // 지시선 글자: 실린더 위로 띄우고 지시선을 벽·피스톤 윗변까지 긋는다. 실린더 글자는 피스톤 지시선과 겹치지 않게 왼쪽으로 비킨다
-        var labelY = 7 * m;
-        function callout(text, x, raise) {
+        // 지시선 글자: 실린더 위로 띄운다. 피스톤 글자는 피스톤 바로 위에 두고(수직 지시선), 실린더 글자는 그 왼쪽에서 겹치지 않게 비키며
+        // 지시선은 윗벽을 향해 사선으로 긋는다. 피스톤 글자가 없으면 실린더 글자가 왼쪽 앞쪽에서 수직 지시선을 쓴다
+        var labelY = 7 * m, gap = 2 * m;
+        var cylWidth = o.cylLabel.length * size * 0.9, pistWidth = o.pistLabel.length * size * 0.9, pistCx = xs[0];
+        function callout(text, cx, tx) {
             if (text === "") return;
-            var y = labelY + raise;
-            t.text(text, x, y, size, "center");
-            t.line([x, y - size * 0.5 - 0.8 * m], [x, 0], o.wRope);
+            t.text(text, cx, labelY, size, "center");
+            t.line([cx, labelY - size * 0.5 - 0.8 * m], [tx, 0], o.wRope);
         }
-        var cylHalf = o.cylLabel.length * size * 0.45, pistHalf = o.pistLabel.length * size * 0.45, cylX = L * 0.2;
-        cylX = Math.max(3 * m, Math.min(cylX, xs[0] - cylHalf - 1 * m));
-        var overlap = Math.abs(xs[0] - cylX) < cylHalf + pistHalf;
-        callout(o.cylLabel, cylX, 0);
-        callout(o.pistLabel, xs[0], overlap ? size * 1.8 : 0);
+        var cylCx = L * 0.2;
+        if (o.pistLabel !== "") cylCx = Math.min(cylCx, pistCx - pistWidth / 2 - gap - cylWidth / 2);
+        // 지시선이 닿는 윗벽 자리: 글자 바로 아래가 벽 안쪽이면 수직, 아니면 가까운 벽 안쪽으로 사선. 피스톤보다 오른쪽으로 넘어가지 않는다
+        var cylTx = Math.max(0.5 * m, Math.min(pistCx - 1 * m, Math.max(1.5 * m, cylCx)));
+        callout(o.cylLabel, cylCx, cylTx);
+        callout(o.pistLabel, pistCx, pistCx);
     }
 
     // ==== 창 ====
@@ -295,7 +297,7 @@ try {
     // 컨트롤: {panel: "제목", fold: true} 새 패널(fold면 기본으로 접힘) / {key, label, unit, min, max, step, value} 숫자 행 /
     //         {key, check: "라벨", value: true} 체크(이어진 것은 한 행에 셋까지) / {key, label, items: [...], value} 드롭다운 /
     //         {key, label, text: true, value: "글"} 글 입력
-    // '선 두께' 패널(wBody 실린더 벽, wObj 칸막이 테두리, wRope 화살표·지시선)과 '위치' 패널(가로·세로 이동)은 끝에 저절로 붙고,
+    // '선 두께' 패널(wBody 실린더 벽, wRope 화살표·지시선)과 '위치' 패널(가로·세로 이동)은 끝에 저절로 붙고,
     // 위치 이동은 다시 그리지 않고 그룹만 옮긴다. draw는 어디에 그려도 된다. 그린 뒤 그룹을 화면 가운데로 옮긴다.
     function makeFormEngine(spec) {
         var api = {label: spec.label, error: null, addRows: addRows,
@@ -303,7 +305,6 @@ try {
         var controls = spec.controls.concat([
             {panel: "선 두께", fold: true},
             {key: "wBody", label: "실린더 벽", unit: "pt", min: 0.1, max: 3, step: 0.1, value: 1},
-            {key: "wObj", label: "칸막이 테두리", unit: "pt", min: 0, max: 2, step: 0.1, value: 0},
             {key: "wRope", label: "화살표·지시선", unit: "pt", min: 0.1, max: 2, step: 0.1, value: 0.4},
             {panel: "위치"},
             {key: "offsetX", label: "가로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 0},
