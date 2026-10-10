@@ -81,7 +81,7 @@
 | 01_도형 | Object_expand_arrow.jsx | 확장 화살표.jsx |
 | 01_도형 | Object_front.jsx | 오브젝트 전선.jsx |
 | 01_도형 | Object_isometric.jsx | 등각 투상도 상자.jsx |
-| 01_도형 | Object_rotate3d.jsx | 3D 평면 회전.jsx |
+| 01_도형 | Object_rotate3d.jsx | (삭제: 3D 스크립트를 평면 회전 탭으로 여는 연결용이라 없앰) |
 | 01_도형 | Object_setdash2-1.jsx | 파선 2-1.jsx |
 | 01_도형 | Object_setdash3-1.jsx | 파선 3-1.jsx |
 | 01_도형 | Object_setdash4-1-1-1.jsx | 파선 4-1-1-1.jsx |
