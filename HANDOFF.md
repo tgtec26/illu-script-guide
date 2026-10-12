@@ -49,7 +49,7 @@
 - `tests/*.js` 중 **변경 전부터 실패하던 4개**: `check-arrowhead-shapes`, `check-crystal-sizes`, `check-math-heads`, `check-script-safety`. 새로 깨뜨린 것은 없다. 나머지는 `for f in tests/*.js; do node $f || echo FAIL $f; done`로 확인.
 - 일러 앱은 Illustrator **2027 Beta**(`com.adobe.illustratorBeta`). 정식판이면 `ILLU_APP_ID=com.adobe.illustrator`.
 - 일러에 스크립트 로더를 다시 등록해야 할 때: `ILLUSTRATOR_APP_DIR="/Applications/Adobe Illustrator (Beta)" ILLUSTRATOR_VER="31.0.0 Beta" ./setup-mac.command`.
-- Windows도 베타는 연도가 없어 자동으로 못 고르고 2026 폴더에 등록된다(액션의 "메뉴 항목" 단계가 `파일 > 스크립트` 메뉴를 찾지 못해 "현재 사용할 수 없습니다"가 뜸): `setup-windows.cmd -IllustratorAppDir "C:\Program Files\Adobe\Adobe Illustrator (Beta)" -IllustratorVer "31.0.0 Beta"`. 베타 `Presets\ko_KR\스크립트` 폴더가 일러가 읽는 이름인지는 재시작 후 메뉴로 확인 필요.
+- Windows도 베타는 연도가 없어 자동으로 못 고르고 2026 폴더에 등록된다(액션의 "메뉴 항목" 단계가 `파일 > 스크립트` 메뉴를 찾지 못해 "현재 사용할 수 없습니다"가 뜸): `setup-windows.cmd -IllustratorAppDir "C:\Program Files\Adobe\Adobe Illustrator (Beta)" -IllustratorVer "31.0.0 Beta"`. 베타 `Presets\ko_KR\스크립트` 폴더를 일러가 읽는다(2026-10-12 Windows 베타에서 메뉴·액션 F12 확인).
 
 ## 7. 2026-10-11 밤 작업 (사용자 취침 중, 일러 실행 검증 전 · 푸시 안 함)
 일러가 문서를 못 만들어(`app.documents.add` → `WENE`, MCP `CreateDocument`도 같은 오류) 실행 검증을 못 했다. **커밋만 했고 푸시하지 않았다.** 일러를 재시작하고 문서 하나를 연 뒤 아래를 하나씩 실행·PNG로 확인하고 푸시한다.
