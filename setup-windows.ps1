@@ -1,5 +1,11 @@
 ﻿#Requires -Version 5.1
-param()   # 항상 전체 세팅: 스크립트 + 단축키(.kys) + 화살표(.ai) + 폭 프로파일
+# 항상 전체 세팅: 스크립트 + 단축키(.kys) + 화살표(.ai) + 폭 프로파일
+# 베타처럼 폴더 이름에 연도가 없으면 자동으로 못 고른다. 직접 지정한다:
+#   setup-windows.cmd -IllustratorAppDir "C:\Program Files\Adobe\Adobe Illustrator (Beta)" -IllustratorVer "31.0.0 Beta"
+param(
+    [string]$IllustratorAppDir = $env:ILLUSTRATOR_APP_DIR,
+    [string]$IllustratorVer = $env:ILLUSTRATOR_VER
+)
 $ErrorActionPreference = "Stop"
 
 $RepoUrl = "https://github.com/tgtec26/illu-script-guide.git"
@@ -26,6 +32,9 @@ function Restart-AsAdministrator {
         "-ExecutionPolicy", "Bypass",
         "-File", "`"$PSCommandPath`""
     )
+    # 관리자 창은 환경 변수를 이어받지 못하므로 인자로 넘긴다
+    if ($IllustratorAppDir) { $Arguments += @("-IllustratorAppDir", "`"$IllustratorAppDir`"") }
+    if ($IllustratorVer) { $Arguments += @("-IllustratorVer", "`"$IllustratorVer`"") }
     Start-Process -FilePath $PowerShellExe -ArgumentList $Arguments -Verb RunAs | Out-Null
     exit
 }
@@ -94,19 +103,41 @@ if (-not (Test-Path $SourceDir)) {
     throw "스크립트 폴더를 찾지 못했습니다: $SourceDir"
 }
 
-$AppDir = Get-IllustratorInstallDirs |
-    Sort-Object -Property FullName -Unique |
-    Sort-Object @{ Expression = {
-        if ($_.Name -match "20\d\d") { [int]$Matches[0] } else { 0 }
-    } } -Descending |
-    Select-Object -First 1
+$AllDirs = @(Get-IllustratorInstallDirs | Sort-Object -Property FullName -Unique)
+if ($IllustratorAppDir) {
+    if (-not (Test-Path -LiteralPath $IllustratorAppDir)) {
+        throw "지정한 Illustrator 폴더가 없습니다: $IllustratorAppDir"
+    }
+    $AppDir = Get-Item -LiteralPath $IllustratorAppDir
+} else {
+    $AppDir = $AllDirs |
+        Sort-Object @{ Expression = {
+            if ($_.Name -match "20\d\d") { [int]$Matches[0] } else { 0 }
+        } } -Descending |
+        Select-Object -First 1
+}
 
 if (-not $AppDir) {
     throw "Illustrator 설치 폴더를 찾지 못했습니다."
 }
 
 $Year = if ($AppDir.Name -match "20\d\d") { [int]$Matches[0] } else { 0 }
-$Ver = if ($Year -ge 1997) { $Year - 1996 } else { 0 }   # 2026 -> 30
+if ($IllustratorVer) {
+    $Ver = $IllustratorVer   # 베타: "31.0.0 Beta" (설정 폴더 이름 "Adobe Illustrator 31.0.0 Beta Settings")
+} elseif ($Year -ge 1997) {
+    $Ver = $Year - 1996      # 2026 -> 30
+} else {
+    throw "'$($AppDir.Name)' 폴더에는 연도가 없어 설정 폴더를 알 수 없습니다. -IllustratorVer `"31.0.0 Beta`" 처럼 버전을 함께 지정하세요."
+}
+
+# 연도 없는 폴더(베타)가 따로 있는데 고르지 않았다면 알려 준다. 지금 쓰는 일러가 그쪽이면 스크립트 메뉴·액션이 안 먹는다
+if (-not $IllustratorAppDir) {
+    $Skipped = $AllDirs | Where-Object { $_.FullName -ne $AppDir.FullName -and $_.Name -notmatch "20\d\d" }
+    foreach ($S in $Skipped) {
+        Write-Host "주의: '$($S.Name)'는 연도가 없어 자동으로 고르지 않았습니다. 이 일러에 설치하려면:"
+        Write-Host "  setup-windows.cmd -IllustratorAppDir `"$($S.FullName)`" -IllustratorVer `"31.0.0 Beta`""
+    }
+}
 
 $PresetRoots = @(
     (Join-Path $AppDir.FullName "Presets"),
@@ -132,7 +163,9 @@ if (-not $TargetDir) {
     if (-not $LocaleDir) {
         throw "Illustrator Presets 폴더를 찾지 못했습니다."
     }
-    $TargetPath = Join-Path $LocaleDir.FullName "Scripts"
+    # 한국어 일러는 현지화된 이름(스크립트)의 폴더를 읽는다(setup-mac.command와 같음)
+    $ScriptsName = if ($LocaleDir.Name -eq "ko_KR") { "스크립트" } else { "Scripts" }
+    $TargetPath = Join-Path $LocaleDir.FullName $ScriptsName
 } else {
     $TargetPath = $TargetDir.FullName
 }
