@@ -77,4 +77,9 @@ assert.ok(g.describeTriangle(g.solveTriangle(1, { b: 5, c: 8, A: 60 })).includes
 }
 
 assert.ok(source.includes('var PREF_KEY = "HighMathTriangle/settings";'));
+// 글자 간격(labelGapMm): 라벨 배치는 상수가 아니라 옵션 값을 쓰고, 저장은 v2(19칸)이며 간격이 생기기 전 v1(18칸)도 읽는다
+assert.ok(!source.includes("LABEL_GAP_MM * MM_TO_PT"), "label placement must use the labelGapMm option, not the constant");
+assert.strictEqual(source.split("labelGapMm * MM_TO_PT").length - 1, 2, "stacked and plain labels both use labelGapMm");
+assert.ok(source.includes('"글자 간격"') && source.includes("bindValueRow(gapControls"));
+assert.ok(source.includes('var parts = ["v2"') && source.includes('p[0] === "v1" && p.length === 18') && source.includes('p[0] === "v2" && p.length === 19'));
 console.log("triangle checks passed");

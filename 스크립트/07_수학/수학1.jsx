@@ -3933,11 +3933,12 @@ var SCRIPT_KEY = "HighMath1";
             var showCenter = false;
             var markMm = 3;
             var fontPt = 8;
+            var labelGapMm = LABEL_GAP_MM;
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-            var DEFAULTS = { unitMm: unitMm, markMm: markMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm, values: { a: values.a, b: values.b, c: values.c, A: values.A, B: values.B, C: values.C } };
+            var DEFAULTS = { unitMm: unitMm, markMm: markMm, fontPt: fontPt, labelGapMm: labelGapMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm, values: { a: values.a, b: values.b, c: values.c, A: values.A, B: values.B, C: values.C } };
             applySettings();
             var LINE_DEFAULTS = {graph: MAIN_PT, guide: GUIDE_PT};
             loadLineWidths();
@@ -3978,6 +3979,8 @@ var SCRIPT_KEY = "HighMath1";
             unitControls.input.helpTip = "변의 길이 1을 몇 mm로 그릴지";
             var markControls = addValueRow(stylePanel, "각 표시 반지름", "mm", markMm, 1, 10, 0.1, 1);
             var fontControls = addValueRow(stylePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+            var gapControls = addValueRow(stylePanel, "글자 간격", "mm", labelGapMm, 0, 5, 0.1, 1);
+            gapControls.input.helpTip = "꼭짓점·변·각 글자와 점 사이의 간격";
 
             var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
             var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
@@ -4006,6 +4009,7 @@ var SCRIPT_KEY = "HighMath1";
             bindValueRow(unitControls, function(value) { unitMm = value; }, DEFAULTS.unitMm);
             bindValueRow(markControls, function(value) { markMm = value; }, DEFAULTS.markMm);
             bindValueRow(fontControls, function(value) { fontPt = value; }, DEFAULTS.fontPt);
+            bindValueRow(gapControls, function(value) { labelGapMm = value; }, DEFAULTS.labelGapMm);
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, DEFAULTS.offsetXmm);
             bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, DEFAULTS.offsetYmm);
@@ -4146,7 +4150,7 @@ var SCRIPT_KEY = "HighMath1";
 
             function addLabel(label) {
                 if (typeof buildStackedLabel === "function" && hasFractionText(label.text)) {
-                    buildStackedLabel(previewGroup, label, fontPt, LABEL_GAP_MM * MM_TO_PT, stackFrame, stackBar);
+                    buildStackedLabel(previewGroup, label, fontPt, labelGapMm * MM_TO_PT, stackFrame, stackBar);
                     return;
                 }
                 var frame = previewGroup.textFrames.add();
@@ -4159,7 +4163,7 @@ var SCRIPT_KEY = "HighMath1";
                 var b = frame.geometricBounds;
                 var halfW = (b[2] - b[0]) / 2, halfH = (b[1] - b[3]) / 2;
                 var dir = label.dir;
-                var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
+                var reach = (label.clear || 0) + labelGapMm * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
                 frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
@@ -4489,8 +4493,8 @@ var SCRIPT_KEY = "HighMath1";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v1", mode, values.a, values.b, values.c, values.A, values.B, values.C, unitMm, sideStyle, angleStyle,
-                    showCircle ? "1" : "0", showCenter ? "1" : "0", markMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v2", mode, values.a, values.b, values.c, values.A, values.B, values.C, unitMm, sideStyle, angleStyle,
+                    showCircle ? "1" : "0", showCenter ? "1" : "0", markMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", labelGapMm];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -4499,7 +4503,8 @@ var SCRIPT_KEY = "HighMath1";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 18) return;
+                // v1(18칸)은 글자 간격이 생기기 전 저장값 — 버리지 않고 간격만 기본값으로 읽는다
+                if (!((p[0] === "v1" && p.length === 18) || (p[0] === "v2" && p.length === 19))) return;
                 mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
                 values.a = restoreNumber(p[2], values.a, 0.5, 30);
                 values.b = restoreNumber(p[3], values.b, 0.5, 30);
@@ -4517,6 +4522,7 @@ var SCRIPT_KEY = "HighMath1";
                 offsetXmm = restoreNumber(p[15], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 offsetYmm = restoreNumber(p[16], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 previewEnabled = p[17] === "1";
+                if (p[0] === "v2") labelGapMm = restoreNumber(p[18], labelGapMm, 0, 5);
             }
 
             function restoreNumber(text, fallback, minimum, maximum) {
