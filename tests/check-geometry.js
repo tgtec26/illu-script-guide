@@ -186,10 +186,10 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
 {
   const made = [];
   const previewGroup = {pathItems: {add() { const p={setEntirePath(a) {this.anchors=a;this.pathPoints=a.map(()=>({}));}}; made.push(p); return p; }}};
-  const paint = new Function("previewGroup", "var strokePt=1.2,MARK_PT=0.3,AXIS_PT=0.4,GUIDE_DASH=[2,1.5]; var StrokeCap={BUTTENDCAP:1},StrokeJoin={MITERENDJOIN:2}; function makeGray(k){return k;}"+extractFunction("addPath")+";return addPath;")(previewGroup);
+  const paint = new Function("previewGroup", "var strokePt=1.2,MARK_PT=0.3,AXIS_PT=0.4,GUIDE_DASH=[2,1.5]; var StrokeCap={BUTTENDCAP:1},StrokeJoin={MITERENDJOIN:1,BEVELENDJOIN:2}; function makeGray(k){return k;}"+extractFunction("addPath")+";return addPath;")(previewGroup);
   for (const kind of ["main", "axis", "mark", "dashed", "dimension"]) paint({kind,closed:kind==="main",points:[{anchor:[0,0],left:[0,0],right:[0,0]},{anchor:[1,0],left:[1,0],right:[1,0]}]});
   assert.deepStrictEqual(made.map(p=>p.strokeWidth),[1.2,0.4,0.3,0.3,0.3]);
-  assert.ok(made[0].closed && made[0].strokeJoin===2);
+  assert.ok(made[0].closed && made[0].strokeJoin===2, "도형 꼭짓점은 경사 연결");
   assert.deepStrictEqual(made[4].strokeDashes,[2,1.5]);
 }
 // 치수선 옵션은 확인 저장에만 쓰고 잘못된 저장값은 기본값을 유지한다.

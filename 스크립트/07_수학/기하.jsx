@@ -2320,8 +2320,7 @@ var SCRIPT_KEY = "HighGeometry";
                 path.strokeColor = makeGray(100);
                 path.strokeWidth = (line.kind === "mark" || line.kind === "dimension" || line.kind === "dashed") ? MARK_PT : (line.kind === "axis" ? AXIS_PT : strokePt);
                 path.strokeCap = StrokeCap.BUTTENDCAP;
-                path.strokeJoin = StrokeJoin.MITERENDJOIN;
-                path.strokeMiterLimit = 10;
+                path.strokeJoin = StrokeJoin.BEVELENDJOIN;
                 if (line.kind === "dashed" || line.kind === "dimension") path.strokeDashes = GUIDE_DASH;
                 return path;
             }
