@@ -5,6 +5,7 @@
 ## 0. 시작할 때
 1. `git pull` 후 `./setup-mac.command`(Windows는 `setup-windows.cmd`)를 한 번 돌리고 일러를 **재시작**한다(스크립트 메뉴·액션 세트 갱신. setup이 옛 `최종훈` 액션 세트를 알아서 지운다).
 2. 웹 도구 저장소: `~/agent/sci-illu-web` ← https://github.com/tgtec26/sci-illu-web (비공개). 없으면 clone 후 `npm install`.
+- **웹 UI 관리:** 루트의 `UI 관리 페이지.command`를 더블클릭하면 옆 폴더 `../sci-illu-web`의 개발 서버를 켜고 `http://127.0.0.1:5173/?admin`을 연다. 항목 이름·범위·기본값은 웹 화면의 라벨을 눌러 편집하고 `sci-illu-web/src/config/slider-ranges.json`에 저장한다. 페이지의 `푸시` 버튼으로 웹에 배포한다. 일러 UI 관리 서버(5200)와 구분한다.
 3. 커밋 작성자는 항상 `tgtec26 <tgtec26@snu-g.ms.kr>`, 한국어로 대화·보고한다. Vercel 배포는 푸시로 자동이다.
 
 ## 1. 일하는 방식
