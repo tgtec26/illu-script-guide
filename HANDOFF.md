@@ -52,7 +52,7 @@
 ## 6. 알려진 상태
 - `tests/*.js` 중 **변경 전부터 실패하던 4개**: `check-arrowhead-shapes`, `check-crystal-sizes`, `check-math-heads`, `check-script-safety`. 새로 깨뜨린 것은 없다. 나머지는 `for f in tests/*.js; do node $f || echo FAIL $f; done`로 확인.
 - 이 Mac의 기본 검증 앱은 Illustrator **2026 30.8.2**(`com.adobe.illustrator`), 연결은 `illustrator-cep`. 2027 Beta는 새 문서 생성 실패로 기본 대상에서 제외한다(재설치·설정 초기화·프로필 복사·새 macOS 계정으로도 미해결).
-- 일러에 스크립트 로더를 다시 등록해야 할 때: `ILLUSTRATOR_APP_DIR="/Applications/Adobe Illustrator 2026" ILLUSTRATOR_VER="30" ./setup-mac.command`.
+- 일러에 스크립트 로더를 다시 등록해야 할 때: `./setup-mac.command`(설치된 정식판·Beta 모두 등록; `ILLUSTRATOR_APP_DIR`를 지정하면 해당 앱만).
 - Windows도 베타는 연도가 없어 자동으로 못 고르고 2026 폴더에 등록된다(액션의 "메뉴 항목" 단계가 `파일 > 스크립트` 메뉴를 찾지 못해 "현재 사용할 수 없습니다"가 뜸): `setup-windows.cmd -IllustratorAppDir "C:\Program Files\Adobe\Adobe Illustrator (Beta)" -IllustratorVer "31.0.0 Beta"`. 베타 `Presets\ko_KR\스크립트` 폴더를 일러가 읽는다(2026-10-12 Windows 베타에서 메뉴·액션 F12 확인).
 
 ## 7. 2026-10-11 밤 작업 (사용자 취침 중, 일러 실행 검증 전 · 푸시 안 함)

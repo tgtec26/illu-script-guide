@@ -21,7 +21,7 @@ For contained Adobe Illustrator JSX requests, default to direct implementation i
 - 새 스크립트는 대화상자 제목과 같거나 가까운 한글 이름으로 짓는다(예: `대류.jsx`). 폴더 안에서 겹치면 안 되고 `/ : * ? " < > |`는 쓰지 않는다. 이름은 NFC로 둔다.
 - **저장 키(`PREF_KEY`)는 이름을 따라 바꾸지 않는다.** 옛 스크립트의 키는 옛 영문 이름 그대로다(`Object_MeterScale/settings` 등). 바꾸면 저장된 옵션이 사라진다. 새 스크립트는 영문 키를 따로 짓는다(예: `ObjectSphere/settings`).
 - 홈페이지 `docs/assets/app.js`의 `file`은 새 파일명, `id`와 탭 `id`는 영문 그대로다.
-- 파일을 더하거나 이름을 바꾸면 일러에 한 줄짜리 로더를 다시 등록해야 한다: `ILLUSTRATOR_APP_DIR="/Applications/Adobe Illustrator 2026" ILLUSTRATOR_VER="30" ./setup-mac.command`.
+- 파일을 더하거나 이름을 바꾸면 일러에 한 줄짜리 로더를 다시 등록해야 한다: `./setup-mac.command`(설치된 정식판·Beta 모두 등록; `ILLUSTRATOR_APP_DIR`를 지정하면 해당 앱만).
 - 한글 이름은 일러(`$.evalFile`)와 헬퍼 로드가 된다고 베타 Mac에서 확인했다. Windows에서는 아직 확인하지 않았다.
 - JSX 실행은 2026 CEP MCP의 `illustrator_execute_script`를 쓴다. 한글 경로도 먼저 이 경로로 확인한다. 옛 osascript 기반 MCP의 경로 제한 때문에 AppleScript로 우회하지 않는다.
 

@@ -47,33 +47,38 @@ if [ ! -d "$SOURCE_DIR" ]; then
   exit 1
 fi
 
-# 베타 등 연도가 없는 폴더는 ILLUSTRATOR_APP_DIR(+ILLUSTRATOR_VER, 예: "31.0.0 Beta")로 직접 지정한다
-APP_DIR="${ILLUSTRATOR_APP_DIR:-$(
-  find /Applications -maxdepth 1 -type d -name 'Adobe Illustrator*' 2>/dev/null \
-    | awk '
-      {
-        year = 0
-        if (match($0, /20[0-9][0-9]/)) year = substr($0, RSTART, RLENGTH)
-        print year "\t" $0
-      }
-    ' \
-    | sort -rn \
-    | head -n 1 \
-    | cut -f2-
-)}"
-
-if [ -z "$APP_DIR" ]; then
-  echo "Illustrator 설치 폴더를 찾지 못했습니다."
+# 경로를 지정하면 그 앱만, 기본 실행은 설치된 정식판과 Beta 모두에 적용한다.
+# 버전만 지정하면 어느 앱의 설정인지 모호하므로 경로도 함께 요구한다.
+if [ -n "${ILLUSTRATOR_VER:-}" ] && [ -z "${ILLUSTRATOR_APP_DIR:-}" ]; then
+  echo "ILLUSTRATOR_VER를 지정할 때는 ILLUSTRATOR_APP_DIR도 지정하세요."
   exit 1
 fi
 
+install_illustrator() {
+local APP_DIR="$1" VER="" APP_VERSION="" YEAR=""
+if [ ! -d "$APP_DIR" ]; then
+  echo "Illustrator 설치 폴더가 없습니다: $APP_DIR"
+  return 1
+fi
 if [ -n "${ILLUSTRATOR_VER:-}" ]; then
   VER="$ILLUSTRATOR_VER"
 elif [[ "$(basename "$APP_DIR")" =~ (20[0-9][0-9]) ]]; then
   YEAR="${BASH_REMATCH[1]}"
   VER=$((YEAR - 1996))
 else
-  VER=""
+  # Beta 앱의 실제 버전으로 설정 폴더 이름을 만든다(31.0.0 Beta 등).
+  APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_DIR/Adobe Illustrator.app/Contents/Info.plist" 2>/dev/null || true)"
+  if [[ "$APP_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+    VER="${BASH_REMATCH[1]}"
+    if [[ "$(basename "$APP_DIR")" == *Beta* ]]; then
+      VER="$VER Beta"
+    else
+      VER="${VER%%.*}"
+    fi
+  else
+    echo "Illustrator 버전을 확인할 수 없습니다: $APP_DIR (ILLUSTRATOR_VER 직접 지정 필요)"
+    return 1
+  fi
 fi
 
 if [ -d "$APP_DIR/Presets.localized/ko_KR" ]; then
@@ -275,6 +280,25 @@ else
   echo "  폭 프로파일 파일 없음(건너뜀): $WIDTH_PROFILE_SRC"
 fi
 
+}
+
+APP_DIRS=()
+if [ -n "${ILLUSTRATOR_APP_DIR:-}" ]; then
+  APP_DIRS+=("$ILLUSTRATOR_APP_DIR")
+else
+  while IFS= read -r app_path; do
+    [ -d "$app_path/Adobe Illustrator.app" ] || continue
+    APP_DIRS+=("$app_path")
+  done < <(find /Applications -maxdepth 1 -type d -name 'Adobe Illustrator*' 2>/dev/null | sort)
+fi
+if [ "${#APP_DIRS[@]}" -eq 0 ]; then
+  echo "Illustrator 설치 폴더를 찾지 못했습니다."
+  exit 1
+fi
+for app_path in "${APP_DIRS[@]}"; do
+  install_illustrator "$app_path"
+done
+
 # 스크립트 패널(CEP): 서명 없는 패널을 불러오도록 개발자 모드를 켜고, 확장 폴더에 원본의 tools/script-panel을 연결한다.
 # 원본이 갱신되면 패널도 같이 갱신된다. 이미 설치돼 있으면 건너뛴다.
 PANEL_SRC="$REPO_DIR/tools/script-panel"
@@ -301,7 +325,7 @@ else
 fi
 
 echo ""
-echo "설치 끝. 남은 단계:"
+echo "Illustrator ${#APP_DIRS[@]}개 설치 끝. 아래 단계는 각 버전에서 진행하세요:"
 echo "  1) 일러스트 실행"
 echo "  2) 파일 > 스크립트 > setup 실행 (환경설정 + 액션 적용)"
 echo "  3) 편집 > 키보드 단축키 에서 'cjh250907' 세트 1회 선택"
