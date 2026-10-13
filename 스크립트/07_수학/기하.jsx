@@ -103,6 +103,28 @@ var SCRIPT_KEY = "HighGeometry";
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
+    // PDF에서 추출한 설치 서체는 BEDFGG+GSMediumB1처럼 접두사가 붙기도 한다.
+    // 정식 이름을 우선하고 같은 서체의 접두사 버전을 찾은 뒤에만 대체한다.
+    var textFontCache = {};
+    function findRuleFont(names) {
+        for (var i = 0; i < names.length; i++) {
+            var name = names[i];
+            if (textFontCache.hasOwnProperty(name)) {
+                if (textFontCache[name] !== null) return textFontCache[name];
+                continue;
+            }
+            try { textFontCache[name] = app.textFonts.getByName(name); return textFontCache[name]; } catch (e) {}
+            var found = null;
+            for (var j = 0; j < app.textFonts.length; j++) {
+                var font = app.textFonts[j];
+                if (font.name.replace(/^[A-Z]{6}\+/, "") === name) { found = font; break; }
+            }
+            textFontCache[name] = found;
+            if (found !== null) return found;
+        }
+        return app.textFonts[0];
+    }
+
     var engines = [makeGeometryEngine(), makeSolid3DEngine(), makeConicEngine(), makeConicTangentEngine(), makeVectorEngine(), makeSpaceEngine()];
 
     var win = new Window("dialog", "기하");
@@ -602,10 +624,7 @@ var SCRIPT_KEY = "HighGeometry";
             }
 
             function findTextFont(names) {
-                for (var i = 0; i < names.length; i++) {
-                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
-                }
-                return app.textFonts[0];
+                return findRuleFont(names);
             }
 
             // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
@@ -1470,10 +1489,7 @@ var SCRIPT_KEY = "HighGeometry";
             }
 
             function findTextFont(names) {
-                for (var i = 0; i < names.length; i++) {
-                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
-                }
-                return app.textFonts[0];
+                return findRuleFont(names);
             }
 
             // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
@@ -2126,10 +2142,13 @@ var SCRIPT_KEY = "HighGeometry";
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
+            var showDimensions = true;
+            var dimensionRiseMm = 3;
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var DEFAULTS = {sizeMm: sizeMm, fontPt: fontPt, labelGapMm: labelGapMm, arcRadiusMm: arcRadiusMm, tickMm: tickMm, strokePt: strokePt,
-                offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+                offsetXmm: offsetXmm, offsetYmm: offsetYmm, dimensionRiseMm: dimensionRiseMm};
             applySettings();
+            loadDimensionSettings();
             var LINE_DEFAULTS = {axis: AXIS_PT, guide: MARK_PT};
             loadLineWidths();
 
@@ -2164,7 +2183,6 @@ var SCRIPT_KEY = "HighGeometry";
             var sizeControls = addValueRow(sizePanel, "그림 크기", "mm", sizeMm, 20, 140, 1, 0);
             sizeControls.input.helpTip = "그림에서 가장 긴 쪽의 길이";
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
-            var strokeControls = addValueRow(sizePanel, "선 두께", "pt", strokePt, 0.1, 1.5, 0.1, 1);
             var gapControls = addValueRow(sizePanel, "글자 간격", "mm", labelGapMm, 0, 5, 0.1, 1);
             var arcControls = addValueRow(sizePanel, "각 호 반지름", "mm", arcRadiusMm, 1, 10, 0.5, 1);
             var tickControls = addValueRow(sizePanel, "눈금 길이", "mm", tickMm, 0.5, 5, 0.1, 1);
@@ -2173,6 +2191,7 @@ var SCRIPT_KEY = "HighGeometry";
             messageText.preferredSize = [380, 32];
 
             var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var strokeControls = addValueRow(lineWidthPanel, "도형·변", "pt", strokePt, 0.1, 1.5, 0.1, 1);
             var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
             var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
             bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
@@ -2194,6 +2213,18 @@ var SCRIPT_KEY = "HighGeometry";
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, DEFAULTS.offsetXmm);
             bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, DEFAULTS.offsetYmm);
 
+            var dimensionPanel = addPanel(win, "치수선", "dimensions");
+            var dimensionCheck = dimensionPanel.add("checkbox", undefined, "점선 치수선");
+            dimensionCheck.value = showDimensions;
+            dimensionCheck.helpTip = "변 길이 글자를 바깥쪽 곡선의 가운데에 두고, 글자 양쪽으로 점선 치수선을 그립니다";
+            var dimensionControls = addValueRow(dimensionPanel, "높이", "mm", dimensionRiseMm, 0.5, 10, 0.5, 1);
+            function enableDimensionControls() {
+                dimensionControls.input.enabled = dimensionControls.slider.enabled = dimensionControls.reset.enabled = showDimensions;
+            }
+            dimensionCheck.onClick = function() { showDimensions = dimensionCheck.value; enableDimensionControls(); updatePreview(); };
+            bindValueRow(dimensionControls, function(value) { dimensionRiseMm = value; }, DEFAULTS.dimensionRiseMm);
+            enableDimensionControls();
+
             // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다. 그릴 것이 없으면 확정하지 않는다
             api.commit = function() {
                 if (previewGroup === null) buildPreview();
@@ -2202,6 +2233,7 @@ var SCRIPT_KEY = "HighGeometry";
                     return false;
                 }
                 saveSettings();
+                saveDimensionSettings();
                 doc.selection = null;
                 previewGroup.selected = true;
                 return true;
@@ -2255,6 +2287,7 @@ var SCRIPT_KEY = "HighGeometry";
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
                 if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
+                for (var dm = 0; dm < drawing.texts.length; dm++) addDimension(drawing.texts[dm]);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -2284,10 +2317,11 @@ var SCRIPT_KEY = "HighGeometry";
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(100);
-                path.strokeWidth = line.kind === "mark" ? Math.min(MARK_PT, strokePt) : (line.kind === "axis" ? AXIS_PT : strokePt);
+                path.strokeWidth = (line.kind === "mark" || line.kind === "dimension" || line.kind === "dashed") ? MARK_PT : (line.kind === "axis" ? AXIS_PT : strokePt);
                 path.strokeCap = StrokeCap.BUTTENDCAP;
-                path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
-                if (line.kind === "dashed") path.strokeDashes = GUIDE_DASH;
+                path.strokeJoin = StrokeJoin.MITERENDJOIN;
+                path.strokeMiterLimit = 10;
+                if (line.kind === "dashed" || line.kind === "dimension") path.strokeDashes = GUIDE_DASH;
             }
 
             // 끝이 tip, 방향 dir인 채운 화살촉 (뒤가 notch만큼 파인 모양)
@@ -2331,10 +2365,11 @@ var SCRIPT_KEY = "HighGeometry";
 
             function addLabel(label) {
                 if (typeof buildStackedLabel === "function" && hasFractionText(label.text)) {
-                    buildStackedLabel(previewGroup, label, fontPt, labelGapMm * MM_TO_PT, stackFrame, stackBar);
+                    label.item = buildStackedLabel(previewGroup, label, fontPt, labelGapMm * MM_TO_PT, stackFrame, stackBar);
                     return;
                 }
                 var frame = previewGroup.textFrames.add();
+                label.item = frame;
                 frame.contents = label.text.replace(/°/g, "˘");
                 var range = frame.textRange;
                 var attributes = range.characterAttributes;
@@ -2384,10 +2419,7 @@ var SCRIPT_KEY = "HighGeometry";
             }
 
             function findTextFont(names) {
-                for (var i = 0; i < names.length; i++) {
-                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
-                }
-                return app.textFonts[0];
+                return findRuleFont(names);
             }
 
             // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
@@ -2557,6 +2589,17 @@ var SCRIPT_KEY = "HighGeometry";
                     i = close + 1;
                 }
                 return {names: names, table: table};
+            }
+
+            // 이어 쓴 경로를 분리하지 않아 꼭짓점에서 stroke join이 적용된다.
+            function readChainPaths(source, names, label, notes) {
+                var paths = [], items = splitItems(source);
+                for (var i = 0; i < items.length; i++) {
+                    var chain = tokenizeNames(items[i], names);
+                    if (chain === null || chain.length < 2) { notes.push(label + " " + items[i]); continue; }
+                    paths.push(chain);
+                }
+                return paths;
             }
 
             // "A-B-C-A, A-D" → [[A,B],[B,C],[C,A],[A,D]]
@@ -2852,8 +2895,8 @@ var SCRIPT_KEY = "HighGeometry";
                     if (notes.length === 0) notes.push("점을 적어 주세요 (예: A(0,3) B(0,0) C(4,0))");
                     return out;
                 }
-                var segments = readChains(text.segmentText, names, "선분", notes);
-                var dashed = readChains(text.dashedText, names, "점선", notes);
+                var segments = readChainPaths(text.segmentText, names, "선분", notes);
+                var dashed = readChainPaths(text.dashedText, names, "점선", notes);
                 var circles = readCircles(text.circleText, table, names, notes);
                 var ellipses = readEllipses(text.ellipseText, table, names, notes);
                 var arrows = readChains(text.arrowText, names, "화살표", notes);
@@ -2942,8 +2985,14 @@ var SCRIPT_KEY = "HighGeometry";
                     out.texts.push({text: "x", at: axR, dir: [0, -1], clear: 0}, {text: "y", at: axT, dir: [-1, 0], clear: 0});
                     if (!table.hasOwnProperty("O")) out.texts.push({text: "O", at: axO, dir: [-0.7071, -0.7071], clear: 0, upright: true});
                 }
-                for (i = 0; i < segments.length; i++) out.lines.push(straight([P(segments[i][0]), P(segments[i][1])], "main", false));
-                for (i = 0; i < dashed.length; i++) out.lines.push(straight([P(dashed[i][0]), P(dashed[i][1])], "dashed", false));
+                for (i = 0; i < segments.length; i++) addChain(segments[i], "main");
+                for (i = 0; i < dashed.length; i++) addChain(dashed[i], "dashed");
+                function addChain(chain, kind) {
+                    var closed = chain.length > 3 && chain[0] === chain[chain.length - 1];
+                    var points = [], count = chain.length - (closed ? 1 : 0);
+                    for (var n = 0; n < count; n++) points.push(P(chain[n]));
+                    out.lines.push(straight(points, kind, closed));
+                }
                 // 화살표 선분: 끝(B)에 화살촉, 선은 화살촉 속에서 끝난다
                 for (i = 0; i < arrows.length; i++) {
                     var af = P(arrows[i][0]), atip = P(arrows[i][1]), ad = unitVector([atip[0] - af[0], atip[1] - af[1]]), acut = ARROW.length - ARROW.notch;
@@ -3025,11 +3074,59 @@ var SCRIPT_KEY = "HighGeometry";
                     var lengthLabel = display(lengths[i].text);
                     lengthLabel.at = lmid; lengthLabel.dir = lnormal;
                     lengthLabel.clear = tickKeys[lengths[i].names[0] + "|" + lengths[i].names[1]] ? tick / 2 : 0;
+                    if (showDimensions) {
+                        var rise = dimensionRiseMm * MM_TO_PT;
+                        lengthLabel.dimension = {a: la, b: lb, normal: lnormal, rise: rise};
+                        lengthLabel.at = offsetPoint(lmid, lnormal, rise);
+                        lengthLabel.dir = [0, 0];
+                        lengthLabel.clear = 0;
+                    }
                     out.texts.push(lengthLabel);
                 }
 
                 for (i = 0; i < dotNames.length; i++) out.dots.push(P(dotNames[i]));
                 return out;
+            }
+
+            // 2차 곡선을 두 개의 정확한 3차 베지어로 나눠 글자 부분을 비운다.
+            function dimensionCurve(a, b, normal, rise, halfGap) {
+                var dx = b[0] - a[0], dy = b[1] - a[1], length = Math.sqrt(dx * dx + dy * dy);
+                if (length < 1e-6 || halfGap >= length * 0.48) return [];
+                var cut = halfGap / length;
+                function Q(t) { return [a[0] + dx * t + normal[0] * 4 * rise * t * (1 - t), a[1] + dy * t + normal[1] * 4 * rise * t * (1 - t)]; }
+                function D(t) { return [dx + normal[0] * 4 * rise * (1 - 2 * t), dy + normal[1] * 4 * rise * (1 - 2 * t)]; }
+                function piece(t0, t1) {
+                    var p = Q(t0), q = Q(t1), dp = D(t0), dq = D(t1), scale = (t1 - t0) / 3;
+                    return {kind: "dimension", closed: false, points: [
+                        {anchor: p, left: p, right: [p[0] + dp[0] * scale, p[1] + dp[1] * scale]},
+                        {anchor: q, left: [q[0] - dq[0] * scale, q[1] - dq[1] * scale], right: q}]};
+                }
+                return [piece(0, 0.5 - cut), piece(0.5 + cut, 1)];
+            }
+
+            function addDimension(label) {
+                if (!label.dimension || !label.item) return;
+                var spec = label.dimension, bounds = label.item.geometricBounds;
+                var along = unitVector([spec.b[0] - spec.a[0], spec.b[1] - spec.a[1]]);
+                var halfGap = (bounds[2] - bounds[0]) * Math.abs(along[0]) / 2 + (bounds[1] - bounds[3]) * Math.abs(along[1]) / 2 + 0.7 * MM_TO_PT;
+                var paths = dimensionCurve(spec.a, spec.b, spec.normal, spec.rise, halfGap);
+                for (var i = 0; i < paths.length; i++) addPath(paths[i]);
+            }
+
+            // 새 옵션은 별도 키로 저장해 기존 v3 도형 입력·크기를 유지한다.
+            function loadDimensionSettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/dimensions"); } catch (e) { return; }
+                var parts = raw ? raw.split("|") : [];
+                if (parts.length !== 3 || parts[0] !== "v1" || (parts[1] !== "0" && parts[1] !== "1")) return;
+                var height = parseFloat(parts[2]);
+                if (!isFinite(height) || height < 0.5 || height > 10) return;
+                showDimensions = parts[1] === "1";
+                dimensionRiseMm = height;
+            }
+
+            function saveDimensionSettings() {
+                try { app.preferences.setStringPreference(PREF_KEY + "/dimensions", ["v1", showDimensions ? "1" : "0", dimensionRiseMm].join("|")); } catch (e) {}
             }
 
             // -------------------------------------------------------
@@ -3488,10 +3585,7 @@ var SCRIPT_KEY = "HighGeometry";
                 }
             }
             function findTextFont(names) {
-                for (var i = 0; i < names.length; i++) {
-                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
-                }
-                return app.textFonts[0];
+                return findRuleFont(names);
             }
             function findEditableLayer() {
                 var active = doc.activeLayer;
@@ -4451,10 +4545,7 @@ var SCRIPT_KEY = "HighGeometry";
             }
 
             function findTextFont(names) {
-                for (var i = 0; i < names.length; i++) {
-                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
-                }
-                return app.textFonts[0];
+                return findRuleFont(names);
             }
 
             // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
@@ -5132,10 +5223,7 @@ var SCRIPT_KEY = "HighGeometry";
             }
 
             function findTextFont(names) {
-                for (var i = 0; i < names.length; i++) {
-                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
-                }
-                return app.textFonts[0];
+                return findRuleFont(names);
             }
 
             // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다

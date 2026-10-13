@@ -28,12 +28,12 @@ function extractFunction(name) {
 }
 
 const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readChains", "readPairTexts", "circumcircle", "readCircles", "readEllipses", "readAngles", "trimText", "curvePoints", "ccwSweep", "readArcs", "readFills",
-  "display", "straight", "circleLine", "unitVector", "offsetPoint", "arcPoints", "rightAnglePoints", "buildGeometry", "clamp", "parseNumber"];
+  "readChainPaths", "dimensionCurve", "display", "straight", "circleLine", "unitVector", "offsetPoint", "arcPoints", "rightAnglePoints", "buildGeometry", "clamp", "parseNumber"];
 const make = new Function("state", `
 var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, KAPPA = 0.5522847498;
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
 var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
-var text = state.text, showNames = state.showNames, showAxes = state.showAxes, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
+var text = state.text, showNames = state.showNames, showAxes = state.showAxes, showDimensions = !!state.showDimensions, dimensionRiseMm = 3, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
 const api = (text = {}, extra = {}) => make(Object.assign({
@@ -59,8 +59,10 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   const g = api({ pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A", angleText: "ABC:R", lengthText: "AB:3, BC:4" });
   const d = g.buildGeometry();
   assert.deepStrictEqual(d.notes, []);
-  assert.strictEqual(d.lines.filter((l) => l.kind === "main").length, 3);
+  assert.strictEqual(d.lines.filter((l) => l.kind === "main").length, 1);
   assert.strictEqual(d.lines.filter((l) => l.kind === "mark").length, 1);
+  const triangle = d.lines.find((l) => l.kind === "main");
+  assert.ok(triangle.closed && triangle.points.length === 3, "삼각형은 연결된 닫힌 패스");
   const labels = d.texts.map((t) => t.text);
   for (const n of ["A", "B", "C", "3", "4"]) assert.ok(labels.includes(n), n);
   // 가장 긴 쪽(4)이 sizeMm(50)
@@ -119,4 +121,65 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   assert.ok(midY(arcs[0]) > 0 && midY(arcs[1]) < 0, "위쪽 호·아래쪽 반원");
   assert.ok(api({ pointsText: "O(0,0) A(1,0)", arcText: "O:A>X", fillText: "A>O" }).buildGeometry().notes.length === 2);
 }
+// 쉼표로 나눈 경로는 각각 유지하고 연속 꼭지점은 하나의 패스로 연결한다.
+{
+  const d = api({ pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C, C-A" }).buildGeometry();
+  const paths = d.lines.filter(l => l.kind === "main");
+  assert.deepStrictEqual(paths.map(l => [l.points.length, l.closed]), [[3, false], [2, false]]);
+}
+// 곡선 점선 치수선: 글자 중앙에서 끊고 양 끝은 측정할 두 점에 붙는다.
+{
+  const g = api({ pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A", lengthText: "AB:3, BC:4" }, {showDimensions: true});
+  const d = g.buildGeometry();
+  for (const label of d.texts.filter(t => t.dimension)) {
+    const spec = label.dimension;
+    assert.deepStrictEqual(label.dir, [0, 0], "치수 글자는 곡선 중앙에 고정");
+    const paths = g.dimensionCurve(spec.a, spec.b, spec.normal, spec.rise, 5);
+    assert.strictEqual(paths.length, 2);
+    assert.deepStrictEqual(paths[0].points[0].anchor, spec.a);
+    assert.deepStrictEqual(paths[1].points[1].anchor, spec.b);
+    assert.ok(paths.every(l => l.kind === "dimension" && !l.closed));
+    assert.ok(paths[0].points[1].anchor.some((v,i) => v !== paths[1].points[0].anchor[i]), "글자 사이 간격");
+  }
+  assert.strictEqual(d.texts.filter(t => t.dimension).length, 2);
+  assert.deepStrictEqual(g.dimensionCurve([0,0], [0,0], [1,0], 3, 2), []);
+  assert.deepStrictEqual(g.dimensionCurve([0,0], [2,0], [0,1], 3, 2), [], "짧은 치수선은 글자와 겹치지 않게 생략");
+}
+// 설치 서체에 붙은 PDF 부분집합 접두사를 허용하고 GS 서체를 Spoqa보다 먼저 찾는다.
+{
+  const start = bundle.indexOf("function findRuleFont(");
+  assert.ok(start >= 0);
+  let end = bundle.indexOf("{", start), depth = 0;
+  for (; end < bundle.length; end++) {
+    if (bundle[end] === "{") depth++;
+    if (bundle[end] === "}" && --depth === 0) break;
+  }
+  const fonts = [{name: "BEDFGG+GSMediumB1"}, {name: "BEDGOA+GSMediItaC1"}, {name: "SpoqaHanSansNeo-Regular"}];
+  fonts.getByName = name => { const f=fonts.find(f => f.name === name); if (!f) throw Error("missing"); return f; };
+  const find = new Function("app", "var textFontCache={};" + bundle.slice(start,end+1) + ";return findRuleFont;")({textFonts: fonts});
+  assert.strictEqual(find(["GSMediumB1", "SpoqaHanSansNeo-Regular"]).name, "BEDFGG+GSMediumB1");
+  assert.strictEqual(find(["GSMediItaC1", "GSMediumB1"]).name, "BEDGOA+GSMediItaC1");
+}
+// 선 종류별 두께: 변은 도형 값, 치수선·점선·직각 표시는 보조선 값.
+{
+  const made = [];
+  const previewGroup = {pathItems: {add() { const p={setEntirePath(a) {this.anchors=a;this.pathPoints=a.map(()=>({}));}}; made.push(p); return p; }}};
+  const paint = new Function("previewGroup", "var strokePt=1.2,MARK_PT=0.3,AXIS_PT=0.4,GUIDE_DASH=[2,1.5]; var StrokeCap={BUTTENDCAP:1},StrokeJoin={MITERENDJOIN:2}; function makeGray(k){return k;}"+extractFunction("addPath")+";return addPath;")(previewGroup);
+  for (const kind of ["main", "axis", "mark", "dashed", "dimension"]) paint({kind,closed:kind==="main",points:[{anchor:[0,0],left:[0,0],right:[0,0]},{anchor:[1,0],left:[1,0],right:[1,0]}]});
+  assert.deepStrictEqual(made.map(p=>p.strokeWidth),[1.2,0.4,0.3,0.3,0.3]);
+  assert.ok(made[0].closed && made[0].strokeJoin===2);
+  assert.deepStrictEqual(made[4].strokeDashes,[2,1.5]);
+}
+// 치수선 옵션은 확인 저장에만 쓰고 잘못된 저장값은 기본값을 유지한다.
+{
+  const create = new Function("app", "var PREF_KEY=\"test\",showDimensions=true,dimensionRiseMm=3;"+extractFunction("loadDimensionSettings")+extractFunction("saveDimensionSettings")+"loadDimensionSettings();return {show:showDimensions,height:dimensionRiseMm,save:saveDimensionSettings};");
+  for (const [raw,show,height] of [["v1|0|4.5",false,4.5],["v1|1|999",true,3],["v0|0|5",true,3],["v1|x|5",true,3]]) {
+    const writes=[];
+    const result=create({preferences:{getStringPreference(){return raw;},setStringPreference(k,v){writes.push(v);}}});
+    assert.strictEqual(result.show,show); assert.strictEqual(result.height,height); assert.strictEqual(writes.length,0);
+    result.save(); assert.strictEqual(writes[0],["v1",show?"1":"0",height].join("|"));
+  }
+}
+require("./es3-lint")(["readChainPaths", "dimensionCurve"].map(extractFunction).join("\n"), "기하 새 도형 함수");
+new Function(bundle);
 console.log("geometry checks passed");
