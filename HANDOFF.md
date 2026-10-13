@@ -1,4 +1,4 @@
-# 작업 이어가기 (HANDOFF) — 2026-10-11
+# 작업 이어가기 (HANDOFF) — 2026-10-13
 
 다른 기기·새 세션에서 이 파일을 먼저 읽고 이어간다. 규칙의 원문은 `AGENTS.md`이고, 이 파일은 이번 세션에서 정해진 것과 다음 작업만 적는다.
 
@@ -26,10 +26,14 @@
 - 점 배치는 쏠리지 않게 **후보 격자 + 가장 먼 점 차례로 고르기**(`spreadDots`).
 - 글자 서체·대화상자 레이아웃·미리보기 이동·옵션 저장(v1 태그)은 `AGENTS.md`.
 
-## 3. 일러 실행 검증 (Mac 전용)
-- `tools/illu-probe.sh <probe.jsx>`로만 돌린다(짧게, 한가할 때만, 문서를 만들거나 닫지 않기). **프로브 안에서 `app.doScript`(액션)는 일러를 멈춘다** → 빼고 확인하고, 확장·병합 같은 액션 경로는 사용자가 직접 확인.
-- 대화상자 스크립트는 프로브에서 소스를 읽어 `win.show()`를 `onShow() 호출 후 1 반환`으로 바꿔 `eval`하고, 필요한 선택(사각형 등)은 미리 만들어 둔 뒤 문서 개체의 경계로 대지를 맞춰 PNG(200%)로 내보내 본다. `#include`는 `$.evalFile`로 대체. 탭 묶음은 저장 탭 값(`savedTab`)을 바꿔 탭마다 확인. 알림은 `alert`를 가로채 모은다.
-- Windows 기기에는 osascript가 없으니 사용자 테스트를 부탁한다.
+## 3. 일러 실행 검증 — 2026 CEP MCP 우선
+- **Illustrator 2026 + `illustrator-cep`를 사용한다. osascript·`tools/illu-probe.sh`·AppleScript 기반 MCP로 검증하지 않는다.** 연결이 안 되면 상태를 점검하고 보고하며 osascript로 자동 우회하지 않는다.
+- Codex 재시작 후 2026에서 `창 → 확장 프로그램 → MCP Control`을 열어 둔다. 서버는 한 클라이언트만 실행한다. 경로: MCP stdio → `ws://127.0.0.1:8081` → CEP `evalScript`.
+- 연결 점검: `illustrator_connection_status`(`probe:true`). 문서 조회: `illustrator_document` list / `illustrator_get_document`. JSX 실행: `illustrator_execute_script`. PNG: `illustrator_export_document`(150~200%) 후 실제 이미지 확인.
+- 테스트 문서 하나를 재사용하고, 호출은 한 경우씩 목표 5초 이내로 나눈다. 사용자 문서와 저장 옵션은 건드리지 않는다. 타임아웃 시 재전송하지 말고 `illustrator_job_status`로 미완료 작업을 확인한다. 액션(`app.doScript`)과 모달은 자동 검증하지 않고 사용자 확인을 받는다.
+- 대화상자 스크립트는 복사본에서 `win.show()`를 미리보기/확인 훅 호출로 바꿔 CEP로 실행한다. 필요한 선택을 만들고 탭마다 별도 확인한다. 알림과 설정 저장은 복사본에서 막는다. 레이아웃은 `onShow`에서 기록 후 `close(2)`로 닫는다.
+- 설치: `~/agent/illustrator-mcp-cep` (jinkeda/Illustrator_MCP, 서버 3.0.0 / 패널 1.0.2). 기록: `~/agent/illustrator-mcp-install/cep-test/README.md`.
+- 2026-10-13 실측: 문서 생성 1.42초, 조회 0.09초, 짧은 JSX 0.07초, PNG 1.93초. PNG·후속 조회 정상, 프리징 없음, AIHangMonitor 대기. 긴 스크립트의 안정성은 미검증.
 
 ## 4. 지금까지 한 것 (물리학Ⅰ 기출 조사 목록)
 | 순위 | 항목 | 상태 |
@@ -47,12 +51,12 @@
 
 ## 6. 알려진 상태
 - `tests/*.js` 중 **변경 전부터 실패하던 4개**: `check-arrowhead-shapes`, `check-crystal-sizes`, `check-math-heads`, `check-script-safety`. 새로 깨뜨린 것은 없다. 나머지는 `for f in tests/*.js; do node $f || echo FAIL $f; done`로 확인.
-- 일러 앱은 Illustrator **2027 Beta**(`com.adobe.illustratorBeta`). 정식판이면 `ILLU_APP_ID=com.adobe.illustrator`.
-- 일러에 스크립트 로더를 다시 등록해야 할 때: `ILLUSTRATOR_APP_DIR="/Applications/Adobe Illustrator (Beta)" ILLUSTRATOR_VER="31.0.0 Beta" ./setup-mac.command`.
+- 이 Mac의 기본 검증 앱은 Illustrator **2026 30.8.2**(`com.adobe.illustrator`), 연결은 `illustrator-cep`. 2027 Beta는 새 문서 생성 실패로 기본 대상에서 제외한다(재설치·설정 초기화·프로필 복사·새 macOS 계정으로도 미해결).
+- 일러에 스크립트 로더를 다시 등록해야 할 때: `ILLUSTRATOR_APP_DIR="/Applications/Adobe Illustrator 2026" ILLUSTRATOR_VER="30" ./setup-mac.command`.
 - Windows도 베타는 연도가 없어 자동으로 못 고르고 2026 폴더에 등록된다(액션의 "메뉴 항목" 단계가 `파일 > 스크립트` 메뉴를 찾지 못해 "현재 사용할 수 없습니다"가 뜸): `setup-windows.cmd -IllustratorAppDir "C:\Program Files\Adobe\Adobe Illustrator (Beta)" -IllustratorVer "31.0.0 Beta"`. 베타 `Presets\ko_KR\스크립트` 폴더를 일러가 읽는다(2026-10-12 Windows 베타에서 메뉴·액션 F12 확인).
 
 ## 7. 2026-10-11 밤 작업 (사용자 취침 중, 일러 실행 검증 전 · 푸시 안 함)
-일러가 문서를 못 만들어(`app.documents.add` → `WENE`, MCP `CreateDocument`도 같은 오류) 실행 검증을 못 했다. **커밋만 했고 푸시하지 않았다.** 일러를 재시작하고 문서 하나를 연 뒤 아래를 하나씩 실행·PNG로 확인하고 푸시한다.
+일러가 문서를 못 만들어(`app.documents.add` → `WENE`, MCP `CreateDocument`도 같은 오류) 실행 검증을 못 했다. **커밋만 했고 푸시하지 않았다.** 현재는 2026 CEP MCP로 아래를 하나씩 실행·PNG로 확인하고 푸시한다. 아래 목록은 당시 기록이며 검증 완료를 뜻하지 않는다.
 - 기출 조사: 물리Ⅱ·화학Ⅰ·Ⅱ·지구과학Ⅰ·Ⅱ 각 PDF에서 단순하고 결정이 쉬운 그림부터 골랐다(지구과학은 사진·지도·천기도가 많아 스크립트로 만들 수 있는 그림이 적다). 복잡한 그림(지층 단면, 일기도, 포물선 운동, 회로 전체 등)은 미뤘다.
 - 새 스크립트 11개(전부 `스크립트/01_도형/`, 테스트 `tests/check-*.js`, 홈페이지 `docs/assets/app.js` 항목 포함, 웹 도구는 아직 없음):
   | 과목 | 스크립트 | 비고 |

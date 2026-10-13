@@ -21,9 +21,9 @@ For contained Adobe Illustrator JSX requests, default to direct implementation i
 - 새 스크립트는 대화상자 제목과 같거나 가까운 한글 이름으로 짓는다(예: `대류.jsx`). 폴더 안에서 겹치면 안 되고 `/ : * ? " < > |`는 쓰지 않는다. 이름은 NFC로 둔다.
 - **저장 키(`PREF_KEY`)는 이름을 따라 바꾸지 않는다.** 옛 스크립트의 키는 옛 영문 이름 그대로다(`Object_MeterScale/settings` 등). 바꾸면 저장된 옵션이 사라진다. 새 스크립트는 영문 키를 따로 짓는다(예: `ObjectSphere/settings`).
 - 홈페이지 `docs/assets/app.js`의 `file`은 새 파일명, `id`와 탭 `id`는 영문 그대로다.
-- 파일을 더하거나 이름을 바꾸면 일러에 한 줄짜리 로더를 다시 등록해야 한다: `ILLUSTRATOR_APP_DIR="/Applications/Adobe Illustrator (Beta)" ILLUSTRATOR_VER="31.0.0 Beta" ./setup-mac.command`.
+- 파일을 더하거나 이름을 바꾸면 일러에 한 줄짜리 로더를 다시 등록해야 한다: `ILLUSTRATOR_APP_DIR="/Applications/Adobe Illustrator 2026" ILLUSTRATOR_VER="30" ./setup-mac.command`.
 - 한글 이름은 일러(`$.evalFile`)와 헬퍼 로드가 된다고 베타 Mac에서 확인했다. Windows에서는 아직 확인하지 않았다.
-- 일러 MCP `run`은 한글 경로를 읽지 못한다(osascript 인코딩). 영문 심볼릭 링크 경로를 거치거나 터미널의 `osascript`로 한글 경로를 직접 준다.
+- JSX 실행은 2026 CEP MCP의 `illustrator_execute_script`를 쓴다. 한글 경로도 먼저 이 경로로 확인한다. 옛 osascript 기반 MCP의 경로 제한 때문에 AppleScript로 우회하지 않는다.
 
 ## Dialog Option Persistence (required)
 
@@ -168,7 +168,7 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 - Use `pathItems.roundedRectangle()` / `rectangle()` instead of writing anchors and handles point by point (1 call vs 30+).
 - Read a group's parts into a name → item map in one pass instead of scanning by name for each part. Re-read after `add`/`move`/`remove`; references can go stale.
 - Skip work when the value did not change (gradient tint, text size, path geometry). Cache the last drawn key per object.
-- Benchmark in Illustrator, not by guessing: copy the script, replace `win.show()` with an option sweep timed by `new Date().getTime()` (not `$.hiresTimer`), run it with `osascript -e 'tell application id "com.adobe.illustrator" to do javascript (POSIX file "...")'`, and compare `doc.exportFile(PNG24)` output between runs. A modal alert in Illustrator blocks every AppleEvent until dismissed.
+- Benchmark in Illustrator through the 2026 CEP MCP: copy the script, replace `win.show()` with a short option sweep timed by `new Date().getTime()` (not `$.hiresTimer`), run via `illustrator_execute_script`, and compare PNG exports. Split cases into short calls; do not use osascript or AppleScript-based MCP runners.
 
 ## Tabbed Script Bundles
 
@@ -184,19 +184,19 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 
 ## Verifying in Illustrator Without Freezing It (required)
 
-2026-09-27: 검증 프로브를 osascript로 길게(20초 이상, 연달아) 돌리자 일러가 느려지고 Dock 아이콘이 계속 튀었다. 닫을 창은 없었다. `sample`로 보니 일러의 `AIHangMonitor`(응답 없음 감시) 스레드가 CPU 80%로 계속 돌고 있었다. `do javascript`가 주 스레드를 오래 막으면 감시가 걸리고, 끝난 뒤에도 풀리지 않는다. 실제 사용(모달 다이얼로그)에서는 생기지 않는 테스트 방식의 문제다.
+2026-10-13 확정: 이 프로젝트는 **Illustrator 2026의 CEP MCP를 우선 사용**한다. 이 Mac Studio의 2027 Beta는 재설치·환경설정 초기화·프로필 복사·새 macOS 계정에서도 새 문서 생성이 실패하므로 기본 검증 대상에서 제외한다.
 
-- 프로브는 반드시 `tools/illu-probe.sh probe.jsx`로 돌린다. 일러가 한가할 때만 보내고, 경고창을 끄고, 만든 문서를 닫고, 중간에 끊지 않는다.
-- 한 번에 한 경우만, 10초 안쪽으로 짠다. PNG는 150~200%로 내보낸다. 문서 만들기만 3~4초 걸린다. 여러 경우는 호출을 나눈다.
-- `timeout` 명령으로 osascript를 끊지 않는다. 끊어도 일러는 그 스크립트를 계속 실행하고 다음 요청이 뒤에 쌓인다.
-- 실행기는 일러가 1분 안에 한가해지지 않으면 `sample`로 원인을 본다. AIHangMonitor가 헛돌면 보내지 않고 멈추고(종료 코드 2), 확장 패널의 계속 다시 그리기 같은 배경 부하(2026-09-28 관찰: 주 스레드 MTKView + PlugPlugOwl, 30~55%)면 보낸다. 13~17초짜리 프로브로도 감시가 다시 걸린 적이 있다(2026-09-28). 실행 뒤 일러 CPU가 오래(1분 이상) 높으면 다음 프로브를 보내지 않는다. 열린 문서가 0개인지 확인한 뒤 일러를 정상 종료하고 다시 켜면 풀린다(`osascript -e 'tell application id "com.adobe.illustrator" to quit'`, `open -g -b com.adobe.illustrator`). 문서가 열려 있으면 사용자에게 묻는다.
-- 문서를 닫아 0개가 되면 일러가 홈 화면(HTML)을 새로 그리느라 1~2분 CPU를 30~80% 쓰고 스크립트 요청에 늦게 응답한다(2026-09-28 측정: 재시작 직후 1%, 빈 문서를 열었다 닫은 뒤 30~77%, 몇 분 뒤 다시 낮아짐). 프로브가 문서를 만들고 닫기를 반복하면 이 상태가 풀리지 않는다. 그래서 실행기는 테스트 문서 하나를 계속 열어 둔다. 프로브에서 문서를 새로 만들거나 닫지 않는다.
-- 일러의 ExtendScript 엔진은 `do javascript` 실행 사이에 전역 변수를 기억한다. 프로브나 감싸는 스크립트에서 `var x;`처럼 값 없이 선언하면 앞 실행의 값이 남는다(2026-09-28: 실행기가 앞 결과를 보고 프로브를 건너뛰어 0초에 "done"만 돌려줌). 전역은 항상 값을 넣어 선언하거나 IIFE 안에 둔다.
-- 프로브는 원본을 고치지 않는다. 설정 저장(`setStringPreference`)은 프로브 안에서 막아 사용자 설정을 덮지 않는다.
-- 2026-10-10부터 Mac 작업 기기는 Illustrator 2027 Beta(번들 ID `com.adobe.illustratorBeta`)를 쓴다. `tools/illu-probe.sh`는 기본이 베타이고 `ILLU_APP_ID`로 바꾼다. 베타에 스크립트를 등록하려면 `ILLUSTRATOR_APP_DIR="/Applications/Adobe Illustrator (Beta)" ILLUSTRATOR_VER="31.0.0 Beta" ./setup-mac.command`(연도가 없는 폴더라 자동 선택이 안 된다). 베타에서도 점검 프로브로 Convection을 돌리면 멈춘다(직접 열면 정상).
-- 일러가 모달(Wacom 경고, 충돌 복구 등)에서 멈추면 `tools/illu-dismiss.sh`로 닫는다(접근성으로 Wacom 경고는 확인, 복구 창은 문서가 전부 `무제-N`일 때만 취소, 모르는 창은 두고 보고). 프로브·MCP 실행 중 자리를 비울 땐 `tools/illu-dismiss.sh --watch`를 백그라운드로 켠다. 2026-10-10 확인: ScriptUI `new Window("dialog")`는 접근성 창 목록에 안 잡히므로 이 스크립트 대상이 아니다. 화면 캡처(screencapture)는 Claude 앱 화면 녹화 권한 창을 띄우니 쓰지 않는다.
-- 일러 MCP 두 개(2026-10-10 시험): `illustrator-run`(`mcp__illustrator-run__run`, 오픈소스 krVatsal/illustrator-mcp, osascript로 ExtendScript 실행)은 프로브가 멈추는 위 문제를 그대로 가진다(doScript 금지, 한글 경로는 ASCII 심볼릭 링크로, 30초 타임아웃). 공식 MCP `illustrator`(`mcp__illustrator__*`, 베타 앱 내장, HTTP)는 스크립트·다이얼로그를 실행하지 못하지만 결과 확인에 좋다: `CapturePreview`가 저장한 PNG(`~/Library/Caches/AI_31_0/illustrator_preview.png`)를 바로 읽을 수 있고(화면 녹화 권한 불필요, 멈춤 없음) `GetCanvasStructure`가 개체·좌표를 준다(Y축이 아래로 향하는 캔버스 좌표). 검증은 실행=`illustrator-run`, 결과 확인=공식 MCP, 다이얼로그 레이아웃=창을 띄운 직후 컨트롤 위치 측정(`dlg.onShow`에서 쓰고 `dlg.close(2)`) 순으로 한다.
-- Windows 기기에는 osascript가 없다. 같은 원칙(짧게, 경고창 끄기, 한가할 때만)으로 사용자 테스트를 부탁한다.
+- **osascript로 검증하지 않는다.** `tools/illu-probe.sh`, `illustrator-run` 등 내부에서 AppleScript/`do javascript`를 사용하는 MCP도 실행·조회·PNG 검증에 사용하지 않는다. CEP 연결 실패 시 이 경로로 자동 대체하지 않고 연결 상태를 확인한 뒤 제한을 보고한다.
+- MCP 등록 이름은 `illustrator-cep`, 소스는 https://github.com/jinkeda/Illustrator_MCP 이다. 설치 위치는 `~/agent/illustrator-mcp-cep`, 패널은 `~/Library/Application Support/Adobe/CEP/extensions/com.illustrator.mcp.panel`이다. 2026 번들 ID는 `com.adobe.illustrator`.
+- Codex 재시작 후 등록된 MCP를 사용하고, Illustrator의 `창 → 확장 프로그램 → MCP Control` 패널을 열어 둔다. 연결은 MCP stdio → `ws://127.0.0.1:8081` → CEP `evalScript`이며 osascript를 거치지 않는다. 서버는 한 클라이언트만 실행한다(임시 테스트 클라이언트와 Codex 서버를 동시에 띄우지 않는다).
+- 먼저 `illustrator_connection_status`에 `probe:true`를 주어 2026 버전·패널 응답·대기 작업을 확인한다. 문서 조회는 `illustrator_document`(list)/`illustrator_get_document`, JSX는 `illustrator_execute_script`, PNG는 `illustrator_export_document`를 쓴다. 실행과 결과 조회를 별도 호출로 나눈다.
+- 한 번에 한 경우만 짧게 실행한다(목표 5초 이내). 테스트 문서 하나를 재사용하고 사용자 문서는 수정·종료하지 않는다. PNG는 150~200%로 내보내 실제 이미지를 확인한다. 경고창은 막고 알림은 수집한다.
+- 타임아웃은 실행 취소가 아니다. 응답이 없으면 후속 요청이나 같은 변경을 다시 보내지 말고 `illustrator_job_status`와 연결 상태로 미완료 작업을 확인한다. CPU가 계속 높으면 `sample`로 원인을 확인한다. 재시작이 필요하고 사용자 문서가 열려 있으면 먼저 묻는다.
+- CEP도 Illustrator 내부에서 JSX를 실행하므로 긴 작업·액션·모달의 안정성을 보장하지 않는다. **`app.doScript` 액션 체인은 자동 검증하지 않고 사용자가 직접 확인**한다. ScriptUI 모달을 자동 호출해 대기하지 않는다. 레이아웃 검증은 복사본의 `onShow`에서 컨트롤 위치를 기록한 뒤 `close(2)`로 닫는다.
+- 대화상자 결과 검증은 원본 대신 복사본에서 `win.show()`를 미리보기/확인 훅 실행으로 바꿔 CEP로 실행한다. 탭별로 선택을 준비하고 따로 확인한다. `setStringPreference`는 복사본에서 막아 사용자 옵션을 덮지 않는다. 전역 변수는 항상 초기화하거나 IIFE 안에 둔다.
+- 과거 osascript 검증은 `AIHangMonitor`가 CPU를 계속 쓰는 프리징을 일으켰다. 2026-10-13 CEP 검증(2026 30.8.2, 서버 3.0.0/패널 1.0.2): 문서 생성 1.42초, 조회 0.09초, 짧은 JSX 0.07초, PNG 1.93초. PNG와 실행 후 재조회 정상, 감시 스레드는 대기 상태였다. 장시간 작업은 아직 미검증.
+- 검증 기록: `~/agent/illustrator-mcp-install/cep-test/README.md`, PNG: 같은 폴더의 `result.png`. 설치기는 미서명 CEP 확장 로딩을 위해 CEP 10/11/12의 `PlayerDebugMode`를 1로 설정했다.
+- 다른 기기에서도 먼저 CEP 연결 가능 여부를 확인한다. 사용할 수 없으면 사용자에게 직접 실행·PNG 확인을 부탁한다.
 
 ## Escalation
 
