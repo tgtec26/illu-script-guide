@@ -5454,13 +5454,13 @@ var SCRIPT_KEY = "MiddleMath";
 
             // line: {points, kind:"main"|"guide"|"mark"}
             function addPath(line) {
-                var path = drawBezier(line.points, false);
+                var path = drawBezier(line.points, !!line.closed);
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(100);
                 path.strokeWidth = line.kind === "main" ? MAIN_PT : GUIDE_PT;
                 path.strokeCap = StrokeCap.BUTTENDCAP;
-                path.strokeJoin = StrokeJoin.MITERENDJOIN;
+                path.strokeJoin = line.closed ? StrokeJoin.BEVELENDJOIN : StrokeJoin.MITERENDJOIN;
                 if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
             }
 
@@ -5583,17 +5583,17 @@ var SCRIPT_KEY = "MiddleMath";
                 var usesAB = o.chord || o.radii || o.inscribed || o.centralMark || o.perpendicular || o.sector || o.quad;
 
                 if (o.sector) out.fills.push([plain(O)].concat(arcPoints(O, r - (fillInset || 0), o.a * rad, sweep)));
-                if (o.chord) out.lines.push(line([A, B], "main"));
+                if (o.chord && !o.radii && !o.inscribed) out.lines.push(line([A, B], "main"));
                 if (o.radii) {
-                    out.lines.push(line([O, A], "main"));
-                    out.lines.push(line([O, B], "main"));
+                    if (o.chord) out.lines.push(line([O, A, B], "main", true));
+                    else out.lines.push(line([A, O, B], "main"));
                 }
                 if (o.centralMark && sweep > 0) {
                     out.lines.push({ points: arcPoints(O, markR, o.a * rad, sweep), kind: "mark" });
                     if (o.values) out.texts.push({ text: formatDegrees(sweep / rad), at: O, dir: unitAt(o.a * rad + sweep / 2), clear: markR });
                 }
                 if (o.inscribed) {
-                    out.lines.push(line([A, P, B], "main"));
+                    out.lines.push(line([A, P, B], "main", !!o.chord));
                     name("P", P);
                     var span = smallAngle(P, A, B);
                     if (o.inscribedMark) out.lines.push({ points: arcPoints(P, markR, span.start, span.sweep), kind: "mark" });
@@ -5616,7 +5616,7 @@ var SCRIPT_KEY = "MiddleMath";
                     var Cq = on(o.c), Dq = on(o.d);
                     var ring = [[o.a, A, "A"], [o.b, B, "B"], [o.c, Cq, "C"], [o.d, Dq, "D"]];
                     ring.sort(function(u, v) { return ((u[0] - o.a) % 360 + 360) % 360 - ((v[0] - o.a) % 360 + 360) % 360; });
-                    out.lines.push(line([ring[0][1], ring[1][1], ring[2][1], ring[3][1], ring[0][1]], "main"));
+                    out.lines.push(line([ring[0][1], ring[1][1], ring[2][1], ring[3][1]], "main", true));
                     name("C", Cq);
                     name("D", Dq);
                     if (o.values || o.inscribedMark) {
@@ -5643,8 +5643,8 @@ var SCRIPT_KEY = "MiddleMath";
                     var sideP = TA[0] * (P[1] - T2[1]) - TA[1] * (P[0] - T2[0]);
                     var sideRay = TA[0] * along2[1] - TA[1] * along2[0];
                     var ray = (sideP > 0) === (sideRay > 0) ? [-along2[0], -along2[1]] : along2;
-                    out.lines.push(line([T2, A], "main"));
-                    out.lines.push(line([T2, P, A], "main"));
+                    // TA는 닫힌 삼각형의 마지막 변이다.
+                    out.lines.push(line([T2, P, A], "main", true));
                     var chordSpan = smallAngle(T2, A, offset(T2, ray, r));
                     var pSpan = smallAngle(P, T2, A);
                     out.lines.push({ points: arcPoints(T2, markR, chordSpan.start, chordSpan.sweep), kind: "mark" });
@@ -5722,10 +5722,10 @@ var SCRIPT_KEY = "MiddleMath";
                 return points;
             }
 
-            function line(anchors, kind) {
+            function line(anchors, kind, closed) {
                 var points = [];
                 for (var i = 0; i < anchors.length; i++) points.push(plain(anchors[i]));
-                return { points: points, kind: kind };
+                return { points: points, kind: kind, closed: !!closed };
             }
 
             function plain(p) { return { anchor: p, left: p, right: p }; }

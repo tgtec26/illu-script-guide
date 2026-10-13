@@ -78,3 +78,7 @@ assert.ok(source.includes('var PREF_KEY = "HighGeometrySpace/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
 console.log("space checks passed");
+
+const tri=build({mode:1}).lines.filter(l=>l.closed&&l.kind==='main');
+assert.strictEqual(tri.length,1);assert.strictEqual(tri[0].points.length,3);
+assert.ok(source.includes('line.closed ? StrokeJoin.BEVELENDJOIN'));

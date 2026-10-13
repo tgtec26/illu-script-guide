@@ -4792,7 +4792,7 @@ var SCRIPT_KEY = "HighMath1";
                 path.strokeColor = makeGray(100);
                 path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "guide" ? GUIDE_PT : (line.kind === "thin" ? THIN_PT : AXIS_PT));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
-                path.strokeJoin = StrokeJoin.MITERENDJOIN;
+                path.strokeJoin = line.closed ? StrokeJoin.BEVELENDJOIN : StrokeJoin.MITERENDJOIN;
                 if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
             }
 
@@ -5082,14 +5082,14 @@ var SCRIPT_KEY = "HighMath1";
                     return k * c;
                 }
                 if (kind === 1) {
-                    // 위·아래를 번갈아 k개. 바닥선과 윗선은 한 줄로
+                    // 삼각형 배열: 바깥은 닫힌 패스 하나, 공유하는 내부 변만 따로 둔다.
                     var h = c * Math.sqrt(3) / 2, half = c / 2;
-                    var bottomEnd = x + Math.ceil(k / 2) * c, topStart = x + half, topEnd = x + half + Math.floor(k / 2) * c;
-                    out.lines.push(straightLine([[x, 0], [bottomEnd, 0]], "main"));
-                    if (k >= 2) out.lines.push(straightLine([[topStart, h], [topEnd, h]], "main"));
-                    var zig = [];
-                    for (i = 0; i <= k + 1; i++) zig.push([x + i * half, i % 2 === 0 ? 0 : h]);
-                    out.lines.push(straightLine(zig, "main"));
+                    var bottomEnd = x + Math.ceil(k / 2) * c;
+                    var outline = [[x, 0], [bottomEnd, 0]];
+                    if (k >= 2) outline.push([x + half + Math.floor(k / 2) * c, h]);
+                    outline.push([x + half, h]);
+                    out.lines.push(straightLine(outline, "main", true));
+                    for (i = 1; i < k; i++) out.lines.push(straightLine([[x + i * half, i % 2 ? h : 0], [x + (i + 1) * half, i % 2 ? 0 : h]], "main"));
                     return (k + 1) * half;
                 }
                 if (kind === 2) {

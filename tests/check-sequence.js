@@ -93,9 +93,10 @@ assert.deepStrictEqual([0.3, 1, 1.5, 4, 7, 30].map(g.niceStep), [0.5, 1, 2, 5, 1
   assert.strictEqual(d.texts[0].text, "〈그림 1〉");
   // 3개짜리: 바닥 2칸, 윗선 1칸, 지그재그 5점
   const stage3 = d.lines.slice(-3);
-  assert.deepStrictEqual(stage3[0].points.map((p) => p.anchor[0]), [65, 85], "stages 10 and 15 wide, two cells apart");
-  assert.deepStrictEqual(stage3[1].points.map((p) => p.anchor[0]), [70, 80]);
-  assert.strictEqual(stage3[2].points.length, 5);
+  assert.deepStrictEqual(stage3[0].points.map((p) => p.anchor[0]), [65, 85, 80, 70], "closed triangle array starts at stage 3");
+  assert.strictEqual(stage3[0].closed, true);
+  assert.deepStrictEqual(stage3[1].points.map((p) => p.anchor[0]), [70, 75]);
+  assert.strictEqual(stage3[2].points.length, 2);
 }
 {
   const d = g.buildPattern(2, 3, 10, 2);
@@ -111,3 +112,11 @@ assert.ok(source.includes('var PREF_KEY = "HighMathSequence/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
 console.log("sequence checks passed");
+
+for(let k=1;k<=6;k++) {
+ const d=g.buildPattern(1,k,10,1);
+ assert.strictEqual(d.lines.filter(l=>l.closed).length,k);
+ const loop=d.lines.filter(l=>l.closed).pop();
+ assert.strictEqual(loop.points.length,k===1?3:4);
+}
+assert.ok(source.includes('line.closed ? StrokeJoin.BEVELENDJOIN'));

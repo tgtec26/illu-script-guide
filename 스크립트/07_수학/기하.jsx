@@ -5199,7 +5199,7 @@ var SCRIPT_KEY = "HighGeometry";
                 path.strokeColor = makeGray(100);
                 path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "plane" ? PLANE_PT : GUIDE_PT);
                 path.strokeCap = StrokeCap.BUTTENDCAP;
-                path.strokeJoin = StrokeJoin.MITERENDJOIN;
+                path.strokeJoin = line.closed ? StrokeJoin.BEVELENDJOIN : StrokeJoin.MITERENDJOIN;
                 if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
             }
 
@@ -5384,9 +5384,7 @@ var SCRIPT_KEY = "HighGeometry";
                         line(ends, "main");
                         name("l", ends[1], [0.7071, 0.7071], false);
                     }
-                    line([P, H], "main");
-                    line([H, M], "main");
-                    line([P, M], "main");
+                    line([P, H, M], "main", true);
                     mark(H, [0, 0, 1], sub3(M, H));
                     mark(M, along, sub3(H, M));
                     mark(M, scale3(along, -1), sub3(P, M));

@@ -97,12 +97,13 @@ assert.strictEqual(build({ perpendicular: true, a: 0, b: 180 }).lines.length, 0)
   assert.deepStrictEqual(texts(d).filter((t) => t.endsWith("°")), ["75°", "105°"]);
   assert.deepStrictEqual(texts(d).filter((t) => !t.endsWith("°")).sort(), ["A", "B", "C", "D"]);
   const quad = d.lines[0].points.map((p) => p.anchor);
-  assert.strictEqual(quad.length, 5, "closed ABCDA");
+  assert.strictEqual(quad.length, 4, "closed ABCD");
+  assert.strictEqual(d.lines[0].closed, true);
   for (const p of quad) near(g.dist(p, [0, 0]), 10, "vertex on circle");
   // 순서가 뒤섞여도 원 위 순서대로 잇는다: C를 A와 B 사이로
   const e = build({ quad: true, c: 270, d: 120 });
   const order = e.lines[0].points.map((p) => Math.round((Math.atan2(p.anchor[1], p.anchor[0]) * 180 / Math.PI + 360) % 360));
-  assert.deepStrictEqual(order, [210, 270, 330, 120, 210]);
+  assert.deepStrictEqual(order, [210, 270, 330, 120]);
   // 두 접선을 함께 켜면 접점은 E, F
   assert.ok(["E", "F"].every((n) => texts(build({ quad: true, external: true })).includes(n)));
 }
@@ -118,3 +119,12 @@ assert.strictEqual(build({ perpendicular: true, a: 0, b: 180 }).lines.length, 0)
 assert.ok(source.includes('var PREF_KEY = "CircleProps/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 console.log("circle props checks passed");
+
+for (const flags of [{chord:true,radii:true},{chord:true,inscribed:true},{tangentChord:true}]) {
+  const d=build(flags), loops=d.lines.filter(l=>l.closed);
+  assert.strictEqual(loops.length,1);
+  assert.strictEqual(loops[0].points.length,3);
+}
+assert.ok(!build({radii:true}).lines.some(l=>l.closed));
+assert.ok(source.includes('drawBezier(line.points, !!line.closed)'));
+assert.ok(source.includes('line.closed ? StrokeJoin.BEVELENDJOIN'));
