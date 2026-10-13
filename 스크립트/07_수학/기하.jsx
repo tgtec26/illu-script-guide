@@ -2116,6 +2116,7 @@ var SCRIPT_KEY = "HighGeometry";
             var MARK_GAP_MM = 0.7;
             var DOT_RADIUS_MM = 0.6;
             var GUIDE_DASH = [2, 1.5];
+            var DIMENSION_LABEL_GAP_MM = 0.7;
             var KAPPA = 0.5522847498;
             var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
             var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText"];
@@ -2322,6 +2323,7 @@ var SCRIPT_KEY = "HighGeometry";
                 path.strokeJoin = StrokeJoin.MITERENDJOIN;
                 path.strokeMiterLimit = 10;
                 if (line.kind === "dashed" || line.kind === "dimension") path.strokeDashes = GUIDE_DASH;
+                return path;
             }
 
             // 끝이 tip, 방향 dir인 채운 화살촉 (뒤가 notch만큼 파인 모양)
@@ -3088,11 +3090,10 @@ var SCRIPT_KEY = "HighGeometry";
                 return out;
             }
 
-            // 2차 곡선을 두 개의 정확한 3차 베지어로 나눠 글자 부분을 비운다.
-            function dimensionCurve(a, b, normal, rise, halfGap, retreat) {
+            // 치수선은 하나의 3차 베지어다. 글자 부분도 자르지 않는다.
+            function dimensionCurve(a, b, normal, rise, retreat) {
                 var dx = b[0] - a[0], dy = b[1] - a[1], length = Math.sqrt(dx * dx + dy * dy);
-                if (length < 1e-6 || halfGap >= length * 0.48) return [];
-                var cut = halfGap / length;
+                if (length < 1e-6) return [];
                 function Q(t) { return [a[0] + dx * t + normal[0] * 4 * rise * t * (1 - t), a[1] + dy * t + normal[1] * 4 * rise * t * (1 - t)]; }
                 function D(t) { return [dx + normal[0] * 4 * rise * (1 - 2 * t), dy + normal[1] * 4 * rise * (1 - 2 * t)]; }
                 function piece(t0, t1) {
@@ -3103,7 +3104,7 @@ var SCRIPT_KEY = "HighGeometry";
                 }
                 // 꼭짓점 중심에서 변의 바깥 경계까지: 변 두께의 절반만큼 물러난다.
                 retreat = Math.max(0, retreat || 0);
-                var low = 0, high = 0.5 - cut;
+                var low = 0, high = 0.5;
                 var end = Q(high), ex = end[0] - a[0], ey = end[1] - a[1];
                 if (retreat >= Math.sqrt(ex * ex + ey * ey)) return [];
                 if (retreat > 0) {
@@ -3114,16 +3115,58 @@ var SCRIPT_KEY = "HighGeometry";
                     }
                 }
                 var inset = retreat > 0 ? (low + high) / 2 : 0;
-                return [piece(inset, 0.5 - cut), piece(0.5 + cut, 1 - inset)];
+                return [piece(inset, 1 - inset)];
+            }
+
+            // 실제 글자 윤곽을 재어 숫자·영문·분수 모두 동일한 여백을 준다.
+            function dimensionLabelBounds(item) {
+                var copy = null;
+                try {
+                    copy = item.duplicate();
+                    if (copy.typename === "TextFrame") copy = copy.createOutline();
+                    else outlineChildren(copy);
+                    var bounds = copy.visibleBounds;
+                    return [bounds[0], bounds[1], bounds[2], bounds[3]];
+                } catch (e) {
+                    var fallback = item.visibleBounds;
+                    return [fallback[0], fallback[1], fallback[2], fallback[3]];
+                } finally {
+                    if (copy !== null) try { copy.remove(); } catch (removeError) {}
+                }
+                function outlineChildren(group) {
+                    for (var i = group.pageItems.length - 1; i >= 0; i--) {
+                        var child = group.pageItems[i];
+                        if (child.typename === "TextFrame") child.createOutline();
+                        else if (child.typename === "GroupItem") outlineChildren(child);
+                    }
+                }
+            }
+
+            function dimensionMaskRect(bounds, gap) {
+                return [bounds[0] - gap, bounds[1] + gap, bounds[2] + gap, bounds[3] - gap];
             }
 
             function addDimension(label) {
                 if (!label.dimension || !label.item) return;
-                var spec = label.dimension, bounds = label.item.geometricBounds;
-                var along = unitVector([spec.b[0] - spec.a[0], spec.b[1] - spec.a[1]]);
-                var halfGap = (bounds[2] - bounds[0]) * Math.abs(along[0]) / 2 + (bounds[1] - bounds[3]) * Math.abs(along[1]) / 2 + 0.7 * MM_TO_PT;
-                var paths = dimensionCurve(spec.a, spec.b, spec.normal, spec.rise, halfGap, strokePt / 2);
-                for (var i = 0; i < paths.length; i++) addPath(paths[i]);
+                var spec = label.dimension;
+                var paths = dimensionCurve(spec.a, spec.b, spec.normal, spec.rise, strokePt / 2);
+                if (paths.length === 0) return;
+                var bounds = dimensionLabelBounds(label.item);
+                var rect = dimensionMaskRect(bounds, DIMENSION_LABEL_GAP_MM * MM_TO_PT);
+                var group = previewGroup.groupItems.add();
+                group.name = "치수선 " + label.text;
+                var curve = addPath(paths[0]);
+                curve.name = "점선 베지어";
+                curve.move(group, ElementPlacement.PLACEATEND);
+                var mask = group.pathItems.rectangle(rect[1], rect[0], rect[2] - rect[0], rect[1] - rect[3]);
+                mask.name = "글자 배경";
+                mask.stroked = false;
+                mask.filled = true;
+                mask.fillColor = makeGray(0);
+                mask.fillOverprint = false;
+                label.item.move(group, ElementPlacement.PLACEATBEGINNING);
+                mask.zOrder(ZOrderMethod.BRINGTOFRONT);
+                label.item.zOrder(ZOrderMethod.BRINGTOFRONT);
             }
 
             // 새 옵션은 별도 키로 저장해 기존 v3 도형 입력·크기를 유지한다.

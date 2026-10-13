@@ -127,35 +127,45 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   const paths = d.lines.filter(l => l.kind === "main");
   assert.deepStrictEqual(paths.map(l => [l.points.length, l.closed]), [[3, false], [2, false]]);
 }
-// 곡선 점선 치수선: 글자 중앙에서 끊고 양 끝은 측정할 두 점에 붙는다.
+// 곡선 점선 치수선: 하나의 베지어 패스를 유지하고 양 끝은 측정할 두 점에 붙는다.
 {
   const g = api({ pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A", lengthText: "AB:3, BC:4" }, {showDimensions: true});
   const d = g.buildGeometry();
   for (const label of d.texts.filter(t => t.dimension)) {
     const spec = label.dimension;
     assert.deepStrictEqual(label.dir, [0, 0], "치수 글자는 곡선 중앙에 고정");
-    const paths = g.dimensionCurve(spec.a, spec.b, spec.normal, spec.rise, 5);
-    assert.strictEqual(paths.length, 2);
+    const paths = g.dimensionCurve(spec.a, spec.b, spec.normal, spec.rise, 0);
+    assert.strictEqual(paths.length, 1);
     assert.deepStrictEqual(paths[0].points[0].anchor, spec.a);
-    assert.deepStrictEqual(paths[1].points[1].anchor, spec.b);
+    assert.deepStrictEqual(paths[0].points[1].anchor, spec.b);
     assert.ok(paths.every(l => l.kind === "dimension" && !l.closed));
-    assert.ok(paths[0].points[1].anchor.some((v,i) => v !== paths[1].points[0].anchor[i]), "글자 사이 간격");
+    assert.strictEqual(paths[0].points.length, 2, "하나의 베지어 세그먼트");
   }
   assert.strictEqual(d.texts.filter(t => t.dimension).length, 2);
   assert.deepStrictEqual(g.dimensionCurve([0,0], [0,0], [1,0], 3, 2), []);
-  assert.deepStrictEqual(g.dimensionCurve([0,0], [2,0], [0,1], 3, 2), [], "짧은 치수선은 글자와 겹치지 않게 생략");
+  assert.strictEqual(g.dimensionCurve([0,0], [2,0], [0,1], 3, 0).length, 1, "짧은 치수선도 흰 사각형으로 가린다");
 }
 // 치수선 양 끝은 변 두께 절반만큼 곡선을 따라 후퇴한다.
 {
   const g = api();
   for (const width of [0.1, 0.8, 1.5]) {
     for (const [a,b,n] of [[[0,0],[100,0],[0,-1]],[[0,0],[0,75],[-1,0]],[[0,0],[60,80],[-0.8,0.6]]]) {
-      const paths=g.dimensionCurve(a,b,n,8,5,width/2);
-      const first=paths[0].points[0].anchor, last=paths[1].points[1].anchor;
+      const paths=g.dimensionCurve(a,b,n,8,width/2);
+      const first=paths[0].points[0].anchor, last=paths[0].points[1].anchor;
       near(Math.hypot(first[0]-a[0],first[1]-a[1]),width/2,"시작 치수선 후퇴",1e-5);
       near(Math.hypot(last[0]-b[0],last[1]-b[1]),width/2,"끝 치수선 후퇴",1e-5);
     }
   }
+}
+// 글자 윤곽에 관계없이 배경의 상하좌우 여백은 동일하다.
+{
+  const rect = new Function(extractFunction("dimensionMaskRect")+";return dimensionMaskRect;")();
+  for (const bounds of [[0,8,4,0],[0,8,20,0],[-4,5,10,-5]]) {
+    const r=rect(bounds,2);
+    assert.deepStrictEqual([bounds[0]-r[0],r[1]-bounds[1],r[2]-bounds[2],bounds[3]-r[3]],[2,2,2,2]);
+  }
+  assert.ok(source.includes('mask.fillColor = makeGray(0)'), "치수 글자 뒤에 흰 사각형");
+  assert.ok(source.includes('label.item.zOrder(ZOrderMethod.BRINGTOFRONT)'), "글자가 가장 위");
 }
 // 설치 서체에 붙은 PDF 부분집합 접두사를 허용하고 GS 서체를 Spoqa보다 먼저 찾는다.
 {
