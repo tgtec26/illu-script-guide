@@ -3089,7 +3089,7 @@ var SCRIPT_KEY = "HighGeometry";
             }
 
             // 2차 곡선을 두 개의 정확한 3차 베지어로 나눠 글자 부분을 비운다.
-            function dimensionCurve(a, b, normal, rise, halfGap) {
+            function dimensionCurve(a, b, normal, rise, halfGap, retreat) {
                 var dx = b[0] - a[0], dy = b[1] - a[1], length = Math.sqrt(dx * dx + dy * dy);
                 if (length < 1e-6 || halfGap >= length * 0.48) return [];
                 var cut = halfGap / length;
@@ -3101,7 +3101,20 @@ var SCRIPT_KEY = "HighGeometry";
                         {anchor: p, left: p, right: [p[0] + dp[0] * scale, p[1] + dp[1] * scale]},
                         {anchor: q, left: [q[0] - dq[0] * scale, q[1] - dq[1] * scale], right: q}]};
                 }
-                return [piece(0, 0.5 - cut), piece(0.5 + cut, 1)];
+                // 꼭짓점 중심에서 변의 바깥 경계까지: 변 두께의 절반만큼 물러난다.
+                retreat = Math.max(0, retreat || 0);
+                var low = 0, high = 0.5 - cut;
+                var end = Q(high), ex = end[0] - a[0], ey = end[1] - a[1];
+                if (retreat >= Math.sqrt(ex * ex + ey * ey)) return [];
+                if (retreat > 0) {
+                    for (var step = 0; step < 24; step++) {
+                        var mid = (low + high) / 2, at = Q(mid);
+                        var ox = at[0] - a[0], oy = at[1] - a[1];
+                        if (ox * ox + oy * oy < retreat * retreat) low = mid; else high = mid;
+                    }
+                }
+                var inset = retreat > 0 ? (low + high) / 2 : 0;
+                return [piece(inset, 0.5 - cut), piece(0.5 + cut, 1 - inset)];
             }
 
             function addDimension(label) {
@@ -3109,7 +3122,7 @@ var SCRIPT_KEY = "HighGeometry";
                 var spec = label.dimension, bounds = label.item.geometricBounds;
                 var along = unitVector([spec.b[0] - spec.a[0], spec.b[1] - spec.a[1]]);
                 var halfGap = (bounds[2] - bounds[0]) * Math.abs(along[0]) / 2 + (bounds[1] - bounds[3]) * Math.abs(along[1]) / 2 + 0.7 * MM_TO_PT;
-                var paths = dimensionCurve(spec.a, spec.b, spec.normal, spec.rise, halfGap);
+                var paths = dimensionCurve(spec.a, spec.b, spec.normal, spec.rise, halfGap, strokePt / 2);
                 for (var i = 0; i < paths.length; i++) addPath(paths[i]);
             }
 

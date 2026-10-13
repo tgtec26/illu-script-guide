@@ -145,6 +145,18 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   assert.deepStrictEqual(g.dimensionCurve([0,0], [0,0], [1,0], 3, 2), []);
   assert.deepStrictEqual(g.dimensionCurve([0,0], [2,0], [0,1], 3, 2), [], "짧은 치수선은 글자와 겹치지 않게 생략");
 }
+// 치수선 양 끝은 변 두께 절반만큼 곡선을 따라 후퇴한다.
+{
+  const g = api();
+  for (const width of [0.1, 0.8, 1.5]) {
+    for (const [a,b,n] of [[[0,0],[100,0],[0,-1]],[[0,0],[0,75],[-1,0]],[[0,0],[60,80],[-0.8,0.6]]]) {
+      const paths=g.dimensionCurve(a,b,n,8,5,width/2);
+      const first=paths[0].points[0].anchor, last=paths[1].points[1].anchor;
+      near(Math.hypot(first[0]-a[0],first[1]-a[1]),width/2,"시작 치수선 후퇴",1e-5);
+      near(Math.hypot(last[0]-b[0],last[1]-b[1]),width/2,"끝 치수선 후퇴",1e-5);
+    }
+  }
+}
 // 설치 서체에 붙은 PDF 부분집합 접두사를 허용하고 GS 서체를 Spoqa보다 먼저 찾는다.
 {
   const start = bundle.indexOf("function findRuleFont(");
