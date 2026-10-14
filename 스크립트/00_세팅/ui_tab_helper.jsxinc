@@ -6,6 +6,7 @@
 // $.evalFile로 읽고 typeof로 확인하므로, 파일이 없어도 스크립트는 그대로 동작한다.
 function bindTabOrder(win) {
     compactDialog(win);
+    stretchRowsOnShow(win);
     var inputs = [];
     collectEditTexts(win, inputs);
     for (var k = 0; k < inputs.length; k++) {
@@ -57,6 +58,7 @@ var COMPACT_SLIDER_WIDTH = 118;
 var COMPACT_BUTTON_WIDTH = 64;
 var COMPACT_BUTTON_PAD = 14;   // 글자 좌우 여백 합 (2026-10-09: 28 → 14로 절반)
 var COMPACT_ROW_HEIGHT = 22;
+var COMPACT_CHECK_BOX = 20;   // 체크박스의 네모와 글자 사이까지 폭 (숫자 행 첫 칸이 체크박스일 때)
 var COMPACT_UNIT = /^(mm|cm|m|pt|px|%|°|deg|s|ms|배|개|회|번|도|단계|줄|칸|N|J|g|kg|K|℃|°C|m\/s|m\/s²)$/;
 var COMPACT_BUTTONS = {"확인": true, "취소": true, "OK": true, "Cancel": true, "적용": true, "닫기": true};
 
@@ -249,6 +251,112 @@ function makeCollapsiblePanel(parent, title, collapsedDefault, key) {
     };
     body.panel = panel;
     return body;
+}
+
+// ---- 좌우 여백 맞추기 (bindTabOrder가 부른다, 2026-10-14) ----
+// 창 폭은 가장 넓은 줄(겹쳐 쌓은 탭 페이지는 가장 넓은 페이지)이 정해서, 좁은 줄은 오른쪽이 빈다.
+// 창이 뜬 뒤(크기를 잴 수 있을 때) 숫자 행의 스크롤바, 넓게 지정한 입력칸·안내문, 아래 줄의 가운데 빈칸을
+// 들어 있는 패널의 안쪽 오른쪽 끝까지 늘린다. 늘리기만 하고 창 폭은 바꾸지 않는다.
+//  - 레이아웃이 한 번 잡힌 뒤에는 preferredSize로 늘어나지 않아 minimumSize를 건다. 최소폭이 최대폭에 잘리므로 최대폭을 먼저 늘린다.
+//  - 패널은 margins보다 오른쪽을 조금 더 남긴다(Mac 4pt). 패널을 채우는 높이 0 그룹을 하나 넣어 그 값을 잰다.
+//  - 가로로 나란히 놓인 줄(부모가 row)은 늘리면 옆 줄을 밀어내므로 건드리지 않는다.
+var STRETCH_WIDE_TEXT = 200;
+
+function stretchRowsOnShow(win) {
+    if ($.global.__noCompact) return;
+    var targets = [], probes = {};
+    try {
+        collectStretchTargets(win, targets);
+        if (!targets.length) return;
+        addStretchProbe(win, "panel", probes);
+        addStretchProbe(win, "tab", probes);
+    } catch (e0) { return; }
+    var previous = win.onShow;
+    win.onShow = function() {
+        try {
+            if (stretchToRightEdge(targets, probes)) win.layout.layout(true);
+        } catch (e1) {}
+        if (previous) return previous.apply(this, arguments);
+    };
+}
+
+function collectStretchTargets(container, targets) {
+    var children = container.children;
+    if (!children) return;
+    var column = container.orientation !== "row";
+    for (var i = 0; i < children.length; i++) {
+        var child = children[i], kids = child.children;
+        if (child.type === "group" && kids && kids.length >= 4 && (kids[0].type === "statictext" || kids[0].type === "checkbox") && kids[1].type === "edittext" && kids[2].type === "scrollbar") {
+            if (column) addStretchTarget(targets, child, kids[2]);
+        } else if ((child.type === "edittext" || child.type === "statictext") && child.preferredSize.width >= STRETCH_WIDE_TEXT) {
+            if (container.type === "group" && !column) {
+                if (container.parent && container.parent.orientation !== "row") addStretchTarget(targets, container, child);
+            } else if (column) {
+                addStretchTarget(targets, child, child);
+            }
+        } else if (child.type === "group" && kids && kids.length === 0 && !column && stretchFills(child)) {
+            if (container.parent && container.parent.orientation !== "row") addStretchTarget(targets, container, child);
+        } else if (kids && kids.length) {
+            collectStretchTargets(child, targets);
+        }
+    }
+}
+
+function addStretchTarget(targets, host, item) {
+    for (var i = 0; i < targets.length; i++) if (targets[i].host === host) return;
+    targets.push({host: host, item: item});
+}
+
+function stretchFills(element) {
+    try {
+        var a = element.alignment;
+        return a === "fill" || (a && a[0] === "fill");
+    } catch (e) { return false; }
+}
+
+// type("panel"/"tab")인 첫 컨테이너 끝에 폭을 채우는 높이 0 그룹을 둔다. 창이 뜬 뒤 그 오른쪽 끝이 패널 안쪽 끝이다.
+// 맨 끝에 붙이므로 기존 요소의 순번(대화상자 요소 편집의 경로)은 바뀌지 않는다
+function addStretchProbe(container, type, probes) {
+    var children = container.children;
+    if (!children || probes[type]) return;
+    for (var i = 0; i < children.length && !probes[type]; i++) {
+        var child = children[i];
+        if (child.type === type) {
+            var probe = child.add("group");
+            probe.alignment = ["fill", "top"];
+            probe.maximumSize.height = 0;
+            probes[type] = {container: child, group: probe};
+        } else if (child.children && child.children.length) {
+            addStretchProbe(child, type, probes);
+        }
+    }
+}
+
+function stretchToRightEdge(targets, probes) {
+    var extra = {panel: 0, tab: 0}, changed = false, key;
+    for (key in probes) {
+        var p = probes[key];
+        var measured = p.container.size.width - p.container.margins[2] - p.group.bounds.right;
+        if (measured >= 0 && measured < 20) extra[key] = measured;
+    }
+    for (var i = 0; i < targets.length; i++) {
+        var host = targets[i].host, item = targets[i].item, parent = host.parent;
+        var limit = parent.size.width - parent.margins[2] - (extra[parent.type] || 0);
+        // 패널 밖에서 왼쪽을 줄 여백으로 패널 안 줄에 맞춘 줄(compactAlignRows)은 오른쪽도 패널 안 줄과 같은 자리에서 끝낸다.
+        // 패널 안에서 더 깊은 줄과 열을 맞추느라 생긴 작은 왼쪽 여백은 오른쪽에 옮기지 않는다
+        var inPanel = parent.type === "panel" || parent.type === "tab";
+        if (host !== item && host.margins[0] > 0 && !inPanel) limit -= host.margins[0] + extra.panel;
+        // 줄이 창 폭을 다 차지해도 내용은 왼쪽에 모여 있으므로 마지막 요소의 오른쪽 끝을 잰다
+        var right = host === item ? host.bounds.right : host.bounds.left + host.children[host.children.length - 1].bounds.right;
+        var free = limit - right;
+        if (!(free > 0.5 && free < parent.size.width)) continue;
+        var width = item.size.width + free;
+        item.maximumSize.width = width;
+        item.minimumSize.width = width;
+        item.preferredSize.width = width;
+        changed = true;
+    }
+    return changed;
 }
 
 // ---- 화면 요소 목록(카탈로그)과 덮어쓰기 ----
@@ -447,7 +555,9 @@ function compactCollectRows(container, rows, offset) {
         if (child.type === "group") {
             var k = child.children;
             // 줄 끝에 단추나 체크가 더 붙은 줄도 같은 줄로 본다
-            if (k.length >= 3 && k[0].type === "statictext" && k[1].type === "edittext" && k[2].type === "scrollbar") {
+            // 첫 칸이 체크박스인 줄(켜고 끄는 숫자 행)도 같은 줄로 본다. 체크박스 글자의 "(단위):"도 툴팁으로 옮긴다
+            if (k.length >= 3 && (k[0].type === "statictext" || k[0].type === "checkbox") && k[1].type === "edittext" && k[2].type === "scrollbar") {
+                if (k[0].type === "checkbox") compactLabel(k[0]);
                 rows.push({group: child, label: k[0], edit: k[1], offset: offset});
             }
         }
@@ -467,7 +577,7 @@ function compactAlignRows(win) {
     compactCollectRows(win, rows, 0);
     if (rows.length < 2) return;
     for (i = 0; i < rows.length; i++) {
-        var w = rows[i].label.graphics.measureString(rows[i].label.text)[0];
+        var w = rows[i].label.graphics.measureString(rows[i].label.text)[0] + (rows[i].label.type === "checkbox" ? COMPACT_CHECK_BOX : 0);
         if (w > need) need = w;
         if (rows[i].edit.preferredSize.width > editWidth) editWidth = rows[i].edit.preferredSize.width;
         if (rows[i].offset > maxOffset) maxOffset = rows[i].offset;

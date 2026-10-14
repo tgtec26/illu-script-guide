@@ -240,49 +240,8 @@ var SCRIPT_KEY = "MiddleMath";
         commitHeadSize(isNaN(value) ? headStyle.size : value);
     };
 
-    // 좌우 여백을 같게: 페이지는 겹쳐 쌓여 가장 넓은 페이지 폭을 같이 쓰므로 좁은 탭은 오른쪽이 빈다.
-    // 넓게 지정한 입력칸·안내문은 창 폭을 정하지 않게 줄여 두고, 창이 뜬 뒤(크기를 잴 수 있을 때)
-    // 숫자 행의 스크롤바, 그 입력칸, 아래 줄의 빈칸을 오른쪽 끝까지 늘린다. 창 폭은 숫자 행과 체크 격자 같은 줄이 정한다.
-    var WIDE_TEXT_WIDTH = 200;
-    var stretchTargets = [];
-    function collectStretchTargets(container) {
-        for (var i = 0; i < container.children.length; i++) {
-            var child = container.children[i];
-            var kids = child.children;
-            if (child.type === "group" && kids && kids.length >= 4 && kids[0].type === "statictext" && kids[1].type === "edittext" && kids[2].type === "scrollbar") {
-                stretchTargets.push({host: child, item: kids[2]});
-            } else if ((child.type === "edittext" || child.type === "statictext") && child.preferredSize.width >= WIDE_TEXT_WIDTH) {
-                child.preferredSize.width = 100;
-                var inRow = container.type === "group" && container.orientation === "row";
-                stretchTargets.push({host: inRow ? container : child, item: child});
-            } else if (kids && kids.length) {
-                collectStretchTargets(child);
-            }
-        }
-    }
-    function stretchToRightEdge() {
-        for (var i = 0; i < stretchTargets.length; i++) {
-            var host = stretchTargets[i].host, item = stretchTargets[i].item, parent = host.parent;
-            // 줄이 창 폭을 다 차지해도 내용은 왼쪽에 모여 있으므로 마지막 요소의 오른쪽 끝을 잰다.
-            // 패널 밖 줄은 왼쪽을 줄 여백(margins[0])으로 패널 안 줄에 맞췄으므로 오른쪽도 그만큼 비운다
-            var right = host === item ? host.bounds.right : host.bounds.left + host.children[host.children.length - 1].bounds.right;
-            var inset = host === item ? 0 : (host.margins[0] || 0);
-            var free = parent.size.width - parent.margins[2] - inset - right;
-            if (!(free > 0.5 && free < 300)) continue;
-            item.preferredSize.width = item.size.width + free;
-            item.maximumSize.width = item.size.width + free;
-        }
-    }
-    collectStretchTargets(holder);
-    stretchTargets.push({host: headSizeGroup, item: headSizeBar});
-    stretchTargets.push({host: footer, item: footerSpacer});
-
     // 초기 미리보기는 표시 시점(onShow)에 그려야 화면에 보인다
-    win.onShow = function() {
-        try { stretchToRightEdge(); win.layout.layout(true); } catch (stretchError) {}
-        hideInactivePages();
-        engine.setPreview(previewCheck.value);
-    };
+    win.onShow = function() { hideInactivePages(); engine.setPreview(previewCheck.value); };
     if (typeof bindTabOrder === "function") bindTabOrder(win);
     var result = win.show();
     if (result !== 1) engine.clearPreview();
