@@ -18,7 +18,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced: ${name}`);
 }
 const names = ["supText", "ellipseAnchors", "parseStars", "drawHR"];
-const tables = source.slice(source.indexOf("var HR_X_ITEMS"), source.indexOf("function makeHREngine"));
+const tables = source.slice(source.indexOf("var HR_X_ITEMS"), source.indexOf("\n    runFormHost("));
 const f = new Function(`var FontBaselineOption = {SUPERSCRIPT: 1};\n${tables}\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 const MM = 2.834645669;

@@ -37,10 +37,11 @@ try {
     var HEAD_EXAM = 3;            // 작살형(평가원식). 화살촉 목록의 1번
     var HEAD_EXAM_LENGTH_PT = 4;  // 크기 100%일 때 작살형의 길이(pt). 다른 모양도 같은 배율로 그린다
 
-    runFormHost("일기 기호", [makeStationEngine()], "StationModel/tab");
-
     // ==== 일기 기호 ====
     var SIDE_ITEMS = ["시계 방향쪽", "반시계 방향쪽"];
+
+    // 목록·표가 다 정해진 뒤에 창을 띄운다. 창은 runFormHost 안에서 닫힐 때까지 떠 있어서, 이 줄보다 아래의 var는 그동안 undefined다
+    runFormHost("일기 기호", [makeStationEngine()], "StationModel/tab");
 
     function makeStationEngine() {
         return makeFormEngine({

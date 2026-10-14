@@ -18,7 +18,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced: ${name}`);
 }
 const names = ["splitNames", "decayAnchors", "drawHalfLife"];
-const tables = source.slice(source.indexOf("var HALF_X_ITEMS"), source.indexOf("function makeHalfLifeEngine"));
+const tables = source.slice(source.indexOf("var HALF_X_ITEMS"), source.indexOf("\n    runFormHost("));
 const f = new Function(`${tables}\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 const MM = 2.834645669;

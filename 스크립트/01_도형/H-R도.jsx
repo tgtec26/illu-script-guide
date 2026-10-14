@@ -38,8 +38,6 @@ try {
     var HEAD_EXAM = 3;            // 작살형(평가원식). 화살촉 목록의 1번
     var HEAD_EXAM_LENGTH_PT = 4;  // 크기 100%일 때 작살형의 길이(pt). 다른 모양도 같은 배율로 그린다
 
-    runFormHost("H-R도", [makeHREngine()], "HRDiagram/tab");
-
     // ==== H-R도 ====
     var HR_X_ITEMS = ["분광형", "표면 온도 (K)"];
     var HR_Y_ITEMS = ["광도 (태양=1)", "절대 등급"];
@@ -47,6 +45,9 @@ try {
     var HR_Y_TICKS = [["10^4", "10^2", "1", "10^-2", "10^-4"], ["-5", "0", "5", "10", "15"]];
     var HR_X_TITLES = ["분광형", "표면 온도(K)"];
     var HR_Y_TITLES = ["광도(태양=1)", "절대 등급"];
+
+    // 목록·표가 다 정해진 뒤에 창을 띄운다. 창은 runFormHost 안에서 닫힐 때까지 떠 있어서, 이 줄보다 아래의 var는 그동안 undefined다
+    runFormHost("H-R도", [makeHREngine()], "HRDiagram/tab");
 
     function makeHREngine() {
         return makeFormEngine({
