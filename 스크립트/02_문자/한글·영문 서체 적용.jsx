@@ -15,6 +15,37 @@ try {
     // "(가)", "(나)"처럼 괄호 안에 한글 한 글자인 항목 기호는 바탕체 10pt (텍스트 삽입.jsx와 같은 규칙)
     var labelFontName = "Batang";
     var labelFontSize = 10;
+    // 원문자·로마 숫자도 텍스트 삽입.jsx와 같은 서체·크기로: ㉠ ⓐ는 바탕체 9pt, ①은 GSMediumB1 8pt(영문과 같음),
+    // Ⅰ Ⅱ는 KoPubWorld바탕체 Pro 8pt (이름이 설치마다 달라 후보 이름으로 찾고, 없으면 서체 정보로 찾고, 그래도 없으면 바탕체)
+    var circleFontSize = 9;
+    var romanFontSize = 8;
+    var romanFontCandidates = [
+        "KoPubWorld바탕체_Pro", "KoPubWorld Batang Pro", "KoPubWorldBatangPro", "KoPubWorldBatang_Pro",
+        "KoPubWorldBatangPM", "KoPubWorldBatangPL", "KoPubWorldBatangPB",
+        "KoPubWorldBatangPro-Regular", "KoPubWorldBatangPro-Medium", "KoPubWorldBatangMedium"
+    ];
+
+    // 글자 종류: "circle" 동그라미 한글·영문(㉠ ⓐ Ⓐ), "roman" 로마 숫자(Ⅰ ⅰ), 그 밖은 null
+    // 동그라미 숫자(①)는 영문·숫자와 같은 규칙(GSMediumB1 8pt)이라 따로 두지 않는다
+    function symbolKind(code) {
+        if ((code >= 0x3260 && code <= 0x327F) || (code >= 0x24B6 && code <= 0x24E9)) return "circle";
+        if (code >= 0x2160 && code <= 0x217F) return "roman";
+        return null;
+    }
+
+    function findRomanFont() {
+        for (var i = 0; i < romanFontCandidates.length; i++) {
+            try { return textFonts.getByName(romanFontCandidates[i]); } catch (e) {}
+        }
+        for (var j = 0; j < textFonts.length; j++) {
+            var all = "";
+            try { all = (String(textFonts[j].name) + " " + String(textFonts[j].family) + " " + String(textFonts[j].style)).toLowerCase(); } catch (e2) {}
+            var koPub = all.indexOf("kopubworld") >= 0 || all.indexOf("kopub") >= 0 || all.indexOf("코펍") >= 0;
+            var batang = all.indexOf("batang") >= 0 || all.indexOf("바탕") >= 0;
+            if (koPub && batang && (all.indexOf("pro") >= 0 || /kopubworldbatangp[mlb]/.test(all))) return textFonts[j];
+        }
+        return textFonts.getByName(labelFontName);
+    }
 
     // 괄호 안 한글 한 글자 기호에 속하는 글자 위치를 표시한다. 괄호까지 포함해 세 글자
     function findLabelChars(chars) {
@@ -35,6 +66,7 @@ try {
         var engFont = textFonts.getByName(engFontName);
         var labelChars = findLabelChars(chars);
         var labelFont = null;
+        var romanFont = null;
 
         for (var i = 0; i < chars.length; i++) {
             var currentChar = chars[i];
@@ -46,6 +78,22 @@ try {
                 if (labelFont === null) labelFont = textFonts.getByName(labelFontName);
                 currentChar.characterAttributes.size = labelFontSize;
                 currentChar.characterAttributes.textFont = labelFont;
+                currentChar.characterAttributes.baselineShift = 0;
+                continue;
+            }
+
+            var kind = symbolKind(charCode);
+            if (kind === "circle") {
+                if (labelFont === null) labelFont = textFonts.getByName(labelFontName);
+                currentChar.characterAttributes.size = circleFontSize;
+                currentChar.characterAttributes.textFont = labelFont;
+                currentChar.characterAttributes.baselineShift = 0;
+                continue;
+            }
+            if (kind === "roman") {
+                if (romanFont === null) romanFont = findRomanFont();
+                currentChar.characterAttributes.size = romanFontSize;
+                currentChar.characterAttributes.textFont = romanFont;
                 currentChar.characterAttributes.baselineShift = 0;
                 continue;
             }
