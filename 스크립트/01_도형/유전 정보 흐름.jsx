@@ -15,7 +15,8 @@ try {
 //   고리는 DNA 상자 왼쪽 변 가운데를 중심으로 한 원에서 상자 밖으로 보이는 부분이다. 원이 상자 윗변과 만나는 점에서 출발해
 //   왼쪽으로 돌아(약 320°) 아랫변과 만나는 점에서 촉이 상자를 향해 끝난다.
 // 선 두께는 상자 테두리 0.3pt, 화살표 0.5pt이고 '선 두께' 패널에서 고친다. 선택 없이 화면 가운데에 그린다.
-// 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, ㉠ ㉡ 같은 동그라미 자모는 바탕체(한 단계 크게)다.
+// 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, 항목 기호 (가)(나)는 괄호까지 바탕체 1.25배, ㉠ ⓐ ①은 바탕체 1.125배,
+// Ⅰ Ⅱ는 KoPubWorld바탕체 Pro다(02_문자/한글·영문 서체 적용.jsx·텍스트 삽입.jsx 규칙).
 
 (function() {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
@@ -27,6 +28,7 @@ try {
     var FORM_ITALIC_FONT = formFindFont(["GSMediItaC1", "GSMediumB1"]);
     var FORM_MATH_FONT = formFindFont(["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular", "GSMediumB1"]);
     var FORM_SYMBOL_FONT = formFindFont(["Batang", "BatangOTF", "SpoqaHanSansNeo-Regular"]);
+    var FORM_ROMAN_FONT = formFindRomanFont();
     // 화살촉 4종류: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽(tools/arrowheads.json과 같은 데이터). 끝이 원점, 뒤쪽이 +y, 가로는 방향의 직각. 단위 pt.
     // 순서는 모양 목록(삼각형, 꺾쇠, 제비꼬리, 작살형)과 같다. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리다
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
@@ -592,17 +594,22 @@ try {
     }
 
     // 한글·공백은 Spoqa(기준선 0), 영문·숫자·기호는 GSMediumB1(기준선 +0.5pt), GSMediumB1에 없는 기호(θ)는 HancomEQN — 02_문자/한글·영문 서체 적용.jsx 규칙.
-    // ㉠ ㉡ 같은 동그라미 자모는 바탕체로 한 단계(1pt) 크게 쓴다(좌표평면·스펙트럼과 같은 규칙)
+    // 항목 기호 (가)(나)는 한글이어도 기호로 보고 괄호까지 바탕체 1.25배(8pt → 10pt), 원문자 ㉠ ⓐ ①은 바탕체 1.125배(8pt → 9pt),
+    // 로마 숫자 Ⅰ Ⅱ는 KoPubWorld바탕체 Pro로 쓴다(서체 적용·텍스트 삽입·세포 등과 같은 규칙)
     // opts.italic이면 영문 글자를 변수 서체(GSMediItaC1)로, opts.sub이면 글자 뒤 숫자를 아래 첨자로 쓴다
     function formFonts(frame, opts) {
         var text = frame.contents, range = frame.textRange, italic = opts && opts.italic, sub = opts && opts.sub;
         for (var i = 0; i < text.length; i++) {
             var code = text.charCodeAt(i);
             var attributes = range.characters[i].characterAttributes;
-            if (code >= 0x3260 && code <= 0x327F) {
+            var kind = formSymbolKind(text, i);
+            if (kind === "bracket" || kind === "circle") {
                 attributes.textFont = FORM_SYMBOL_FONT;
                 attributes.baselineShift = 0;
-                attributes.size = attributes.size + 1;
+                attributes.size = attributes.size * (kind === "bracket" ? 1.25 : 1.125);
+            } else if (kind === "roman") {
+                attributes.textFont = FORM_ROMAN_FONT;
+                attributes.baselineShift = 0;
             } else if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32) {
                 attributes.textFont = FORM_KOR_FONT;
                 attributes.baselineShift = 0;
@@ -624,6 +631,35 @@ try {
                 if (prevSub) range.characters[k].characterAttributes.baselinePosition = FontBaselineOption.SUBSCRIPT;
             }
         }
+    }
+
+    // i번째 글자의 기호 종류: "bracket" (가)처럼 괄호 안 한글 한 글자의 세 글자, "circle" ㉠ ⓐ Ⓐ ① ⓪, "roman" Ⅰ ⅰ, 아니면 null
+    function formSymbolKind(text, i) {
+        for (var start = i - 2; start <= i; start++) {
+            if (start < 0 || start + 2 >= text.length) continue;
+            var inner = text.charCodeAt(start + 1);
+            if (text.charAt(start) === "(" && text.charAt(start + 2) === ")" && inner >= 0xAC00 && inner <= 0xD7A3) return "bracket";
+        }
+        var code = text.charCodeAt(i);
+        if ((code >= 0x3260 && code <= 0x327F) || (code >= 0x24B6 && code <= 0x24E9) || (code >= 0x2460 && code <= 0x2473) || code === 0x24EA) return "circle";
+        if (code >= 0x2160 && code <= 0x217F) return "roman";
+        return null;
+    }
+
+    // 로마 숫자 서체: 텍스트 삽입.jsx와 같은 후보 이름 → 서체 정보(KoPub·바탕·Pro) → 바탕체
+    function formFindRomanFont() {
+        var names = ["KoPubWorld바탕체_Pro", "KoPubWorld Batang Pro", "KoPubWorldBatangPro", "KoPubWorldBatang_Pro",
+            "KoPubWorldBatangPM", "KoPubWorldBatangPL", "KoPubWorldBatangPB", "KoPubWorldBatangPro-Regular", "KoPubWorldBatangPro-Medium", "KoPubWorldBatangMedium"];
+        for (var i = 0; i < names.length; i++) {
+            try { return app.textFonts.getByName(names[i]); } catch (e) {}
+        }
+        for (var j = 0; j < app.textFonts.length; j++) {
+            var all = "";
+            try { all = (String(app.textFonts[j].name) + " " + String(app.textFonts[j].family) + " " + String(app.textFonts[j].style)).toLowerCase(); } catch (e2) {}
+            if ((all.indexOf("kopub") >= 0 || all.indexOf("코펍") >= 0) && (all.indexOf("batang") >= 0 || all.indexOf("바탕") >= 0) &&
+                (all.indexOf("pro") >= 0 || /kopubworldbatangp[mlb]/.test(all))) return app.textFonts[j];
+        }
+        return formFindFont(["Batang", "BatangOTF", "SpoqaHanSansNeo-Regular"]);
     }
 
     function formFindFont(names) {

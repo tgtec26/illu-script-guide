@@ -73,7 +73,30 @@ assert.ok(/\{key: "wArrow", label: "화살표"[^}]*value: 0\.5\}/.test(source));
 assert.ok(source.includes('makeCollapsiblePanel(page, ctl.panel, true, spec.name + "/" + ctl.panel)'));
 assert.ok(!source.includes("HeatEngineCycle"), "no leftovers from the template");
 assert.ok(source.includes('value: "DNA, ㉠, ㉡"') && source.includes('value: "(가), (나), (다)"'));
-assert.ok(source.includes("code >= 0x3260 && code <= 0x327F"), "circled jamo use the symbol font");
+// 글자 서체: (가)는 한글이어도 괄호까지 기호로 보고 바탕체 1.25배, ㉠ ⓐ ①은 바탕체 1.125배, Ⅰ은 로마 숫자 서체
+{
+  const kind = new Function(`${extract("formSymbolKind")}\nreturn formSymbolKind;`)();
+  const kinds = (text) => Array.from(text, (_, i) => kind(text, i));
+  assert.deepStrictEqual(kinds("(가)"), ["bracket", "bracket", "bracket"]);
+  assert.deepStrictEqual(kinds("A(나)B"), [null, "bracket", "bracket", "bracket", null]);
+  assert.deepStrictEqual(kinds("(가나)"), [null, null, null, null], "two syllables are words, not an item label");
+  assert.deepStrictEqual(kinds("(a)"), [null, null, null], "Latin in brackets stays text");
+  assert.deepStrictEqual(kinds("㉠ⓐⒶ①⓪Ⅰ"), ["circle", "circle", "circle", "circle", "circle", "roman"]);
+  assert.deepStrictEqual(kinds("가"), [null]);
+
+  const fonts = new Function("FontBaselineOption", `var FORM_KOR_FONT = "kor", FORM_ENG_FONT = "eng", FORM_ITALIC_FONT = "ita", FORM_MATH_FONT = "math", FORM_SYMBOL_FONT = "batang", FORM_ROMAN_FONT = "kopub";
+${extract("formSymbolKind")}\n${extract("formFonts")}\nreturn formFonts;`)({});
+  const draw = (text) => {
+    const chars = Array.from(text, () => ({ characterAttributes: { size: 8 } }));
+    fonts({ contents: text, textRange: { characters: chars } });
+    return chars.map((c) => [c.characterAttributes.textFont, c.characterAttributes.size, c.characterAttributes.baselineShift]);
+  };
+  assert.deepStrictEqual(draw("(가)"), [["batang", 10, 0], ["batang", 10, 0], ["batang", 10, 0]], "(가) → 바탕체 10pt");
+  assert.deepStrictEqual(draw("㉠"), [["batang", 9, 0]], "㉠ → 바탕체 9pt");
+  assert.deepStrictEqual(draw("Ⅱ"), [["kopub", 8, 0]]);
+  assert.deepStrictEqual(draw("전사"), [["kor", 8, 0], ["kor", 8, 0]]);
+  assert.deepStrictEqual(draw("DNA").map((f) => f[0]), ["eng", "eng", "eng"]);
+}
 // 글자 크기 재기: 윤곽선 만들기가 실패해도 복제본을 남기지 않는다(남으면 (나)가 겹쳐 보였다)
 {
   const ink = new Function(`${extract("formInkBounds")}\nreturn formInkBounds;`)();
