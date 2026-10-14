@@ -74,6 +74,8 @@ assert.ok(!/match\(/.test(extractFunction("parseInequality")), "no whole-pattern
     points: [{ name: "A", value: 0.5 }], solution: g.parseInequality("-1<x<=1"), solutionHeight: 8, dotRadius: 1 });
   const ticks = d.lines.filter((l) => l.points.length === 2 && l.points[0][0] === l.points[1][0]);
   assert.strictEqual(ticks.length, 9, "8 half steps + 1");
+  assert.ok(ticks.every((l) => l.tick), "ticks get their own line width");
+  assert.ok(!d.lines[0].tick && !d.lines[0].main, "axis line is neither tick nor solution");
   assert.deepStrictEqual(d.texts.filter((t) => t.dir === -1).map((t) => t.text), ["-2", "-1", "0", "1", "2"]);
   const solution = d.lines.find((l) => l.main);
   assert.deepStrictEqual(solution.points, [[-10, 1], [-10, 8], [10, 8], [10, 1]], "rises from both dots");
@@ -91,6 +93,7 @@ assert.ok(!/match\(/.test(extractFunction("parseInequality")), "no whole-pattern
 }
 
 assert.ok(source.includes('var PREF_KEY = "NumberLine/settings";'));
+assert.ok(/drawing\.lines\[i\]\.tick \? TICK_PT : AXIS_PT/.test(source), "ticks drawn with TICK_PT");
 assert.ok(!/\beval\(/.test(source), "no eval");
 // ExtendScript는 /=로 시작하는 정규식을 나누기-대입으로 읽어 스크립트 전체가 문법 오류가 난다
 assert.ok(!/[(,=]\s*\/=/.test(source), "regex literal must not start with =");

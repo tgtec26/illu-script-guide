@@ -147,6 +147,8 @@ for (const bad of ["x", "z=1", "x=", "x=a"]) assert.strictEqual(g.parseAsymptote
   const axes = d.lines.filter((l) => l.kind === "axis" && l.points[0].anchor[1] === 0 && l.points[1].anchor[1] === 0);
   assert.deepStrictEqual(axes[0].points.map((p) => p.anchor), [[-25, 0], [35, 0]], "x axis stops at the arrow notch");
   assert.strictEqual(d.lines.filter((l) => l.kind === "grid").length, 5 + 3);
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 2, "ticks are not axis lines");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "tick").length, 5 + 3, "x ticks -2..3 and y ticks -1..2 without 0");
   assert.ok(d.texts.some((t) => t.text === "A(1, 2)"));
   assert.strictEqual(d.lines.filter((l) => l.kind === "guide").length, 2);
   assert.ok(!d.texts.some((t) => t.text === "0"), "origin is O, not 0");
