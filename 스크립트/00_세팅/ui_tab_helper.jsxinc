@@ -522,8 +522,9 @@ function uiReadFile(path) {
     return t;
 }
 
+// 로마 숫자(Ⅰ Ⅱ)도 남긴다. 빼면 "수학Ⅰ"과 "수학Ⅱ"가 같은 파일(수학.json)에 겹쳐 쓰여 한쪽이 목록에서 사라진다
 function uiSlug(text) {
-    return String(text).replace(/[^A-Za-z0-9가-힣]+/g, "_").replace(/^_+|_+$/g, "");
+    return String(text).replace(/[^A-Za-z0-9가-힣\u2160-\u217F]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
 // 한 요소의 목록 항목 (지원하지 않는 종류는 null). orig는 덮어쓰기가 맞는 요소인지 확인하는 값
