@@ -12,7 +12,8 @@ try {
 
 // 유전 정보 흐름: 기출에 흔한 [DNA] →(나) [㉠] →(다) [㉡] 그림과 DNA 상자 왼쪽을 도는 복제 고리 (가)를 그린다.
 //   (가) DNA 복제, (나) 전사, (다) 번역, ㉠ mRNA, ㉡ 단백질. 상자 글자와 과정 글자는 쉼표로 고쳐 쓴다(예: DNA, mRNA, 단백질).
-//   고리는 상자 왼쪽 위에서 출발해 왼쪽으로 돌아(약 200°) 상자 아래에서 오른쪽을 향해 끝나는 원호 화살표다.
+//   고리는 DNA 상자 왼쪽 변 가운데를 중심으로 한 원에서 상자 밖으로 보이는 부분이다. 원이 상자 윗변과 만나는 점에서 출발해
+//   왼쪽으로 돌아(약 320°) 아랫변과 만나는 점에서 촉이 상자를 향해 끝난다.
 // 선 두께는 상자 테두리 0.3pt, 화살표 0.5pt이고 '선 두께' 패널에서 고친다. 선택 없이 화면 가운데에 그린다.
 // 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, ㉠ ㉡ 같은 동그라미 자모는 바탕체(한 단계 크게)다.
 
@@ -37,11 +38,9 @@ try {
     ];
     var HEAD_EXAM = 3;            // 작살형(평가원식). 화살촉 목록의 1번
     var HEAD_EXAM_LENGTH_PT = 4;  // 크기 100%일 때 작살형의 길이(pt). 다른 모양도 같은 배율로 그린다
-    // 복제 고리: 원의 중심은 상자 왼쪽 변에서 반지름의 10%만큼 왼쪽, 상자 높이 가운데. 84°(위)에서 반시계로 283°(아래)까지
-    var LOOP_CENTER_SHIFT = 0.1;
-    var LOOP_START_DEG = 84;
-    var LOOP_END_DEG = 283;
-    var LOOP_LABEL_DEG = 122;     // (가) 글자가 놓이는 방향
+    // 복제 고리: 원의 중심은 DNA 상자 왼쪽 변 가운데. 원이 윗변과 만나는 각에서 반시계로 아랫변과 만나는 각까지 그린다
+    var LOOP_LABEL_DEG = 133;     // (가) 글자가 놓이는 방향
+    var LOOP_LABEL_MM = 3;        // 고리 바깥으로 (가) 글자 가운데까지
     var LABEL_GAP_MM = 1.2;       // 화살표와 과정 글자 사이
 
     runFormHost("유전 정보 흐름", [makeDogmaEngine()], "CentralDogma/tab");
@@ -49,15 +48,15 @@ try {
     // ==== 유전 정보 흐름 ====
     function makeDogmaEngine() {
         return makeFormEngine({
-            label: "유전 정보 흐름", name: "CentralDogma", prefKey: "CentralDogma/settings",
+            label: "유전 정보 흐름", name: "CentralDogma", prefKey: "CentralDogma/settings", settingsTag: "v2",
             controls: [
                 {panel: "모양"},
-                {key: "boxW", label: "상자 너비", unit: "mm", min: 5, max: 40, step: 0.5, value: 13},
-                {key: "boxH", label: "상자 높이", unit: "mm", min: 3, max: 15, step: 0.5, value: 5.5},
-                {key: "arrowLen", label: "화살표 길이", unit: "mm", min: 3, max: 40, step: 0.5, value: 9.5},
-                {key: "gap", label: "상자와 화살표 간격", unit: "mm", min: 0, max: 5, step: 0.1, value: 1.5},
+                {key: "boxW", label: "상자 너비", unit: "mm", min: 5, max: 40, step: 0.5, value: 11},
+                {key: "boxH", label: "상자 높이", unit: "mm", min: 3, max: 15, step: 0.5, value: 4.5},
+                {key: "arrowLen", label: "화살표 길이", unit: "mm", min: 3, max: 40, step: 0.5, value: 7},
+                {key: "gap", label: "상자와 화살표 간격", unit: "mm", min: 0, max: 5, step: 0.1, value: 1.2},
                 {key: "boxK", label: "상자 회색", unit: "K", min: 0, max: 40, step: 5, value: 10},
-                {key: "loopR", label: "고리 반지름", unit: "mm", min: 4, max: 25, step: 0.5, value: 9.5},
+                {key: "loopR", label: "고리 반지름", unit: "mm", min: 3, max: 20, step: 0.1, value: 6},
                 {key: "showLoop", check: "DNA 복제 고리 (가)", value: true},
                 {key: "headShape", label: "화살촉 모양", items: HEAD_SHAPES, order: [3, 2, 0, 1], value: 3},
                 {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
@@ -87,10 +86,10 @@ try {
         var boxes = [], arrows = [], i;
         for (i = 0; i < 3; i++) boxes.push({left: i * pitch, bottom: 0, width: w, height: h, cx: i * pitch + w / 2, cy: h / 2});
         for (i = 0; i < 2; i++) arrows.push({from: [i * pitch + w + gap, h / 2], to: [(i + 1) * pitch - gap, h / 2]});
-        var r = o.loopR * m;
-        var loop = {cx: -LOOP_CENTER_SHIFT * r, cy: h / 2, r: r, start: LOOP_START_DEG, end: LOOP_END_DEG,
-            label: [-LOOP_CENTER_SHIFT * r + Math.cos(LOOP_LABEL_DEG * Math.PI / 180) * (r + 3.5 * m),
-                h / 2 + Math.sin(LOOP_LABEL_DEG * Math.PI / 180) * (r + 3.5 * m)]};
+        // 원이 윗변(y = h)과 만나는 각. 반지름이 상자 높이의 절반보다 작으면 윗변에 닿지 않으므로 90°(왼쪽 반원)
+        var r = o.loopR * m, meet = Math.asin(Math.min(1, h / 2 / r)) * 180 / Math.PI, labelR = r + LOOP_LABEL_MM * m;
+        var loop = {cx: 0, cy: h / 2, r: r, start: meet, end: 360 - meet,
+            label: [Math.cos(LOOP_LABEL_DEG * Math.PI / 180) * labelR, h / 2 + Math.sin(LOOP_LABEL_DEG * Math.PI / 180) * labelR]};
         return {boxes: boxes, arrows: arrows, loop: loop};
     }
 
@@ -248,7 +247,7 @@ try {
     }
 
     // ==== 폼 탭 공용 부품 ====
-    // spec: label(탭 이름), name(그룹 이름), prefKey, controls[], lineWidths[], draw(tools, o)
+    // spec: label(탭 이름), name(그룹 이름), prefKey, settingsTag(저장 형식 태그, 기본 v1), controls[], lineWidths[], draw(tools, o)
     // 컨트롤: {panel: "제목", fold: true} 새 패널(fold면 기본으로 접힘) / {key, label, unit, min, max, step, value} 숫자 행 /
     //         {key, check: "라벨", value: true} 체크(이어진 것은 한 행에 셋까지) / {key, label, items: [...], value} 드롭다운 /
     //         {key, label, text: true, value: "글", tip: "툴팁"} 글 입력
@@ -425,7 +424,7 @@ try {
         }
 
         function saveSettings() {
-            var parts = ["v1"];
+            var parts = [spec.settingsTag || "v1"];
             for (var i = 0; i < controls.length; i++) {
                 var ctl = controls[i];
                 if (!ctl.key) continue;
@@ -442,7 +441,7 @@ try {
             var p = String(raw).split("|");
             var keyed = [];
             for (var i = 0; i < controls.length; i++) if (controls[i].key) keyed.push(controls[i]);
-            if (p[0] !== "v1" || p.length !== keyed.length + 1) return;
+            if (p[0] !== (spec.settingsTag || "v1") || p.length !== keyed.length + 1) return;
             var values = [];
             for (var k = 0; k < keyed.length; k++) {
                 var ctl = keyed[k], text = p[k + 1];
