@@ -1,4 +1,4 @@
-# 작업 이어가기 (HANDOFF) — 2026-10-13
+# 작업 이어가기 (HANDOFF) — 2026-10-14
 
 다른 기기·새 세션에서 이 파일을 먼저 읽고 이어간다. 규칙의 원문은 `AGENTS.md`이고, 이 파일은 이번 세션에서 정해진 것과 다음 작업만 적는다.
 
@@ -28,14 +28,18 @@
 - 점 배치는 쏠리지 않게 **후보 격자 + 가장 먼 점 차례로 고르기**(`spreadDots`).
 - 글자 서체·대화상자 레이아웃·미리보기 이동·옵션 저장(v1 태그)은 `AGENTS.md`.
 
-## 3. 일러 실행 검증 — 2026 CEP MCP 우선
-- **Illustrator 2026 + `illustrator-cep`를 사용한다. osascript·`tools/illu-probe.sh`·AppleScript 기반 MCP로 검증하지 않는다.** 연결이 안 되면 상태를 점검하고 보고하며 osascript로 자동 우회하지 않는다.
-- Codex 재시작 후 2026에서 `창 → 확장 프로그램 → MCP Control`을 열어 둔다. 서버는 한 클라이언트만 실행한다. 경로: MCP stdio → `ws://127.0.0.1:8081` → CEP `evalScript`.
+## 3. 일러 실행 검증 — 2026 CEP MCP 직접 연결 우선
+- **Illustrator 2026 + `illustrator-cep` MCP를 직접 호출한다. osascript·`tools/illu-probe.sh`·AppleScript 기반 MCP로 검증하지 않는다.** 연결이 안 되면 상태를 점검하고 보고하며 osascript로 자동 우회하지 않는다.
+- 2026에서 `창 → 확장 프로그램 → MCP Control`을 열어 둔다. 패널은 자동 연결이며 Connect 버튼은 없다. 이 Mac의 경로: MCP HTTP `http://127.0.0.1:8083/mcp` → `ws://127.0.0.1:8081` → CEP `evalScript`. `~/agent/illustrator-cli/CEP 서버.command`로 공유 서버 한 개만 실행한다. Codex·CLI가 같은 서버를 공유하며 별도 stdio 서버를 동시에 띄우지 않는다. 다른 기기는 등록 구성을 먼저 확인한다.
+- CLI-Anything은 명령줄·반복 작업용 보조 도구다. CEP MCP와 실행 경로가 같아 CLI 자체가 프리징을 해결하지 않는다. 공식 MCP는 이 Mac에서 Beta 연결이며 2026 대체용으로 미검증이다.
 - 연결 점검: `illustrator_connection_status`(`probe:true`). 문서 조회: `illustrator_document` list / `illustrator_get_document`. JSX 실행: `illustrator_execute_script`. PNG: `illustrator_export_document`(150~200%) 후 실제 이미지 확인.
+- 일반 JSX는 `expected_document_token` 지정, `auto_assign_ids:"off"`, `return_preview:false`로 짧은 IIFE를 실행하고 문자열/작은 JSON만 반환한다. 조회 JSX는 `read_only:true`. 자동 ID가 필요한 고수준 개체 편집에는 off를 일괄 적용하지 않는다. **실행 → 결과 조회 → 별도 PNG 내보내기**로 나눈다.
 - 테스트 문서 하나를 재사용하고, 호출은 한 경우씩 목표 5초 이내로 나눈다. 사용자 문서와 저장 옵션은 건드리지 않는다. 타임아웃 시 재전송하지 말고 `illustrator_job_status`로 미완료 작업을 확인한다. 액션(`app.doScript`)과 모달은 자동 검증하지 않고 사용자 확인을 받는다.
 - 대화상자 스크립트는 복사본에서 `win.show()`를 미리보기/확인 훅 호출로 바꿔 CEP로 실행한다. 필요한 선택을 만들고 탭마다 별도 확인한다. 알림과 설정 저장은 복사본에서 막는다. 레이아웃은 `onShow`에서 기록 후 `close(2)`로 닫는다.
 - 설치: `~/agent/illustrator-mcp-cep` (jinkeda/Illustrator_MCP, 서버 3.0.0 / 패널 1.0.2). 기록: `~/agent/illustrator-mcp-install/cep-test/README.md`.
 - 2026-10-13 실측: 문서 생성 1.42초, 조회 0.09초, 짧은 JSX 0.07초, PNG 1.93초. PNG·후속 조회 정상, 프리징 없음, AIHangMonitor 대기. 긴 스크립트의 안정성은 미검증.
+
+- 2026-10-14 비교: 직접 MCP 조회·짧은 읽기 JSX 약 0.16~0.21초(각 3회), PNG 약 0.20초. CLI는 프로그램 시작 포함 약 0.59~0.61초. 위 옵션으로 삼각형·글자 생성·JSON 조회·PNG를 나눠 실행해 성공했고 마지막 연결 정상·미완료 작업 없음. 앞선 삼각형+글자 JSX 타임아웃 원인은 미확정이며 모든 JSX/장시간 안정성을 보장하지 않는다. 기록: `~/agent/illustrator-cli/agent-harness/evidence/connection-comparison.md`.
 
 ## 4. 지금까지 한 것 (물리학Ⅰ 기출 조사 목록)
 | 순위 | 항목 | 상태 |

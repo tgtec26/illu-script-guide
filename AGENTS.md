@@ -184,18 +184,20 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 
 ## Verifying in Illustrator Without Freezing It (required)
 
-2026-10-13 확정: 이 프로젝트는 **Illustrator 2026의 CEP MCP를 우선 사용**한다. 이 Mac Studio의 2027 Beta는 재설치·환경설정 초기화·프로필 복사·새 macOS 계정에서도 새 문서 생성이 실패하므로 기본 검증 대상에서 제외한다.
+2026-10-14 확정: 이 프로젝트는 **Illustrator 2026의 CEP MCP 직접 연결을 우선 사용**한다. CLI-Anything은 같은 CEP 서버를 이용하는 명령줄·반복 작업용 보조 도구이며, 프리징을 해결하는 별도 실행 엔진이 아니다. 이 Mac Studio의 2027 Beta는 재설치·환경설정 초기화·프로필 복사·새 macOS 계정에서도 새 문서 생성이 실패하므로 기본 검증 대상에서 제외한다.
 
 - **osascript로 검증하지 않는다.** `tools/illu-probe.sh`, `illustrator-run` 등 내부에서 AppleScript/`do javascript`를 사용하는 MCP도 실행·조회·PNG 검증에 사용하지 않는다. CEP 연결 실패 시 이 경로로 자동 대체하지 않고 연결 상태를 확인한 뒤 제한을 보고한다.
 - MCP 등록 이름은 `illustrator-cep`, 소스는 https://github.com/jinkeda/Illustrator_MCP 이다. 설치 위치는 `~/agent/illustrator-mcp-cep`, 패널은 `~/Library/Application Support/Adobe/CEP/extensions/com.illustrator.mcp.panel`이다. 2026 번들 ID는 `com.adobe.illustrator`.
-- Codex 재시작 후 등록된 MCP를 사용하고, Illustrator의 `창 → 확장 프로그램 → MCP Control` 패널을 열어 둔다. 연결은 MCP stdio → `ws://127.0.0.1:8081` → CEP `evalScript`이며 osascript를 거치지 않는다. 서버는 한 클라이언트만 실행한다(임시 테스트 클라이언트와 Codex 서버를 동시에 띄우지 않는다).
+- 등록된 `illustrator-cep` MCP를 직접 호출하고 Illustrator의 `창 → 확장 프로그램 → MCP Control` 패널을 열어 둔다. 패널은 **자동 연결**되며 Connect 버튼을 요구하지 않는다. 이 Mac의 현재 경로는 MCP HTTP `http://127.0.0.1:8083/mcp` → `ws://127.0.0.1:8081` → CEP `evalScript`다. 공유 서버는 `~/agent/illustrator-cli/CEP 서버.command`로 시작한다. Codex와 CLI는 이 서버를 공유하며 8081을 사용하는 별도 stdio 서버·임시 클라이언트를 동시에 띄우지 않는다. 다른 기기는 등록된 연결 구성을 먼저 확인한다.
 - 먼저 `illustrator_connection_status`에 `probe:true`를 주어 2026 버전·패널 응답·대기 작업을 확인한다. 문서 조회는 `illustrator_document`(list)/`illustrator_get_document`, JSX는 `illustrator_execute_script`, PNG는 `illustrator_export_document`를 쓴다. 실행과 결과 조회를 별도 호출로 나눈다.
+- 일반 JSX 검증은 `expected_document_token`으로 테스트 문서를 지정하고 `auto_assign_ids:"off"`, `return_preview:false`를 명시한다. 상태만 읽는 JSX는 `read_only:true`로 선언한다. 자동 ID가 필요한 고수준 개체 편집에는 `off`를 일괄 적용하지 않는다. 코드는 짧은 IIFE로 감싸고 반환값은 문자열이나 작은 JSON으로 제한한다. **짧은 JSX 실행 → 결과 조회 → 별도 PNG 내보내기** 순서로 검증한다.
 - 한 번에 한 경우만 짧게 실행한다(목표 5초 이내). 테스트 문서 하나를 재사용하고 사용자 문서는 수정·종료하지 않는다. PNG는 150~200%로 내보내 실제 이미지를 확인한다. 경고창은 막고 알림은 수집한다.
 - 타임아웃은 실행 취소가 아니다. 응답이 없으면 후속 요청이나 같은 변경을 다시 보내지 말고 `illustrator_job_status`와 연결 상태로 미완료 작업을 확인한다. CPU가 계속 높으면 `sample`로 원인을 확인한다. 재시작이 필요하고 사용자 문서가 열려 있으면 먼저 묻는다.
 - CEP도 Illustrator 내부에서 JSX를 실행하므로 긴 작업·액션·모달의 안정성을 보장하지 않는다. **`app.doScript` 액션 체인은 자동 검증하지 않고 사용자가 직접 확인**한다. ScriptUI 모달을 자동 호출해 대기하지 않는다. 레이아웃 검증은 복사본의 `onShow`에서 컨트롤 위치를 기록한 뒤 `close(2)`로 닫는다.
 - 대화상자 결과 검증은 원본 대신 복사본에서 `win.show()`를 미리보기/확인 훅 실행으로 바꿔 CEP로 실행한다. 탭별로 선택을 준비하고 따로 확인한다. `setStringPreference`는 복사본에서 막아 사용자 옵션을 덮지 않는다. 전역 변수는 항상 초기화하거나 IIFE 안에 둔다.
 - 과거 osascript 검증은 `AIHangMonitor`가 CPU를 계속 쓰는 프리징을 일으켰다. 2026-10-13 CEP 검증(2026 30.8.2, 서버 3.0.0/패널 1.0.2): 문서 생성 1.42초, 조회 0.09초, 짧은 JSX 0.07초, PNG 1.93초. PNG와 실행 후 재조회 정상, 감시 스레드는 대기 상태였다. 장시간 작업은 아직 미검증.
 - 검증 기록: `~/agent/illustrator-mcp-install/cep-test/README.md`, PNG: 같은 폴더의 `result.png`. 설치기는 미서명 CEP 확장 로딩을 위해 CEP 10/11/12의 `PlayerDebugMode`를 1로 설정했다.
+- 2026-10-14 비교: 직접 MCP 조회·짧은 읽기 JSX 각 3회 약 0.16~0.21초, PNG 약 0.20초. CLI는 같은 호출에 프로그램 시작 포함 약 0.59~0.61초였다. 위 옵션으로 삼각형 생성·글자 생성·JSON 조회·PNG를 분리 실행해 정상 응답과 마지막 미완료 작업 없음이 확인됐다. 앞선 삼각형+글자 JSX는 타임아웃이 재현됐으며 원인은 미확정이다. 자동 ID/미리보기가 원인이라고 단정하거나 장시간·모든 JSX의 안정성을 보장하지 않는다. 비교 기록: `~/agent/illustrator-cli/agent-harness/evidence/connection-comparison.md`.
 - 다른 기기에서도 먼저 CEP 연결 가능 여부를 확인한다. 사용할 수 없으면 사용자에게 직접 실행·PNG 확인을 부탁한다.
 
 ## Escalation
