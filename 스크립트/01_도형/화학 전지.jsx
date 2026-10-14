@@ -392,6 +392,7 @@ try {
                 o[ctl.key] = String(input.text).replace(/\|/g, "");
                 redraw();
             };
+            input.onChanging = input.onChange;   // 치는 대로 미리보기
         }
 
         function addCheck(row, ctl) {

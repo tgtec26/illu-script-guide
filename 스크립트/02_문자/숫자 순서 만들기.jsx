@@ -373,6 +373,8 @@ function main() {
   }
 
   win.center();
+  try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (tabError) {}
+  if (typeof bindTabOrder === "function") bindTabOrder(win);
   win.show();
 }
 

@@ -5,10 +5,15 @@
 // 사용: 창을 다 만든 뒤 win.show() 전에 bindTabOrder(win). 각 스크립트는 이 파일을
 // $.evalFile로 읽고 typeof로 확인하므로, 파일이 없어도 스크립트는 그대로 동작한다.
 function bindTabOrder(win) {
+    if (win.__dialogInputsBound) return;
+    win.__dialogInputsBound = true;
+    var confirmButtons = [];
+    collectDialogConfirmButtons(win, confirmButtons);
     compactDialog(win);
     stretchRowsOnShow(win);
     var inputs = [];
     collectEditTexts(win, inputs);
+    bindDeferredDialogInputs(win, inputs, confirmButtons);
     for (var k = 0; k < inputs.length; k++) {
         inputs[k].addEventListener("keydown", makeTabOrderHandler(win, inputs, k));
     }
@@ -26,6 +31,11 @@ function collectEditTexts(container, inputs) {
 
 function makeTabOrderHandler(win, inputs, index) {
     return function(event) {
+        if (event.isComposing || event.keyCode === 229) return;
+        if (event.keyName === "Enter" || event.keyName === "Return") {
+            // IME 확정·여러 줄 줄바꿈을 가로채지 않는다. 기본 실행 버튼은 별도로 없앤다.
+            return;
+        }
         if (event.keyName !== "Tab") return;
         var step = event.shiftKey ? -1 : 1;
         var count = inputs.length;
@@ -36,6 +46,116 @@ function makeTabOrderHandler(win, inputs, index) {
             try { event.preventDefault(); } catch (e) {}
             return;
         }
+    };
+}
+
+// 문구 덮어쓰기를 적용하기 전에 완료 버튼을 식별한다. 취소·닫기·R은 확정 버튼이 아니다.
+function collectDialogConfirmButtons(container, buttons) {
+    var children = container.children;
+    if (!children) return;
+    for (var i = 0; i < children.length; i++) {
+        var child = children[i];
+        if (child.type === "button" &&
+            ((child.properties && child.properties.name === "ok") ||
+            /^(확인|완료|완료하기|적용|실행|만들기|그리기|OK)$/.test(child.text))) buttons.push(child);
+        else collectDialogConfirmButtons(child, buttons);
+    }
+}
+
+// 입력창의 기존 onChanging/onChange는 그대로 불러 치는 대로 미리보기한다(2026-10-14). 반영한 글은 확정값으로 기억한다.
+// 확인 때는 아직 반영되지 않은 입력(onChange만 있어 포커스를 옮기기 전인 숫자 칸 등)을 기존 onChange 검증·반영 경로로 한 번 더 반영한다.
+// 다른 옵션은 확정된 입력으로 미리보기하고, 아직 반영되지 않은 원문은 그 뒤에 되돌려 놓는다.
+function bindDeferredDialogInputs(win, inputs, confirmButtons) {
+    if (!inputs.length || !confirmButtons.length) return;
+    try { win.defaultElement = null; } catch (defaultError) {}
+    var state = {applying: false, confirming: false}, fields = [];
+    for (var i = 0; i < inputs.length; i++) {
+        var input = inputs[i];
+        var field = {input: input, text: String(input.text), touched: false,
+            change: input.onChange, changing: input.onChanging};
+        fields.push(field);
+        input.onChange = makeDeferredInputHandler(state, field, field.change || field.changing);
+        input.onChanging = makeDeferredInputHandler(state, field, field.changing);
+    }
+    function flush() {
+        // 한 필드의 검증이 다른 입력창을 정규화해도 입력 중인 원문을 잃지 않도록 먼저 읽는다.
+        var values = [], dirty = [], j;
+        for (j = 0; j < fields.length; j++) {
+            values[j] = String(fields[j].input.text);
+            dirty[j] = values[j] !== fields[j].text && isTabTarget(win, fields[j].input);
+        }
+        state.applying = true;
+        try {
+            for (j = 0; j < fields.length; j++) {
+                if (!dirty[j]) continue;
+                fields[j].input.text = values[j];
+                fields[j].input.onChange();
+            }
+            for (j = 0; j < fields.length; j++) fields[j].text = String(fields[j].input.text);
+        } finally { state.applying = false; }
+    }
+    function wrapControl(handler, confirm) {
+        return function() {
+            if (state.applying) return handler ? handler.apply(this, arguments) : undefined;
+            if (confirm) {
+                if (state.confirming) return;
+                state.confirming = true;
+                try {
+                    flush();
+                    state.applying = true;
+                    return handler ? handler.apply(this, arguments) : win.close(1);
+                } finally { state.applying = false; state.confirming = false; }
+            }
+            var pending = [], j;
+            for (j = 0; j < fields.length; j++) {
+                pending[j] = String(fields[j].input.text);
+                fields[j].touched = false;
+                fields[j].input.text = fields[j].text;
+            }
+            state.applying = true;
+            try { return handler.apply(this, arguments); }
+            finally {
+                for (j = 0; j < fields.length; j++) {
+                    var current = String(fields[j].input.text);
+                    if (current !== fields[j].text || fields[j].touched) fields[j].text = current;
+                    else fields[j].input.text = pending[j];
+                }
+                state.applying = false;
+            }
+        };
+    }
+    function walk(container) {
+        var children = container.children;
+        if (!children) return;
+        for (var j = 0; j < children.length; j++) {
+            var child = children[j], confirm = false;
+            for (var k = 0; k < confirmButtons.length; k++) if (child === confirmButtons[k]) confirm = true;
+            if (child.type !== "edittext") {
+                if (confirm || child.onClick) child.onClick = wrapControl(child.onClick, confirm);
+                if (child.onChange) child.onChange = wrapControl(child.onChange, false);
+                if (child.onChanging) child.onChanging = wrapControl(child.onChanging, false);
+            }
+            walk(child);
+        }
+    }
+    walk(win);
+    var show = win.onShow;
+    win.onShow = function() {
+        if (show) show.apply(this, arguments);
+        for (var j = 0; j < fields.length; j++) fields[j].text = String(fields[j].input.text);
+    };
+}
+
+function makeDeferredInputHandler(state, field, handler) {
+    return function() {
+        if (state.applying) {
+            field.touched = true;
+            return handler ? handler.apply(this, arguments) : undefined;
+        }
+        if (!handler) return;
+        var result = handler.apply(this, arguments);
+        field.text = String(field.input.text);
+        return result;
     };
 }
 
