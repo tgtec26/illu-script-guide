@@ -15,7 +15,7 @@ try {
     // "(가)", "(나)"처럼 괄호 안에 한글 한 글자인 항목 기호는 바탕체 10pt (텍스트 삽입.jsx와 같은 규칙)
     var labelFontName = "Batang";
     var labelFontSize = 10;
-    // 원문자·로마 숫자도 텍스트 삽입.jsx와 같은 서체·크기로: ㉠ ⓐ는 바탕체 9pt, ①은 GSMediumB1 8pt(영문과 같음),
+    // 원문자·로마 숫자도 텍스트 삽입.jsx와 같은 서체·크기로: ㉠ ⓐ ①은 바탕체 9pt (①은 GSMediumB1에 글자가 없다),
     // Ⅰ Ⅱ는 KoPubWorld바탕체 Pro 8pt (이름이 설치마다 달라 후보 이름으로 찾고, 없으면 서체 정보로 찾고, 그래도 없으면 바탕체)
     var circleFontSize = 9;
     var romanFontSize = 8;
@@ -25,10 +25,10 @@ try {
         "KoPubWorldBatangPro-Regular", "KoPubWorldBatangPro-Medium", "KoPubWorldBatangMedium"
     ];
 
-    // 글자 종류: "circle" 동그라미 한글·영문(㉠ ⓐ Ⓐ), "roman" 로마 숫자(Ⅰ ⅰ), 그 밖은 null
-    // 동그라미 숫자(①)는 영문·숫자와 같은 규칙(GSMediumB1 8pt)이라 따로 두지 않는다
+    // 글자 종류: "circle" 원문자(㉠ ⓐ Ⓐ ① ⓪), "roman" 로마 숫자(Ⅰ ⅰ), 그 밖은 null
     function symbolKind(code) {
-        if ((code >= 0x3260 && code <= 0x327F) || (code >= 0x24B6 && code <= 0x24E9)) return "circle";
+        if ((code >= 0x3260 && code <= 0x327F) || (code >= 0x24B6 && code <= 0x24E9) ||
+            (code >= 0x2460 && code <= 0x2473) || code === 0x24EA) return "circle";
         if (code >= 0x2160 && code <= 0x217F) return "roman";
         return null;
     }

@@ -55,7 +55,7 @@ try {
         {contents: ["㉠", "㉡", "㉢", "㉣", "㉤", "㉥"], fontSize: 9, fontNames: ["Batang"]},
         {contents: ["ⓐ", "ⓑ", "ⓒ", "ⓓ", "ⓔ", "ⓕ"], fontSize: 9, fontNames: ["Batang"]},
         {contents: ["1", "2", "3", "4", "5", "6"], fontSize: 8, fontNames: ["GSMediumB1"]},
-        {contents: ["①", "②", "③", "④", "⑤", "⑥"], fontSize: 8, fontNames: ["GSMediumB1"]},
+        {contents: ["①", "②", "③", "④", "⑤", "⑥"], fontSize: 9, fontNames: ["Batang"]},   // GSMediumB1에는 ①이 없어 일러가 다른 명조로 바꾼다
         {prefix: "t", fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
         {prefix: "d", fontSize: 8, fontNames: ["GSMediItaC1"], applySubscript: true},
         {contents: [
