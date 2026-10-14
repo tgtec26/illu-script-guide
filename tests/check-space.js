@@ -76,7 +76,31 @@ assert.deepStrictEqual(g.project([3, 0, 4]), [3, 4]);
 
 assert.ok(source.includes('var PREF_KEY = "HighGeometrySpace/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
-assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");// 선 두께 역할: 엔진의 상수·LINE_DEFAULTS·LINE_KEYS와 저장 함수를 잘라 가짜 app.preferences로 돌린다
+function lineWidthStore(constNames, raw) {
+  const decl = (name) => { const at = source.indexOf(`var ${name} = `); assert.ok(at >= 0, name); return source.slice(at, source.indexOf("\n", at)); };
+  const writes = [];
+  const app = { preferences: { getStringPreference: () => raw, setStringPreference: (key, value) => writes.push(value) } };
+  const current = new Function("app", ['var PREF_KEY = "T";'].concat(constNames.map(decl), [decl("LINE_DEFAULTS"), decl("LINE_KEYS")],
+    ["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction), ["loadLineWidths(); saveLineWidths(); return currentLineWidth;"]).join("\n"))(app);
+  return { current, saved: writes[0] };
+}
+function paintWidths(constText, kinds, flat) {
+  const made = [];
+  const previewGroup = { pathItems: { add() { const p = { setEntirePath(a) { this.pathPoints = a.map(() => ({})); }, zOrder() {} }; made.push(p); return p; } } };
+  const paint = new Function("previewGroup", constText + "var GRID_K=30,GUIDE_DASH=[2,1.5],MM_TO_PT=1;var StrokeCap={BUTTENDCAP:1},StrokeJoin={ROUNDENDJOIN:1,MITERENDJOIN:2,BEVELENDJOIN:3},ZOrderMethod={SENDTOBACK:1};function makeGray(k){return k;}" + extractFunction("addPath") + ";return addPath;")(previewGroup);
+  const pts = flat ? [[0, 0], [1, 0]] : [{ anchor: [0, 0], left: [0, 0], right: [0, 0] }, { anchor: [1, 0], left: [1, 0], right: [1, 0] }];
+  for (const kind of kinds) paint({ kind, points: pts });
+  return made.map((p) => p.strokeWidth);
+}
+const lineWidthLabels = () => source.split('addValueRow(lineWidthPanel, "').slice(1).map((s) => s.slice(0, s.indexOf('"')));
+{
+  const consts = ["PLANE_PT", "MAIN_PT", "GUIDE_PT", "MARK_PT"];
+  assert.strictEqual(lineWidthStore(consts, "").saved, "v2|0.4|0.8|0.3|||0.3|||");
+  assert.strictEqual(lineWidthStore(consts, "v1|1|1.2|0.5").current("mark"), 0.3, "표시는 보조선과 따로");
+  assert.deepStrictEqual(lineWidthLabels(), ["축", "그래프", "보조선", "표시"]);
+  assert.deepStrictEqual(paintWidths("var MAIN_PT=0.8,PLANE_PT=0.41,GUIDE_PT=0.31,MARK_PT=0.33;", ["main", "plane", "guide", "mark"], true), [0.8, 0.41, 0.31, 0.33]);
+}
 console.log("space checks passed");
 
 const tri=build({mode:1}).lines.filter(l=>l.closed&&l.kind==='main');

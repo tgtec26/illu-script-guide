@@ -97,4 +97,45 @@ assert.ok(/drawing\.lines\[i\]\.tick \? TICK_PT : AXIS_PT/.test(source), "ticks 
 assert.ok(!/\beval\(/.test(source), "no eval");
 // ExtendScript는 /=로 시작하는 정규식을 나누기-대입으로 읽어 스크립트 전체가 문법 오류가 난다
 assert.ok(!/[(,=]\s*\/=/.test(source), "regex literal must not start with =");
+// 선 두께: "/lines"는 v2 + LINE_KEYS 9칸(10필드). v1(축·그래프·보조선)도 읽고, 필드 수가 다르면 무시한다
+{
+  const store = {};
+  const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const lineKeys = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
+  assert.ok(source.includes('var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];'), "LINE_KEYS order");
+  assert.ok(source.indexOf("var LINE_KEYS") < source.indexOf("loadLineWidths();"), "LINE_KEYS must exist before loadLineWidths runs");
+  const body = `var PREF_KEY = "T";\n${source.match(/var [A-Z_]+_PT = [\d.]+;/g).join("\n")}\n` +
+    `${source.match(/var LINE_KEYS = [^;]+;/)[0]}\n${source.match(/var LINE_DEFAULTS = [^;]+;/)[0]}\n` +
+    `${["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n")}\n` +
+    "return { LINE_DEFAULTS, setLineWidth, currentLineWidth, loadLineWidths, saveLineWidths };";
+  const make = () => new Function("app", body)(app);
+  const lw = make();
+  const own = Object.keys(lw.LINE_DEFAULTS);
+  assert.deepStrictEqual(own.slice().sort(), ["axis", "tick", "graph"].slice().sort(), "LINE_DEFAULTS groups");
+  const values = [0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9];
+  for (const key of own) assert.strictEqual(lw.currentLineWidth(key), lw.LINE_DEFAULTS[key], `${key} default`);
+  for (const key of own) lw.setLineWidth(key, values[lineKeys.indexOf(key)]);
+  for (const key of own) assert.strictEqual(lw.currentLineWidth(key), values[lineKeys.indexOf(key)], `${key} has its own width`);
+  lw.saveLineWidths();
+  const saved = store["T/lines"].split("|");
+  assert.strictEqual(saved.length, 10);
+  assert.strictEqual(saved[0], "v2");
+  lineKeys.forEach((key, i) => assert.strictEqual(saved[i + 1], own.includes(key) ? String(values[i]) : "", `saved ${key}`));
+  const again = make();
+  again.loadLineWidths();
+  for (const key of own) assert.strictEqual(again.currentLineWidth(key), values[lineKeys.indexOf(key)], `reload ${key}`);
+  store["T/lines"] = "v1|1.2|1.4|5";
+  const old = make();
+  old.loadLineWidths();
+  for (const key of own) assert.strictEqual(old.currentLineWidth(key), { axis: 1.2, graph: 1.4, guide: 2 }[key] || old.LINE_DEFAULTS[key], `v1 ${key}`);
+  // 2026-10-14에 잠시 쓴 5칸 v2(축·그래프·보조선·눈금)도 읽는다
+  store["T/lines"] = "v2|1.2|1.4|1.6|1.8";
+  const interim = make();
+  interim.loadLineWidths();
+  for (const key of own) assert.strictEqual(interim.currentLineWidth(key), { axis: 1.2, graph: 1.4, guide: 1.6, tick: 1.8 }[key] || interim.LINE_DEFAULTS[key], `5-field v2: ${key}`);
+  store["T/lines"] = "v2|1.2|1.4|1.6|1.8|1.9";
+  const odd = make();
+  odd.loadLineWidths();
+  for (const key of own) assert.strictEqual(odd.currentLineWidth(key), odd.LINE_DEFAULTS[key], `6-field v2 is ignored: ${key}`);
+}
 console.log("number line checks passed");

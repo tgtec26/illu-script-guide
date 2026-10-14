@@ -66,6 +66,13 @@ assert.strictEqual(g.trigFormula(Object.assign({}, base, { b: 3, c: -0.5 })).tex
   near(arrows[0].tip[0], -3 * Math.PI / 4 * 10, "first peak inside the range", 1e-9);
   near(arrows[1].tip[0] - arrows[0].tip[0], Math.PI * 10, "one period apart");
   assert.ok(d.texts.some((t) => t.text === "π" && t.dir[1] === 1), "period label");
+  // 주기 치수선(화살촉 사이 실선)은 표시(mark), 눈금은 tick
+  const marks = d.lines.filter((l) => l.kind === "mark");
+  assert.strictEqual(marks.length, 1, "period dimension line is a mark");
+  assert.strictEqual(marks[0].points[0].anchor[1], marks[0].points[1].anchor[1], "dimension line is horizontal");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "thin").length, 0);
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 2, "ticks are not axis lines");
+  assert.ok(d.lines.filter((l) => l.kind === "tick").length > 0);
   assert.strictEqual(d.lines.filter((l) => l.kind === "guide" && l.points[0].anchor[1] === l.points[1].anchor[1]).length, 2, "max/min lines");
   assert.ok(d.texts.some((t) => t.text === "3π/2"), "π/2 ticks");
   assert.ok(d.texts.some((t) => t.text === "y=2sin 2x"));
@@ -176,6 +183,50 @@ assert.ok(sinWith({ second: { kind: 0, a: 1, b: 1, c: 0, d: 0 } }).notes.include
   const d = sinWith({ kLine: true, k: 3 });
   assert.ok(d.texts.some((t) => t.text === "3" && t.dir[0] === -1), "y range covers k");
 }
+
+// 격자는 grid (보조선과 따로)
+assert.ok(build({ grid: true }).lines.filter((l) => l.kind === "grid").length > 0);
+assert.ok(source.includes('addValueRow(lineWidthPanel, "눈금", "pt", currentLineWidth("tick")') && source.includes('addValueRow(lineWidthPanel, "모눈", "pt", currentLineWidth("grid")') &&
+  source.includes('addValueRow(lineWidthPanel, "표시", "pt", currentLineWidth("mark")'));
+assert.ok(source.includes('(line.kind === "tick" ? TICK_PT : (line.kind === "grid" ? GRID_PT : (line.kind === "mark" ? MARK_PT : GUIDE_PT)))'), "tick, grid, mark have their own widths");
+assert.ok(source.includes('circle.strokeWidth = OPEN_DOT_PT;') && source.includes('line.kind === "solution" ? SOLUTION_PT'), "solution segment and open dot stay fixed");
+// 선 두께 저장: v2 + LINE_KEYS 9칸(이 탭에 없는 선은 빈칸), v1(축·그래프·보조선)도 읽고, 0.1–2로 자른다
+function checkLineWidths(expectedKeys) {
+  const defaults = source.slice(source.indexOf("var LINE_DEFAULTS = {") + 21, source.indexOf("};", source.indexOf("var LINE_DEFAULTS = {")))
+    .split(",").map((s) => s.trim().split(/:\s*/));
+  assert.deepStrictEqual(defaults.map(([k]) => k), expectedKeys, "LINE_DEFAULTS keys in panel order");
+  const keysStart = source.indexOf("var LINE_KEYS = [");
+  const keysLine = source.slice(keysStart, source.indexOf(";", keysStart) + 1);
+  assert.strictEqual(keysLine, 'var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];');
+  let stored = "";
+  const app = { preferences: { getStringPreference: () => stored, setStringPreference: (key, value) => { stored = value; } } };
+  const lw = new Function("app", `var PREF_KEY = "K"; var ${defaults.map(([, v]) => v + " = 1").join(", ")};\n${keysLine}\n` +
+    `var LINE_DEFAULTS = {${defaults.map(([k, v]) => k + ": " + v).join(", ")}};\n` +
+    ["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n") +
+    "\nreturn { set: setLineWidth, get: currentLineWidth, load: loadLineWidths, save: saveLineWidths };")(app);
+  const allKeys = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
+  expectedKeys.forEach((k, i) => lw.set(k, 0.1 * (i + 2)));
+  lw.save();
+  const parts = stored.split("|");
+  assert.strictEqual(parts.length, 10, "v2 has 10 fields");
+  assert.strictEqual(parts[0], "v2");
+  allKeys.forEach((k, i) => assert.strictEqual(parts[i + 1] === "", !expectedKeys.includes(k), `field ${k}`));
+  expectedKeys.forEach((k) => { assert.ok(Math.abs(lw.get(k) - parseFloat(parts[allKeys.indexOf(k) + 1])) < 1e-9, `saved ${k}`); lw.set(k, 1); });
+  lw.load();
+  expectedKeys.forEach((k, i) => assert.ok(Math.abs(lw.get(k) - 0.1 * (i + 2)) < 1e-9, `v2 restores ${k}`));
+  expectedKeys.forEach((k) => lw.set(k, 1));
+  stored = "v1|0.5|1.5|0.7";
+  lw.load();
+  const v1 = { axis: 0.5, graph: 1.5, guide: 0.7 };
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), k in v1 ? v1[k] : 1, `v1 ${k}`));
+  stored = "v2|9|9|9|9|9|9|9|9";
+  lw.load();
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), k in v1 ? v1[k] : 1, `short v2 ignored (${k})`));
+  stored = "v2|" + allKeys.map(() => "5").join("|");
+  lw.load();
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), 2, `clamped ${k}`));
+}
+checkLineWidths(["axis", "tick", "graph", "guide", "grid", "mark"]);
 
 assert.ok(source.includes('var PREF_KEY = "HighMathTrig/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");

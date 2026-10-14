@@ -1058,7 +1058,7 @@ var SCRIPT_KEY = "HighStatistics";
     // 확률분포 그림: 정규분포 N(m, σ²) 곡선(두 번째 분포를 겹쳐 비교할 수 있다)과 이항분포 B(n, p) 막대(정규분포 근사 곡선).
     // P(a≤X≤b), P(X≥a), P(X≤b) 영역을 칠하고, 확률(표준화한 Z 범위 포함)·평균·분산을 창에 보여 준다.
     // 축 아래 글자는 값(50, 60) 또는 문자(m, a, b, m+σ)로 고른다. 세로축은 두지 않는다(교과서·평가원 그림처럼).
-    // 선 두께: 곡선 0.8pt, 축·막대 테두리 0.4pt, 평균 점선 0.3pt. 선택은 필요 없다.
+    // 선 두께: 곡선 0.8pt, 축·눈금·막대 테두리 0.4pt, 평균 점선 0.3pt. 선택은 필요 없다.
     function makeDistributionEngine() {
         var api = {label: "확률분포", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
@@ -1076,8 +1076,10 @@ var SCRIPT_KEY = "HighStatistics";
             var EQN_FONT_NAME = "HancomEQN";   // GSMediumB1에 없는 기호(σ …)
             var ENG_BASELINE_PT = 0.5;
             var AXIS_PT = 0.4;
+            var TICK_PT = 0.4;
             var CURVE_PT = 0.8;
             var GUIDE_PT = 0.3;
+            var EDGE_PT = 0.4;   // 이항분포 막대 테두리
             var GUIDE_DASH = [2, 1.5];
             var TICK_MM = 1.2;
             var LABEL_GAP_MM = 0.8;
@@ -1119,7 +1121,8 @@ var SCRIPT_KEY = "HighStatistics";
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var defaults = {mean: mean, sigma: sigma, mean2: mean2, sigma2: sigma2, trials: trials, chance: chance, aValue: aValue, bValue: bValue, shadeK: shadeK, widthMm: widthMm, heightMm: heightMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
-            var LINE_DEFAULTS = {axis: AXIS_PT, graph: CURVE_PT, guide: GUIDE_PT};
+            var LINE_DEFAULTS = {axis: AXIS_PT, tick: TICK_PT, graph: CURVE_PT, guide: GUIDE_PT, edge: EDGE_PT};
+            var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
             loadLineWidths();
 
             var previewGroup = null;
@@ -1174,11 +1177,18 @@ var SCRIPT_KEY = "HighStatistics";
 
             var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
             var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            var tickWidthControls = addValueRow(lineWidthPanel, "눈금", "pt", currentLineWidth("tick"), 0.1, 2, 0.1, 1);
             var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
             var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            var edgeWidthControls = addValueRow(lineWidthPanel, "막대 테두리", "pt", currentLineWidth("edge"), 0.1, 2, 0.1, 1);
+            tickWidthControls.input.helpTip = "축 아래 m, m±σ, a, b 눈금";
+            guideWidthControls.input.helpTip = "평균 점선";
+            edgeWidthControls.input.helpTip = "이항분포 막대의 테두리";
             bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+            bindValueRow(tickWidthControls, function(value) { setLineWidth("tick", value); }, LINE_DEFAULTS.tick);
             bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
             bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
+            bindValueRow(edgeWidthControls, function(value) { setLineWidth("edge", value); }, LINE_DEFAULTS.edge);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -1307,12 +1317,12 @@ var SCRIPT_KEY = "HighStatistics";
                 path.stroked = !!fill.stroked;
                 if (fill.stroked) {
                     path.strokeColor = makeGray(100);
-                    path.strokeWidth = AXIS_PT;
+                    path.strokeWidth = EDGE_PT;
                     path.strokeJoin = StrokeJoin.MITERENDJOIN;
                 }
             }
 
-            // line: {points:[{anchor,left,right}], kind:"axis"|"curve"|"guide"}
+            // line: {points:[{anchor,left,right}], kind:"axis"|"tick"|"curve"|"guide"}
             function addPath(line) {
                 var path = previewGroup.pathItems.add();
                 setBezier(path, line.points);
@@ -1320,7 +1330,7 @@ var SCRIPT_KEY = "HighStatistics";
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(100);
-                path.strokeWidth = line.kind === "curve" ? CURVE_PT : (line.kind === "axis" ? AXIS_PT : GUIDE_PT);
+                path.strokeWidth = line.kind === "curve" ? CURVE_PT : (line.kind === "axis" ? AXIS_PT : (line.kind === "tick" ? TICK_PT : GUIDE_PT));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
                 if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
@@ -1576,7 +1586,7 @@ var SCRIPT_KEY = "HighStatistics";
                     for (var j = 0; j < used.length; j++) if (Math.abs(used[j] - x) < 0.5) taken = true;
                     if (taken) continue;
                     used.push(x);
-                    if (!marks[i].tickless) out.lines.push({ points: straight([[x, -tick / 2], [x, tick / 2]]), kind: "axis" });
+                    if (!marks[i].tickless) out.lines.push({ points: straight([[x, -tick / 2], [x, tick / 2]]), kind: "tick" });
                     var label = { text: marks[i].text, at: [x, 0], dir: [0, -1], clear: tick / 2, upright: !isNaN(parseFloat(marks[i].text)) };
                     if (marks[i].sub) label.sub = marks[i].sub;
                     out.texts.push(label);
@@ -1664,35 +1674,42 @@ var SCRIPT_KEY = "HighStatistics";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            // 선 두께(축·눈금·그래프·보조선·막대 테두리): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
             function setLineWidth(group, value) {
                 if (group === "axis") { AXIS_PT = value; }
+                if (group === "tick") { TICK_PT = value; }
                 if (group === "graph") { CURVE_PT = value; }
                 if (group === "guide") { GUIDE_PT = value; }
+                if (group === "edge") { EDGE_PT = value; }
             }
 
             function currentLineWidth(group) {
                 if (group === "axis") return AXIS_PT;
+                if (group === "tick") return TICK_PT;
                 if (group === "graph") return CURVE_PT;
                 if (group === "guide") return GUIDE_PT;
+                if (group === "edge") return EDGE_PT;
                 return 0;
             }
 
+            // v2는 LINE_KEYS 순서 9칸, v1(축·그래프·보조선)도 읽는다
             function loadLineWidths() {
                 var raw = "";
                 try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
                 var p = raw ? raw.split("|") : [];
-                if (p.length !== 4 || p[0] !== "v1") return;
-                var groups = ["axis", "graph", "guide"];
-                for (var i = 0; i < 3; i++) {
+                var groups;
+                if (p.length === 4 && p[0] === "v1") groups = ["axis", "graph", "guide"];
+                else if (p.length === 10 && p[0] === "v2") groups = LINE_KEYS;
+                else return;
+                for (var i = 0; i < groups.length; i++) {
                     var value = parseFloat(p[i + 1]);
                     if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
                 }
             }
 
             function saveLineWidths() {
-                var groups = ["axis", "graph", "guide"], parts = ["v1"];
-                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                var parts = ["v2"];
+                for (var i = 0; i < LINE_KEYS.length; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(LINE_KEYS[i]) ? String(currentLineWidth(LINE_KEYS[i])) : "");
                 try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
             }
 

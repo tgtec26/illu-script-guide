@@ -96,4 +96,55 @@ assert.deepStrictEqual(g.quartiles([8, 1, 4, 2, 6, 5]), { min: 1, max: 8, median
 assert.ok(source.includes('var PREF_KEY = "StatChart/settings";'));
 assert.ok(!/[(,=]\s*\/=/.test(source), "regex literal must not start with = (ExtendScript syntax error)");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+// 선 두께: "/lines"는 v2 + LINE_KEYS 9칸(10필드). v1(축·그래프·보조선)도 읽고, 필드 수가 다르면 무시한다
+{
+  const store = {};
+  const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const lineKeys = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
+  assert.ok(source.includes('var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];'), "LINE_KEYS order");
+  assert.ok(source.indexOf("var LINE_KEYS") < source.indexOf("loadLineWidths();"), "LINE_KEYS must exist before loadLineWidths runs");
+  const body = `var PREF_KEY = "T";\n${source.match(/var [A-Z_]+_PT = [\d.]+;/g).join("\n")}\n` +
+    `${source.match(/var LINE_KEYS = [^;]+;/)[0]}\n${source.match(/var LINE_DEFAULTS = [^;]+;/)[0]}\n` +
+    `${["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n")}\n` +
+    "return { LINE_DEFAULTS, setLineWidth, currentLineWidth, loadLineWidths, saveLineWidths };";
+  const make = () => new Function("app", body)(app);
+  const lw = make();
+  const own = Object.keys(lw.LINE_DEFAULTS);
+  assert.deepStrictEqual(own.slice().sort(), ["axis", "tick", "graph", "edge"].slice().sort(), "LINE_DEFAULTS groups");
+  const values = [0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9];
+  for (const key of own) assert.strictEqual(lw.currentLineWidth(key), lw.LINE_DEFAULTS[key], `${key} default`);
+  for (const key of own) lw.setLineWidth(key, values[lineKeys.indexOf(key)]);
+  for (const key of own) assert.strictEqual(lw.currentLineWidth(key), values[lineKeys.indexOf(key)], `${key} has its own width`);
+  lw.saveLineWidths();
+  const saved = store["T/lines"].split("|");
+  assert.strictEqual(saved.length, 10);
+  assert.strictEqual(saved[0], "v2");
+  lineKeys.forEach((key, i) => assert.strictEqual(saved[i + 1], own.includes(key) ? String(values[i]) : "", `saved ${key}`));
+  const again = make();
+  again.loadLineWidths();
+  for (const key of own) assert.strictEqual(again.currentLineWidth(key), values[lineKeys.indexOf(key)], `reload ${key}`);
+  store["T/lines"] = "v1|1.2|1.4|5";
+  const old = make();
+  old.loadLineWidths();
+  for (const key of own) assert.strictEqual(old.currentLineWidth(key), { axis: 1.2, graph: 1.4, guide: 2 }[key] || old.LINE_DEFAULTS[key], `v1 ${key}`);
+  store["T/lines"] = "v2|1.2|1.4|1.6|1.8";
+  const odd = make();
+  odd.loadLineWidths();
+  for (const key of own) assert.strictEqual(odd.currentLineWidth(key), odd.LINE_DEFAULTS[key], `5-field v2 is ignored: ${key}`);
+}
+// 눈금은 tick, 막대 테두리는 EDGE_PT
+{
+  const axes = (d) => d.lines.filter((l) => !l.main && !l.tick).length;
+  const h = g.buildHistogram(size, 140, 5, [2, 5, 8, 4, 1], true, false, false);
+  assert.strictEqual(h.lines.filter((l) => l.tick).length, 6 + 4, "x ticks 140~165 and y ticks 2~8");
+  assert.strictEqual(axes(h), 2);
+  const b = g.buildBoxPlot(size, [3, 5, 6, 7, 8, 9, 10, 12, 15], 6);
+  assert.strictEqual(b.lines.filter((l) => l.tick).length, 8);
+  assert.strictEqual(axes(b), 1);
+  const s = g.buildScatter(size, [[160, 50], [165, 55], [170, 58], [155, 48], [175, 65]]);
+  assert.strictEqual(s.lines.filter((l) => l.tick).length, 5 + 4);
+  assert.strictEqual(axes(s), 2);
+}
+assert.ok(source.includes("line.main ? MAIN_PT : (line.tick ? TICK_PT : AXIS_PT)"), "ticks drawn with TICK_PT");
+assert.ok(/function addBar\([^)]*\) \{[^}]*strokeWidth = EDGE_PT;/.test(source), "bar outlines drawn with EDGE_PT");
 console.log("stat chart checks passed");

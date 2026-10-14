@@ -118,6 +118,51 @@ assert.strictEqual(build({ perpendicular: true, a: 0, b: 180 }).lines.length, 0)
 
 assert.ok(source.includes('var PREF_KEY = "CircleProps/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
+// 선 두께: "/lines"는 v2 + LINE_KEYS 9칸(10필드). v1(축·그래프·보조선)도 읽고, 필드 수가 다르면 무시한다
+{
+  const store = {};
+  const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const lineKeys = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
+  assert.ok(source.includes('var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];'), "LINE_KEYS order");
+  assert.ok(source.indexOf("var LINE_KEYS") < source.indexOf("loadLineWidths();"), "LINE_KEYS must exist before loadLineWidths runs");
+  const body = `var PREF_KEY = "T";\n${source.match(/var [A-Z_]+_PT = [\d.]+;/g).join("\n")}\n` +
+    `${source.match(/var LINE_KEYS = [^;]+;/)[0]}\n${source.match(/var LINE_DEFAULTS = [^;]+;/)[0]}\n` +
+    `${["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n")}\n` +
+    "return { LINE_DEFAULTS, setLineWidth, currentLineWidth, loadLineWidths, saveLineWidths };";
+  const make = () => new Function("app", body)(app);
+  const lw = make();
+  const own = Object.keys(lw.LINE_DEFAULTS);
+  assert.deepStrictEqual(own.slice().sort(), ["graph", "guide", "mark"].slice().sort(), "LINE_DEFAULTS groups");
+  const values = [0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9];
+  for (const key of own) assert.strictEqual(lw.currentLineWidth(key), lw.LINE_DEFAULTS[key], `${key} default`);
+  for (const key of own) lw.setLineWidth(key, values[lineKeys.indexOf(key)]);
+  for (const key of own) assert.strictEqual(lw.currentLineWidth(key), values[lineKeys.indexOf(key)], `${key} has its own width`);
+  lw.saveLineWidths();
+  const saved = store["T/lines"].split("|");
+  assert.strictEqual(saved.length, 10);
+  assert.strictEqual(saved[0], "v2");
+  lineKeys.forEach((key, i) => assert.strictEqual(saved[i + 1], own.includes(key) ? String(values[i]) : "", `saved ${key}`));
+  const again = make();
+  again.loadLineWidths();
+  for (const key of own) assert.strictEqual(again.currentLineWidth(key), values[lineKeys.indexOf(key)], `reload ${key}`);
+  store["T/lines"] = "v1|1.2|1.4|5";
+  const old = make();
+  old.loadLineWidths();
+  for (const key of own) assert.strictEqual(old.currentLineWidth(key), { axis: 1.2, graph: 1.4, guide: 2 }[key] || old.LINE_DEFAULTS[key], `v1 ${key}`);
+  store["T/lines"] = "v2|1.2|1.4|1.6|1.8";
+  const odd = make();
+  odd.loadLineWidths();
+  for (const key of own) assert.strictEqual(odd.currentLineWidth(key), odd.LINE_DEFAULTS[key], `5-field v2 is ignored: ${key}`);
+}
+// 각 호·직각 표시는 kind "mark"(표시 두께), 수선은 보조선
+{
+  const d = build({ perpendicular: true });
+  assert.deepStrictEqual(d.lines.map((l) => l.kind), ["guide", "mark"]);
+  const e = build({ centralMark: true, inscribed: true, inscribedMark: true });
+  assert.strictEqual(e.lines.filter((l) => l.kind === "mark").length, 2, "central + inscribed arcs");
+}
+assert.ok(source.includes('line.kind === "main" ? MAIN_PT : (line.kind === "mark" ? MARK_PT : GUIDE_PT)'), "marks drawn with MARK_PT");
+assert.ok(source.includes('var normalizeCheck = lineWidthPanel.add("checkbox"'), "원 선 맞춤 sits in the 선 두께 panel");
 console.log("circle props checks passed");
 
 for (const flags of [{chord:true,radii:true},{chord:true,inscribed:true},{tangentChord:true}]) {

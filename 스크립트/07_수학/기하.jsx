@@ -294,7 +294,7 @@ var SCRIPT_KEY = "HighGeometry";
     // 이차곡선: 포물선 y²=4px(x²=4py), 타원 x²/a²+y²/b²=1, 쌍곡선 x²/a²-y²/b²=±1을 좌표평면에 그린다. 중심(꼭짓점)을 (m, n)으로 옮길 수 있다.
     // 초점 F·F′, 꼭짓점, 준선(포물선)·점근선(쌍곡선), 곡선 위의 점 P와 초점까지 선분(포물선은 준선까지 수선 PH), P에서의 접선을 고른다.
     // 계산은 주축이 가로인 표준형에서 하고 세로면 x·y를 바꾼다. 타원은 4점 베지어, 포물선은 정확한 이차 베지어, 쌍곡선은 에르미트 베지어.
-    // 선 두께: 축 0.4pt, 곡선·접선 0.8pt, 초점까지 선분 0.4pt, 준선·점근선·수선 점선 0.3pt. 선택은 필요 없다.
+    // 선 두께: 축·눈금 0.4pt, 곡선·접선 0.8pt, 초점까지 선분 0.4pt, 준선·점근선·수선 점선 0.3pt, 격자 0.3pt. 선택은 필요 없다.
     function makeConicEngine() {
         var api = {label: "이차곡선", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
@@ -312,9 +312,11 @@ var SCRIPT_KEY = "HighGeometry";
             var EQN_FONT_NAME = "HancomEQN";   // GSMediumB1에 없는 기호(′, √ …)
             var ENG_BASELINE_PT = 0.5;
             var AXIS_PT = 0.4;
+            var TICK_PT = 0.4;
             var MAIN_PT = 0.8;
             var THIN_PT = 0.4;
             var GUIDE_PT = 0.3;
+            var GRID_PT = 0.3;
             var GRID_K = 30;
             var GUIDE_DASH = [2, 1.5];
             var TICK_MM = 1.2;
@@ -354,7 +356,8 @@ var SCRIPT_KEY = "HighGeometry";
             var DEFAULTS = {pValue: pValue, aValue: aValue, bValue: bValue, mValue: mValue, nValue: nValue, angle: angle,
                 unitMm: unitMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
-            var LINE_DEFAULTS = {axis: AXIS_PT, graph: MAIN_PT, guide: GUIDE_PT};
+            var LINE_DEFAULTS = {axis: AXIS_PT, tick: TICK_PT, graph: MAIN_PT, guide: GUIDE_PT, grid: GRID_PT, thin: THIN_PT};
+            var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
             loadLineWidths();
 
             var previewGroup = null;
@@ -391,11 +394,20 @@ var SCRIPT_KEY = "HighGeometry";
 
             var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
             var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            var tickWidthControls = addValueRow(lineWidthPanel, "눈금", "pt", currentLineWidth("tick"), 0.1, 2, 0.1, 1);
             var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
             var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            var gridWidthControls = addValueRow(lineWidthPanel, "모눈", "pt", currentLineWidth("grid"), 0.1, 2, 0.1, 1);
+            var thinWidthControls = addValueRow(lineWidthPanel, "초점 선분", "pt", currentLineWidth("thin"), 0.1, 2, 0.1, 1);
+            guideWidthControls.input.helpTip = "준선·점근선 점선, 포물선의 수선 PH";
+            gridWidthControls.input.helpTip = "격자를 켰을 때의 회색 모눈";
+            thinWidthControls.input.helpTip = "곡선 위의 점 P에서 초점 F, F′까지 잇는 실선";
             bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+            bindValueRow(tickWidthControls, function(value) { setLineWidth("tick", value); }, LINE_DEFAULTS.tick);
             bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
             bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
+            bindValueRow(gridWidthControls, function(value) { setLineWidth("grid", value); }, LINE_DEFAULTS.grid);
+            bindValueRow(thinWidthControls, function(value) { setLineWidth("thin", value); }, LINE_DEFAULTS.thin);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -506,7 +518,7 @@ var SCRIPT_KEY = "HighGeometry";
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
-            // line: {points:[{anchor,left,right}], closed, kind:"axis"|"main"|"thin"|"guide"|"grid"}
+            // line: {points:[{anchor,left,right}], closed, kind:"axis"|"tick"|"main"|"thin"|"guide"|"grid"}
             function addPath(line) {
                 var path = previewGroup.pathItems.add();
                 var anchors = [], curved = false;
@@ -526,7 +538,7 @@ var SCRIPT_KEY = "HighGeometry";
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(line.kind === "grid" ? GRID_K : 100);
-                path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "thin" || line.kind === "axis" ? (line.kind === "thin" ? THIN_PT : AXIS_PT) : GUIDE_PT);
+                path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "thin" ? THIN_PT : (line.kind === "axis" ? AXIS_PT : (line.kind === "tick" ? TICK_PT : (line.kind === "grid" ? GRID_PT : GUIDE_PT))));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
                 if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
@@ -712,12 +724,12 @@ var SCRIPT_KEY = "HighGeometry";
                 if (o.numbers) {
                     for (var tx = xMin; tx <= xMax; tx++) {
                         if (tx === 0) continue;
-                        out.lines.push(straight([[tx * u, -o.tick / 2], [tx * u, o.tick / 2]], "axis"));
+                        out.lines.push(straight([[tx * u, -o.tick / 2], [tx * u, o.tick / 2]], "tick"));
                         out.texts.push({ text: String(tx), at: [tx * u, 0], dir: [0, -1], clear: o.tick / 2, upright: true });
                     }
                     for (var ty = yMin; ty <= yMax; ty++) {
                         if (ty === 0) continue;
-                        out.lines.push(straight([[-o.tick / 2, ty * u], [o.tick / 2, ty * u]], "axis"));
+                        out.lines.push(straight([[-o.tick / 2, ty * u], [o.tick / 2, ty * u]], "tick"));
                         out.texts.push({ text: String(ty), at: [0, ty * u], dir: [-1, 0], clear: o.tick / 2, upright: true });
                     }
                 }
@@ -967,35 +979,44 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            // 선 두께(축·눈금·그래프·보조선·모눈·초점 선분): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
             function setLineWidth(group, value) {
-                if (group === "axis") { AXIS_PT = value; THIN_PT = value; }
+                if (group === "axis") { AXIS_PT = value; }
+                if (group === "tick") { TICK_PT = value; }
                 if (group === "graph") { MAIN_PT = value; }
                 if (group === "guide") { GUIDE_PT = value; }
+                if (group === "grid") { GRID_PT = value; }
+                if (group === "thin") { THIN_PT = value; }
             }
 
             function currentLineWidth(group) {
                 if (group === "axis") return AXIS_PT;
+                if (group === "tick") return TICK_PT;
                 if (group === "graph") return MAIN_PT;
                 if (group === "guide") return GUIDE_PT;
+                if (group === "grid") return GRID_PT;
+                if (group === "thin") return THIN_PT;
                 return 0;
             }
 
+            // v2는 LINE_KEYS 순서 9칸, v1(축·그래프·보조선)도 읽는다
             function loadLineWidths() {
                 var raw = "";
                 try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
                 var p = raw ? raw.split("|") : [];
-                if (p.length !== 4 || p[0] !== "v1") return;
-                var groups = ["axis", "graph", "guide"];
-                for (var i = 0; i < 3; i++) {
+                var groups;
+                if (p.length === 4 && p[0] === "v1") groups = ["axis", "graph", "guide"];
+                else if (p.length === 10 && p[0] === "v2") groups = LINE_KEYS;
+                else return;
+                for (var i = 0; i < groups.length; i++) {
                     var value = parseFloat(p[i + 1]);
                     if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
                 }
             }
 
             function saveLineWidths() {
-                var groups = ["axis", "graph", "guide"], parts = ["v1"];
-                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                var parts = ["v2"];
+                for (var i = 0; i < LINE_KEYS.length; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(LINE_KEYS[i]) ? String(currentLineWidth(LINE_KEYS[i])) : "");
                 try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
             }
 
@@ -1137,7 +1158,7 @@ var SCRIPT_KEY = "HighGeometry";
     // 곡선은 중심(꼭짓점)이 원점인 표준형이다: 포물선 y²=4px(x²=4py), 타원 x²/a²+y²/b²=1, 쌍곡선 x²/a²-y²/b²=±1.
     // 곡선을 αx²+βy²+γx+δy+ε=0으로 두고, 점 (x₁, y₁)에서의 접선(극선) αx₁x+βy₁y+γ(x+x₁)/2+δ(y+y₁)/2+ε=0으로 세 경우를 한 식으로 푼다.
     // 기울기 m: y=mx+k를 넣은 이차방정식의 판별식이 0인 k. 밖의 점 A: A의 극선과 곡선이 만나는 두 점이 접점이다(접점을 잇는 선을 고를 수 있다).
-    // 접선의 식은 y=2x±√13처럼 근호·분수로 쓰고 창에도 보여 준다. 선 두께: 축 0.4pt, 곡선·접선 0.8pt, 접점을 잇는 선 0.3pt 점선. 선택은 필요 없다.
+    // 접선의 식은 y=2x±√13처럼 근호·분수로 쓰고 창에도 보여 준다. 선 두께: 축·눈금 0.4pt, 곡선·접선 0.8pt, 접점을 잇는 선 0.3pt 점선, 격자 0.3pt. 선택은 필요 없다.
     function makeConicTangentEngine() {
         var api = {label: "이차곡선 접선", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
@@ -1155,9 +1176,10 @@ var SCRIPT_KEY = "HighGeometry";
             var EQN_FONT_NAME = "HancomEQN";   // GSMediumB1에 없는 기호(′, √ …)
             var ENG_BASELINE_PT = 0.5;
             var AXIS_PT = 0.4;
+            var TICK_PT = 0.4;
             var MAIN_PT = 0.8;
-            var THIN_PT = 0.4;
             var GUIDE_PT = 0.3;
+            var GRID_PT = 0.3;
             var GRID_K = 30;
             var GUIDE_DASH = [2, 1.5];
             var TICK_MM = 1.2;
@@ -1200,7 +1222,8 @@ var SCRIPT_KEY = "HighGeometry";
             var DEFAULTS = {pValue: pValue, aValue: aValue, bValue: bValue, angle: angle, slope: slope, x0Value: x0Value,
                 y0Value: y0Value, unitMm: unitMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
-            var LINE_DEFAULTS = {axis: AXIS_PT, graph: MAIN_PT, guide: GUIDE_PT};
+            var LINE_DEFAULTS = {axis: AXIS_PT, tick: TICK_PT, graph: MAIN_PT, guide: GUIDE_PT, grid: GRID_PT};
+            var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
             loadLineWidths();
 
             var previewGroup = null;
@@ -1245,11 +1268,17 @@ var SCRIPT_KEY = "HighGeometry";
 
             var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
             var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            var tickWidthControls = addValueRow(lineWidthPanel, "눈금", "pt", currentLineWidth("tick"), 0.1, 2, 0.1, 1);
             var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
             var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            var gridWidthControls = addValueRow(lineWidthPanel, "모눈", "pt", currentLineWidth("grid"), 0.1, 2, 0.1, 1);
+            guideWidthControls.input.helpTip = "접점을 잇는 점선 (밖의 점 A의 극선)";
+            gridWidthControls.input.helpTip = "격자를 켰을 때의 회색 모눈";
             bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+            bindValueRow(tickWidthControls, function(value) { setLineWidth("tick", value); }, LINE_DEFAULTS.tick);
             bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
             bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
+            bindValueRow(gridWidthControls, function(value) { setLineWidth("grid", value); }, LINE_DEFAULTS.grid);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -1371,7 +1400,7 @@ var SCRIPT_KEY = "HighGeometry";
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
-            // line: {points:[{anchor,left,right}], closed, kind:"axis"|"main"|"thin"|"guide"|"grid"}
+            // line: {points:[{anchor,left,right}], closed, kind:"axis"|"tick"|"main"|"guide"|"grid"}
             function addPath(line) {
                 var path = previewGroup.pathItems.add();
                 var anchors = [], curved = false;
@@ -1391,7 +1420,7 @@ var SCRIPT_KEY = "HighGeometry";
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(line.kind === "grid" ? GRID_K : 100);
-                path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "thin" || line.kind === "axis" ? (line.kind === "thin" ? THIN_PT : AXIS_PT) : GUIDE_PT);
+                path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "axis" ? AXIS_PT : (line.kind === "tick" ? TICK_PT : (line.kind === "grid" ? GRID_PT : GUIDE_PT)));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
                 if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
@@ -1624,12 +1653,12 @@ var SCRIPT_KEY = "HighGeometry";
                 if (o.numbers) {
                     for (var tx = xMin; tx <= xMax; tx++) {
                         if (tx === 0) continue;
-                        out.lines.push(straight([[tx * u, -o.tick / 2], [tx * u, o.tick / 2]], "axis"));
+                        out.lines.push(straight([[tx * u, -o.tick / 2], [tx * u, o.tick / 2]], "tick"));
                         out.texts.push({ text: String(tx), at: [tx * u, 0], dir: [0, -1], clear: o.tick / 2, upright: true });
                     }
                     for (var ty = yMin; ty <= yMax; ty++) {
                         if (ty === 0) continue;
-                        out.lines.push(straight([[-o.tick / 2, ty * u], [o.tick / 2, ty * u]], "axis"));
+                        out.lines.push(straight([[-o.tick / 2, ty * u], [o.tick / 2, ty * u]], "tick"));
                         out.texts.push({ text: String(ty), at: [0, ty * u], dir: [-1, 0], clear: o.tick / 2, upright: true });
                     }
                 }
@@ -1914,35 +1943,42 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            // 선 두께(축·눈금·그래프·보조선·모눈): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
             function setLineWidth(group, value) {
-                if (group === "axis") { AXIS_PT = value; THIN_PT = value; }
+                if (group === "axis") { AXIS_PT = value; }
+                if (group === "tick") { TICK_PT = value; }
                 if (group === "graph") { MAIN_PT = value; }
                 if (group === "guide") { GUIDE_PT = value; }
+                if (group === "grid") { GRID_PT = value; }
             }
 
             function currentLineWidth(group) {
                 if (group === "axis") return AXIS_PT;
+                if (group === "tick") return TICK_PT;
                 if (group === "graph") return MAIN_PT;
                 if (group === "guide") return GUIDE_PT;
+                if (group === "grid") return GRID_PT;
                 return 0;
             }
 
+            // v2는 LINE_KEYS 순서 9칸, v1(축·그래프·보조선)도 읽는다
             function loadLineWidths() {
                 var raw = "";
                 try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
                 var p = raw ? raw.split("|") : [];
-                if (p.length !== 4 || p[0] !== "v1") return;
-                var groups = ["axis", "graph", "guide"];
-                for (var i = 0; i < 3; i++) {
+                var groups;
+                if (p.length === 4 && p[0] === "v1") groups = ["axis", "graph", "guide"];
+                else if (p.length === 10 && p[0] === "v2") groups = LINE_KEYS;
+                else return;
+                for (var i = 0; i < groups.length; i++) {
                     var value = parseFloat(p[i + 1]);
                     if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
                 }
             }
 
             function saveLineWidths() {
-                var groups = ["axis", "graph", "guide"], parts = ["v1"];
-                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                var parts = ["v2"];
+                for (var i = 0; i < LINE_KEYS.length; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(LINE_KEYS[i]) ? String(currentLineWidth(LINE_KEYS[i])) : "");
                 try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
             }
 
@@ -2090,7 +2126,7 @@ var SCRIPT_KEY = "HighGeometry";
     // ·각 표시(BAC:60° 꼭짓점 A, ABC:R 직각, BAC::2 호 2겹)·같은 길이 눈금(AB:1)·변 길이 글자(AB:5)·점 찍기를 적는다.
     // 좌표는 같은 길이 단위로 쓰고(길이가 3, 4, √13이면 그 수 그대로) 그림 크기는 가장 긴 쪽을 mm로 맞춘다. 숫자는 √·분수·π도 된다.
     // 점 이름 O_1은 O₁처럼 아래첨자가 된다. 점 이름 글자 방향은 u d l r ul ur dl dr로 고칠 수 있다.
-    // 선 두께: 도형 0.8pt(조절 가능), 각 호·직각·눈금 0.3pt, 점선 도형과 같은 굵기. 선택은 필요 없다.
+    // 선 두께: 도형 0.8pt, 점선·치수선 0.3pt(보조선), 각 호·직각·같은 길이 눈금 0.3pt(표시), 좌표축 0.4pt. 모두 "선 두께" 패널에서 조절한다. 선택은 필요 없다.
     function makeGeometryEngine() {
         var api = {label: "도형", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
@@ -2112,6 +2148,7 @@ var SCRIPT_KEY = "HighGeometry";
             var AXIS_PT = 0.4;
             var ARROW = {length: 4, halfWidth: 1.3, notch: 1};
             registerHead(ARROW);
+            var GUIDE_PT = 0.3;
             var MARK_PT = 0.3;
             var MARK_GAP_MM = 0.7;
             var DOT_RADIUS_MM = 0.6;
@@ -2150,7 +2187,8 @@ var SCRIPT_KEY = "HighGeometry";
                 offsetXmm: offsetXmm, offsetYmm: offsetYmm, dimensionRiseMm: dimensionRiseMm};
             applySettings();
             loadDimensionSettings();
-            var LINE_DEFAULTS = {axis: AXIS_PT, guide: MARK_PT};
+            var LINE_DEFAULTS = {axis: AXIS_PT, guide: GUIDE_PT, mark: MARK_PT};
+            var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
             loadLineWidths();
 
             var previewGroup = null;
@@ -2192,11 +2230,15 @@ var SCRIPT_KEY = "HighGeometry";
             messageText.preferredSize = [380, 32];
 
             var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
-            var strokeControls = addValueRow(lineWidthPanel, "도형·변", "pt", strokePt, 0.1, 1.5, 0.1, 1);
             var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            var strokeControls = addValueRow(lineWidthPanel, "도형·변", "pt", strokePt, 0.1, 1.5, 0.1, 1);
             var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            var markWidthControls = addValueRow(lineWidthPanel, "표시", "pt", currentLineWidth("mark"), 0.1, 2, 0.1, 1);
+            guideWidthControls.input.helpTip = "점선 선분, 변 길이의 점선 치수선";
+            markWidthControls.input.helpTip = "각 호, 직각 표시, 같은 길이 눈금";
             bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
             bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
+            bindValueRow(markWidthControls, function(value) { setLineWidth("mark", value); }, LINE_DEFAULTS.mark);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -2318,7 +2360,7 @@ var SCRIPT_KEY = "HighGeometry";
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(100);
-                path.strokeWidth = (line.kind === "mark" || line.kind === "dimension" || line.kind === "dashed") ? MARK_PT : (line.kind === "axis" ? AXIS_PT : strokePt);
+                path.strokeWidth = line.kind === "mark" ? MARK_PT : ((line.kind === "dimension" || line.kind === "dashed") ? GUIDE_PT : (line.kind === "axis" ? AXIS_PT : strokePt));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.BEVELENDJOIN;
                 if (line.kind === "dashed" || line.kind === "dimension") path.strokeDashes = GUIDE_DASH;
@@ -3187,33 +3229,38 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            // 선 두께(축·보조선·표시, 도형·변은 strokePt로 따로): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
             function setLineWidth(group, value) {
                 if (group === "axis") { AXIS_PT = value; }
-                if (group === "guide") { MARK_PT = value; }
+                if (group === "guide") { GUIDE_PT = value; }
+                if (group === "mark") { MARK_PT = value; }
             }
 
             function currentLineWidth(group) {
                 if (group === "axis") return AXIS_PT;
-                if (group === "guide") return MARK_PT;
+                if (group === "guide") return GUIDE_PT;
+                if (group === "mark") return MARK_PT;
                 return 0;
             }
 
+            // v2는 LINE_KEYS 순서 9칸, v1(축·그래프·보조선)도 읽는다
             function loadLineWidths() {
                 var raw = "";
                 try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
                 var p = raw ? raw.split("|") : [];
-                if (p.length !== 4 || p[0] !== "v1") return;
-                var groups = ["axis", "graph", "guide"];
-                for (var i = 0; i < 3; i++) {
+                var groups;
+                if (p.length === 4 && p[0] === "v1") groups = ["axis", "graph", "guide"];
+                else if (p.length === 10 && p[0] === "v2") groups = LINE_KEYS;
+                else return;
+                for (var i = 0; i < groups.length; i++) {
                     var value = parseFloat(p[i + 1]);
                     if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
                 }
             }
 
             function saveLineWidths() {
-                var groups = ["axis", "graph", "guide"], parts = ["v1"];
-                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                var parts = ["v2"];
+                for (var i = 0; i < LINE_KEYS.length; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(LINE_KEYS[i]) ? String(currentLineWidth(LINE_KEYS[i])) : "");
                 try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
             }
 
@@ -3353,7 +3400,7 @@ var SCRIPT_KEY = "HighGeometry";
     // 수능·모의평가의 기둥·뿔·원기둥·원뿔·구 그림을 정사영 시점(방위각·고도)으로 그리고, 보이지 않는 모서리는 점선으로 그린다. 웹 도구 "3D 입체도형"과 같은 그림이다.
     // 기본 도형의 꼭짓점 이름: n각기둥 위 A1..An·아래 B1..Bn, n각뿔 꼭짓점 P·밑면 A1..An, 원기둥 위 중심 O1·아래 중심 O2, 원뿔 꼭짓점 V·밑면 중심 O, 구 중심 O.
     // 좌표계는 밑면이 z=0, 앞이 -y, 위가 +z. "직접 좌표"는 프리셋 없이 점 이름(x,y,z)과 선분 목록만으로 그린다. 프리셋에도 점·선분·점선을 덧붙일 수 있다.
-    // 선 두께: 실선·점선 0.8pt(조절). 선택은 필요 없다.
+    // 선 두께: 모서리(실선) 0.8pt, 보조선(점선: 가려진 모서리·덧붙인 점선) 0.8pt. 둘 다 "선 두께" 패널에서 따로 조절한다. 선택은 필요 없다.
     function makeSolid3DEngine() {
         var api = {label: "3D 입체", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
@@ -3372,8 +3419,7 @@ var SCRIPT_KEY = "HighGeometry";
             var EQN_FONT_NAME = "HancomEQN";   // GSMediumB1에 없는 기호(√, π …)
             var GS_SYMBOLS = "˘°±·";
             var ENG_BASELINE_PT = 0.5;
-            var AXIS_PT = 0.4;
-            var MARK_PT = 0.3;
+            var GUIDE_PT = 0.8;   // 점선 기본값은 모서리 기본값(strokePt)과 같다
             var DOT_RADIUS_MM = 0.6;
             var GUIDE_DASH = [2, 1.5];
             var CURVE_STEPS = 96;
@@ -3408,7 +3454,10 @@ var SCRIPT_KEY = "HighGeometry";
             var DEFAULTS = {sides: sides, azimuthDeg: azimuthDeg, elevationDeg: elevationDeg, sizeMm: sizeMm, fontPt: fontPt,
                 labelGapMm: labelGapMm, strokePt: strokePt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
-            var LINE_DEFAULTS = {axis: AXIS_PT, guide: MARK_PT};
+            var LINE_DEFAULTS = {guide: GUIDE_PT};
+            var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
+            // 보조선을 저장한 적이 없으면(예전 저장값) 가려진 모서리 점선은 지금까지처럼 모서리 두께로 시작한다
+            GUIDE_PT = strokePt;
             loadLineWidths();
 
             var previewGroup = null;
@@ -3444,15 +3493,15 @@ var SCRIPT_KEY = "HighGeometry";
             var sizeControls = addValueRow(viewPanel, "그림 크기", "mm", sizeMm, 20, 140, 1, 0);
             var fontControls = addValueRow(viewPanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var gapControls = addValueRow(viewPanel, "글자 간격", "mm", labelGapMm, 0, 5, 0.1, 1);
-            var strokeControls = addValueRow(viewPanel, "선 두께", "pt", strokePt, 0.1, 1.5, 0.1, 1);
 
             var messageText = win.add("statictext", undefined, " ", {multiline: true});
             messageText.preferredSize = [380, 32];
 
             var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
-            var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            var strokeControls = addValueRow(lineWidthPanel, "모서리", "pt", strokePt, 0.1, 1.5, 0.1, 1);
             var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
-            bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+            strokeControls.input.helpTip = "보이는 모서리, 원기둥·원뿔·구의 윤곽, 덧붙인 실선 선분";
+            guideWidthControls.input.helpTip = "가려진 모서리 점선, 덧붙인 점선 선분";
             bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
 
             var positionPanel = addPanel(win, "위치");
@@ -3555,7 +3604,7 @@ var SCRIPT_KEY = "HighGeometry";
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(100);
-                path.strokeWidth = line.kind === "mark" ? Math.min(MARK_PT, strokePt) : (line.kind === "axis" ? AXIS_PT : strokePt);
+                path.strokeWidth = line.kind === "dashed" ? GUIDE_PT : strokePt;
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
                 if (line.kind === "dashed") path.strokeDashes = GUIDE_DASH;
@@ -4082,33 +4131,31 @@ var SCRIPT_KEY = "HighGeometry";
                 return out;
             }
 
-            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            // 선 두께(보조선, 모서리는 strokePt로 기본 설정에 저장): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
             function setLineWidth(group, value) {
-                if (group === "axis") { AXIS_PT = value; }
-                if (group === "guide") { MARK_PT = value; }
+                if (group === "guide") { GUIDE_PT = value; }
             }
 
             function currentLineWidth(group) {
-                if (group === "axis") return AXIS_PT;
-                if (group === "guide") return MARK_PT;
+                if (group === "guide") return GUIDE_PT;
                 return 0;
             }
 
+            // v2는 LINE_KEYS 순서 9칸. v1의 축·보조선 칸은 그림에 쓰이지 않던 값이라(읽으면 가려진 모서리가 0.3pt로 바뀐다) 읽지 않는다
             function loadLineWidths() {
                 var raw = "";
                 try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
                 var p = raw ? raw.split("|") : [];
-                if (p.length !== 4 || p[0] !== "v1") return;
-                var groups = ["axis", "graph", "guide"];
-                for (var i = 0; i < 3; i++) {
+                if (p.length !== 10 || p[0] !== "v2") return;
+                for (var i = 0; i < LINE_KEYS.length; i++) {
                     var value = parseFloat(p[i + 1]);
-                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(LINE_KEYS[i])) setLineWidth(LINE_KEYS[i], Math.min(2, Math.max(0.1, value)));
                 }
             }
 
             function saveLineWidths() {
-                var groups = ["axis", "graph", "guide"], parts = ["v1"];
-                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                var parts = ["v2"];
+                for (var i = 0; i < LINE_KEYS.length; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(LINE_KEYS[i]) ? String(currentLineWidth(LINE_KEYS[i])) : "");
                 try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
             }
 
@@ -4242,7 +4289,7 @@ var SCRIPT_KEY = "HighGeometry";
     // 평면벡터: a⃗=(a₁, a₂), b⃗=(b₁, b₂)를 원점에서 그리고, a⃗+b⃗(평행사변형·꼬리에 머리), a⃗-b⃗, ka⃗+lb⃗ 중 하나를 더한다.
     // 사잇각 θ(호), a⃗의 b⃗ 위로의 정사영(수선과 직각 표시), 성분(축까지 점선), 점 이름 O·A·B·C, 좌표축·격자를 고른다.
     // 벡터 글자는 글자 위에 작은 화살표를 직접 그린다(글꼴에 결합 화살표가 없어도 된다). 크기·내적·사잇각은 창에 보여 준다.
-    // 선 두께: 벡터 0.8pt, 보조 벡터(ka⃗, lb⃗) 0.4pt, 축 0.4pt, 점선·호·직각 표시 0.3pt. 선택은 필요 없다.
+    // 선 두께: 벡터 0.8pt, 보조 벡터(ka⃗, lb⃗, 정사영) 0.4pt, 축·눈금 0.4pt, 점선 0.3pt, 격자 0.3pt, 호·직각 표시 0.3pt. 선택은 필요 없다.
     function makeVectorEngine() {
         var api = {label: "벡터", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
@@ -4260,9 +4307,12 @@ var SCRIPT_KEY = "HighGeometry";
             var EQN_FONT_NAME = "HancomEQN";   // GSMediumB1에 없는 기호(θ)
             var ENG_BASELINE_PT = 0.5;
             var AXIS_PT = 0.4;
+            var TICK_PT = 0.4;
             var MAIN_PT = 0.8;
             var THIN_PT = 0.4;
             var GUIDE_PT = 0.3;
+            var GRID_PT = 0.3;
+            var MARK_PT = 0.3;
             var GRID_K = 30;
             var GUIDE_DASH = [2, 1.5];
             var TICK_MM = 1.2;
@@ -4300,7 +4350,8 @@ var SCRIPT_KEY = "HighGeometry";
             var DEFAULTS = {a1: a1, a2: a2, b1: b1, b2: b2, kValue: kValue, lValue: lValue, unitMm: unitMm, fontPt: fontPt,
                 offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
-            var LINE_DEFAULTS = {axis: AXIS_PT, graph: MAIN_PT, guide: GUIDE_PT};
+            var LINE_DEFAULTS = {axis: AXIS_PT, tick: TICK_PT, graph: MAIN_PT, guide: GUIDE_PT, grid: GRID_PT, mark: MARK_PT, thin: THIN_PT};
+            var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
             loadLineWidths();
 
             var previewGroup = null;
@@ -4331,11 +4382,23 @@ var SCRIPT_KEY = "HighGeometry";
 
             var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
             var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            var tickWidthControls = addValueRow(lineWidthPanel, "눈금", "pt", currentLineWidth("tick"), 0.1, 2, 0.1, 1);
             var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
             var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            var gridWidthControls = addValueRow(lineWidthPanel, "모눈", "pt", currentLineWidth("grid"), 0.1, 2, 0.1, 1);
+            var markWidthControls = addValueRow(lineWidthPanel, "표시", "pt", currentLineWidth("mark"), 0.1, 2, 0.1, 1);
+            var thinWidthControls = addValueRow(lineWidthPanel, "보조 벡터", "pt", currentLineWidth("thin"), 0.1, 2, 0.1, 1);
+            guideWidthControls.input.helpTip = "평행사변형·성분·정사영 수선 점선, 벡터 글자 위 작은 화살표";
+            gridWidthControls.input.helpTip = "격자를 켰을 때의 회색 모눈";
+            markWidthControls.input.helpTip = "사잇각 θ의 호, 정사영의 직각 표시";
+            thinWidthControls.input.helpTip = "ka, lb 보조 벡터와 정사영 벡터 OH";
             bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+            bindValueRow(tickWidthControls, function(value) { setLineWidth("tick", value); }, LINE_DEFAULTS.tick);
             bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
             bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
+            bindValueRow(gridWidthControls, function(value) { setLineWidth("grid", value); }, LINE_DEFAULTS.grid);
+            bindValueRow(markWidthControls, function(value) { setLineWidth("mark", value); }, LINE_DEFAULTS.mark);
+            bindValueRow(thinWidthControls, function(value) { setLineWidth("thin", value); }, LINE_DEFAULTS.thin);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -4462,7 +4525,7 @@ var SCRIPT_KEY = "HighGeometry";
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(line.kind === "grid" ? GRID_K : 100);
-                path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "thin" ? THIN_PT : (line.kind === "axis" ? AXIS_PT : GUIDE_PT));
+                path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "thin" ? THIN_PT : (line.kind === "axis" ? AXIS_PT : (line.kind === "tick" ? TICK_PT : (line.kind === "grid" ? GRID_PT : (line.kind === "mark" ? MARK_PT : GUIDE_PT)))));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.MITERENDJOIN;
                 if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
@@ -4559,7 +4622,7 @@ var SCRIPT_KEY = "HighGeometry";
                     var fb2 = frames[m].geometricBounds, w = fb2[2] - fb2[0];
                     var y = fb2[1] + fontPt * 0.12, x0 = fb2[0] + w * 0.1, x1 = fb2[2] - w * 0.02 + fontPt * 0.1;
                     var scale = fontPt / 9;
-                    addPath({ points: [plain([x0, y]), plain([x1 - OVER_ARROW.length * scale + OVER_ARROW.notch * scale, y])], kind: "mark" });
+                    addPath({ points: [plain([x0, y]), plain([x1 - OVER_ARROW.length * scale + OVER_ARROW.notch * scale, y])], kind: "over" });   // 보조선 두께(GUIDE_PT)
                     addArrow({ tip: [x1, y], dir: [1, 0], shape: "over", scale: scale });
                 }
                 // 글자 여러 개·화살표로 된 라벨은 한 그룹으로 묶어 겹침 풀기(untangleLabels)가 한 덩어리로 옮기게 한다
@@ -4682,12 +4745,12 @@ var SCRIPT_KEY = "HighGeometry";
                     if (o.numbers) {
                         for (var tx = xMin; tx <= xMax; tx++) {
                             if (tx === 0) continue;
-                            out.lines.push(straight([[tx * u, -o.tick / 2], [tx * u, o.tick / 2]], "axis"));
+                            out.lines.push(straight([[tx * u, -o.tick / 2], [tx * u, o.tick / 2]], "tick"));
                             out.texts.push({ text: String(tx), at: [tx * u, 0], dir: [0, -1], clear: o.tick / 2, upright: true });
                         }
                         for (var ty = yMin; ty <= yMax; ty++) {
                             if (ty === 0) continue;
-                            out.lines.push(straight([[-o.tick / 2, ty * u], [o.tick / 2, ty * u]], "axis"));
+                            out.lines.push(straight([[-o.tick / 2, ty * u], [o.tick / 2, ty * u]], "tick"));
                             out.texts.push({ text: String(ty), at: [0, ty * u], dir: [-1, 0], clear: o.tick / 2, upright: true });
                         }
                     }
@@ -4832,35 +4895,46 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            // 선 두께(축·눈금·그래프·보조선·모눈·표시·보조 벡터): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
             function setLineWidth(group, value) {
-                if (group === "axis") { AXIS_PT = value; THIN_PT = value; }
+                if (group === "axis") { AXIS_PT = value; }
+                if (group === "tick") { TICK_PT = value; }
                 if (group === "graph") { MAIN_PT = value; }
                 if (group === "guide") { GUIDE_PT = value; }
+                if (group === "grid") { GRID_PT = value; }
+                if (group === "mark") { MARK_PT = value; }
+                if (group === "thin") { THIN_PT = value; }
             }
 
             function currentLineWidth(group) {
                 if (group === "axis") return AXIS_PT;
+                if (group === "tick") return TICK_PT;
                 if (group === "graph") return MAIN_PT;
                 if (group === "guide") return GUIDE_PT;
+                if (group === "grid") return GRID_PT;
+                if (group === "mark") return MARK_PT;
+                if (group === "thin") return THIN_PT;
                 return 0;
             }
 
+            // v2는 LINE_KEYS 순서 9칸, v1(축·그래프·보조선)도 읽는다
             function loadLineWidths() {
                 var raw = "";
                 try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
                 var p = raw ? raw.split("|") : [];
-                if (p.length !== 4 || p[0] !== "v1") return;
-                var groups = ["axis", "graph", "guide"];
-                for (var i = 0; i < 3; i++) {
+                var groups;
+                if (p.length === 4 && p[0] === "v1") groups = ["axis", "graph", "guide"];
+                else if (p.length === 10 && p[0] === "v2") groups = LINE_KEYS;
+                else return;
+                for (var i = 0; i < groups.length; i++) {
                     var value = parseFloat(p[i + 1]);
                     if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
                 }
             }
 
             function saveLineWidths() {
-                var groups = ["axis", "graph", "guide"], parts = ["v1"];
-                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                var parts = ["v2"];
+                for (var i = 0; i < LINE_KEYS.length; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(LINE_KEYS[i]) ? String(currentLineWidth(LINE_KEYS[i])) : "");
                 try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
             }
 
@@ -5023,6 +5097,7 @@ var SCRIPT_KEY = "HighGeometry";
             var PLANE_PT = 0.4;
             var MAIN_PT = 0.8;
             var GUIDE_PT = 0.3;
+            var MARK_PT = 0.3;
             var GUIDE_DASH = [2, 1.5];
             var DOT_RADIUS_MM = 0.5;
             var MARK_MM = 2;
@@ -5057,7 +5132,8 @@ var SCRIPT_KEY = "HighGeometry";
             var DEFAULTS = {planeMm: planeMm, thetaDeg: thetaDeg, lengthMm: lengthMm, heightMm: heightMm, distanceMm: distanceMm,
                 directionDeg: directionDeg, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
-            var LINE_DEFAULTS = {axis: PLANE_PT, graph: MAIN_PT, guide: GUIDE_PT};
+            var LINE_DEFAULTS = {axis: PLANE_PT, graph: MAIN_PT, guide: GUIDE_PT, mark: MARK_PT};
+            var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
             loadLineWidths();
 
             var previewGroup = null;
@@ -5093,9 +5169,13 @@ var SCRIPT_KEY = "HighGeometry";
             var axisWidthControls = addValueRow(lineWidthPanel, "축", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
             var graphWidthControls = addValueRow(lineWidthPanel, "그래프", "pt", currentLineWidth("graph"), 0.1, 2, 0.1, 1);
             var guideWidthControls = addValueRow(lineWidthPanel, "보조선", "pt", currentLineWidth("guide"), 0.1, 2, 0.1, 1);
+            var markWidthControls = addValueRow(lineWidthPanel, "표시", "pt", currentLineWidth("mark"), 0.1, 2, 0.1, 1);
+            guideWidthControls.input.helpTip = "수선·보조선 점선";
+            markWidthControls.input.helpTip = "직각 표시, 각 θ의 호";
             bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
             bindValueRow(graphWidthControls, function(value) { setLineWidth("graph", value); }, LINE_DEFAULTS.graph);
             bindValueRow(guideWidthControls, function(value) { setLineWidth("guide", value); }, LINE_DEFAULTS.guide);
+            bindValueRow(markWidthControls, function(value) { setLineWidth("mark", value); }, LINE_DEFAULTS.mark);
 
             var positionPanel = addPanel(win, "위치");
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -5197,7 +5277,7 @@ var SCRIPT_KEY = "HighGeometry";
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(100);
-                path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "plane" ? PLANE_PT : GUIDE_PT);
+                path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "plane" ? PLANE_PT : (line.kind === "mark" ? MARK_PT : GUIDE_PT));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = line.closed ? StrokeJoin.BEVELENDJOIN : StrokeJoin.MITERENDJOIN;
                 if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
@@ -5466,35 +5546,40 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             // 다이얼로그 부품
             // -------------------------------------------------------
-            // 선 두께(축·그래프·보조선): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            // 선 두께(축(평면)·그래프·보조선·표시): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
             function setLineWidth(group, value) {
                 if (group === "axis") { PLANE_PT = value; }
                 if (group === "graph") { MAIN_PT = value; }
                 if (group === "guide") { GUIDE_PT = value; }
+                if (group === "mark") { MARK_PT = value; }
             }
 
             function currentLineWidth(group) {
                 if (group === "axis") return PLANE_PT;
                 if (group === "graph") return MAIN_PT;
                 if (group === "guide") return GUIDE_PT;
+                if (group === "mark") return MARK_PT;
                 return 0;
             }
 
+            // v2는 LINE_KEYS 순서 9칸, v1(축·그래프·보조선)도 읽는다
             function loadLineWidths() {
                 var raw = "";
                 try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
                 var p = raw ? raw.split("|") : [];
-                if (p.length !== 4 || p[0] !== "v1") return;
-                var groups = ["axis", "graph", "guide"];
-                for (var i = 0; i < 3; i++) {
+                var groups;
+                if (p.length === 4 && p[0] === "v1") groups = ["axis", "graph", "guide"];
+                else if (p.length === 10 && p[0] === "v2") groups = LINE_KEYS;
+                else return;
+                for (var i = 0; i < groups.length; i++) {
                     var value = parseFloat(p[i + 1]);
                     if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
                 }
             }
 
             function saveLineWidths() {
-                var groups = ["axis", "graph", "guide"], parts = ["v1"];
-                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                var parts = ["v2"];
+                for (var i = 0; i < LINE_KEYS.length; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(LINE_KEYS[i]) ? String(currentLineWidth(LINE_KEYS[i])) : "");
                 try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
             }
 

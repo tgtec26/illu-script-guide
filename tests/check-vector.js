@@ -98,7 +98,41 @@ assert.deepStrictEqual(g.combinationParts(0, -1).map((p) => p.text), ["-", "b"])
 }
 // 좌표축 없이
 assert.ok(!build({ axes: false }).texts.some((t) => t.text === "x"));
-
+// 선 두께 역할: 엔진의 상수·LINE_DEFAULTS·LINE_KEYS와 저장 함수를 잘라 가짜 app.preferences로 돌린다
+function lineWidthStore(constNames, raw) {
+  const decl = (name) => { const at = source.indexOf(`var ${name} = `); assert.ok(at >= 0, name); return source.slice(at, source.indexOf("\n", at)); };
+  const writes = [];
+  const app = { preferences: { getStringPreference: () => raw, setStringPreference: (key, value) => writes.push(value) } };
+  const current = new Function("app", ['var PREF_KEY = "T";'].concat(constNames.map(decl), [decl("LINE_DEFAULTS"), decl("LINE_KEYS")],
+    ["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction), ["loadLineWidths(); saveLineWidths(); return currentLineWidth;"]).join("\n"))(app);
+  return { current, saved: writes[0] };
+}
+function paintWidths(constText, kinds, flat) {
+  const made = [];
+  const previewGroup = { pathItems: { add() { const p = { setEntirePath(a) { this.pathPoints = a.map(() => ({})); }, zOrder() {} }; made.push(p); return p; } } };
+  const paint = new Function("previewGroup", constText + "var GRID_K=30,GUIDE_DASH=[2,1.5],MM_TO_PT=1;var StrokeCap={BUTTENDCAP:1},StrokeJoin={ROUNDENDJOIN:1,MITERENDJOIN:2,BEVELENDJOIN:3},ZOrderMethod={SENDTOBACK:1};function makeGray(k){return k;}" + extractFunction("addPath") + ";return addPath;")(previewGroup);
+  const pts = flat ? [[0, 0], [1, 0]] : [{ anchor: [0, 0], left: [0, 0], right: [0, 0] }, { anchor: [1, 0], left: [1, 0], right: [1, 0] }];
+  for (const kind of kinds) paint({ kind, points: pts });
+  return made.map((p) => p.strokeWidth);
+}
+const lineWidthLabels = () => source.split('addValueRow(lineWidthPanel, "').slice(1).map((s) => s.slice(0, s.indexOf('"')));
+{
+  const consts = ["AXIS_PT", "TICK_PT", "MAIN_PT", "THIN_PT", "GUIDE_PT", "GRID_PT", "MARK_PT"];
+  assert.strictEqual(lineWidthStore(consts, "").saved, "v2|0.4|0.8|0.3|0.4|0.3|0.3|0.4||");
+  const v1 = lineWidthStore(consts, "v1|1|1.2|0.5");
+  assert.strictEqual(v1.current("thin"), 0.4, "보조 벡터는 축과 따로");
+  assert.strictEqual(v1.current("mark"), 0.3, "표시는 보조선과 따로");
+  assert.deepStrictEqual(lineWidthLabels(), ["축", "눈금", "그래프", "보조선", "모눈", "표시", "보조 벡터"]);
+  // 글자 위 작은 화살표의 선("over")은 예전처럼 보조선 두께
+  assert.deepStrictEqual(paintWidths("var MAIN_PT=0.8,AXIS_PT=0.41,TICK_PT=0.42,THIN_PT=0.43,GUIDE_PT=0.31,GRID_PT=0.32,MARK_PT=0.33;",
+    ["main", "axis", "tick", "thin", "guide", "grid", "mark", "over"]), [0.8, 0.41, 0.42, 0.43, 0.31, 0.32, 0.33, 0.31]);
+  const d = build({ numbers: true, grid: true, projection: true });
+  const count = (k) => d.lines.filter((l) => l.kind === k).length;
+  assert.strictEqual(count("axis"), 2);
+  assert.ok(count("tick") > 0 && count("grid") > 0);
+  assert.strictEqual(count("mark"), 2, "호 + 직각 표시");
+  assert.strictEqual(count("thin"), 1, "정사영 벡터 OH");
+}
 assert.ok(source.includes('var PREF_KEY = "HighMathVector/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");

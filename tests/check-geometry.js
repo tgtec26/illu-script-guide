@@ -182,13 +182,13 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   assert.strictEqual(find(["GSMediumB1", "SpoqaHanSansNeo-Regular"]).name, "BEDFGG+GSMediumB1");
   assert.strictEqual(find(["GSMediItaC1", "GSMediumB1"]).name, "BEDGOA+GSMediItaC1");
 }
-// 선 종류별 두께: 변은 도형 값, 치수선·점선·직각 표시는 보조선 값.
+// 선 종류별 두께: 변은 도형 값, 치수선·점선은 보조선 값, 각 호·직각·같은 길이 눈금은 표시 값.
 {
   const made = [];
   const previewGroup = {pathItems: {add() { const p={setEntirePath(a) {this.anchors=a;this.pathPoints=a.map(()=>({}));}}; made.push(p); return p; }}};
-  const paint = new Function("previewGroup", "var strokePt=1.2,MARK_PT=0.3,AXIS_PT=0.4,GUIDE_DASH=[2,1.5]; var StrokeCap={BUTTENDCAP:1},StrokeJoin={MITERENDJOIN:1,BEVELENDJOIN:2}; function makeGray(k){return k;}"+extractFunction("addPath")+";return addPath;")(previewGroup);
+  const paint = new Function("previewGroup", "var strokePt=1.2,GUIDE_PT=0.3,MARK_PT=0.5,AXIS_PT=0.4,GUIDE_DASH=[2,1.5]; var StrokeCap={BUTTENDCAP:1},StrokeJoin={MITERENDJOIN:1,BEVELENDJOIN:2}; function makeGray(k){return k;}"+extractFunction("addPath")+";return addPath;")(previewGroup);
   for (const kind of ["main", "axis", "mark", "dashed", "dimension"]) paint({kind,closed:kind==="main",points:[{anchor:[0,0],left:[0,0],right:[0,0]},{anchor:[1,0],left:[1,0],right:[1,0]}]});
-  assert.deepStrictEqual(made.map(p=>p.strokeWidth),[1.2,0.4,0.3,0.3,0.3]);
+  assert.deepStrictEqual(made.map(p=>p.strokeWidth),[1.2,0.4,0.5,0.3,0.3]);
   assert.ok(made[0].closed && made[0].strokeJoin===2, "도형 꼭짓점은 경사 연결");
   assert.deepStrictEqual(made[4].strokeDashes,[2,1.5]);
 }
@@ -201,6 +201,30 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
     assert.strictEqual(result.show,show); assert.strictEqual(result.height,height); assert.strictEqual(writes.length,0);
     result.save(); assert.strictEqual(writes[0],["v1",show?"1":"0",height].join("|"));
   }
+}
+// 선 두께 역할: 축·도형·변·보조선·표시 행, v2(9칸) 저장, v1(축·그래프·보조선) 읽기
+function lineWidthStore(constNames, raw) {
+  const decl = (name) => { const at = source.indexOf(`var ${name} = `); assert.ok(at >= 0, name); return source.slice(at, source.indexOf("\n", at)); };
+  const writes = [];
+  const app = { preferences: { getStringPreference: () => raw, setStringPreference: (key, value) => writes.push(value) } };
+  const current = new Function("app", ['var PREF_KEY = "T";'].concat(constNames.map(decl), [decl("LINE_DEFAULTS"), decl("LINE_KEYS")],
+    ["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction), ["loadLineWidths(); saveLineWidths(); return currentLineWidth;"]).join("\n"))(app);
+  return { current, saved: writes[0] };
+}
+{
+  const consts = ["AXIS_PT", "GUIDE_PT", "MARK_PT"];
+  assert.strictEqual(lineWidthStore(consts, "").saved, "v2|0.4||0.3|||0.3|||");
+  const v1 = lineWidthStore(consts, "v1|0.5||0.6");
+  assert.strictEqual(v1.current("guide"), 0.6);
+  assert.strictEqual(v1.current("mark"), 0.3, "표시는 보조선과 따로");
+  assert.strictEqual(lineWidthStore(consts, "v2|1||0.2|||5|||").saved, "v2|1||0.2|||2|||");
+  assert.strictEqual(lineWidthStore(consts, "v2|1|1").saved, "v2|0.4||0.3|||0.3|||", "칸 수가 틀리면 무시");
+  const labels = source.split('addValueRow(lineWidthPanel, "').slice(1).map((s) => s.slice(0, s.indexOf('"')));
+  assert.deepStrictEqual(labels, ["축", "도형·변", "보조선", "표시"]);
+  // 직각·각 호·같은 길이 눈금은 "mark", 점선은 "dashed"
+  const d = api({ pointsText: "A(0,3) B(0,0) C(4,0) D(2,0)", segmentText: "A-B-C-A", dashedText: "A-D", angleText: "ABC:R, BAC:30°", tickText: "AB:1" }).buildGeometry();
+  assert.strictEqual(d.lines.filter((l) => l.kind === "mark").length, 3);
+  assert.strictEqual(d.lines.filter((l) => l.kind === "dashed").length, 1);
 }
 require("./es3-lint")(["readChainPaths", "dimensionCurve"].map(extractFunction).join("\n"), "기하 새 도형 함수");
 new Function(bundle);

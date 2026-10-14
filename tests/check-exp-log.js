@@ -95,6 +95,53 @@ for (const bad of ["1", "-2", "0", "x", "3,,a"]) assert.strictEqual(g.parseBases
   assert.strictEqual(links.length, 2);
 }
 
+// 눈금은 tick, 격자는 grid (보조선과 따로): x -3..5, y -3..5에서 0 뺀 눈금 8+8개, 격자 8+8개
+{
+  const d = build({ grid: true });
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 2, "ticks are not axis lines");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "tick").length, 16);
+  assert.strictEqual(d.lines.filter((l) => l.kind === "grid").length, 16);
+}
+assert.ok(source.includes('addValueRow(lineWidthPanel, "눈금", "pt", currentLineWidth("tick")') && source.includes('addValueRow(lineWidthPanel, "모눈", "pt", currentLineWidth("grid")'));
+assert.ok(source.includes('(line.kind === "tick" ? TICK_PT : (line.kind === "grid" ? GRID_PT : GUIDE_PT))'), "tick and grid have their own widths");
+// 선 두께 저장: v2 + LINE_KEYS 9칸(이 탭에 없는 선은 빈칸), v1(축·그래프·보조선)도 읽고, 0.1–2로 자른다
+function checkLineWidths(expectedKeys) {
+  const defaults = source.slice(source.indexOf("var LINE_DEFAULTS = {") + 21, source.indexOf("};", source.indexOf("var LINE_DEFAULTS = {")))
+    .split(",").map((s) => s.trim().split(/:\s*/));
+  assert.deepStrictEqual(defaults.map(([k]) => k), expectedKeys, "LINE_DEFAULTS keys in panel order");
+  const keysStart = source.indexOf("var LINE_KEYS = [");
+  const keysLine = source.slice(keysStart, source.indexOf(";", keysStart) + 1);
+  assert.strictEqual(keysLine, 'var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];');
+  let stored = "";
+  const app = { preferences: { getStringPreference: () => stored, setStringPreference: (key, value) => { stored = value; } } };
+  const lw = new Function("app", `var PREF_KEY = "K"; var ${defaults.map(([, v]) => v + " = 1").join(", ")};\n${keysLine}\n` +
+    `var LINE_DEFAULTS = {${defaults.map(([k, v]) => k + ": " + v).join(", ")}};\n` +
+    ["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n") +
+    "\nreturn { set: setLineWidth, get: currentLineWidth, load: loadLineWidths, save: saveLineWidths };")(app);
+  const allKeys = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
+  expectedKeys.forEach((k, i) => lw.set(k, 0.1 * (i + 2)));
+  lw.save();
+  const parts = stored.split("|");
+  assert.strictEqual(parts.length, 10, "v2 has 10 fields");
+  assert.strictEqual(parts[0], "v2");
+  allKeys.forEach((k, i) => assert.strictEqual(parts[i + 1] === "", !expectedKeys.includes(k), `field ${k}`));
+  expectedKeys.forEach((k) => { assert.ok(Math.abs(lw.get(k) - parseFloat(parts[allKeys.indexOf(k) + 1])) < 1e-9, `saved ${k}`); lw.set(k, 1); });
+  lw.load();
+  expectedKeys.forEach((k, i) => assert.ok(Math.abs(lw.get(k) - 0.1 * (i + 2)) < 1e-9, `v2 restores ${k}`));
+  expectedKeys.forEach((k) => lw.set(k, 1));
+  stored = "v1|0.5|1.5|0.7";
+  lw.load();
+  const v1 = { axis: 0.5, graph: 1.5, guide: 0.7 };
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), k in v1 ? v1[k] : 1, `v1 ${k}`));
+  stored = "v2|9|9|9|9|9|9|9|9";
+  lw.load();
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), k in v1 ? v1[k] : 1, `short v2 ignored (${k})`));
+  stored = "v2|" + allKeys.map(() => "5").join("|");
+  lw.load();
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), 2, `clamped ${k}`));
+}
+checkLineWidths(["axis", "tick", "graph", "guide", "grid"]);
+
 assert.ok(source.includes('var PREF_KEY = "HighMathExpLog/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");

@@ -78,4 +78,37 @@ assert.strictEqual(api({ sides: 8 }).buildSolid3D().lines.length, 24);
   assert.strictEqual(d.lines.length, 6);
   assert.strictEqual(d.texts.length, 4);
 }
+// 선 두께: "선 두께" 패널의 모서리(strokePt, 기본 설정에 저장)·보조선(점선). 예전의 쓰이지 않던 "축" 행은 없다
+function lineWidthStore(constNames, raw) {
+  const decl = (name) => { const at = source.indexOf(`var ${name} = `); assert.ok(at >= 0, name); return source.slice(at, source.indexOf("\n", at)); };
+  const writes = [];
+  const app = { preferences: { getStringPreference: () => raw, setStringPreference: (key, value) => writes.push(value) } };
+  const current = new Function("app", ['var PREF_KEY = "T";'].concat(constNames.map(decl), [decl("LINE_DEFAULTS"), decl("LINE_KEYS")],
+    ["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction), ["loadLineWidths(); saveLineWidths(); return currentLineWidth;"]).join("\n"))(app);
+  return { current, saved: writes[0] };
+}
+{
+  const labels = source.split('addValueRow(lineWidthPanel, "').slice(1).map((s) => s.slice(0, s.indexOf('"')));
+  assert.deepStrictEqual(labels, ["모서리", "보조선"]);
+  assert.ok(source.includes('addValueRow(lineWidthPanel, "모서리", "pt", strokePt, 0.1, 1.5, 0.1, 1)'), "모서리 행은 strokePt 범위 그대로");
+  assert.ok(!source.includes('addValueRow(viewPanel, "선 두께"'), "시점 · 크기 패널에서 옮겼다");
+  assert.ok(source.includes("strokePt = restoreNumber(p[17], strokePt, 0.1, 1.5);"), "모서리 값은 기본 설정 문자열에 그대로 저장");
+  // 보조선 기본값 = 모서리 기본값이라 기본 그림은 예전과 같다
+  const num = (name) => parseFloat(source.slice(source.indexOf(`var ${name} = `) + name.length + 7));
+  assert.strictEqual(num("GUIDE_PT"), num("strokePt"));
+  assert.strictEqual(lineWidthStore(["GUIDE_PT"], "").saved, "v2|||0.8||||||");
+  assert.strictEqual(lineWidthStore(["GUIDE_PT"], "v1|0.4||0.3").current("guide"), 0.8, "v1의 보조선 칸은 쓰이지 않던 값이라 읽지 않는다");
+  assert.strictEqual(lineWidthStore(["GUIDE_PT"], "v2|1|1|0.5|1|1|1|1|1|1").saved, "v2|||0.5||||||");
+  // 실선은 모서리 값, 점선은 보조선 값
+  const made = [];
+  const previewGroup = { pathItems: { add() { const p = { setEntirePath(a) { this.pathPoints = a.map(() => ({})); } }; made.push(p); return p; } } };
+  const paint = new Function("previewGroup", "var strokePt=1.2,GUIDE_PT=0.5,GUIDE_DASH=[2,1.5];var StrokeCap={BUTTENDCAP:1},StrokeJoin={ROUNDENDJOIN:1};function makeGray(k){return k;}" + extractFunction("addPath") + ";return addPath;")(previewGroup);
+  for (const kind of ["main", "dashed"]) paint({ kind, points: [{ anchor: [0, 0], left: [0, 0], right: [0, 0] }, { anchor: [1, 0], left: [1, 0], right: [1, 0] }] });
+  assert.deepStrictEqual(made.map((p) => p.strokeWidth), [1.2, 0.5]);
+  assert.deepStrictEqual(made[1].strokeDashes, [2, 1.5]);
+  const kinds = new Set(api({ text: { pointsText: "P(0,0,1.5)", segmentText: "P-A1", dashedText: "P-B3" } }).buildSolid3D().lines.map((l) => l.kind));
+  assert.deepStrictEqual([...kinds].sort(), ["dashed", "main"]);
+}
+// 보조선을 저장한 적이 없으면 가려진 모서리 점선이 복원된 모서리 두께로 시작한다 (저장값 복원 뒤, 불러오기 전)
+assert.ok(/applySettings\(\);[\s\S]*?GUIDE_PT = strokePt;\s*loadLineWidths\(\);/.test(source), "hidden edges start from restored edge width");
 console.log("solid3d checks passed");

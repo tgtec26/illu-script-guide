@@ -60,6 +60,9 @@ assert.deepStrictEqual([0.3, 1, 1.5, 4, 7, 30].map(g.niceStep), [0.5, 1, 2, 5, 1
   near(curve[0].points[0].anchor[1], 4, "curve starts at (1, 1)");
   assert.ok(d.texts.some((t) => t.text === "an" && t.sub[0] === 1));
   assert.ok(d.texts.some((t) => t.text === "10"), "y ticks every 2");
+  // 눈금은 축과 따로(tick): n 눈금 6개 + 세로 눈금 5, 10, 15
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 2, "ticks are not axis lines");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "tick").length, 6 + 3);
 }
 // 음수 항은 축 아래, 값 글자도 아래
 {
@@ -74,6 +77,7 @@ assert.deepStrictEqual([0.3, 1, 1.5, 4, 7, 30].map(g.niceStep), [0.5, 1, 2, 5, 1
   assert.deepStrictEqual(d.texts.map((t) => t.text), ["1", "3", "7", "15", "+2", "+4", "+8", "+2", "+4"]);
   assert.deepStrictEqual(d.texts[4].at, [10, -16], "first difference between 1 and 3, one row down");
   assert.strictEqual(d.lines.length, 5);
+  assert.ok(d.lines.every((l) => l.kind === "thin"), "difference V-lines are thin (계차선)");
   assert.deepStrictEqual(d.lines[0].points.map((p) => p.anchor[0]), [2.4, 10, 17.6]);
   assert.deepStrictEqual(d.notes, ["차: 2, 4, 8", "두 번째 계차: 2, 4"]);
 }
@@ -107,6 +111,48 @@ assert.deepStrictEqual([0.3, 1, 1.5, 4, 7, 30].map(g.niceStep), [0.5, 1, 2, 5, 1
 }
 assert.strictEqual(g.buildPattern(3, 4, 10, 0).dots.length, 1 + 3 + 6 + 10);
 assert.strictEqual(g.buildPattern(4, 3, 10, 0).dots.length, 1 + 4 + 9);
+
+// 선 두께: 계차선(THIN_PT)은 축 행에 묶이지 않고 따로 조절한다
+assert.ok(source.includes('if (group === "axis") { AXIS_PT = value; }') && !source.includes("AXIS_PT = value; THIN_PT = value;"), "axis no longer drives THIN_PT");
+assert.ok(source.includes('addValueRow(lineWidthPanel, "눈금", "pt", currentLineWidth("tick")') && source.includes('addValueRow(lineWidthPanel, "계차선", "pt", currentLineWidth("thin")'));
+assert.ok(source.includes('(line.kind === "thin" ? THIN_PT : (line.kind === "tick" ? TICK_PT : AXIS_PT))'), "tick and thin have their own widths");
+// 선 두께 저장: v2 + LINE_KEYS 9칸(이 탭에 없는 선은 빈칸), v1(축·그래프·보조선)도 읽고, 0.1–2로 자른다
+function checkLineWidths(expectedKeys) {
+  const defaults = source.slice(source.indexOf("var LINE_DEFAULTS = {") + 21, source.indexOf("};", source.indexOf("var LINE_DEFAULTS = {")))
+    .split(",").map((s) => s.trim().split(/:\s*/));
+  assert.deepStrictEqual(defaults.map(([k]) => k), expectedKeys, "LINE_DEFAULTS keys in panel order");
+  const keysStart = source.indexOf("var LINE_KEYS = [");
+  const keysLine = source.slice(keysStart, source.indexOf(";", keysStart) + 1);
+  assert.strictEqual(keysLine, 'var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];');
+  let stored = "";
+  const app = { preferences: { getStringPreference: () => stored, setStringPreference: (key, value) => { stored = value; } } };
+  const lw = new Function("app", `var PREF_KEY = "K"; var ${defaults.map(([, v]) => v + " = 1").join(", ")};\n${keysLine}\n` +
+    `var LINE_DEFAULTS = {${defaults.map(([k, v]) => k + ": " + v).join(", ")}};\n` +
+    ["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n") +
+    "\nreturn { set: setLineWidth, get: currentLineWidth, load: loadLineWidths, save: saveLineWidths };")(app);
+  const allKeys = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
+  expectedKeys.forEach((k, i) => lw.set(k, 0.1 * (i + 2)));
+  lw.save();
+  const parts = stored.split("|");
+  assert.strictEqual(parts.length, 10, "v2 has 10 fields");
+  assert.strictEqual(parts[0], "v2");
+  allKeys.forEach((k, i) => assert.strictEqual(parts[i + 1] === "", !expectedKeys.includes(k), `field ${k}`));
+  expectedKeys.forEach((k) => { assert.ok(Math.abs(lw.get(k) - parseFloat(parts[allKeys.indexOf(k) + 1])) < 1e-9, `saved ${k}`); lw.set(k, 1); });
+  lw.load();
+  expectedKeys.forEach((k, i) => assert.ok(Math.abs(lw.get(k) - 0.1 * (i + 2)) < 1e-9, `v2 restores ${k}`));
+  expectedKeys.forEach((k) => lw.set(k, 1));
+  stored = "v1|0.5|1.5|0.7";
+  lw.load();
+  const v1 = { axis: 0.5, graph: 1.5, guide: 0.7 };
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), k in v1 ? v1[k] : 1, `v1 ${k}`));
+  stored = "v2|9|9|9|9|9|9|9|9";
+  lw.load();
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), k in v1 ? v1[k] : 1, `short v2 ignored (${k})`));
+  stored = "v2|" + allKeys.map(() => "5").join("|");
+  lw.load();
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), 2, `clamped ${k}`));
+}
+checkLineWidths(["axis", "tick", "graph", "guide", "thin"]);
 
 assert.ok(source.includes('var PREF_KEY = "HighMathSequence/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");

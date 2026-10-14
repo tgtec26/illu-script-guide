@@ -67,4 +67,13 @@ for (const type of [0, 1, 2, 3]) assert.ok(api({}, type).buildSolid().fills.leng
   assert.ok(api({ fText: "y=x-2" }).buildSolid().notes.length > 0);   // 구간에서 음수
   assert.ok(api({ fText: "y=@@" }).buildSolid().notes.length > 0);
 }
+// 선 두께 패널: 입체 선 두께(strokePt, 0.1~1.5, 설정 문자열에 저장)가 모양 패널에서 옮겨 와 첫 행 "입체"가 된다
+{
+  const rows = [...source.matchAll(/addValueRow\(lineWidthPanel, "([^"]+)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(rows, ["입체", "축", "보조선"]);
+  assert.ok(source.includes('var strokeControls = addValueRow(lineWidthPanel, "입체", "pt", strokePt, 0.1, 1.5, 0.1, 1);'));
+  assert.ok(!/addValueRow\(shapePanel, "선 두께"/.test(source), "no width row left in the shape panel");
+  assert.ok(source.includes("bindValueRow(strokeControls, function(value) { strokePt = value; }, defaults.strokePt);"));
+  assert.ok(/parts\.push\([^)]*strokePt/.test(extractFunction("saveSettings")), "strokePt stays in the main settings string");
+}
 console.log("solid section checks passed");

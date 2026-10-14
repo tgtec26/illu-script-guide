@@ -89,4 +89,28 @@ assert.strictEqual(g.solveInequality(1, 0, 1, 1).text, "모든 실수");
 assert.ok(source.includes('var PREF_KEY = "HighCommonQuadratic/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+// 선 두께: 역할마다 한 줄(눈금·모눈), 눈금은 kind "tick", 모눈은 kind "grid". 저장은 v2 10칸, v1도 읽는다
+{
+  const d = build({ grid: true, numbers: true });
+  assert.ok(d.lines.some((l) => l.kind === "tick"), "ticks get kind tick");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 2, "only the two axes keep kind axis");
+  assert.ok(d.lines.some((l) => l.kind === "grid"), "grid lines get kind grid");
+  assert.ok(source.includes('line.kind === "tick" ? TICK_PT') && source.includes('line.kind === "grid" ? GRID_PT'), "addPath routes tick/grid widths");
+  const rows = ["축", "눈금", "그래프", "보조선", "모눈"].map((label) => source.indexOf(`addValueRow(lineWidthPanel, "${label}"`));
+  assert.ok(rows.every((at, i) => at > 0 && (i === 0 || at > rows[i - 1])), "line-width rows in canonical order");
+  const store = {};
+  const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const decl = (name) => { const at = source.indexOf(`var ${name} = `); assert.ok(at >= 0, name); return source.slice(at, source.indexOf(";", at) + 1); };
+  const lw = new Function("app", `var PREF_KEY = "T"; ${["AXIS_PT", "GRAPH_PT", "GUIDE_PT", "TICK_PT", "GRID_PT", "LINE_KEYS", "LINE_DEFAULTS"].map(decl).join(" ")}
+${["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n")}
+return { set: setLineWidth, get: currentLineWidth, load: loadLineWidths, save: saveLineWidths };`)(app);
+  lw.save();
+  assert.strictEqual(store["T/lines"], "v2|0.4|0.8|0.3|0.4|0.3||||");
+  assert.strictEqual(store["T/lines"].split("|").length, 10);
+  lw.set("tick", 1.2); lw.set("grid", 0.7); lw.save();
+  lw.set("tick", 0.4); lw.set("grid", 0.3); lw.load();
+  assert.deepStrictEqual([lw.get("tick"), lw.get("grid")], [1.2, 0.7], "v2 round trip");
+  store["T/lines"] = "v1|0.6|1|0.5"; lw.load();
+  assert.deepStrictEqual([lw.get("axis"), lw.get("graph"), lw.get("guide"), lw.get("tick")], [0.6, 1, 0.5, 1.2], "v1 read; new groups untouched");
+}
 console.log("quadratic checks passed");

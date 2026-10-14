@@ -81,4 +81,45 @@ assert.strictEqual(build({ f: f("y=x+1/x") }).notes[0], "극대 f(-1) = -2, 극�
 assert.ok(source.includes('var PREF_KEY = "HighMathExtrema/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+// 선 두께 역할: 패널 행 순서·행마다 저장 그룹. 저장은 v2(LINE_KEYS 9칸, 탭에 없는 칸은 비움)이고 v1(축·그래프·보조선)도 읽는다
+{
+  const rows = [...source.matchAll(/addValueRow\(lineWidthPanel, "([^"]+)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(rows, ["축", "눈금", "그래프", "보조선", "모눈", "수평 접선", "증감표"]);
+  const decl = (name) => { const m = source.match(new RegExp(`var ${name} = [^;\\n]*;`)); assert.ok(m, `missing ${name}`); return m[0]; };
+  const defaultsDecl = decl("LINE_DEFAULTS");
+  const keys = defaultsDecl.match(/\w+: [A-Z_]+_PT/g).map((pair) => pair.split(":")[0]);
+  assert.deepStrictEqual(keys, ["axis", "tick", "graph", "guide", "grid", "thin", "table"]);
+  for (const key of keys) assert.ok(source.includes(`setLineWidth("${key}", value); }, LINE_DEFAULTS.${key});`), `row for ${key}`);
+  const prefs = {};
+  const app = { preferences: { getStringPreference: (k) => prefs[k] || "", setStringPreference: (k, v) => { prefs[k] = v; } } };
+  const widths = () => new Function("app", `var PREF_KEY = "K";\n${defaultsDecl.match(/[A-Z_]+_PT/g).map(decl).join("\n")}\n${defaultsDecl}\n${decl("LINE_KEYS")}
+loadLineWidths();\n${["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n")}
+return { set: setLineWidth, get: currentLineWidth, save: saveLineWidths };`)(app);
+  let w = widths();
+  assert.deepStrictEqual(keys.map(w.get), [0.4, 0.4, 0.8, 0.3, 0.3, 0.3, 0.4], "defaults = widths used before the split");
+  w.save();
+  const saved = prefs["K/lines"].split("|");
+  assert.strictEqual(saved.length, 10);
+  assert.strictEqual(saved[0], "v2");
+  ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"].forEach((key, i) => assert.strictEqual(saved[i + 1] === "", !keys.includes(key), key));
+  prefs["K/lines"] = "v1|0.7|1.2|0.5";
+  w = widths();
+  assert.deepStrictEqual([w.get("axis"), w.get("graph"), w.get("guide"), w.get("tick")], [0.7, 1.2, 0.5, 0.4], "v1 values; axis no longer moves ticks");
+  w.set("table", 1.1);
+  w.save();
+  assert.strictEqual(widths().get("table"), 1.1, "v2 round trip");
+  prefs["K/lines"] = "v2|1|1";
+  assert.strictEqual(widths().get("table"), 0.4, "wrong field count is ignored");
+}
+// 그림: 눈금 "tick", 격자 "grid", 수평 접선 "flat"(THIN_PT), 증감표 "table"(TABLE_PT, 축과 따로)
+{
+  const d = build({ f: f("y=x^3-3x"), grid: true, flat: true });
+  assert.strictEqual(d.lines.filter((l) => l.kind === "tick").length, 12, "x·y ticks -3..3 without 0");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 2);
+  assert.ok(d.lines.some((l) => l.kind === "grid"));
+  assert.strictEqual(d.lines.filter((l) => l.kind === "flat").length, 2);
+  const addPath = extractFunction("addPath");
+  for (const pair of ['"tick" ? TICK_PT', '"table" ? TABLE_PT', '"grid" ? GRID_PT', '"flat" ? THIN_PT']) assert.ok(addPath.includes(pair), pair);
+  assert.ok(!/AXIS_PT = value; TABLE_PT/.test(extractFunction("setLineWidth")), "table is no longer linked to axis");
+}
 console.log("extrema checks passed");

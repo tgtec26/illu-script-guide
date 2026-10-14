@@ -165,4 +165,44 @@ assert.strictEqual(g.roundRectPoints([0, 0], 20, 28, 3).length, 8);
 assert.ok(source.includes('var PREF_KEY = "MiddleFigureProblem/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+// 선 두께: "/lines"는 v2 + LINE_KEYS 9칸(10필드). v1(축·그래프·보조선)도 읽고, 필드 수가 다르면 무시한다
+{
+  const store = {};
+  const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const lineKeys = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
+  assert.ok(source.includes('var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];'), "LINE_KEYS order");
+  assert.ok(source.indexOf("var LINE_KEYS") < source.indexOf("loadLineWidths();"), "LINE_KEYS must exist before loadLineWidths runs");
+  const body = `var PREF_KEY = "T";\n${source.match(/var [A-Z_]+_PT = [\d.]+;/g).join("\n")}\n` +
+    `${source.match(/var LINE_KEYS = [^;]+;/)[0]}\n${source.match(/var LINE_DEFAULTS = [^;]+;/)[0]}\n` +
+    `${["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n")}\n` +
+    "return { LINE_DEFAULTS, setLineWidth, currentLineWidth, loadLineWidths, saveLineWidths };";
+  const make = () => new Function("app", body)(app);
+  const lw = make();
+  const own = Object.keys(lw.LINE_DEFAULTS);
+  assert.deepStrictEqual(own.slice().sort(), ["graph", "guide", "mark"].slice().sort(), "LINE_DEFAULTS groups");
+  const values = [0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9];
+  for (const key of own) assert.strictEqual(lw.currentLineWidth(key), lw.LINE_DEFAULTS[key], `${key} default`);
+  for (const key of own) lw.setLineWidth(key, values[lineKeys.indexOf(key)]);
+  for (const key of own) assert.strictEqual(lw.currentLineWidth(key), values[lineKeys.indexOf(key)], `${key} has its own width`);
+  lw.saveLineWidths();
+  const saved = store["T/lines"].split("|");
+  assert.strictEqual(saved.length, 10);
+  assert.strictEqual(saved[0], "v2");
+  lineKeys.forEach((key, i) => assert.strictEqual(saved[i + 1], own.includes(key) ? String(values[i]) : "", `saved ${key}`));
+  const again = make();
+  again.loadLineWidths();
+  for (const key of own) assert.strictEqual(again.currentLineWidth(key), values[lineKeys.indexOf(key)], `reload ${key}`);
+  store["T/lines"] = "v1|1.2|1.4|5";
+  const old = make();
+  old.loadLineWidths();
+  for (const key of own) assert.strictEqual(old.currentLineWidth(key), { axis: 1.2, graph: 1.4, guide: 2 }[key] || old.LINE_DEFAULTS[key], `v1 ${key}`);
+  store["T/lines"] = "v2|1.2|1.4|1.6|1.8";
+  const odd = make();
+  odd.loadLineWidths();
+  for (const key of own) assert.strictEqual(odd.currentLineWidth(key), odd.LINE_DEFAULTS[key], `5-field v2 is ignored: ${key}`);
+}
+// 직각 표시·반지름 선(kind "thin")은 표시 두께
+assert.strictEqual(build({}).lines.filter((l) => l.kind === "thin").length, 1, "right-angle mark at A");
+assert.strictEqual(build({ kind: 5, p: [3, 3, 0, 0] }).lines.filter((l) => l.kind === "thin").length, 1, "radius mark");
+assert.ok(source.includes('line.kind === "main" ? MAIN_PT : (line.kind === "thin" ? MARK_PT : GUIDE_PT)'), "thin marks drawn with MARK_PT");
 console.log("figure problem checks passed");

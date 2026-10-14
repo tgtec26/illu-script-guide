@@ -124,4 +124,30 @@ const base = { center: [1, 1], r: 2, line: g.parseLine("y=x+2"), point: g.parseP
 assert.ok(source.includes('var PREF_KEY = "HighMathCircleLine/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+// 선 두께: 역할마다 한 줄(눈금·모눈·표시), 눈금은 kind "tick", 모눈은 kind "grid". 저장은 v2 10칸, v1도 읽는다
+{
+  const d = g.buildCircleLine(Object.assign({}, base, { grid: true, numbers: true }));
+  assert.ok(d.lines.some((l) => l.kind === "tick"), "ticks get kind tick");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 2, "only the two axes keep kind axis");
+  assert.ok(d.lines.some((l) => l.kind === "grid"), "grid lines get kind grid");
+  assert.ok(source.includes('line.kind === "tick" ? TICK_PT') && source.includes('line.kind === "grid" ? GRID_PT'), "addPath routes tick/grid widths");
+  assert.ok(d.lines.some((l) => l.kind === "mark"), "right-angle mark keeps kind mark");
+  assert.ok(source.includes('line.kind === "mark" ? MARK_PT'), "addPath routes mark width");
+  const rows = ["축", "눈금", "그래프", "보조선", "모눈", "표시"].map((label) => source.indexOf(`addValueRow(lineWidthPanel, "${label}"`));
+  assert.ok(rows.every((at, i) => at > 0 && (i === 0 || at > rows[i - 1])), "line-width rows in canonical order");
+  const store = {};
+  const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const decl = (name) => { const at = source.indexOf(`var ${name} = `); assert.ok(at >= 0, name); return source.slice(at, source.indexOf(";", at) + 1); };
+  const lw = new Function("app", `var PREF_KEY = "T"; ${["AXIS_PT", "MAIN_PT", "GUIDE_PT", "TICK_PT", "GRID_PT", "MARK_PT", "LINE_KEYS", "LINE_DEFAULTS"].map(decl).join(" ")}
+${["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n")}
+return { set: setLineWidth, get: currentLineWidth, load: loadLineWidths, save: saveLineWidths };`)(app);
+  lw.save();
+  assert.strictEqual(store["T/lines"], "v2|0.4|0.8|0.3|0.4|0.3|0.3|||");
+  assert.strictEqual(store["T/lines"].split("|").length, 10);
+  lw.set("tick", 1.2); lw.set("grid", 0.7); lw.set("mark", 0.9); lw.save();
+  lw.set("tick", 0.4); lw.set("grid", 0.3); lw.set("mark", 0.3); lw.load();
+  assert.deepStrictEqual([lw.get("tick"), lw.get("grid"), lw.get("mark")], [1.2, 0.7, 0.9], "v2 round trip");
+  store["T/lines"] = "v1|0.6|1|0.5"; lw.load();
+  assert.deepStrictEqual([lw.get("axis"), lw.get("graph"), lw.get("guide"), lw.get("tick")], [0.6, 1, 0.5, 1.2], "v1 read; new groups untouched");
+}
 console.log("circle-line checks passed");

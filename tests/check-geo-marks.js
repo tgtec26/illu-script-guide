@@ -109,4 +109,14 @@ assert.deepStrictEqual(g.orderVertices([[0, 0], [40, 0], [50, 30], [10, 30]], tr
 
 assert.ok(source.includes('var PREF_KEY = "GeoMarks/settings";'));
 assert.ok(source.includes("\\u02D8"), "degree sign uses the GSMediumB1 glyph");
+// 선 두께 패널: 도형 선 맞춤 체크 + 표기 행, 위치 패널 바로 앞. 범위·저장 위치는 그대로
+{
+  const panel = source.indexOf('var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");');
+  assert.ok(panel > 0, "선 두께 panel");
+  assert.ok(panel < source.indexOf('var normalizeCheck = lineWidthPanel.add("checkbox"'), "normalize check inside it");
+  assert.ok(source.includes('var strokeControls = addValueRow(lineWidthPanel, "표기", "pt", strokePt, 0.1, 1, 0.05, 2);'), "표기 row");
+  assert.ok(source.indexOf('var strokeControls') < source.indexOf('var positionPanel = addPanel(win, "위치");'), "before 위치");
+  assert.ok(!source.includes("sizePanel.add(\"checkbox\"") && !source.includes('addValueRow(sizePanel, "선 두께"'), "moved out of 크기");
+  assert.ok(source.includes("strokePt = restoreNumber(p[8], strokePt, 0.1, 1);"), "still saved in the main settings");
+}
 console.log("geo marks checks passed");

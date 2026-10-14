@@ -82,4 +82,44 @@ assert.ok(!source.includes("LABEL_GAP_MM * MM_TO_PT"), "label placement must use
 assert.strictEqual(source.split("labelGapMm * MM_TO_PT").length - 1, 2, "stacked and plain labels both use labelGapMm");
 assert.ok(source.includes('"글자 간격"') && source.includes("bindValueRow(gapControls"));
 assert.ok(source.includes('var parts = ["v2"') && source.includes('p[0] === "v1" && p.length === 18') && source.includes('p[0] === "v2" && p.length === 19'));
+// 선 두께: 각 표시 호(mark, 실선)는 보조선과 따로 표시 행
+assert.ok(source.includes('addValueRow(lineWidthPanel, "표시", "pt", currentLineWidth("mark")'));
+assert.ok(source.includes('path.strokeWidth = line.kind === "main" ? MAIN_PT : (line.kind === "mark" ? MARK_PT : GUIDE_PT);'), "angle marks use MARK_PT");
+// 선 두께 저장: v2 + LINE_KEYS 9칸(이 탭에 없는 선은 빈칸), v1(축·그래프·보조선)도 읽고, 0.1–2로 자른다
+function checkLineWidths(expectedKeys) {
+  const defaults = source.slice(source.indexOf("var LINE_DEFAULTS = {") + 21, source.indexOf("};", source.indexOf("var LINE_DEFAULTS = {")))
+    .split(",").map((s) => s.trim().split(/:\s*/));
+  assert.deepStrictEqual(defaults.map(([k]) => k), expectedKeys, "LINE_DEFAULTS keys in panel order");
+  const keysStart = source.indexOf("var LINE_KEYS = [");
+  const keysLine = source.slice(keysStart, source.indexOf(";", keysStart) + 1);
+  assert.strictEqual(keysLine, 'var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];');
+  let stored = "";
+  const app = { preferences: { getStringPreference: () => stored, setStringPreference: (key, value) => { stored = value; } } };
+  const lw = new Function("app", `var PREF_KEY = "K"; var ${defaults.map(([, v]) => v + " = 1").join(", ")};\n${keysLine}\n` +
+    `var LINE_DEFAULTS = {${defaults.map(([k, v]) => k + ": " + v).join(", ")}};\n` +
+    ["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n") +
+    "\nreturn { set: setLineWidth, get: currentLineWidth, load: loadLineWidths, save: saveLineWidths };")(app);
+  const allKeys = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
+  expectedKeys.forEach((k, i) => lw.set(k, 0.1 * (i + 2)));
+  lw.save();
+  const parts = stored.split("|");
+  assert.strictEqual(parts.length, 10, "v2 has 10 fields");
+  assert.strictEqual(parts[0], "v2");
+  allKeys.forEach((k, i) => assert.strictEqual(parts[i + 1] === "", !expectedKeys.includes(k), `field ${k}`));
+  expectedKeys.forEach((k) => { assert.ok(Math.abs(lw.get(k) - parseFloat(parts[allKeys.indexOf(k) + 1])) < 1e-9, `saved ${k}`); lw.set(k, 1); });
+  lw.load();
+  expectedKeys.forEach((k, i) => assert.ok(Math.abs(lw.get(k) - 0.1 * (i + 2)) < 1e-9, `v2 restores ${k}`));
+  expectedKeys.forEach((k) => lw.set(k, 1));
+  stored = "v1|0.5|1.5|0.7";
+  lw.load();
+  const v1 = { axis: 0.5, graph: 1.5, guide: 0.7 };
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), k in v1 ? v1[k] : 1, `v1 ${k}`));
+  stored = "v2|9|9|9|9|9|9|9|9";
+  lw.load();
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), k in v1 ? v1[k] : 1, `short v2 ignored (${k})`));
+  stored = "v2|" + allKeys.map(() => "5").join("|");
+  lw.load();
+  expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), 2, `clamped ${k}`));
+}
+checkLineWidths(["graph", "guide", "mark"]);
 console.log("triangle checks passed");

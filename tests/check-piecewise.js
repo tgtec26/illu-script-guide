@@ -78,4 +78,43 @@ for (const bad of ["", "x", "3<x<1", "1<y", "x<a", "x<1<2", "xx<1"]) assert.stri
 assert.ok(source.includes('var PREF_KEY = "HighMathPiecewise/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+// 선 두께 역할: 패널 행 순서·행마다 저장 그룹. 저장은 v2(LINE_KEYS 9칸, 탭에 없는 칸은 비움)이고 v1(축·그래프·보조선)도 읽는다
+{
+  const rows = [...source.matchAll(/addValueRow\(lineWidthPanel, "([^"]+)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(rows, ["축", "눈금", "그래프", "보조선", "모눈"]);
+  const decl = (name) => { const m = source.match(new RegExp(`var ${name} = [^;\\n]*;`)); assert.ok(m, `missing ${name}`); return m[0]; };
+  const defaultsDecl = decl("LINE_DEFAULTS");
+  const keys = defaultsDecl.match(/\w+: [A-Z_]+_PT/g).map((pair) => pair.split(":")[0]);
+  assert.deepStrictEqual(keys, ["axis", "tick", "graph", "guide", "grid"]);
+  for (const key of keys) assert.ok(source.includes(`setLineWidth("${key}", value); }, LINE_DEFAULTS.${key});`), `row for ${key}`);
+  const prefs = {};
+  const app = { preferences: { getStringPreference: (k) => prefs[k] || "", setStringPreference: (k, v) => { prefs[k] = v; } } };
+  const widths = () => new Function("app", `var PREF_KEY = "K";\n${defaultsDecl.match(/[A-Z_]+_PT/g).map(decl).join("\n")}\n${defaultsDecl}\n${decl("LINE_KEYS")}
+loadLineWidths();\n${["setLineWidth", "currentLineWidth", "loadLineWidths", "saveLineWidths"].map(extractFunction).join("\n")}
+return { set: setLineWidth, get: currentLineWidth, save: saveLineWidths };`)(app);
+  let w = widths();
+  assert.deepStrictEqual(keys.map(w.get), [0.4, 0.4, 0.8, 0.3, 0.3], "defaults = widths used before the split");
+  w.save();
+  const saved = prefs["K/lines"].split("|");
+  assert.strictEqual(saved.length, 10);
+  assert.strictEqual(saved[0], "v2");
+  ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"].forEach((key, i) => assert.strictEqual(saved[i + 1] === "", !keys.includes(key), key));
+  prefs["K/lines"] = "v1|0.7|1.2|0.5";
+  w = widths();
+  assert.deepStrictEqual([w.get("axis"), w.get("graph"), w.get("guide"), w.get("tick")], [0.7, 1.2, 0.5, 0.4], "v1 values; axis no longer moves ticks");
+  w.set("grid", 1.1);
+  w.save();
+  assert.strictEqual(widths().get("grid"), 1.1, "v2 round trip");
+  prefs["K/lines"] = "v2|1|1";
+  assert.strictEqual(widths().get("grid"), 0.3, "wrong field count is ignored");
+}
+// 그림: 눈금은 "tick", 격자는 "grid"로 그려 축·보조선 두께와 따로 간다
+{
+  const d = build([piece("x+1", "x<1")], { grid: true });
+  assert.strictEqual(d.lines.filter((l) => l.kind === "tick").length, 6 + 5, "x ticks -2..4, y ticks -1..4 without 0");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 2, "axis kind is only the two axes");
+  assert.ok(d.lines.some((l) => l.kind === "grid"));
+  const addPath = extractFunction("addPath");
+  assert.ok(addPath.includes('line.kind === "tick" ? TICK_PT') && addPath.includes('line.kind === "grid" ? GRID_PT'));
+}
 console.log("piecewise checks passed");
