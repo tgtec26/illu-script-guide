@@ -605,7 +605,12 @@ try {
                 o[ctl.key] = String(input.text).replace(/\|/g, "");
                 redraw();
             };
-            input.onChanging = input.onChange;   // 치는 대로 미리보기
+            // 글자마다 다시 그리지 않는다. [완료]를 누르거나 포커스를 옮기거나 Enter를 칠 때 반영한다
+            var apply = row.add("button", undefined, "완료");
+            apply.preferredSize.width = 44;
+            apply.helpTip = "입력한 글을 미리보기에 반영";
+            apply.applyTo = input;   // ui_tab_helper: 이 단추는 이 입력칸을 확정한다
+            apply.onClick = input.onChange;
         }
 
         function addCheck(row, ctl) {

@@ -46,14 +46,14 @@ function key(c, name, extra = {}) {
   return event;
 }
 let f = fixture();
-// 치는 대로 미리보기한다(2026-10-14): 기존 onChanging이 글자마다 그대로 불린다
-['ㅎ', '하', '한', '한글 완료'].forEach((text, i) => {
+// 글자마다(onChanging) 다시 그리지 않고, 포커스 이동·Enter(onChange)에 반영한다(2026-10-14)
+for (const text of ['ㅎ', '하', '한', '한글 완료']) {
   f.input.text = text; f.input.onChanging();
-  assert.equal(f.model.renders, i + 1, '입력 중에도 미리보기');
-  assert.equal(f.model.text, text);
-});
+  assert.equal(f.model.renders, 0, '입력/한글 조합 중 렌더링 금지');
+}
 f.input.onChange();
-assert.equal(f.model.text, '한글 완료', '포커스 이동 때도 기존 onChange 그대로');
+assert.equal(f.model.renders, 1, '포커스 이동 때 반영');
+assert.equal(f.model.text, '한글 완료');
 assert.equal(key(f.input, 'Enter').prevented, undefined, 'IME 확정 Enter를 가로채지 않음');
 assert.equal(f.win.defaultElement, null, 'Enter로 완료 버튼 실행 금지');
 key(f.input, 'Enter');
@@ -160,4 +160,31 @@ assert.deepEqual(draws.at(-1), ['한글 최신', 3]);
 done.onClick();
 assert.deepEqual(draws.at(-1), ['한글 최신', 8]);
 assert.equal(preferences['Test/settings'].split('|').slice(0, 3).join('|'), 'v1|한글 최신|8');
-console.log('PASS: live preview while typing, focus-free confirm, Enter, multiline, IME guard, validation, cancel, slider/reset, Tab');
+// 입력칸 옆 [완료](applyTo): 그 칸만 친 글 그대로 확정해 그리고, 창 확인으로 보지 않는다
+{
+  const win = control('dialog', '완료 단추');
+  const text = control('edittext', '처음', win);
+  const other = control('edittext', '3', win);
+  const apply = control('button', '완료', win);
+  const ok = control('button', '확인', win);
+  const m = { text: '처음', other: '3', renders: 0 };
+  // 폼 엔진처럼 처리기가 this가 아니라 입력창을 직접 읽는다(단추 onClick으로도 불리므로)
+  text.onChange = function() { m.text = text.text; m.renders++; };
+  other.onChange = function() { m.other = other.text; m.renders++; };
+  apply.applyTo = text;
+  apply.onClick = text.onChange;
+  ok.onClick = function() { m.saved = [m.text, m.other]; };
+  ctx.bindTabOrder(win);
+  text.text = '새 글'; text.onChanging && text.onChanging();
+  other.text = '9';
+  assert.equal(m.renders, 0, '타이핑만으로는 그리지 않음');
+  apply.onClick();
+  assert.equal(m.text, '새 글', '[완료]는 친 글로 그 칸을 확정');
+  assert.equal(m.renders, 1);
+  assert.equal(m.other, '3', '다른 칸의 반영 전 글은 그대로 둔다');
+  assert.equal(other.text, '9', '다른 칸의 친 글은 지우지 않는다');
+  assert.equal(m.saved, undefined, '[완료]는 창 확인이 아님');
+  ok.onClick();
+  assert.deepEqual(m.saved, ['새 글', '9'], '확인 때 나머지도 반영');
+}
+console.log('PASS: no render while typing, apply button, focus-free confirm, Enter, multiline, IME guard, validation, cancel, slider/reset, Tab');

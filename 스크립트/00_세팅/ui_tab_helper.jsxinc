@@ -55,15 +55,17 @@ function collectDialogConfirmButtons(container, buttons) {
     if (!children) return;
     for (var i = 0; i < children.length; i++) {
         var child = children[i];
-        if (child.type === "button" &&
+        // 입력칸 옆 [완료](applyTo)는 그 칸만 확정하는 단추라 창 확인 단추가 아니다
+        if (child.type === "button" && !child.applyTo &&
             ((child.properties && child.properties.name === "ok") ||
             /^(확인|완료|완료하기|적용|실행|만들기|그리기|OK)$/.test(child.text))) buttons.push(child);
         else collectDialogConfirmButtons(child, buttons);
     }
 }
 
-// 입력창의 기존 onChanging/onChange는 그대로 불러 치는 대로 미리보기한다(2026-10-14). 반영한 글은 확정값으로 기억한다.
-// 확인 때는 아직 반영되지 않은 입력(onChange만 있어 포커스를 옮기기 전인 숫자 칸 등)을 기존 onChange 검증·반영 경로로 한 번 더 반영한다.
+// 글자를 칠 때마다(onChanging) 다시 그리지 않는다. 포커스를 옮기거나 Enter를 칠 때(onChange) 기존 처리기로 반영하고,
+// 반영한 글은 확정값으로 기억한다(2026-10-14). 입력칸 옆 [완료]처럼 applyTo(입력창)가 붙은 단추는 그 입력칸을 확정한다.
+// 확인 때는 아직 반영되지 않은 입력을 기존 onChange 검증·반영 경로로 한 번 더 반영한다.
 // 다른 옵션은 확정된 입력으로 미리보기하고, 아직 반영되지 않은 원문은 그 뒤에 되돌려 놓는다.
 function bindDeferredDialogInputs(win, inputs, confirmButtons) {
     if (!inputs.length || !confirmButtons.length) return;
@@ -74,8 +76,8 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
         var field = {input: input, text: String(input.text), touched: false,
             change: input.onChange, changing: input.onChanging};
         fields.push(field);
-        input.onChange = makeDeferredInputHandler(state, field, field.change || field.changing);
-        input.onChanging = makeDeferredInputHandler(state, field, field.changing);
+        input.onChange = makeDeferredInputHandler(state, field, field.change || field.changing, true);
+        input.onChanging = makeDeferredInputHandler(state, field, field.changing, false);
     }
     function flush() {
         // 한 필드의 검증이 다른 입력창을 정규화해도 입력 중인 원문을 잃지 않도록 먼저 읽는다.
@@ -94,7 +96,7 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
             for (j = 0; j < fields.length; j++) fields[j].text = String(fields[j].input.text);
         } finally { state.applying = false; }
     }
-    function wrapControl(handler, confirm) {
+    function wrapControl(handler, confirm, applyTo) {
         return function() {
             if (state.applying) return handler ? handler.apply(this, arguments) : undefined;
             if (confirm) {
@@ -110,7 +112,8 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
             for (j = 0; j < fields.length; j++) {
                 pending[j] = String(fields[j].input.text);
                 fields[j].touched = false;
-                fields[j].input.text = fields[j].text;
+                // [완료]가 확정하는 입력칸은 친 글 그대로 둔다
+                if (fields[j].input !== applyTo) fields[j].input.text = fields[j].text;
             }
             state.applying = true;
             try { return handler.apply(this, arguments); }
@@ -131,7 +134,7 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
             var child = children[j], confirm = false;
             for (var k = 0; k < confirmButtons.length; k++) if (child === confirmButtons[k]) confirm = true;
             if (child.type !== "edittext") {
-                if (confirm || child.onClick) child.onClick = wrapControl(child.onClick, confirm);
+                if (confirm || child.onClick) child.onClick = wrapControl(child.onClick, confirm, child.applyTo || null);
                 if (child.onChange) child.onChange = wrapControl(child.onChange, false);
                 if (child.onChanging) child.onChanging = wrapControl(child.onChanging, false);
             }
@@ -146,13 +149,14 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
     };
 }
 
-function makeDeferredInputHandler(state, field, handler) {
+// live: 포커스 이동·Enter(onChange)면 바로 반영, 글자마다 오는 onChanging은 확정 때만
+function makeDeferredInputHandler(state, field, handler, live) {
     return function() {
         if (state.applying) {
             field.touched = true;
             return handler ? handler.apply(this, arguments) : undefined;
         }
-        if (!handler) return;
+        if (!live || !handler) return;
         var result = handler.apply(this, arguments);
         field.text = String(field.input.text);
         return result;
