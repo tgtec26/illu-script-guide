@@ -103,6 +103,7 @@ try {
         if (o.xTitle !== "") t.textAt(o.xTitle, W + 4 * m, -5.5 * m, size, "right");
         if (o.yTitle !== "") t.text(o.yTitle, 0, H + 4 * m + size * 0.9, size, "center");
         // 눈금: 가로는 반감기마다, 세로는 100·50·25·12.5 … 반감기 횟수만큼
+        var lastLabelY = null;   // 바로 위에 쓴 세로 눈금 글자의 y
         for (i = 0; i <= n; i++) {
             var gx = i * sx, gy = 100 * Math.pow(0.5, i) * sy;
             if (i > 0) {
@@ -110,7 +111,11 @@ try {
                 t.text(o.xMode === 0 ? (i === 1 ? "T" : i + "T") : String(i), gx, -2.6 * m, size, "center", o.xMode === 0 ? {italic: true} : null);
             } else t.text("0", 0, -2.6 * m, size, "center");
             t.line([0, gy], [0.9 * m, gy], o.wRope);
-            t.textAt(i < 3 ? String(100 * Math.pow(0.5, i)) : String(Math.round(100 * Math.pow(0.5, i) * 100) / 100), -1.4 * m, gy, size, "left");
+            // 위 글자와 글자 크기×1.2보다 가까우면 글자만 빼고 눈금·안내선은 둔다 (낮은 그래프에서 6.25가 12.5에 붙는 것)
+            if (lastLabelY === null || lastLabelY - gy >= size * 1.2) {
+                t.textAt(i < 3 ? String(100 * Math.pow(0.5, i)) : String(Math.round(100 * Math.pow(0.5, i) * 100) / 100), -1.4 * m, gy, size, "left");
+                lastLabelY = gy;
+            }
             if (o.showGuides && i > 0) {
                 t.line([0, gy], [gx, gy], o.wRope, [1.5, 1.5]);
                 t.line([gx, gy], [gx, 0], o.wRope, [1.5, 1.5]);

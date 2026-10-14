@@ -79,4 +79,35 @@ assert.strictEqual(calls.filter((c) => c.k === "curve").length, 2);
 assert.ok(calls.filter((c) => c.k === "curve").every((c) => c.a[2] === 10), "무리 음영");
 assert.ok(!t2.includes("거성"));
 assert.strictEqual(calls.filter((c) => c.k === "line").length, 4 + 5);
+
+// 기본값(대화상자의 value)으로 그리면 별 점·별 이름이 무리 이름 글자와 겹치지 않는다.
+// 글자 상자는 가운데 기준 폭 = 글자 수 × 크기(한글 전각), 높이 = 크기로 넉넉히 잡는다
+function readDefaults() {
+  const out = {};
+  const re = /\{key: "(\w+)"[^{}]*?value: ("(?:[^"\\]|\\.)*"|true|false|-?[\d.]+)/g;
+  let hit;
+  while ((hit = re.exec(source))) out[hit[1]] = JSON.parse(hit[2]);
+  return out;
+}
+const defaults = readDefaults();
+calls = run(defaults);
+const size = defaults.font;
+// 글자 가로 자리는 정렬(c.a[4])을 따른다: "right"면 x가 오른쪽 끝
+const groupLabels = calls.filter((c) => c.k === "text" && ["주계열성", "거성", "초거성", "백색 왜성"].includes(c.a[0])).map((c) => {
+  const w = c.a[0].length * size, left = c.a[4] === "right" ? c.a[1] - w : c.a[1] - w / 2;
+  return { name: c.a[0], left, right: left + w, bottom: c.a[2] - size / 2, top: c.a[2] + size / 2 };
+});
+assert.strictEqual(groupLabels.length, 4);
+// 거성 이름은 작은 타원 왼쪽 바깥(타원 왼쪽 끝 0.66W)에 있다
+assert.ok(groupLabels.find((g) => g.name === "거성").right <= 55 * MM * 0.66, "거성 이름이 타원 밖 왼쪽");
+const starBoxes = [];
+for (const c of calls.filter((c) => c.k === "dot")) {
+  const [x, y, r] = c.a;
+  starBoxes.push({ name: "점", left: x - r, right: x + r, bottom: y - r, top: y + r });
+  starBoxes.push({ name: "이름", left: x + r + 0.8 * MM, right: x + r + 0.8 * MM + size * 0.7, bottom: y - size / 2, top: y + size / 2 });
+}
+for (const s of starBoxes) for (const g of groupLabels) {
+  const overlap = s.left < g.right && s.right > g.left && s.bottom < g.top && s.top > g.bottom;
+  assert.ok(!overlap, `기본 별 ${s.name}이 '${g.name}' 글자와 겹친다`);
+}
 console.log("ok hr-diagram");

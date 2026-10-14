@@ -63,7 +63,18 @@ assert.strictEqual(calls.filter((c) => c.k === "dot").length, 4);
 assert.strictEqual(calls.filter((c) => c.k === "line" && c.a[3]).length, 8);
 assert.strictEqual(calls.filter((c) => c.k === "line" && !c.a[3]).length, 4 + 5);
 const texts = calls.filter((c) => c.k === "text" || c.k === "textAt").map((c) => c.a[0]);
-for (const w of ["0", "T", "2T", "4T", "100", "50", "25", "12.5", "6.25", "시간", "남은 양(%)", "A"]) assert.ok(texts.includes(w), `글자 ${w}`);
+for (const w of ["0", "T", "2T", "4T", "100", "50", "25", "12.5", "시간", "남은 양(%)", "A"]) assert.ok(texts.includes(w), `글자 ${w}`);
+// 세로 눈금 글자는 위 글자와 글자 크기×1.2 이상 떨어진다. 가까우면 그 글자만 빼고 눈금·안내선은 남긴다
+// (높이 40mm, 8pt: 6.25는 12.5와 7pt 차이라 빠짐 / 높이 90mm면 16pt 차이라 들어감)
+function yLabelGaps(callList) {
+  const ys = callList.filter((c) => c.k === "textAt" && c.a[4] === "left").map((c) => c.a[2]);
+  return ys.slice(1).map((y, i) => ys[i] - y);
+}
+assert.ok(!texts.includes("6.25"), "40mm에서 6.25는 12.5와 붙어서 뺀다");
+assert.ok(yLabelGaps(calls).every((gap) => gap >= 8 * 1.2 - 1e-9), `세로 눈금 글자 간격 ${yLabelGaps(calls)}`);
+const tall = run({ height: 90 });
+assert.ok(tall.some((c) => c.k === "textAt" && c.a[0] === "6.25"), "90mm에서는 6.25가 들어간다");
+assert.ok(yLabelGaps(run({ height: 25, periods: 5, font: 14 })).every((gap) => gap >= 14 * 1.2 - 1e-9));
 // 점은 곡선 위(i번째 점 x = i·W/4, y = 100·0.5^i %)
 const dots = calls.filter((c) => c.k === "dot").map((c) => c.a);
 near(dots[1][0], 2 * W / 4, "둘째 점 x"); near(dots[1][1], 25 * H / 100, "둘째 점 y");

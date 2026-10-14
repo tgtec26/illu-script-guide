@@ -140,11 +140,12 @@ try {
             supText(t, yt[i], -1.4 * m, ty, size, "right");
         }
         // 별 무리: 주계열(왼쪽 위 → 오른쪽 아래의 기울어진 타원), 거성, 초거성(위쪽 가로로 긴 타원), 백색 왜성(왼쪽 아래)
+        // 거성 타원은 작아서 이름을 타원 왼쪽 바깥에 쓴다(안에 쓰면 거성 자리에 찍은 별과 겹친다)
         var p1 = [W * 0.08, H * 0.88], p2 = [W * 0.94, H * 0.07];
         var mdx = p2[0] - p1[0], mdy = p2[1] - p1[1], mlen = Math.sqrt(mdx * mdx + mdy * mdy);
         var groups = [
             {on: o.showMain, name: "주계열성", c: [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2], rx: mlen / 2 + 2 * m, ry: H * 0.07, rot: Math.atan2(mdy, mdx), label: [W * 0.62, H * 0.2]},
-            {on: o.showGiant, name: "거성", c: [W * 0.78, H * 0.68], rx: W * 0.12, ry: H * 0.07, rot: 0, label: [W * 0.78, H * 0.68]},
+            {on: o.showGiant, name: "거성", c: [W * 0.78, H * 0.68], rx: W * 0.12, ry: H * 0.07, rot: 0, label: [W * 0.66 - 1 * m, H * 0.68], align: "right"},
             {on: o.showSuper, name: "초거성", c: [W * 0.62, H * 0.9], rx: W * 0.3, ry: H * 0.045, rot: 0, label: [W * 0.62, H * 0.9]},
             {on: o.showDwarf, name: "백색 왜성", c: [W * 0.25, H * 0.13], rx: W * 0.14, ry: H * 0.055, rot: 0, label: [W * 0.25, H * 0.13]}
         ];
@@ -152,7 +153,7 @@ try {
             var g = groups[i];
             if (!g.on) continue;
             t.curve(ellipseAnchors(g.c[0], g.c[1], g.rx, g.ry, g.rot), true, shade, 100, o.wBody);
-            if (o.showGroupNames) t.text(g.name, g.label[0], g.label[1], size, "center");
+            if (o.showGroupNames) t.text(g.name, g.label[0], g.label[1], size, g.align || "center");
         }
         // 별
         var stars = parseStars(o.stars), r = o.starMm * m / 2;

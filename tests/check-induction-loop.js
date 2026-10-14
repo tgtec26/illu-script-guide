@@ -67,6 +67,9 @@ assert.ok(calls.some((c) => c.k === "textAt" && c.a[0] === "p"));
 // 기호: 영역 Ⅰ·Ⅲ은 ●, Ⅱ는 ×(선 두 개씩). 기호 간격 6mm, 영역 2d=12mm×4d=24mm → 2열 4행(세기 글자 자리 제외)
 const dotsI = calls.filter((c) => c.k === "dot" && c.a[0] > 2 * d && c.a[0] < 4 * d);
 assert.ok(dotsI.length >= 6 && dotsI.length <= 8, `영역 Ⅰ 점 ${dotsI.length}`);
+// 너비가 같은 영역은 기호 열 수도 같다(6d~8d에서 (8d-6d)/간격이 1.9999…로 떨어져 1열이 되던 것)
+const columnsIn = (lo, hi) => new Set(calls.filter((c) => c.k === "dot" && c.a[0] > lo * d && c.a[0] < hi * d).map((c) => c.a[0].toFixed(3))).size;
+assert.strictEqual(columnsIn(6, 8), columnsIn(2, 4), "영역 Ⅲ 기호 열 수");
 const crosses = calls.filter((c) => c.k === "line" && c.a[0][0] > 4 * d && c.a[0][0] < 6 * d && Math.abs(c.a[0][0] - c.a[1][0]) > 1e-6);
 assert.ok(crosses.length >= 12 && crosses.length % 2 === 0, `영역 Ⅱ × 선 ${crosses.length}`);
 // 글자: 영역 이름 3, 세기 3, O·x·y
@@ -87,4 +90,34 @@ near(moved[0].a[0][0][0], (-2 + 3) * d, "이동 고리 왼쪽");
 // p 오른쪽 변
 calls = run({ pPos: 2 });
 assert.ok(calls.some((c) => c.k === "dot" && c.a[0] === 0 && c.a[1] === 2 * d));
+
+// 기본값(대화상자의 value)으로 그리면 고리·p 글자·v 화살표가 y축 왼쪽의 눈금 글자와 겹치지 않고,
+// 고리 변이 축 위에 겹쳐 놓이지 않는다. 글자 상자는 폭 = 글자 수 × 크기 × 0.6, 높이 = 크기
+function readDefaults() {
+  const out = {};
+  const re = /\{key: "(\w+)"[^{}]*?value: ("(?:[^"\\]|\\.)*"|true|false|-?[\d.]+)/g;
+  let hit;
+  while ((hit = re.exec(source))) out[hit[1]] = JSON.parse(hit[2]);
+  return out;
+}
+const defaults = readDefaults();
+calls = run(defaults);
+const size = defaults.font, dd = defaults.unit * MM;
+const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.bottom < b.top && a.top > b.bottom;
+const yTickLabels = calls.filter((c) => c.k === "textAt" && c.a[4] === "left" && /d$/.test(c.a[0]))
+  .map((c) => ({ name: c.a[0], left: c.a[1] - c.a[0].length * size * 0.6, right: c.a[1], bottom: c.a[2] - size / 2, top: c.a[2] + size / 2 }));
+assert.ok(yTickLabels.length >= 3, "기본값에 y 눈금 글자가 있다");
+const [rl, rt, rr, rb] = calls.find((c) => c.k === "rect").a;
+const loopBox = { left: rl, right: rr, bottom: rb, top: rt };
+assert.ok(rl !== 0 && rr !== 0 && rb !== 0, "고리 변이 축 위에 놓인다");
+const pText = calls.find((c) => c.k === "textAt" && c.a[0] === "p");
+const pBox = { left: pText.a[1] - size * 0.6, right: pText.a[1], bottom: pText.a[2] - size / 2, top: pText.a[2] + size / 2 };
+assert.ok(pBox.right <= 0 || pBox.left >= 0, "p 글자가 y축에 걸친다");
+const vArrow = calls.filter((c) => c.k === "arrow")[2];
+const vBox = { left: vArrow.a[0][0], right: vArrow.a[1][0], bottom: vArrow.a[0][1] - 1, top: vArrow.a[0][1] + 1 };
+for (const label of yTickLabels) {
+  for (const [what, box] of [["고리", loopBox], ["p 글자", pBox], ["v 화살표", vBox]]) assert.ok(!overlaps(label, box), `기본값에서 ${what}가 y 눈금 '${label.name}'와 겹친다`);
+}
+// 기본 고리는 영역 Ⅰ보다 왼쪽에 있다
+assert.ok(rr < defaults.regionStart * dd, "기본 고리가 영역과 겹친다");
 console.log("ok induction-loop");

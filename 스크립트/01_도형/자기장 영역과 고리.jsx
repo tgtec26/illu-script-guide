@@ -50,7 +50,7 @@ try {
             controls: [
                 {panel: "좌표"},
                 {key: "unit", label: "d 한 칸", unit: "mm", min: 3, max: 12, step: 0.5, value: 6},
-                {key: "regionStart", label: "영역 시작 x", unit: "d", min: 0, max: 6, step: 0.5, value: 2},
+                {key: "regionStart", label: "영역 시작 x", unit: "d", min: 0, max: 6, step: 0.5, value: 4},
                 {key: "height", label: "영역 높이", unit: "d", min: 2, max: 8, step: 0.5, value: 4},
                 {key: "tickStep", label: "눈금 간격", unit: "d", min: 1, max: 4, step: 1, value: 1},
                 {key: "showTicks", check: "눈금 글자", value: true},
@@ -62,19 +62,20 @@ try {
                 {key: "dir1", label: "Ⅰ 방향", items: DIRECTION_ITEMS, value: 1},
                 {key: "dir2", label: "Ⅱ 방향", items: DIRECTION_ITEMS, value: 0},
                 {key: "dir3", label: "Ⅲ 방향", items: DIRECTION_ITEMS, value: 1},
+                {panel: "기호·음영", fold: true},
                 {key: "shade1", label: "Ⅰ 음영", unit: "%", min: 0, max: 60, step: 5, value: 10},
                 {key: "shade2", label: "Ⅱ 음영", unit: "%", min: 0, max: 60, step: 5, value: 25},
                 {key: "shade3", label: "Ⅲ 음영", unit: "%", min: 0, max: 60, step: 5, value: 10},
                 {key: "gridMm", label: "기호 간격", unit: "mm", min: 3, max: 12, step: 0.5, value: 6},
                 {key: "symMm", label: "기호 크기", unit: "mm", min: 0.8, max: 4, step: 0.1, value: 1.8},
-                {panel: "글자"},
+                {panel: "글자", fold: true},
                 {key: "showNames", check: "영역 이름", value: true},
                 {key: "showStrength", check: "세기 글자", value: true},
                 {key: "names", label: "영역 이름", text: true, value: "I, II, III"},
                 {key: "strengths", label: "세기", text: true, value: "B0, 2B0, B0"},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 14, step: 0.5, value: 8},
                 {panel: "고리"},
-                {key: "loopX", label: "왼쪽 변 x", unit: "d", min: -8, max: 12, step: 0.5, value: -2},
+                {key: "loopX", label: "왼쪽 변 x", unit: "d", min: -8, max: 12, step: 0.5, value: 1},
                 {key: "loopY", label: "아래 변 y", unit: "d", min: 0, max: 7, step: 0.5, value: 1},
                 {key: "loopW", label: "가로", unit: "d", min: 0.5, max: 5, step: 0.5, value: 2},
                 {key: "loopH", label: "세로", unit: "d", min: 0.5, max: 6, step: 0.5, value: 2},
@@ -83,7 +84,7 @@ try {
                 {key: "showMove", check: "이동한 고리 (파선)", value: false},
                 {key: "vLen", label: "화살표 길이", unit: "d", min: 0.5, max: 3, step: 0.5, value: 1},
                 {key: "moveD", label: "이동 거리", unit: "d", min: 0.5, max: 12, step: 0.5, value: 3},
-                {panel: "화살촉 (축·속도)"},
+                {panel: "화살촉 (축·속도)", fold: true},
                 {key: "headShape", label: "화살촉 모양", items: HEAD_SHAPES, order: [3, 2, 0, 1], value: 3},
                 {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100}
             ],
@@ -142,7 +143,8 @@ try {
             t.path([[left, H], [right, H], [right, 0], [left, 0]], true, rg.shade > 0 ? rg.shade : null, 100, o.wRope, [1.5, 1.5]);
             // 기호: 영역 안에 일정한 간격의 격자로. 세기 글자 자리(왼쪽 위)는 비운다
             if (rg.dir < 2) {
-                var step = o.gridMm * m, cols = Math.max(1, Math.floor((right - left) / step)), rows = Math.max(1, Math.floor(H / step));
+                // 1e-9: (8d-6d)/간격이 1.9999…로 떨어져 한 열이 빠지지 않게
+                var step = o.gridMm * m, cols = Math.max(1, Math.floor((right - left) / step + 1e-9)), rows = Math.max(1, Math.floor(H / step + 1e-9));
                 var x0 = (left + right) / 2 - (cols - 1) * step / 2, y0 = H / 2 - (rows - 1) * step / 2;
                 var rr = o.symMm * m / 2;
                 var textW = o.showStrength && i < strengths.length ? strengths[i].length * size * 0.6 + 2 * m : 0;
