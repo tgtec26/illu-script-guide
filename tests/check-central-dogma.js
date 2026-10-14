@@ -74,4 +74,29 @@ assert.ok(source.includes('makeCollapsiblePanel(page, ctl.panel, true, spec.name
 assert.ok(!source.includes("HeatEngineCycle"), "no leftovers from the template");
 assert.ok(source.includes('value: "DNA, ㉠, ㉡"') && source.includes('value: "(가), (나), (다)"'));
 assert.ok(source.includes("code >= 0x3260 && code <= 0x327F"), "circled jamo use the symbol font");
+// 글자 크기 재기: 윤곽선 만들기가 실패해도 복제본을 남기지 않는다(남으면 (나)가 겹쳐 보였다)
+{
+  const ink = new Function(`${extract("formInkBounds")}\nreturn formInkBounds;`)();
+  const removed = [];
+  const copy = { remove() { removed.push("copy"); }, createOutline() { throw new Error("Target layer cannot be modified"); } };
+  const frame = { geometricBounds: [1, 2, 3, 4], duplicate() { return copy; } };
+  assert.deepStrictEqual(ink(frame), [1, 2, 3, 4], "falls back to the frame bounds");
+  assert.deepStrictEqual(removed, ["copy"], "failed copy is removed");
+  const outlined = { geometricBounds: [5, 6, 7, 8], remove() { removed.push("outline"); } };
+  const ok = { geometricBounds: [0, 0, 0, 0], duplicate() { return { createOutline() { return outlined; }, remove() { removed.push("stale copy"); } }; } };
+  assert.deepStrictEqual(ink(ok), [5, 6, 7, 8]);
+  assert.deepStrictEqual(removed, ["copy", "outline"], "outline removed, consumed copy not touched");
+}
+// 다시 그리기: 그리는 사이에 온 요청은 겹쳐 그리지 않고 끝난 뒤 한 번 더 그린다
+{
+  const body = extract("redraw");
+  const guard = source.slice(source.indexOf("var drawing = false, drawAgain = false;"), source.indexOf("function redraw()"));
+  // 그리는 도중(글자 크기를 재는 사이 등)에 키 입력이 한 번 끼어든다고 본다
+  let depth = 0, maxDepth = 0, builds = 0, nested = 1;
+  const redraw = new Function("app", "removeGroup", "build", `var previewOn = true;\n${guard}\n${body}\nreturn redraw;`)(
+    { redraw() {} }, () => {}, () => { depth++; maxDepth = Math.max(maxDepth, depth); builds++; if (nested-- > 0) redraw(); depth--; });
+  redraw();
+  assert.strictEqual(maxDepth, 1, "never draws inside another draw");
+  assert.strictEqual(builds, 2, "the request that came in while drawing is drawn once afterwards");
+}
 console.log("central dogma checks passed");

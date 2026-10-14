@@ -412,10 +412,20 @@ try {
             box.onClick = function() { o[ctl.key] = box.value; redraw(); };
         }
 
+        // 그리는 사이(app.redraw가 키 입력을 처리할 때) 다시 그리라는 요청이 오면 겹쳐 그리지 않고 끝난 뒤 한 번 더 그린다.
+        // 겹쳐 그리면 그리던 그룹이 지워져 'Target layer cannot be modified'가 나고 조각이 남는다
+        var drawing = false, drawAgain = false;
         function redraw() {
-            removeGroup();
-            if (previewOn) build();
-            app.redraw();
+            if (drawing) { drawAgain = true; return; }
+            drawing = true;
+            try {
+                do {
+                    drawAgain = false;
+                    removeGroup();
+                    if (previewOn) build();
+                    app.redraw();
+                } while (drawAgain);
+            } finally { drawing = false; }
         }
 
         function build() {
@@ -576,16 +586,20 @@ try {
 
     // 글자 윤곽의 경계: 복사본을 윤곽선으로 바꿔 재고 지운다. 실패하면 글상자 경계를 쓴다
     function formInkBounds(frame) {
+        var copy = null, outlined = null;
         try {
-            var copy = frame.duplicate();
-            var outlined = copy.createOutline();
+            copy = frame.duplicate();
+            outlined = copy.createOutline();
+            copy = null;   // 윤곽선으로 바뀌어 복제본은 없어졌다
             var b = outlined.geometricBounds;
-            var out = [b[0], b[1], b[2], b[3]];
-            outlined.remove();
-            return out;
+            return [b[0], b[1], b[2], b[3]];
         } catch (e) {
             var f = frame.geometricBounds;
             return [f[0], f[1], f[2], f[3]];
+        } finally {
+            // 실패해도 잰 복제본·윤곽선을 남기지 않는다(남으면 글자가 겹쳐 보인다)
+            try { if (outlined) outlined.remove(); } catch (e2) {}
+            try { if (copy) copy.remove(); } catch (e3) {}
         }
     }
 
