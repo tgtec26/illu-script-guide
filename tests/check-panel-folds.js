@@ -70,6 +70,51 @@ input.text = '0.8';
 ctx.setPanelFold(panel, true);
 ok.onClick();
 assert.equal(committed, '0.8');
+// 숨긴 탭 페이지는 높이 계산에서 빼고, 탭을 바꾸면 높이 제약을 복원한다.
+const tabWin = control('dialog', '탭 시험');
+tabWin.layout = { layout() {} };
+const selector = control('radiobutton', '다른 탭', tabWin);
+const stack = control('group', '', tabWin);
+stack.orientation = 'stack';
+const pageA = control('group', '', stack);
+const pageB = control('group', '', stack);
+pageB.visible = false;
+control('panel', '첫째 옵션', pageA).children.push(control('group', ''));
+control('panel', '둘째 옵션', pageB).children.push(control('group', ''));
+selector.onClick = function() { pageA.visible = false; pageB.visible = true; };
+ctx.bindPanelFolds(tabWin);
+tabWin.onShow();
+assert.equal(pageB.maximumSize.height, 0, '다른 탭의 긴 내용이 창 높이를 유지하지 않음');
+selector.onClick();
+assert.equal(pageA.maximumSize.height, 0);
+assert.equal(pageB.maximumSize.height, 10000, '현재 탭은 원래 제약 복원');
+assert.equal(pageB.preferredSize.height, -1);
+// 네이티브 탭은 selection이 바뀐 뒤 onChange가 호출된다. 처리기 내부에서 visible이 안 바뀌어도 갱신한다.
+const nativeWin = control('dialog', '기본 탭 시험');
+nativeWin.layout = { layout() {} };
+const tabs = control('tabbedpanel', '', nativeWin);
+const tabA = control('tab', 'A', tabs);
+const tabB = control('tab', 'B', tabs);
+control('group', '', control('panel', 'A 옵션', tabA));
+control('group', '', control('panel', 'B 옵션', tabB));
+tabs.selection = tabA;
+ctx.bindPanelFolds(nativeWin);
+nativeWin.onShow();
+assert.equal(tabB.maximumSize.height, 0);
+tabs.selection = tabB;
+tabs.onChange();
+assert.equal(tabA.maximumSize.height, 0);
+assert.equal(tabB.maximumSize.height, 10000);
+// 최초 onShow가 비활성 페이지를 숨기기 전에 원래 자식 표시 상태를 기록한다.
+const initialWin = control('dialog', '초기 접기 시험');
+initialWin.layout = { layout() {} };
+const initialPanel = control('panel', '접힌 옵션', initialWin);
+const initialRow = control('group', '', initialPanel);
+initialPanel.__foldDefault = true;
+initialWin.onShow = function() { initialRow.visible = false; };
+ctx.bindPanelFolds(initialWin);
+initialWin.onShow();
+assert.equal(initialPanel.__foldState.items[0].visible, true);
 // 제목 있는 패널이 헬퍼에 연결되지 않은 스크립트가 없어야 한다.
 const path = require('node:path');
 function walk(dir) {

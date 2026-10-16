@@ -504,16 +504,22 @@ function bindPanelFolds(win) {
     }
     walk(win, "");
     if (!panels.length) return;
+    win.__foldPanels = panels;
+    bindFoldPageResize(win);
     var show = win.onShow;
     win.onShow = function() {
-        if (show) show.apply(this, arguments);
         // 폭은 모두 펼친 상태에서 확보한다. 접힌 상태로 다시 열어도 제목·숫자 행이 잘리지 않는다.
         var width = win.size.width;
         for (var i = panels.length - 1; i >= 0; i--) {
             var p = panels[i];
             p.minimumSize.width = Math.max(p.minimumSize.width, p.size.width);
-            if (p.__foldState.initial) setPanelFold(p, true);
+            if (p.visible) {
+                p.__foldState.initialApplied = true;
+                if (p.__foldState.initial) setPanelFold(p, true);
+            }
         }
+        // 다른 페이지를 숨기기 전에 자식의 원래 visible 값을 보관해야 펼칠 때 복원된다.
+        if (show) show.apply(this, arguments);
         win.minimumSize.width = Math.max(win.minimumSize.width, width);
         resizeFoldDialog(win);
     };
@@ -578,10 +584,94 @@ function setPanelFold(panel, collapsed, save) {
 }
 
 function resizeFoldDialog(win) {
+    if (win.__foldResizing) return;
+    win.__foldResizing = true;
     try {
+        var panels = win.__foldPanels || [];
+        for (var i = 0; i < panels.length; i++) {
+            var panel = panels[i], state = panel.__foldState;
+            // 기본 탭의 비활성 페이지는 처음부터 숨겨져 있으므로 처음 선택한 뒤 상태를 적용한다.
+            if (!state.initialApplied && panel.visible) {
+                state.initialApplied = true;
+                if (state.initial) setPanelFold(panel, true);
+            }
+        }
+        syncFoldPageHeights(win);
         win.size = [win.size.width, 10];
         win.layout.layout(true);
     } catch (layoutError) {}
+    finally { win.__foldResizing = false; }
+}
+
+// stack의 숨긴 페이지도 기본 레이아웃은 높이에 포함한다. 숨긴 페이지의 높이만 0으로 제한한다.
+// 패널 내부 요소·탭 순서·페이지 너비는 건드리지 않는다.
+function bindFoldPageResize(win) {
+    var stacks = [];
+    function collect(c) {
+        if (!c.children) return;
+        if (c.type === "tabbedpanel") stacks.push(c);
+        else if (c.type === "group" && c.orientation === "stack" && c.children.length > 1) {
+            var pagesOnly = true;
+            for (var j = 0; j < c.children.length; j++) {
+                if (c.children[j].type !== "group") pagesOnly = false;
+            }
+            if (pagesOnly) stacks.push(c);
+        }
+        for (var i = 0; i < c.children.length; i++) collect(c.children[i]);
+    }
+    collect(win);
+    win.__foldStacks = stacks;
+    if (!stacks.length) return;
+    function visibilityKey() {
+        var key = "";
+        for (var i = 0; i < stacks.length; i++) {
+            for (var j = 0; j < stacks[i].children.length; j++) key += isFoldPageShown(stacks[i], stacks[i].children[j]) ? "1" : "0";
+        }
+        return key;
+    }
+    function wrap(handler, always) {
+        return function() {
+            var before = visibilityKey();
+            var result = handler.apply(this, arguments);
+            if (always || before !== visibilityKey()) resizeFoldDialog(win);
+            return result;
+        };
+    }
+    function bind(c) {
+        if (c.type === "radiobutton" || c.type === "dropdownlist" || c.type === "button" || c.type === "tabbedpanel") {
+            if (c.onClick) c.onClick = wrap(c.onClick);
+            if (c.onChange || c.type === "tabbedpanel") c.onChange = wrap(c.onChange || function() {}, c.type === "tabbedpanel");
+        }
+        if (c.children) for (var i = 0; i < c.children.length; i++) bind(c.children[i]);
+    }
+    bind(win);
+}
+
+function isFoldPageShown(stack, page) {
+    return stack.type === "tabbedpanel" ? stack.selection === page : page.visible;
+}
+
+function syncFoldPageHeights(win) {
+    var stacks = win.__foldStacks || [];
+    for (var i = 0; i < stacks.length; i++) {
+        var stack = stacks[i];
+        for (var j = 0; j < stack.children.length; j++) {
+            var page = stack.children[j], saved = page.__foldPageHeight;
+            if (!isFoldPageShown(stack, page) && !saved) {
+                page.__foldPageHeight = {minimum: page.minimumSize.height,
+                    maximum: page.maximumSize.height, preferred: page.preferredSize.height};
+                page.minimumSize.height = 0;
+                page.preferredSize.height = page.maximumSize.height = 0;
+            } else if (isFoldPageShown(stack, page) && saved) {
+                page.maximumSize.height = saved.maximum;
+                page.minimumSize.height = saved.minimum;
+                page.preferredSize.height = saved.preferred;
+                page.__foldPageHeight = null;
+            }
+        }
+        // stack 자체에 직전 페이지 높이가 남지 않도록 다시 계산한다.
+        stack.preferredSize.height = -1;
+    }
 }
 
 // ---- 좌우 여백 맞추기 (bindTabOrder가 부른다, 2026-10-14) ----
