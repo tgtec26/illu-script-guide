@@ -165,7 +165,10 @@ try {
         var i;
         // 복제는 숨기기 전에 모두 끝낸다
         for (i = 0; i < originals.length; i++) {
-            previews.push(originals[i].duplicate(originals[i], ElementPlacement.PLACEAFTER));
+            var copy = originals[i].duplicate(originals[i], ElementPlacement.PLACEAFTER);
+            // 숨겨 둔 원본을 복제하면 복제본도 숨겨진다
+            try { copy.hidden = false; } catch (showError) {}
+            previews.push(copy);
         }
         for (i = 0; i < originals.length; i++) {
             try { originals[i].hidden = true; } catch (hideError) {}
