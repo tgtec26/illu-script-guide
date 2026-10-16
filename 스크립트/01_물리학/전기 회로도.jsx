@@ -14,7 +14,7 @@ try {
     var doc = app.activeDocument, MM = 2.834645669, UNIT = MM / 8;
     var PREF_KEY = "CircuitDiagram/settings";
     var o = {loopW:40, loopH:30, scale:100, fontSize:8, parallel:false, branchStart:120, branchEnd:240, branchGap:10,
-        meterOn:false, meterTarget:1, meterGap:10, meterInside:false, top:"battery", right:"resistor", bottom:"switchOpen", left:"ammeter"};
+        meterOn:false, meterTarget:1, meterGap:10, meterSpan:0, meterInside:false, top:"battery", right:"resistor", bottom:"switchOpen", left:"ammeter"};
     var elements, count = 4, selected = 0, dx = 0, dy = 0, preview = null, previewOn = true, busy = true;
     var posX = 0, posY = 0;
     // BEGIN CIRCUIT CORE (tools/sync-circuit-native.py)
@@ -319,7 +319,8 @@ function generateCircuit(o) {
     for (i = 0; i < g.placements.length; i++) if (g.placements[i].index === targetIndex) target = g.placements[i];
     if (!target || target.key === 'voltmeter' || target.key === 'ammeter') g.error = '전압계 연결 대상을 저항·전구·전지 등의 요소로 골라주세요.';
     else {
-      var lead = target.half + 2 * m, off = circuitNumber(o.meterGap, 6, 35, 10) * m * (o.meterInside ? -1 : 1);
+      var span = circuitNumber(o.meterSpan, 0, 80, 0);
+      var lead = span > 0 ? span * m / 2 : target.half + 2 * m, off = circuitNumber(o.meterGap, 6, 35, 10) * m * (o.meterInside ? -1 : 1);
       var nx = target.uy, ny = -target.ux;
       var pa = [target.x - target.ux * lead, target.y - target.uy * lead], pb = [target.x + target.ux * lead, target.y + target.uy * lead];
       // 분기 접점은 대상과 같은 직선 도선 위, 모서리 바깥으로 넘어가지 않게 제한한다.
@@ -403,7 +404,9 @@ function generateCircuit(o) {
     var meterPanel=panel("전압계 연결");
     var meter=check(meterPanel,"전압계",false,function(v){o.meterOn=v;});
     var target=selectRow(meterPanel,"측정 대상",["1","2","3","4"],function(i){o.meterTarget=i;updatePreview();});
-    var meterGap=numberRow(meterPanel,"간격",10,6,35,1,function(v){o.meterGap=v;});
+    var meterGap=numberRow(meterPanel,"거리",10,6,35,1,function(v){o.meterGap=v;});
+    var meterSpan=numberRow(meterPanel,"연결 폭",0,0,80,0.5,function(v){o.meterSpan=v;});
+    meterSpan.edit.helpTip="두 접점 사이 간격(mm). 0은 자동. 모서리·다른 기호 앞에서 제한됩니다";
     var inside=check(meterPanel,"안쪽 연결",false,function(v){o.meterInside=v;});
     var position=panel("위치");
     var xRow=numberRow(position,"가로",0,-300,300,0.5,function(v){dx=v;movePreview();});
@@ -439,21 +442,21 @@ function generateCircuit(o) {
             preview.translate((board[0]+board[2]-b[0]-b[2])/2+dx*MM,(board[1]+board[3]-b[1]-b[3])/2+dy*MM);posX=dx;posY=dy;app.redraw();
         }catch(e){clearPreview();status.text="그리기 오류: "+e;}
     }
-    function save(){var v=["v1",o.loopW,o.loopH,o.scale,o.fontSize,o.parallel?1:0,o.branchStart,o.branchEnd,o.branchGap,o.meterOn?1:0,o.meterTarget,o.meterGap,o.meterInside?1:0,count,dx,dy];
+    function save(){var v=["v2",o.loopW,o.loopH,o.scale,o.fontSize,o.parallel?1:0,o.branchStart,o.branchEnd,o.branchGap,o.meterOn?1:0,o.meterTarget,o.meterGap,o.meterInside?1:0,count,dx,dy,o.meterSpan];
         for(var i=0;i<12;i++){var e=elements[i]||{key:"resistor",angle:0,upper:true,reverse:false,name:"",value:""};v.push(e.key,e.angle,e.upper?1:0,e.reverse?1:0,encodeURIComponent(e.name),encodeURIComponent(e.value));}
         try{app.preferences.setStringPreference(PREF_KEY,v.join("|"));}catch(e){}
     }
-    function restore(){try{var p=app.preferences.getStringPreference(PREF_KEY).split("|");if(p.length!==88||p[0]!=="v1")return;
+    function restore(){try{var p=app.preferences.getStringPreference(PREF_KEY).split("|");var legacy=p.length===88&&p[0]==="v1";if(!legacy&&!(p.length===89&&p[0]==="v2"))return;
         function n(i,a,b,d){var x=parseFloat(p[i]);return isFinite(x)&&x>=a&&x<=b?x:d;}
         o.loopW=n(1,20,160,40);o.loopH=n(2,15,120,30);o.scale=n(3,50,200,100);o.fontSize=n(4,5,18,8);o.parallel=p[5]==="1";
         o.branchStart=n(6,0,359,120);o.branchEnd=n(7,0,359,240);o.branchGap=n(8,6,60,10);o.meterOn=p[9]==="1";count=Math.round(n(13,1,12,4));o.meterTarget=Math.round(n(10,0,count-1,1));o.meterGap=n(11,6,35,10);o.meterInside=p[12]==="1";
-        dx=n(14,-300,300,0);dy=n(15,-300,300,0);var es=[];
-        for(var i=0;i<12;i++){var k=16+i*6;es.push({key:p[k],angle:n(k+1,0,359,0),upper:p[k+2]==="1",reverse:p[k+3]==="1",name:decodeURIComponent(p[k+4]).slice(0,80),value:decodeURIComponent(p[k+5]).slice(0,80)});}
+        dx=n(14,-300,300,0);dy=n(15,-300,300,0);o.meterSpan=legacy?0:n(16,0,80,0);var es=[];
+        for(var i=0;i<12;i++){var k=(legacy?16:17)+i*6;es.push({key:p[k],angle:n(k+1,0,359,0),upper:p[k+2]==="1",reverse:p[k+3]==="1",name:decodeURIComponent(p[k+4]).slice(0,80),value:decodeURIComponent(p[k+5]).slice(0,80)});}
         o.elements=es;elements=circuitElements(o);
     }catch(e){}}
     restore();
     if(typeof scriptStartsWithoutSelection==="function"&&scriptStartsWithoutSelection(doc)){dx=0;dy=0;}
-    width.set(o.loopW);height.set(o.loopH);scale.set(o.scale);font.set(o.fontSize);num.set(count);parallel.value=o.parallel;start.set(o.branchStart);end.set(o.branchEnd);spacing.set(o.branchGap);meter.value=o.meterOn;meterGap.set(o.meterGap);inside.value=o.meterInside;xRow.set(dx);yRow.set(dy);refreshLists();loadElement();busy=false;
+    width.set(o.loopW);height.set(o.loopH);scale.set(o.scale);font.set(o.fontSize);num.set(count);parallel.value=o.parallel;start.set(o.branchStart);end.set(o.branchEnd);spacing.set(o.branchGap);meter.value=o.meterOn;meterGap.set(o.meterGap);meterSpan.set(o.meterSpan);inside.value=o.meterInside;xRow.set(dx);yRow.set(dy);refreshLists();loadElement();busy=false;
     ok.onClick=function(){var was=previewOn;previewOn=true;updatePreview();if(!preview){previewOn=was;return;}save();win.close(1);};
     cancel.onClick=function(){win.close(0);};win.onShow=function(){updatePreview();};
     if(typeof bindTabOrder==="function")bindTabOrder(win);

@@ -18,11 +18,14 @@ function settingsRun(raw,save){
  vm.createContext(c);vm.runInContext(script,c);return {result:c.result,stored:prefs.get('CircuitDiagram/settings')};
 }
 const saved=settingsRun('',true).stored;
-assert.equal(saved.split('|').length,88);
-const parts=saved.split('|');parts[1]='70';parts[13]='5';parts[14]='12';parts[15]='-3';parts[16+4]=encodeURIComponent('㉠|이름');parts[16+5]=encodeURIComponent('10Ω');
+assert.equal(saved.split('|').length,89);
+const parts=saved.split('|');parts[1]='70';parts[13]='5';parts[14]='12';parts[15]='-3';parts[17+4]=encodeURIComponent('㉠|이름');parts[17+5]=encodeURIComponent('10Ω');
 const loaded=settingsRun(parts.join('|'),false);assert.equal(loaded.result.o.loopW,70);assert.equal(loaded.result.count,5);assert.equal(loaded.result.dx,12);assert.equal(loaded.result.elements[0].name,'㉠|이름');assert.equal(loaded.result.elements[0].value,'10Ω');assert.equal(loaded.stored,parts.join('|'));
-parts[1]='99999';parts[16]='unknown';assert.equal(settingsRun(parts.join('|'),false).result.o.loopW,40);assert.equal(settingsRun(parts.join('|'),false).result.elements[0].key,'resistor');
+parts[1]='99999';parts[17]='unknown';assert.equal(settingsRun(parts.join('|'),false).result.o.loopW,40);assert.equal(settingsRun(parts.join('|'),false).result.elements[0].key,'resistor');
 assert.equal(settingsRun('v0|bad',false).result.count,4);
+const legacy=saved.split('|');legacy[0]='v1';legacy.splice(16,1);
+assert.equal(settingsRun(legacy.join('|'),false).result.o.meterSpan,0);
+const custom=saved.split('|');custom[16]='22.5';assert.equal(settingsRun(custom.join('|'),false).result.o.meterSpan,22.5);
 console.log('PASS native circuit ES3, prefs roundtrip/ranges, cancel preserves options');
 (async()=>{
  const web=await import('../../sci-illu-web/src/generators/circuit-layout.js');
