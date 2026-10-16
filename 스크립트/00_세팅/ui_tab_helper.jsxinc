@@ -446,7 +446,7 @@ function compactButtonWalk(container) {
 }
 
 // ---- 접는 패널 ----
-// 기존 호출의 body·children 경로는 유지한다. 접기 표시는 제목 오른쪽에 직접 그려 별도 행을 차지하지 않는다.
+// 기존 호출의 body·children 경로는 유지한다. 접기 표시는 기본 제목 문자열 오른쪽에 붙여 별도 행을 차지하지 않는다.
 // (parent.add("panel") 대신 body = makeCollapsiblePanel(parent, "제목", true, "스크립트/패널") 으로 만들고 body.add(...)).
 // 접힌 상태는 app.preferences "<key>"(1 = 접힘)에 기억한다. 헬퍼가 없는 환경에서는 일반 패널로 대신해도 된다:
 //   var body = typeof makeCollapsiblePanel === "function" ? makeCollapsiblePanel(...) : parent.add("panel", undefined, "제목");
@@ -520,40 +520,10 @@ function bindPanelFolds(win) {
 }
 
 function bindPanelFoldHeader(panel) {
-    var draw = panel.onDraw;
-    try {
-        panel.minimumSize.width = Math.max(panel.minimumSize.width,
-            Math.ceil(panel.graphics.measureString(panel.text, panel.graphics.font).width) + 44);
-    } catch (titleMeasureError) {}
-    var light = false;
-    try { light = app.preferences.getIntegerPreference("uiBrightness") >= 2; } catch (themeError) {}
-    var ink = light ? [0.2, 0.2, 0.2, 1] : [0.82, 0.82, 0.82, 1];
-    var edge = light ? [0.65, 0.65, 0.65, 1] : [0.27, 0.27, 0.27, 1];
-    panel.onDraw = function() {
-        var g = this.graphics;
-        if (draw) draw.apply(this, arguments);
-        else {
-            // Illustrator의 drawOSControl()은 패널 제목·테두리를 그리지 않는다.
-            var width = this.size.width, height = this.size.height;
-            var titleWidth = g.measureString(this.text, g.font).width;
-            g.newPath();
-            g.moveTo(8, 7); g.lineTo(1, 7); g.lineTo(1, height - 1);
-            g.lineTo(width - 1, height - 1); g.lineTo(width - 1, 7); g.lineTo(width - 8, 7);
-            g.moveTo(Math.min(titleWidth + 18, width - 26), 7); g.lineTo(width - 26, 7);
-            g.strokePath(g.newPen(g.PenType.SOLID_COLOR, edge, 1));
-            g.drawString(this.text, g.newPen(g.PenType.SOLID_COLOR, ink, 1), 12, 0, g.font);
-        }
-        // 제목의 같은 높이, 오른쪽 여백에 8px 삼각형. 글꼴·유니코드 지원에 의존하지 않는다.
-        var x = this.size.width - 18, y = 7;
-        g.newPath();
-        if (this.__foldState.collapsed) {
-            g.moveTo(x, y - 3); g.lineTo(x + 5, y + 1); g.lineTo(x, y + 5);
-        } else {
-            g.moveTo(x - 2, y - 1); g.lineTo(x + 6, y - 1); g.lineTo(x + 2, y + 4);
-        }
-        g.closePath();
-        g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, ink));
-    };
+    // 패널 onDraw를 바꾸면 내부 그룹의 네이티브 컨트롤이 사라진다.
+    // 제목 자체에 아이콘을 붙여 기본 패널·자식 렌더링을 그대로 사용한다.
+    panel.__foldTitle = panel.text;
+    updatePanelFoldTitle(panel);
     panel.helpTip = (panel.helpTip ? panel.helpTip + "\n" : "") + "제목 줄을 클릭하면 접기·펼치기 (삼각형 아이콘)";
     panel.addEventListener("mousedown", function(event) {
         if (event.target !== panel || event.clientY > 18 || event.clientY < 0) return;
@@ -561,6 +531,10 @@ function bindPanelFoldHeader(panel) {
         setPanelFold(panel, !panel.__foldState.collapsed, true);
         if (event.preventDefault) event.preventDefault();
     });
+}
+
+function updatePanelFoldTitle(panel) {
+    panel.text = panel.__foldTitle + (panel.__foldState.collapsed ? "   \u25B6" : "   \u25BC");
 }
 
 function setPanelFold(panel, collapsed, save) {
@@ -596,6 +570,7 @@ function setPanelFold(panel, collapsed, save) {
         }
     }
     state.collapsed = collapsed;
+    updatePanelFoldTitle(panel);
     if (save) {
         try { app.preferences.setStringPreference(state.key, collapsed ? "1" : "0"); } catch (writeError) {}
         resizeFoldDialog(state.win);
