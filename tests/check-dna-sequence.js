@@ -1,11 +1,11 @@
-// DNA 모형 '염기 서열' 탭: 아미노산 서열 → 코돈 → DNA·RNA 서열의 순수 계산을 검사한다
+// 유전 정보 흐름 '유전자 발현' 탭(구 DNA 모형의 염기 서열 탭): 아미노산 서열 → 코돈 → DNA·RNA 서열의 순수 계산을 검사한다
 const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const file = fs.readFileSync(path.join(root, "스크립트", "03_생명과학", "DNA 모형.jsx"), "utf8");
-const source = file.slice(file.indexOf("function makeSequenceEngine("));
+const file = fs.readFileSync(path.join(root, "스크립트", "03_생명과학", "유전 정보 흐름.jsx"), "utf8");
+const source = file.slice(file.indexOf("function makeExpressionEngine("));
 
 function extract(name) {
   const start = source.indexOf(`function ${name}(`);

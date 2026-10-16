@@ -2587,11 +2587,11 @@ for (const file of cabinetFiles) {
 
 // DNA·RNA 염기 서열: 상보·전사·입력 정리와 설정 문자열 검증
 {
-  // 염기 서열 탭은 DNA 모형.jsx 안의 makeSequenceEngine에 원래 코드 그대로 들어 있다
-  const file = "스크립트/03_생명과학/DNA 모형.jsx";
+  // 유전자 발현 탭은 유전 정보 흐름.jsx 안의 makeExpressionEngine에 들어 있다(구 DNA 모형의 염기 서열 탭)
+  const file = "스크립트/03_생명과학/유전 정보 흐름.jsx";
   const source = read(file);
   const required = [
-    'label: "염기 서열"',
+    'label: "유전자 발현"',
     'var PREF_KEY = "ObjectDnaRnaSequence/settings";',
     'illu_last_script.txt',
     'addRow(positionPanel, "가로", "offsetX", -100, 100, "mm", true);',
@@ -2605,8 +2605,8 @@ for (const file of cabinetFiles) {
       failures++;
     }
   }
-  // 평면 모형 탭에도 complement가 있어 염기 서열 엔진 구간에서만 뽑는다
-  const sequenceSource = source.slice(source.indexOf("function makeSequenceEngine("));
+  // 유전자 발현 엔진 구간에서만 뽑는다
+  const sequenceSource = source.slice(source.indexOf("function makeExpressionEngine("));
   const pure = ["complement"].map((name) => extractFunction(sequenceSource, name)).join("\n");
   const fns = new Function(`${pure}; return {complement};`)();
   assert.strictEqual(fns.complement("GGAGCACTT"), "CCTCGTGAA", `${file} complement`);
