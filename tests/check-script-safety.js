@@ -2607,16 +2607,12 @@ for (const file of cabinetFiles) {
   }
   // 평면 모형 탭에도 complement가 있어 염기 서열 엔진 구간에서만 뽑는다
   const sequenceSource = source.slice(source.indexOf("function makeSequenceEngine("));
-  const pure = ["complement", "transcribe", "cleanSequence"].map((name) => extractFunction(sequenceSource, name)).join("\n");
-  const fns = new Function(`${pure}; return {complement, transcribe, cleanSequence};`)();
+  const pure = ["complement"].map((name) => extractFunction(sequenceSource, name)).join("\n");
+  const fns = new Function(`${pure}; return {complement};`)();
   assert.strictEqual(fns.complement("GGAGCACTT"), "CCTCGTGAA", `${file} complement`);
-  assert.strictEqual(fns.transcribe("GGAGCACTT"), "GGAGCACUU", `${file} transcribe`);
-  assert.strictEqual(fns.cleanSequence(" gga cu-t ", false), "GGACT", `${file} clean DNA drops U`);
-  assert.strictEqual(fns.cleanSequence(" gga cu-t ", true), "GGACUT", `${file} clean RNA keeps U`);
-  assert.ok(sequenceSource.includes('p[0] !== "v1" || p.length !== 18'), `${file}: settings string must be v1 with 18 fields`);
+  // 아미노산·코돈·가닥 계산은 tests/check-dna-sequence.js가 따로 검사한다
+  assert.ok(sequenceSource.includes('p[0] !== "v2" || p.length !== 26'), `${file}: settings string must be v2 with 26 fields`);
   assert.strictEqual((sequenceSource.match(/join\("\|"\)/g) || []).length, 1, `${file}: one saveSettings join`);
-  const saveArgs = sequenceSource.match(/\["v1",([\s\S]*?)\]\.join\("\|"\)/)[1].split(",").length;
-  assert.strictEqual(saveArgs, 17, `${file}: saveSettings writes 17 fields after the tag`);
 }
 
 {
