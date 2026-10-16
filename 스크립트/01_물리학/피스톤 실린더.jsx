@@ -23,6 +23,15 @@ try {
 
     var doc = app.activeDocument;
     var FORM_MM = 2.834645669;
+    var optionSchema = null, presetData = null;
+    try {
+        var helperRoot = new File($.fileName).parent.parent.fsName + "/00_세팅/";
+        $.evalFile(new File(helperRoot + "option_contract.jsxinc"));
+        $.evalFile(new File(helperRoot + "educational_presets.jsxinc"));
+        var repoRoot = new File($.fileName).parent.parent.parent.fsName;
+        optionSchema = EducationalPresets.load(new File(repoRoot + "/contracts/tool-contracts.json")).tools["piston-cylinder"];
+        presetData = EducationalPresets.load(new File(repoRoot + "/config/educational-presets.json"));
+    } catch (optionLoadError) {}
     var FORM_KOR_FONT = formFindFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
     var FORM_ITALIC_FONT = formFindFont(["GSMediItaC1", "GSMediumB1"]);
@@ -185,7 +194,7 @@ try {
         function callout(text, cx, tx) {
             if (text === "") return;
             t.text(text, cx, labelY, size, "center");
-            t.line([cx, labelY - size * 0.5 - 0.8 * m], [tx, 0], o.wRope);
+            t.stroke("wRope", t.line([cx, labelY - size * 0.5 - 0.8 * m], [tx, 0], o.wRope));
         }
         var cylCx = L * 0.2;
         if (o.pistLabel !== "") cylCx = Math.min(cylCx, pistCx - pistWidth / 2 - gap - cylWidth / 2);
@@ -312,11 +321,14 @@ try {
         ]);
         var o = {};
         var group = null, committed = false, previewOn = true, center = [0, 0], ui = {};
+        var lastOptions = null, stylePaths = [], syncRows = [], syncing = false;
 
         function addRows(page) {
             try { center = doc.activeView.centerPoint; } catch (viewError) {}
             for (var i = 0; i < controls.length; i++) if (controls[i].key) o[controls[i].key] = controls[i].value;
             loadSettings();
+            var restored = normalizeFormOptions(o, false);
+            o = restored.params;
             var panel = page, checkRow = null;
             for (var c = 0; c < controls.length; c++) {
                 var ctl = controls[c];
@@ -343,12 +355,27 @@ try {
                     else addNumber(panel, ctl);
                 }
             }
+            if (typeof presetData !== "undefined" && presetData && typeof EducationalPresets !== "undefined") {
+                EducationalPresets.addPanel(page, presetData, function(result) {
+                    var applied = normalizeFormOptions(result.params, true);
+                    o = applied.params;
+                    syncControls();
+                    redraw();
+                }, null, "piston-cylinder");
+            }
+            if (restored.notes.length) {
+                var restoredNote = page.add("statictext", undefined, "저장 옵션 보정: " + restored.notes.join(" / "), {multiline: true});
+                restoredNote.preferredSize.width = 300;
+            }
             api.setPreview = function(on) { previewOn = on; redraw(); };
             api.updatePreview = redraw;
             api.clearPreview = function() { if (!committed) removeGroup(); };
             api.finish = function() {};
             api.commit = function() {
-                if (group === null) build();
+                if (drawing) return false;
+                if (group === null || !sameOptions(lastOptions, o, false)) {
+                    if (!build()) return false;
+                }
                 if (group === null) return false;
                 saveSettings();
                 committed = true;
@@ -373,7 +400,9 @@ try {
             var reset = row.add("button", undefined, "R");
             reset.preferredSize.width = 34;
             reset.helpTip = "처음 값으로 되돌리기";
+            syncRows.push(function() { input.text = formFormat(o[ctl.key], decimals); bar.value = o[ctl.key]; });
             function apply(value) {
+                if (syncing) return;
                 if (isNaN(value)) value = o[ctl.key];
                 value = Math.round(value / ctl.step) * ctl.step;
                 value = Math.max(ctl.min, Math.min(ctl.max, Number(value.toFixed(decimals))));
@@ -384,7 +413,10 @@ try {
                 if (delta === 0) return;
                 if (ctl.move !== undefined) {
                     if (group !== null) {
-                        try { group.translate(ctl.move === 0 ? delta * FORM_MM : 0, ctl.move === 1 ? delta * FORM_MM : 0, true, true, true, true); } catch (e2) {}
+                        try {
+                            group.translate(ctl.move === 0 ? delta * FORM_MM : 0, ctl.move === 1 ? delta * FORM_MM : 0, true, true, true, true);
+                            if (lastOptions) lastOptions[ctl.key] = value;
+                        } catch (e2) { redraw(); }
                         app.redraw();
                     }
                 } else redraw();
@@ -411,7 +443,13 @@ try {
             list.maximumSize.width = 230;
             list.selection = pos;
             ui[ctl.key] = list;
+            syncRows.push(function() {
+                pos = o[ctl.key];
+                if (order) for (var j = 0; j < order.length; j++) if (order[j] === o[ctl.key]) pos = j;
+                list.selection = pos;
+            });
             list.onChange = function() {
+                if (syncing) return;
                 if (list.selection === null) { list.selection = pos; return; }
                 pos = list.selection.index;
                 o[ctl.key] = order ? order[pos] : pos;
@@ -426,7 +464,9 @@ try {
             var input = row.add("edittext", undefined, o[ctl.key]);
             input.characters = 22;
             ui[ctl.key] = input;
+            syncRows.push(function() { input.text = o[ctl.key]; });
             input.onChange = function() {
+                if (syncing) return;
                 o[ctl.key] = String(input.text).replace(/\|/g, "");
                 redraw();
             };
@@ -441,43 +481,128 @@ try {
         function addCheck(row, ctl) {
             var box = row.add("checkbox", undefined, ctl.check);
             box.value = o[ctl.key];
-            box.onClick = function() { o[ctl.key] = box.value; redraw(); };
+            syncRows.push(function() { box.value = o[ctl.key]; });
+            box.onClick = function() { if (syncing) return; o[ctl.key] = box.value; redraw(); };
         }
 
-        // 그리는 사이(app.redraw가 키 입력을 처리할 때) 다시 그리라는 요청이 오면 겹쳐 그리지 않고 끝난 뒤 한 번 더 그린다.
-        // 겹쳐 그리면 그리던 그룹이 지워져 'Target layer cannot be modified'가 나고 조각이 남는다
+        // app.redraw의 이벤트가 재진입해도 한 번에 최대 두 요청만 처리한다.
         var drawing = false, drawAgain = false;
         function redraw() {
             if (drawing) { drawAgain = true; return; }
             drawing = true;
+            var passes = 0;
             try {
                 do {
                     drawAgain = false;
-                    removeGroup();
-                    if (previewOn) build();
+                    if (!previewOn) removeGroup();
+                    else if (!sameOptions(lastOptions, o, false)) {
+                        if (!updateStyle()) build();
+                    }
                     app.redraw();
-                } while (drawAgain);
-            } finally { drawing = false; }
+                    passes++;
+                } while (drawAgain && passes < 2);
+                // 두 번째 redraw에서 들어온 최신 입력도 반영한다. 이 마지막 처리는
+                // 이벤트를 다시 받는 app.redraw를 부르지 않아 연속 입력에도 끝난다.
+                if (drawAgain) {
+                    drawAgain = false;
+                    if (!previewOn) removeGroup();
+                    else if (!sameOptions(lastOptions, o, false)) {
+                        if (!updateStyle()) build();
+                    }
+                }
+            } finally { drawing = false; drawAgain = false; }
+        }
+
+        function syncControls() {
+            syncing = true;
+            try { for (var i = 0; i < syncRows.length; i++) syncRows[i](); }
+            finally { syncing = false; }
+        }
+
+        // 프리셋(web 이름)과 저장 옵션(기존 JSX 이름)을 같은 계약으로 검사한다.
+        function normalizeFormOptions(input, webInput) {
+            var merged = copyOptions(o), key, source = {}, result;
+            if (typeof optionSchema === "undefined" || !optionSchema || typeof normalizeOptions !== "function") {
+                for (key in input) if (input.hasOwnProperty(key) && merged.hasOwnProperty(key)) merged[key] = input[key];
+                return {params: merged, notes: []};
+            }
+            for (key in optionSchema.properties) if (optionSchema.properties.hasOwnProperty(key)) {
+                var alias = key === "lengthMm" ? "length" : key === "widthMm" ? "width" : key === "heightMm" ? "height" : key === "fontPt" ? "font" : key;
+                if (webInput && input.hasOwnProperty(key)) source[key] = input[key];
+                else if (input.hasOwnProperty(alias)) source[key] = input[alias];
+                else if (merged.hasOwnProperty(alias)) source[key] = merged[alias];
+            }
+            result = normalizeOptions(optionSchema, source);
+            for (key in result.params) if (result.params.hasOwnProperty(key)) {
+                var target = key === "lengthMm" ? "length" : key === "widthMm" ? "width" : key === "heightMm" ? "height" : key === "fontPt" ? "font" : key;
+                merged[target] = key === "axes" || /^p[1-4]$/.test(key) ? Number(result.params[key]) : result.params[key];
+            }
+            return {params: merged, notes: result.notes};
+        }
+
+        function copyOptions(value) {
+            var result = {};
+            for (var key in value) if (value.hasOwnProperty(key)) result[key] = value[key];
+            return result;
+        }
+
+        function sameOptions(a, b, skipStyle) {
+            if (a === null || b === null) return false;
+            for (var i = 0; i < controls.length; i++) {
+                var key = controls[i].key;
+                if (!key) continue;
+                if (skipStyle && (key === "wRope")) continue;
+                if (a[key] !== b[key]) return false;
+            }
+            return true;
+        }
+
+        // 이 경로의 두께는 좌표/글자/기하 경계 계산에 쓰이지 않는다.
+        function updateStyle() {
+            if (group === null || !sameOptions(lastOptions, o, true)) return false;
+            var changed = [], i;
+            try {
+                for (i = 0; i < stylePaths.length; i++) {
+                    var part = stylePaths[i];
+                    if (lastOptions[part.key] === o[part.key]) continue;
+                    changed.push(part);
+                    part.item.strokeWidth = o[part.key];
+                }
+                lastOptions = copyOptions(o);
+                return true;
+            } catch (e) {
+                for (i = 0; i < changed.length; i++) {
+                    try { changed[i].item.strokeWidth = lastOptions[changed[i].key]; } catch (restoreError) {}
+                }
+                return false;
+            }
         }
 
         function build() {
-            var layer = doc.activeLayer;
-            if (layer.locked || !layer.visible) {
-                for (var i = 0; i < doc.layers.length; i++) {
-                    if (!doc.layers[i].locked && doc.layers[i].visible) { layer = doc.layers[i]; break; }
-                }
-            }
-            group = layer.groupItems.add();
-            group.name = spec.name;
+            var candidate = null, nextPaths = [], options = copyOptions(o);
             try {
-                var tools = makeFormTools(group, o);
-                spec.draw(tools, o);
-                var b = group.geometricBounds;
-                group.translate(center[0] - (b[0] + b[2]) / 2 + o.offsetX * FORM_MM,
-                    center[1] - (b[1] + b[3]) / 2 + o.offsetY * FORM_MM, true, true, true, true);
+                var layer = doc.activeLayer;
+                if (layer.locked || !layer.visible) {
+                    for (var i = 0; i < doc.layers.length; i++) {
+                        if (!doc.layers[i].locked && doc.layers[i].visible) { layer = doc.layers[i]; break; }
+                    }
+                }
+                candidate = layer.groupItems.add();
+                candidate.name = spec.name;
+                var tools = makeFormTools(candidate, options, nextPaths);
+                spec.draw(tools, options);
+                var b = candidate.geometricBounds;
+                candidate.translate(center[0] - (b[0] + b[2]) / 2 + options.offsetX * FORM_MM,
+                    center[1] - (b[1] + b[3]) / 2 + options.offsetY * FORM_MM, true, true, true, true);
+                if (group !== null) group.remove();
+                group = candidate;
+                lastOptions = options;
+                stylePaths = nextPaths;
+                return true;
             } catch (e) {
-                removeGroup();
+                try { if (candidate !== null) candidate.remove(); } catch (cleanupError) {}
                 alert("그리지 못했습니다: " + e);
+                return false;
             }
         }
 
@@ -485,6 +610,8 @@ try {
             if (group === null) return;
             try { group.remove(); } catch (e) {}
             group = null;
+            lastOptions = null;
+            stylePaths = [];
         }
 
         function saveSettings() {
@@ -529,8 +656,12 @@ try {
     }
 
     // 그리기 도구. 좌표는 pt, 색은 K값(0~100, null이면 없음)
-    function makeFormTools(g, o) {
+    function makeFormTools(g, o, stylePaths) {
         var t = {mm: FORM_MM, group: g};
+        t.stroke = function(key, item) {
+            if (stylePaths && item) stylePaths.push({key: key, item: item});
+            return item;
+        };
         t.path = function(points, closed, fill, stroke, width, dash) {
             var p = g.pathItems.add();
             p.setEntirePath(points);
@@ -578,7 +709,7 @@ try {
             var dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx * dx + dy * dy);
             if (len < 0.01) return;
             var d = [dx / len, dy / len], back = t.headBack();
-            if (len > back) t.line(a, [b[0] - d[0] * back, b[1] - d[1] * back], width);
+            if (len > back) t.stroke("wRope", t.line(a, [b[0] - d[0] * back, b[1] - d[1] * back], width));
             t.head(b, d);
         };
         // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). opts: italic 변수 글자(이탤릭), sub 글자 뒤 숫자를 아래 첨자로

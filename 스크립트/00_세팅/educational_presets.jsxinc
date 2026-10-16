@@ -1,0 +1,100 @@
+// Educational preset bridge. ES3, no eval and no document/preferences writes.
+var EducationalPresets = (function () {
+    function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+    function parse(text) {
+        if (typeof text !== "string" || text.length > 100000) throw Error("Invalid preset JSON");
+        var i = 0;
+        function ws() { while (/\s/.test(text.charAt(i)) && i < text.length) i++; }
+        function str() {
+            var out = "", c, code, escapes = {'"':'"', '\\':'\\', '/':'/', b:'\b', f:'\f', n:'\n', r:'\r', t:'\t'};
+            i++;
+            while (i < text.length) {
+                c = text.charAt(i++);
+                if (c === '"') return out;
+                if (c === '\\') {
+                    c = text.charAt(i++);
+                    if (c === 'u') {
+                        code = text.substr(i, 4);
+                        if (!/^[0-9a-fA-F]{4}$/.test(code)) throw Error("Invalid escape");
+                        out += String.fromCharCode(parseInt(code, 16)); i += 4;
+                    } else if (own(escapes, c)) out += escapes[c];
+                    else throw Error("Invalid escape");
+                } else { if (c.charCodeAt(0) < 32) throw Error("Control character"); out += c; }
+            }
+            throw Error("Unclosed string");
+        }
+        function value(depth) {
+            if (depth > 16) throw Error("JSON too deep");
+            ws(); var c = text.charAt(i), out, key, m;
+            if (c === '"') return str();
+            if (c === '{' || c === '[') {
+                var array = c === '[', end = array ? ']' : '}'; out = array ? [] : {}; i++; ws();
+                if (text.charAt(i) === end) { i++; return out; }
+                while (i < text.length) {
+                    if (array) out.push(value(depth + 1));
+                    else {
+                        ws(); if (text.charAt(i) !== '"') throw Error("Expected key"); key = str(); ws();
+                        if (key === '__proto__' || key === 'constructor' || key === 'prototype' || own(out, key)) throw Error("Unsafe or duplicate key");
+                        if (text.charAt(i++) !== ':') throw Error("Expected colon"); out[key] = value(depth + 1);
+                    }
+                    ws(); c = text.charAt(i++); if (c === end) return out;
+                    if (c !== ',') throw Error("Expected comma");
+                }
+                throw Error("Unclosed JSON");
+            }
+            m = /^(true|false|null|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)/.exec(text.substr(i));
+            if (!m) throw Error("Invalid JSON value"); i += m[0].length;
+            if (m[0] === 'true') return true; if (m[0] === 'false') return false; if (m[0] === 'null') return null;
+            out = Number(m[0]); if (!isFinite(out)) throw Error("Nonfinite number"); return out;
+        }
+        var result = value(0); ws(); if (i !== text.length) throw Error("Trailing JSON"); return result;
+    }
+    function load(file) {
+        file = new File(file); file.encoding = "UTF-8";
+        if (!file.open("r")) throw Error("Cannot open presets");
+        var text; try { text = file.read(); } finally { file.close(); }
+        return parse(text);
+    }
+    function create(data, id, variant, seed, validate) {
+        if (!data || data.format !== "sci-illu-educational-presets" || data.version !== 1) throw Error("Unsupported presets");
+        var preset = null, i, k, params = {}, source;
+        for (i = 0; i < data.presets.length; i++) if (data.presets[i].id === id) preset = data.presets[i];
+        if (!preset) throw Error("Unknown preset");
+        variant = variant || "problem";
+        if (variant !== "problem" && variant !== "explanation") throw Error("Unknown variant");
+        for (i = 0; i < 2; i++) {
+            source = i === 0 ? preset.params : preset[variant];
+            for (k in source) if (own(source, k)) {
+                if (k === '__proto__' || k === 'constructor' || k === 'prototype') throw Error("Unsafe key");
+                if (typeof source[k] !== 'string' && typeof source[k] !== 'boolean' && !(typeof source[k] === 'number' && isFinite(source[k]))) throw Error("Invalid parameter");
+                params[k] = source[k];
+            }
+        }
+        if (typeof seed !== 'undefined') {
+            if (!preset.seedRange || typeof seed !== 'number' || seed !== Math.floor(seed) || seed < preset.seedRange[0] || seed > preset.seedRange[1]) throw Error("Invalid seed");
+            params.seed = seed;
+        }
+        // Validator must throw for invalid settings and return its cleaned params.
+        if (validate) params = validate(preset.tool, params);
+        return {tool: preset.tool, params: params};
+    }
+    // Embeddable ScriptUI controls: host provides actual application to its own form.
+    function addPanel(parent, data, onApply, validate, toolId) {
+        var selected = [], j;
+        for (j = 0; j < data.presets.length; j++) if (!toolId || data.presets[j].tool === toolId) selected.push(data.presets[j]);
+        if (!selected.length) return null;
+        data = {format:data.format, version:data.version, sourceNote:data.sourceNote, presets:selected};
+        var panel = parent.add('panel', undefined, '교육용 프리셋'), titles = [], i;
+        panel.orientation = 'column'; panel.alignChildren = 'fill';
+        for (i = 0; i < data.presets.length; i++) titles.push(data.presets[i].title);
+        var list = panel.add('dropdownlist', undefined, titles); list.selection = 0;
+        var variant = panel.add('dropdownlist', undefined, ['문제', '해설']); variant.selection = 0;
+        var info = panel.add('statictext', undefined, data.presets[0].description, {multiline:true});
+        var apply = panel.add('button', undefined, '폼에 적용');
+        list.onChange = function () { info.text = data.presets[list.selection.index].description; };
+        apply.onClick = function () { onApply(create(data, data.presets[list.selection.index].id, variant.selection.index ? 'explanation' : 'problem', undefined, validate)); };
+        panel.helpTip = data.sourceNote;
+        return panel;
+    }
+    return {parse:parse, load:load, create:create, addPanel:addPanel};
+}());

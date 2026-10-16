@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "toolId": "heat-engine-cycle",
+  "tolerance": 1e-08,
+  "scales": [
+    8,
+    9
+  ],
+  "curveToleranceMm": 0.02,
+  "cases": [
+    {
+      "id": "carnot",
+      "params": {
+        "p1": 2,
+        "p2": 3,
+        "p3": 2,
+        "p4": 3,
+        "r1": 2,
+        "r2": 1.5
+      }
+    },
+    {
+      "id": "rectangle",
+      "params": {
+        "p1": 0,
+        "p2": 1,
+        "p3": 0,
+        "p4": 1,
+        "r1": 2,
+        "r2": 2
+      }
+    },
+    {
+      "id": "three-process",
+      "params": {
+        "p1": 0,
+        "p2": 2,
+        "p3": 3,
+        "p4": 4,
+        "r1": 2,
+        "r2": 2
+      }
+    }
+  ]
+}

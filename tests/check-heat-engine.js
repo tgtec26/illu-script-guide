@@ -26,7 +26,7 @@ const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}
 const invariant = (type, s) => [s.P, s.V, s.P * s.V, s.P * Math.pow(s.V, GAMMA)][type];
 function run(o) {
   const calls = [];
-  const t = { mm: MM, headBack: () => 3, headLength: () => 4 };
+  const t = { stroke: (key, item) => item, mm: MM, headBack: () => 3, headLength: () => 4 };
   for (const k of ["line", "path", "curve", "arrow", "head", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   f.drawCycle(t, { ...base, ...o });
   return calls;

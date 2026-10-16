@@ -23,7 +23,7 @@ const base = { chambers: 2, length: 45, height: 14, pistonMm: 1.2, pos1: 50, pos
   wBody: 1, wObj: 0, wRope: 0.4 };
 function run(o) {
   const calls = [];
-  const t = { mm: MM };
+  const t = { stroke: (key, item) => item, mm: MM };
   for (const k of ["rect", "dot", "line", "arrow", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   f.drawPiston(t, { ...base, ...o });
   return calls;

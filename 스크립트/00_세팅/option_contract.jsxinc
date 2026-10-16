@@ -1,0 +1,86 @@
+// ES3-compatible core, mirrored verbatim in Illustrator's option_contract.jsxinc.
+// Explicit schemas are required. Unknown fields and repairs always produce notes.
+function normalizeOptions(schema, input) {
+    if (!schema || schema.schemaVersion !== 1 || !schema.properties) throw new Error('Unsupported option schema');
+    var params = {}, notes = [], props = schema.properties, key, def, value, field, i;
+    if (input === undefined || input === null) input = {};
+    if (Object.prototype.toString.call(input) !== '[object Object]') {
+        notes.push('params: expected an option object; restored defaults');
+        input = {};
+    }
+    for (key in props) if (Object.prototype.hasOwnProperty.call(props, key)) {
+        field = props[key]; def = field['default']; value = Object.prototype.hasOwnProperty.call(input, key) ? input[key] : def;
+        if (field.type === 'number' && typeof value === 'string' && value.replace(/\s/g, '') !== '') value = Number(value);
+        if (field.type === 'string' && typeof value === 'number' && isFinite(value)) value = String(value);
+        if (field.type === 'boolean') {
+            if (value === 'true' || value === 1) value = true;
+            else if (value === 'false' || value === 0) value = false;
+        }
+        var valid = typeof value === field.type;
+        if (field.type === 'number') valid = valid && isFinite(value) && (!field.integer || Math.floor(value) === value) && (field.minimum === undefined || value >= field.minimum) && (field.maximum === undefined || value <= field.maximum);
+        if (field['enum']) {
+            var found = false;
+            for (i = 0; i < field['enum'].length; i++) if (value === field['enum'][i]) found = true;
+            valid = valid && found;
+        }
+        if (!valid) { notes.push(key + ': invalid value; restored default'); value = def; }
+        params[key] = value;
+    }
+    for (key in input) if (Object.prototype.hasOwnProperty.call(input, key) && !Object.prototype.hasOwnProperty.call(props, key)) notes.push(key + ': unknown option ignored');
+    var constraints = schema.constraints || [];
+    for (i = 0; i < constraints.length; i++) {
+        var c = constraints[i], ok = true;
+        if (c.rule === 'pistonFit') {
+            var positions = params.chambers === 3 ? [params.pos1, params.pos2] : [params.pos1];
+            var previous = 0;
+            for (var j = 0; j <= positions.length; j++) {
+                var next = j === positions.length ? 100 : positions[j];
+                if ((next - previous) * params.lengthMm / 100 <= params.pistonMm) ok = false;
+                previous = next;
+            }
+            if (params.chambers === 3 && params.pos2 - params.pos1 < 8) ok = false;
+        } else if (c.rule === 'particleFit') ok = params.diameterMm < Math.min(params.widthMm, params.heightMm);
+        else if (c.rule === 'closedCycle') {
+            var types = [Number(params.p1), Number(params.p2), Number(params.p3), Number(params.p4)];
+            var n = types[3] === 4 ? 3 : 4, ab = [[0, 1], [1, 0], [1, 1], [5 / 3, 1]], states = [[0, 0]];
+            for (var k = 0; k < n - 2; k++) {
+                var step = Math.log(k === 0 ? params.r1 : params.r2), last = states[k];
+                states.push(types[k] === 1 ? [last[0], last[1] + step] : [last[0] + step, last[1] - ab[types[k]][0] * step]);
+            }
+            var a = ab[types[n - 2]], b = ab[types[n - 1]], det = a[0] * b[1] - b[0] * a[1];
+            ok = Math.abs(det) > 1e-9;
+            if (ok) {
+                var s = states[n - 2], h = a[0] * s[0] + a[1] * s[1];
+                states.push([h * b[1] / det, -b[0] * h / det]);
+                var area = 0;
+                for (var q = 0; q < states.length; q++) {
+                    var t = states[q], u = states[(q + 1) % states.length];
+                    if (!isFinite(Math.exp(t[0])) || !isFinite(Math.exp(t[1])) || Math.exp(t[0]) <= 0 || Math.exp(t[1]) <= 0) ok = false;
+                    area += t[0] * u[1] - u[0] * t[1];
+                }
+                if (Math.abs(area) < 1e-9) ok = false;
+            }
+        } else throw new Error('Unknown option constraint: ' + c.rule);
+        if (!ok) {
+            notes.push(c.rule + ': ' + c.description);
+            for (var f = 0; f < c.fields.length; f++) params[c.fields[f]] = props[c.fields[f]]['default'];
+        }
+    }
+    return {params: params, notes: notes};
+}
+
+// Pure adapter for the heat cycle's historical JSX option names. It never writes preferences.
+function normalizeHeatCycleOptions(schema, options) {
+    var input = {}, key;
+    for (key in schema.properties) if (Object.prototype.hasOwnProperty.call(schema.properties, key)) {
+        var sourceKey = key === 'widthMm' ? 'width' : key === 'heightMm' ? 'height' : key === 'fontPt' ? 'font' : key;
+        if (Object.prototype.hasOwnProperty.call(options, sourceKey)) input[key] = options[sourceKey];
+    }
+    var result = normalizeOptions(schema, input), out = {};
+    for (key in options) if (Object.prototype.hasOwnProperty.call(options, key)) out[key] = options[key];
+    for (key in result.params) if (Object.prototype.hasOwnProperty.call(result.params, key)) {
+        var targetKey = key === 'widthMm' ? 'width' : key === 'heightMm' ? 'height' : key === 'fontPt' ? 'font' : key;
+        out[targetKey] = key === 'axes' || /^p[1-4]$/.test(key) ? Number(result.params[key]) : result.params[key];
+    }
+    return {params: out, notes: result.notes};
+}

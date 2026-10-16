@@ -1,0 +1,509 @@
+{
+  "schemaVersion": 1,
+  "tools": {
+    "heat-engine-cycle": {
+      "schemaVersion": 1,
+      "toolId": "heat-engine-cycle",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "axes": {
+          "type": "string",
+          "default": "0",
+          "unit": "dimensionless",
+          "enum": [
+            "0",
+            "1",
+            "2"
+          ]
+        },
+        "widthMm": {
+          "type": "number",
+          "default": 55,
+          "unit": "mm",
+          "minimum": 20,
+          "maximum": 120
+        },
+        "heightMm": {
+          "type": "number",
+          "default": 45,
+          "unit": "mm",
+          "minimum": 20,
+          "maximum": 120
+        },
+        "p1": {
+          "type": "string",
+          "default": "2",
+          "unit": "dimensionless",
+          "enum": [
+            "0",
+            "1",
+            "2",
+            "3"
+          ]
+        },
+        "r1": {
+          "type": "number",
+          "default": 2,
+          "unit": "dimensionless",
+          "minimum": 0.2,
+          "maximum": 5
+        },
+        "p2": {
+          "type": "string",
+          "default": "3",
+          "unit": "dimensionless",
+          "enum": [
+            "0",
+            "1",
+            "2",
+            "3"
+          ]
+        },
+        "r2": {
+          "type": "number",
+          "default": 2,
+          "unit": "dimensionless",
+          "minimum": 0.2,
+          "maximum": 5
+        },
+        "p3": {
+          "type": "string",
+          "default": "2",
+          "unit": "dimensionless",
+          "enum": [
+            "0",
+            "1",
+            "2",
+            "3"
+          ]
+        },
+        "p4": {
+          "type": "string",
+          "default": "3",
+          "unit": "dimensionless",
+          "enum": [
+            "0",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        "headShape": {
+          "type": "number",
+          "default": 3,
+          "unit": "dimensionless",
+          "integer": true,
+          "enum": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "headSize": {
+          "type": "number",
+          "default": 100,
+          "unit": "%",
+          "minimum": 30,
+          "maximum": 300
+        },
+        "names": {
+          "type": "string",
+          "default": "A, B, C, D",
+          "unit": "dimensionless"
+        },
+        "showProcess": {
+          "type": "boolean",
+          "default": false,
+          "unit": "dimensionless"
+        },
+        "showGuides": {
+          "type": "boolean",
+          "default": false,
+          "unit": "dimensionless"
+        },
+        "xTicks": {
+          "type": "string",
+          "default": "",
+          "unit": "dimensionless"
+        },
+        "yTicks": {
+          "type": "string",
+          "default": "",
+          "unit": "dimensionless"
+        },
+        "fontPt": {
+          "type": "number",
+          "default": 8,
+          "unit": "pt",
+          "minimum": 5,
+          "maximum": 14
+        },
+        "wBody": {
+          "type": "number",
+          "default": 0.8,
+          "unit": "pt",
+          "minimum": 0.1,
+          "maximum": 2
+        },
+        "wObj": {
+          "type": "number",
+          "default": 0.4,
+          "unit": "pt",
+          "minimum": 0.1,
+          "maximum": 2
+        },
+        "wRope": {
+          "type": "number",
+          "default": 0.3,
+          "unit": "pt",
+          "minimum": 0.1,
+          "maximum": 2
+        }
+      },
+      "constraints": [
+        {
+          "rule": "closedCycle",
+          "fields": [
+            "p1",
+            "p2",
+            "p3",
+            "p4",
+            "r1",
+            "r2"
+          ],
+          "description": "마지막 두 과정은 서로 달라야 하며 순환의 상태는 양수·유한, 면적은 0보다 커야 합니다."
+        }
+      ]
+    },
+    "piston-cylinder": {
+      "schemaVersion": 1,
+      "toolId": "piston-cylinder",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "chambers": {
+          "type": "number",
+          "default": 2,
+          "unit": "dimensionless",
+          "minimum": 2,
+          "maximum": 3,
+          "integer": true,
+          "enum": [
+            2,
+            3
+          ]
+        },
+        "lengthMm": {
+          "type": "number",
+          "default": 45,
+          "unit": "mm",
+          "minimum": 20,
+          "maximum": 120
+        },
+        "heightMm": {
+          "type": "number",
+          "default": 14,
+          "unit": "mm",
+          "minimum": 6,
+          "maximum": 50
+        },
+        "pistonMm": {
+          "type": "number",
+          "default": 1.2,
+          "unit": "mm",
+          "minimum": 0.5,
+          "maximum": 4
+        },
+        "pos1": {
+          "type": "number",
+          "default": 50,
+          "unit": "%",
+          "minimum": 5,
+          "maximum": 95
+        },
+        "pos2": {
+          "type": "number",
+          "default": 75,
+          "unit": "%",
+          "minimum": 5,
+          "maximum": 95
+        },
+        "showDots": {
+          "type": "boolean",
+          "default": true,
+          "unit": "dimensionless"
+        },
+        "dots": {
+          "type": "number",
+          "default": 6,
+          "unit": "dimensionless",
+          "minimum": 1,
+          "maximum": 30,
+          "integer": true
+        },
+        "dotMm": {
+          "type": "number",
+          "default": 0.8,
+          "unit": "mm",
+          "minimum": 0.3,
+          "maximum": 2
+        },
+        "seed": {
+          "type": "number",
+          "default": 1,
+          "unit": "dimensionless",
+          "minimum": 1,
+          "maximum": 99,
+          "integer": true
+        },
+        "showNames": {
+          "type": "boolean",
+          "default": true,
+          "unit": "dimensionless"
+        },
+        "chamberNames": {
+          "type": "string",
+          "default": "A, B, C",
+          "unit": "dimensionless"
+        },
+        "cylLabel": {
+          "type": "string",
+          "default": "단열된 실린더",
+          "unit": "dimensionless"
+        },
+        "pistLabel": {
+          "type": "string",
+          "default": "단열된 피스톤",
+          "unit": "dimensionless"
+        },
+        "fontPt": {
+          "type": "number",
+          "default": 8,
+          "unit": "pt",
+          "minimum": 5,
+          "maximum": 14
+        },
+        "heat": {
+          "type": "boolean",
+          "default": false,
+          "unit": "dimensionless"
+        },
+        "arrowMm": {
+          "type": "number",
+          "default": 8,
+          "unit": "mm",
+          "minimum": 3,
+          "maximum": 20
+        },
+        "headShape": {
+          "type": "number",
+          "default": 3,
+          "unit": "dimensionless",
+          "integer": true,
+          "enum": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "headSize": {
+          "type": "number",
+          "default": 100,
+          "unit": "%",
+          "minimum": 30,
+          "maximum": 300
+        },
+        "wBody": {
+          "type": "number",
+          "default": 1,
+          "unit": "pt",
+          "minimum": 0.1,
+          "maximum": 3
+        },
+        "wRope": {
+          "type": "number",
+          "default": 0.4,
+          "unit": "pt",
+          "minimum": 0.1,
+          "maximum": 2
+        }
+      },
+      "constraints": [
+        {
+          "rule": "pistonFit",
+          "fields": [
+            "chambers",
+            "pos1",
+            "pos2",
+            "lengthMm",
+            "pistonMm"
+          ],
+          "description": "세 칸의 피스톤 간격은 8% 이상이며 각 칸의 안쪽 폭은 양수여야 합니다."
+        }
+      ]
+    },
+    "particle-state": {
+      "schemaVersion": 1,
+      "toolId": "particle-state",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "container": {
+          "type": "string",
+          "default": "beaker",
+          "unit": "dimensionless",
+          "enum": [
+            "rect",
+            "ellipse",
+            "beaker"
+          ]
+        },
+        "widthMm": {
+          "type": "number",
+          "default": 50,
+          "unit": "mm",
+          "minimum": 5,
+          "maximum": 200
+        },
+        "heightMm": {
+          "type": "number",
+          "default": 40,
+          "unit": "mm",
+          "minimum": 5,
+          "maximum": 200
+        },
+        "showContainer": {
+          "type": "boolean",
+          "default": true,
+          "unit": "dimensionless"
+        },
+        "containerWidthPt": {
+          "type": "number",
+          "default": 0.5,
+          "unit": "pt",
+          "minimum": 0.1,
+          "maximum": 3
+        },
+        "state": {
+          "type": "number",
+          "default": 0,
+          "unit": "dimensionless",
+          "integer": true,
+          "enum": [
+            0,
+            1,
+            2
+          ]
+        },
+        "diameterMm": {
+          "type": "number",
+          "default": 3,
+          "unit": "mm",
+          "minimum": 0.5,
+          "maximum": 20
+        },
+        "levelPct": {
+          "type": "number",
+          "default": 60,
+          "unit": "%",
+          "minimum": 5,
+          "maximum": 100
+        },
+        "gasCount": {
+          "type": "number",
+          "default": 20,
+          "unit": "dimensionless",
+          "minimum": 1,
+          "maximum": 300,
+          "integer": true
+        },
+        "particleK": {
+          "type": "number",
+          "default": 40,
+          "unit": "dimensionless",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "arrowRatio": {
+          "type": "number",
+          "default": 0,
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "arrowMm": {
+          "type": "number",
+          "default": 3,
+          "unit": "mm",
+          "minimum": 0.5,
+          "maximum": 20
+        },
+        "arrowWidthPt": {
+          "type": "number",
+          "default": 0.3,
+          "unit": "pt",
+          "minimum": 0.1,
+          "maximum": 5
+        },
+        "arrowK": {
+          "type": "number",
+          "default": 100,
+          "unit": "dimensionless",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "headScale": {
+          "type": "number",
+          "default": 50,
+          "unit": "%",
+          "minimum": 20,
+          "maximum": 200
+        },
+        "headShape": {
+          "type": "number",
+          "default": 3,
+          "unit": "dimensionless",
+          "integer": true,
+          "enum": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "seed": {
+          "type": "number",
+          "default": 1,
+          "unit": "dimensionless",
+          "minimum": 1,
+          "maximum": 99,
+          "integer": true
+        }
+      },
+      "constraints": [
+        {
+          "rule": "particleFit",
+          "fields": [
+            "diameterMm",
+            "widthMm",
+            "heightMm"
+          ],
+          "description": "입자 지름은 용기의 가로·세로보다 작아야 합니다."
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "format": "sci-illu-educational-presets",
+  "version": 1,
+  "sourceNote": "일반적인 교과 개념과 문항 도식 관례를 조합한 자체 예시입니다. 특정 기출 그림을 복제하지 않았으며 출제 빈도나 원문 검증을 주장하지 않습니다.",
+  "presets": [
+    {
+      "id": "pv-isobaric-isochoric",
+      "title": "P–V 등압·등적 사각 순환",
+      "tool": "heat-engine-cycle",
+      "description": "점 A–D의 과정 종류를 읽는 개념형. 해설에는 과정명과 보조선을 표시합니다.",
+      "params": {
+        "axes": "0",
+        "p1": "0",
+        "r1": 2,
+        "p2": "1",
+        "r2": 2,
+        "p3": "0",
+        "p4": "1",
+        "names": "A, B, C, D"
+      },
+      "problem": {
+        "showProcess": false,
+        "showGuides": false
+      },
+      "explanation": {
+        "showProcess": true,
+        "showGuides": true
+      }
+    },
+    {
+      "id": "pv-isothermal-adiabatic",
+      "title": "P–V 등온·단열 순환",
+      "tool": "heat-engine-cycle",
+      "description": "등온선과 단열선을 구별하는 개념형. 해설에는 과정명을 표시합니다.",
+      "params": {
+        "axes": "0",
+        "p1": "2",
+        "r1": 2,
+        "p2": "3",
+        "r2": 2,
+        "p3": "2",
+        "p4": "3",
+        "names": "A, B, C, D"
+      },
+      "problem": {
+        "showProcess": false,
+        "showGuides": false
+      },
+      "explanation": {
+        "showProcess": true,
+        "showGuides": false
+      }
+    },
+    {
+      "id": "piston-two-gases",
+      "title": "단열 피스톤 두 기체",
+      "tool": "piston-cylinder",
+      "description": "A·B 두 칸과 단열 조건을 유지합니다. 해설의 점은 기체의 모식적 표현이며 분자수·압력의 정량 답이 아닙니다.",
+      "params": {
+        "chambers": 2,
+        "pos1": 50,
+        "seed": 1,
+        "showNames": true,
+        "chamberNames": "A, B",
+        "cylLabel": "단열된 실린더",
+        "pistLabel": "단열된 피스톤",
+        "heat": false,
+        "dots": 6
+      },
+      "problem": {
+        "showDots": false
+      },
+      "explanation": {
+        "showDots": true
+      },
+      "seedRange": [
+        1,
+        99
+      ]
+    },
+    {
+      "id": "gas-motion",
+      "title": "기체 입자의 무질서한 운동",
+      "tool": "particle-state",
+      "description": "같은 입자 배치를 유지하고 해설에 운동 방향을 더합니다. 화살표는 순간 운동의 모식도입니다.",
+      "params": {
+        "container": "rect",
+        "state": 2,
+        "widthMm": 50,
+        "heightMm": 40,
+        "diameterMm": 2,
+        "gasCount": 18,
+        "seed": 1,
+        "showContainer": true
+      },
+      "problem": {
+        "arrowRatio": 0
+      },
+      "explanation": {
+        "arrowRatio": 50
+      },
+      "seedRange": [
+        1,
+        99
+      ]
+    }
+  ]
+}
