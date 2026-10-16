@@ -124,13 +124,16 @@ assert.deepStrictEqual(g.splitNames("", 4), ["", "", "", ""]);
 
 // 설정 문자열: v2, 26칸. 저장 칸 수와 읽는 칸 수가 같다
 {
-  assert.ok(source.includes('p[0] !== "v4" || p.length !== 29'), "settings string must be v4 with 29 fields");
+  assert.ok(source.includes('p[0] !== "v5" || p.length !== 32'), "settings string must be v5 with 32 fields");
   assert.strictEqual((source.match(/join\("\|"\)/g) || []).length, 1, "one saveSettings join");
   const keys = source.match(/var NUMBER_KEYS = \[([^\]]*)\]/)[1].split(",").length;
   assert.strictEqual(keys, 11);
+  // 저장 칸 수: 태그 1 + 숫자 11 + 표시·글자·목록 등 17 + 덧붙인 숫자 3 = 32
+  const extra = source.match(/var EXTRA_KEYS = \[([^\]]*)\]/)[1].split(",").length;
+  assert.strictEqual(1 + keys + 17 + extra, 32);
   // 읽기 전에 써야 하는 상수가 readSettings 호출(var options = readSettings();)보다 위에 있다
   const call = source.indexOf("var options = readSettings();");
-  for (const name of ["NUMBER_KEYS", "NUMBER_MINS", "NUMBER_MAXS", "MAX_AMINO", "PROTEIN_CHOICES"]) {
+  for (const name of ["NUMBER_KEYS", "NUMBER_MINS", "NUMBER_MAXS", "EXTRA_KEYS", "EXTRA_MINS", "EXTRA_MAXS", "MAX_AMINO", "PROTEIN_CHOICES"]) {
     assert.ok(source.indexOf(`var ${name} =`) < call, `${name} must be declared before readSettings()`);
   }
 }

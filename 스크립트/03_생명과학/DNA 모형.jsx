@@ -891,10 +891,9 @@ try {
             var PREVIEW_NAME = "DnaRnaSequence_Preview";
             var ENG_FONT_NAME = "GSMediumB1";
             var MAX_AMINO = 8;                   // 코돈 행 수(아미노산 최대 개수)
-            var RNA_GRAY_K = 50;                 // RNA 골격·연결선 회색
             var BRACE_HEIGHT_MM = 3;             // 코돈 중괄호 높이
-            var BRACE_PAD_MM = 1.5;              // RNA 글자와 중괄호 사이
             var LABEL_STRAND_GAP_MM = 8.5;       // 줄 이름 칸과 염기 줄 사이
+            var LABEL_PROCESS_GAP_MM = 1.5;      // 과정 이름(가)와 왼쪽 화살표 사이
             // 작살형 화살촉(끝이 원점, 뒤쪽이 +y, 선 두께 1pt 기준 pt). 선은 lineEnd만큼 줄인다
             var ARROW_HEAD = {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]};
             var LABELS = ["?",
@@ -908,6 +907,10 @@ try {
             var NUMBER_KEYS = ["backboneWidth", "tickWidth", "tickLength", "arrowWidth", "fontSize", "baseGap", "strandGap", "rnaGap", "arrowLength", "offsetX", "offsetY"];
             var NUMBER_MINS = [0.1, 0.1, 0, 0.1, 4, 1, 2, 2, 2, -100, -100];
             var NUMBER_MAXS = [5, 5, 20, 3, 30, 30, 60, 60, 40, 100, 100];
+            // 뒤에 덧붙인 숫자(칸 29~31): RNA–중괄호 간격, DNA·RNA 골격 색(K)
+            var EXTRA_KEYS = ["braceGap", "dnaColor", "rnaColor"];
+            var EXTRA_MINS = [0, 0, 0];
+            var EXTRA_MAXS = [20, 100, 100];
 
             var doc = app.activeDocument;
             var viewCenter = doc.activeView.centerPoint;
@@ -1045,11 +1048,14 @@ try {
             addRow(linePanel, "연결선 길이", "tickLength", 0, 20, "mm", false);
             addRow(linePanel, "화살표 굵기", "arrowWidth", 0.1, 3, "pt", false);
             addRow(linePanel, "글자 크기", "fontSize", 4, 30, "pt", false);
+            addRow(linePanel, "DNA 골격 색", "dnaColor", 0, 100, "K", false);
+            addRow(linePanel, "RNA 골격 색", "rnaColor", 0, 100, "K", false);
 
             var gapPanel = foldPanel(win, "간격", true, "gap");
             addRow(gapPanel, "염기 간격", "baseGap", 1, 30, "mm", false);
             addRow(gapPanel, "DNA 1–2", "strandGap", 2, 60, "mm", false);
             addRow(gapPanel, "DNA 2–RNA", "rnaGap", 2, 60, "mm", false);
+            addRow(gapPanel, "RNA–중괄호", "braceGap", 0, 20, "mm", false);
             addRow(gapPanel, "화살표 길이", "arrowLength", 2, 40, "mm", false);
 
             var positionPanel = win.add("panel", undefined, "위치");
@@ -1172,7 +1178,7 @@ try {
                 row.spacing = 3;
                 var caption = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
                 caption.preferredSize.width = 80;
-                var step = unit === "mm" ? 0.1 : (key === "fontSize" ? 0.5 : 0.1);
+                var step = unit === "K" ? 10 : (unit === "mm" ? 0.1 : (key === "fontSize" ? 0.5 : 0.1));
                 var input = row.add("edittext", undefined, String(options[key]));
                 input.characters = 5;
                 var slider = row.add("scrollbar", undefined, options[key], min, max);
@@ -1315,25 +1321,30 @@ try {
                 var arrowGap = 0.9 * fs;                              // 줄 이름과 가운데 화살표 끝 사이
 
                 // 줄 이름은 먼저 만들어 폭을 잰 뒤 제자리로 옮긴다
+                // DNA·RNA·단백질은 세로선(왼쪽 화살표) 가운데에 맞추고, 과정 이름(가)는 그 선 왼쪽에 둔다
                 var labelFrames = [null, null, null, null];
-                var labelWidth = 0;
+                var centeredHalf = 0;                                 // 가운데 맞춘 이름의 반폭 최댓값
+                var processWidth = 0;
                 if (options.showNames) {
                     for (var n = 0; n < 4; n++) {
                         if (names[n] === "" || (!protein && n >= 2)) continue;
                         labelFrames[n] = placeText(group, names[n], 0, 0, null);
                         var nb = labelFrames[n].geometricBounds;
-                        labelWidth = Math.max(labelWidth, nb[2] - nb[0]);
+                        if (n === 2) processWidth = nb[2] - nb[0];
+                        else centeredHalf = Math.max(centeredHalf, (nb[2] - nb[0]) / 2);
                     }
                 }
-                var hasLabels = labelWidth > 0;
-                var leftBlock = hasLabels ? labelWidth + LABEL_STRAND_GAP_MM * mmToPt : 0;
+                var hasLabels = centeredHalf > 0 || processWidth > 0;
+                var processGap = LABEL_PROCESS_GAP_MM * mmToPt;       // (가)와 세로선 사이
+                var leftHalf = Math.max(centeredHalf, processWidth > 0 ? processWidth + processGap : 0);   // 세로선에서 왼쪽 끝까지
+                var leftBlock = hasLabels ? leftHalf + centeredHalf + LABEL_STRAND_GAP_MM * mmToPt : 0;
                 var width = leftBlock + count * codonWidth;
                 var left = viewCenter[0] - width / 2;                 // 그림 왼쪽 끝
-                var columnX = left + labelWidth / 2;                  // 줄 이름을 가운데 맞추고 왼쪽 화살표를 놓는 세로선
+                var columnX = left + leftHalf;                        // 왼쪽 화살표를 놓는 세로선
                 var x0 = left + leftBlock + gap / 2;                  // 첫 염기 중심
 
                 var rnaLetterOffset = options.strandGap * mmToPt + options.rnaGap * mmToPt + letterDrop;   // y1에서 RNA 글자 중심까지
-                var braceTopOffset = rnaLetterOffset + boxHalf + BRACE_PAD_MM * mmToPt;
+                var braceTopOffset = rnaLetterOffset + boxHalf + options.braceGap * mmToPt;
                 var arrowStartOffset = braceTopOffset + braceDepth;
                 var arrowEndOffset = arrowStartOffset + arrowLength;
                 var proteinCenterOffset = arrowEndOffset + boxHeight / 2;
@@ -1346,13 +1357,14 @@ try {
                 var y3 = y2 - options.rnaGap * mmToPt;                // RNA 골격
                 var rnaLetterY = y3 - letterDrop;
                 var black = makeGray(100);
-                var gray = makeGray(RNA_GRAY_K);
+                var dnaColor = makeGray(options.dnaColor);            // 골격선·연결선 색(글자는 항상 검정)
+                var rnaColor = makeGray(options.rnaColor);
                 var xs = [];
                 for (var i = 0; i < count * 3; i++) xs.push(x0 + i * gap);
 
-                drawStrand(group, seq1, xs, y1, -1, black);
-                drawStrand(group, seq2, xs, y2, 1, black);
-                drawStrand(group, rna, xs, y3, -1, gray);
+                drawStrand(group, seq1, xs, y1, -1, dnaColor);
+                drawStrand(group, seq2, xs, y2, 1, dnaColor);
+                drawStrand(group, rna, xs, y3, -1, rnaColor);
 
                 var missing = [];
                 var rows = [y1 - letterDrop, y2 + letterDrop, rnaLetterY];
@@ -1381,21 +1393,11 @@ try {
                     for (var l = 0; l < 4; l++) {
                         if (labelFrames[l] === null) continue;
                         var lb = labelFrames[l].geometricBounds;
-                        labelFrames[l].translate(columnX - (lb[0] + lb[2]) / 2, centers[l] - (lb[1] + lb[3]) / 2);
+                        var targetX = l === 2 ? columnX - processGap - (lb[2] - lb[0]) / 2 : columnX;
+                        labelFrames[l].translate(targetX - (lb[0] + lb[2]) / 2, centers[l] - (lb[1] + lb[3]) / 2);
                     }
                     if (arrows) drawArrow(group, columnX, dnaMid - arrowGap, rnaLetterY + arrowGap, options.arrowWidth, black);
-                    if (arrows && protein) {
-                        // 과정 이름(가)이 있으면 화살표를 그 글자 위에서 끊고 아래에서 다시 시작한다
-                        var processLabel = labelFrames[2];
-                        if (processLabel === null) {
-                            drawArrow(group, columnX, rnaLetterY - arrowGap, proteinY + arrowGap, options.arrowWidth, black);
-                        } else {
-                            var plb = processLabel.geometricBounds;
-                            var pad = 0.25 * fs;
-                            drawLine(group, columnX, rnaLetterY - arrowGap, columnX, plb[1] + pad, options.arrowWidth, black);
-                            drawArrow(group, columnX, plb[3] - pad, proteinY + arrowGap, options.arrowWidth, black);
-                        }
-                    }
+                    if (arrows && protein) drawArrow(group, columnX, rnaLetterY - arrowGap, proteinY + arrowGap, options.arrowWidth, black);
                 }
                 return missing;
             }
@@ -1765,19 +1767,23 @@ try {
                     templateTop: true, showNames: true, showBraces: true, showArrows: true, showProtein: true, nameKorean: true, names: "DNA, RNA, (가), 단백질",
                     masks: ["1-3", "4-9", "4-9"], labels: [0, 7, 8],
                     backboneWidth: 1, tickWidth: 0.3, tickLength: 3, arrowWidth: 0.5, fontSize: 10,
-                    baseGap: 6, strandGap: 16, rnaGap: 14, arrowLength: 7, offsetX: 0, offsetY: 0, preview: true };
+                    baseGap: 6, strandGap: 16, rnaGap: 14, arrowLength: 7, offsetX: 0, offsetY: 0, braceGap: 1.5, dnaColor: 100, rnaColor: 50, preview: true };
             }
 
-            // v4: 숫자 11개, 주형·줄 이름 표시·단백질 줄 표시(0/1), 줄 이름, 아미노산 서열, 코돈 선택·단백질 칸(쉼표 목록),
-            //     가릴 염기 번호 3개(예: 1~5, 8~10), 박스 문자 번호 3개, 미리보기(0/1), 한글 이름(0/1), 중괄호·화살표 표시(0/1)
+            // v5: 숫자 11개, 주형·줄 이름 표시·단백질 줄 표시(0/1), 줄 이름, 아미노산 서열, 코돈 선택·단백질 칸(쉼표 목록),
+            //     가릴 염기 번호 3개(예: 1~5, 8~10), 박스 문자 번호 3개, 미리보기(0/1), 한글 이름(0/1), 중괄호·화살표 표시(0/1), 덧붙인 숫자 3개
             function readSettings() {
                 var result = defaultOptions();
                 try {
                     var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-                    if (p[0] !== "v4" || p.length !== 29) return result;
+                    if (p[0] !== "v5" || p.length !== 32) return result;
                     for (var i = 0; i < NUMBER_KEYS.length; i++) {
                         var value = Number(p[i + 1]);
                         if (!/\S/.test(p[i + 1]) || !isFinite(value) || value < NUMBER_MINS[i] || value > NUMBER_MAXS[i]) return result;
+                    }
+                    for (var e = 0; e < EXTRA_KEYS.length; e++) {
+                        var extra = Number(p[29 + e]);
+                        if (!/\S/.test(p[29 + e]) || !isFinite(extra) || extra < EXTRA_MINS[e] || extra > EXTRA_MAXS[e]) return result;
                     }
                     if (!/^[01]$/.test(p[12]) || !/^[01]$/.test(p[13]) || !/^[01]$/.test(p[14]) || !/^[01]$/.test(p[25]) || !/^[01]$/.test(p[26]) || !/^[01]$/.test(p[27]) || !/^[01]$/.test(p[28])) return result;
                     var parsed = parseAminoAcids(p[16]);
@@ -1804,6 +1810,7 @@ try {
                     result.nameKorean = p[26] === "1";
                     result.showBraces = p[27] === "1";
                     result.showArrows = p[28] === "1";
+                    for (var x = 0; x < EXTRA_KEYS.length; x++) result[EXTRA_KEYS[x]] = Number(p[29 + x]);
                 } catch (e) {}
                 return result;
             }
@@ -1828,7 +1835,8 @@ try {
                         options.names, options.aaText, options.picks.join(","), options.proteins.join(","),
                         options.masks[0], options.masks[1], options.masks[2],
                         options.labels[0], options.labels[1], options.labels[2], options.preview ? 1 : 0, options.nameKorean ? 1 : 0,
-                        options.showBraces ? 1 : 0, options.showArrows ? 1 : 0);
+                        options.showBraces ? 1 : 0, options.showArrows ? 1 : 0,
+                        options.braceGap, options.dnaColor, options.rnaColor);
                     app.preferences.setStringPreference(PREF_KEY, parts.join("|"));
                 } catch (e) {}
             }
