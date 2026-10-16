@@ -300,7 +300,7 @@ try {
                 var problem = spec.check();
                 if (problem) return problem;
             }
-            try { center = doc.activeView.centerPoint; } catch (viewError) {}
+            try { center = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint); } catch (viewError) {}
             for (var i = 0; i < controls.length; i++) if (controls[i].key) o[controls[i].key] = controls[i].value;
             loadSettings();
             var panel = page, checkRow = null;

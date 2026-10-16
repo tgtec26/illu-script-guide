@@ -62,7 +62,7 @@ try {
         {name: "측면", y: 90, x: 0, z: 0}, {name: "윗면", y: 0, x: 90, z: 0}];
 
     var doc = app.activeDocument;
-    var viewCenter = doc.activeView.centerPoint;
+    var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
     var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
     var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
     var batangFont = findOptionalFont("Batang");

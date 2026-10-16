@@ -920,7 +920,7 @@ try {
             applyRangeOverrides(fields);
             var options = readSettings();
             var view = doc.activeView ? doc.activeView : doc.views[0];
-            var viewCenter = view.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : view.centerPoint);
             var initial = trajectory(options.height, options.speed);
             // 시작점은 처음 배치할 때만 정한다. 값을 바꿔도 투사 지점은 움직이지 않는다.
             var originX = viewCenter[0] - initial.width / 2;
@@ -2783,7 +2783,7 @@ try {
                 var problem = spec.check();
                 if (problem) return problem;
             }
-            try { center = doc.activeView.centerPoint; } catch (viewError) {}
+            try { center = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint); } catch (viewError) {}
             for (var i = 0; i < controls.length; i++) {
                 var ctl0 = controls[i];
                 if (ctl0.min !== undefined) {

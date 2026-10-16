@@ -52,7 +52,7 @@ function foldPanel(parent, title, collapsed, key) {
     var ENG_FONT_NAME = "GSMediumB1";
 
     var doc = app.activeDocument;
-    var viewCenter = doc.activeView.centerPoint;
+    var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
     var lineColor = makeBlackColor(doc);
     var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
     var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);

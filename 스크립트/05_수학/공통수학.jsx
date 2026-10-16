@@ -320,7 +320,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var FLAG_KEYS = ["grid", "numbers", "links", "coords", "dashedOriginal"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -1002,7 +1002,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var FLAG_KEYS = ["circle", "radius", "crossings", "centerDistance", "tangents", "pointDistance", "equations", "grid", "numbers"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -2014,7 +2014,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var FLAG_KEYS = ["shade", "formulas", "grid", "numbers"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -3082,7 +3082,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var COUNTS = ["2개 (A, B)", "3개 (A, B, C)"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -3733,7 +3733,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var FLAG_KEYS = ["vertex", "axisLine", "roots", "intercept", "line", "formula", "grid", "numbers"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -4502,7 +4502,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var FLAG_KEYS = ["asymptote", "start", "intercepts", "formula", "grid", "numbers"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);

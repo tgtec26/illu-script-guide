@@ -1021,7 +1021,7 @@ var SCRIPT_KEY = "MiddleMath";
             var LABEL_GAP_MM = 1;
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -1682,7 +1682,7 @@ var SCRIPT_KEY = "MiddleMath";
             var NAME_STYLES = ["없음", "식", "㉠ ㉡ ㉢", "(가) (나) (다)"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -3185,7 +3185,7 @@ var SCRIPT_KEY = "MiddleMath";
             registerHead(ARROW);
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -4637,7 +4637,7 @@ var SCRIPT_KEY = "MiddleMath";
             ];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
 
             // 옵션 (길이는 mm)
@@ -6025,7 +6025,7 @@ var SCRIPT_KEY = "MiddleMath";
             var FLAG_KEYS = ["names", "center", "lengthText"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -6812,7 +6812,7 @@ var SCRIPT_KEY = "MiddleMath";
             var FLAG_KEYS = ["names", "guides", "lengths", "extra"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -7918,7 +7918,7 @@ var SCRIPT_KEY = "MiddleMath";
             var FLAG_KEYS = ["dots", "guides", "grid"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -8553,7 +8553,7 @@ var SCRIPT_KEY = "MiddleMath";
             var LINE_GAP_MM = 1;
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);

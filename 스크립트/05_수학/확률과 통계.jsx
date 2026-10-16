@@ -294,7 +294,7 @@ var SCRIPT_KEY = "HighStatistics";
             var MAPS = ["가로 4칸 (A~D)", "가운데 원 + 네 조각 (A~E)", "위 한 칸 + 아래 세 칸 (A~D)"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -1095,7 +1095,7 @@ var SCRIPT_KEY = "HighStatistics";
             var FLAG_KEYS = ["second", "meanLine", "sigmaTicks", "approx"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -1879,7 +1879,7 @@ var SCRIPT_KEY = "HighStatistics";
             var LABEL_GAP_MM = 0.8;
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
@@ -2468,7 +2468,7 @@ var SCRIPT_KEY = "HighStatistics";
             var TEXT_KEYS = ["headText", "sideText", "cornerText", "cellsText"];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
             var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
             var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);

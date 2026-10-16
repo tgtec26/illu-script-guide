@@ -1,0 +1,30 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync('스크립트/00_세팅/ui_tab_helper.jsxinc', 'utf8');
+function fixture(selection) {
+  const boards = [{ artboardRect: [200, 700, 800, 300] }];
+  boards.getActiveArtboardIndex = () => 0;
+  const doc = { selection, artboards: boards, activeView: { centerPoint: [999, -999] } };
+  const ctx = { $: { global: {} }, app: { documents: [doc], activeDocument: doc } };
+  vm.createContext(ctx);
+  vm.runInContext(source, ctx);
+  return { ctx, doc };
+}
+let { ctx, doc } = fixture([]);
+assert.deepEqual(Array.from(ctx.getScriptStartCenter(doc)), [500, 500], '선택이 없으면 화면 이동과 무관하게 활성 대지 중앙');
+doc.selection = [{}];
+assert.deepEqual(Array.from(ctx.getScriptStartCenter(doc)), [500, 500], '미리보기 선택은 시작 기준을 바꾸지 않음');
+const input = { type: 'edittext', text: '25', onChange() { this.applied = this.text; } };
+const bar = { type: 'scrollbar', minvalue: -100, maxvalue: 100 };
+const row = { children: [{ type: 'statictext', text: '가로' }, input, bar] };
+const panel = { type: 'panel', text: '위치', children: [row] };
+ctx.resetUnselectedPositionRows({ children: [panel] });
+assert.equal(input.text, '0');
+assert.equal(input.applied, '0');
+({ ctx, doc } = fixture([{}]));
+assert.deepEqual(Array.from(ctx.getScriptStartCenter(doc)), [999, -999], '선택한 도형을 쓰는 기존 기준은 유지');
+input.text = '25';
+ctx.resetUnselectedPositionRows({ children: [panel] });
+assert.equal(input.text, '25', '선택이 있으면 저장 위치 유지');
+console.log('check-unselected-origin ok');

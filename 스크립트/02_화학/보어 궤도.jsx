@@ -164,7 +164,7 @@ try {
         var group = doc.activeLayer.groupItems.add();
         group.name = "BohrQuantumOrbit_n" + maxQuantumNumber;
 
-        var center = doc.activeView.centerPoint;
+        var center = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
         var cx = center[0];
         var cy = center[1];
         var radiusValuesMM = [3, 7, 14, 25];

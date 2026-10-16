@@ -267,7 +267,7 @@ try {
         var group = null, committed = false, previewOn = true, center = [0, 0], ui = {};
 
         function addRows(page) {
-            try { center = doc.activeView.centerPoint; } catch (viewError) {}
+            try { center = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint); } catch (viewError) {}
             for (var i = 0; i < controls.length; i++) if (controls[i].key) o[controls[i].key] = controls[i].value;
             loadSettings();
             var panel = page, checkRow = null;
@@ -715,7 +715,7 @@ try {
             var EXTRA_MAXS = [20, 100, 100];
 
             var doc = app.activeDocument;
-            var viewCenter = doc.activeView.centerPoint;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var engFont = findTextFont([ENG_FONT_NAME]);
             var korFont = findTextFont(["SpoqaHanSansNeo-Regular", ENG_FONT_NAME]);
             var symbolFont = findTextFont(["Batang", "BatangOTF", ENG_FONT_NAME]);

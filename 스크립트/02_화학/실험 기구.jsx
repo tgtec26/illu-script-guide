@@ -59,7 +59,7 @@ try {
         var rb = rect.geometricBounds;
         center = [(rb[0] + rb[2]) / 2, (rb[1] + rb[3]) / 2];
     } else {
-        center = doc.activeView.centerPoint;
+        center = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
     }
 
     // 옵션 (크기는 선택한 사각형이나 종류별 기본값에서 오므로 저장하지 않는다)

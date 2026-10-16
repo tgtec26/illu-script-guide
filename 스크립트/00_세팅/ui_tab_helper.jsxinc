@@ -4,6 +4,60 @@
 // 켜진 입력창끼리만 오가게 한다. 마지막에서는 처음으로 돌아간다.
 // 사용: 창을 다 만든 뒤 win.show() 전에 bindTabOrder(win). 각 스크립트는 이 파일을
 // $.evalFile로 읽고 typeof로 확인하므로, 파일이 없어도 스크립트는 그대로 동작한다.
+// 미리보기가 선택 상태를 바꾸기 전에 실행 시작 시점의 선택을 기억한다.
+var SCRIPT_START_CONTEXT = (function() {
+    try {
+        if (app.documents.length) {
+            var doc = app.activeDocument;
+            return {document: doc, empty: !scriptHasSelection(doc)};
+        }
+    } catch (e) {}
+    return null;
+})();
+
+function scriptHasSelection(doc) {
+    var selection = doc.selection;
+    return !!selection && (selection.length === undefined || selection.length > 0);
+}
+
+function scriptStartsWithoutSelection(doc) {
+    if (SCRIPT_START_CONTEXT && SCRIPT_START_CONTEXT.document === doc) return SCRIPT_START_CONTEXT.empty;
+    return !scriptHasSelection(doc);
+}
+
+function getScriptStartCenter(doc) {
+    if (!scriptStartsWithoutSelection(doc)) return doc.activeView.centerPoint;
+    var b = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+    return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
+}
+
+// 저장값 자체는 취소 때 바꾸지 않는다. 선택 없는 실행의 위치 초기값만 0으로 시작한다.
+function resetUnselectedPositionRows(win) {
+    try {
+        if (!SCRIPT_START_CONTEXT || !SCRIPT_START_CONTEXT.empty) return;
+        var fields = [];
+        function walk(c, position) {
+            if (c.type === "panel") position = /위치/.test(c.text);
+            var children = c.children;
+            if (!children) return;
+            if (position && children.length >= 3 &&
+                (children[0].type === "statictext" || children[0].type === "checkbox") &&
+                children[1].type === "edittext" && children[2].type === "scrollbar" &&
+                /^(가로|세로|가로 이동|세로 이동|좌우|상하|X|Y|X 이동|Y 이동)$/.test(children[0].text)) {
+                var input = children[1], bar = children[2];
+                if (Number(input.text) !== 0 && bar.minvalue <= 0 && bar.maxvalue >= 0) fields.push(input);
+            }
+            for (var i = 0; i < children.length; i++) walk(children[i], position);
+        }
+        walk(win, false);
+        for (var i = 0; i < fields.length; i++) fields[i].text = "0";
+        for (i = 0; i < fields.length; i++) {
+            if (fields[i].onChange) fields[i].onChange();
+            else if (fields[i].onChanging) fields[i].onChanging();
+        }
+    } catch (positionResetError) {}
+}
+
 function bindTabOrder(win) {
     if (win.__dialogInputsBound) return;
     win.__dialogInputsBound = true;
@@ -11,6 +65,7 @@ function bindTabOrder(win) {
     collectDialogConfirmButtons(win, confirmButtons);
     compactDialog(win);
     try { addApplyButtons(win); } catch (applyError) {}
+    resetUnselectedPositionRows(win);
     stretchRowsOnShow(win);
     try { bindPanelFolds(win); } catch (foldError) {}
     var inputs = [];
@@ -551,11 +606,11 @@ function bindPanelFolds(win) {
     bindFoldPageResize(win);
     var show = win.onShow;
     win.onShow = function() {
-        // 폭은 모두 펼친 상태에서 확보한다. 접힌 상태로 다시 열어도 제목·숫자 행이 잘리지 않는다.
-        var width = win.size.width;
+        // 탭 없는 창만 최초 폭을 유지한다. 탭 창은 페이지별 원래 크기로 다시 계산한다.
+        var width = win.size.width, tabbed = win.__foldStacks && win.__foldStacks.length;
         for (var i = panels.length - 1; i >= 0; i--) {
             var p = panels[i];
-            p.minimumSize.width = Math.max(p.minimumSize.width, p.size.width);
+            if (!tabbed) p.minimumSize.width = Math.max(p.minimumSize.width, p.size.width);
             if (p.visible) {
                 p.__foldState.initialApplied = true;
                 if (p.__foldState.initial) setPanelFold(p, true);
@@ -563,7 +618,7 @@ function bindPanelFolds(win) {
         }
         // 다른 페이지를 숨기기 전에 자식의 원래 visible 값을 보관해야 펼칠 때 복원된다.
         if (show) show.apply(this, arguments);
-        win.minimumSize.width = Math.max(win.minimumSize.width, width);
+        if (!tabbed) win.minimumSize.width = Math.max(win.minimumSize.width, width);
         resizeFoldDialog(win);
     };
 }
@@ -640,14 +695,20 @@ function resizeFoldDialog(win) {
             }
         }
         syncFoldPageHeights(win);
-        win.size = [win.size.width, 10];
+        var tabbed = win.__foldStacks && win.__foldStacks.length;
+        if (tabbed) {
+            restoreFoldNaturalWidths(win);
+            syncFoldPageHeights(win);
+        }
+        win.size = [tabbed ? 10 : win.size.width, 10];
         win.layout.layout(true);
+        if (tabbed && win.__foldStretch && stretchToRightEdge(win.__foldStretch.targets, win.__foldStretch.probes)) win.layout.layout(true);
+        if (tabbed) refreshFoldScrollbars(win);
     } catch (layoutError) {}
     finally { win.__foldResizing = false; }
 }
 
-// stack의 숨긴 페이지도 기본 레이아웃은 높이에 포함한다. 숨긴 페이지의 높이만 0으로 제한한다.
-// 패널 내부 요소·탭 순서·페이지 너비는 건드리지 않는다.
+// 기본 레이아웃에 남는 숨긴 페이지의 가로·세로 공간을 제거한다. 요소·탭 순서는 유지한다.
 function bindFoldPageResize(win) {
     var stacks = [];
     function collect(c) {
@@ -665,6 +726,16 @@ function bindFoldPageResize(win) {
     collect(win);
     win.__foldStacks = stacks;
     if (!stacks.length) return;
+    win.__foldNaturalWidths = [];
+    function remember(c) {
+        // dropdownlist의 children에는 크기 속성이 없는 ListItem도 들어 있다.
+        if (c.minimumSize && c.maximumSize && c.preferredSize)
+            win.__foldNaturalWidths.push({control: c, minimum: c.minimumSize.width,
+                maximum: c.maximumSize.width, preferred: c.preferredSize.width,
+                preferredHeight: c.preferredSize.height});
+        if (c.children) for (var i = 0; i < c.children.length; i++) remember(c.children[i]);
+    }
+    remember(win);
     function visibilityKey() {
         var key = "";
         for (var i = 0; i < stacks.length; i++) {
@@ -694,6 +765,45 @@ function isFoldPageShown(stack, page) {
     return stack.type === "tabbedpanel" ? stack.selection === page : page.visible;
 }
 
+function restoreFoldNaturalWidths(win) {
+    var widths = win.__foldNaturalWidths || [];
+    for (var i = 0; i < widths.length; i++) {
+        var saved = widths[i], c = saved.control;
+        c.minimumSize.width = 0;
+        c.maximumSize.width = saved.maximum;
+        c.minimumSize.width = saved.minimum;
+        c.preferredSize.width = saved.preferred;
+        // 0폭이 된 네이티브 컨트롤은 preferredSize만 복원해도 실제 폭이 0으로 남는다.
+        if (saved.preferred > 0 && !/^(group|panel|tab|tabbedpanel|dialog|palette|window)$/.test(c.type)) {
+            var height = saved.preferredHeight > 0 ? saved.preferredHeight : (c.type === "scrollbar" ? 16 : c.size.height);
+            c.size = [Math.max(saved.minimum, Math.min(saved.maximum, saved.preferred)),
+                Math.max(c.minimumSize.height, Math.min(c.maximumSize.height, height))];
+        }
+    }
+}
+
+function suppressFoldPageWidth(page) {
+    if (page.type === "scrollbar") page.__foldZeroWidth = true;
+    if (page.minimumSize && page.maximumSize && page.preferredSize) {
+        page.minimumSize.width = 0;
+        page.preferredSize.width = page.maximumSize.width = 0;
+    }
+    if (page.children) for (var i = 0; i < page.children.length; i++) suppressFoldPageWidth(page.children[i]);
+}
+
+function refreshFoldScrollbars(win) {
+    var widths = win.__foldNaturalWidths || [];
+    for (var i = 0; i < widths.length; i++) {
+        var c = widths[i].control;
+        // macOS의 네이티브 스크롤바는 0폭에서 돌아오면 bounds가 정상이어도 화면이 갱신되지 않는다.
+        if (c.__foldZeroWidth && c.visible && c.size.width > 0 && c.size.height > 0) {
+            c.visible = false;
+            c.visible = true;
+            c.__foldZeroWidth = false;
+        }
+    }
+}
+
 function syncFoldPageHeights(win) {
     var stacks = win.__foldStacks || [];
     for (var i = 0; i < stacks.length; i++) {
@@ -711,9 +821,13 @@ function syncFoldPageHeights(win) {
                 page.preferredSize.height = saved.preferred;
                 page.__foldPageHeight = null;
             }
+            if (!isFoldPageShown(stack, page)) {
+                suppressFoldPageWidth(page);
+            }
         }
         // stack 자체에 직전 페이지 높이가 남지 않도록 다시 계산한다.
         stack.preferredSize.height = -1;
+        stack.preferredSize.width = -1;
     }
 }
 
@@ -734,6 +848,7 @@ function stretchRowsOnShow(win) {
         if (!targets.length) return;
         addStretchProbe(win, "panel", probes);
         addStretchProbe(win, "tab", probes);
+        win.__foldStretch = {targets: targets, probes: probes};
     } catch (e0) { return; }
     var previous = win.onShow;
     win.onShow = function() {

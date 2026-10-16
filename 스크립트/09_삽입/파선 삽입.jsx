@@ -1,3 +1,5 @@
+// 선택 없는 출력은 활성 대지 중앙에서 시작
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 12_기타/마지막 실행 반복.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -41,7 +43,7 @@ try {
 
     // 4. 위치 계산
     var currentView = doc.views[0];
-    var centerPoint = currentView.centerPoint; 
+    var centerPoint = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : currentView.centerPoint);
     
     var centerX = centerPoint[0];
     var centerY = centerPoint[1];

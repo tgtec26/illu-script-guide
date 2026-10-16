@@ -397,7 +397,7 @@ try {
         if (engine.selectedCount() === 0) { alert(engine.emptyMessage); return; }
         if (!pending) return;
         var g = detectGuideCircle();
-        var center = app.activeDocument.activeView.centerPoint;
+        var center = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(app.activeDocument) : app.activeDocument.activeView.centerPoint);
         var rec = { engine: engine, fields: engine.saveFields(), overall: sldOverall.value,
             dx: offsetXmm * MM + (g ? g.cx - center[0] : 0), dy: offsetYmm * MM + (g ? g.cy - center[1] : 0), holder: null };
         if (g) { try { g.item.remove(); } catch (e) {} } // 가이드 원은 첫 확정 때 지운다. 이후 미리보기는 화면 중심 기준
@@ -659,7 +659,7 @@ try {
 
             var doc = app.activeDocument;
             var layer = targetLayer ? targetLayer : doc.activeLayer;
-            var centerPoint = doc.activeView.centerPoint;
+            var centerPoint = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var startCx = centerPoint[0];
             var cy = centerPoint[1];
 
@@ -998,7 +998,7 @@ try {
             if (app.documents.length === 0) return [];
             var doc = app.activeDocument;
             var layer = targetLayer ? targetLayer : doc.activeLayer;
-            var vc = doc.activeView.centerPoint;
+            var vc = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var startCx = vc[0], baseCy = vc[1];
 
             // 선택된 정원(원)이 있으면 첫 분자의 중심 원자를 그 중심으로 옮기고 원은 삭제.
@@ -1337,7 +1337,7 @@ try {
             if (app.documents.length === 0) return [];
             var doc = app.activeDocument;
             var layer = targetLayer ? targetLayer : doc.activeLayer;
-            var vc = doc.activeView.centerPoint;
+            var vc = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var startCx = vc[0], cy = vc[1];
 
             // 선택된 정원(원)이 있으면 첫 이온의 중심을 그 중심으로 옮기고 원은 삭제.

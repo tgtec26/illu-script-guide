@@ -1174,7 +1174,7 @@ function foldPanel(parent, title, collapsed, key) {
                     api.originX = (gb[0] + gb[2]) / 2;
                     api.originY = (gb[1] + gb[3]) / 2;
                 } else {
-                    var centerPoint = doc.views[0].centerPoint;
+                    var centerPoint = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.views[0].centerPoint);
                     api.originX = centerPoint[0];
                     api.originY = centerPoint[1];
                 }

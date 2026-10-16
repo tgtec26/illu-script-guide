@@ -50,7 +50,7 @@ try {
     ];
 
     var doc = app.activeDocument;
-    var viewCenter = doc.activeView.centerPoint;
+    var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
     var centerX = viewCenter[0];
     var centerY = viewCenter[1];
     var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);

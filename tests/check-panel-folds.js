@@ -79,16 +79,38 @@ stack.orientation = 'stack';
 const pageA = control('group', '', stack);
 const pageB = control('group', '', stack);
 pageB.visible = false;
+const dropdown = control('dropdownlist', '', pageA);
+dropdown.children.push({ type: 'item', text: '항목' }); // ListItem에는 크기 속성이 없다.
+const nativeBar = control('scrollbar', '', pageA);
+nativeBar.preferredSize = { width: 118, height: 16 };
+let nativeSize = { width: 118, height: 16 }, ownVisible = true, visibilityWrites = 0;
+Object.defineProperty(nativeBar, 'size', {
+  get() { return nativeSize; },
+  set(v) { nativeSize = Array.isArray(v) ? { width: v[0], height: v[1] } : v; }
+});
+Object.defineProperty(nativeBar, 'visible', {
+  get() { return ownVisible && pageA.visible; },
+  set(v) { ownVisible = v; visibilityWrites++; }
+});
 control('panel', '첫째 옵션', pageA).children.push(control('group', ''));
 control('panel', '둘째 옵션', pageB).children.push(control('group', ''));
 selector.onClick = function() { pageA.visible = false; pageB.visible = true; };
 ctx.bindPanelFolds(tabWin);
 tabWin.onShow();
 assert.equal(pageB.maximumSize.height, 0, '다른 탭의 긴 내용이 창 높이를 유지하지 않음');
+assert.equal(pageB.maximumSize.width, 0, '다른 탭의 너비도 제외');
+assert.equal(tabWin.minimumSize.width, 0, '가장 넓은 탭의 창 폭을 고정하지 않음');
 selector.onClick();
 assert.equal(pageA.maximumSize.height, 0);
 assert.equal(pageB.maximumSize.height, 10000, '현재 탭은 원래 제약 복원');
+assert.equal(pageB.maximumSize.width, 10000, '선택한 탭의 원래 너비 제약 복원');
 assert.equal(pageB.preferredSize.height, -1);
+nativeBar.size = [0, 0]; // 숨긴 페이지의 실제 네이티브 컨트롤이 0 크기가 된 상황
+pageA.visible = true;
+pageB.visible = false;
+ctx.resizeFoldDialog(tabWin);
+assert.deepEqual(nativeBar.size, { width: 118, height: 16 }, '너비·높이를 함께 복원');
+assert.ok(visibilityWrites >= 2, 'macOS 스크롤바도 다시 그려 표시');
 // 네이티브 탭은 selection이 바뀐 뒤 onChange가 호출된다. 처리기 내부에서 visible이 안 바뀌어도 갱신한다.
 const nativeWin = control('dialog', '기본 탭 시험');
 nativeWin.layout = { layout() {} };

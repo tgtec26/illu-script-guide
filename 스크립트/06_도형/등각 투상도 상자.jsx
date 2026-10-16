@@ -755,7 +755,7 @@ function createIsometricBox(doc, w_mm, d_mm, h_mm, angleR, angleL, offX_mm, offY
         cx = originX;
         cy = originY;
     } else {
-        var centerPoint = doc.views[0].centerPoint;
+        var centerPoint = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.views[0].centerPoint);
         cx = centerPoint[0];
         cy = centerPoint[1];
     }

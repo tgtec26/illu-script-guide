@@ -117,7 +117,7 @@ try {
         readPlaceSettings();
 
         var layer = findEditableLayer();
-        var viewCenter = doc.activeView.centerPoint;
+        var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
         var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
         var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
         var batangFont = findOptionalFont("Batang");

@@ -138,7 +138,7 @@ try {
 
         var doc = app.activeDocument;
         var layer = doc.activeLayer;
-        var centerPoint = doc.activeView.centerPoint;
+        var centerPoint = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
         var MM = 2.834645669;
         var gap = 5 * MM;
 

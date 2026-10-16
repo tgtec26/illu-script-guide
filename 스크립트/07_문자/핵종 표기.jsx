@@ -300,7 +300,7 @@ try {
 
     function placeInCurrentView(documentRef, item) {
         var view = getCurrentView(documentRef);
-        var center = view.centerPoint;
+        var center = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(documentRef) : view.centerPoint);
         item.position = [center[0], center[1]];
     }
 

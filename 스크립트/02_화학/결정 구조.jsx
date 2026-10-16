@@ -1666,7 +1666,7 @@ function foldPanel(parent, title, collapsed, key) {
             var cols = o.lattices.length, rows = o.modes.length;
             var totalW = cols * cellW + (cols - 1) * gap;
             var totalH = rows * cellH + (rows - 1) * gap;
-            var vc = doc.activeView.centerPoint;
+            var vc = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var left0 = vc[0] - totalW / 2, top0 = vc[1] + totalH / 2;
 
             var created = [];
