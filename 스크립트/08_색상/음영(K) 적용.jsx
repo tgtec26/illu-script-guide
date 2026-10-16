@@ -1,3 +1,5 @@
+// 공통 패널 제목의 접기·펼치기 아이콘
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 12_기타/마지막 실행 반복.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -92,6 +94,7 @@ try {
     var btnCancel = btnGroup.add("button", undefined, "취소", {name: "cancel"});
 
     // 3. 실행 로직
+    if (typeof bindPanelFolds === "function") bindPanelFolds(win);
     if (win.show() == 1) {
         var selectedK = 50; 
         for (var x = 0; x < radios.length; x++) {

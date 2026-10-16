@@ -12,6 +12,7 @@ function bindTabOrder(win) {
     compactDialog(win);
     try { addApplyButtons(win); } catch (applyError) {}
     stretchRowsOnShow(win);
+    try { bindPanelFolds(win); } catch (foldError) {}
     var inputs = [];
     collectEditTexts(win, inputs);
     bindDeferredDialogInputs(win, inputs, confirmButtons);
@@ -164,7 +165,7 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
         var values = [], dirty = [], j;
         for (j = 0; j < fields.length; j++) {
             values[j] = String(fields[j].input.text);
-            dirty[j] = values[j] !== fields[j].text && isTabTarget(win, fields[j].input);
+            dirty[j] = values[j] !== fields[j].text && isDialogConfirmTarget(win, fields[j].input);
         }
         state.applying = true;
         try {
@@ -263,6 +264,23 @@ function makeDeferredInputHandler(state, field, handler, live) {
 function isTabTarget(win, control) {
     for (var c = control; c && c !== win; c = c.parent) {
         if (!c.enabled || !c.visible) return false;
+    }
+    return true;
+}
+
+// 접어서만 숨겨진 입력은 확인할 때 확정한다. 비활성 탭·원래 숨긴 항목은 계속 제외한다.
+function isDialogConfirmTarget(win, control) {
+    for (var c = control; c && c !== win; c = c.parent) {
+        if (!c.enabled) return false;
+        if (!c.visible) {
+            var state = c.parent && c.parent.__foldState, restored = false;
+            if (state && state.collapsed) {
+                for (var i = 0; i < state.items.length; i++) {
+                    if (state.items[i].control === c) restored = state.items[i].visible;
+                }
+            }
+            if (!restored) return false;
+        }
     }
     return true;
 }
@@ -428,7 +446,7 @@ function compactButtonWalk(container) {
 }
 
 // ---- 접는 패널 ----
-// 행이 많은 패널을 접어 창 높이를 줄인다. 패널 맨 위에 [접기/펼치기] 단추가 있고, 행은 돌려받은 body 그룹에 넣는다
+// 기존 호출의 body·children 경로는 유지한다. 접기 표시는 제목 오른쪽에 직접 그려 별도 행을 차지하지 않는다.
 // (parent.add("panel") 대신 body = makeCollapsiblePanel(parent, "제목", true, "스크립트/패널") 으로 만들고 body.add(...)).
 // 접힌 상태는 app.preferences "<key>"(1 = 접힘)에 기억한다. 헬퍼가 없는 환경에서는 일반 패널로 대신해도 된다:
 //   var body = typeof makeCollapsiblePanel === "function" ? makeCollapsiblePanel(...) : parent.add("panel", undefined, "제목");
@@ -446,31 +464,149 @@ function makeCollapsiblePanel(parent, title, collapsedDefault, key) {
     var head = panel.add("group");
     head.alignChildren = ["left", "center"];
     var toggle = head.add("button", undefined, "");
-    toggle.preferredSize.width = 60;
-    toggle.preferredSize.height = 20;
+    // 기존 UI 관리 경로를 보존하기 위해 예전 헤더·단추는 높이 0으로 남긴다.
+    head.visible = false;
+    head.preferredSize.height = head.maximumSize.height = 0;
+    toggle.visible = false;
+    toggle.preferredSize.height = toggle.maximumSize.height = 0;
     var body = panel.add("group");
     body.orientation = "column";
     body.alignChildren = "fill";
-    function apply() {
-        toggle.text = collapsed ? "펼치기" : "접기";
-        toggle.helpTip = collapsed ? "이 패널의 항목을 펼칩니다" : "이 패널의 항목을 접습니다";
-        body.visible = !collapsed;
-        body.maximumSize.height = collapsed ? 0 : 10000;
-    }
-    apply();
-    toggle.onClick = function() {
-        collapsed = !collapsed;
-        apply();
-        try { app.preferences.setStringPreference("Fold/" + key, collapsed ? "1" : "0"); } catch (e1) {}
-        try {
-            var win = panel.window;
-            // 줄일 때는 창을 작게 만든 뒤 다시 잡아야 줄어든다
-            win.size = [10, 10];
-            win.layout.layout(true);
-        } catch (e2) {}
-    };
+    toggle.text = collapsed ? "펼치기" : "접기";
+    panel.__foldKey = "Fold/" + key;
+    panel.__foldDefault = collapsed;
     body.panel = panel;
     return body;
+}
+
+// 제목 있는 모든 옵션 패널에 적용한다. 요소를 추가·이동하지 않아 UI 덮어쓰기 경로를 보존한다.
+function bindPanelFolds(win) {
+    if (win.__panelFoldsBound || $.global.__noPanelFolds) return;
+    win.__panelFoldsBound = true;
+    var panels = [];
+    function walk(parent, path) {
+        if (!parent.children) return;
+        for (var i = 0; i < parent.children.length; i++) {
+            var c = parent.children[i], childPath = path + "/" + i;
+            if (c.type === "panel" && c.text && c.children.length) {
+                var key = c.__foldKey || "Fold/Auto/" + win.text + childPath;
+                var collapsed = c.__foldDefault === true;
+                try {
+                    var saved = app.preferences.getStringPreference(key);
+                    if (saved === "1" || saved === "0") collapsed = saved === "1";
+                } catch (readError) {}
+                c.__foldState = {key: key, collapsed: false, initial: collapsed, items: [], win: win};
+                bindPanelFoldHeader(c);
+                panels.push(c);
+            }
+            walk(c, childPath);
+        }
+    }
+    walk(win, "");
+    if (!panels.length) return;
+    var show = win.onShow;
+    win.onShow = function() {
+        if (show) show.apply(this, arguments);
+        // 폭은 모두 펼친 상태에서 확보한다. 접힌 상태로 다시 열어도 제목·숫자 행이 잘리지 않는다.
+        var width = win.size.width;
+        for (var i = panels.length - 1; i >= 0; i--) {
+            var p = panels[i];
+            p.minimumSize.width = Math.max(p.minimumSize.width, p.size.width);
+            if (p.__foldState.initial) setPanelFold(p, true);
+        }
+        win.minimumSize.width = Math.max(win.minimumSize.width, width);
+        resizeFoldDialog(win);
+    };
+}
+
+function bindPanelFoldHeader(panel) {
+    var draw = panel.onDraw;
+    try {
+        panel.minimumSize.width = Math.max(panel.minimumSize.width,
+            Math.ceil(panel.graphics.measureString(panel.text, panel.graphics.font).width) + 44);
+    } catch (titleMeasureError) {}
+    var light = false;
+    try { light = app.preferences.getIntegerPreference("uiBrightness") >= 2; } catch (themeError) {}
+    var ink = light ? [0.2, 0.2, 0.2, 1] : [0.82, 0.82, 0.82, 1];
+    var edge = light ? [0.65, 0.65, 0.65, 1] : [0.27, 0.27, 0.27, 1];
+    panel.onDraw = function() {
+        var g = this.graphics;
+        if (draw) draw.apply(this, arguments);
+        else {
+            // Illustrator의 drawOSControl()은 패널 제목·테두리를 그리지 않는다.
+            var width = this.size.width, height = this.size.height;
+            var titleWidth = g.measureString(this.text, g.font).width;
+            g.newPath();
+            g.moveTo(8, 7); g.lineTo(1, 7); g.lineTo(1, height - 1);
+            g.lineTo(width - 1, height - 1); g.lineTo(width - 1, 7); g.lineTo(width - 8, 7);
+            g.moveTo(Math.min(titleWidth + 18, width - 26), 7); g.lineTo(width - 26, 7);
+            g.strokePath(g.newPen(g.PenType.SOLID_COLOR, edge, 1));
+            g.drawString(this.text, g.newPen(g.PenType.SOLID_COLOR, ink, 1), 12, 0, g.font);
+        }
+        // 제목의 같은 높이, 오른쪽 여백에 8px 삼각형. 글꼴·유니코드 지원에 의존하지 않는다.
+        var x = this.size.width - 18, y = 7;
+        g.newPath();
+        if (this.__foldState.collapsed) {
+            g.moveTo(x, y - 3); g.lineTo(x + 5, y + 1); g.lineTo(x, y + 5);
+        } else {
+            g.moveTo(x - 2, y - 1); g.lineTo(x + 6, y - 1); g.lineTo(x + 2, y + 4);
+        }
+        g.closePath();
+        g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, ink));
+    };
+    panel.helpTip = (panel.helpTip ? panel.helpTip + "\n" : "") + "제목 줄을 클릭하면 접기·펼치기 (삼각형 아이콘)";
+    panel.addEventListener("mousedown", function(event) {
+        if (event.target !== panel || event.clientY > 18 || event.clientY < 0) return;
+        if (event.button !== undefined && event.button !== 0) return;
+        setPanelFold(panel, !panel.__foldState.collapsed, true);
+        if (event.preventDefault) event.preventDefault();
+    });
+}
+
+function setPanelFold(panel, collapsed, save) {
+    var state = panel.__foldState;
+    if (!state || state.collapsed === collapsed) return;
+    var i, item, c;
+    if (collapsed) {
+        state.items = [];
+        state.minimum = panel.minimumSize.height;
+        state.maximum = panel.maximumSize.height;
+        state.preferred = panel.preferredSize.height;
+        for (i = 0; i < panel.children.length; i++) {
+            c = panel.children[i];
+            state.items.push({control: c, visible: c.visible, minimum: c.minimumSize.height,
+                maximum: c.maximumSize.height, preferred: c.preferredSize.height});
+            c.minimumSize.height = 0;
+            c.preferredSize.height = c.maximumSize.height = 0;
+            c.visible = false;
+        }
+        panel.minimumSize.height = 0;
+        panel.preferredSize.height = panel.maximumSize.height = 22;
+        panel.minimumSize.height = 22;
+    } else {
+        panel.maximumSize.height = state.maximum;
+        panel.minimumSize.height = state.minimum;
+        panel.preferredSize.height = state.preferred;
+        for (i = 0; i < state.items.length; i++) {
+            item = state.items[i]; c = item.control;
+            c.maximumSize.height = item.maximum;
+            c.minimumSize.height = item.minimum;
+            c.preferredSize.height = item.preferred;
+            c.visible = item.visible;
+        }
+    }
+    state.collapsed = collapsed;
+    if (save) {
+        try { app.preferences.setStringPreference(state.key, collapsed ? "1" : "0"); } catch (writeError) {}
+        resizeFoldDialog(state.win);
+    }
+}
+
+function resizeFoldDialog(win) {
+    try {
+        win.size = [win.size.width, 10];
+        win.layout.layout(true);
+    } catch (layoutError) {}
 }
 
 // ---- 좌우 여백 맞추기 (bindTabOrder가 부른다, 2026-10-14) ----

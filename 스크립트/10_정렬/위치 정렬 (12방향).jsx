@@ -1,3 +1,5 @@
+// 공통 패널 제목의 접기·펼치기 아이콘
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 /* [위치 정렬 - 12방향 배치]
   1. 선택한 두 개체 중 기준 개체(큰/작은)를 라디오 버튼으로 선택 (기본: 큰 개체)
   2. 간격 옵션: 0mm / 0.5mm / 1.0mm (기본: 1.0mm)
@@ -257,6 +259,8 @@ try {
     var btnGroup = dlg.add("group");
     btnGroup.alignment = "center";
     btnGroup.add("button", undefined, "취소", { name: "cancel" });
+
+    if (typeof bindPanelFolds === "function") bindPanelFolds(dlg);
 
     if (dlg.show() !== 1 || !result) return;
 

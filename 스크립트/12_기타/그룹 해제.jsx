@@ -1,4 +1,6 @@
-﻿// 마지막 실행 스크립트 기록 → 12_기타/마지막 실행 반복.jsx(F4)가 다시 실행
+﻿// 공통 패널 제목의 접기·펼치기 아이콘
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
+// 마지막 실행 스크립트 기록 → 12_기타/마지막 실행 반복.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
     __memo.encoding = "UTF-8";
@@ -101,6 +103,7 @@ if (app.documents.length > 0) {
     copyright.enabled = false;
 
     if (doc.groupItems.length > 0) {
+      if (typeof bindPanelFolds === "function") bindPanelFolds(win);
       win.show();
     } else { 
       alert(SCRIPT_NAME + '\n문서에 그룹이 없습니다.'); 

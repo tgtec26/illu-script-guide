@@ -1,3 +1,5 @@
+// 공통 패널 제목의 접기·펼치기 아이콘
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 /* [보이는 영역 정렬 - 7방향 패널]
   1. 선택한 개체 중 기준 개체(큰/작은)를 라디오 버튼으로 선택 (기본: 큰 개체)
   2. 정렬 버튼을 클릭하면 즉시 적용
@@ -254,6 +256,8 @@ try {
     var btnGroup = dlg.add("group");
     btnGroup.alignment = "center";
     btnGroup.add("button", undefined, "취소", { name: "cancel" });
+
+    if (typeof bindPanelFolds === "function") bindPanelFolds(dlg);
 
     if (dlg.show() !== 1 || !mode) return;
 

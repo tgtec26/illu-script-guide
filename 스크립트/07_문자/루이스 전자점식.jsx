@@ -1,4 +1,6 @@
 #target Illustrator
+// 공통 패널 제목의 접기·펼치기 아이콘
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 // 마지막 실행 스크립트 기록 → 12_기타/마지막 실행 반복.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
@@ -52,6 +54,8 @@ try {
         buttons.alignment = "right";
         buttons.add("button", undefined, "실행", {name: "ok"});
         buttons.add("button", undefined, "취소", {name: "cancel"});
+
+        if (typeof bindPanelFolds === "function") bindPanelFolds(dlg);
 
         if (dlg.show() !== 1) return;
         saveDotCounts();
