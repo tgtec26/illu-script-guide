@@ -164,6 +164,8 @@ try {
             var lengthMm = 30;
             var angleDeg = 25;
             var ballMm = 6;
+            var showCeiling = true;
+            var ceilingWidthPt = 0.6;
             var showTheta = true;
             var showLength = true;
             var lengthLabel = "l";
@@ -185,7 +187,7 @@ try {
 
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var defaults = {lengthMm: lengthMm, angleDeg: angleDeg, ballMm: ballMm, bulgePercent: bulgePercent,
-                thetaRadiusPercent: thetaRadiusPercent, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+                thetaRadiusPercent: thetaRadiusPercent, ceilingWidthPt: ceilingWidthPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
 
             applySavedSettings();
 
@@ -202,6 +204,11 @@ try {
             var ballField = addNumberField(sizePanel, "공 크기", "mm", ballMm, 0.5, 0.5, 100, defaults.ballMm);
 
             var markPanel = addPanel(dlg, "표시");
+            var ceilingCheck = markPanel.add("checkbox", undefined, "천장 선");
+            ceilingCheck.value = showCeiling;
+            var ceilingWidthField = addNumberField(markPanel, "천장 두께", "pt", ceilingWidthPt, 0.1, 0.1, 5, defaults.ceilingWidthPt);
+            ceilingWidthField.row.enabled = showCeiling;
+            ceilingCheck.onClick = function() {ceilingWidthField.row.enabled = ceilingCheck.value;updatePreview();};
             var thetaCheck = markPanel.add("checkbox", undefined, "각도 θ 표시");
             thetaCheck.value = showTheta;
 
@@ -277,6 +284,12 @@ try {
 
                 var black = makeBlack();
                 var gray = makeGray(60);
+
+                if (showCeiling) {
+                    var half = Math.max(12, lengthMm * 0.6) * MM / 2;
+                    var ceilingPath = drawLine(group, pivotX - half, pivotY, pivotX + half, pivotY, black);
+                    ceilingPath.strokeWidth = ceilingWidthPt;
+                }
 
                 // 세 위치: 실제(왼쪽), 중앙(수직 아래), 반대편 끝(오른쪽)
                 var actual = [pivotX - length * Math.sin(radians), pivotY - length * Math.cos(radians)];
@@ -647,6 +660,8 @@ try {
             }
 
             function readFields(showAlert) {
+                var ceilingWeight = parseNumber(ceilingWidthField.input.text);
+                if (ceilingWeight === null || ceilingWeight < 0.1 || ceilingWeight > 5) {if (showAlert) alert("천장 두께는 0.1~5pt로 입력해주세요.");return false;}
                 var length = parseNumber(lengthField.input.text);
                 var angle = parseNumber(angleField.input.text);
                 var ball = parseNumber(ballField.input.text);
@@ -690,6 +705,8 @@ try {
                 ballMm = ball;
                 bulgePercent = bulge;
                 thetaRadiusPercent = thetaRadius;
+                showCeiling = ceilingCheck.value;
+                ceilingWidthPt = ceilingWeight;
                 showTheta = thetaCheck.value;
                 showLength = lengthCheck.value;
                 lengthLabel = lengthLabelInput.text;
@@ -814,7 +831,7 @@ try {
 
             function saveSettings() {
                 var parts = [
-                    "v5",
+                    "v6",
                     lengthMm,
                     angleDeg,
                     ballMm,
@@ -827,7 +844,9 @@ try {
                     thetaRadiusPercent,
                     offsetXmm,
                     offsetYmm,
-                    lengthLabel
+                    lengthLabel,
+                    showCeiling ? "1" : "0",
+                    ceilingWidthPt
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -837,7 +856,8 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v5" || p.length < 14) return;
+                if (!((p[0] === "v5" && p.length === 14) || (p[0] === "v6" && p.length === 16))) return;
+                if (p[0] === "v6") {showCeiling = p[14] === "1";var cw = parseFloat(p[15]);if (cw >= 0.1 && cw <= 5) ceilingWidthPt = cw;}
 
                 var length = parseFloat(p[1]);
                 var angle = parseFloat(p[2]);
