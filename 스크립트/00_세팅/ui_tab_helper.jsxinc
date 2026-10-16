@@ -310,11 +310,54 @@ function compactDialog(win) {
         } catch (e0) {}
         compactWalk(win);
         compactButtons(win);
-        compactAlignRows(win);
         compactArrowheadNames(win);
     } catch (e) {}
     // 로컬 서버(tools/ui-admin.js)로 고친 제목·슬라이더 범위·기본값·항목 문구를 적용하고, 화면 요소 목록을 남긴다
     try { uiCatalogAndOverrides(win); } catch (e2) {}
+    try {
+        if (!$.global.__noCompact) {
+            compactInputLabels(win);
+            compactAlignRows(win);
+        }
+    } catch (inputCompactError) {}
+}
+
+// 입력칸 왼쪽 라벨만 줄인다. 원문은 툴팁에 남기고 카탈로그의 orig는 유지한다.
+var COMPACT_LABEL_ALIASES = null;
+
+function compactLabelLength(text) {
+    var length = 0;
+    for (var i = 0; i < text.length; i++) length += /\s/.test(text.charAt(i)) ? 0.5 : 1;
+    return length;
+}
+
+function compactInputLabels(container) {
+    if (COMPACT_LABEL_ALIASES === null) {
+        COMPACT_LABEL_ALIASES = {};
+        try {
+            var data = uiReadFile(UI_HELPER_DIR + "/ui_label_aliases.json");
+            if (data) COMPACT_LABEL_ALIASES = eval("(" + data + ")");
+        } catch (aliasReadError) {}
+    }
+    var children = container.children;
+    if (!children) return;
+    for (var i = 0; i < children.length - 1; i++) {
+        var label = children[i], next = children[i + 1];
+        // 일반 체크박스·패널·탭 이름·설명문은 그대로 둔다.
+        if (label.type !== "statictext" && !(label.type === "checkbox" &&
+            next.type === "edittext" && i + 2 < children.length && children[i + 2].type === "scrollbar")) continue;
+        if (next.type !== "edittext" && next.type !== "dropdownlist") continue;
+        compactLabel(label);
+        var original = label.text, shortText = COMPACT_LABEL_ALIASES[original];
+        if (!shortText || compactLabelLength(original) <= 6 || compactLabelLength(shortText) > 6) continue;
+        label.text = shortText;
+        if (!label.helpTip || label.helpTip.indexOf(original) < 0)
+            label.helpTip = (label.helpTip ? label.helpTip + "\n" : "") + original;
+    }
+    for (i = 0; i < children.length; i++) {
+        if (children[i].children && children[i].children.length) compactInputLabels(children[i]);
+    }
+    try { compactLabelWidths(container); } catch (labelWidthError) {}
 }
 
 function compactWalk(container) {
@@ -967,9 +1010,9 @@ function uiQuiet(control, fn) {
 }
 
 // ---- 줄 맞춤과 화살촉 이름 ----
-var COMPACT_EDIT_WIDTH = 62;
+var COMPACT_EDIT_WIDTH = 46;
 
-// [라벨 | 입력창 | 스크롤바 (| R)] 줄을 창 전체에서 같은 칸 폭으로 맞춘다: 패널이 달라도 입력창·슬라이더·R 단추가 세로로 한 줄에 선다.
+// [라벨 | 입력창 | 스크롤바 (| R)]의 라벨 칸은 창 전체에서 맞춘다. 숫자 칸은 기본 4자이며 큰 범위인 행만 늘린다.
 // 라벨 칸은 창 안의 모든 그런 줄 중 가장 긴 글자에 맞춘다.
 function compactCollectRows(container, rows, offset) {
     for (var i = 0; i < container.children.length; i++) {
@@ -980,7 +1023,7 @@ function compactCollectRows(container, rows, offset) {
             // 첫 칸이 체크박스인 줄(켜고 끄는 숫자 행)도 같은 줄로 본다. 체크박스 글자의 "(단위):"도 툴팁으로 옮긴다
             if (k.length >= 3 && (k[0].type === "statictext" || k[0].type === "checkbox") && k[1].type === "edittext" && k[2].type === "scrollbar") {
                 if (k[0].type === "checkbox") compactLabel(k[0]);
-                rows.push({group: child, label: k[0], edit: k[1], offset: offset});
+                rows.push({group: child, label: k[0], edit: k[1], bar: k[2], offset: offset});
             }
         }
         if (child.children && child.children.length) {
@@ -995,19 +1038,21 @@ function compactCollectRows(container, rows, offset) {
 }
 
 function compactAlignRows(win) {
-    var rows = [], i, need = 0, editWidth = COMPACT_EDIT_WIDTH, maxOffset = 0;
+    var rows = [], i, need = 0, maxOffset = 0;
     compactCollectRows(win, rows, 0);
-    if (rows.length < 2) return;
+    if (!rows.length) return;
     for (i = 0; i < rows.length; i++) {
         var w = rows[i].label.graphics.measureString(rows[i].label.text)[0] + (rows[i].label.type === "checkbox" ? COMPACT_CHECK_BOX : 0);
         if (w > need) need = w;
-        if (rows[i].edit.preferredSize.width > editWidth) editWidth = rows[i].edit.preferredSize.width;
         if (rows[i].offset > maxOffset) maxOffset = rows[i].offset;
     }
     var width = Math.ceil(need) + 6;
     for (i = 0; i < rows.length; i++) {
+        var editWidth = compactNumericWidth(rows[i]);
         rows[i].label.preferredSize.width = width;
         rows[i].label.maximumSize.width = width;
+        rows[i].edit.characters = 4;
+        rows[i].edit.minimumSize.width = 0;
         rows[i].edit.preferredSize.width = editWidth;
         rows[i].edit.maximumSize.width = editWidth;
         // 패널 밖(또는 얕은 곳)의 줄은 모자란 왼쪽 여백을 줄 자체의 여백으로 채워 패널 안 줄과 세로로 맞춘다
@@ -1019,6 +1064,24 @@ function compactAlignRows(win) {
             } catch (eG) {}
         }
     }
+}
+
+// 기본 4자. 부호·소수·큰 수가 필요한 행만 유효 범위의 값을 표시할 폭을 확보한다.
+function compactNumericWidth(row) {
+    var width = COMPACT_EDIT_WIDTH, step = Number(row.bar.stepdelta), decimals = 0;
+    var scale = 1;
+    while (decimals < 6 && step > 0 && Math.abs(step * scale - Math.round(step * scale)) > 0.00000001) {
+        decimals++;
+        scale *= 10;
+    }
+    var values = [row.bar.minvalue, row.bar.maxvalue];
+    for (var i = 0; i < values.length; i++) {
+        var n = Number(values[i]);
+        if (!isFinite(n)) continue;
+        try { width = Math.max(width, Math.ceil(row.edit.graphics.measureString(n.toFixed(decimals))[0]) + 14); }
+        catch (measureError) {}
+    }
+    return width;
 }
 
 // 화살촉 모양 드롭다운(삼각형·꺾쇠·제비꼬리·작살형)은 모든 대화상자에서 번호로 보인다: 1 작살형(평가원식) 2 제비꼬리 3 삼각형 4 꺾쇠.
