@@ -118,9 +118,16 @@ var SCRIPT_KEY = "MiddleMath";
     var tabList = null;
     var tabLabels = [];
     for (engineIndex = 0; engineIndex < engines.length; engineIndex++) tabLabels.push(engines[engineIndex].label);
-    tabList = win.add("dropdownlist", undefined, tabLabels);
-    tabList.alignment = ["left", "center"];
-    tabList.selection = 0;
+    // 탭 선택 줄: 라디오 버튼이 기본이고, 너무 넓을 때만 드롭다운 (00_세팅/ui_tab_helper.jsxinc의 tabSelectorNeedsDropdown)
+    if (typeof tabSelectorNeedsDropdown !== "function" || tabSelectorNeedsDropdown(tabLabels)) {
+        tabList = win.add("dropdownlist", undefined, tabLabels);
+        tabList.alignment = ["left", "center"];
+        tabList.selection = 0;
+    } else {
+        tabBar = win.add("group");
+        tabBar.alignChildren = ["left", "center"];
+        tabBar.spacing = 12;
+    }
     holder = win.add("group");
     holder.orientation = "stack";
     holder.alignChildren = ["fill", "top"];

@@ -177,7 +177,7 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 
 - 옵션을 공유하는 묶음(3D 라인·입자 모형·결정 구조): 공용 상태·패널은 IIFE 최상위, 탭별 상태·행·기하는 `makeXEngine()` 클로저 안. 엔진 인터페이스는 파일 머리 주석에 있다.
 - 서로 다른 다이얼로그를 그대로 담는 묶음(DNA 모형·역학·그래프·표): 원본 스크립트 본문이 `addRows(page)` 안에 그대로 들어가고, 창·푸터·show 부분만 `api.setPreview/updatePreview/clearPreview/commit` 훅으로 바뀐다. 각 탭의 저장 키(`PREF_KEY`)는 원래 것을 그대로 쓴다. 선택이 맞지 않는 탭은 `addRows`가 안내문을 돌려주고 호스트가 탭을 끈다.
-- 탭 줄(`tabbedpanel`)은 탭 수만큼 폭을 차지해 창이 넓어진다(5개면 약 500, 11개면 1000 넘게). 2026-10-09부터 새 묶음은 `tabbedpanel` 대신 선택 줄 + 겹쳐 쌓은 페이지를 쓴다: 탭이 적으면 라디오 버튼 줄, 많으면 드롭다운, 페이지는 `stack` 그룹에 쌓고 레이아웃을 잡은 뒤 선택되지 않은 페이지를 숨긴다(`역학.jsx`, `공통수학.jsx` 참고). 기존 묶음은 `tools/tabs-to-selector.py`로 호스트 틀이 같은 것만 변환했다.
+- 탭 줄(`tabbedpanel`)은 탭 수만큼 폭을 차지해 창이 넓어진다(5개면 약 500, 11개면 1000 넘게). 2026-10-09부터 새 묶음은 `tabbedpanel` 대신 선택 줄 + 겹쳐 쌓은 페이지를 쓴다: 탭 선택 줄은 라디오 버튼이 기본이고, 라디오 줄이 너무 넓을 때만 드롭다운(판정은 `ui_tab_helper.jsxinc`의 `tabSelectorNeedsDropdown(labels)`, 글자 수로 600px 넘는지 어림, 2026-10-16), 페이지는 `stack` 그룹에 쌓고 레이아웃을 잡은 뒤 선택되지 않은 페이지를 숨긴다(`역학.jsx`, `공통수학.jsx` 참고). 기존 묶음은 `tools/tabs-to-selector.py`로 호스트 틀이 같은 것만 변환했다.
 - ScriptUI `tabbedpanel.selection`(Tab)에는 `index`가 없다. 제목(`text`)을 라벨과 비교해 찾는다.
 - Node 테스트는 스코프를 평탄화해 공통 함수가 엔진 상수를 쓰는 오류를 못 잡는다. 통합 뒤에는 일러에서 탭마다 미리보기를 그려 확인한다.
 - **창을 줄일 때 `layout()`을 미리 부르지 말 것**: 한 번 레이아웃이 잡히면 ScriptUI가 늘어난 크기를 `preferredSize`로 굳혀서 이후에 줄여도 창이 줄지 않는다(2026-10-09 측정: 탭 호스트가 먼저 레이아웃을 잡아 `compactDialog`가 스크롤바·버튼을 줄이지 못함). 선택되지 않은 페이지는 `win.onShow`에서 숨긴다. 크기를 줄이는 속성은 `preferredSize`와 `maximumSize`를 함께 건다.

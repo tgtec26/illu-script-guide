@@ -29,6 +29,16 @@ function collectEditTexts(container, inputs) {
     }
 }
 
+// 탭 선택 줄은 라디오 버튼이 기본이다. 라디오 줄이 너무 넓어 창 너비를 많이 잡아먹을 때만 드롭다운으로 바꾼다(2026-10-16).
+// 라벨 글자 수로 폭을 어림한다(글자당 13px + 라디오 단추 30px + 간격 10px).
+var TAB_RADIO_MAX_WIDTH = 600;
+function tabSelectorNeedsDropdown(labels) {
+    var width = 0;
+    for (var i = 0; i < labels.length; i++) width += String(labels[i]).length * 13 + 30;
+    width += Math.max(0, labels.length - 1) * 10;
+    return width > TAB_RADIO_MAX_WIDTH;
+}
+
 function makeTabOrderHandler(win, inputs, index) {
     return function(event) {
         if (event.isComposing || event.keyCode === 229) return;
