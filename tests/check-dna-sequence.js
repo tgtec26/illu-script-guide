@@ -17,7 +17,7 @@ function extract(name) {
   }
   throw new Error(`unbalanced ${name}`);
 }
-const names = ["codonTable", "aminoList", "aminoName", "findAmino", "oneLetter", "parseAminoAcids", "buildStrands", "parseCodonRange",
+const names = ["codonTable", "aminoList", "aminoName", "findAmino", "oneLetter", "parseAminoAcids", "buildStrands", "parseBaseRanges",
   "splitNames", "bracePoints", "complement"];
 const g = new Function(`${names.map(extract).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
@@ -83,16 +83,19 @@ const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}
   assert.strictEqual(g.complement("GGAGCACTT"), "CCTCGTGAA");
 }
 
-// 가릴 코돈 번호
+// 가릴 염기 번호: 왼쪽부터 센 번호, 쉼표로 여러 구간
 {
-  assert.strictEqual(g.parseCodonRange("", 3), null);
-  assert.strictEqual(g.parseCodonRange("  ", 3), null);
-  assert.deepStrictEqual(g.parseCodonRange("1", 3), {from: 1, to: 1, error: false});
-  assert.deepStrictEqual(g.parseCodonRange("2-3", 3), {from: 2, to: 3, error: false});
-  assert.deepStrictEqual(g.parseCodonRange("2 ~ 3", 3), {from: 2, to: 3, error: false});
-  assert.deepStrictEqual(g.parseCodonRange("2–3", 3), {from: 2, to: 3, error: false});
-  for (const bad of ["0", "4", "3-2", "1-4", "a", "1-", "1,2", "-1"]) {
-    assert.strictEqual(g.parseCodonRange(bad, 3).error, true, bad);
+  const list = (text, length) => g.parseBaseRanges(text, length).list;
+  assert.strictEqual(g.parseBaseRanges("", 9), null);
+  assert.strictEqual(g.parseBaseRanges("  ", 9), null);
+  assert.deepStrictEqual(list("1", 9), [{from: 1, to: 1}]);
+  assert.deepStrictEqual(list("4-9", 9), [{from: 4, to: 9}]);
+  assert.deepStrictEqual(list("1~5, 8~10", 12), [{from: 1, to: 5}, {from: 8, to: 10}]);
+  assert.deepStrictEqual(list("2 ~ 3,7", 9), [{from: 2, to: 3}, {from: 7, to: 7}]);
+  assert.deepStrictEqual(list("2–3", 9), [{from: 2, to: 3}]);
+  assert.strictEqual(g.parseBaseRanges("1~5", 9).error, false);
+  for (const bad of ["0", "10", "3-2", "1-10", "a", "1-", "1,,2", "-1", "1~5,", "1~5, 8~10"]) {
+    assert.strictEqual(g.parseBaseRanges(bad, bad === "1~5, 8~10" ? 9 : 9).error, true, bad);
   }
 }
 
@@ -121,7 +124,7 @@ assert.deepStrictEqual(g.splitNames("", 4), ["", "", "", ""]);
 
 // 설정 문자열: v2, 26칸. 저장 칸 수와 읽는 칸 수가 같다
 {
-  assert.ok(source.includes('p[0] !== "v3" || p.length !== 27'), "settings string must be v3 with 27 fields");
+  assert.ok(source.includes('p[0] !== "v4" || p.length !== 29'), "settings string must be v4 with 29 fields");
   assert.strictEqual((source.match(/join\("\|"\)/g) || []).length, 1, "one saveSettings join");
   const keys = source.match(/var NUMBER_KEYS = \[([^\]]*)\]/)[1].split(",").length;
   assert.strictEqual(keys, 11);
