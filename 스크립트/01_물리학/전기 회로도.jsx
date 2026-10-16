@@ -394,7 +394,8 @@ function generateCircuit(o) {
     var flags = part.add("group");
     var upper = check(flags,"위 가지",true,function(v){elements[selected].upper=v;}); upper.helpTip="분기 안쪽(기본 아래쪽 분기의 위 가지). 해제하면 바깥쪽. 분기 밖에서는 공통 도선";
     var reverse = check(flags,"방향 반전",false,function(v){elements[selected].reverse=v;});
-    function textRow(label, key) {var r=part.add("group");var l=r.add("statictext",undefined,label);l.preferredSize.width=65;var e=r.add("edittext",undefined,"");e.characters=16;e.onChange=function(){elements[selected][key]=String(e.text).slice(0,80);refreshLists();if(!busy)updatePreview();};return e;}
+    var textPair=part.add("group");textPair.spacing=8;
+    function textRow(label, key) {var r=textPair.add("group");r.spacing=4;var l=r.add("statictext",undefined,label);l.preferredSize.width=26;var e=r.add("edittext",undefined,"");e.characters=8;e.onChange=function(){elements[selected][key]=String(e.text).slice(0,80);refreshLists();if(!busy)updatePreview();};return e;}
     var nameInput=textRow("이름","name"), valueInput=textRow("값","value");
     var branch=panel("병렬 구간");
     var parallel=check(branch,"병렬 분기",false,function(v){o.parallel=v;upper.enabled=v;});
