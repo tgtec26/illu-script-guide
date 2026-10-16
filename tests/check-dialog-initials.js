@@ -1,0 +1,17 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const ctx = { $: { global: {} } };
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync('스크립트/00_세팅/ui_tab_helper.jsxinc', 'utf8'), ctx);
+assert.equal(ctx.circledDialogInitials('ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ'), '㉠㉡㉢㉣㉤㉥㉦㉧㉨㉩㉪㉫㉬㉭');
+assert.equal(ctx.circledDialogInitials('DNA, ㄱ, 단백질 -1.25'), 'DNA, ㉠, 단백질 -1.25');
+const field = { input: { text: 'ㄱ', __inputComposing: true }, text: '', touched: false };
+const state = { applying: false };
+let seen;
+const handler = ctx.makeDeferredInputHandler(state, field, function() { seen = field.input.text; }, true);
+handler(); assert.equal(field.input.text, 'ㄱ'); assert.equal(seen, undefined);
+field.input.__inputComposing = false;
+handler(); assert.equal(seen, '㉠'); assert.equal(field.text, '㉠');
+field.input.text = 'ㄴ'; state.applying = true; handler(); assert.equal(seen, '㉡');
+console.log('dialog initials: conversion, composition and confirm paths passed');

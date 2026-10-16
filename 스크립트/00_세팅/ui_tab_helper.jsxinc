@@ -300,16 +300,26 @@ function makeEnterApply(field) {
     };
 }
 
+// 기본 초성 14자를 원문자로 바꾼다. 완성 한글과 숫자는 그대로 둔다.
+function circledDialogInitials(text) {
+    var initials = "ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ";
+    return String(text).replace(/[ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ]/g, function(ch) {
+        return String.fromCharCode(0x3260 + initials.indexOf(ch));
+    });
+}
+
 // live: 포커스 이동·Enter(onChange)면 바로 반영, 글자마다 오는 onChanging은 확정 때만
 function makeDeferredInputHandler(state, field, handler, live) {
     return function() {
         if (state.applying) {
+            if (!field.input.__inputComposing) field.input.text = circledDialogInitials(field.input.text);
             field.touched = true;
             return handler ? handler.apply(this, arguments) : undefined;
         }
-        if (!live || !handler || field.input.__inputComposing) return;
+        if (!live || field.input.__inputComposing) return;
+        field.input.text = circledDialogInitials(field.input.text);
         if (String(field.input.text) === field.text) return;
-        var result = handler.apply(this, arguments);
+        var result = handler ? handler.apply(this, arguments) : undefined;
         field.text = String(field.input.text);
         return result;
     };
