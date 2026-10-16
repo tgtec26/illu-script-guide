@@ -1,19 +1,19 @@
 // 대화상자 요소 편집용 로컬 서버. 실행: node tools/ui-admin.js  →  http://127.0.0.1:5200
 // 일러에서 대화상자를 열면 ui_tab_helper.jsxinc가 그 창의 요소 목록을 스크립트/00_세팅/ui_catalog/<창 제목>.json에 남긴다(이 서버는 읽기만 함).
 // 여기서 고친 값은 스크립트/00_세팅/ui_overrides.json에 저장하고, 일러는 대화상자를 열 때 그것을 적용한다. 원래 값과 같은 항목은 저장하지 않는다.
-// 저장하면 ui_overrides.json만 커밋해서 GitHub에 올린다(동료 교사는 git pull로 받는다). `--no-push`를 주면 커밋까지만 한다.
+// 저장은 로컬 파일만 바꾼다. 공유 게시는 별도 확인 후 커밋·푸시한다. --no-push는 게시 시 커밋까지만 한다.
 // 고칠 수 있는 것: 제목·단추·체크·라디오 글자, 패널 제목, 드롭다운 항목 문구(개수·순서는 그대로), 스크롤바 최솟값·최댓값·단계, R 단추가 되돌리는 값
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 
-const ROOT = process.env.UI_ADMIN_ROOT || path.join(__dirname, "..");
+function createAdmin(options = {}) {
+const ROOT = options.root || process.env.UI_ADMIN_ROOT || path.join(__dirname, "..");
 const NO_PUSH = process.argv.includes("--no-push");
 const DIR = path.join(ROOT, "스크립트", "00_세팅");
 const CATALOG_DIR = path.join(DIR, "ui_catalog");
 const OVERRIDES = path.join(DIR, "ui_overrides.json");
-const PORT = Number(process.env.UI_ADMIN_PORT) || 5200;
 // 커밋 작성자는 Vercel 배포 정책상 고정이다 (전역 지침 참고)
 const GIT_USER = ["-c", "user.name=tgtec26", "-c", "user.email=tgtec26@snu-g.ms.kr"];
 
@@ -112,17 +112,8 @@ function publish(dialog) {
     const commit = await git([...GIT_USER, "commit", "-m", `UI overrides: ${dialog}`, "--", rel]);
     if (!commit.ok) return { committed: false, pushed: false, message: "커밋 실패: " + (commit.err || commit.out) };
     if (NO_PUSH) return { committed: true, pushed: false, message: "커밋했습니다 (--no-push라 올리지는 않았습니다)." };
-    let push = await git(["push", "origin", "HEAD"]);
-    if (!push.ok) {
-      // 원격이 앞서 있으면 받아 합친 뒤 다시 올린다
-      const pull = await git([...GIT_USER, "pull", "--rebase", "--autostash", "origin", "HEAD"]);
-      if (!pull.ok) {
-        await git(["rebase", "--abort"]);
-        return { committed: true, pushed: false, message: "커밋은 했지만 원격과 합치지 못했습니다. 터미널에서 git pull 후 git push 하세요: " + (pull.err || pull.out).slice(0, 200) };
-      }
-      push = await git(["push", "origin", "HEAD"]);
-    }
-    if (!push.ok) return { committed: true, pushed: false, message: "커밋은 했지만 push에 실패했습니다: " + push.err.slice(0, 200) };
+    const push = await git(["push", "origin", "HEAD"]);
+    if (!push.ok) return { committed: true, pushed: false, message: "커밋은 했지만 push에 실패했습니다. 자동 병합하지 않았습니다. 원격 충돌을 직접 확인하세요: " + push.err.slice(0, 200) };
     const head = await git(["rev-parse", "--short", "HEAD"]);
     return { committed: true, pushed: true, message: "GitHub에 올렸습니다 (" + head.out + "). 동료는 git pull로 받습니다." };
   };
@@ -149,13 +140,13 @@ input:focus,select:focus,button:focus-visible{outline:2px solid #4aa0ab;outline-
 button{padding:5px 14px;margin-right:8px;background:#5a5a5a;cursor:pointer}button:hover{background:#6a6a6a}
 </style>
 <h3>대화상자 편집</h3>
-<div class="w r"><b>저장하면 바로 GitHub에 올라가 동료 교사에게도 적용됩니다</b> (<code>git pull</code> 뒤). 되돌리려면 이 화면에서 다시 고치거나 <code>git revert</code> 하세요.</div>
+<div class="w r"><b>저장은 이 컴퓨터에만 반영됩니다. 공유 게시를 누르면 GitHub에 올라갑니다</b> (<code>git pull</code> 뒤). 되돌리려면 이 화면에서 다시 고치거나 <code>git revert</code> 하세요.</div>
 <div class="w">제목·단추 글자를 바꿔도 스크립트가 글자로 항목을 구분하는 경우엔 동작이 달라질 수 있습니다. 슬라이더는 범위만 바뀌고, 입력칸이 받는 값의 한계(스크립트 안의 상수)는 그대로입니다.
 기본값은 R 단추를 눌렀을 때 되돌아가는 값입니다(비우면 원래대로). 일러에서 대화상자를 처음 열어 보면 그 창이 이 목록에 나타납니다.</div>
-<select id="dlg"></select> <button id="save">저장 + 올리기</button><button id="clear">이 대화상자 되돌리기 + 올리기</button><span id="msg"></span>
+<select id="dlg"></select> <button id="save">저장</button><button id="clear">이 대화상자 되돌리기</button><button id="publish">공유 게시</button><span id="msg"></span><pre id="preview"></pre>
 <div id="who" class="d" style="margin:8px 0 2px"></div>
 <div id="body"></div>
-<div><button id="save2">저장 + 올리기</button><button id="clear2">이 대화상자 되돌리기 + 올리기</button><span id="msg2"></span></div>
+<div><button id="save2">저장</button><button id="clear2">이 대화상자 되돌리기</button><span id="msg2"></span></div>
 <script>
 let data = null, cur = null;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -212,7 +203,7 @@ async function post(rows) {
   const r = await fetch("/api", { method: "POST", body: JSON.stringify({ dialog: cur.dialog, rows }) });
   const msgs = [document.getElementById("msg"), document.getElementById("msg2")];
   const say = (t) => msgs.forEach((m) => (m.textContent = t));
-  say("저장하고 올리는 중…");
+  say("로컬 저장 중…");
   if (!r.ok) { say(await r.text()); return; }
   const j = await r.json();
   say("저장했습니다. " + j.message + " 일러에서 대화상자를 다시 열면 반영됩니다.");
@@ -221,13 +212,43 @@ async function post(rows) {
 document.getElementById("dlg").onchange = (e) => show(e.target.value);
 for (const id of ["save", "save2"]) document.getElementById(id).onclick = () => post(collect());
 for (const id of ["clear", "clear2"]) document.getElementById(id).onclick = () => post([]);
+document.getElementById("publish").onclick = async () => {
+  const preview = await (await fetch("/api/status")).json();
+  document.getElementById("preview").textContent = preview.diff || preview.status || "변경 없음";
+  if (!preview.ok) { alert(preview.message); return; }
+  if (!confirm("위 변경을 커밋하고 GitHub에 공유 게시합니다. 동료가 git pull하면 적용되며 연결된 배포가 실행될 수 있습니다. 계속할까요?")) return;
+  const response = await fetch("/api/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirm: "publish", dialog: cur.dialog }) });
+  const result = await response.json();
+  document.getElementById("msg").textContent = result.message;
+};
 load();
 </script>`;
 
-http.createServer((req, res) => {
+const publishAction = options.publish || publish;
+const statusAction = options.status || (async () => {
+  const rel = path.relative(ROOT, OVERRIDES);
+  const status = await git(["status", "--short", "--", rel]);
+  const diff = await git(["diff", "HEAD", "--", rel]);
+  return { ok: status.ok && diff.ok, status: status.out, diff: diff.out, validation: "자동 검증 미실행", message: status.err || diff.err };
+});
+return function handler(req, res) {
   try {
     if (req.method === "GET" && req.url === "/") {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE);
+    } else if (req.method === "GET" && req.url === "/api/status") {
+      statusAction().then((result) => { res.setHeader("content-type", "application/json; charset=utf-8"); res.end(JSON.stringify(result)); }).catch((e) => { res.writeHead(500); res.end(JSON.stringify({ message: e.message })); });
+    } else if (req.url === "/api/publish") {
+      if (req.method !== "POST") { res.writeHead(405, { Allow: "POST" }); return res.end(); }
+      let body = "";
+      req.on("data", (c) => body += c);
+      req.on("end", async () => {
+        try {
+          const j = JSON.parse(body);
+          if (j.confirm !== "publish") { res.writeHead(400); return res.end(JSON.stringify({ message: "명시적 게시 확인이 필요합니다." })); }
+          const result = await publishAction(j.dialog || "관리자 변경");
+          res.setHeader("content-type", "application/json; charset=utf-8"); res.end(JSON.stringify(result));
+        } catch (e) { res.writeHead(400); res.end(JSON.stringify({ message: e.message })); }
+      });
     } else if (req.method === "GET" && req.url === "/api") {
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       const dialogs = readCatalogs();
@@ -244,8 +265,14 @@ http.createServer((req, res) => {
         let j;
         try { j = JSON.parse(body); save(j.dialog, j.rows); }
         catch (e) { res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }); res.end(String(e.message)); return; }
-        publish(j.dialog).then((result) => { res.writeHead(200, { "content-type": "application/json; charset=utf-8" }); res.end(JSON.stringify(result)); });
+        res.writeHead(200, { "content-type": "application/json; charset=utf-8" }); res.end(JSON.stringify({ saved: true, committed: false, pushed: false, message: "로컬 파일에만 저장했습니다." }));
       });
     } else { res.writeHead(404); res.end(); }
   } catch (e) { res.writeHead(500); res.end(String(e.message)); }
-}).listen(PORT, "127.0.0.1", () => console.log(`대화상자 편집: http://127.0.0.1:${PORT}`));
+};
+}
+module.exports = { createAdmin };
+if (require.main === module) {
+  const port = Number(process.env.UI_ADMIN_PORT) || 5200;
+  http.createServer(createAdmin()).listen(port, "127.0.0.1", () => console.log(`대화상자 편집: http://127.0.0.1:${port}`));
+}
