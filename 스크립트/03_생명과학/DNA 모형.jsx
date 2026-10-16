@@ -1005,7 +1005,7 @@ try {
             namesCheck.onClick = function() { options.showNames = namesCheck.value; updatePreview(); };
             var namesInput = namesRow.add("edittext", undefined, options.names);
             namesInput.preferredSize.width = 160;
-            namesInput.helpTip = "DNA, RNA, 과정, 단백질 순서로 쉼표로 나눠 입력 (비우면 그 이름만 생략)";
+            namesInput.helpTip = "DNA, (DNA→RNA 과정), RNA, (RNA→단백질 과정), 단백질 순서로 쉼표로 나눠 입력 (비우면 그 이름만 생략)";
             namesInput.onChange = function() { applyInputs(); };
             var namesButton = namesRow.add("button", undefined, "완료");
             namesButton.preferredSize.width = 50;
@@ -1321,7 +1321,7 @@ try {
                 var braces = options.showBraces;
                 var arrows = options.showArrows;
                 var protein = options.showProtein;
-                var names = splitNames(options.names, 4);
+                var names = splitNames(options.names, 5);
                 var boxHeight = fs * 1.6;
                 var codonWidth = 3 * gap;
                 var braceWidth = codonWidth * 0.7;
@@ -1331,15 +1331,15 @@ try {
 
                 // 줄 이름은 먼저 만들어 폭을 잰 뒤 제자리로 옮긴다
                 // DNA·RNA·단백질은 세로선(왼쪽 화살표) 가운데에 맞추고, 과정 이름(가)는 그 선 왼쪽에 둔다
-                var labelFrames = [null, null, null, null];
+                var labelFrames = [null, null, null, null, null];     // DNA, 과정(DNA→RNA), RNA, 과정(RNA→단백질), 단백질
                 var centeredHalf = 0;                                 // 가운데 맞춘 이름의 반폭 최댓값
                 var processWidth = 0;
                 if (options.showNames) {
-                    for (var n = 0; n < 4; n++) {
-                        if (names[n] === "" || (!protein && n >= 2)) continue;
+                    for (var n = 0; n < 5; n++) {
+                        if (names[n] === "" || (!protein && n >= 3)) continue;
                         labelFrames[n] = placeText(group, names[n], 0, 0, null);
                         var nb = labelFrames[n].geometricBounds;
-                        if (n === 2) processWidth = nb[2] - nb[0];
+                        if (n === 1 || n === 3) processWidth = Math.max(processWidth, nb[2] - nb[0]);
                         else centeredHalf = Math.max(centeredHalf, (nb[2] - nb[0]) / 2);
                     }
                 }
@@ -1389,8 +1389,8 @@ try {
                 var proteinY = y1 - proteinCenterOffset;
                 if (braces || arrows || protein) {
                     var lineLeft = null;
-                    if (hasLabels && labelFrames[3] !== null) {
-                        var pb = labelFrames[3].geometricBounds;
+                    if (hasLabels && labelFrames[4] !== null) {
+                        var pb = labelFrames[4].geometricBounds;
                         lineLeft = columnX + (pb[2] - pb[0]) / 2 + 1.5 * mmToPt;
                     }
                     drawBelow(group, xs, gap, count, y1 - braceTopOffset, y1 - arrowStartOffset, y1 - arrowEndOffset, braceWidth, proteinY, boxHeight, lineLeft, black);
@@ -1398,11 +1398,11 @@ try {
 
                 if (hasLabels) {
                     var dnaMid = (y1 + y2) / 2;
-                    var centers = [dnaMid, rnaLetterY, (rnaLetterY + proteinY) / 2, proteinY];
-                    for (var l = 0; l < 4; l++) {
+                    var centers = [dnaMid, (dnaMid + rnaLetterY) / 2, rnaLetterY, (rnaLetterY + proteinY) / 2, proteinY];
+                    for (var l = 0; l < 5; l++) {
                         if (labelFrames[l] === null) continue;
                         var lb = labelFrames[l].geometricBounds;
-                        var targetX = l === 2 ? columnX - processGap - (lb[2] - lb[0]) / 2 : columnX;
+                        var targetX = (l === 1 || l === 3) ? columnX - processGap - (lb[2] - lb[0]) / 2 : columnX;
                         labelFrames[l].translate(targetX - (lb[0] + lb[2]) / 2, centers[l] - (lb[1] + lb[3]) / 2);
                     }
                     if (arrows) drawArrow(group, columnX, dnaMid - arrowGap, rnaLetterY + arrowGap, options.arrowWidth, black);
@@ -1773,19 +1773,19 @@ try {
             // 첨부 그림(기출형)을 처음 값으로 한다: Gly Arg Glu, 주형은 위 가닥, DNA 1의 염기 1~3·DNA 2와 RNA의 염기 4~9를 가림
             function defaultOptions() {
                 return { aaText: "Gly Arg Glu", picks: [2, 0, 0, 0, 0, 0, 0, 0], proteins: [2, 1, 5, 0, 0, 0, 0, 0],
-                    templateTop: true, showNames: true, showBraces: true, showArrows: true, showProtein: true, nameKorean: true, names: "DNA, RNA, (가), 단백질",
+                    templateTop: true, showNames: true, showBraces: true, showArrows: true, showProtein: true, nameKorean: true, names: "DNA, , RNA, (가), 단백질",
                     masks: ["1-3", "4-9", "4-9"], labels: [0, 7, 8],
                     backboneWidth: 1, tickWidth: 0.3, tickLength: 3, arrowWidth: 0.5, fontSize: 10,
                     baseGap: 6, strandGap: 16, rnaGap: 14, arrowLength: 7, offsetX: 0, offsetY: 0, braceGap: 1.5, dnaColor: 100, rnaColor: 50, preview: true };
             }
 
-            // v5: 숫자 11개, 주형·줄 이름 표시·단백질 줄 표시(0/1), 줄 이름, 아미노산 서열, 코돈 선택·단백질 칸(쉼표 목록),
+            // v6: 숫자 11개, 주형·줄 이름 표시·단백질 줄 표시(0/1), 줄 이름, 아미노산 서열, 코돈 선택·단백질 칸(쉼표 목록),
             //     가릴 염기 번호 3개(예: 1~5, 8~10), 박스 문자 번호 3개, 미리보기(0/1), 한글 이름(0/1), 중괄호·화살표 표시(0/1), 덧붙인 숫자 3개
             function readSettings() {
                 var result = defaultOptions();
                 try {
                     var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-                    if (p[0] !== "v5" || p.length !== 32) return result;
+                    if (p[0] !== "v6" || p.length !== 32) return result;
                     for (var i = 0; i < NUMBER_KEYS.length; i++) {
                         var value = Number(p[i + 1]);
                         if (!/\S/.test(p[i + 1]) || !isFinite(value) || value < NUMBER_MINS[i] || value > NUMBER_MAXS[i]) return result;
@@ -1838,7 +1838,7 @@ try {
 
             function saveSettings() {
                 try {
-                    var parts = ["v2"];
+                    var parts = ["v6"];
                     for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
                     parts.push(options.templateTop ? 1 : 0, options.showNames ? 1 : 0, options.showProtein ? 1 : 0,
                         options.names, options.aaText, options.picks.join(","), options.proteins.join(","),

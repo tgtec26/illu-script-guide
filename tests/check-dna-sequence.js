@@ -100,9 +100,10 @@ const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}
 }
 
 // 줄 이름
-assert.deepStrictEqual(g.splitNames("DNA, RNA, (가), 단백질", 4), ["DNA", "RNA", "(가)", "단백질"]);
-assert.deepStrictEqual(g.splitNames("DNA,,", 4), ["DNA", "", "", ""]);
-assert.deepStrictEqual(g.splitNames("", 4), ["", "", "", ""]);
+assert.deepStrictEqual(g.splitNames("DNA, (나), RNA, (가), 단백질", 5), ["DNA", "(나)", "RNA", "(가)", "단백질"]);
+assert.deepStrictEqual(g.splitNames("DNA, , RNA, (가), 단백질", 5), ["DNA", "", "RNA", "(가)", "단백질"]);
+assert.deepStrictEqual(g.splitNames("DNA,,", 5), ["DNA", "", "", "", ""]);
+assert.deepStrictEqual(g.splitNames("", 5), ["", "", "", "", ""]);
 
 // 중괄호: 앵커 7개, 좌우 대칭, 뾰족한 끝은 가운데 아래
 {
@@ -124,13 +125,15 @@ assert.deepStrictEqual(g.splitNames("", 4), ["", "", "", ""]);
 
 // 설정 문자열: v2, 26칸. 저장 칸 수와 읽는 칸 수가 같다
 {
-  assert.ok(source.includes('p[0] !== "v5" || p.length !== 32'), "settings string must be v5 with 32 fields");
+  assert.ok(source.includes('p[0] !== "v6" || p.length !== 32'), "settings string must be v6 with 32 fields");
   assert.strictEqual((source.match(/join\("\|"\)/g) || []).length, 1, "one saveSettings join");
   const keys = source.match(/var NUMBER_KEYS = \[([^\]]*)\]/)[1].split(",").length;
   assert.strictEqual(keys, 11);
   // 저장 칸 수: 태그 1 + 숫자 11 + 표시·글자·목록 등 17 + 덧붙인 숫자 3 = 32
   const extra = source.match(/var EXTRA_KEYS = \[([^\]]*)\]/)[1].split(",").length;
   assert.strictEqual(1 + keys + 17 + extra, 32);
+    // 저장하는 태그와 읽는 태그가 같아야 저장한 옵션이 복원된다
+  assert.ok(source.includes('var parts = ["v6"];'), "saveSettings tag must match readSettings tag");
   // 읽기 전에 써야 하는 상수가 readSettings 호출(var options = readSettings();)보다 위에 있다
   const call = source.indexOf("var options = readSettings();");
   for (const name of ["NUMBER_KEYS", "NUMBER_MINS", "NUMBER_MAXS", "EXTRA_KEYS", "EXTRA_MINS", "EXTRA_MAXS", "MAX_AMINO", "PROTEIN_CHOICES"]) {

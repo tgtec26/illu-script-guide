@@ -2611,7 +2611,7 @@ for (const file of cabinetFiles) {
   const fns = new Function(`${pure}; return {complement};`)();
   assert.strictEqual(fns.complement("GGAGCACTT"), "CCTCGTGAA", `${file} complement`);
   // 아미노산·코돈·가닥 계산은 tests/check-dna-sequence.js가 따로 검사한다
-  assert.ok(sequenceSource.includes('p[0] !== "v5" || p.length !== 32'), `${file}: settings string must be v5 with 32 fields`);
+  assert.ok(sequenceSource.includes('p[0] !== "v6" || p.length !== 32'), `${file}: settings string must be v6 with 32 fields`);
   assert.strictEqual((sequenceSource.match(/join\("\|"\)/g) || []).length, 1, `${file}: one saveSettings join`);
 }
 
