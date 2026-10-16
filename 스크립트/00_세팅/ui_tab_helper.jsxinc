@@ -10,6 +10,7 @@ function bindTabOrder(win) {
     var confirmButtons = [];
     collectDialogConfirmButtons(win, confirmButtons);
     compactDialog(win);
+    try { addApplyButtons(win); } catch (applyError) {}
     stretchRowsOnShow(win);
     var inputs = [];
     collectEditTexts(win, inputs);
@@ -17,6 +18,46 @@ function bindTabOrder(win) {
     for (var k = 0; k < inputs.length; k++) {
         inputs[k].addEventListener("keydown", makeTabOrderHandler(win, inputs, k));
     }
+}
+
+// 미리보기가 있는 창의 글 입력칸(옆에 슬라이더가 없는 입력칸) 오른쪽에 [완료]를 단다(2026-10-16).
+// 이미 [완료](applyTo)가 있는 칸은 건드리지 않는다. 누르면 포커스 이동·Enter와 같은 경로(onChange)로 그 칸을 반영한다.
+// 슬라이더 옆 숫자 칸과 창에 바로 붙은 입력칸은 달지 않는다. 끄려면 $.global.__noAutoApply = true.
+function addApplyButtons(win) {
+    if ($.global.__noAutoApply || !hasPreviewCheck(win)) return;
+    var inputs = [];
+    collectEditTexts(win, inputs);
+    for (var i = 0; i < inputs.length; i++) addApplyButton(inputs[i]);
+}
+
+function hasPreviewCheck(container) {
+    var children = container.children;
+    if (!children) return false;
+    for (var i = 0; i < children.length; i++) {
+        var child = children[i];
+        if (child.type === "checkbox" && /미리보기/.test(child.text)) return true;
+        if (hasPreviewCheck(child)) return true;
+    }
+    return false;
+}
+
+function addApplyButton(input) {
+    var parent = input.parent, kids = parent.children, index = -1, i;
+    if (!parent || parent.type === "dialog" || parent.type === "window" || parent.type === "palette") return;
+    for (i = 0; i < kids.length; i++) {
+        if (kids[i] === input) index = i;
+        if (kids[i].type === "scrollbar") return;
+        if (kids[i].type === "button" && kids[i].applyTo === input) return;
+    }
+    var button = parent.add("button", undefined, "완료");
+    button.helpTip = "이 칸에 친 글을 반영합니다 (포커스 이동·Enter와 같음)";
+    button.preferredSize.width = 50;
+    button.preferredSize.height = COMPACT_ROW_HEIGHT;
+    button.maximumSize.height = COMPACT_ROW_HEIGHT;
+    button.applyTo = input;
+    button.onClick = function() { if (input.onChange) input.onChange(); };
+    // 칸이 줄 끝이 아니면 칸 바로 오른쪽으로 옮긴다
+    if (index !== kids.length - 2) { try { button.moveAfter(input); } catch (moveError) {} }
 }
 
 function collectEditTexts(container, inputs) {
