@@ -942,6 +942,7 @@ try {
             seqInput.helpTip = "1글자(MSG)·3글자(Met Ser Gly)·한글 이름(메싸이오닌)을 공백·쉼표·하이픈으로 나눠 입력. 종결은 Stop 또는 *. 최대 " + MAX_AMINO + "개";
             var seqButton = seqRow.add("button", undefined, "완료");
             seqButton.preferredSize.width = 50;
+            seqButton.applyTo = seqInput;   // ui_tab_helper: 이 단추는 이 입력칸을 확정한다
             seqButton.onClick = function() { applyInputs(); };
             seqInput.onChange = function() { applyInputs(); };
 
@@ -1003,9 +1004,13 @@ try {
             namesCheck.value = options.showNames;
             namesCheck.onClick = function() { options.showNames = namesCheck.value; updatePreview(); };
             var namesInput = namesRow.add("edittext", undefined, options.names);
-            namesInput.preferredSize.width = 220;
+            namesInput.preferredSize.width = 160;
             namesInput.helpTip = "DNA, RNA, 과정, 단백질 순서로 쉼표로 나눠 입력 (비우면 그 이름만 생략)";
             namesInput.onChange = function() { applyInputs(); };
+            var namesButton = namesRow.add("button", undefined, "완료");
+            namesButton.preferredSize.width = 50;
+            namesButton.applyTo = namesInput;
+            namesButton.onClick = function() { applyInputs(); };
             var belowRow = buildPanel.add("group");
             belowRow.alignChildren = ["left", "center"];
             var braceCheck = belowRow.add("checkbox", undefined, "코돈 중괄호");
@@ -1031,7 +1036,7 @@ try {
                 maskRow.spacing = 3;
                 addCaption(maskRow, maskNames[m]);
                 var maskInput = maskRow.add("edittext", undefined, options.masks[m]);
-                maskInput.preferredSize.width = 150;
+                maskInput.preferredSize.width = 120;
                 maskInput.helpTip = "그 줄의 왼쪽부터 센 염기 번호. 예: 1~5, 8~10 (쉼표로 여러 구간). 비우면 가리지 않음";
                 maskInput.onChange = function() { applyInputs(); };
                 maskInputs.push(maskInput);
@@ -1039,6 +1044,10 @@ try {
                 labelList.selection = options.labels[m];
                 labelList.helpTip = "박스 안에 쓸 문자";
                 labelList.onChange = makePickHandler(m, labelList, options.labels);
+                var maskButton = maskRow.add("button", undefined, "완료");
+                maskButton.preferredSize.width = 50;
+                maskButton.applyTo = maskInput;
+                maskButton.onClick = function() { applyInputs(); };
             }
 
             // ---- 조절 ----
