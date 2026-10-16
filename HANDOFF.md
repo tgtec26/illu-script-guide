@@ -7,8 +7,8 @@
 - 웹 `sci-illu-web/src/tools/circuit-tool.jsx` + `generators/circuit-layout.js`: 1~12개 요소(기호·각도·방향·이름·값), 병렬 구간 하나/두 가지, 대상 양 끝 전압계. 옛 top/right/bottom/left 설정은 계속 읽는다.
 - 일러 `스크립트/01_물리학/전기 회로도.jsx`를 새로 추가(기존 `전기.jsx`의 직선 기호 삽입 유지). `CircuitDiagram/settings` v1 88필드, 확인만 저장·취소 복구·미리보기 이동. `tools/sync-circuit-native.py`로 웹 기하를 ES3로 동기화. Node `tests/check-circuit-layout.js`가 양쪽 기하·저장 복원을 검사.
 - 웹 전체 1,001개 테스트/빌드, JSX ES3·구문·저장 roundtrip·cancel 검사 통과. 웹의 가지 전환·겹침 안내 확인. Illustrator 2026에서 5개 요소+병렬+전압계 실제 그리기·PNG 캡처 확인, 창 321×646 확인.
-- **마지막 추가 CEP 실행이 미해결**: `job_f1f5f4001758` (테스트 복사본 `/tmp/circuit-probe.jsx`). 재실행 금지. `illustrator_job_status`로 먼저 조정. CPU 약105%, sample `/tmp/circuit-illustrator-sample.txt`: ScriptingSupport→aeInteractWithUser 대기. Escape/창 Raise로 해소 안 됨. 원인 확정 아님. 사용자에게 원본 저장 후 직접 재시작을 요청해 둠. 재시작 승인 없이 종료하지 않는다.
-- 테스트 문서 `circuit-verification` token `doc_1a144930094_d8948a_5`; 원래 사용자 문서 `무제-1` token `doc_1a143868714_971c4f_1`. 연결이 회복되면 테스트 문서만 저장 없이 닫고 원래 문서를 활성화한다. 사용자 문서 수정/닫기 금지.
+- **2026-10-16 마지막 확인 완료**: 사용자가 Illustrator를 저장 후 재시작. 서버에 이전 unknown 요청이 남아 공유 CEP 서버만 재시작해 정리(옛 요청 재전송 안 함). 새 호스트·새 테스트 문서에서 최신 코어+렌더러만 실행한 `/tmp/circuit-final-static.jsx` 성공(37 paths/6 texts). PNG 캡처 1200×840에서 5개 요소·병렬 두 가지·전압계·이름·값 확인. 그룹 translate(10mm,-5mm)도 도형 재생성 없이 확인.
+- 테스트 문서는 저장 없이 닫고 사용자 `무제-1`을 다시 활성화했다. 최종 connection probe ready=true, 대기·미해결 작업 없음. 이전 테스트 지연 원인은 확정하지 않았으며 없던 일로 처리하지 않는다. 현재 사용자 문서 토큰은 재시작으로 달라졌으므로 이후에는 list로 새로 조회한다.
 - setup-mac.command로 2026/Beta 로더 155개 등록됨. Beta 화살표 파일은 권한 부족으로 건너뜀(이번 기능은 액션·화살표 파일을 안 쓴다). 웹 검증 이미지 `/tmp/circuit-web-final.png`. 현재 변경은 푸시 전(앞선 공유 헬퍼 초성 변환 커밋도 대기).
 
 ## 0. 시작할 때
