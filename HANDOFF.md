@@ -38,6 +38,7 @@
 - 대화상자 스크립트는 복사본에서 `win.show()`를 미리보기/확인 훅 호출로 바꿔 CEP로 실행한다. 필요한 선택을 만들고 탭마다 별도 확인한다. 알림과 설정 저장은 복사본에서 막는다. 레이아웃은 `onShow`에서 기록 후 `close(2)`로 닫는다.
 - 설치: `~/agent/illustrator-mcp-cep` (jinkeda/Illustrator_MCP, 서버 3.0.0 / 패널 1.0.2). 기록: `~/agent/illustrator-mcp-install/cep-test/README.md`.
 - 2026-10-13 실측: 문서 생성 1.42초, 조회 0.09초, 짧은 JSX 0.07초, PNG 1.93초. PNG·후속 조회 정상, 프리징 없음, AIHangMonitor 대기. 긴 스크립트의 안정성은 미검증.
+- **Windows(2026-10-16 측정, 이 Windows 기기)**: 대화상자 레이아웃 검증은 **COM**(`New-Object -ComObject Illustrator.Application` → `DoJavaScript(코드)`)으로 **2027 Beta**(31.0)에 보낸다. 짧게 끝나고 20회 이상 무사고(창 하나 0.3~8초). 공식 `illustrator` MCP(2027 Beta)는 연결·문서 조회는 빠르나 **임의 JSX 실행 도구가 없어** ScriptUI 검증에는 못 쓰고 조회·내보내기용이다. `illustrator-cep`(2026)는 JSX 0.4초로 되지만 "패널 busy/미해결 요청"으로 막혔다가 몇 분 뒤 스스로 풀린 적이 있어 보조용이다. CLI-Anything은 Windows에 없고 pip에도 없다. 하니스 주의: 2027 Beta Windows에서 `show`는 `Window.prototype`이 아니라 창 인스턴스 속성이라 덮어쓰기가 먹지 않는다(창이 열린 채 멈춤). 사본 파일의 `win.show()`를 `$.global.__hookShow(win)`(onShow에서 기록 후 `close(2)`)으로 치환한다. `windowBounds`는 원점에만 화면 배율이 곱해지므로 `bounds`를 부모 따라 합산한다. 전역 `alert`를 덮어쓴 뒤 `delete`하면 원본이 사라지니 `Window.alert`로 되돌린다. ScriptUI에는 `moveAfter`/`moveBefore`가 없다(2027 Beta Windows 확인).
 
 - 2026-10-14 비교: 직접 MCP 조회·짧은 읽기 JSX 약 0.16~0.21초(각 3회), PNG 약 0.20초. CLI는 프로그램 시작 포함 약 0.59~0.61초. 위 옵션으로 삼각형·글자 생성·JSON 조회·PNG를 나눠 실행해 성공했고 마지막 연결 정상·미완료 작업 없음. 앞선 삼각형+글자 JSX 타임아웃 원인은 미확정이며 모든 JSX/장시간 안정성을 보장하지 않는다. 기록: `~/agent/illustrator-cli/agent-harness/evidence/connection-comparison.md`.
 
