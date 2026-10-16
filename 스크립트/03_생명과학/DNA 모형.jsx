@@ -894,8 +894,7 @@ try {
             var RNA_GRAY_K = 50;                 // RNA 골격·연결선 회색
             var BRACE_HEIGHT_MM = 3;             // 코돈 중괄호 높이
             var BRACE_PAD_MM = 1.5;              // RNA 글자와 중괄호 사이
-            var LABEL_ARROW_GAP_MM = 2.5;        // 줄 이름 칸과 왼쪽 화살표 사이
-            var LABEL_STRAND_GAP_MM = 6;         // 왼쪽 화살표와 염기 줄 사이
+            var LABEL_STRAND_GAP_MM = 8.5;       // 줄 이름 칸과 염기 줄 사이
             // 작살형 화살촉(끝이 원점, 뒤쪽이 +y, 선 두께 1pt 기준 pt). 선은 lineEnd만큼 줄인다
             var ARROW_HEAD = {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]};
             var LABELS = ["?",
@@ -1302,7 +1301,7 @@ try {
                 var braceWidth = codonWidth * 0.7;
                 var braceDepth = 2 * Math.min(BRACE_HEIGHT_MM * mmToPt / 2, braceWidth / 4);
                 var arrowLength = options.arrowLength * mmToPt;
-                var arrowGap = 0.9 * fs;                              // 줄 이름과 왼쪽 화살표 끝 사이
+                var arrowGap = 0.9 * fs;                              // 줄 이름과 가운데 화살표 끝 사이
 
                 // 줄 이름은 먼저 만들어 폭을 잰 뒤 제자리로 옮긴다
                 var labelFrames = [null, null, null, null];
@@ -1316,10 +1315,10 @@ try {
                     }
                 }
                 var hasLabels = labelWidth > 0;
-                var leftBlock = hasLabels ? labelWidth + (LABEL_ARROW_GAP_MM + LABEL_STRAND_GAP_MM) * mmToPt : 0;
+                var leftBlock = hasLabels ? labelWidth + LABEL_STRAND_GAP_MM * mmToPt : 0;
                 var width = leftBlock + count * codonWidth;
                 var left = viewCenter[0] - width / 2;                 // 그림 왼쪽 끝
-                var arrowX = left + labelWidth + LABEL_ARROW_GAP_MM * mmToPt;
+                var columnX = left + labelWidth / 2;                  // 줄 이름을 가운데 맞추고 왼쪽 화살표를 놓는 세로선
                 var x0 = left + leftBlock + gap / 2;                  // 첫 염기 중심
 
                 var rnaLetterOffset = options.strandGap * mmToPt + options.rnaGap * mmToPt + letterDrop;   // y1에서 RNA 글자 중심까지
@@ -1350,7 +1349,7 @@ try {
 
                 var proteinY = y1 - proteinCenterOffset;
                 if (protein) drawProtein(group, xs, gap, count, y1 - braceTopOffset, braceWidth, proteinY, boxHeight,
-                    hasLabels ? left + (labelFrames[3] === null ? 0 : labelFrames[3].geometricBounds[2] - labelFrames[3].geometricBounds[0]) + 1.5 * mmToPt : null, black);
+                    hasLabels ? columnX + (labelFrames[3] === null ? 0 : (labelFrames[3].geometricBounds[2] - labelFrames[3].geometricBounds[0]) / 2) + 1.5 * mmToPt : null, black);
 
                 if (hasLabels) {
                     var dnaMid = (y1 + y2) / 2;
@@ -1358,10 +1357,21 @@ try {
                     for (var l = 0; l < 4; l++) {
                         if (labelFrames[l] === null) continue;
                         var lb = labelFrames[l].geometricBounds;
-                        labelFrames[l].translate(left - lb[0], centers[l] - (lb[1] + lb[3]) / 2);
+                        labelFrames[l].translate(columnX - (lb[0] + lb[2]) / 2, centers[l] - (lb[1] + lb[3]) / 2);
                     }
-                    drawArrow(group, arrowX, dnaMid - arrowGap, rnaLetterY + arrowGap, options.arrowWidth, black);
-                    if (protein) drawArrow(group, arrowX, rnaLetterY - arrowGap, proteinY + arrowGap, options.arrowWidth, black);
+                    drawArrow(group, columnX, dnaMid - arrowGap, rnaLetterY + arrowGap, options.arrowWidth, black);
+                    if (protein) {
+                        // 과정 이름(가)이 있으면 화살표를 그 글자 위에서 끊고 아래에서 다시 시작한다
+                        var processLabel = labelFrames[2];
+                        if (processLabel === null) {
+                            drawArrow(group, columnX, rnaLetterY - arrowGap, proteinY + arrowGap, options.arrowWidth, black);
+                        } else {
+                            var pb = processLabel.geometricBounds;
+                            var pad = 0.25 * fs;
+                            drawLine(group, columnX, rnaLetterY - arrowGap, columnX, pb[1] + pad, options.arrowWidth, black);
+                            drawArrow(group, columnX, pb[3] - pad, proteinY + arrowGap, options.arrowWidth, black);
+                        }
+                    }
                 }
                 return missing;
             }
@@ -1412,7 +1422,17 @@ try {
                     var fb = frame.geometricBounds;
                     var halfWidth = (fb[2] - fb[0]) / 2;
                     if (choice < 2 || choice > 4) {        // ⓐⓑⓒ는 글자 자체가 원이라 박스를 두지 않는다
-                        halfWidth = Math.max(halfWidth + fs * 0.45, fs * 1.1);
+                        // 이름이 길어 이웃 칸과 닿으면 글자를 줄여 코돈 폭 안에 넣는다
+                        var maxHalf = (3 * gap - 3) / 2;
+                        if (halfWidth + fs * 0.45 > maxHalf) {
+                            var shrink = Math.max(0.3, (maxHalf - fs * 0.3) / halfWidth);
+                            frame.resize(shrink * 100, shrink * 100, true, true, true, true, shrink * 100, Transformation.CENTER);
+                            fb = frame.geometricBounds;
+                            halfWidth = (fb[2] - fb[0]) / 2;
+                            halfWidth = halfWidth + fs * 0.3;
+                        } else {
+                            halfWidth = Math.max(halfWidth + fs * 0.45, fs * 1.1);
+                        }
                         var box = group.pathItems.rectangle(boxTop, cx - halfWidth, halfWidth * 2, boxHeight);
                         box.filled = true;
                         box.fillColor = makeGray(0);
