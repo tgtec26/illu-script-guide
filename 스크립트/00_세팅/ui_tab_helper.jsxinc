@@ -34,6 +34,8 @@ function makeTabOrderHandler(win, inputs, index) {
         if (event.isComposing || event.keyCode === 229) return;
         if (event.keyName === "Enter" || event.keyName === "Return") {
             // IME 확정·여러 줄 줄바꿈을 가로채지 않는다. 기본 실행 버튼은 별도로 없앤다.
+            // 네이티브 Enter가 onChange를 주지 않는 환경(Windows)이 있어, 바뀐 글이 있으면 입력칸의 반영 함수(enterApply)를 부른다.
+            if (inputs[index].enterApply) inputs[index].enterApply();
             return;
         }
         if (event.keyName !== "Tab") return;
@@ -78,6 +80,7 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
         fields.push(field);
         input.onChange = makeDeferredInputHandler(state, field, field.change || field.changing, true);
         input.onChanging = makeDeferredInputHandler(state, field, field.changing, false);
+        input.enterApply = makeEnterApply(field);
     }
     function flush() {
         // 한 필드의 검증이 다른 입력창을 정규화해도 입력 중인 원문을 잃지 않도록 먼저 읽는다.
@@ -146,6 +149,15 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
     win.onShow = function() {
         if (show) show.apply(this, arguments);
         for (var j = 0; j < fields.length; j++) fields[j].text = String(fields[j].input.text);
+    };
+}
+
+// Enter를 쳤을 때 아직 반영하지 않은 글이 있으면 포커스 이동과 같은 경로(onChange)로 반영한다. 여러 줄 칸은 건드리지 않는다
+function makeEnterApply(field) {
+    return function() {
+        var input = field.input;
+        try { if (input.properties && input.properties.multiline) return; } catch (e) {}
+        if (String(input.text) !== field.text) input.onChange();
     };
 }
 

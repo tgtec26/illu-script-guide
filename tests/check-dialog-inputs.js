@@ -79,9 +79,9 @@ for (const emitsChange of [false, true]) {
   assert.equal(entered.input.text, 'Enter 후 최신 글');
   assert.equal(entered.number.text, '8');
   assert.equal(entered.input.active, true, 'Enter가 포커스를 옮기지 않음');
-  // 네이티브 onChange가 오면 바로 반영(미리보기), 오지 않으면 확인 때 반영
-  assert.equal(entered.model.text, emitsChange ? 'Enter 후 최신 글' : '처음');
-  assert.equal(entered.model.number, emitsChange ? 8 : 3);
+  // 네이티브 Enter가 onChange를 주지 않아도 Enter가 직접 반영한다(Windows)
+  assert.equal(entered.model.text, 'Enter 후 최신 글');
+  assert.equal(entered.model.number, 8);
   assert.equal(entered.model.saved, undefined, 'Enter만 누르면 저장/완료하지 않음');
   entered.ok.onClick();
   assert.deepEqual(entered.model.saved, ['Enter 후 최신 글', 8, '첫 줄'],
