@@ -54,7 +54,7 @@ for (const text of ['ㅎ', '하', '한', '한글 완료']) {
 f.input.onChange();
 assert.equal(f.model.renders, 1, '포커스 이동 때 반영');
 assert.equal(f.model.text, '한글 완료');
-assert.equal(key(f.input, 'Enter').prevented, undefined, 'IME 확정 Enter를 가로채지 않음');
+assert.equal(key(f.input, 'Enter').prevented, true, '단일 줄 Enter를 명시적으로 확정');
 assert.equal(f.win.defaultElement, null, 'Enter로 완료 버튼 실행 금지');
 key(f.input, 'Enter');
 assert.equal(f.model.confirms, 0);
@@ -79,9 +79,10 @@ for (const emitsChange of [false, true]) {
   assert.equal(entered.input.text, 'Enter 후 최신 글');
   assert.equal(entered.number.text, '8');
   assert.equal(entered.input.active, true, 'Enter가 포커스를 옮기지 않음');
-  // 네이티브 Enter가 onChange를 주지 않아도 Enter가 직접 반영한다(Windows)
+  // 네이티브 Enter가 onChange를 주지 않아도 Enter가 직접 반영하고(Windows), 뒤따르는 이벤트는 중복 처리하지 않는다.
   assert.equal(entered.model.text, 'Enter 후 최신 글');
   assert.equal(entered.model.number, 8);
+  assert.equal(entered.model.renders, 2, 'Enter 뒤 native onChange 중복 렌더 금지');
   assert.equal(entered.model.saved, undefined, 'Enter만 누르면 저장/완료하지 않음');
   entered.ok.onClick();
   assert.deepEqual(entered.model.saved, ['Enter 후 최신 글', 8, '첫 줄'],
@@ -100,6 +101,15 @@ assert.equal(f.model.number, 7, '슬라이더 즉시 반영 유지');
 f.reset.onClick(); assert.equal(f.model.number, 3, 'R의 기존 검증 경로 유지');
 f.ok.onClick(); assert.equal(f.model.saved[0], '미완성');
 f = fixture(); key(f.input, 'Tab'); assert.equal(f.number.active, true);
+f = fixture(); f.input.text = '조합 중';
+f.input.listeners.compositionstart.call(f.input);
+key(f.input, 'Enter'); f.input.onChange();
+assert.equal(f.model.text, '처음', 'composition 중 Enter/onChange 확정 금지');
+f.input.listeners.compositionend.call(f.input);
+key(f.input, 'Return');
+assert.equal(f.model.text, '조합 중');
+const afterIME = f.model.renders; f.input.onChange();
+assert.equal(f.model.renders, afterIME, 'Enter 후 blur 중복 없음');
 f = fixture(); f.input.text = '키 229';
 assert.equal(key(f.input, 'Enter', { keyCode: 229 }).prevented, undefined);
 assert.equal(key(f.input, 'Escape').prevented, undefined);

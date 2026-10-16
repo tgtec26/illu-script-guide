@@ -16,6 +16,8 @@ function bindTabOrder(win) {
     collectEditTexts(win, inputs);
     bindDeferredDialogInputs(win, inputs, confirmButtons);
     for (var k = 0; k < inputs.length; k++) {
+        inputs[k].addEventListener("compositionstart", function() { this.__inputComposing = true; });
+        inputs[k].addEventListener("compositionend", function() { this.__inputComposing = false; });
         inputs[k].addEventListener("keydown", makeTabOrderHandler(win, inputs, k));
     }
 }
@@ -102,11 +104,15 @@ function tabSelectorNeedsDropdown(labels) {
 
 function makeTabOrderHandler(win, inputs, index) {
     return function(event) {
-        if (event.isComposing || event.keyCode === 229) return;
-        if (event.keyName === "Enter" || event.keyName === "Return") {
+        var input = inputs[index];
+        if (input.__inputComposing || event.isComposing || event.keyCode === 229 || event.which === 229) return;
+        var key = event.keyName || event.key;
+        if (key === "Enter" || key === "Return" || event.keyCode === 13) {
             // IME 확정·여러 줄 줄바꿈을 가로채지 않는다. 기본 실행 버튼은 별도로 없앤다.
             // 네이티브 Enter가 onChange를 주지 않는 환경(Windows)이 있어, 바뀐 글이 있으면 입력칸의 반영 함수(enterApply)를 부른다.
-            if (inputs[index].enterApply) inputs[index].enterApply();
+            if (input.properties && input.properties.multiline) return;
+            if (input.enterApply) input.enterApply();
+            try { event.preventDefault(); } catch (enterError) {}
             return;
         }
         if (event.keyName !== "Tab") return;
@@ -245,7 +251,8 @@ function makeDeferredInputHandler(state, field, handler, live) {
             field.touched = true;
             return handler ? handler.apply(this, arguments) : undefined;
         }
-        if (!live || !handler) return;
+        if (!live || !handler || field.input.__inputComposing) return;
+        if (String(field.input.text) === field.text) return;
         var result = handler.apply(this, arguments);
         field.text = String(field.input.text);
         return result;
