@@ -11,12 +11,7 @@ vm.runInContext(source, ctx);
 function control(type, text, parent, props = {}) {
   const c = { type, text, parent, properties: props, enabled: true, visible: true, children: [], preferredSize: {}, maximumSize: {}, listeners: {},
     add(kind, bounds, value, properties) { return control(kind, value, this, properties); },
-    addEventListener(name, cb) { this.listeners[name] = cb; },
-    moveAfter(sibling) {
-      const list = this.parent.children;
-      list.splice(list.indexOf(this), 1);
-      list.splice(list.indexOf(sibling) + 1, 0, this);
-    } };
+    addEventListener(name, cb) { this.listeners[name] = cb; } }; // ScriptUI에는 moveAfter가 없다
   if (parent) parent.children.push(c);
   return c;
 }
@@ -42,6 +37,12 @@ function fixture({ preview = true } = {}) {
   const mixed = control('edittext', '혼합', mixedRow);
   control('dropdownlist', '', mixedRow);
   mixed.onChange = function() { applied.push(['mixed', this.text]); };
+  // 입력칸이 둘인 줄
+  const pairRow = control('group', '', win);
+  const pairA = control('edittext', 'A', pairRow);
+  const pairB = control('edittext', 'B', pairRow);
+  pairA.onChange = function() { applied.push(['pairA', this.text]); };
+  pairB.onChange = function() { applied.push(['pairB', this.text]); };
   // 이미 [완료]가 있는 줄
   const doneRow = control('group', '', win);
   const done = control('edittext', '기존', doneRow);
@@ -57,7 +58,7 @@ function fixture({ preview = true } = {}) {
   const ok = control('button', '확인', win);
   ok.onClick = function() { applied.push(['ok']); };
   ctx.bindTabOrder(win);
-  return { win, textRow, numRow, mixedRow, doneRow, panel, text, num, mixed, done, multi, applied };
+  return { win, textRow, numRow, mixedRow, pairRow, pairA, pairB, doneRow, panel, text, num, mixed, done, multi, applied };
 }
 
 let f = fixture();
@@ -67,8 +68,10 @@ const button = f.textRow.children[2];
 assert.equal(button.applyTo, f.text);
 // 슬라이더 옆 숫자 줄에는 달지 않는다
 assert.deepEqual(kinds(f.numRow), ['statictext:크기', 'edittext:3', 'scrollbar:', 'button:R']);
-// 입력칸이 줄 끝이 아니면 바로 오른쪽에
-assert.deepEqual(kinds(f.mixedRow), ['edittext:혼합', 'button:완료', 'dropdownlist:']);
+// ScriptUI에는 moveAfter가 없어 단추는 줄 끝에 붙는다(입력칸 뒤에 다른 칸이 있어도)
+assert.deepEqual(kinds(f.mixedRow), ['edittext:혼합', 'dropdownlist:', 'button:완료']);
+// 입력칸이 둘인 줄은 단추 하나가 둘 다 반영한다
+assert.deepEqual(kinds(f.pairRow), ['edittext:A', 'edittext:B', 'button:완료']);
 // 이미 있으면 더 달지 않는다
 assert.deepEqual(kinds(f.doneRow), ['edittext:기존', 'button:완료']);
 // 여러 줄 입력칸도 [완료]
@@ -81,7 +84,7 @@ assert.deepEqual(f.applied, [['text', '새 글']]);
 assert.equal(f.text.text, '새 글', '[완료]는 친 글을 되돌리지 않는다');
 f.applied.length = 0;
 f.mixed.text = '다른 칸 옆';
-f.mixedRow.children[1].onClick();
+f.mixedRow.children[2].onClick();
 assert.deepEqual(f.applied, [['mixed', '다른 칸 옆']]);
 f.applied.length = 0;
 f.multi.text = '첫 줄\n둘째 줄';

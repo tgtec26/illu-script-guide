@@ -20,14 +20,24 @@ function bindTabOrder(win) {
     }
 }
 
-// 미리보기가 있는 창의 글 입력칸(옆에 슬라이더가 없는 입력칸) 오른쪽에 [완료]를 단다(2026-10-16).
+// 미리보기가 있는 창의 글 입력칸(옆에 슬라이더가 없는 입력칸) 줄 끝에 [완료]를 단다(2026-10-16).
 // 이미 [완료](applyTo)가 있는 칸은 건드리지 않는다. 누르면 포커스 이동·Enter와 같은 경로(onChange)로 그 칸을 반영한다.
-// 슬라이더 옆 숫자 칸과 창에 바로 붙은 입력칸은 달지 않는다. 끄려면 $.global.__noAutoApply = true.
+// 한 줄(같은 부모)에 입력칸이 여럿이면 단추 하나가 그 줄의 칸을 모두 반영한다(applyTo=마지막 칸, applyAlso=나머지).
+// ScriptUI에는 moveAfter가 없어 단추는 항상 그 부모의 맨 끝에 붙는다(세로 부모는 입력칸이 맨 아래일 때만). 슬라이더 옆 숫자 칸과 창에 바로 붙은 입력칸은 달지 않는다.
+// 끄려면 $.global.__noAutoApply = true.
 function addApplyButtons(win) {
     if ($.global.__noAutoApply || !hasPreviewCheck(win)) return;
-    var inputs = [];
+    var inputs = [], parents = [], groups = [], i, j;
     collectEditTexts(win, inputs);
-    for (var i = 0; i < inputs.length; i++) addApplyButton(inputs[i]);
+    for (i = 0; i < inputs.length; i++) {
+        var parent = inputs[i].parent;
+        if (!parent || parent.type === "dialog" || parent.type === "window" || parent.type === "palette") continue;
+        if (applyNotNeeded(parent, inputs[i])) continue;
+        for (j = 0; j < parents.length; j++) if (parents[j] === parent) break;
+        if (j === parents.length) { parents.push(parent); groups.push([]); }
+        groups[j].push(inputs[i]);
+    }
+    for (i = 0; i < parents.length; i++) addApplyButton(parents[i], groups[i]);
 }
 
 function hasPreviewCheck(container) {
@@ -41,23 +51,33 @@ function hasPreviewCheck(container) {
     return false;
 }
 
-function addApplyButton(input) {
-    var parent = input.parent, kids = parent.children, index = -1, i;
-    if (!parent || parent.type === "dialog" || parent.type === "window" || parent.type === "palette") return;
-    for (i = 0; i < kids.length; i++) {
-        if (kids[i] === input) index = i;
-        if (kids[i].type === "scrollbar") return;
-        if (kids[i].type === "button" && kids[i].applyTo === input) return;
+// 같은 줄에 슬라이더가 있거나 이미 그 칸을 확정하는 [완료]가 있으면 달지 않는다
+function applyNotNeeded(parent, input) {
+    var kids = parent.children;
+    // 세로로 쌓는 부모에서는 단추가 맨 아래에 붙으므로 입력칸이 맨 아래일 때만 단다
+    if (parent.orientation === "stack") return true;
+    if (parent.orientation === "column" && kids[kids.length - 1] !== input) return true;
+    for (var i = 0; i < kids.length; i++) {
+        if (kids[i].type === "scrollbar") return true;
+        if (kids[i].type !== "button" || !kids[i].applyTo) continue;
+        if (kids[i].applyTo === input) return true;
+        var also = kids[i].applyAlso || [];
+        for (var j = 0; j < also.length; j++) if (also[j] === input) return true;
     }
+    return false;
+}
+
+function addApplyButton(parent, inputs) {
     var button = parent.add("button", undefined, "완료");
-    button.helpTip = "이 칸에 친 글을 반영합니다 (포커스 이동·Enter와 같음)";
+    button.helpTip = "이 줄의 칸에 친 글을 반영합니다 (포커스 이동·Enter와 같음)";
     button.preferredSize.width = 50;
     button.preferredSize.height = COMPACT_ROW_HEIGHT;
     button.maximumSize.height = COMPACT_ROW_HEIGHT;
-    button.applyTo = input;
-    button.onClick = function() { if (input.onChange) input.onChange(); };
-    // 칸이 줄 끝이 아니면 칸 바로 오른쪽으로 옮긴다
-    if (index !== kids.length - 2) { try { button.moveAfter(input); } catch (moveError) {} }
+    button.applyTo = inputs[inputs.length - 1];
+    button.applyAlso = inputs.slice(0, inputs.length - 1);
+    button.onClick = function() {
+        for (var i = 0; i < inputs.length; i++) if (inputs[i].onChange) inputs[i].onChange();
+    };
 }
 
 function collectEditTexts(container, inputs) {
@@ -150,7 +170,7 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
             for (j = 0; j < fields.length; j++) fields[j].text = String(fields[j].input.text);
         } finally { state.applying = false; }
     }
-    function wrapControl(handler, confirm, applyTo) {
+    function wrapControl(handler, confirm, applyTargets) {
         return function() {
             if (state.applying) return handler ? handler.apply(this, arguments) : undefined;
             if (confirm) {
@@ -167,7 +187,7 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
                 pending[j] = String(fields[j].input.text);
                 fields[j].touched = false;
                 // [완료]가 확정하는 입력칸은 친 글 그대로 둔다
-                if (fields[j].input !== applyTo) fields[j].input.text = fields[j].text;
+                if (!isApplyTarget(fields[j].input, applyTargets)) fields[j].input.text = fields[j].text;
             }
             state.applying = true;
             try { return handler.apply(this, arguments); }
@@ -188,7 +208,7 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
             var child = children[j], confirm = false;
             for (var k = 0; k < confirmButtons.length; k++) if (child === confirmButtons[k]) confirm = true;
             if (child.type !== "edittext") {
-                if (confirm || child.onClick) child.onClick = wrapControl(child.onClick, confirm, child.applyTo || null);
+                if (confirm || child.onClick) child.onClick = wrapControl(child.onClick, confirm, child.applyTo ? [child.applyTo].concat(child.applyAlso || []) : null);
                 if (child.onChange) child.onChange = wrapControl(child.onChange, false);
                 if (child.onChanging) child.onChanging = wrapControl(child.onChanging, false);
             }
@@ -201,6 +221,12 @@ function bindDeferredDialogInputs(win, inputs, confirmButtons) {
         if (show) show.apply(this, arguments);
         for (var j = 0; j < fields.length; j++) fields[j].text = String(fields[j].input.text);
     };
+}
+
+function isApplyTarget(input, targets) {
+    if (!targets) return false;
+    for (var i = 0; i < targets.length; i++) if (targets[i] === input) return true;
+    return false;
 }
 
 // Enter를 쳤을 때 아직 반영하지 않은 글이 있으면 포커스 이동과 같은 경로(onChange)로 반영한다. 여러 줄 칸은 건드리지 않는다
