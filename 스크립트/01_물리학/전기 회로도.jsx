@@ -381,9 +381,14 @@ function generateCircuit(o) {
     var font = numberRow(size,"글자 크기",8,5,18,0.5,function(v){o.fontSize=v;});
     var part = panel("요소");
     var num = numberRow(part,"개수",4,1,12,1,function(v) {count=v;while(elements.length<count)elements.push(newElement());refreshLists();loadElement();});
-    var choices = selectRow(part,"편집 요소",["1","2","3","4"],function(i){selected=i;loadElement();});
+    var elementSelects=part.add("group");elementSelects.spacing=8;
+    var choices = selectRow(elementSelects,"편집 요소",["1","2","3","4"],function(i){selected=i;loadElement();});
     var names = []; for(var si=0;si<SYMBOL_OPTIONS.length;si++)names.push(SYMBOL_OPTIONS[si].label);
-    var symbol = selectRow(part,"기호",names,function(i){elements[selected].key=SYMBOL_OPTIONS[i].value;refreshLists();updatePreview();});
+    var symbol = selectRow(elementSelects,"기호",names,function(i){elements[selected].key=SYMBOL_OPTIONS[i].value;refreshLists();updatePreview();});
+    choices.parent.children[0].preferredSize.width=55;
+    choices.preferredSize.width=45;
+    symbol.parent.children[0].preferredSize.width=26;
+    symbol.preferredSize.width=110;
     var angle = numberRow(part,"위치",0,0,359,1,function(v){elements[selected].angle=v;});angle.edit.helpTip="0 위, 90 오른쪽, 180 아래, 270 왼쪽. 모서리는 가까운 직선으로 보정";
     var flags = part.add("group");
     var upper = check(flags,"위 가지",true,function(v){elements[selected].upper=v;}); upper.helpTip="분기 안쪽(기본 아래쪽 분기의 위 가지). 해제하면 바깥쪽. 분기 밖에서는 공통 도선";
@@ -416,7 +421,7 @@ function generateCircuit(o) {
     }
     function refreshLists() {
         var was=busy;busy=true;selected=Math.min(selected,count-1);o.meterTarget=Math.min(o.meterTarget,count-1);
-        choices.removeAll();target.removeAll();for(var i=0;i<count;i++){var text=(i+1)+" "+(elements[i].name||names[keyIndex(elements[i].key)]);choices.add("item",text);target.add("item",text);}
+        choices.removeAll();target.removeAll();for(var i=0;i<count;i++){var text=(i+1)+" "+(elements[i].name||names[keyIndex(elements[i].key)]);choices.add("item",String(i+1));target.add("item",text);}
         choices.selection=selected;target.selection=o.meterTarget;busy=was;
     }
     function keyIndex(key){for(var i=0;i<SYMBOL_OPTIONS.length;i++)if(SYMBOL_OPTIONS[i].value===key)return i;return 0;}
