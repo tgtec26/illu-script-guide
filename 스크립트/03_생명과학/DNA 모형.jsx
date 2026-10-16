@@ -904,6 +904,7 @@ try {
                 String.fromCharCode(0x2160), String.fromCharCode(0x2161), String.fromCharCode(0x2162)];  // ⅠⅡⅢ
             var PROTEIN_CHOICES = ["이름"].concat(LABELS);
             var TEMPLATE_CHOICES = ["위 가닥 (DNA 1)", "아래 가닥 (DNA 2)"];
+            var NAME_CHOICES = ["한글", "3글자 (Met)"];
             var maskNames = ["DNA 1", "DNA 2", "RNA"];
             var NUMBER_KEYS = ["backboneWidth", "tickWidth", "tickLength", "arrowWidth", "fontSize", "baseGap", "strandGap", "rnaGap", "arrowLength", "offsetX", "offsetY"];
             var NUMBER_MINS = [0.1, 0.1, 0, 0.1, 4, 1, 2, 2, 2, -100, -100];
@@ -953,6 +954,7 @@ try {
                 codonRow.alignChildren = ["left", "center"];
                 codonRow.spacing = 3;
                 var rowCaption = addCaption(codonRow, " ");
+                rowCaption.preferredSize.width = 120;
                 var codonList = codonRow.add("dropdownlist", undefined, []);
                 codonList.preferredSize.width = 70;
                 codonList.helpTip = "이 아미노산의 mRNA 코돈";
@@ -978,6 +980,18 @@ try {
             templateList.onChange = function() {
                 if (templateList.selection === null) return;
                 options.templateTop = templateList.selection.index === 0;
+                updatePreview();
+            };
+            var nameRow = buildPanel.add("group");
+            nameRow.alignChildren = ["left", "center"];
+            addCaption(nameRow, "이름 표기");
+            var nameList = nameRow.add("dropdownlist", undefined, NAME_CHOICES);
+            nameList.selection = options.nameKorean ? 0 : 1;
+            nameList.helpTip = "코돈 행과 단백질 칸의 '이름'에 쓸 표기. 한글은 2022 개정 교육과정 유전 부호표 표기";
+            nameList.onChange = function() {
+                if (nameList.selection === null) return;
+                options.nameKorean = nameList.selection.index === 0;
+                refreshCodonRows();
                 updatePreview();
             };
             var namesRow = buildPanel.add("group");
@@ -1127,7 +1141,7 @@ try {
                     var row = codonRows[i];
                     row.codons.removeAll();
                     if (i < aaList.length) {
-                        row.caption.text = (i + 1) + "  " + aaList[i];
+                        row.caption.text = (i + 1) + "  " + aminoName(aaList[i], options.nameKorean);
                         var codons = table[aaList[i]];
                         for (var c = 0; c < codons.length; c++) row.codons.add("item", codons[c]);
                         var pick = options.picks[i];
@@ -1393,7 +1407,7 @@ try {
                     drawArrow(group, cx, tipY, boxTop, options.arrowWidth, color);
 
                     var choice = options.proteins[i];
-                    var text = choice === 0 ? (aaList[i] === "Stop" ? "종결" : aaList[i]) : LABELS[choice - 1];
+                    var text = choice === 0 ? aminoName(aaList[i], options.nameKorean) : LABELS[choice - 1];
                     var frame = placeText(group, text, cx, centerY, null);
                     var fb = frame.geometricBounds;
                     var halfWidth = (fb[2] - fb[0]) / 2;
@@ -1525,7 +1539,7 @@ try {
                 };
             }
 
-            // 아미노산 목록: 3글자 약어, 1글자 약어, 한글 이름(교과서 표기와 흔한 표기)
+            // 아미노산 목록: 3글자 약어, 1글자 약어, 한글 이름. 한글 이름의 첫째는 2022 개정 교육과정 유전 부호표 표기이고 나머지는 입력만 받는 다른 표기
             function aminoList() {
                 return [
                     {code: "Phe", one: "F", ko: ["페닐알라닌"]}, {code: "Leu", one: "L", ko: ["류신", "루신"]},
@@ -1533,12 +1547,22 @@ try {
                     {code: "Val", one: "V", ko: ["발린"]}, {code: "Ser", one: "S", ko: ["세린"]}, {code: "Pro", one: "P", ko: ["프롤린"]},
                     {code: "Thr", one: "T", ko: ["트레오닌"]}, {code: "Ala", one: "A", ko: ["알라닌"]},
                     {code: "Tyr", one: "Y", ko: ["타이로신", "티로신"]}, {code: "His", one: "H", ko: ["히스티딘"]},
-                    {code: "Gln", one: "Q", ko: ["글루타민"]}, {code: "Asn", one: "N", ko: ["아스파라긴", "아스파라진"]},
-                    {code: "Lys", one: "K", ko: ["라이신", "리신"]}, {code: "Asp", one: "D", ko: ["아스파르트산", "아스파트산"]},
+                    {code: "Gln", one: "Q", ko: ["글루타민"]}, {code: "Asn", one: "N", ko: ["아스파라진", "아스파라긴"]},
+                    {code: "Lys", one: "K", ko: ["라이신", "리신"]}, {code: "Asp", one: "D", ko: ["아스파트산", "아스파르트산"]},
                     {code: "Glu", one: "E", ko: ["글루탐산"]}, {code: "Cys", one: "C", ko: ["시스테인"]}, {code: "Trp", one: "W", ko: ["트립토판"]},
-                    {code: "Arg", one: "R", ko: ["아르지닌"]}, {code: "Gly", one: "G", ko: ["글리신"]},
-                    {code: "Stop", one: "*", ko: ["종결", "정지"]}
+                    {code: "Arg", one: "R", ko: ["아르지닌"]}, {code: "Gly", one: "G", ko: ["글라이신", "글리신"]},
+                    {code: "Stop", one: "*", ko: ["종결코돈", "종결", "정지"]}
                 ];
+            }
+
+            // 화면에 쓸 아미노산 이름: 한글(유전 부호표 표기) 또는 3글자 약어
+            function aminoName(code, korean) {
+                if (!korean) return code;
+                var list = aminoList();
+                for (var i = 0; i < list.length; i++) {
+                    if (list[i].code === code) return list[i].ko[0];
+                }
+                return code;
             }
 
             // 3글자 약어(대소문자 무관)나 한글 이름이면 코드를, 아니면 null
@@ -1683,24 +1707,24 @@ try {
             // 첨부 그림(기출형)을 처음 값으로 한다: Gly Arg Glu, 주형은 위 가닥, DNA 1의 코돈 1·DNA 2와 RNA의 코돈 2–3을 가림
             function defaultOptions() {
                 return { aaText: "Gly Arg Glu", picks: [2, 0, 0, 0, 0, 0, 0, 0], proteins: [2, 1, 5, 0, 0, 0, 0, 0],
-                    templateTop: true, showNames: true, showProtein: true, names: "DNA, RNA, (가), 단백질",
+                    templateTop: true, showNames: true, showProtein: true, nameKorean: true, names: "DNA, RNA, (가), 단백질",
                     masks: ["1", "2-3", "2-3"], labels: [0, 7, 8],
                     backboneWidth: 1, tickWidth: 0.3, tickLength: 3, arrowWidth: 0.5, fontSize: 10,
                     baseGap: 6, strandGap: 16, rnaGap: 14, arrowLength: 7, offsetX: 0, offsetY: 0, preview: true };
             }
 
-            // v2: 숫자 11개, 주형·줄 이름 표시·단백질 줄 표시(0/1), 줄 이름, 아미노산 서열, 코돈 선택·단백질 칸(쉼표 목록),
-            //     가릴 코돈 번호 3개, 박스 문자 번호 3개, 미리보기(0/1)
+            // v3: 숫자 11개, 주형·줄 이름 표시·단백질 줄 표시(0/1), 줄 이름, 아미노산 서열, 코돈 선택·단백질 칸(쉼표 목록),
+            //     가릴 코돈 번호 3개, 박스 문자 번호 3개, 미리보기(0/1), 한글 이름(0/1)
             function readSettings() {
                 var result = defaultOptions();
                 try {
                     var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-                    if (p[0] !== "v2" || p.length !== 26) return result;
+                    if (p[0] !== "v3" || p.length !== 27) return result;
                     for (var i = 0; i < NUMBER_KEYS.length; i++) {
                         var value = Number(p[i + 1]);
                         if (!/\S/.test(p[i + 1]) || !isFinite(value) || value < NUMBER_MINS[i] || value > NUMBER_MAXS[i]) return result;
                     }
-                    if (!/^[01]$/.test(p[12]) || !/^[01]$/.test(p[13]) || !/^[01]$/.test(p[14]) || !/^[01]$/.test(p[25])) return result;
+                    if (!/^[01]$/.test(p[12]) || !/^[01]$/.test(p[13]) || !/^[01]$/.test(p[14]) || !/^[01]$/.test(p[25]) || !/^[01]$/.test(p[26])) return result;
                     var parsed = parseAminoAcids(p[16]);
                     if (parsed.error !== null || parsed.list.length > MAX_AMINO) return result;
                     var picks = readList(p[17], MAX_AMINO, 5);
@@ -1722,6 +1746,7 @@ try {
                         result.labels[l] = Number(p[22 + l]);
                     }
                     result.preview = p[25] === "1";
+                    result.nameKorean = p[26] === "1";
                 } catch (e) {}
                 return result;
             }
@@ -1745,7 +1770,7 @@ try {
                     parts.push(options.templateTop ? 1 : 0, options.showNames ? 1 : 0, options.showProtein ? 1 : 0,
                         options.names, options.aaText, options.picks.join(","), options.proteins.join(","),
                         options.masks[0], options.masks[1], options.masks[2],
-                        options.labels[0], options.labels[1], options.labels[2], options.preview ? 1 : 0);
+                        options.labels[0], options.labels[1], options.labels[2], options.preview ? 1 : 0, options.nameKorean ? 1 : 0);
                     app.preferences.setStringPreference(PREF_KEY, parts.join("|"));
                 } catch (e) {}
             }

@@ -17,7 +17,7 @@ function extract(name) {
   }
   throw new Error(`unbalanced ${name}`);
 }
-const names = ["codonTable", "aminoList", "findAmino", "oneLetter", "parseAminoAcids", "buildStrands", "parseCodonRange",
+const names = ["codonTable", "aminoList", "aminoName", "findAmino", "oneLetter", "parseAminoAcids", "buildStrands", "parseCodonRange",
   "splitNames", "bracePoints", "complement"];
 const g = new Function(`${names.map(extract).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
@@ -54,6 +54,19 @@ const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}
   assert.strictEqual(g.parseAminoAcids("MXG").error, "알 수 없는 아미노산: MXG");
   assert.strictEqual(g.parseAminoAcids("Gly 프로").error, "알 수 없는 아미노산: 프로");
   assert.strictEqual(g.parseAminoAcids("Gly Arg").error, null);
+}
+
+// 한글 이름: 2022 개정 교육과정 유전 부호표 표기를 화면에 쓰고, 다른 표기도 입력으로 받는다
+{
+  const table = {Phe: "페닐알라닌", Leu: "류신", Ile: "아이소류신", Met: "메싸이오닌", Val: "발린", Ser: "세린", Pro: "프롤린",
+    Thr: "트레오닌", Ala: "알라닌", Tyr: "타이로신", His: "히스티딘", Gln: "글루타민", Asn: "아스파라진", Lys: "라이신",
+    Asp: "아스파트산", Glu: "글루탐산", Cys: "시스테인", Trp: "트립토판", Arg: "아르지닌", Gly: "글라이신", Stop: "종결코돈"};
+  for (const code of Object.keys(table)) {
+    assert.strictEqual(g.aminoName(code, true), table[code], code);
+    assert.strictEqual(g.aminoName(code, false), code);
+    assert.deepStrictEqual(g.parseAminoAcids(table[code]).list, [code], `${table[code]} 입력`);
+  }
+  assert.deepStrictEqual(g.parseAminoAcids("글리신 아스파라긴 아스파르트산").list, ["Gly", "Asn", "Asp"], "다른 표기도 입력 가능");
 }
 
 // 가닥 만들기: 첨부 그림(주형이 위 가닥)과 같은 결과
@@ -108,7 +121,7 @@ assert.deepStrictEqual(g.splitNames("", 4), ["", "", "", ""]);
 
 // 설정 문자열: v2, 26칸. 저장 칸 수와 읽는 칸 수가 같다
 {
-  assert.ok(source.includes('p[0] !== "v2" || p.length !== 26'), "settings string must be v2 with 26 fields");
+  assert.ok(source.includes('p[0] !== "v3" || p.length !== 27'), "settings string must be v3 with 27 fields");
   assert.strictEqual((source.match(/join\("\|"\)/g) || []).length, 1, "one saveSettings join");
   const keys = source.match(/var NUMBER_KEYS = \[([^\]]*)\]/)[1].split(",").length;
   assert.strictEqual(keys, 11);
