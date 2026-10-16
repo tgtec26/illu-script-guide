@@ -17,7 +17,7 @@ def check(names, explicit=None, version=None):
         home = base / "user-settings"
         repo = base / "repo"
         repo.mkdir()
-        scripts = repo / "스크립트" / "01_도형"
+        scripts = repo / "스크립트" / "06_도형"
         scripts.mkdir(parents=True)
         (scripts / "테스트.jsx").write_text("// fixture")
         (repo / "cjh250907.kys").write_bytes(b"test keys")
@@ -43,7 +43,7 @@ def check(names, explicit=None, version=None):
         assert result.returncode == 0, result.stdout + result.stderr
         expected = [explicit] if explicit else names
         for name in names:
-            loader = apps / name / "Presets.localized" / "ko_KR" / "스크립트" / "01_도형" / "테스트.jsx"
+            loader = apps / name / "Presets.localized" / "ko_KR" / "스크립트" / "06_도형" / "테스트.jsx"
             assert loader.exists() == (name in expected), (name, result.stdout)
             if loader.exists():
                 assert str(scripts / "테스트.jsx") in loader.read_text()

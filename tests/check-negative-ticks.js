@@ -2,8 +2,8 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-// 음수 눈금 숫자는 빼기 기호를 빼고 숫자 가운데를 눈금에 맞춘다 (평가원 그림). 07_수학의 모든 addLabel이 negativeNumberShift를 거친다
-const dir = path.resolve(__dirname, "..", "스크립트", "07_수학");
+// 음수 눈금 숫자는 빼기 기호를 빼고 숫자 가운데를 눈금에 맞춘다 (평가원 그림). 05_수학의 모든 addLabel이 negativeNumberShift를 거친다
+const dir = path.resolve(__dirname, "..", "스크립트", "05_수학");
 let helper = null;
 for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".jsx"))) {
   const source = fs.readFileSync(path.join(dir, file), "utf8");
@@ -49,7 +49,7 @@ assert.strictEqual(shift(fakeFrame("(-2, 1)"), [0, -1]), 0, "coordinates");
 
 // 그래프 도구 축 탭: x축 음수 눈금도 빼기를 지운 사본의 너비로 숫자 가운데를 맞춘다
 {
-  const graph = fs.readFileSync(path.resolve(__dirname, "..", "스크립트", "01_도형", "그래프·표.jsx"), "utf8");
+  const graph = fs.readFileSync(path.resolve(__dirname, "..", "스크립트", "06_도형", "그래프·표.jsx"), "utf8");
   const label = graph.slice(graph.indexOf("function createAlignedLabel("), graph.indexOf("function createLegendText("));
   assert.ok(label.includes('if (alignMode === "bottom" && /^[\\-\\u2212][0-9.]/.test(text)) {'), "graph tools: negative check");
   assert.ok(label.includes("digits.textRange.characters[0].remove();"), "graph tools: minus removed on a copy");

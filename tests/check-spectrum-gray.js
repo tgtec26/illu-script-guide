@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "03_색상", "스펙트럼.jsx");
+const scriptPath = path.join(root, "스크립트", "08_색상", "스펙트럼.jsx");
 
 assert.ok(fs.existsSync(scriptPath), "스펙트럼.jsx must exist");
 const source = fs.readFileSync(scriptPath, "utf8");
@@ -155,7 +155,7 @@ assert.ok(source.includes("guideGroup.zOrder(ZOrderMethod.SENDTOBACK);"), "guide
 assert.ok(source.includes("var xs = [left + GUIDE_WIDTH / 2, right - GUIDE_WIDTH / 2];"), "guides sit half a stroke inside the band edges, in line with the ticks");
 assert.ok(/function addScale[\s\S]*?return y;\n    \}/.test(source), "guides start at the scale line");
 assert.ok(source.includes('if (isFinal && typeof applyDashPatternToItems === "function")'), "dash alignment only at confirm and only when the helper loaded");
-assert.ok(source.includes('/01_도형/Object_setdash_align_helper.jsxinc'), "dash helper is loaded like the tab helper");
+assert.ok(source.includes('/06_도형/Object_setdash_align_helper.jsxinc'), "dash helper is loaded like the tab helper");
 assert.ok(source.includes("previewGroup = buildSpectrum(false);") && source.includes("var finalGroup = buildSpectrum(true);"), "preview skips the slow action");
 assert.ok(/if \(result === 1\) \{[\s\S]*?rect\.remove\(\);[\s\S]*?saveSettings\(\);/.test(source), "confirm removes the source rectangle and saves");
 assert.ok(source.includes("illu_last_script.txt"), "RepeatLast memo header must exist");

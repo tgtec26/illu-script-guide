@@ -4,7 +4,7 @@ const assert = require("assert");
 const es3Lint = require("./es3-lint.js");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "유전 정보 흐름.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "03_생명과학", "유전 정보 흐름.jsx"), "utf8");
 es3Lint(source, "유전 정보 흐름.jsx");
 
 function extract(name) {

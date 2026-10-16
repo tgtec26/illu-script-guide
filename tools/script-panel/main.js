@@ -205,7 +205,7 @@
         return row;
     }
 
-    // 상대 폴더 경로("01_도형/하위")로 폴더 트리를 만든다
+    // 상대 폴더 경로("06_도형/하위")로 폴더 트리를 만든다
     function buildTree(items) {
         var root = { name: "", path: "", dirs: {}, order: [], files: [], count: 0 };
         items.forEach(function (it) {

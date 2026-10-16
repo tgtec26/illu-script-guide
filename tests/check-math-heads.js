@@ -23,7 +23,7 @@ function extractFunction(source, name) {
 const near = (a, b, label) => assert.ok(Math.abs(a - b) <= 1e-9, `${label}: expected ${b}, got ${a}`);
 
 for (const file of FILES) {
-  const source = fs.readFileSync(path.join(root, "스크립트", "07_수학", file), "utf8");
+  const source = fs.readFileSync(path.join(root, "스크립트", "05_수학", file), "utf8");
   new Function(source);
 
   // 화살촉 코드는 한 덩어리로 있어서 그대로 꺼내 쓴다

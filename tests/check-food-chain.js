@@ -3,8 +3,8 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "먹이 사슬.jsx");
-const artDir = path.join(root, "스크립트", "01_도형", "Object_FoodChain_art");
+const scriptPath = path.join(root, "스크립트", "03_생명과학", "먹이 사슬.jsx");
+const artDir = path.join(root, "스크립트", "03_생명과학", "Object_FoodChain_art");
 const source = fs.readFileSync(scriptPath, "utf8");
 
 function extractFunction(name) {

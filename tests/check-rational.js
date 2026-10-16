@@ -4,7 +4,7 @@ const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
 // 공통수학 묶음(공통수학.jsx)의 "Rational" 탭 엔진만 잘라 읽는다
-const bundle = fs.readFileSync(path.join(root, "스크립트", "07_수학", "공통수학.jsx"), "utf8");
+const bundle = fs.readFileSync(path.join(root, "스크립트", "05_수학", "공통수학.jsx"), "utf8");
 const source = (() => {
   const start = bundle.indexOf("function makeRationalEngine(");
   assert.ok(start >= 0, "missing engine: makeRationalEngine");

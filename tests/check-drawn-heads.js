@@ -6,7 +6,7 @@ const assert = require("assert");
 const {assertSameCatalog, catalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
 
 const root = path.resolve(__dirname, "..");
-const read = (file) => fs.readFileSync(path.join(root, "스크립트", "01_도형", file), "utf8");
+const read = (file) => fs.readFileSync(require("./script-path")(root, file), "utf8");
 const SHAPES = '["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"]';
 
 const CONVERTED = ["대류.jsx", "먹이 사슬.jsx", "별의 일주 운동.jsx", "달 위상.jsx", "힘 화살표.jsx", "입자 상태 모형.jsx", "그래프·표.jsx",

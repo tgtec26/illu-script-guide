@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptFile = "스크립트/01_도형/렌즈·거울.jsx";
+const scriptFile = "스크립트/01_물리학/렌즈·거울.jsx";
 const source = fs.readFileSync(path.join(root, scriptFile), "utf8");
 
 function extractFunction(name) {
@@ -82,7 +82,7 @@ assert.ok(source.includes("if (child.clipping) return child.geometricBounds;") &
 assert.ok(source.includes("value = Math.round(value / step) * step;"), "row values snap to their step");
 assert.ok(source.includes('addRow(shapePanel, "굴절률", "index", 1.5, 2, "", 0.05, false)'), "refractive index 1.5~2.0");
 const guide = fs.readFileSync(path.join(root, "docs/assets/app.js"), "utf8");
-assert.ok(guide.includes('id: "lens-mirror"') && guide.includes('file: "01_도형/렌즈·거울.jsx"'), "guide entry");
+assert.ok(guide.includes('id: "lens-mirror"') && guide.includes('file: "01_물리학/렌즈·거울.jsx"'), "guide entry");
 
 // 볼록 렌즈(뾰족, 가장자리 0): 두 호가 (0, ±h/2)에서 만나고 꼭짓점은 (±tc/2, 0)
 {

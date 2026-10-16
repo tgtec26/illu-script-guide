@@ -2,9 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-// 수학 묶음 공용 라벨 겹침 풀기(07_수학/math_label_helper.jsxinc)를 가짜 글상자로 확인한다
+// 수학 묶음 공용 라벨 겹침 풀기(05_수학/math_label_helper.jsxinc)를 가짜 글상자로 확인한다
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "07_수학", "math_label_helper.jsxinc"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "05_수학", "math_label_helper.jsxinc"), "utf8");
 const untangleLabels = new Function(source + "\nreturn untangleLabels;")();
 
 // 글자 폭 5pt, 높이 8pt로 dir 쪽 gap만큼 떨어뜨려 놓는 addLabel 흉내

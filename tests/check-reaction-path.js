@@ -4,7 +4,7 @@ const assert = require("assert");
 const es3Lint = require("./es3-lint");
 
 // 반응 경로 에너지 도표.jsx에서 곡선 점·그리기 함수만 잘라 가짜 도구로 돌려 좌표를 검사한다
-const source = fs.readFileSync(path.join(__dirname, "..", "스크립트", "01_도형", "반응 경로 에너지 도표.jsx"), "utf8");
+const source = fs.readFileSync(path.join(__dirname, "..", "스크립트", "02_화학", "반응 경로 에너지 도표.jsx"), "utf8");
 new Function(source);
 es3Lint(source, "반응 경로 에너지 도표");
 function extractFunction(name) {

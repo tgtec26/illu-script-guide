@@ -3,11 +3,11 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "전자기 유도.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_물리학", "전자기 유도.jsx"), "utf8");
 
 // 문법만 확인 (실행하지 않는다)
 new Function(source);
-assert.ok(fs.existsSync(path.join(root, "스크립트", "01_도형", "Object_Induction_template.ai")), "template .ai next to the script");
+assert.ok(fs.existsSync(path.join(root, "스크립트", "01_물리학", "Object_Induction_template.ai")), "template .ai next to the script");
 
 // 순수 기하 구간을 그대로 읽는다
 const start = source.indexOf("// ==== 순수 기하 시작");

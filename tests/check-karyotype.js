@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const scriptPath = path.join(root, "스크립트", "01_도형", "사람의 핵형.jsx");
+const scriptPath = path.join(root, "스크립트", "03_생명과학", "사람의 핵형.jsx");
 assert.ok(fs.existsSync(scriptPath), "사람의 핵형.jsx must exist");
 const source = fs.readFileSync(scriptPath, "utf8");
 

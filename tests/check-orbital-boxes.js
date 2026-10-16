@@ -4,7 +4,7 @@ const assert = require("assert");
 const es3Lint = require("./es3-lint");
 
 // 오비탈 전자 배치.jsx에서 읽기·채우기·그리기 함수만 잘라 가짜 도구로 돌려 좌표를 검사한다
-const source = fs.readFileSync(path.join(__dirname, "..", "스크립트", "01_도형", "오비탈 전자 배치.jsx"), "utf8");
+const source = fs.readFileSync(path.join(__dirname, "..", "스크립트", "02_화학", "오비탈 전자 배치.jsx"), "utf8");
 new Function(source);
 es3Lint(source, "오비탈 전자 배치");
 function extractFunction(name) {

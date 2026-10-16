@@ -5,7 +5,7 @@ const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
 function load(file, names) {
-  const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", file), "utf8");
+  const source = fs.readFileSync(require("./script-path")(root, file), "utf8");
   const pick = (name) => {
     const start = source.indexOf(`function ${name}(`);
     assert.ok(start >= 0, `missing helper: ${name} in ${file}`);
@@ -116,7 +116,7 @@ function load(file, names) {
 
 // 공통: 새 스크립트는 메모·탭 이동·저장 규칙을 따른다
 for (const file of ["날씨.jsx", "화학 반응 모형.jsx", "뉴런.jsx"]) {
-  const s = fs.readFileSync(path.join(root, "스크립트", "01_도형", file), "utf8");
+  const s = fs.readFileSync(require("./script-path")(root, file), "utf8");
   assert.ok(s.includes("illu_last_script.txt") && s.includes("ui_tab_helper.jsxinc") && s.includes("bindTabOrder(win)"), file);
   assert.ok(s.includes("win.defaultElement = null"), file);
 }

@@ -121,7 +121,7 @@ button.onClick = function() { n.onChange(); committedNumber = Number(n.text); };
 ctx.bindTabOrder(w); n.text = '100'; button.onClick(); assert.equal(committedNumber, 10);
 
 // 실제 열기관 순환의 폼 엔진을 가져와 옵션 객체·저장값·미리보기까지 검사한다.
-const engineSource = fs.readFileSync(path.join(__dirname, '../스크립트/01_도형/열기관 순환.jsx'), 'utf8');
+const engineSource = fs.readFileSync(path.join(__dirname, '../스크립트/01_물리학/열기관 순환.jsx'), 'utf8');
 const engineCode = engineSource.slice(engineSource.indexOf('function makeFormEngine(spec)'), engineSource.indexOf('// 그리기 도구.'));
 const preferences = {};
 const draws = [];

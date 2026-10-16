@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "대류.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "04_지구과학", "대류.jsx"), "utf8");
 
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -153,7 +153,7 @@ for (const clockwise of [true, false]) {
   assert.strictEqual(zero.glass, 0);
   near(Math.max(...zero.outline.map((p) => p.anchor[0])), 80, 1e-9, "single line on the inner wall");
   assert.ok(source.includes("var GLASS_RANGE = [0, 5];"), "glass can be zero");
-  const lab = fs.readFileSync(path.join(root, "스크립트", "01_도형", "실험 기구.jsx"), "utf8");
+  const lab = fs.readFileSync(path.join(root, "스크립트", "02_화학", "실험 기구.jsx"), "utf8");
   const pick = (src) => { const i = src.indexOf("    function offsetWall("); return src.slice(i, src.indexOf("\n    }\n", i)); };
   assert.strictEqual(pick(source), pick(lab), "offsetWall matches 실험 기구.jsx");
 }

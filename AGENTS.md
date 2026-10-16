@@ -36,7 +36,7 @@ Any script with a dialog must remember the options from the last run and presele
 - Validate every restored value against the same range the dialog enforces before applying it.
 - Wrap reads and writes in `try/catch`; a preference failure must never block the script.
 
-Reference implementations: `스크립트/01_도형/원 입체.jsx`(구 탭), `스크립트/01_도형/그래프·표.jsx`(축 눈금 탭), `스크립트/01_도형/입자 모형.jsx`(원자 탭).
+Reference implementations: `스크립트/06_도형/원 입체.jsx`(구 탭), `스크립트/06_도형/그래프·표.jsx`(축 눈금 탭), `스크립트/02_화학/입자 모형.jsx`(원자 탭).
 
 ## Movable Preview (required)
 
@@ -49,7 +49,7 @@ Reference implementations: `스크립트/01_도형/원 입체.jsx`(구 탭), `�
 - 취소하거나 창을 닫으면 미리보기를 모두 지우고 원본을 되돌린다. 확인을 누르면 미리보기가 그대로 결과가 된다.
 - 이동값도 다이얼로그 옵션이므로 Dialog Option Persistence 규칙대로 저장한다.
 
-Reference implementations: `스크립트/01_도형/가계도.jsx`(`bindPositionRow`), `스크립트/01_도형/영역 중괄호.jsx`.
+Reference implementations: `스크립트/03_생명과학/가계도.jsx`(`bindPositionRow`), `스크립트/06_도형/영역 중괄호.jsx`.
 
 ## Dialog Layout (required)
 
@@ -81,14 +81,14 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
 - 선택이 비어 있지 않은데 맞지 않으면(원이 아닌 타원, 사각형 둘 등) 이유를 알리고 끝낸다.
 - 틀 크기는 `PREF_KEY + "/frame"` 키에 `v1|너비mm|높이mm`(원은 지름을 둘 다에)로 저장한다. 확인할 때만, 틀이 실제 선택에서 왔을 때만 저장한다. 기존 설정 문자열 형식은 건드리지 않는다.
 - 원본을 숨기거나 지우거나 되살리는 코드는 원본이 `null`이어도 안전해야 한다. 기본 크기는 상수 하나(`DEFAULT_FRAME_MM`)로 둔다.
-- 참고 구현: `스크립트/01_도형/방형구.jsx`, `스크립트/01_도형/사람의 핵형.jsx`.
+- 참고 구현: `스크립트/03_생명과학/방형구.jsx`, `스크립트/03_생명과학/사람의 핵형.jsx`.
 
 ## Last-Script Memo (required)
 
-Every runnable `.jsx` under `스크립트/` records its own path so `스크립트/10_기타/마지막 실행 반복.jsx`(F4)가 그 스크립트를 다시 실행할 수 있다. 새 스크립트를 만들면 파일 맨 위(단, `#target`/`#include` 지시문 뒤)에 아래 조각을 그대로 넣는다. `마지막 실행 반복.jsx` 자신만 예외다.
+Every runnable `.jsx` under `스크립트/` records its own path so `스크립트/12_기타/마지막 실행 반복.jsx`(F4)가 그 스크립트를 다시 실행할 수 있다. 새 스크립트를 만들면 파일 맨 위(단, `#target`/`#include` 지시문 뒤)에 아래 조각을 그대로 넣는다. `마지막 실행 반복.jsx` 자신만 예외다.
 
 ```jsx
-// 마지막 실행 스크립트 기록 → 10_기타/마지막 실행 반복.jsx(F4)가 다시 실행
+// 마지막 실행 스크립트 기록 → 12_기타/마지막 실행 반복.jsx(F4)가 다시 실행
 try {
     var __memo = new File(Folder.temp + "/illu_last_script.txt");
     __memo.encoding = "UTF-8";
@@ -117,7 +117,7 @@ Parameter keys for the `ai_plugin_setStroke` event (integer form of the four-cha
 - Strings in an action file are UTF-8 bytes written as uppercase hex, and the declared length is the **byte** count, not the character count.
 - Arrowhead names and the `/name` of enumerated parameters follow the Illustrator UI language. Keep them in one named constant per script so another language only needs that constant changed (Korean build: `화살표 1` = `ED9994EC82B4ED919C2031`, 11 bytes).
 - Wrap the whole action call in `try/catch` so the artwork survives a failure, and always unload the action set and delete the temporary file afterwards.
-- Reference implementations: `스크립트/01_도형/그래프·표.jsx` (축 눈금 탭의 `applyAxisArrowheads`), `스크립트/01_도형/Object_setdash_align_helper.jsxinc`. To find more keys, parse `스크립트/00_세팅/cjhaction_260624.aia` — it holds real recorded values.
+- Reference implementations: `스크립트/06_도형/그래프·표.jsx` (축 눈금 탭의 `applyAxisArrowheads`), `스크립트/06_도형/Object_setdash_align_helper.jsxinc`. To find more keys, parse `스크립트/00_세팅/cjhaction_260624.aia` — it holds real recorded values.
 
 ## Expand and Pathfinder Must Go Through the Installed Action Set
 
@@ -131,7 +131,7 @@ app.doScript("도형 합치기", "최종훈");  // Pathfinder Unite (ai_plugin_p
 ```
 
 - `expandStyle` (Object > Expand Appearance) is the one exception: the menu command works, so keep using it.
-- `executeMenuCommand("ungroup")` is unreliable on nested groups: with the inner groups selected it worked on a 3-cell test but dissolved the *outer* cell groups on the real periodic table. Ungroup by script instead — move each path out bottom-most first so stacking order is kept, then remove the empty group (`flattenShapes` in `스크립트/01_도형/주기율표.jsx`):
+- `executeMenuCommand("ungroup")` is unreliable on nested groups: with the inner groups selected it worked on a 3-cell test but dissolved the *outer* cell groups on the real periodic table. Ungroup by script instead — move each path out bottom-most first so stacking order is kept, then remove the empty group (`flattenShapes` in `스크립트/02_화학/주기율표.jsx`):
 
 ```javascript
 while (shape.pathItems.length > 0) {
@@ -142,7 +142,7 @@ shape.remove();
 - Wrap each call in `try/catch` and tell the user to re-run setup if the action set is missing.
 - Do the whole chain one object at a time. Expanding several objects together leaves the selection as a flat list of all the pieces, and the later merge then has nothing meaningful to work on.
 - Other useful actions in the same set: `선 두께 0.3`, `0.3 화살촉 넣기`, `글자깨고흰라인`, `화살표 확장`, `검은 선 흰색으로`. Decode `cjhaction_260624.aia` (UTF-8 hex) to see the full list.
-- Reference implementation: `스크립트/01_도형/세포분열.jsx` (세포 주기 탭의 `outlineArrows`, `applyExpandAction`).
+- Reference implementation: `스크립트/03_생명과학/세포분열.jsx` (세포 주기 탭의 `outlineArrows`, `applyExpandAction`).
 
 When a step-by-step diagnosis is needed, put the stage limit constant at the **top** of the IIFE, not next to the function it guards — a `var` declared after the dialog code runs too late to take effect, and the resulting tests silently exercise the full pipeline.
 
@@ -159,7 +159,7 @@ path.rotate(angle - path.fillColor.angle, false, false, true, false, Transformat
 
 - Rotating the whole shape and rotating it back leaves hairlines between adjoining faces; rotate the fill only.
 - Assigning `gradientStops[i].color` re-renders every object using that gradient on the next `app.redraw()`, even with the same value. Write stop colors only when they change.
-- Reference implementation: `스크립트/01_도형/주기율표.jsx` (`applyGradientFill`, `tintBevelGradients`).
+- Reference implementation: `스크립트/02_화학/주기율표.jsx` (`applyGradientFill`, `tintBevelGradients`).
 
 ## Preview Performance
 

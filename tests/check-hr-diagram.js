@@ -4,7 +4,7 @@ const assert = require("assert");
 const es3Lint = require("./es3-lint");
 
 // H-R도.jsx에서 타원·별 읽기·그리기 함수만 잘라 가짜 도구로 돌려 좌표를 검사한다
-const source = fs.readFileSync(path.join(__dirname, "..", "스크립트", "01_도형", "H-R도.jsx"), "utf8");
+const source = fs.readFileSync(path.join(__dirname, "..", "스크립트", "04_지구과학", "H-R도.jsx"), "utf8");
 new Function(source);
 es3Lint(source, "H-R도");
 function extractFunction(name) {

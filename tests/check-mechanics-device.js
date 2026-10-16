@@ -4,7 +4,7 @@ const assert = require("assert");
 
 const root = path.resolve(__dirname, "..");
 // 역학 장치.jsx에서 장면 그리기 함수만 잘라 가짜 도구로 돌려 좌표를 검사한다
-const source = fs.readFileSync(path.join(root, "스크립트", "01_도형", "역학 장치.jsx"), "utf8");
+const source = fs.readFileSync(path.join(root, "스크립트", "01_물리학", "역학 장치.jsx"), "utf8");
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.ok(start >= 0, `missing: ${name}`);

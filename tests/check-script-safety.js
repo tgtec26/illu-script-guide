@@ -5,39 +5,39 @@ const assert = require("assert");
 const root = path.resolve(__dirname, "..");
 
 const alignFiles = [
-  "스크립트/05_정렬/1mm 간격 가로 정렬 (큰 것 기준).jsx",
-  "스크립트/05_정렬/1mm 간격 가로 정렬 (작은 것 기준).jsx",
-  "스크립트/05_정렬/1mm 간격 세로 정렬 (큰 것 기준).jsx",
-  "스크립트/05_정렬/1mm 간격 세로 정렬 (작은 것 기준).jsx",
+  "스크립트/10_정렬/1mm 간격 가로 정렬 (큰 것 기준).jsx",
+  "스크립트/10_정렬/1mm 간격 가로 정렬 (작은 것 기준).jsx",
+  "스크립트/10_정렬/1mm 간격 세로 정렬 (큰 것 기준).jsx",
+  "스크립트/10_정렬/1mm 간격 세로 정렬 (작은 것 기준).jsx",
 ];
-const centerAlignBig = "스크립트/05_정렬/가운데 정렬 (큰 것 기준).jsx";
-const centerAlignSmall = "스크립트/05_정렬/가운데 정렬 (작은 것 기준).jsx";
-const visibleAlign = "스크립트/05_정렬/보이는 영역 정렬.jsx";
+const centerAlignBig = "스크립트/10_정렬/가운데 정렬 (큰 것 기준).jsx";
+const centerAlignSmall = "스크립트/10_정렬/가운데 정렬 (작은 것 기준).jsx";
+const visibleAlign = "스크립트/10_정렬/보이는 영역 정렬.jsx";
 
-const artboardGenerator = "스크립트/04_삽입/대지 생성기.jsx";
-const textInput = "스크립트/02_문자/텍스트 삽입.jsx";
-const subscriptedVariable = "스크립트/02_문자/첨자 문자.jsx";
-const graySelection = "스크립트/03_색상/음영(K) 적용.jsx";
-const fitToMargin = "스크립트/10_기타/2mm 맞춤.jsx";
-const findSimilar = "스크립트/10_기타/찾아 바꾸기.jsx";
-const embedLinkedImages = "스크립트/10_기타/링크 이미지 포함(embed).jsx";
-const extUngroup = "스크립트/10_기타/그룹 해제.jsx";
-const dashAlignHelper = "스크립트/01_도형/Object_setdash_align_helper.jsxinc";
-const dashShift = "스크립트/01_도형/파선 패턴 이동.jsx";
-const cylinder = "스크립트/01_도형/원 입체.jsx";
-const cone = "스크립트/01_도형/원 입체.jsx";
-const sphere = "스크립트/01_도형/원 입체.jsx";
-const coilSpring = "스크립트/01_도형/역학.jsx";
-const sineWave = "스크립트/01_도형/역학.jsx";
-const weatherFront = "스크립트/01_도형/오브젝트 전선.jsx";
-const phospholipid = "스크립트/01_도형/인지질 2중층.jsx";
-const cellCycle = "스크립트/01_도형/세포분열.jsx";
-const anchorAngle = "스크립트/01_도형/수평.jsx";
-const lewisDots = "스크립트/02_문자/루이스 전자점식.jsx";
-const cubicLattice = "스크립트/01_도형/결정 구조.jsx";
-const graphiteCrystal = "스크립트/01_도형/결정 구조.jsx";
-const diamondCrystal = "스크립트/01_도형/결정 구조.jsx";
-const cabinetFiles = ["스크립트/01_도형/캐비넷 깊이 (밖).jsx", "스크립트/01_도형/캐비넷 깊이 (안·밖).jsx"];
+const artboardGenerator = "스크립트/09_삽입/대지 생성기.jsx";
+const textInput = "스크립트/07_문자/텍스트 삽입.jsx";
+const subscriptedVariable = "스크립트/07_문자/첨자 문자.jsx";
+const graySelection = "스크립트/08_색상/음영(K) 적용.jsx";
+const fitToMargin = "스크립트/12_기타/2mm 맞춤.jsx";
+const findSimilar = "스크립트/12_기타/찾아 바꾸기.jsx";
+const embedLinkedImages = "스크립트/12_기타/링크 이미지 포함(embed).jsx";
+const extUngroup = "스크립트/12_기타/그룹 해제.jsx";
+const dashAlignHelper = "스크립트/06_도형/Object_setdash_align_helper.jsxinc";
+const dashShift = "스크립트/06_도형/파선 패턴 이동.jsx";
+const cylinder = "스크립트/06_도형/원 입체.jsx";
+const cone = "스크립트/06_도형/원 입체.jsx";
+const sphere = "스크립트/06_도형/원 입체.jsx";
+const coilSpring = "스크립트/01_물리학/역학.jsx";
+const sineWave = "스크립트/01_물리학/역학.jsx";
+const weatherFront = "스크립트/04_지구과학/오브젝트 전선.jsx";
+const phospholipid = "스크립트/03_생명과학/인지질 2중층.jsx";
+const cellCycle = "스크립트/03_생명과학/세포분열.jsx";
+const anchorAngle = "스크립트/06_도형/수평.jsx";
+const lewisDots = "스크립트/07_문자/루이스 전자점식.jsx";
+const cubicLattice = "스크립트/02_화학/결정 구조.jsx";
+const graphiteCrystal = "스크립트/02_화학/결정 구조.jsx";
+const diamondCrystal = "스크립트/02_화학/결정 구조.jsx";
+const cabinetFiles = ["스크립트/06_도형/캐비넷 깊이 (밖).jsx", "스크립트/06_도형/캐비넷 깊이 (안·밖).jsx"];
 const updaterFiles = ["setup-mac.command", "setup-windows.ps1", "UPDATE.md"];
 
 function read(file) {
@@ -473,8 +473,8 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
       }
     }
   }
-  if (exists("스크립트/01_도형/Object_ExtUngroup.jsx")) {
-    console.error("스크립트/01_도형/Object_ExtUngroup.jsx: old Object_ prefixed script must be removed from 도형");
+  if (exists("스크립트/06_도형/Object_ExtUngroup.jsx")) {
+    console.error("스크립트/06_도형/Object_ExtUngroup.jsx: old Object_ prefixed script must be removed from 도형");
     failures++;
   }
 }
@@ -2588,7 +2588,7 @@ for (const file of cabinetFiles) {
 // DNA·RNA 염기 서열: 상보·전사·입력 정리와 설정 문자열 검증
 {
   // 염기 서열 탭은 DNA 모형.jsx 안의 makeSequenceEngine에 원래 코드 그대로 들어 있다
-  const file = "스크립트/01_도형/DNA 모형.jsx";
+  const file = "스크립트/03_생명과학/DNA 모형.jsx";
   const source = read(file);
   const required = [
     'label: "염기 서열"',
@@ -2620,7 +2620,7 @@ for (const file of cabinetFiles) {
 }
 
 {
-  const file = "스크립트/01_도형/주기율표.jsx";
+  const file = "스크립트/02_화학/주기율표.jsx";
   const source = read(file);
   const required = [
     'new Window("dialog", "주기율표")',

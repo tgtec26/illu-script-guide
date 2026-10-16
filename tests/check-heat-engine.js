@@ -3,7 +3,7 @@ const path = require("path");
 const assert = require("assert");
 
 // 열기관 순환.jsx에서 순환 계산·표본·그리기 함수만 잘라 가짜 도구로 돌려 좌표를 검사한다
-const source = fs.readFileSync(path.join(__dirname, "..", "스크립트", "01_도형", "열기관 순환.jsx"), "utf8");
+const source = fs.readFileSync(path.join(__dirname, "..", "스크립트", "01_물리학", "열기관 순환.jsx"), "utf8");
 function extractFunction(name) {
   const start = source.indexOf(`function ${name}(`);
   assert.ok(start >= 0, `missing: ${name}`);
