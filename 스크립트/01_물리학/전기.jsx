@@ -828,19 +828,18 @@ try {
                 }
 
 
-                // 루프 좌우 폭은 피치(코일 간격)에 비례시켜 연결된 느낌을 만든다.
-                // a가 피치에 걸려 있으므로 한 번 추정 후 다시 계산해 수렴시킨다.
-                var a = clampValue((usable / turnCount) * 0.35, b * 0.10, b * 0.95);
-                var pitch = (usable - 2 * a) / turnCount;
-                a = clampValue(pitch * 0.35, b * 0.10, b * 0.95);
-                pitch = (usable - 2 * a) / turnCount;
+                // 원형 코일의 깊이 방향을 막대 끝면과 같은 시점으로 투영한다.
+                // 음수 시점에서는 앞쪽 반턴의 휘는 방향도 반대가 된다.
+                var a = b * Math.sin(viewAngleDeg * Math.PI / 180);
+                var extent = Math.abs(a);
+                var pitch = (usable - 2 * extent) / turnCount;
 
                 if (pitch <= 0) {
                     drawRod(group, black, capRx);
                     return group;
                 }
 
-                var startX = leftX + margin + a;
+                var startX = leftX + margin + extent;
 
                 // 나선: x = startX + pitch·θ/2π + a·sinθ, y = centerY + b·cosθ
                 function helixPoint(t) {
