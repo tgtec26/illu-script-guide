@@ -109,9 +109,10 @@ try {
         var guideEnd = w + 4 * m;
         t.line([w * 0.18, er], [guideEnd, er], o.wRope, [1.5, 1.5]);
         t.line([w * 0.82, ep], [guideEnd, ep], o.wRope, [1.5, 1.5]);
+        // 반응물·생성물 글자는 평탄 구간 바로 위 (글자 윤곽 아래가 곡선에서 1.2mm 위)
         if (o.showNames) {
-            if (o.reactName !== "") t.textAt(o.reactName, w * 0.09, er + 1.2 * m, size, "below");
-            if (o.prodName !== "") t.textAt(o.prodName, w * 0.91, ep + 1.2 * m, size, "below");
+            if (o.reactName !== "") t.textAt(o.reactName, w * 0.09, er + 1.2 * m, size, "above");
+            if (o.prodName !== "") t.textAt(o.prodName, w * 0.91, ep + 1.2 * m, size, "above");
         }
         if (o.showEa) {
             t.arrow([xp, er], [xp, peak], o.wRope);
@@ -540,11 +541,12 @@ try {
             frame.translate(x - anchorX, y - (b[1] + b[3]) / 2);
             return frame;
         };
-        // 글자 윤곽 기준: anchor "below"면 (x, y)가 글자 윤곽의 위 가운데, "right"면 윤곽의 왼쪽 끝 세로 가운데, "left"면 윤곽의 오른쪽 끝 세로 가운데
+        // 글자 윤곽 기준: anchor "below"면 (x, y)가 글자 윤곽의 위 가운데, "above"면 윤곽의 아래 가운데, "right"면 윤곽의 왼쪽 끝 세로 가운데, "left"면 윤곽의 오른쪽 끝 세로 가운데
         t.textAt = function(text, x, y, size, anchor, opts) {
             var frame = t.text(text, x, y, size, "center", opts);
             var ink = formInkBounds(frame), cx = (ink[0] + ink[2]) / 2, cy = (ink[1] + ink[3]) / 2;
             if (anchor === "below") frame.translate(x - cx, y - ink[1]);
+            else if (anchor === "above") frame.translate(x - cx, y - ink[3]);
             else if (anchor === "left") frame.translate(x - ink[2], y - cy);
             else frame.translate(x - ink[0], y - cy);
             return frame;

@@ -50,6 +50,12 @@ near(curve[0].a[0][4].a[1], 8 * MM, "생성물 높이(발열)");
 near(curve[0].a[0][2].a[1], (16 + 14) * MM, "봉우리 = 반응물 + Ea");
 assert.strictEqual(calls.filter((c) => c.k === "arrow").length, 4);
 assert.strictEqual(calls.filter((c) => c.k === "line").length, 2);
+// 반응물·생성물 글자는 평탄 구간 위: 글자 윤곽의 아래 가운데("above")를 곡선 높이보다 위에 둔다 (예전엔 "below"라 글자가 곡선에 걸쳤다)
+for (const [name, y] of [["A(g)", 16 * MM], ["B(g)", 8 * MM]]) {
+  const label = calls.find((c) => c.k === "textAt" && c.a[0] === name).a;
+  assert.strictEqual(label[4], "above", `${name} 기준`);
+  assert.ok(label[2] > y, `${name}는 곡선 위`);
+}
 // ΔH 화살표는 발열이면 아래로, 흡열이면 위로
 let dh = calls.filter((c) => c.k === "arrow")[3].a;
 assert.ok(dh[1][1] < dh[0][1], "발열: 아래로");
