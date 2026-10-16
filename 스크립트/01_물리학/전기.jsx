@@ -728,6 +728,8 @@ try {
 
             if (rodLength <= 0 || rodRadius <= 0) return "가로와 세로 크기가 있는 사각형을 선택해주세요.";
 
+            var solidRod = false;
+            var rodK = 20;
             var coilWeight = 2;
             var turnCount = 8;
             var coilGapMm = 1;      // 도선 표면과 코일 사이 거리
@@ -745,7 +747,7 @@ try {
 
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var defaults = {coilWeight: coilWeight, turnCount: turnCount, coilGapMm: coilGapMm,
-                viewAngleDeg: viewAngleDeg, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+                rodK: rodK, viewAngleDeg: viewAngleDeg, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
 
             applySavedSettings();
 
@@ -763,6 +765,15 @@ try {
 
             var rodPanel = addPanel(dlg, "금속 막대");
             var viewField = addNumberField(rodPanel, "시점 각도", "°", viewAngleDeg, 1, -60, 60, defaults.viewAngleDeg);
+
+            var solidCheck = rodPanel.add("checkbox", undefined, "막대 단색");
+            solidCheck.value = solidRod;
+            var rodKField = addNumberField(rodPanel, "막대 K", "%", rodK, 1, 0, 100, defaults.rodK);
+            rodKField.row.enabled = solidRod;
+            solidCheck.onClick = function() {
+                rodKField.row.enabled = solidCheck.value;
+                updatePreview();
+            };
 
             var positionPanel = addPanel(dlg, "위치");
             var offsetXField = addNumberField(positionPanel, "가로", "mm", offsetXmm, 0.1,
@@ -928,7 +939,7 @@ try {
                     var cap = container.pathItems.ellipse(
                         centerY + rodRadius, faceLeft, capRx * 2, rodRadius * 2);
                     cap.filled = true;
-                    cap.fillColor = makeGray(22);
+                    cap.fillColor = makeGray(solidRod ? rodK : 22);
                     cap.stroked = true;
                     cap.strokeColor = black;
                     cap.strokeWidth = 0.8;
@@ -957,6 +968,7 @@ try {
 
             // 몸통에 세로 그라데이션. 그라데이션 적용이 거부되면 단색으로 남긴다.
             function applyRodFill(item) {
+                if (solidRod) { item.fillColor = makeGray(rodK); return; }
                 item.fillColor = makeGray(18);
 
                 var gradient = getRodGradient();
@@ -1052,6 +1064,7 @@ try {
                 var turns = parseNumber(turnField.input.text);
                 var gap = parseNumber(gapField.input.text);
                 var view = parseNumber(viewField.input.text);
+                var k = parseNumber(rodKField.input.text);
                 var offX = parseNumber(offsetXField.input.text);
                 var offY = parseNumber(offsetYField.input.text);
 
@@ -1079,6 +1092,12 @@ try {
                     return false;
                 }
 
+                if (k === null || k < 0 || k > 100) {
+                    if (showAlert) alert("막대 K는 0부터 100 사이로 입력해주세요.");
+                    return false;
+                }
+                solidRod = solidCheck.value;
+                rodK = k;
                 coilWeight = weight;
                 offsetXmm = offX;
                 offsetYmm = offY;
@@ -1189,8 +1208,8 @@ try {
             }
 
             function saveSettings() {
-                var parts = ["v3", coilWeight, turnCount, coilGapMm, viewAngleDeg,
-                    offsetXmm, offsetYmm];
+                var parts = ["v4", coilWeight, turnCount, coilGapMm, viewAngleDeg,
+                    offsetXmm, offsetYmm, solidRod ? 1 : 0, rodK];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -1199,8 +1218,14 @@ try {
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if ((p[0] !== "v2" && p[0] !== "v3") || p.length < 5) return;
+                if (!((p[0] === "v2" && p.length === 5) ||
+                    (p[0] === "v3" && p.length === 7) || (p[0] === "v4" && p.length === 9))) return;
 
+                if (p[0] === "v4") {
+                    if (p[7] === "0" || p[7] === "1") solidRod = p[7] === "1";
+                    var savedK = Number(p[8]);
+                    if (p[8] !== "" && isFinite(savedK) && savedK >= 0 && savedK <= 100) rodK = savedK;
+                }
                 var weight = parseFloat(p[1]);
                 var turns = parseInt(p[2], 10);
                 var gap = parseFloat(p[3]);
@@ -1209,7 +1234,7 @@ try {
                 if (turns >= 1) turnCount = clampValue(turns, 1, 20);
                 if (gap >= 0) coilGapMm = clampValue(gap, 0, 3);
                 if (view >= -60 && view <= 60) viewAngleDeg = view;
-                if (p[0] === "v3" && p.length >= 7) {
+                if (p[0] === "v3" || p[0] === "v4") {
                     var offX = parseFloat(p[5]);
                     var offY = parseFloat(p[6]);
                     if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
