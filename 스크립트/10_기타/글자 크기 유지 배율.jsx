@@ -13,7 +13,8 @@ try {
 // 선택한 그림 전체를 배율(%)만큼 키우거나 줄이되 글자(TextFrame)의 크기는 그대로 둔다.
 //   - 배율의 기준점은 선택한 개체 전체의 가운데. 글자는 제 위치(가운데)만 배율에 맞춰 옮겨진다.
 //   - 그룹 안에 든 글자도 찾아서 크기를 되돌린다. 글자의 서체·글자 크기·획은 바뀌지 않는다.
-//   - 선 두께도 배율을 따를지 고를 수 있다. 끄면 선은 원래 두께 그대로.
+//   - 일러 환경설정처럼 "선과 효과 크기 조절"·"모퉁이 크기 조절"을 각각 켜고 끌 수 있다.
+//     모퉁이 쪽은 환경설정 값(policyForPreservingCorners)을 잠깐 바꿔 크기를 바꾼 뒤 되돌린다.
 //   - 미리보기는 복제본으로 그리고 원본은 숨긴다. 확인하면 원본이 지워지고 복제본이 남는다.
 
 (function() {
@@ -24,6 +25,8 @@ try {
 
     var PREF_KEY = "ObjectScaleKeepText/settings";
     var MM = 2.834645669;
+    // 환경설정 "모퉁이 크기 조절": 이 값이 true면 모퉁이를 유지(= 크기 조절 끔)
+    var CORNER_PREF = "policyForPreservingCorners";
     var SCALE_RANGE = [10, 500];
     var POSITION_LIMIT_MM = 200;
     var LABEL_WIDTH = 60;
@@ -58,6 +61,7 @@ try {
     // 옵션
     var scalePct = 50;
     var scaleLines = true;
+    var scaleCorners = true;
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
@@ -80,8 +84,10 @@ try {
     var sizePanel = addPanel(dlg, "크기");
     var scaleRow = addValueRow(sizePanel, "배율", scalePct, SCALE_RANGE[0], SCALE_RANGE[1], 1, 0);
     scaleRow.input.helpTip = "% — 100이면 원래 크기. 글자 크기는 그대로 두고 그림만 키우거나 줄인다";
-    var lineCheck = sizePanel.add("checkbox", undefined, "선 두께도 배율 적용");
+    var lineCheck = sizePanel.add("checkbox", undefined, "선과 효과 크기 조절");
     lineCheck.value = scaleLines;
+    var cornerCheck = sizePanel.add("checkbox", undefined, "모퉁이 크기 조절");
+    cornerCheck.value = scaleCorners;
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXRow = addValueRow(positionPanel, "가로", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
@@ -101,6 +107,7 @@ try {
 
     bindValueRow(scaleRow, function() { return scalePct; }, function(v) { scalePct = v; }, DEFAULTS.scalePct);
     lineCheck.onClick = function() { scaleLines = lineCheck.value; updatePreview(); };
+    cornerCheck.onClick = function() { scaleCorners = cornerCheck.value; updatePreview(); };
     // 위치는 다시 만들지 않고 복제본만 옮긴다
     bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, DEFAULTS.offsetXmm);
     bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, DEFAULTS.offsetYmm);
@@ -173,8 +180,19 @@ try {
         for (i = 0; i < originals.length; i++) {
             try { originals[i].hidden = true; } catch (hideError) {}
         }
-        for (i = 0; i < previews.length; i++) {
-            scaleKeepingText(previews[i], s);
+        var oldPolicy = null;
+        try {
+            oldPolicy = app.preferences.getBooleanPreference(CORNER_PREF);
+            app.preferences.setBooleanPreference(CORNER_PREF, !scaleCorners);
+        } catch (policyError) {}
+        try {
+            for (i = 0; i < previews.length; i++) {
+                scaleKeepingText(previews[i], s);
+            }
+        } finally {
+            if (oldPolicy !== null) {
+                try { app.preferences.setBooleanPreference(CORNER_PREF, oldPolicy); } catch (restoreError) {}
+            }
         }
         movePreview(offsetXmm * MM, offsetYmm * MM);
     }
@@ -333,9 +351,10 @@ try {
     // -------------------------------------------------------
     function saveSettings() {
         var parts = [
-            "v1",
+            "v2",
             scalePct,
             scaleLines ? "1" : "0",
+            scaleCorners ? "1" : "0",
             offsetXmm,
             offsetYmm,
             previewEnabled ? "1" : "0"
@@ -348,12 +367,13 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 6) return;
+        if (p[0] !== "v2" || p.length !== 7) return;
         scalePct = restoreNumber(p[1], scalePct, SCALE_RANGE, 1);
         scaleLines = (p[2] === "1");
-        offsetXmm = restoreNumber(p[3], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.5);
-        offsetYmm = restoreNumber(p[4], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.5);
-        previewEnabled = (p[5] === "1");
+        scaleCorners = (p[3] === "1");
+        offsetXmm = restoreNumber(p[4], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.5);
+        offsetYmm = restoreNumber(p[5], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.5);
+        previewEnabled = (p[6] === "1");
     }
 
     function restoreNumber(text, fallback, range, step) {
