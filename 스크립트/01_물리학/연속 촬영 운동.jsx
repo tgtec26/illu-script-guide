@@ -105,10 +105,10 @@ try {
 
     var DIRECTIONS = ["가로", "세로 (아래로 운동)"];
     var MOTIONS = ["등속 운동", "가속·감속 운동"];
-    var BALLS = ["구 (그라데이션)", "테두리 + 단색", "시간기록 테이프"];
+    var BALLS = ["구 (그라데이션)", "단색", "테이프"];
 
     var LABEL_WIDTH = 120;
-    var SLIDER_WIDTH = 196;
+    var SLIDER_WIDTH = 118;
     var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 100;
 
@@ -184,7 +184,8 @@ try {
     addRadioRow(ballPanel, "모양:", "ball", BALLS);
     addRow(ballPanel, "size", "지름", "mm");
     addRow(ballPanel, "ballK", "색", "K");
-    addCheck(ballPanel, "지난 위치는 흐리게 (구: 반투명, 단색: 흰 속 + 파선)", "ghostOn");
+    addCheck(ballPanel, "지난 위치는 흐리게", "ghostOn");
+    checks.ghostOn.helpTip = "구는 반투명, 단색은 흰 속 + 파선으로 그린다";
 
     var showPanel = addPanel(dlg, "배경·표시");
     var bgRow = showPanel.add("group");
@@ -196,7 +197,7 @@ try {
     var markRow = showPanel.add("group");
     markRow.alignChildren = ["left", "center"];
     addCheck(markRow, "출발 지점 표시", "startOn");
-    addCheck(markRow, "지표면 표시 (세로)", "surfaceOn");
+    addCheck(markRow, "지표면 (세로)", "surfaceOn");
     addCheck(markRow, "지표면에 닿기", "touchOn");
     checks.touchOn.helpTip = "마지막 사진이 지표면에 닿는다. 켜면 원의 아래 기준도 같이 켜지고(다시 끌 수 있다), 아래 기준이면 마지막 보조선은 지표면이 대신한다";
     var guideRow = showPanel.add("group");
@@ -205,6 +206,9 @@ try {
     addCheck(guideRow, "시간 표시", "timeOn");
     addCheck(guideRow, "운동 방향", "arrowOn");
     var headShapeList = guideRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
+    // 번호(1~4)만 보이는 작은 드롭다운: 줄이 창 폭을 넓히지 않게 한다
+    headShapeList.preferredSize.width = 48;
+    headShapeList.maximumSize.width = 48;
     headShapeList.selection = [2, 3, 1, 0][options.headShape];
     headShapeList.helpTip = "화살촉 모양(거리 표시·운동 방향). 작살형이 평가원식. 모두 일러스트레이터 화살촉을 측정한 모양";
     headShapeList.onChange = function() {
@@ -222,7 +226,8 @@ try {
     distInput.characters = 12;
     distInput.helpTip = "숫자로 시작하면(예: 10 cm) 가속에서 구간마다 1, 3, 5배…로, 글자면(예: d) d, 3d, 5d…로 쓴다";
     distInput.onChange = function() { commitDistText(); };
-    addCheck(distRow, "원의 아래 기준 (세로)", "bottomOn");
+    // 줄 폭을 줄이려고 거리 표시 줄 아래에 따로 둔다
+    addCheck(showPanel, "원의 아래 기준 (세로)", "bottomOn");
     checks.bottomOn.helpTip = "보조선·거리 표시·눈금자의 기준을 원의 중심이 아니라 원의 아래(운동 방향 끝)로 한다";
 
     var positionPanel = addPanel(dlg, "위치");
