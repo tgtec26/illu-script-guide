@@ -73,8 +73,8 @@ try {
     var SLIDER_WIDTH = 196;
     var RESET_BUTTON_WIDTH = 34;
     var POSITION_LIMIT_MM = 100;
-    var WIDTH_RANGE = [15, 200];
-    // 세로로 쌓은 이동거리(4줄)가 y축 안에 들어오는 높이부터
+    // 높이의 최솟값은 세로로 쌓은 이동거리(4줄)가 y축 안에 들어오는 높이. 너비도 같게 해서 같은 값이면 슬라이더 위치도 같다
+    var WIDTH_RANGE = [20, 200];
     var HEIGHT_RANGE = [20, 200];
     var Y_VALUE_RANGE = [1, 200];
 

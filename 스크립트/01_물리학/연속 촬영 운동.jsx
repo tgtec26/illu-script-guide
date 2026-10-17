@@ -406,11 +406,12 @@ try {
         var labelSign = vertical ? 1 : -1;
         var showDist = o.distOn && trimText(o.distText) !== "";
         var startInner = false;   // 띠 위의 출발선 조각은 띠를 그린 뒤에 얹는다
+        // 출발선이 띠 밖으로 나오는 길이: 거리 표시가 있으면 표시선 연장선 끝까지만 (글자를 가로지르지 않게)
+        var startExtMm = showDist ? DIM_GAP_MM + DIM_OVERSHOOT_MM : EXT_MM;
         if (o.startOn) {
-            // 거리 표시가 있으면 그쪽은 표시선 연장선 끝까지만 (글자를 가로지르지 않게)
-            // 시간 글자가 있는 쪽은 띠 가장자리에서 끝낸다 (글자를 가로지르지 않게)
-            var otherReach = half + (o.timeOn ? 0 : EXT_MM * MM);
-            var labelReach = showDist ? half + (DIM_GAP_MM + DIM_OVERSHOOT_MM) * MM : otherReach;
+            // 시간 글자가 있는 쪽은 띠 가장자리에서 끝낸다 (글자를 가로지르지 않게). 시간 글자가 없으면 양쪽 길이를 같게 맞춘다
+            var labelReach = half + (showDist || !o.timeOn ? startExtMm : 0) * MM;
+            var otherReach = half + (o.timeOn ? 0 : startExtMm) * MM;
             if (whiteGuide) {
                 if (labelReach > half) guide(shift, labelSign * labelReach, labelSign * half, LINE_PT, black, "StartLine");
                 if (otherReach > half) guide(shift, -labelSign * half, -labelSign * otherReach, LINE_PT, black, "StartLine");
@@ -533,7 +534,7 @@ try {
         }
         if (o.arrowOn) {
             // 출발 지점 파선이 이쪽으로 나와 있으면 그 바깥에 놓는다
-            var clear = Math.max(stack, o.startOn && !o.timeOn ? half + EXT_MM * MM : 0);
+            var clear = Math.max(stack, o.startOn && !o.timeOn ? half + startExtMm * MM : 0);
             var arrowC = sideB * (clear + MOTION_GAP_MM * MM);
             var arrowLength = Math.max(pos[count - 1] * MM * MOTION_RATIO, MOTION_MIN_MM * MM);
             var tail = at(0, arrowC);
