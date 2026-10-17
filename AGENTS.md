@@ -188,6 +188,8 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 
 2026-10-14 확정: 이 프로젝트는 **Illustrator 2026의 CEP MCP 직접 연결을 우선 사용**한다. CLI-Anything은 같은 CEP 서버를 이용하는 명령줄·반복 작업용 보조 도구이며, 프리징을 해결하는 별도 실행 엔진이 아니다. 이 Mac Studio의 2027 Beta는 재설치·환경설정 초기화·프로필 복사·새 macOS 계정에서도 새 문서 생성이 실패하므로 기본 검증 대상에서 제외한다.
 
+2026-10-18 갱신(사용자 확인): 위 Mac Studio 2027 Beta의 새 문서 생성 실패는 **해결됐다.** 2027 Beta도 검증 대상으로 쓸 수 있고, 위 "제외한다"는 해결 전의 기록이다. 2027 Beta용 공식 `illustrator` MCP(`http://localhost:18412/v1/mcp`)는 사용자 설정(user scope)에 등록돼 있다. MacBook Air에는 2027 Beta만 있고 `illustrator-cep` 구성은 없으며, 공식 MCP로 일러에 연결되는 것을 확인했다(열린 모달 대화상자가 있으면 문서 조회가 막힌다). 공식 MCP에는 임의 JSX를 실행하는 도구가 없어 문서 조회·미리보기·내보내기에만 쓴다.
+
 - **osascript로 검증하지 않는다.** `tools/illu-probe.sh`, `illustrator-run` 등 내부에서 AppleScript/`do javascript`를 사용하는 MCP도 실행·조회·PNG 검증에 사용하지 않는다. CEP 연결 실패 시 이 경로로 자동 대체하지 않고 연결 상태를 확인한 뒤 제한을 보고한다.
 - MCP 등록 이름은 `illustrator-cep`, 소스는 https://github.com/jinkeda/Illustrator_MCP 이다. 설치 위치는 `~/agent/illustrator-mcp-cep`, 패널은 `~/Library/Application Support/Adobe/CEP/extensions/com.illustrator.mcp.panel`이다. 2026 번들 ID는 `com.adobe.illustrator`.
 - 등록된 `illustrator-cep` MCP를 직접 호출하고 Illustrator의 `창 → 확장 프로그램 → MCP Control` 패널을 열어 둔다. 패널은 **자동 연결**되며 Connect 버튼을 요구하지 않는다. 이 Mac의 현재 경로는 MCP HTTP `http://127.0.0.1:8083/mcp` → `ws://127.0.0.1:8081` → CEP `evalScript`다. 공유 서버는 `~/agent/illustrator-cli/CEP 서버.command`로 시작한다. Codex와 CLI는 이 서버를 공유하며 8081을 사용하는 별도 stdio 서버·임시 클라이언트를 동시에 띄우지 않는다. 다른 기기는 등록된 연결 구성을 먼저 확인한다.
