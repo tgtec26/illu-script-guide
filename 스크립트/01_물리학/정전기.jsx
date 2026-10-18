@@ -13,7 +13,7 @@ try {
 
 // 정전기: 화면 가운데에 검전기나 정전기 유도 모식도를 그린다.
 //   - 검전기: 살짝 위에서 본 모습 (교재 그림 비율). 둥근 어깨의 유리병과 안쪽 바닥, 테 달린 원통 마개와 기둥,
-//     얇은 원판 금속판, 굵은 금속 막대, 막대 끝에서 휘어 벌어지는 금속박 두 장. 음영은 면마다 단색 K 한 가지.
+//     얇은 원판 금속판, 굵은 금속 막대, 막대 끝에서 휘어 벌어지는 금속박 두 장. 음영은 면마다 단색 K 한 가지이고 유리병·금속판 색(K)은 고를 수 있다.
 //     상태 '대전 안 됨'은 금속박이 닫히고 +−가 짝지어 있다. '대전체를 가까이'는 정전기 유도라 금속판에 대전체와 반대 전하,
 //     금속박에 같은 전하가 모여 금속박이 벌어진다. '접촉 후'는 대전체를 뗀 뒤라 검전기 전체가 대전체와 같은 전하로 대전되어 벌어진다.
 //   - 금속 막대 유도: 왼쪽 대전체에 가까운 A쪽에 반대 전하, 먼 B쪽에 같은 전하가 모인다.
@@ -53,6 +53,7 @@ try {
     var ANGLE_RANGE = [5, 90];
     var CHARGE_RANGE = [1, 6];
     var FONT_RANGE = [5, 20];
+    var K_RANGE = [0, 100];
 
     var doc = app.activeDocument;
     var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
@@ -71,11 +72,13 @@ try {
     var ringOn = false;
     var labelsOn = true;
     var fontPt = 8;
+    var glassK = GLASS_K;     // 유리병 색(K)
+    var plateK = PLATE_K;     // 금속판 색(K)
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-    var DEFAULTS = {sizeMm: sizeMm, foilAngle: foilAngle, chargeMm: chargeMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    var DEFAULTS = {sizeMm: sizeMm, foilAngle: foilAngle, chargeMm: chargeMm, fontPt: fontPt, glassK: glassK, plateK: plateK, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var layer = findEditableLayer();
@@ -97,6 +100,8 @@ try {
     var sizeRow = addValueRow(shapePanel, "크기", "mm", sizeMm, SIZE_RANGE[0], SIZE_RANGE[1], 1, 0, DEFAULTS.sizeMm);
     sizeRow.input.helpTip = "검전기 높이 / 금속 막대 길이";
     var angleRow = addValueRow(shapePanel, "금속박 벌어짐", "°", foilAngle, ANGLE_RANGE[0], ANGLE_RANGE[1], 1, 0, DEFAULTS.foilAngle);
+    var glassRow = addValueRow(shapePanel, "유리병 색", "K", glassK, K_RANGE[0], K_RANGE[1], 5, 0, DEFAULTS.glassK);
+    var plateRow = addValueRow(shapePanel, "금속판 색", "K", plateK, K_RANGE[0], K_RANGE[1], 5, 0, DEFAULTS.plateK);
 
     var markPanel = addPanel(dlg, "표시");
     var chargeRow = addValueRow(markPanel, "전하 기호", "mm", chargeMm, CHARGE_RANGE[0], CHARGE_RANGE[1], 0.1, 1, DEFAULTS.chargeMm);
@@ -126,6 +131,8 @@ try {
     labelsCheck.onClick = function() { labelsOn = labelsCheck.value; updatePreview(); };
     bindValueRow(sizeRow, function() { return sizeMm; }, function(v) { sizeMm = v; });
     bindValueRow(angleRow, function() { return foilAngle; }, function(v) { foilAngle = v; });
+    bindValueRow(glassRow, function() { return glassK; }, function(v) { glassK = v; });
+    bindValueRow(plateRow, function() { return plateK; }, function(v) { plateK = v; });
     bindValueRow(chargeRow, function() { return chargeMm; }, function(v) { chargeMm = v; });
     bindValueRow(fontRow, function() { return fontPt; }, function(v) { fontPt = v; });
     bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true);
@@ -152,10 +159,12 @@ try {
     }
     app.redraw();
 
-    // 상태·금속박은 검전기에만 있다
+    // 상태·금속박·유리병·금속판은 검전기에만 있다
     function syncEnabled() {
         for (var i = 0; i < stateRadios.length; i++) stateRadios[i].enabled = kind === 0;
         setRowEnabled(angleRow, kind === 0);
+        setRowEnabled(glassRow, kind === 0);
+        setRowEnabled(plateRow, kind === 0);
     }
 
     // -------------------------------------------------------
@@ -186,7 +195,7 @@ try {
         var p = electroscopeParts(H);
         var charges = electroscopeCharges(state, rodSign);
         var jar = addBezier(jarOutline(p), true, "유리병");
-        styleFace(jar, GLASS_K);
+        styleFace(jar, glassK);
         var dish = previewGroup.pathItems.ellipse(p.dish[1] + p.dish[3], -p.dish[2], p.dish[2] * 2, p.dish[3] * 2);
         styleLine(dish, LINE_WIDTH_PT, null, 40);
         dish.name = "병 바닥";
@@ -203,7 +212,7 @@ try {
         addCylinder(p.rimRx, p.cap[0], p.rimTop, STOPPER_K + 10, "마개 테");
         addCylinder(p.capRx, p.rimTop, p.cap[1], STOPPER_K, "마개");
         addCylinder(p.stemRx, p.cap[1], p.plate[0], STOPPER_K, "마개 기둥");
-        addCylinder(p.plateRx, p.plate[0], p.plate[1], PLATE_K, "금속판");
+        addCylinder(p.plateRx, p.plate[0], p.plate[1], plateK, "금속판");
         var s = chargeMm * MM;
         placeCharges([0, p.plate[1] + p.plateRx * TILT + s * 0.8], p.plateRx * 1.6, 0, charges.plate, 3, s);
         if (charges.foil.open) {
@@ -426,8 +435,8 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v1", kind, sign, state, sizeMm, foilAngle, chargeMm, ringOn ? "1" : "0", labelsOn ? "1" : "0",
-            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+        var parts = ["v2", kind, sign, state, sizeMm, foilAngle, chargeMm, ringOn ? "1" : "0", labelsOn ? "1" : "0",
+            fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", glassK, plateK];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -436,7 +445,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v1" || p.length !== 13) return;
+        if (p[0] !== "v2" || p.length !== 15) return;
         kind = restoreNumber(p[1], kind, [0, KINDS.length - 1], 1);
         sign = restoreNumber(p[2], sign, [0, SIGNS.length - 1], 1);
         state = restoreNumber(p[3], state, [0, STATES.length - 1], 1);
@@ -449,6 +458,8 @@ try {
         offsetXmm = restoreNumber(p[10], offsetXmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         offsetYmm = restoreNumber(p[11], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         previewEnabled = p[12] === "1";
+        glassK = restoreNumber(p[13], glassK, K_RANGE, 5);
+        plateK = restoreNumber(p[14], plateK, K_RANGE, 5);
     }
 
     // -------------------------------------------------------

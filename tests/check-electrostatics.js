@@ -53,5 +53,10 @@ near(Math.hypot(rod.outline[1][0] - rod.outline[0][0], rod.outline[1][1] - rod.o
 near(Math.hypot(rod.capsule[2].anchor[0] - rod.capsule[5].anchor[0], rod.capsule[2].anchor[1] - rod.capsule[5].anchor[1]), 50, 1e-9, "capsule length");
 near(Math.hypot(rod.capsule[1].anchor[0] - rod.capsule[3].anchor[0], rod.capsule[1].anchor[1] - rod.capsule[3].anchor[1]), 8, 1e-9, "capsule thickness");
 assert.ok(source.includes('var PREF_KEY = "ObjectElectrostatics/settings";'));
-assert.ok(source.includes('p[0] !== "v1" || p.length !== 13'), "settings field count");
+assert.ok(source.includes('p[0] !== "v2" || p.length !== 15'), "settings field count");
+// 유리병·금속판 색: 옵션 변수로 그리고, 기본은 예전 값(5, 75), 입체 유도에서는 꺼진다
+assert.ok(source.includes("styleFace(jar, glassK)") && source.includes('plateK, "금속판")'), "colors come from the options");
+assert.ok(source.includes("var glassK = GLASS_K;") && source.includes("var plateK = PLATE_K;") && source.includes("var GLASS_K = 5;") && source.includes("var PLATE_K = 75;"), "defaults keep the old look");
+assert.ok(source.includes("setRowEnabled(glassRow, kind === 0)") && source.includes("setRowEnabled(plateRow, kind === 0)"), "electroscope only");
+assert.ok(source.includes('parts.join("|")') && /"v2", kind[^\]]*glassK, plateK\]/.test(source.replace(/\s+/g, " ")), "colors are saved");
 console.log("electrostatics checks passed");
