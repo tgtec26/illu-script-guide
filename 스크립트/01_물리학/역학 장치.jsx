@@ -169,17 +169,19 @@ try {
     // ==== 빗면 도르래 탭 ====
     function makeInclinePulleyEngine() {
         return makeFormEngine({
-            label: "빗면 도르래", name: "InclinePulley", prefKey: "MechanicsDevice/inclinePulley",
+            label: "빗면 도르래", name: "InclinePulley", prefKey: "MechanicsDevice/inclinePulley", version: "v2",
             controls: [
                 {panel: "물체와 추"},
                 {key: "blockText", label: "물체 글자", text: true, value: "4 kg"},
                 {key: "blockName", label: "물체 이름", text: true, value: "나무도막"},
                 {key: "blockW", label: "물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 13},
                 {key: "blockH", label: "물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 15},
+                {key: "blockK", label: "물체 색", unit: "K", min: 0, max: 100, step: 5, value: 0},
                 {key: "weightText", label: "추 글자", text: true, value: "1 kg"},
                 {key: "weightName", label: "추 이름", text: true, value: "추"},
                 {key: "weightW", label: "추 너비", unit: "mm", min: 4, max: 20, step: 0.5, value: 9},
                 {key: "weightH", label: "추 높이", unit: "mm", min: 4, max: 20, step: 0.5, value: 8},
+                {key: "weightK", label: "추 색", unit: "K", min: 0, max: 100, step: 5, value: 0},
                 {panel: "빗면·실·도르래"},
                 {key: "angle", label: "빗면 각도", unit: "°", min: 10, max: 60, step: 1, value: 30},
                 {key: "slopeLen", label: "빗면 길이", unit: "mm", min: 30, max: 120, step: 0.5, value: 60},
@@ -220,7 +222,7 @@ try {
         t.path([[0, 0], apex, [apex[0], 0]], true, null, 100, wBody);
         // 물체 (빗면 위에 기울어져 놓임), 글자는 수평
         var b0 = W(ub - bw, 0), b1 = W(ub, 0), b2 = W(ub, bh), b3 = W(ub - bw, bh);
-        t.path([b0, b1, b2, b3], true, null, 100, wObj);
+        t.path([b0, b1, b2, b3], true, o.blockK, 100, wObj);
         var bc = W(ub - bw / 2, bh / 2);
         if (o.blockText !== "") t.text(o.blockText, bc[0], bc[1], size, "center");
         var topY = Math.max(b2[1], b3[1]);
@@ -236,7 +238,7 @@ try {
         t.line(W(ub, bh / 2), W(uP, bh / 2), wRope);
         t.arc(cx, cy, R, 0, Math.PI / 2 + th, wRope);
         t.line([wx, cy], [wx, wTop], wRope);
-        t.rect(wx - ww / 2, wTop, wx + ww / 2, wTop - wh, 0, 100, wObj);
+        t.rect(wx - ww / 2, wTop, wx + ww / 2, wTop - wh, o.weightK, 100, wObj);
         if (o.weightText !== "") t.text(o.weightText, wx, wTop - wh / 2, size, "center");
         if (o.weightName !== "") t.textAt(o.weightName, wx + ww / 2 + NAME_GAP_MM * m, wTop - wh / 2, size, "right");
         // 빗면 각도: 아래 끝의 호와 글자
@@ -252,13 +254,15 @@ try {
     // ==== 두 빗면 탭 ====
     function makeTwoInclineEngine() {
         return makeFormEngine({
-            label: "두 빗면", name: "TwoInclines", prefKey: "MechanicsDevice/twoInclines",
+            label: "두 빗면", name: "TwoInclines", prefKey: "MechanicsDevice/twoInclines", version: "v2",
             controls: [
                 {panel: "물체"},
                 {key: "textA", label: "왼쪽 물체 글자", text: true, value: "A"},
                 {key: "textB", label: "오른쪽 물체 글자", text: true, value: "B"},
                 {key: "blockW", label: "물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 13},
                 {key: "blockH", label: "물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 15},
+                {key: "blockAK", label: "왼쪽 물체 색", unit: "K", min: 0, max: 100, step: 5, value: 0},
+                {key: "blockBK", label: "오른쪽 물체 색", unit: "K", min: 0, max: 100, step: 5, value: 0},
                 {panel: "빗면·실·도르래"},
                 {key: "angleA", label: "왼쪽 빗면 각도", unit: "°", min: 10, max: 70, step: 1, value: 30},
                 {key: "angleB", label: "오른쪽 빗면 각도", unit: "°", min: 10, max: 70, step: 1, value: 60},
@@ -305,12 +309,12 @@ try {
         t.path([[0, 0], apex, [xR, 0]], true, null, 100, wBody);
         // 왼쪽 물체
         var a0 = W(ua - bw, 0), a1 = W(ua, 0), a2 = W(ua, bh), a3 = W(ua - bw, bh);
-        t.path([a0, a1, a2, a3], true, null, 100, wObj);
+        t.path([a0, a1, a2, a3], true, o.blockAK, 100, wObj);
         var ac = W(ua - bw / 2, bh / 2);
         if (o.textA !== "") t.text(o.textA, ac[0], ac[1], size, "center");
         // 오른쪽 물체
         var b0 = V(db, 0), b1 = V(dbEnd, 0), b2 = V(dbEnd, bh), b3 = V(db, bh);
-        t.path([b0, b1, b2, b3], true, null, 100, wObj);
+        t.path([b0, b1, b2, b3], true, o.blockBK, 100, wObj);
         var bc = V(db + bw / 2, bh / 2);
         if (o.textB !== "") t.text(o.textB, bc[0], bc[1], size, "center");
         // 도르래와 받침대(수직으로 armLen, 꼭대기 아래로 박힘)
@@ -332,15 +336,17 @@ try {
     // ==== 물체 A·B 탭 ====
     function makeBlocksEngine() {
         return makeFormEngine({
-            label: "물체 A·B", name: "BlocksAB", prefKey: "MechanicsDevice/blocksAB",
+            label: "물체 A·B", name: "BlocksAB", prefKey: "MechanicsDevice/blocksAB", version: "v2",
             controls: [
                 {panel: "물체"},
                 {key: "textA", label: "왼쪽 물체 글자", text: true, value: "A"},
                 {key: "textB", label: "오른쪽 물체 글자", text: true, value: "B"},
                 {key: "widthA", label: "왼쪽 물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 13},
                 {key: "heightA", label: "왼쪽 물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 10},
+                {key: "blockAK", label: "왼쪽 물체 색", unit: "K", min: 0, max: 100, step: 5, value: 0},
                 {key: "widthB", label: "오른쪽 물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 13},
                 {key: "heightB", label: "오른쪽 물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 10},
+                {key: "blockBK", label: "오른쪽 물체 색", unit: "K", min: 0, max: 100, step: 5, value: 0},
                 {panel: "연결·힘"},
                 {key: "gap", label: "물체 사이 간격", unit: "mm", min: 0, max: 40, step: 0.5, value: 10},
                 {key: "rope", check: "실로 연결", value: true},
@@ -362,8 +368,8 @@ try {
         var bx = wa + gap, endX = bx + wb;
         var force = o.force ? o.forceLen * m : 0;
         t.line([-(force + o.groundSide * m), 0], [endX + o.groundSide * m, 0], wBody);
-        t.rect(0, ha, wa, 0, 0, 100, wObj);
-        t.rect(bx, hb, endX, 0, 0, 100, wObj);
+        t.rect(0, ha, wa, 0, o.blockAK, 100, wObj);
+        t.rect(bx, hb, endX, 0, o.blockBK, 100, wObj);
         if (o.textA !== "") t.text(o.textA, wa / 2, ha / 2, size, "center");
         if (o.textB !== "") t.text(o.textB, bx + wb / 2, hb / 2, size, "center");
         if (o.rope && gap > 0) { var ry = Math.min(ha, hb) / 2; t.line([wa, ry], [bx, ry], wRope); }

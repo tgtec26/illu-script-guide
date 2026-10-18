@@ -161,8 +161,28 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   assert.strictEqual(rects.length, 2);
   assert.strictEqual(rects[0].a[4], 20, "물체 칠"); assert.strictEqual(rects[1].a[4], 60, "추 칠");
 }
+// 물체·추 색(K): 빗면 도르래·두 빗면·물체 A·B도 옵션을 따르고 기본은 0(흰색)
+{
+  const incline = defaultsOf("makeInclinePulleyEngine");
+  assert.strictEqual(incline.blockK, 0); assert.strictEqual(incline.weightK, 0);
+  const calls = record({ ...incline, blockK: 15, weightK: 70 }, scenes.drawInclinePulley);
+  const block = calls.filter((c) => c.k === "path" && c.a[1] === true && c.a[0].length === 4)[0];
+  assert.strictEqual(block.a[2], 15, "빗면 도르래 물체 칠");
+  assert.strictEqual(calls.find((c) => c.k === "rect").a[4], 70, "빗면 도르래 추 칠");
+  const two = defaultsOf("makeTwoInclineEngine");
+  assert.strictEqual(two.blockAK, 0); assert.strictEqual(two.blockBK, 0);
+  const quads = record({ ...two, blockAK: 25, blockBK: 80 }, scenes.drawTwoIncline).filter((c) => c.k === "path" && c.a[1] === true && c.a[0].length === 4);
+  assert.deepStrictEqual(quads.map((c) => c.a[2]), [25, 80], "두 빗면 물체 A·B 칠");
+  const blocks = defaultsOf("makeBlocksEngine");
+  assert.strictEqual(blocks.blockAK, 0); assert.strictEqual(blocks.blockBK, 0);
+  const rects = record({ ...blocks, blockAK: 30, blockBK: 90 }, scenes.drawBlocks).filter((c) => c.k === "rect");
+  assert.deepStrictEqual(rects.map((c) => c.a[4]), [30, 90], "물체 A·B 칠");
+}
 // 저장 태그: 수평면 도르래 탭은 항목이 바뀌어 v2, 다른 탭은 그대로 v1
 assert.ok(source.includes('prefKey: "MechanicsDevice/horizontalPulley", version: "v3"'), "수평면 도르래 탭 저장 태그");
+for (const tab of ["inclinePulley", "twoInclines", "blocksAB"]) {
+  assert.ok(source.includes(`prefKey: "MechanicsDevice/${tab}", version: "v2"`), `${tab} 탭 저장 태그`);
+}
 assert.ok(source.includes('spec.version || "v1"'), "탭별 저장 태그");
 console.log("mechanics device checks passed");
 
