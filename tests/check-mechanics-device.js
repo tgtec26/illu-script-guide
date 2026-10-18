@@ -47,8 +47,10 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   near(pulley.a[0], cx, "도르래 x"); near(pulley.a[1], cy, "도르래 y"); near(pulley.a[2], R, "도르래 반지름");
   const mount = pulley.a[3];
   near(mount[1], -2.2, "볼트는 윗면 아래 볼트 깊이"); assert.ok(mount[0] < cx, "받침대는 왼쪽으로");
-  near(Math.hypot(mount[0] - cx, mount[1] - cy), 9, "받침대 길이");
+  // 볼트는 테이블 모서리 기준으로 고정: 모서리에서 안쪽 2.8, 윗면 아래 2.2. 받침대 길이(볼트~도르래 가운데)는 그에 따라 정해진다(기본은 약 9)
   const edgeX = cx - 3.8;
+  near(mount[0], edgeX - 2.8, "볼트는 모서리에서 안쪽 boltInset");
+  near(Math.hypot(mount[0] - cx, mount[1] - cy), 9, "받침대 길이(볼트~도르래 가운데)", 0.05);
   assert.ok(mount[0] < edgeX - 2, "볼트는 테이블 모서리보다 안쪽(왼쪽)");
   near(pulley.a[4], 0.4, "도르래 겉 두께"); near(pulley.a[5], 0.3, "도르래 안쪽 두께");
   // 실은 물체 옆면 가운데(높이 절반)에서 수평으로 도르래 꼭대기까지
@@ -117,6 +119,27 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   const c2 = record(on, scenes.drawHorizontalPulley).filter((c) => c.k === "dashRect");
   near(0 - c2[0].a[0], 31, "이동 거리 31 (물체)"); near(c2[1].a[1] - (3.9 - 42), 31, "이동 거리 31 (추)");
 }
+// 물체 높이가 달라도 나사(볼트)는 테이블 모서리 기준에 고정이고 받침대의 각도와 길이만 달라진다
+{
+  const base = defaultsOf("makeHorizontalPulleyEngine");
+  const armOf = (blockH) => {
+    const o = { ...base, blockH };
+    const pulley = record(o, scenes.drawHorizontalPulley).find((c) => c.k === "pulley");
+    const cx = o.blockW + o.ropeLen, mount = pulley.a[3];
+    near(pulley.a[1], blockH / 2 - o.pulleyR, `높이 ${blockH}: 도르래 가운데`);
+    near(mount[0], cx - o.cornerDist - 2.8, `높이 ${blockH}: 볼트 x`); near(mount[1], -o.boltDepth, `높이 ${blockH}: 볼트 y`);
+    return { len: Math.hypot(pulley.a[0] - mount[0], pulley.a[1] - mount[1]), angle: Math.atan2(pulley.a[1] - mount[1], pulley.a[0] - mount[0]) };
+  };
+  const low = armOf(8), mid = armOf(15), high = armOf(25);
+  assert.ok(low.len < mid.len && mid.len < high.len, "도르래가 높아지면 받침대가 길어진다");
+  assert.ok(low.angle < mid.angle && mid.angle < high.angle, "도르래가 높아지면 받침대가 더 세워진다");
+  // 볼트~모서리를 바꾸면 볼트만 움직인다
+  const moved = record({ ...base, boltInset: 6 }, scenes.drawHorizontalPulley).find((c) => c.k === "pulley");
+  near(moved.a[3][0], base.blockW + base.ropeLen - base.cornerDist - 6, "볼트~모서리 6");
+}
+// 저장 태그: 수평면 도르래 탭은 항목이 바뀌어 v2, 다른 탭은 그대로 v1
+assert.ok(source.includes('prefKey: "MechanicsDevice/horizontalPulley", version: "v2"'), "수평면 도르래 탭 저장 태그");
+assert.ok(source.includes('spec.version || "v1"'), "탭별 저장 태그");
 console.log("mechanics device checks passed");
 
 // 빗면 도르래: 실은 빗면과 나란하고 도르래 꼭대기에 접하며, 추는 수직선에서 떨어져 매달리고, 볼트는 빗면 안쪽

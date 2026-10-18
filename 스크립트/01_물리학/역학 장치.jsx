@@ -46,7 +46,7 @@ try {
     // ==== 수평면 도르래 탭 ====
     function makeHorizontalPulleyEngine() {
         return makeFormEngine({
-            label: "수평면 도르래", name: "HorizontalPulley", prefKey: "MechanicsDevice/horizontalPulley",
+            label: "수평면 도르래", name: "HorizontalPulley", prefKey: "MechanicsDevice/horizontalPulley", version: "v2",
             controls: [
                 {panel: "물체와 추"},
                 {key: "blockText", label: "물체 글자", text: true, value: "4 kg"},
@@ -62,7 +62,7 @@ try {
                 {key: "pulleyArm", check: "도르래 받침대", value: true},
                 {key: "ropeLen", label: "물체~도르래", unit: "mm", min: 8, max: 80, step: 0.5, value: 28},
                 {key: "cornerDist", label: "모서리~도르래 가운데", unit: "mm", min: -5, max: 15, step: 0.1, value: 3.8},
-                {key: "armLen", label: "받침대 길이", unit: "mm", min: 3, max: 25, step: 0.5, value: 9},
+                {key: "boltInset", label: "볼트~모서리", unit: "mm", min: 0.5, max: 15, step: 0.1, value: 2.8},
                 {key: "boltDepth", label: "볼트 깊이", unit: "mm", min: 0, max: 8, step: 0.1, value: 2.2},
                 {key: "tableLeft", label: "바닥 왼쪽 여유", unit: "mm", min: 0, max: 40, step: 0.5, value: 8},
                 {key: "pulleyR", label: "도르래 반지름", unit: "mm", min: 1.5, max: 6, step: 0.1, value: 3.6},
@@ -94,11 +94,11 @@ try {
         var attachY = bh / 2;
         var cx = bw + o.ropeLen * m, cy = attachY - R;
         // 도르래는 받침대(길쭉한 둥근 막대)로 테이블 안쪽에 볼트로 고정한다. 받침대 양 끝은 같은 볼트(도르래 가운데, 테이블 안)이고,
-        // 테이블 쪽 볼트는 윗면 아래 boltDepth, 모서리보다 안쪽(왼쪽)에 있다. 모서리는 도르래 가운데에서 cornerDist만큼 왼쪽, armLen은 볼트~도르래 가운데 길이
-        var boltY = -o.boltDepth * m, dyBolt = cy - boltY;
-        var armLen = Math.max(o.armLen * m, dyBolt + 0.01), armDx = Math.sqrt(armLen * armLen - dyBolt * dyBolt);
-        var mountX = cx - armDx;                                     // 볼트 x
+        // 테이블 쪽 볼트는 테이블 모서리 기준으로 고정이다: 윗면 아래 boltDepth, 모서리에서 안쪽(왼쪽)으로 boltInset. 모서리는 도르래 가운데에서
+        // cornerDist만큼 왼쪽. 도르래가 물체 높이에 따라 오르내려도 볼트는 그대로이고 받침대(볼트~도르래 가운데)의 각도와 길이만 달라진다
+        var boltY = -o.boltDepth * m;
         var edgeX = cx - o.cornerDist * m;                           // 테이블 모서리 x
+        var mountX = edgeX - o.boltInset * m;                        // 볼트 x
         var wx = cx + R, wTop = cy - o.drop * m, ww = o.weightW * m, wh = o.weightH * m;
         var ghostLeft = -shift, ghostRight = bw - shift;             // 이전 위치의 물체
         // 테이블 윗면과 모서리의 세로선
@@ -465,7 +465,7 @@ try {
     }
 
     // ==== 폼 탭 공용 부품 ====
-    // spec: label(탭 이름), name(그룹 이름), prefKey, controls[], draw(tools, o)
+    // spec: label(탭 이름), name(그룹 이름), prefKey, version(저장 태그, 항목이 바뀌면 올린다. 기본 v1), controls[], draw(tools, o)
     // 컨트롤: {panel: "제목", fold: true} 새 패널(fold면 기본으로 접힘) / {key, label, unit, min, max, step, value} 숫자 행 /
     //         {key, check: "라벨", value: true} 체크(이어진 것은 한 행에 셋까지) / {key, label, items: [...], value} 드롭다운 /
     //         {key, label, text: true, value: "글"} 글 입력
@@ -664,7 +664,7 @@ try {
         }
 
         function saveSettings() {
-            var parts = ["v1"];
+            var parts = [spec.version || "v1"];
             for (var i = 0; i < controls.length; i++) {
                 var ctl = controls[i];
                 if (!ctl.key) continue;
@@ -681,7 +681,7 @@ try {
             var p = String(raw).split("|");
             var keyed = [];
             for (var i = 0; i < controls.length; i++) if (controls[i].key) keyed.push(controls[i]);
-            if (p[0] !== "v1" || p.length !== keyed.length + 1) return;
+            if (p[0] !== (spec.version || "v1") || p.length !== keyed.length + 1) return;
             var values = [];
             for (var k = 0; k < keyed.length; k++) {
                 var ctl = keyed[k], text = p[k + 1];
