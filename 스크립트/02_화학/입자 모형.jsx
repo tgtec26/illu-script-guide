@@ -546,7 +546,8 @@ try {
 
     function makeAtomEngine() {
         // 1. 데이터 정의
-        var elements = ["H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar"];
+        // K·Ca는 전자가 18개 이하가 되는 이온(K⁺, Ca²⁺)으로만 그린다 — 껍질은 3개(2·8·8)까지
+        var elements = ["H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca"];
         var chargeLabels = ["-3", "-2", "-1", "0", "+1", "+2", "+3"];
         var checkBoxes, chargeRadios, sldIonFont, chkHorizontalFirst, chkRotateShell2, chkRotateShell3;
 
@@ -566,6 +567,7 @@ try {
 
         function addRows(page) {
             checkBoxes = addCheckGrid(page, "원소 기호 (다중 선택)", elements, 6, 50, "Na");
+            for (var c = 0; c < checkBoxes.length; c++) checkBoxes[c].onClick = onSelectionChange;
 
             // --- 이온 전하 패널 ---
             var pnlCharge = page.add("panel", undefined, "이온 전하");
@@ -575,7 +577,7 @@ try {
             chargeRadios = [];
             for (var j = 0; j < chargeLabels.length; j++) {
                 chargeRadios[j] = chargeRow.add("radiobutton", undefined, chargeLabels[j]);
-                chargeRadios[j].onClick = updatePreview;
+                chargeRadios[j].onClick = onSelectionChange;
                 if (chargeLabels[j] === "0") chargeRadios[j].value = true;
             }
             sldIonFont = addSlider(pnlCharge, "이온 전하 글자", 1, 20, 6, "pt", 0.1);
@@ -602,6 +604,16 @@ try {
         function currentCharge() {
             for (var r = 0; r < chargeRadios.length; r++) if (chargeRadios[r].value) return parseInt(chargeLabels[r], 10);
             return 0;
+        }
+        // 고른 원소 중 전자가 18개를 넘는 것이 없도록 이온 전하를 올린다 (K는 +1 이상, Ca는 +2 이상)
+        function onSelectionChange() {
+            var zs = getSelectedElements();
+            var minCharge = parseInt(chargeLabels[0], 10);
+            for (var i = 0; i < zs.length; i++) if (zs[i] - 18 > minCharge) minCharge = zs[i] - 18;
+            if (currentCharge() < minCharge) {
+                for (var r = 0; r < chargeRadios.length; r++) chargeRadios[r].value = (parseInt(chargeLabels[r], 10) === minCharge);
+            }
+            updatePreview();
         }
         function drawWith(targetLayer, consumeGuide) {
             var sel = getSelectedElements();
@@ -654,7 +666,7 @@ try {
 
             var ionCharge = parseInt(ionChargeStr, 10);
             var showNucleusText = (showNucleusTextStr === true);
-            var elementSymbols = ["H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar"];
+            var elementSymbols = ["H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca"];
             var fontName = "GSMediumB1"; // 지정 서체명
 
             var doc = app.activeDocument;
