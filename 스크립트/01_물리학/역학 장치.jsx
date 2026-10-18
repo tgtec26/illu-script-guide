@@ -32,6 +32,7 @@ try {
     var TAB_PREF_KEY = "MechanicsDevice/tab";
     var NAME_GAP_MM = 1;   // 물체·추 이름과 도형 사이 간격(글자 윤곽 기준)
     var ARROW_GAP_MM = 1;  // 속도 화살표와 물체 사이, 화살표와 속도 글자 사이 간격(화살촉 가장자리 기준)
+    var TABLE_GAP_MM = 2;  // 수평면 도르래: 추 왼쪽 면과 테이블 모서리 세로선 사이 최소 간격
     var ARROW_HEAD_MM = 1.4, ARROW_HALF_MM = 1.4 * 0.35;   // 속도 화살촉 길이와 반폭
     var GHOST_DASH = [2, 1];   // 파선 2-1 (선 2pt, 간격 1pt)
     // 화살촉 모양: 일러스트레이터 화살촉을 선 두께 1pt·100%로 확장해 잰 외곽. 끝이 원점, 뒤쪽이 +y. length는 끝에서 가장 먼 점, lineEnd는 선이 머리 속에서 끝나는 끝에서의 거리
@@ -46,17 +47,19 @@ try {
     // ==== 수평면 도르래 탭 ====
     function makeHorizontalPulleyEngine() {
         return makeFormEngine({
-            label: "수평면 도르래", name: "HorizontalPulley", prefKey: "MechanicsDevice/horizontalPulley", version: "v2",
+            label: "수평면 도르래", name: "HorizontalPulley", prefKey: "MechanicsDevice/horizontalPulley", version: "v3",
             controls: [
                 {panel: "물체와 추"},
                 {key: "blockText", label: "물체 글자", text: true, value: "4 kg"},
                 {key: "blockName", label: "물체 이름", text: true, value: "나무도막"},
                 {key: "blockW", label: "물체 너비", unit: "mm", min: 6, max: 30, step: 0.5, value: 13},
                 {key: "blockH", label: "물체 높이", unit: "mm", min: 5, max: 25, step: 0.5, value: 15},
+                {key: "blockK", label: "물체 색", unit: "K", min: 0, max: 100, step: 5, value: 0},
                 {key: "weightText", label: "추 글자", text: true, value: "1 kg"},
                 {key: "weightName", label: "추 이름", text: true, value: "추"},
                 {key: "weightW", label: "추 너비", unit: "mm", min: 4, max: 20, step: 0.5, value: 9},
                 {key: "weightH", label: "추 높이", unit: "mm", min: 4, max: 20, step: 0.5, value: 8},
+                {key: "weightK", label: "추 색", unit: "K", min: 0, max: 100, step: 5, value: 0},
                 {panel: "테이블·실·도르래"},
                 {key: "tableEdge", check: "테이블 세로선", value: true},
                 {key: "pulleyArm", check: "도르래 받침대", value: true},
@@ -91,15 +94,19 @@ try {
     function drawHorizontalPulley(t, o) {
         var m = t.mm, wBody = o.wBody, wObj = o.wObj, wRope = o.wRope, wGuide = o.wGuide, size = o.font;
         var bw = o.blockW * m, bh = o.blockH * m, R = o.pulleyR * m, shift = o.shift * m;
-        var attachY = bh / 2;
-        var cx = bw + o.ropeLen * m, cy = attachY - R;
+        var attachY = bh / 2, ww = o.weightW * m, wh = o.weightH * m;
+        var cy = attachY - R;
+        // 테이블 모서리는 물체~도르래(ropeLen)와 모서리~도르래 가운데(cornerDist)로 정해진다. 추가 넓으면 추의 왼쪽 면이 모서리 세로선을 넘으므로
+        // 모서리는 그대로 두고 도르래(와 추)를 오른쪽으로 옮겨 추와 모서리 사이를 TABLE_GAP_MM 이상 띄운다
+        var edgeX = bw + (o.ropeLen - o.cornerDist) * m;                 // 테이블 모서리 x
+        var cornerDist = Math.max(o.cornerDist * m, ww / 2 - R + TABLE_GAP_MM * m);
+        var cx = edgeX + cornerDist;
         // 도르래는 받침대(길쭉한 둥근 막대)로 테이블 안쪽에 볼트로 고정한다. 받침대 양 끝은 같은 볼트(도르래 가운데, 테이블 안)이고,
         // 테이블 쪽 볼트는 테이블 모서리 기준으로 고정이다: 윗면 아래 boltDepth, 모서리에서 안쪽(왼쪽)으로 boltInset. 모서리는 도르래 가운데에서
         // cornerDist만큼 왼쪽. 도르래가 물체 높이에 따라 오르내려도 볼트는 그대로이고 받침대(볼트~도르래 가운데)의 각도와 길이만 달라진다
         var boltY = -o.boltDepth * m;
-        var edgeX = cx - o.cornerDist * m;                           // 테이블 모서리 x
         var mountX = edgeX - o.boltInset * m;                        // 볼트 x
-        var wx = cx + R, wTop = cy - o.drop * m, ww = o.weightW * m, wh = o.weightH * m;
+        var wx = cx + R, wTop = cy - o.drop * m;
         var ghostLeft = -shift, ghostRight = bw - shift;             // 이전 위치의 물체
         // 테이블 윗면과 모서리의 세로선
         var left = Math.min(0, o.ghostBlock ? ghostLeft : 0) - o.tableLeft * m;
@@ -114,7 +121,7 @@ try {
             if (o.ghostSpeed !== "") t.textAt(o.ghostSpeed, gcx, ay + (ARROW_HALF_MM + ARROW_GAP_MM) * m, size, "above");
         }
         // 물체
-        t.rect(0, bh, bw, 0, 0, 100, wObj);
+        t.rect(0, bh, bw, 0, o.blockK, 100, wObj);
         if (o.blockText !== "") t.text(o.blockText, bw / 2, bh / 2, size, "center");
         if (o.blockName !== "") t.textAt(o.blockName, bw / 2, bh + NAME_GAP_MM * m, size, "above");
         // 도르래: 겉 테두리 wObj, 안쪽 원판·받침대·축 점 wGuide
@@ -132,7 +139,7 @@ try {
             t.arrow([arrowX, gmid + 3.5 * m], [arrowX, gmid - 3.5 * m], wRope, 100, ARROW_HEAD_MM * m);
             if (o.weightSpeed !== "") t.textAt(o.weightSpeed, arrowX + (ARROW_HALF_MM + ARROW_GAP_MM) * m, gmid, size, "right");
         }
-        t.rect(wx - ww / 2, wTop, wx + ww / 2, wTop - wh, 0, 100, wObj);
+        t.rect(wx - ww / 2, wTop, wx + ww / 2, wTop - wh, o.weightK, 100, wObj);
         if (o.weightText !== "") t.text(o.weightText, wx, wTop - wh / 2, size, "center");
         if (o.weightName !== "") t.textAt(o.weightName, wx + ww / 2 + NAME_GAP_MM * m, wTop - wh / 2, size, "right");
         // 거리 표시: 이전 위치 오른쪽 끝(P)에서 지금 오른쪽 끝(Q)까지 = 이동 거리. P·Q의 보조선은 파선, 화살촉은 평가원 작살형

@@ -16,7 +16,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced: ${name}`);
 }
 const names = ["drawHorizontalPulley", "drawInclinePulley", "drawTwoIncline", "drawBlocks"];
-const scenes = new Function(`var GHOST_DASH = [2, 1], HEAD_HARPOON = 1, NAME_GAP_MM = 1, ARROW_GAP_MM = 1, ARROW_HEAD_MM = 1.4, ARROW_HALF_MM = 1.4 * 0.35;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+const scenes = new Function(`var GHOST_DASH = [2, 1], HEAD_HARPOON = 1, NAME_GAP_MM = 1, ARROW_GAP_MM = 1, ARROW_HEAD_MM = 1.4, ARROW_HALF_MM = 1.4 * 0.35, TABLE_GAP_MM = 2;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 컨트롤 기본값을 소스의 controls 배열에서 읽는다 (+ 엔진이 붙이는 선 두께 기본값)
 function defaultsOf(engineName) {
@@ -137,8 +137,32 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   const moved = record({ ...base, boltInset: 6 }, scenes.drawHorizontalPulley).find((c) => c.k === "pulley");
   near(moved.a[3][0], base.blockW + base.ropeLen - base.cornerDist - 6, "볼트~모서리 6");
 }
+// 추가 넓어도 추가 테이블 모서리 세로선과 겹치지 않는다: 모서리는 그대로 두고 도르래(와 추)를 오른쪽으로 옮긴다
+{
+  const base = defaultsOf("makeHorizontalPulleyEngine");
+  const baseEdge = base.blockW + base.ropeLen - base.cornerDist;
+  for (const weightW of [9, 14, 20, 30]) {
+    const calls = record({ ...base, weightW }, scenes.drawHorizontalPulley);
+    const pulley = calls.find((c) => c.k === "pulley"), cx = pulley.a[0];
+    const weight = calls.filter((c) => c.k === "rect")[1];
+    const edge = calls.find((c) => c.k === "line" && c.a[0][1] === 0 && c.a[1][1] < 0 && Math.abs(c.a[0][0] - c.a[1][0]) < 1e-9);
+    near(edge.a[0][0], baseEdge, `추 ${weightW}: 테이블 모서리 그대로`);
+    assert.ok(weight.a[0] >= baseEdge + 2 - 1e-9, `추 ${weightW}: 추 왼쪽 면이 모서리에서 2mm 이상 (${weight.a[0] - baseEdge})`);
+    near(pulley.a[3][0], baseEdge - 2.8, `추 ${weightW}: 볼트는 모서리 기준 그대로`);
+    if (weightW === 9) near(cx, base.blockW + base.ropeLen, "기본 추: 도르래 x 그대로");
+    if (weightW === 30) assert.ok(cx > base.blockW + base.ropeLen + 1, "넓은 추: 도르래가 오른쪽으로");
+  }
+}
+// 물체·추 색(K): 칠은 blockK·weightK를 따른다 (기본 0 = 흰색)
+{
+  const base = defaultsOf("makeHorizontalPulleyEngine");
+  assert.strictEqual(base.blockK, 0); assert.strictEqual(base.weightK, 0);
+  const rects = record({ ...base, blockK: 20, weightK: 60 }, scenes.drawHorizontalPulley).filter((c) => c.k === "rect");
+  assert.strictEqual(rects.length, 2);
+  assert.strictEqual(rects[0].a[4], 20, "물체 칠"); assert.strictEqual(rects[1].a[4], 60, "추 칠");
+}
 // 저장 태그: 수평면 도르래 탭은 항목이 바뀌어 v2, 다른 탭은 그대로 v1
-assert.ok(source.includes('prefKey: "MechanicsDevice/horizontalPulley", version: "v2"'), "수평면 도르래 탭 저장 태그");
+assert.ok(source.includes('prefKey: "MechanicsDevice/horizontalPulley", version: "v3"'), "수평면 도르래 탭 저장 태그");
 assert.ok(source.includes('spec.version || "v1"'), "탭별 저장 태그");
 console.log("mechanics device checks passed");
 
