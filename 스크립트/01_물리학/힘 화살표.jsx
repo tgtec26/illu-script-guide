@@ -11,10 +11,11 @@ try {
 } catch (e) {}
 
 // 힘 화살표: 선택한 물체(아무 개체 하나)의 경계 상자를 기준으로 힘 화살표를 붙인다.
-//   - 중력: 가운데에서 아래로. 부력: 가운데에서 위로. 수직항력: 바닥에서 위로 (중력과 겹치지 않게 너비의 20% 비켜서).
-//   - 마찰력: 바닥 가운데에서 운동 방향과 반대로. 작용한 힘: 밀기는 뒤쪽 옆면을 향해 들어오고, 당기기는 앞쪽 옆면에서 나간다.
+//   - 중력: 가운데에서 아래로. 부력: 가운데에서 위로 (중력과 한 줄로 붙지 않게 너비의 20% 왼쪽으로 비켜서). 수직항력: 바닥에서 위로 (중력과 겹치지 않게 너비의 20% 비켜서).
+//   - 마찰력: 바닥 가운데에서 운동 방향과 반대로 (경계선에 묻히지 않게 물체 안쪽으로 2mm 띄운다. 낮은 물체는 높이의 1/4). 작용한 힘: 밀기는 뒤쪽 옆면을 향해 들어오고, 당기기는 앞쪽 옆면에서 나간다.
 //   - 운동 방향 화살표: 물체(와 위로 뻗은 화살표 끝) 위에 떨어져서 운동 방향으로.
 //   - 화살표는 선 + 끝 화살촉(측정한 일러스트레이터 화살촉 4종을 직접 그린 도형), 이름은 화살표 끝 옆에 둔다. 결과는 물체와 따로 된 그룹 하나.
+//   - 이름이 물체의 경계 상자 변·화살표(선과 촉)·다른 이름과 겹치면 가장 가까운 빈 자리로 밀어 놓는다(placeLabel).
 
 (function() {
     if (app.documents.length === 0) {
@@ -56,6 +57,9 @@ try {
     var WIDTH_RANGE = [0.1, 3];
     var HEAD_RANGE = [20, 300];
     var FONT_RANGE = [5, 20];
+    var FRICTION_LIFT_MM = 2;    // 마찰력을 경계선에서 물체 안쪽으로 띄우는 높이 (낮은 물체는 높이의 1/4)
+    var LABEL_PAD_MM = 0.4;      // 이름과 선·다른 이름 사이 최소 간격
+    var LABEL_SEARCH_MM = 12;    // 이름이 겹치면 제자리에서 이 거리까지 밀어 본다
 
     var doc = app.activeDocument;
     if (!doc.selection || doc.selection.length !== 1) {
@@ -201,34 +205,44 @@ try {
     }
 
     function buildPreview() {
-        var arrows = forceArrows(bounds, enabled, mmList(lengths), movingRight, appliedMode === 0, 1.5 * MM, labelsOn ? fontPt : 0);
+        var lift = Math.min(FRICTION_LIFT_MM * MM, (bounds[1] - bounds[3]) / 4);
+        var arrows = forceArrows(bounds, enabled, mmList(lengths), movingRight, appliedMode === 0, 1.5 * MM, labelsOn ? fontPt : 0, lift);
         if (arrows.length === 0) return;
         previewGroup = target.layer.groupItems.add();
         previewGroup.name = "힘 화살표";
         previewGroup.move(target, ElementPlacement.PLACEBEFORE);
         var black = makeGray(100);
+        // 이름이 올라타지 않게 피할 선: 물체의 경계 상자 네 변과 화살표(선, 촉)
+        var solids = polySegments([[bounds[0], bounds[1]], [bounds[2], bounds[1]], [bounds[2], bounds[3]], [bounds[0], bounds[3]]], true);
         for (var i = 0; i < arrows.length; i++) {
             // 선은 화살촉 속에서 끝나고, 촉은 고른 모양의 채운 도형이다
             var dx = arrows[i].to[0] - arrows[i].from[0], dy = arrows[i].to[1] - arrows[i].from[1];
             var len = Math.sqrt(dx * dx + dy * dy), dir = [dx / len, dy / len];
             var back = headBack(headShape, lineWidth, headScale);
             if (len > back) {
+                var shaftEnd = [arrows[i].to[0] - dir[0] * back, arrows[i].to[1] - dir[1] * back];
                 var line = previewGroup.pathItems.add();
-                line.setEntirePath([arrows[i].from, [arrows[i].to[0] - dir[0] * back, arrows[i].to[1] - dir[1] * back]]);
+                line.setEntirePath([arrows[i].from, shaftEnd]);
                 line.name = arrows[i].name;
                 line.filled = false;
                 line.stroked = true;
                 line.strokeColor = black;
                 line.strokeWidth = lineWidth;
+                solids.push([arrows[i].from, shaftEnd]);
             }
             addHeadShape(previewGroup, headShape, arrows[i].to, dir, lineWidth, headScale, black).name = arrows[i].name + " 화살촉";
-            if (labelsOn) addLabel(arrows[i]);
+            solids = solids.concat(polySegments(catalogPoints(headShape, arrows[i].to, dir, headUnit(lineWidth, headScale)), true));
+        }
+        if (labelsOn) {
+            var placed = [];
+            for (i = 0; i < arrows.length; i++) addLabel(arrows[i], solids, placed);
         }
         if (offsetXmm !== 0 || offsetYmm !== 0) previewGroup.translate(offsetXmm * MM, offsetYmm * MM);
     }
 
-    // 이름은 화살표 끝 너머, 화살표 방향으로 조금 떨어진 곳에 가운데를 둔다 (가로 화살표는 위쪽)
-    function addLabel(arrow) {
+    // 이름은 화살표 끝 너머, 화살표 방향으로 조금 떨어진 곳에 가운데를 둔다 (가로 화살표는 위쪽).
+    // 그 자리가 solids(피할 선)·placed(먼저 놓은 이름)와 겹치면 가장 가까운 빈 자리로 민다
+    function addLabel(arrow, solids, placed) {
         var text = previewGroup.textFrames.add();
         text.contents = arrow.name;
         text.textRange.characterAttributes.size = fontPt;
@@ -249,7 +263,9 @@ try {
             x = (arrow.from[0] + arrow.to[0]) / 2;
             y = arrow.to[1] + (arrow.below ? -h / 2 - 1 * MM : h / 2 + 1 * MM);
         }
-        text.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+        var spot = placeLabel([x, y], w / 2, h / 2, solids, placed, [x - arrow.to[0], y - arrow.to[1]], LABEL_PAD_MM * MM, LABEL_SEARCH_MM * MM, 0.5 * MM);
+        placed.push({c: spot, hw: w / 2, hh: h / 2});
+        text.translate(spot[0] - (b[0] + b[2]) / 2, spot[1] - (b[1] + b[3]) / 2);
     }
 
     function clearPreview() {
@@ -273,19 +289,23 @@ try {
     // 화살표 위치 (순수 계산)
     // -------------------------------------------------------
     // bounds [left, top, right, bottom], on·length는 FORCES 순서. gap은 운동 방향 화살표와 그 아래 것 사이,
-    // labelRoom은 위로 뻗어 물체 위로 나온 화살표 끝의 이름 자리. 돌려주는 것: [{name, from, to, below}]
-    function forceArrows(b, on, length, right, push, gap, labelRoom) {
+    // labelRoom은 위로 뻗어 물체 위로 나온 화살표 끝의 이름 자리, lift는 마찰력을 경계선에서 물체 안쪽으로 띄우는 높이(생략하면 0).
+    // 돌려주는 것: [{name, from, to, below}]
+    function forceArrows(b, on, length, right, push, gap, labelRoom, lift) {
         var cx = (b[0] + b[2]) / 2;
         var cy = (b[1] + b[3]) / 2;
         var sign = right ? 1 : -1;
         var back = right ? b[0] : b[2];     // 운동 방향의 뒤쪽 옆면
         var front = right ? b[2] : b[0];
+        var rise = lift || 0;
         var list = [];
         if (on[0]) list.push({name: "중력", from: [cx, cy], to: [cx, cy - length[0]]});
-        if (on[1]) list.push({name: "부력", from: [cx, cy], to: [cx, cy + length[1]]});
+        // 부력은 중력과 한 줄로 붙지 않게 왼쪽으로 너비의 20% 비킨다 (수직항력은 오른쪽으로 같은 만큼)
+        var buoyancyX = cx - (b[2] - b[0]) * 0.2;
+        if (on[1]) list.push({name: "부력", from: [buoyancyX, cy], to: [buoyancyX, cy + length[1]]});
         var normalX = cx + (b[2] - b[0]) * 0.2;
         if (on[2]) list.push({name: "수직항력", from: [normalX, b[3]], to: [normalX, b[3] + length[2]]});
-        if (on[3]) list.push({name: "마찰력", from: [cx, b[3]], to: [cx - sign * length[3], b[3]], below: true});
+        if (on[3]) list.push({name: "마찰력", from: [cx, b[3] + rise], to: [cx - sign * length[3], b[3] + rise], below: true});
         if (on[4]) {
             if (push) list.push({name: "작용한 힘", from: [back - sign * length[4], cy], to: [back, cy]});
             else list.push({name: "작용한 힘", from: [front, cy], to: [front + sign * length[4], cy]});
@@ -297,6 +317,72 @@ try {
             list.push({name: "운동 방향", from: [cx - sign * length[5] / 2, y], to: [cx + sign * length[5] / 2, y]});
         }
         return list;
+    }
+
+    // -------------------------------------------------------
+    // 이름 자리 (순수 계산): 이름이 선·다른 이름과 겹치지 않게
+    // -------------------------------------------------------
+    // 가운데 c, 반너비 hw·반높이 hh 상자가 선분 a→b와 만나는지 (Liang–Barsky)
+    function boxHitsSegment(c, hw, hh, a, b) {
+        var dx = b[0] - a[0], dy = b[1] - a[1];
+        var p = [-dx, dx, -dy, dy];
+        var q = [a[0] - (c[0] - hw), (c[0] + hw) - a[0], a[1] - (c[1] - hh), (c[1] + hh) - a[1]];
+        var t0 = 0, t1 = 1;
+        for (var i = 0; i < 4; i++) {
+            if (p[i] === 0) {
+                if (q[i] < 0) return false;
+                continue;
+            }
+            var t = q[i] / p[i];
+            if (p[i] < 0) {
+                if (t > t1) return false;
+                if (t > t0) t0 = t;
+            } else {
+                if (t < t0) return false;
+                if (t < t1) t1 = t;
+            }
+        }
+        return t0 <= t1;
+    }
+
+    // 점들을 이은 선분 목록 [[a, b], ...] (closed면 마지막과 처음도)
+    function polySegments(pts, closed) {
+        var out = [];
+        for (var i = closed ? 0 : 1; i < pts.length; i++) out.push([pts[closed ? (i + pts.length - 1) % pts.length : i - 1], pts[i]]);
+        return out;
+    }
+
+    // c에 w×h(반너비·반높이) 이름 상자를 놓아도 되는지: 어느 선분과도, 이미 놓은 이름 {c, hw, hh}와도 만나지 않으면 true
+    function labelSpotFree(c, hw, hh, segments, placed) {
+        var i;
+        for (i = 0; i < segments.length; i++) {
+            if (boxHitsSegment(c, hw, hh, segments[i][0], segments[i][1])) return false;
+        }
+        for (i = 0; i < placed.length; i++) {
+            if (Math.abs(c[0] - placed[i].c[0]) < hw + placed[i].hw && Math.abs(c[1] - placed[i].c[1]) < hh + placed[i].hh) return false;
+        }
+        return true;
+    }
+
+    function angleGap(u, v) {
+        return Math.abs(Math.atan2(Math.sin(u - v), Math.cos(u - v)));
+    }
+
+    // 기준 자리 base의 이름 상자(반너비 hw·반높이 hh)가 겹치면, base에서 step씩 멀어지는 둘레(16방향, 같은 거리면 prefer 쪽 먼저)를
+    // reach까지 돌며 처음 비는 자리를 돌려준다. pad는 선·다른 이름과 띄울 간격. 빈 자리가 없으면 base
+    function placeLabel(base, hw, hh, segments, placed, prefer, pad, reach, step) {
+        var w = hw + pad, h = hh + pad;
+        if (labelSpotFree(base, w, h, segments, placed)) return base;
+        var first = Math.atan2(prefer[1], prefer[0]), dirs = [], k;
+        for (k = 0; k < 16; k++) dirs.push(k * Math.PI / 8);
+        dirs.sort(function(u, v) { return angleGap(u, first) - angleGap(v, first); });
+        for (var r = step; r <= reach; r += step) {
+            for (k = 0; k < dirs.length; k++) {
+                var c = [base[0] + r * Math.cos(dirs[k]), base[1] + r * Math.sin(dirs[k])];
+                if (labelSpotFree(c, w, h, segments, placed)) return c;
+            }
+        }
+        return base;
     }
 
     // -------------------------------------------------------
