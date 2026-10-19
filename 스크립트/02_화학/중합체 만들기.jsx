@@ -40,7 +40,7 @@ try {
     // ── 1-5. 저장된 환경설정 불러오기 ────────────────────────
     var PREF_PREFIX = "PolymerMaker_";
     // 처음 값: R 버튼이 되돌아가는 값이자 저장값이 없을 때 쓰는 값
-    var DEFAULTS = {width: 6, gap: 1, shapeStroke: 1, connStroke: 1, innerK: 0, offsetX: 0, offsetY: 0};
+    var DEFAULTS = {width: 6, rectH: 4, rectR: 0.7, gap: 1, shapeStroke: 1, connStroke: 1, innerK: 0, offsetX: 0, offsetY: 0};
     var savedShape = app.preferences.getStringPreference(PREF_PREFIX + "Shape") || "circle";
     var savedWidth = app.preferences.getStringPreference(PREF_PREFIX + "Width") || String(DEFAULTS.width);
     var savedGap = app.preferences.getStringPreference(PREF_PREFIX + "Gap") || String(DEFAULTS.gap);
@@ -50,6 +50,12 @@ try {
     // 헥사 코드는 특수한 경우에만 쓰므로 기본은 빈 값(= K값 사용)
     var savedHexColor = app.preferences.getStringPreference(PREF_PREFIX + "InnerHex") || "";
     var savedShade = app.preferences.getStringPreference(PREF_PREFIX + "Shade") === "true";
+    // 둥근 사각형 높이·모서리 둥글기: 저장값이 없는 옛 사용자는 예전 모양(너비의 2/3, 너비의 0.11배) 그대로 시작한다
+    var legacyRectWidth = parseFloat(app.preferences.getStringPreference(PREF_PREFIX + "Width"));
+    var savedRectH = app.preferences.getStringPreference(PREF_PREFIX + "RectH") ||
+        (isNaN(legacyRectWidth) ? String(DEFAULTS.rectH) : formatValue(legacyRectWidth * 2 / 3));
+    var savedRectR = app.preferences.getStringPreference(PREF_PREFIX + "RectR") ||
+        (isNaN(legacyRectWidth) ? String(DEFAULTS.rectR) : formatValue(legacyRectWidth * 0.11));
 
     var MM = 2.834645; // mm to points conversion
     var SAMPLES = 2000;
@@ -96,11 +102,16 @@ try {
     panelSize.spacing = 10;
 
     var fieldW = addNumberField(panelSize, "단위체 너비 (mm):", 120, savedWidth, 0.2, 1, 100, DEFAULTS.width);
+    // 둥근 사각형일 때만 쓰는 행. 둥글기의 최댓값은 너비·높이 중 짧은 쪽의 절반이라 syncRadiusLimit이 맞춘다
+    var fieldRH = addNumberField(panelSize, "단위체 높이 (mm):", 120, savedRectH, 0.1, 1, 100, DEFAULTS.rectH);
+    var fieldRR = addNumberField(panelSize, "모서리 둥글기 (mm):", 120, savedRectR, 0.1, 0, 50, DEFAULTS.rectR);
     var fieldSW = addNumberField(panelSize, "단위체 선 굵기 (pt):", 120, savedShapeStroke, 0.1, 0, 20, DEFAULTS.shapeStroke);
     var fieldG = addNumberField(panelSize, "연결선 길이 (mm):", 120, savedGap, 0.1, 0, 50, DEFAULTS.gap);
     var fieldCSW = addNumberField(panelSize, "연결선 굵기 (pt):", 120, savedConnStroke, 0.1, 0, 20, DEFAULTS.connStroke);
 
     var inW = fieldW.input;
+    var inRH = fieldRH.input;
+    var inRR = fieldRR.input;
     var inSW = fieldSW.input;
     var inG = fieldG.input;
     var inCSW = fieldCSW.input;
@@ -150,10 +161,20 @@ try {
     try { win.defaultElement = null; } catch (defaultError) {}
     var btnCancel = groupBtn.add("button", undefined, "취소", {name: "cancel"});
 
-    rCircle.onClick = updatePreview;
-    rRect.onClick = updatePreview;
-    rHex.onClick = updatePreview;
-    rRandom.onClick = updatePreview;
+    function onShapeChange() {
+        syncRectFields();
+        updatePreview();
+    }
+    rCircle.onClick = onShapeChange;
+    rRect.onClick = onShapeChange;
+    rHex.onClick = onShapeChange;
+    rRandom.onClick = onShapeChange;
+    fieldW.onCommit = fieldRH.onCommit = function () {
+        syncRadiusLimit();
+        updatePreview();
+    };
+    syncRadiusLimit();
+    syncRectFields();
     btnShuffle.onClick = function () {
         rollShapeSequence();
         updatePreview();
@@ -249,6 +270,26 @@ try {
         var value = parseFloat(text);
         if (isNaN(value) || Math.abs(value) > 100) return 0;
         return value;
+    }
+
+    // 둥글기는 너비·높이 중 짧은 쪽의 절반까지만 된다. 슬라이더 끝과 입력값을 그 한계에 맞춘다
+    function syncRadiusLimit() {
+        var w = parseFloat(inW.text), h = parseFloat(inRH.text);
+        if (isNaN(w) || isNaN(h)) return;
+        var limit = Math.min(w, h) / 2;
+        fieldRR.maximum = limit;
+        fieldRR.slider.maxvalue = limit;
+        var r = parseFloat(inRR.text);
+        if (!isNaN(r) && r > limit) {
+            inRR.text = formatValue(limit);
+            fieldRR.slider.value = limit;
+        }
+    }
+
+    // 높이·둥글기는 단위체 모양이 둥근 사각형일 때만 쓰므로 그때만 켠다
+    function syncRectFields() {
+        fieldRH.group.enabled = rRect.value;
+        fieldRR.group.enabled = rRect.value;
     }
 
     function clampField(field, value) {
@@ -459,6 +500,22 @@ try {
             { ax: -hw,    ay:  hh-r, lx: -hw,        ly:  hh-r-K_BEZIER*r,  rx: -hw,       ry:  hh-r+K_BEZIER*r },
             { ax: -hw+r,  ay:  hh,   lx: -hw+r-K_BEZIER*r,  ly:  hh,        rx: -hw+r+K_BEZIER*r, ry:  hh       }
         ];
+        // 둥글기가 0이거나 짧은 변의 절반이면 이웃한 두 점이 같은 자리에 겹친다. 하나로 합쳐 앵커가 겹치지 않게 한다
+        var merged = [];
+        for (var m = 0; m < localPts.length; m++) {
+            var prev = merged.length ? merged[merged.length - 1] : null;
+            if (prev && samePoint(prev, localPts[m])) {
+                prev.rx = localPts[m].rx;
+                prev.ry = localPts[m].ry;
+            } else {
+                merged.push(localPts[m]);
+            }
+        }
+        if (merged.length > 1 && samePoint(merged[0], merged[merged.length - 1])) {
+            var tail = merged.pop();
+            merged[0].lx = tail.lx;
+            merged[0].ly = tail.ly;
+        }
         var item = container.pathItems.add();
         item.closed      = true;
         item.filled      = true;
@@ -466,8 +523,8 @@ try {
         item.stroked     = true;
         item.strokeColor = strokeColor;
         item.strokeWidth = strokeW;
-        for (var i = 0; i < localPts.length; i++) {
-            var lp     = localPts[i];
+        for (var i = 0; i < merged.length; i++) {
+            var lp     = merged[i];
             var anchor = rotatePoint(cx + lp.ax, cy + lp.ay, cx, cy, angleDeg);
             var left   = rotatePoint(cx + lp.lx, cy + lp.ly, cx, cy, angleDeg);
             var right  = rotatePoint(cx + lp.rx, cy + lp.ry, cx, cy, angleDeg);
@@ -475,9 +532,12 @@ try {
             pp.anchor         = anchor;
             pp.leftDirection  = left;
             pp.rightDirection = right;
-            pp.pointType      = PointType.SMOOTH;
+            pp.pointType      = (lp.lx !== lp.ax || lp.ly !== lp.ay) ? PointType.SMOOTH : PointType.CORNER; // 손잡이가 없으면 모서리점
         }
         return item;
+    }
+    function samePoint(a, b) {
+        return Math.abs(a.ax - b.ax) < 1e-6 && Math.abs(a.ay - b.ay) < 1e-6;
     }
 
     // ── 4. 옵션 읽기 · 생성 · 미리보기 ────────────────────────────────
@@ -486,8 +546,11 @@ try {
         var gVal = parseFloat(inG.text);
         var swVal = parseFloat(inSW.text);
         var cswVal = parseFloat(inCSW.text);
+        var rhVal = parseFloat(inRH.text);
+        var rrVal = parseFloat(inRR.text);
 
-        if (isNaN(wVal) || isNaN(gVal) || wVal <= 0 || gVal < 0 || isNaN(swVal) || isNaN(cswVal)) {
+        if (isNaN(wVal) || isNaN(gVal) || wVal <= 0 || gVal < 0 || isNaN(swVal) || isNaN(cswVal) ||
+            isNaN(rhVal) || rhVal <= 0 || isNaN(rrVal) || rrVal < 0) {
             if (showAlert) alert("올바른 숫자(0 이상)를 입력해주세요.");
             return null;
         }
@@ -506,6 +569,8 @@ try {
         return {
             shapeType: shapeType,
             width: wVal,
+            rectH: rhVal,
+            rectR: rrVal,
             gap: gVal,
             shapeStroke: swVal,
             connStroke: cswVal,
@@ -518,6 +583,8 @@ try {
     function saveOptions(options) {
         app.preferences.setStringPreference(PREF_PREFIX + "Shape", options.shapeType);
         app.preferences.setStringPreference(PREF_PREFIX + "Width", inW.text);
+        app.preferences.setStringPreference(PREF_PREFIX + "RectH", inRH.text);
+        app.preferences.setStringPreference(PREF_PREFIX + "RectR", inRR.text);
         app.preferences.setStringPreference(PREF_PREFIX + "Gap", inG.text);
         app.preferences.setStringPreference(PREF_PREFIX + "ShapeStroke", inSW.text);
         app.preferences.setStringPreference(PREF_PREFIX + "ConnStroke", inCSW.text);
@@ -565,6 +632,8 @@ try {
         var CONN_LEN = options.gap * MM;
         var UNIT     = SHAPE_W + CONN_LEN;
         var FIRST_OFFSET = SHAPE_W / 2;
+        var RECT_H   = options.rectH * MM;
+        var RECT_R   = Math.min(options.rectR * MM, SHAPE_W / 2, RECT_H / 2); // 둥글기는 짧은 쪽의 절반까지
         var SW       = options.shapeStroke; // 외곽선 굵기는 pt 단위
         var CONN_SW  = options.connStroke;  // 연결선 굵기는 pt 단위
 
@@ -622,8 +691,6 @@ try {
                     var HEX_H = SHAPE_W / 1.5;
                     drawRotatedHexagon(polymerGroup, ptC.x, ptC.y, SHAPE_W, HEX_H, ang, SW, black, currentFill);
                 } else if (unitShape === "rect") {
-                    var RECT_H = SHAPE_W * (2.0/3.0);
-                    var RECT_R = SHAPE_W * 0.11;
                     drawRoundedRotatedRect(polymerGroup, ptC.x, ptC.y, SHAPE_W, RECT_H, RECT_R, ang, SW, black, currentFill);
                 } else if (unitShape === "tri") {
                     drawRegularPolygon(polymerGroup, ptC.x, ptC.y, SHAPE_W, 3, ang, SW, black, currentFill);
