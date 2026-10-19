@@ -38,7 +38,8 @@ try {
         {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
-    var HEAD_LENGTH = 1.4 * MM;
+    // 화살촉 크기 100% = 일러스트레이터 100%: 삼각형 길이 = 카탈로그 삼각형(8.6) × 선 두께(pt) (그림 제작 규칙 4.7)
+    var HEAD_LENGTH = HEAD_CATALOG[HEAD_TRIANGLE].length * LINE_WIDTH_PT;
     var HEAD_WIDTH = 1 * MM;
     var NORTH_K = 60;
     var SOUTH_K = 10;

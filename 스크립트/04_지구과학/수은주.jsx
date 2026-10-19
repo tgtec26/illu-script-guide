@@ -57,7 +57,6 @@ try {
     var MIN_ARROW_HEAD_MM = 1;
     var LEADER_MM = 5;
     var TEXT_GAP_MM = 1;
-    var DIM_HEAD_LEN_MM = 1.8;
     var DIM_HEAD_WIDTH_MM = 0.9;
     // 치수선 화살촉 모양
     var HEAD_TRIANGLE = 0;
@@ -72,6 +71,8 @@ try {
         {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
+    // 치수선 화살촉 크기 100% = 일러스트레이터 100%: 삼각형 머리 길이(pt) = 카탈로그 삼각형(8.6) × 치수선 두께 LINE_PT (그림 제작 규칙 4.7)
+    var DIM_HEAD_LEN_PT = HEAD_CATALOG[HEAD_TRIANGLE].length * LINE_PT;
     var DIM_PAD_MM = 0.8;
     var DIM_GAP_MIN_MM = 8;
     var DIM_GAP_RATIO = 0.2;
@@ -407,7 +408,7 @@ try {
         var bTextTop = -Infinity;
 
         // 높이 표시: 점선 + 치수선 + 값
-        if (options.heightOn && colTop - surfY > 2 * DIM_HEAD_LEN_MM * MM * options.headSize / 100) {
+        if (options.heightOn && colTop - surfY > 2 * DIM_HEAD_LEN_PT * options.headSize / 100) {
             var tubeLeftTop = g.axisX(colTop) - g.hw;
             var dimX = Math.min(Math.min(tubeLeftSurf, tubeLeftTop) - Math.max(DIM_GAP_MIN_MM * MM, DIM_GAP_RATIO * o.troughW * MM),
                 leftLimit - 3 * MM);
@@ -416,7 +417,7 @@ try {
             level.name = "Level";
 
             var headScale = options.headSize / 100;
-            var headLen = DIM_HEAD_LEN_MM * MM * headScale;
+            var headLen = DIM_HEAD_LEN_PT * headScale;
             var lineInset = dimLineInset(headLen, options.headShape);
             var dimMid = (surfY + colTop) / 2;
             var dimText = options.heightText === "" ? null : makeText(group, options.heightText);
@@ -686,9 +687,9 @@ try {
         return out;
     }
 
-    // 치수선 화살촉의 점들: 끝이 (x, y), dir 1이면 위를 가리킨다. 삼각형 머리 길이가 DIM_HEAD_LEN_MM × scale(1 = 100%)이고 다른 모양도 같은 배율을 쓴다
+    // 치수선 화살촉의 점들: 끝이 (x, y), dir 1이면 위를 가리킨다. 삼각형 머리 길이가 DIM_HEAD_LEN_PT × scale(1 = 100%)이고 다른 모양도 같은 배율을 쓴다
     function dimHeadPoints(x, y, dir, shape, scale) {
-        var k = DIM_HEAD_LEN_MM * MM * scale / HEAD_CATALOG[HEAD_TRIANGLE].length;
+        var k = DIM_HEAD_LEN_PT * scale / HEAD_CATALOG[HEAD_TRIANGLE].length;
         var poly = HEAD_CATALOG[shape].poly;
         var points = [];
         for (var i = 0; i < poly.length; i++) points.push([x + poly[i][0] * k, y - dir * poly[i][1] * k]);

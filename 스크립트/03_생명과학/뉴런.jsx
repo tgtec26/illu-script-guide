@@ -518,13 +518,13 @@ try {
             formPaint(p, fillK, strokeK, width);
             return p;
         };
-        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리, 3 작살형), 크기는 o.headSize(%): 삼각형 머리 길이가 headLength × 크기이고 다른 모양도 같은 배율을 쓴다.
+        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리, 3 작살형), 크기는 o.headSize(%): 삼각형 머리 길이가 headLength(없으면 8.6 × 선 두께) × 크기이고 다른 모양도 같은 배율을 쓴다.
         // 선은 머리 속(lineEnd)에서 끝나 틈이 없다
         t.arrow = function(a, b, width, k, headLength) {
             if (k === undefined) k = 100;
             var scale = o && o.headSize ? o.headSize / 100 : 1;
             var shape = o && o.headShape ? o.headShape : 0;
-            var head = (headLength || 1.6 * FORM_MM) * scale;
+            var head = (headLength || HEAD_CATALOG[0].length * width) * scale;   // 일러스트레이터 100%: 카탈로그 삼각형 × 선 두께 (그림 제작 규칙 4.7)
             var dx = b[0] - a[0], dy = b[1] - a[1];
             var len = Math.sqrt(dx * dx + dy * dy);
             if (len < 0.01) return;

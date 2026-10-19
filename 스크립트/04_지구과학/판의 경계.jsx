@@ -40,7 +40,8 @@ try {
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
     var HEAD_SIZE_RANGE = [30, 300];
-    var BASE_HEAD_LENGTH = 2 * MM;
+    // 화살촉 크기 100% = 일러스트레이터 100%: 삼각형 길이 = 카탈로그 삼각형(8.6) × 선 두께(pt) (그림 제작 규칙 4.7)
+    var BASE_HEAD_LENGTH = HEAD_CATALOG[HEAD_TRIANGLE].length * ARROW_WIDTH_PT;
     var BASE_HEAD_WIDTH = 1.6 * MM;
     var HEAD_LENGTH = BASE_HEAD_LENGTH;
     var HEAD_WIDTH = BASE_HEAD_WIDTH;

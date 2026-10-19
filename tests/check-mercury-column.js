@@ -31,7 +31,7 @@ function extractVar(name) {
 
 const constants = ["MM", "KAPPA", "MOUTH_MARGIN_MM", "MIN_VACUUM_MM", "CORNER_R_MM", "FRAME_W_RANGE", "FRAME_H_RANGE",
   "TROUGH_W_RANGE", "TROUGH_H_RANGE", "DEPTH_RANGE", "TUBE_W_RANGE", "TUBE_LEN_RANGE", "TILT_RANGE", "COL_RANGE", "LINE_RANGE",
-  "DIM_HEAD_LEN_MM", "HEAD_TRIANGLE", "HEAD_CATALOG"];
+  "HEAD_TRIANGLE", "HEAD_CATALOG", "LINE_PT", "DIM_HEAD_LEN_PT"];
 const names = ["clampOptions", "mouthHeights", "mercuryGeometry", "uPath", "corner", "cornerAt", "clamp", "catalogPoints", "dimHeadPoints", "dimLineInset"];
 const lib = new Function(`${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
   `return {${[...constants, ...names].join(",")}};`)();
@@ -114,11 +114,12 @@ for (const tilt of [-45, -20, 0, 10, 30, 60]) {
   assert.deepStrictEqual(g.troughFill[0].anchor, [-50, 40], "mercury fill stops at the surface");
   near(g.troughOutline[2].left[0], -42 - lib.KAPPA * 8, 1e-9, "corner handle uses KAPPA");
 }
-// 치수선 화살촉: 일러스트레이터 화살촉 4종류(tools/arrowheads.json). 삼각형 머리 길이가 DIM_HEAD_LEN_MM × scale이고 다른 모양도 같은 배율, 위·아래 방향
+// 치수선 화살촉: 일러스트레이터 화살촉 4종류(tools/arrowheads.json). 삼각형 머리 길이가 DIM_HEAD_LEN_PT(= 8.6 × 치수선 0.4pt, 일러스트레이터 100%) × scale이고 다른 모양도 같은 배율, 위·아래 방향
 {
   const {catalog, nearPoints} = require("./arrowhead-catalog.js");
   assert.deepStrictEqual(lib.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), "same data as tools/arrowheads.json");
-  const len = lib.DIM_HEAD_LEN_MM * MM;
+  const len = lib.DIM_HEAD_LEN_PT;
+  near(len, 8.6 * 0.4, 1e-9, "일러스트레이터 100%: 삼각형 8.6 × 선 0.4pt");
   const k = len / 8.6;
   for (let shape = 0; shape < 4; shape++) {
     for (const dir of [1, -1]) {
