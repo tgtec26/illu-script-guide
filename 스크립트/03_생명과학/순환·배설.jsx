@@ -29,7 +29,6 @@ try {
     var MM = 2.834645669;
     var LINE_WIDTH_PT = 0.3;
     // 화살촉 기본 크기 (화살촉 크기 100%). 그릴 때 HEAD_LENGTH·HEAD_WIDTH를 배율에 맞춘다
-    var BASE_HEAD_LENGTH = 1.8 * MM;
     var BASE_HEAD_WIDTH = 1.4 * MM;
     var HEAD_TRIANGLE = 0;
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
@@ -42,7 +41,8 @@ try {
         {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
-    var HEAD_LENGTH = BASE_HEAD_LENGTH;
+    // 크기 100% = 일러스트레이터 100%: 삼각형 길이 = 카탈로그 삼각형(8.6) × 화살표 선 두께(pt) (그림 제작 규칙 4.7). 그릴 때 buildPreview에서 다시 정한다
+    var HEAD_LENGTH = HEAD_CATALOG[HEAD_TRIANGLE].length * LINE_WIDTH_PT;
     var HEAD_WIDTH = BASE_HEAD_WIDTH;
     var ARTERIAL = {cmyk: [0, 90, 80, 0], rgb: [220, 40, 40], k: 15};
     var VENOUS = {cmyk: [85, 45, 0, 0], rgb: [40, 100, 200], k: 55};
@@ -209,7 +209,7 @@ try {
     function buildPreview() {
         previewGroup = layer.groupItems.add();
         previewGroup.name = KINDS[kind];
-        HEAD_LENGTH = BASE_HEAD_LENGTH * headPct / 100;
+        HEAD_LENGTH = HEAD_CATALOG[HEAD_TRIANGLE].length * arrowPt * headPct / 100;
         HEAD_WIDTH = BASE_HEAD_WIDTH * headPct / 100;
         var H = sizeMm * MM;
         if (kind === 0) {
