@@ -17,7 +17,7 @@ try {
 //   - 액체: 기구 안쪽을 바닥부터 높이(%)까지 채운 면(선 없음, 이름 '액체')과 수면 선. 온도계는 액주 높이, 주사기는 피스톤 위치.
 //     주사기 속 공간은 선·면 없는 닫힌 패스 '기체'로 남긴다. 둘 다 입자 상태 모형(입자 상태 모형)으로 채울 수 있다.
 //   - 눈금: 안쪽 왼쪽 벽을 따라 짧은 선 (5칸마다 길게). 온도계는 관 오른쪽 바깥.
-// 선은 0.3pt 검정. 결과는 그룹 하나.
+// 유리 선(기구 윤곽, 유리 두께가 있으면 두 겹 선의 테두리)·수면 선·눈금 선은 굵기(pt)를 따로 정한다. 기본 0.3pt 검정. 결과는 그룹 하나.
 
 (function() {
     if (app.documents.length === 0) {
@@ -50,6 +50,7 @@ try {
     var K_RANGE = [0, 100];
     var TICK_RANGE = [2, 50];
     var GLASS_RANGE = [0, 5];
+    var LINE_WEIGHT_RANGE = [0.1, 3];
 
     var doc = app.activeDocument;
     var rect = getSelectedRectangle(doc.selection);
@@ -70,11 +71,14 @@ try {
     var ticksOn = false;
     var tickCount = 10;
     var glassMm = 0;
+    var glassLinePt = LINE_WIDTH_PT;     // 유리(기구 윤곽) 선 굵기
+    var surfaceLinePt = LINE_WIDTH_PT;   // 수면 선 굵기
+    var tickLinePt = LINE_WIDTH_PT;      // 눈금 선 굵기
     var offsetXmm = 0;
     var offsetYmm = 0;
     var previewEnabled = true;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다 (너비·높이는 선택한 사각형이나 종류별 기본 크기)
-    var DEFAULTS = {levelPct: levelPct, liquidK: liquidK, tickCount: tickCount, glassMm: glassMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    var DEFAULTS = {levelPct: levelPct, liquidK: liquidK, tickCount: tickCount, glassMm: glassMm, glassLinePt: glassLinePt, surfaceLinePt: surfaceLinePt, tickLinePt: tickLinePt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
     var widthMm, heightMm;
     resetSize();
@@ -102,15 +106,21 @@ try {
     var heightRow = addValueRow(kindPanel, "높이", "mm", heightMm, SIZE_RANGE[0], SIZE_RANGE[1], 0.5, 1);
     var glassRow = addValueRow(kindPanel, "유리 두께", "mm", glassMm, GLASS_RANGE[0], GLASS_RANGE[1], 0.1, 1);
     glassRow.input.helpTip = "0이면 한 줄 선, 올리면 흰 안쪽의 두 겹 유리(바깥쪽으로 두꺼워지고 열린 끝은 둥글게 조금 더 두껍다). 받침·날개·피스톤은 그대로";
+    var glassLineRow = addValueRow(kindPanel, "유리 선", "pt", glassLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2);
+    glassLineRow.input.helpTip = "기구 윤곽 선 굵기. 유리 두께가 있으면 두 겹 선의 검정 테두리 굵기";
 
     var liquidPanel = addPanel(dlg, "액체");
     var liquidCheck = liquidPanel.add("checkbox", undefined, "액체 넣기");
     var levelRow = addValueRow(liquidPanel, KINDS[kind].level, "%", levelPct, LEVEL_RANGE[0], LEVEL_RANGE[1], 1, 0);
     var kRow = addValueRow(liquidPanel, "액체 색", "K", liquidK, K_RANGE[0], K_RANGE[1], 10, 0);
+    var surfaceLineRow = addValueRow(liquidPanel, "수면 선", "pt", surfaceLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2);
+    surfaceLineRow.input.helpTip = "액체 윗면 선 굵기";
 
     var tickPanel = addPanel(dlg, "눈금");
     var tickCheck = tickPanel.add("checkbox", undefined, "눈금 넣기 (5칸마다 길게)");
     var tickRow = addValueRow(tickPanel, "칸 수", "", tickCount, TICK_RANGE[0], TICK_RANGE[1], 1, 0);
+    var tickLineRow = addValueRow(tickPanel, "눈금 선", "pt", tickLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2);
+    tickLineRow.input.helpTip = "눈금 선 굵기";
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
@@ -149,9 +159,12 @@ try {
     bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; }, function() { return RECT_SIZE !== null ? RECT_SIZE[0] : KINDS[kind].size[0]; });
     bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; }, function() { return RECT_SIZE !== null ? RECT_SIZE[1] : KINDS[kind].size[1]; });
     bindValueRow(glassRow, function() { return glassMm; }, function(v) { glassMm = v; }, function() { return DEFAULTS.glassMm; });
+    bindValueRow(glassLineRow, function() { return glassLinePt; }, function(v) { glassLinePt = v; }, function() { return DEFAULTS.glassLinePt; });
     bindValueRow(levelRow, function() { return levelPct; }, function(v) { levelPct = v; }, function() { return DEFAULTS.levelPct; });
     bindValueRow(kRow, function() { return liquidK; }, function(v) { liquidK = v; }, function() { return DEFAULTS.liquidK; });
+    bindValueRow(surfaceLineRow, function() { return surfaceLinePt; }, function(v) { surfaceLinePt = v; }, function() { return DEFAULTS.surfaceLinePt; });
     bindValueRow(tickRow, function() { return tickCount; }, function(v) { tickCount = v; }, function() { return DEFAULTS.tickCount; });
+    bindValueRow(tickLineRow, function() { return tickLinePt; }, function(v) { tickLinePt = v; }, function() { return DEFAULTS.tickLinePt; });
     bindPositionRow(offsetXRow, function() { return offsetXmm; }, function(v) { offsetXmm = v; }, true, function() { return DEFAULTS.offsetXmm; });
     bindPositionRow(offsetYRow, function() { return offsetYmm; }, function(v) { offsetYmm = v; }, false, function() { return DEFAULTS.offsetYmm; });
     previewCheck.onClick = function() {
@@ -200,7 +213,9 @@ try {
     function syncEnabled() {
         setRowEnabled(levelRow, liquidOn || kind === 4);
         setRowEnabled(kRow, liquidOn);
+        setRowEnabled(surfaceLineRow, liquidOn && kind !== 4);
         setRowEnabled(tickRow, ticksOn);
+        setRowEnabled(tickLineRow, ticksOn);
         liquidCheck.text = kind === 4 ? "액체 넣기 (주사기는 피스톤만 움직임)" : "액체 넣기";
     }
 
@@ -248,19 +263,19 @@ try {
                 liquidPath.fillColor = makeGray(liquidK);
                 var surface = spanAt(g.interior, g.levelY);
                 if (surface !== null && g.levelY < g.interiorTop - 0.01) {
-                    strokeLine(previewGroup, [[surface[0], g.levelY], [surface[1], g.levelY]], black);
+                    strokeLine(previewGroup, [[surface[0], g.levelY], [surface[1], g.levelY]], black, surfaceLinePt);
                 }
             }
         }
         for (var i = 0; i < g.outlines.length; i++) {
             if (g.outlines[i].glass > 0) {
-                drawGlassWall(previewGroup, g.outlines[i].points, g.outlines[i].glass, g.outlines[i].closed, g.outlines[i].noRims);
+                drawGlassWall(previewGroup, g.outlines[i].points, g.outlines[i].glass, g.outlines[i].closed, g.outlines[i].noRims, glassLinePt);
                 continue;
             }
             var outline = drawBezier(previewGroup, g.outlines[i].points, g.outlines[i].closed);
             outline.stroked = true;
             outline.strokeColor = black;
-            outline.strokeWidth = LINE_WIDTH_PT;
+            outline.strokeWidth = glassLinePt;
             outline.filled = g.outlines[i].fill !== undefined;
             if (outline.filled) outline.fillColor = g.outlines[i].fill === "liquid" ? makeGray(liquidK) : makeGray(g.outlines[i].fill);
         }
@@ -281,7 +296,7 @@ try {
         }
         if (ticksOn) {
             var ticks = tickLines(g, tickCount);
-            for (var t = 0; t < ticks.length; t++) strokeLine(previewGroup, ticks[t], black);
+            for (var t = 0; t < ticks.length; t++) strokeLine(previewGroup, ticks[t], black, tickLinePt);
         }
         if (offsetXmm !== 0 || offsetYmm !== 0) previewGroup.translate(offsetXmm * MM, offsetYmm * MM);
     }
@@ -653,11 +668,12 @@ try {
 
     // 두꺼운 유리: 검정(두께 + 테두리 두 줄) → 흰색(두께) 순서로 겹쳐 흰 안쪽의 두 겹 선을 만든다.
     // 열린 벽은 끝이 둥글고, 양 끝에는 두께의 RIM_SCALE배인 둥근 알을 같은 순서로 겹쳐 조금 더 두껍게 한다.
-    // 닫힌 모양(온도계)과 noRims(주사기 통)는 알이 없다. 닫힌 모양은 검정 층을 흰색으로 채워 안쪽을 가린다
-    function drawGlassWall(container, points, glass, closed, noRims) {
+    // 닫힌 모양(온도계)과 noRims(주사기 통)는 알이 없다. 닫힌 모양은 검정 층을 흰색으로 채워 안쪽을 가린다.
+    // linePt는 검정 테두리 한 줄의 굵기(유리 선)
+    function drawGlassWall(container, points, glass, closed, noRims, linePt) {
         var group = container.groupItems.add();
         group.name = "유리";
-        var layers = [[100, glass + LINE_WIDTH_PT * 2], [0, glass]];
+        var layers = [[100, glass + linePt * 2], [0, glass]];
         var ends = closed || noRims ? [] : [points[0].anchor, points[points.length - 1].anchor];
         for (var i = 0; i < layers.length; i++) {
             var wall = drawBezier(group, points, closed);
@@ -679,13 +695,13 @@ try {
         return group;
     }
 
-    function strokeLine(container, points, color) {
+    function strokeLine(container, points, color, widthPt) {
         var line = container.pathItems.add();
         line.setEntirePath(points);
         line.filled = false;
         line.stroked = true;
         line.strokeColor = color;
-        line.strokeWidth = LINE_WIDTH_PT;
+        line.strokeWidth = widthPt;
         return line;
     }
 
@@ -851,8 +867,9 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v2", kind, liquidOn ? "1" : "0", levelPct, liquidK, ticksOn ? "1" : "0", tickCount,
-            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", glassMm];
+        var parts = ["v3", kind, liquidOn ? "1" : "0", levelPct, liquidK, ticksOn ? "1" : "0", tickCount,
+            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", glassMm,
+            formatNumber(glassLinePt, 2), formatNumber(surfaceLinePt, 2), formatNumber(tickLinePt, 2)];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -861,7 +878,8 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v2" || p.length !== 11) return;
+        // v2(세 선 굵기가 생기기 전)는 굵기를 기본 0.3pt로 두고 나머지를 그대로 읽는다
+        if (!((p[0] === "v3" && p.length === 14) || (p[0] === "v2" && p.length === 11))) return;
         kind = restoreNumber(p[1], kind, [0, KINDS.length - 1], 1);
         liquidOn = p[2] === "1";
         levelPct = restoreNumber(p[3], levelPct, LEVEL_RANGE, 1);
@@ -872,6 +890,11 @@ try {
         offsetYmm = restoreNumber(p[8], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         previewEnabled = p[9] === "1";
         glassMm = restoreNumber(p[10], glassMm, GLASS_RANGE, 0.1);
+        if (p[0] === "v3") {
+            glassLinePt = restoreNumber(p[11], glassLinePt, LINE_WEIGHT_RANGE, 0.05);
+            surfaceLinePt = restoreNumber(p[12], surfaceLinePt, LINE_WEIGHT_RANGE, 0.05);
+            tickLinePt = restoreNumber(p[13], tickLinePt, LINE_WEIGHT_RANGE, 0.05);
+        }
     }
 
     function restoreNumber(text, fallback, range, step) {

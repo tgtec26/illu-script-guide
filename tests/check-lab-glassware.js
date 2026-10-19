@@ -137,6 +137,17 @@ for (let kind = 0; kind < 6; kind++) {
   const bottom = Math.min(...tube.map((p) => p.anchor[1]));
   near(bottom, 0 - 1, 1e-9, "test tube bottom");
 }
-assert.ok(source.includes('if (p[0] !== "v2" || p.length !== 11) return;'), "settings bumped to v2");
+assert.ok(source.includes('"v3",'), "settings tag bumped for the line weight fields");
+assert.ok(source.includes('if (!((p[0] === "v3" && p.length === 14) || (p[0] === "v2" && p.length === 11))) return;'), "v2 saves still load, v3 adds three fields");
+assert.ok(source.includes('if (p[0] === "v3") {'), "line weights are read only from v3 so v2 saves keep 0.3pt");
+assert.ok(source.includes('addValueRow(kindPanel, "유리 선", "pt", glassLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2)'), "glass line row");
+assert.ok(source.includes('addValueRow(liquidPanel, "수면 선", "pt", surfaceLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2)'), "surface line row");
+assert.ok(source.includes('addValueRow(tickPanel, "눈금 선", "pt", tickLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2)'), "tick line row");
+assert.ok(source.includes("black, surfaceLinePt);"), "surface line uses its own weight");
+assert.ok(source.includes("strokeLine(previewGroup, ticks[t], black, tickLinePt);"), "tick lines use their own weight");
+assert.ok(source.includes("outline.strokeWidth = glassLinePt;"), "plain outlines use the glass line weight");
+assert.ok(source.includes("g.outlines[i].noRims, glassLinePt);"), "thick glass follows the glass line weight");
+assert.ok(source.includes("var layers = [[100, glass + linePt * 2], [0, glass]];"), "black layer follows the glass line weight");
+assert.ok(!/strokeWidth = LINE_WIDTH_PT/.test(source), "no stroke is pinned to the fixed 0.3pt any more");
 assert.ok(source.includes('var PREF_KEY = "ObjectLabGlassware/settings";'));
 console.log("lab glassware checks passed");
