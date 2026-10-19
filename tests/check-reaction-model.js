@@ -42,7 +42,7 @@ function extractVar(name) {
 }
 
 const tables = ["MINUS", "ANGSTROM", "regionCache", "TEXTBOOK_OVERLAP", "TEXTBOOK_H_RADIUS", "ELEMENTS", "SPHERE_COLORS", "SPHERE_GRAYS", "NITRATE", "BRACKET", "MOLECULES", "REACT_PRESETS", "GAS_PRESETS"];
-const functions = ["dia", "atomRadius", "polygonArea", "pointInPolygon", "mergeHoles", "molRegions", "parseEquations", "parseSide", "molLayout", "clusterRows", "arrangeSpecies", "formSubFlags", "sphereTextK"];
+const functions = ["dia", "atomRadius", "polygonArea", "pointInPolygon", "mergeHoles", "molRegions", "parseEquations", "parseSide", "molLayout", "clusterRows", "arrangeSpecies", "formSubFlags", "sphereTextK", "blockArrowPoints"];
 const names = tables.concat(functions);
 const lib = new Function(`${tables.map(extractVar).join("\n")}\n${functions.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
@@ -282,6 +282,39 @@ for (const presets of [lib.REACT_PRESETS, lib.GAS_PRESETS]) {
   assert.strictEqual(flags("H2O2"), "0101");
   assert.strictEqual(flags("물(2H2O)"), "000010" + "0");
   assert.strictEqual(flags("C10"), "011");
+}
+
+// 큰 화살표: 기본(굵기·촉 100%)은 옛 7점 모양, 굵기는 줄기 두께, 촉 크기는 촉 길이·너비. 웹 sci-illu-web의 blockArrowPoints와 같은 식
+{
+  const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 1e-9, `${label}: ${actual} vs ${expected}`);
+  const L = 14 * 2.834645669;
+  assert.deepStrictEqual(lib.blockArrowPoints(0, L, 0), [[0, 0.11 * L], [0.64 * L, 0.11 * L], [0.64 * L, 0.21 * L], [L, 0],
+    [0.64 * L, -0.21 * L], [0.64 * L, -0.11 * L], [0, -0.11 * L]]);
+  assert.deepStrictEqual(lib.blockArrowPoints(0, L, 0, 100, 100), lib.blockArrowPoints(0, L, 0));
+  const thick = lib.blockArrowPoints(0, L, 0, 150, 100);
+  near(thick[0][1], 0.165 * L, "shaft 1.5x");
+  near(thick[2][1], 0.21 * L, "head unchanged");
+  const big = lib.blockArrowPoints(0, L, 0, 100, 200);
+  near(big[2][1], 0.42 * L, "head twice as wide");
+  near(big[1][0], L - 0.72 * L, "head twice as long");
+  near(big[0][1], 0.11 * L, "shaft unchanged");
+  const small = lib.blockArrowPoints(0, L, 0, 250, 30);
+  assert.ok(small[0][1] <= small[2][1] + 1e-9, "shaft never wider than the head");
+  assert.ok(lib.blockArrowPoints(0, L, 0, 100, 300)[1][0] >= -1e-9, "head never longer than the arrow");
+  // 선 화살표도 큰 화살표도 같은 굵기·촉 옵션을 따른다 (화살표 모양 0 큰 화살표, 1 선 화살표)
+  assert.ok(/t\.blockArrow\(x0, x1, y, o\.arrowColor, o\.arrowThick, o\.headSize\)/.test(source), "block arrow gets thickness and head size");
+  assert.ok(/t\.headArrow\(\[x0, y\], \[x1, y\], o\.arrowThick \/ 100,/.test(source), "line arrow width follows thickness");
+}
+
+// 화살표 굵기 옵션: 화학 반응 탭 표시 패널 끝에 붙인다(앞의 행 순서를 바꾸면 UI 덮어쓰기 경로가 어긋난다). 화학 반응 탭만 저장 태그를 v8로 올린다
+{
+  assert.ok(source.includes('{key: "arrowThick", label: "화살표 굵기", unit: "%", min: 40, max: 250, step: 10, value: 100}'), "arrowThick control");
+  const react = source.slice(source.indexOf("function makeReactEngine()"), source.indexOf("function drawReact("));
+  const gas = source.slice(source.indexOf("function makeGasEngine()"), source.indexOf("function drawGas("));
+  assert.ok(/value: 0\},\s*\{key: "arrowThick"[^\n]*\n\s*\],\s*version: "v8",/.test(react), "arrowThick is the last react control and the react tab is v8");
+  assert.ok(!gas.includes("arrowThick") && !gas.includes("version:"), "gas tab keeps its layout and v7 tag");
+  assert.ok(source.includes('spec.version || "v7"'), "tag comes from the engine, default v7");
+  assert.ok(!source.includes('"v7")') || source.includes('(spec.version || "v7")'), "no hard-coded v7 tag left in save/load");
 }
 
 console.log("check-reaction-model: ok");

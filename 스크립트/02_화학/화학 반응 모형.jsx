@@ -182,8 +182,10 @@ try {
                 {key: "arrowColor", label: "화살표 색", items: ["파랑", "빨강", "검정"], value: 0},
                 {key: "headShape", label: "화살촉 모양", items: ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"], order: [3, 2, 0, 1], value: 0},
                 {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
-                {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 0}
+                {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 0},
+                {key: "arrowThick", label: "화살표 굵기", unit: "%", min: 40, max: 250, step: 10, value: 100}
             ],
+            version: "v8",
             draw: drawReact
         });
     }
@@ -198,11 +200,11 @@ try {
         var sides = [reaction.left, reaction.right];
         var bottom, width;
 
-        // 큰 화살표, 또는 화살촉 모양·크기를 고르는 선 화살표 (선과 촉은 화살표 색을 따른다)
+        // 큰 화살표(굵기·촉 크기), 또는 화살촉 모양·크기를 고르는 선 화살표 (선과 촉은 화살표 색을 따른다). 굵기 %는 큰 화살표는 줄기 두께, 선 화살표는 1 pt 기준 선 굵기
         function mainArrow(x0, x1, y) {
-            if (o.arrowStyle === 0) { t.blockArrow(x0, x1, y, o.arrowColor); return; }
+            if (o.arrowStyle === 0) { t.blockArrow(x0, x1, y, o.arrowColor, o.arrowThick, o.headSize); return; }
             var color = ARROW_COLORS[o.arrowColor];
-            t.headArrow([x0, y], [x1, y], 1, color === null ? 100 : (t.mode === 1 ? color.grayBottom : color.bottom), 2.2 * mm);
+            t.headArrow([x0, y], [x1, y], o.arrowThick / 100, color === null ? 100 : (t.mode === 1 ? color.grayBottom : color.bottom), 2.2 * mm);
         }
 
         if (o.arrange === 2) {
@@ -1087,7 +1089,7 @@ try {
         }
 
         function saveSettings() {
-            var parts = ["v7"];
+            var parts = [spec.version || "v7"];
             for (var i = 0; i < controls.length; i++) {
                 var ctl = controls[i];
                 if (!ctl.key) continue;
@@ -1104,7 +1106,7 @@ try {
             var p = String(raw).split("|");
             var keyed = [];
             for (var i = 0; i < controls.length; i++) if (controls[i].key) keyed.push(controls[i]);
-            if (p[0] !== "v7" || p.length !== keyed.length + 1) return;
+            if (p[0] !== (spec.version || "v7") || p.length !== keyed.length + 1) return;
             var values = [];
             for (var k = 0; k < keyed.length; k++) {
                 var ctl = keyed[k], text = p[k + 1];
@@ -1140,6 +1142,17 @@ try {
             out.push([tip[0] - d[0] * poly[i][1] * k + n[0] * poly[i][0] * k, tip[1] - d[1] * poly[i][1] * k + n[1] * poly[i][0] * k]);
         }
         return out;
+    }
+
+    // 큰 화살표 모양: 줄기와 촉이 이어진 7점. 길이 L에서 촉 길이 0.36 L, 촉 반너비 0.21 L, 줄기 반두께 0.11 L이 기본(100%).
+    // head %는 촉 길이·너비, thick %는 줄기 두께. 줄기는 촉보다 두꺼워지지 않고 촉은 화살표 길이를 넘지 않는다
+    function blockArrowPoints(x0, x1, y, thick, head) {
+        if (thick === undefined) thick = 100;
+        if (head === undefined) head = 100;
+        var length = x1 - x0, headLength = Math.min(length * 0.36 * head / 100, length), headHalf = length * 0.21 * head / 100;
+        var shaftHalf = Math.min(length * 0.11 * thick / 100, headHalf);
+        return [[x0, y + shaftHalf], [x1 - headLength, y + shaftHalf], [x1 - headLength, y + headHalf], [x1, y],
+            [x1 - headLength, y - headHalf], [x1 - headLength, y - shaftHalf], [x0, y - shaftHalf]];
     }
 
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다. 색은 K값(숫자) 또는 [r, g, b]
@@ -1195,11 +1208,9 @@ try {
             if (len > lineEnd) t.line(a, [b[0] - ux * lineEnd, b[1] - uy * lineEnd], width, k);
             t.path(catalogPoints(shape, b, [ux, uy], unit), true, k, null, 0);
         };
-        // 속 채운 화살표(위가 밝고 아래가 어두운 그라데이션). x0 → x1, 세로 가운데 y
-        t.blockArrow = function(x0, x1, y, colorIndex) {
-            var length = x1 - x0, headLength = length * 0.36, headHalf = length * 0.21, shaftHalf = length * 0.11;
-            var p = t.path([[x0, y + shaftHalf], [x1 - headLength, y + shaftHalf], [x1 - headLength, y + headHalf], [x1, y],
-                [x1 - headLength, y - headHalf], [x1 - headLength, y - shaftHalf], [x0, y - shaftHalf]], true, null, null, 0);
+        // 속 채운 화살표(위가 밝고 아래가 어두운 그라데이션). x0 → x1, 세로 가운데 y. thick·head는 줄기 굵기·촉 크기 %(없으면 100)
+        t.blockArrow = function(x0, x1, y, colorIndex, thick, head) {
+            var p = t.path(blockArrowPoints(x0, x1, y, thick, head), true, null, null, 0);
             p.filled = true;
             var color = ARROW_COLORS[colorIndex];
             if (color === null) {
