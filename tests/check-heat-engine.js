@@ -15,7 +15,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced: ${name}`);
 }
 const names = ["splitNames", "solveCycle", "plotPoint", "sampleProcess", "midOnPolyline", "distinctSorted", "insidePolygon", "processPoint", "curvePieces", "cycleAnchors", "catalogPoints", "headUnit", "drawCycle"];
-const catalogSource = source.slice(source.indexOf("var HEAD_SHAPES"), source.indexOf("var HEAD_EXAM_LENGTH_PT = 4;") + "var HEAD_EXAM_LENGTH_PT = 4;".length);
+const catalogSource = source.slice(source.indexOf("var HEAD_SHAPES"), source.indexOf("var HEAD_EXAM_LENGTH_PT = 4.84;") + "var HEAD_EXAM_LENGTH_PT = 4.84;".length);
 const f = new Function(`var GAMMA = 5 / 3, PROCESS_NAMES = ["등압", "등적", "등온", "단열"];
 var PROCESS_AB = [[0, 1], [1, 0], [1, 1], [GAMMA, 1]];\n${catalogSource}\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
@@ -103,9 +103,10 @@ calls = run({ p1: 0, r1: 2, p2: 1, r2: 0.5, p3: 0, p4: 1, showGuides: true, xTic
 assert.strictEqual(calls.filter((c) => c.k === "line" && c.a[3]).length, 4, "x 두 곳 + y 두 곳의 점선");
 assert.deepStrictEqual(calls.filter((c) => c.k === "textAt" && c.a[4] === "below").map((c) => c.a[0]), ["V0", "2V0"]);
 assert.deepStrictEqual(calls.filter((c) => c.k === "textAt" && c.a[4] === "left" && c.a[0] !== "0").map((c) => c.a[0]), ["P0", "2P0"]);
-// 화살촉: 기본은 작살형이고 길이 4pt(100%). 선은 lineEnd(9)만큼, 모양은 카탈로그 그대로
+// 화살촉: 기본은 작살형이고 길이 4.84pt(100%) = 일러스트레이터 100%(12.1 × 선 0.4pt). 선은 lineEnd(9)만큼, 모양은 카탈로그 그대로
 const o100 = { headShape: 3, headSize: 100 }, k = f.headUnit(o100);
-near(k, 4 / 12.1, "배율");
+near(k, 4.84 / 12.1, "배율");
+near(k, 0.4, "일러스트레이터 100%는 카탈로그(선 1pt) × 선 두께 0.4pt");
 const harpoon = f.catalogPoints(3, [10, 0], [1, 0], k);
 assert.strictEqual(harpoon.length, 6);
 near(harpoon[0][0], 10, "끝점 x"); near(Math.min(...harpoon.map((q) => q[0])), 10 - 12 * k, "뒤 끝", 1e-9);

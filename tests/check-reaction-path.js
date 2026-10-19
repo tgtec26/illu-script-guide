@@ -29,13 +29,14 @@ function run(o) {
   const t = { mm: MM };
   for (const k of ["line", "arrow", "arrow2", "path", "text", "textAt", "axisLegendX", "axisLegendY"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   t.curve = (...a) => { calls.push({ k: "curve", a }); return {}; };
+  t.headLength = () => 4.84;   // 작살형 100% = 일러스트레이터 100%(12.1 × 선 0.4pt)
   f.drawReactionPath(t, { ...base, ...o });
   return calls;
 }
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
 
 // 곡선 점: 앵커 5개, 시작·끝은 평탄, 봉우리가 가장 높고 반응물 높이에서 시작해 생성물 높이에서 끝난다
-const pts = f.pathPoints(100, 40, 20, 90, 50);
+const pts = f.pathPoints(100, 40, 20, 90, 50, 100);
 assert.strictEqual(pts.length, 5);
 assert.deepStrictEqual([pts[0].a[1], pts[4].a[1]], [40, 20]);
 assert.strictEqual(pts[2].a[1], 90);
@@ -119,4 +120,15 @@ assert.ok(source.includes("function headUnit(o, style) {") && source.includes("f
 assert.ok(source.includes("t.head(a, [-d[0], -d[1]], style);"), "시작 끝에도 화살촉");
 for (const key of ["eaText", "catText", "rangeHeadShape", "rangeHeadSize"]) assert.ok(source.includes(`{key: "${key}"`), `컨트롤 ${key}`);
 assert.ok(source.includes('label: "축 화살촉 모양"') && source.includes('label: "구간 화살촉 모양"'), "축/구간 화살촉 이름");
+// 그림 제작 규칙 7.7: 그래프의 진행은 X축 화살촉의 가장 왼쪽(촉 뒤끝)까지다 = 축 끝(가로 길이 + 6mm)에서 촉 길이만큼 물러난 곳
+for (const o of [{}, { catalyst: true }, { kind: 1 }, { width: 25 }]) {
+  const w = (o.width || 50) * MM;
+  const curves = run(o).filter((c) => c.k === "curve");
+  assert.strictEqual(curves.length, o.catalyst ? 2 : 1);
+  curves.forEach((c) => {
+    const last = c.a[0][c.a[0].length - 1].a;
+    near(last[0], w + 6 * MM - 4.84, "곡선 끝 x = 화살촉 뒤끝");
+    near(c.a[0][3].a[0], 0.82 * w, "내리막 위치는 그대로(평탄 구간만 늘어남)");
+  });
+}
 console.log("ok reaction-path");

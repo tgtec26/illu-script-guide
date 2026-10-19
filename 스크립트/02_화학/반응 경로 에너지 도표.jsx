@@ -40,7 +40,7 @@ try {
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
     var HEAD_EXAM = 3;            // 작살형(평가원식). 화살촉 목록의 1번
-    var HEAD_EXAM_LENGTH_PT = 4;  // 크기 100%일 때 작살형의 길이(pt). 다른 모양도 같은 배율로 그린다
+    var HEAD_EXAM_LENGTH_PT = 4.84;  // 크기 100%일 때 작살형의 길이(pt) = 일러스트레이터 100%(12.1 × 선 0.4pt, 그림 제작 규칙 4.7). 다른 모양도 같은 배율로 그린다
 
     // ==== 반응 경로 에너지 도표 ====
     var KIND_ITEMS = ["발열 반응 (생성물이 낮음)", "흡열 반응 (생성물이 높음)"];
@@ -83,14 +83,15 @@ try {
     }
 
     // 반응물 높이 er, 생성물 높이 ep, 봉우리 높이 peak(모두 pt), 가로 w, 봉우리 x가 xp인 곡선의 베지어 점 다섯 개(수평 평탄 구간 + 매끄러운 봉우리)
-    function pathPoints(w, er, ep, peak, xp) {
+    // 곡선의 오른쪽 끝은 xEnd다. 봉우리·내리막은 w 기준 그대로 두고 생성물의 평탄 구간만 xEnd까지 늘린다
+    function pathPoints(w, er, ep, peak, xp, xEnd) {
         var x1 = w * 0.18, x2 = w * 0.82, h1 = (xp - x1) * 0.5, h2 = (x2 - xp) * 0.5;
         return [
             {a: [0, er], l: [0, er], r: [0, er], smooth: false},
             {a: [x1, er], l: [x1 - h1 * 0.4, er], r: [x1 + h1, er], smooth: true},
             {a: [xp, peak], l: [xp - h1, peak], r: [xp + h2, peak], smooth: true},
             {a: [x2, ep], l: [x2 - h2, ep], r: [x2 + h2 * 0.4, ep], smooth: true},
-            {a: [w, ep], l: [w, ep], r: [w, ep], smooth: false}
+            {a: [xEnd, ep], l: [xEnd, ep], r: [xEnd, ep], smooth: false}
         ];
     }
 
@@ -121,6 +122,8 @@ try {
         var lo = Math.min(er, ep), hi = Math.max(er, ep);
         var peak = hi + o.ea * m;
         var xp = w * 0.5, top = peak + 8 * m, xAxis = w + 6 * m;
+        // 그림 제작 규칙 7.7: 그래프의 진행은 X축 화살촉의 가장 왼쪽(촉 뒤끝)까지다. 축 화살촉 길이는 구간 화살촉이 아니라 축 화살촉(headShape·headSize)이다
+        var xEnd = Math.max(w, xAxis - t.headLength());
         // 화살촉 두 벌: 축 화살표는 headShape·headSize, 구간(Ea·ΔH) 화살표는 rangeHeadShape·rangeHeadSize. 구간 값이 없는 옛 저장본은 축과 같다
         var rangeHead = {
             shape: o.rangeHeadShape === undefined ? o.headShape : o.rangeHeadShape,
@@ -130,11 +133,11 @@ try {
         t.arrow([0, 0], [xAxis, 0], o.wRope);
         t.arrow([0, 0], [0, top], o.wRope);
         // 곡선(반응 경로)과 촉매 곡선
-        var eaPts = pathPoints(w, er, ep, peak, xp);
+        var eaPts = pathPoints(w, er, ep, peak, xp, xEnd);
         t.curve(eaPts, false, null, 100, o.wBody);
         var catPeak = hi + o.ea * m * o.catPct / 100, catPts = null;
         if (o.catalyst) {
-            catPts = pathPoints(w, er, ep, catPeak, xp);
+            catPts = pathPoints(w, er, ep, catPeak, xp, xEnd);
             var cat = t.curve(catPts, false, null, 100, o.wBody);
             cat.strokeDashes = [3, 2];
         }
