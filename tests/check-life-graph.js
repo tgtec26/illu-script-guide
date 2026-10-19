@@ -57,7 +57,9 @@ const build = (o) => g.buildLifeGraph(Object.assign({}, base, o));
   const ys = d.texts.filter((t) => t.dir[0] === -1 && t.upright && t.text !== "O").map((t) => t.text);
   assert.deepStrictEqual(xs, ["5", "9", "12", "20"]);
   assert.deepStrictEqual(ys, ["400", "1000"]);
-  assert.ok(d.texts.some((t) => t.text === "x(분)") && d.texts.some((t) => t.text === "y(m)"));
+  // 축 범례(그림 제작 규칙)는 texts가 아니라 legends: 다른 글자를 모두 놓은 뒤 addLegends가 놓는다. X는 화살촉 끝 오른쪽 정렬, Y는 세로 쌓기·위 끝
+  assert.deepStrictEqual(d.legends.map((t) => [t.kind, t.text, t.at[0], t.at[1]]), [["x", "x(분)", 106, 0], ["y", "y(m)", 0, 56]]);
+  assert.ok(!d.texts.some((t) => t.text === "x(분)" || t.text === "y(m)"));
   // 점선: (5,400)과 (20,1000)만 두 축까지 (축 위의 점은 없다)
   assert.strictEqual(d.lines.filter((l) => l.kind === "guide").length, 4);
 }

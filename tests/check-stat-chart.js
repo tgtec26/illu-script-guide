@@ -65,7 +65,9 @@ assert.deepStrictEqual(g.quartiles([8, 1, 4, 2, 6, 5]), { min: 1, max: 8, median
   assert.deepStrictEqual(poly.points[0], [5, 0]);
   assert.deepStrictEqual(poly.points[poly.points.length - 1], [65, 0]);
   assert.strictEqual(d.dots.length, 7);
-  assert.ok(d.texts.some((t) => t.text === "(cm)") && d.texts.some((t) => t.text === "(명)"));
+  // 축 범례(그림 제작 규칙)는 texts가 아니라 legends: X는 화살촉 끝 오른쪽 정렬, Y는 세로 쌓기·위 끝
+  assert.deepStrictEqual(d.legends.map((t) => [t.kind, t.text, t.at[0], t.at[1]]), [["x", "(cm)", 80, 0], ["y", "(명)", 0, 50]]);
+  assert.ok(!d.texts.some((t) => t.text === "(cm)" || t.text === "(명)"));
 }
 
 // 상대도수: 합 20 → 0.4가 가장 큼, 0 없는 막대는 안 그린다
@@ -82,6 +84,8 @@ assert.deepStrictEqual(g.quartiles([8, 1, 4, 2, 6, 5]), { min: 1, max: 8, median
   const box = d.lines.find((l) => l.closed);
   assert.strictEqual(box.points[0][0], (5.5 - 2) * 5, "box starts at Q1");
   assert.strictEqual(box.points[1][0], (11 - 2) * 5, "box ends at Q3");
+  // 화살촉 없이 눈금만 있는 축이라 X 범례는 가운데 정렬(그림 제작 규칙), Y 범례는 없다
+  assert.deepStrictEqual(d.legends, [{ kind: "x", align: "center", text: "(cm)", at: [35, 0] }]);
 }
 
 // 산점도

@@ -3181,6 +3181,8 @@ var SCRIPT_KEY = "MiddleMath";
             var DOT_RADIUS_MM = 0.6;
             var BOX_HEIGHT_MM = 6;
             var LABEL_GAP_MM = 0.8;
+            var LEGEND_GAP_MM = 1;           // 축 범례와 축(또는 눈금 숫자·글자) 사이 간격 (그림 제작 규칙)
+            var LEGEND_LINE_HEIGHT = 1.2;    // 세로로 쌓은 범례의 줄 간격(글자 크기 배)
             var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };   // pt. 좌표평면과 같은 평가원식 화살촉
             registerHead(ARROW);
 
@@ -3366,6 +3368,7 @@ var SCRIPT_KEY = "MiddleMath";
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
                 if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
+                addLegends(drawing);
                 previewGroup.translate(viewCenter[0] - size.width / 2 + offsetXmm * MM_TO_PT,
                     viewCenter[1] - size.height / 2 + offsetYmm * MM_TO_PT);
             }
@@ -3451,6 +3454,98 @@ var SCRIPT_KEY = "MiddleMath";
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
                 frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+            }
+
+            // 축 범례(그림 제작 규칙): 다른 글자를 모두 놓은 뒤에 놓는다. X는 가로 글자를 축 아래 1mm에 오른쪽 끝(align "center"면 가운데)을 at에 맞추고,
+            // Y는 글자를 세워 한 글자씩 위→아래로 쌓아(글상자 하나, 줄은 \r, 가운데 맞춤) 축 왼쪽 1mm에 윗끝을 at에 맞춘다.
+            // 다른 글자와 겹치면 그 글자에서 1mm 띄운다(글상자 기준. 다른 라벨도 글상자 기준으로 놓인다)
+            function addLegends(drawing) {
+                var legends = drawing.legends || [];
+                if (legends.length === 0) return;
+                var gap = LEGEND_GAP_MM * MM_TO_PT, boxes = [], frames = previewGroup.textFrames, i, k;
+                for (i = 0; i < frames.length; i++) {
+                    var fb = frames[i].geometricBounds;
+                    boxes.push([fb[0], fb[3], fb[2], fb[1]]);
+                }
+                for (i = 0; i < legends.length; i++) {
+                    var legend = legends[i], stack = legend.kind === "y", rows = legendRows(legend.text);
+                    if (rows.length === 0) continue;
+                    var frame = previewGroup.textFrames.add();
+                    frame.contents = stack ? rows.join("\r") : legend.text;
+                    var range = frame.textRange;
+                    range.characterAttributes.size = fontPt;
+                    range.characterAttributes.fillColor = makeGray(100);
+                    applyTextFonts(frame);
+                    if (stack) applyStackedFonts(frame, legend.text);
+                    if (stack) {
+                        range.paragraphAttributes.justification = Justification.CENTER;
+                        range.characterAttributes.autoLeading = false;
+                        range.characterAttributes.leading = fontPt * LEGEND_LINE_HEIGHT;
+                    }
+                    var b = frame.geometricBounds, w = b[2] - b[0], h = b[1] - b[3], x0, y0, top, right;
+                    if (!stack) {
+                        var x1 = legend.align === "center" ? legend.at[0] + w / 2 : legend.at[0];
+                        x0 = x1 - w;
+                        top = legendTop(legend.at[1], x0, x1, h, gap, boxes);
+                        frame.translate(x0 - b[0], top - b[1]);
+                        boxes.push([x0, top - h, x1, top]);
+                    } else {
+                        y0 = legend.at[1] - h;
+                        right = legendRight(legend.at[0], y0, legend.at[1], w, gap, boxes);
+                        frame.translate(right - b[2], legend.at[1] - b[1]);
+                        boxes.push([right - w, y0, right, legend.at[1]]);
+                    }
+                }
+            }
+
+            // 축 범례 배치 규칙(웹 generators/axis-legend.js와 같다). 사각형은 [왼쪽, 아래, 오른쪽, 위], y 위쪽 +
+            // 세로 범례의 줄: 글자 하나씩(공백도 한 줄)
+            function legendRows(text) {
+                var rows = [], str = String(text);
+                for (var i = 0; i < str.length; i++) rows.push(str.charAt(i));
+                return rows;
+            }
+
+            // X 범례 윗변의 y. 축선 아래 gap에서 시작해, gap만큼 넓힌 글자 상자와 겹치면 그 글자 아래 gap으로 내린다
+            function legendTop(axisY, x0, x1, h, gap, boxes) {
+                var top = axisY - gap;
+                for (var i = 0; i < 64; i++) {
+                    var hit = null;
+                    for (var k = 0; k < boxes.length; k++) {
+                        var b = boxes[k];
+                        if (b[2] + gap > x0 && b[0] - gap < x1 && top > b[1] - gap && top - h < b[3] + gap) { hit = b; break; }
+                    }
+                    if (!hit) break;
+                    top = hit[1] - gap;
+                }
+                return top;
+            }
+
+            // Y 범례 오른쪽 끝의 x. 축선 왼쪽 gap에서 시작해, gap만큼 넓힌 글자 상자와 겹치면 그 글자 왼쪽 gap으로 옮긴다
+            function legendRight(axisX, y0, y1, w, gap, boxes) {
+                var right = axisX - gap;
+                for (var i = 0; i < 64; i++) {
+                    var hit = null;
+                    for (var k = 0; k < boxes.length; k++) {
+                        var b = boxes[k];
+                        if (b[3] + gap > y0 && b[1] - gap < y1 && right > b[0] - gap && right - w < b[2] + gap) { hit = b; break; }
+                    }
+                    if (!hit) break;
+                    right = hit[0] - gap;
+                }
+                return right;
+            }
+
+            // 쌓은 글자는 줄바꿈이 끼어 이웃 글자가 사라지므로, 원래 글자(legend.text)의 이웃으로 서체를 다시 정한다
+            // (따로 떨어진 소문자 한 글자(x)만 이탤릭, (cm)의 c·m은 똑바로)
+            function applyStackedFonts(frame, original) {
+                for (var i = 0; i < original.length; i++) {
+                    var ch = original.charAt(i), code = original.charCodeAt(i);
+                    if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) continue;
+                    var attributes = frame.textRange.characters[2 * i].characterAttributes;
+                    if (/[a-z]/.test(ch) && !/[A-Za-z]/.test(original.charAt(i - 1)) && !/[A-Za-z]/.test(original.charAt(i + 1))) attributes.textFont = italicFont;
+                    else if (code <= 126) attributes.textFont = engFont;
+                }
             }
 
             // 글자 서체 (07_문자/한글·영문 서체 적용.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자·기호 GSMediumB1(기준선 +0.5pt).
@@ -3560,7 +3655,8 @@ var SCRIPT_KEY = "MiddleMath";
                     out.lines.push({ points: [[x, -size.tick / 2], [x, size.tick / 2]], tick: true });
                     out.texts.push({ text: formatValue(v, axis.step), at: [x, 0], dir: [0, -1], clear: size.tick / 2 });
                 }
-                if (size.xName) out.texts.push({ text: size.xName, at: [size.width, 0], dir: [1, 0], clear: 0 });
+                // 화살촉 없이 눈금만 있는 축이라 X 범례(그림 제작 규칙)는 가운데 정렬
+                if (size.xName) out.legends.push({ kind: "x", align: "center", text: size.xName, at: [size.width / 2, 0] });
 
                 var y0 = boxHeight * 0.8, y1 = y0 + boxHeight, mid = (y0 + y1) / 2;
                 out.lines.push({ points: [[X(s.q1), y0], [X(s.q3), y0], [X(s.q3), y1], [X(s.q1), y1]], closed: true, main: true });
@@ -3608,7 +3704,7 @@ var SCRIPT_KEY = "MiddleMath";
             }
 
             function emptyDrawing() {
-                return { bars: [], lines: [], arrows: [], dots: [], texts: [] };
+                return { bars: [], lines: [], arrows: [], dots: [], texts: [], legends: [] };
             }
 
             // 왼쪽 아래 (0,0)에서 시작하는 두 축과 평가원식 화살촉, 축 이름
@@ -3618,8 +3714,10 @@ var SCRIPT_KEY = "MiddleMath";
                 out.lines.push({ points: [[0, 0], [0, top - ARROW.length + ARROW.notch]] });
                 out.arrows.push({ tip: [right, 0], dir: [1, 0] });
                 out.arrows.push({ tip: [0, top], dir: [0, 1] });
-                if (xLabel) out.texts.push({ text: xLabel, at: [right, 0], dir: [1, 0], clear: 0 });
-                if (yLabel) out.texts.push({ text: yLabel, at: [0, top], dir: [0, 1], clear: 0 });
+                // 축 범례(그림 제작 규칙, addLegends가 다른 글자를 모두 놓은 뒤에 놓는다): X는 축 아래 1mm에 화살촉 끝 오른쪽 정렬,
+                // Y는 글자를 세워 쌓고 축 왼쪽 1mm에 위 끝 정렬. 눈금 숫자와 겹치면 그 숫자에서 1mm
+                if (xLabel) out.legends.push({ kind: "x", text: xLabel, at: [right, 0] });
+                if (yLabel) out.legends.push({ kind: "y", text: yLabel, at: [0, top] });
             }
 
             function addYTicks(out, axis, scale, tick) {
@@ -7911,6 +8009,8 @@ var SCRIPT_KEY = "MiddleMath";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
+            var LEGEND_GAP_MM = 1;           // 축 범례와 축(또는 눈금 숫자·글자) 사이 간격 (그림 제작 규칙)
+            var LEGEND_LINE_HEIGHT = 1.2;    // 세로로 쌓은 범례의 줄 간격(글자 크기 배)
             var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
             registerHead(ARROW);
             var NUMBER_MODES = ["모든 눈금", "점의 좌표만", "없음"];
@@ -8073,6 +8173,7 @@ var SCRIPT_KEY = "MiddleMath";
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
                 if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
+                addLegends(drawing);
                 previewGroup.translate(viewCenter[0] - widthMm * MM_TO_PT / 2 + offsetXmm * MM_TO_PT, viewCenter[1] - heightMm * MM_TO_PT / 2 + offsetYmm * MM_TO_PT);
             }
 
@@ -8179,6 +8280,85 @@ var SCRIPT_KEY = "MiddleMath";
                 frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
             }
 
+            // 축 범례(그림 제작 규칙): 다른 글자를 모두 놓은 뒤에 놓는다. X는 가로 글자를 축 아래 1mm에 오른쪽 끝(align "center"면 가운데)을 at에 맞추고,
+            // Y는 글자를 세워 한 글자씩 위→아래로 쌓아(글상자 하나, 줄은 \r, 가운데 맞춤) 축 왼쪽 1mm에 윗끝을 at에 맞춘다.
+            // 다른 글자와 겹치면 그 글자에서 1mm 띄운다(글상자 기준. 다른 라벨도 글상자 기준으로 놓인다)
+            function addLegends(drawing) {
+                var legends = drawing.legends || [];
+                if (legends.length === 0) return;
+                var gap = LEGEND_GAP_MM * MM_TO_PT, boxes = [], frames = previewGroup.textFrames, i, k;
+                for (i = 0; i < frames.length; i++) {
+                    var fb = frames[i].geometricBounds;
+                    boxes.push([fb[0], fb[3], fb[2], fb[1]]);
+                }
+                for (i = 0; i < legends.length; i++) {
+                    var legend = legends[i], stack = legend.kind === "y", rows = legendRows(legend.text);
+                    if (rows.length === 0) continue;
+                    var frame = previewGroup.textFrames.add();
+                    frame.contents = stack ? rows.join("\r") : legend.text;
+                    var range = frame.textRange;
+                    range.characterAttributes.size = fontPt;
+                    range.characterAttributes.fillColor = makeGray(100);
+                    applyTextFonts(frame, false);
+                    if (stack) {
+                        range.paragraphAttributes.justification = Justification.CENTER;
+                        range.characterAttributes.autoLeading = false;
+                        range.characterAttributes.leading = fontPt * LEGEND_LINE_HEIGHT;
+                    }
+                    var b = frame.geometricBounds, w = b[2] - b[0], h = b[1] - b[3], x0, y0, top, right;
+                    if (!stack) {
+                        var x1 = legend.align === "center" ? legend.at[0] + w / 2 : legend.at[0];
+                        x0 = x1 - w;
+                        top = legendTop(legend.at[1], x0, x1, h, gap, boxes);
+                        frame.translate(x0 - b[0], top - b[1]);
+                        boxes.push([x0, top - h, x1, top]);
+                    } else {
+                        y0 = legend.at[1] - h;
+                        right = legendRight(legend.at[0], y0, legend.at[1], w, gap, boxes);
+                        frame.translate(right - b[2], legend.at[1] - b[1]);
+                        boxes.push([right - w, y0, right, legend.at[1]]);
+                    }
+                }
+            }
+
+            // 축 범례 배치 규칙(웹 generators/axis-legend.js와 같다). 사각형은 [왼쪽, 아래, 오른쪽, 위], y 위쪽 +
+            // 세로 범례의 줄: 글자 하나씩(공백도 한 줄)
+            function legendRows(text) {
+                var rows = [], str = String(text);
+                for (var i = 0; i < str.length; i++) rows.push(str.charAt(i));
+                return rows;
+            }
+
+            // X 범례 윗변의 y. 축선 아래 gap에서 시작해, gap만큼 넓힌 글자 상자와 겹치면 그 글자 아래 gap으로 내린다
+            function legendTop(axisY, x0, x1, h, gap, boxes) {
+                var top = axisY - gap;
+                for (var i = 0; i < 64; i++) {
+                    var hit = null;
+                    for (var k = 0; k < boxes.length; k++) {
+                        var b = boxes[k];
+                        if (b[2] + gap > x0 && b[0] - gap < x1 && top > b[1] - gap && top - h < b[3] + gap) { hit = b; break; }
+                    }
+                    if (!hit) break;
+                    top = hit[1] - gap;
+                }
+                return top;
+            }
+
+            // Y 범례 오른쪽 끝의 x. 축선 왼쪽 gap에서 시작해, gap만큼 넓힌 글자 상자와 겹치면 그 글자 왼쪽 gap으로 옮긴다
+            function legendRight(axisX, y0, y1, w, gap, boxes) {
+                var right = axisX - gap;
+                for (var i = 0; i < 64; i++) {
+                    var hit = null;
+                    for (var k = 0; k < boxes.length; k++) {
+                        var b = boxes[k];
+                        if (b[3] + gap > y0 && b[1] - gap < y1 && right > b[0] - gap && right - w < b[2] + gap) { hit = b; break; }
+                    }
+                    if (!hit) break;
+                    right = hit[0] - gap;
+                }
+                return right;
+            }
+
             // 글자 서체 (07_문자/한글·영문 서체 적용.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자·기호 GSMediumB1(기준선 +0.5pt).
             // 소문자 변수(x, y, f)는 GSMediItaC1. 점 이름·O(upright)는 기울이지 않는다.
             // GSMediumB1에 없는 기호(π, √, θ, − 같은 ASCII 밖 글자)는 HancomEQN
@@ -8277,8 +8457,11 @@ var SCRIPT_KEY = "MiddleMath";
                 lines.push({ points: [[0, 0], [0, top - ARROW.length + ARROW.notch]], kind: "axis" });
                 arrows.push({ tip: [right, 0], dir: [1, 0] });
                 arrows.push({ tip: [0, top], dir: [0, 1] });
-                if (o.xName) texts.push({ text: o.xName, at: [right, 0], dir: [0, -1] });
-                if (o.yName) texts.push({ text: o.yName, at: [0, top], dir: [-1, 0] });
+                // 축 범례(그림 제작 규칙, addLegends가 다른 글자를 모두 놓은 뒤에 놓는다): X는 축 아래 1mm에 화살촉 끝 오른쪽 정렬,
+                // Y는 글자를 세워 쌓고 축 왼쪽 1mm에 위 끝 정렬. 눈금 숫자와 겹치면 그 숫자에서 1mm
+                var legends = [];
+                if (o.xName) legends.push({ kind: "x", text: o.xName, at: [right, 0] });
+                if (o.yName) legends.push({ kind: "y", text: o.yName, at: [0, top] });
                 texts.push({ text: "O", at: [0, 0], dir: [-0.7071, -0.7071], upright: true });
 
                 // 눈금: 모든 눈금이면 간격마다, 점의 좌표만이면 점의 x·y 값 자리에만
@@ -8318,7 +8501,7 @@ var SCRIPT_KEY = "MiddleMath";
                     lines.push({ points: path, kind: "graph" });
                 }
                 if (o.dots) for (var dp = 0; dp < o.points.length; dp++) dots.push(P(o.points[dp].x, o.points[dp].y));
-                return { lines: lines, arrows: arrows, dots: dots, texts: texts };
+                return { lines: lines, arrows: arrows, dots: dots, texts: texts, legends: legends };
             }
 
             function ticks(max, step) {
