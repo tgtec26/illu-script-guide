@@ -1031,17 +1031,15 @@ try {
             }
         }
 
-        // 축 제목: X는 숫자 아래 가운데, Y는 숫자 왼쪽에 세로로(아래에서 위로), Y2는 숫자 오른쪽에 세로로(위에서 아래로)
+        // 축 제목(그림 제작 규칙): X는 숫자 아래 1mm 가운데, Y는 숫자 왼쪽 1mm에 글자를 세워 한 글자씩 위→아래로 쌓고 가운데 맞춤, Y2는 숫자 오른쪽 1mm에 같은 방식
         var xTitle = addText(group, spec.xTitle);
         var xtb = xTitle.geometricBounds;
         xTitle.translate((spec.left + spec.right) / 2 - (xtb[0] + xtb[2]) / 2, labelsBottom - titleGap - xtb[1]);
-        var yTitle = addText(group, spec.yTitle);
-        yTitle.rotate(90);
+        var yTitle = addStackedText(group, spec.yTitle);
         var ytb = yTitle.geometricBounds;
         yTitle.translate(labelsLeft - titleGap - ytb[2], (spec.bottom + spec.top) / 2 - (ytb[1] + ytb[3]) / 2);
         if (spec.y2Title) {
-            var y2Title = addText(group, spec.y2Title);
-            y2Title.rotate(-90);
+            var y2Title = addStackedText(group, spec.y2Title);
             var y2tb = y2Title.geometricBounds;
             y2Title.translate(labelsRight + titleGap - y2tb[0], (spec.bottom + spec.top) / 2 - (y2tb[1] + y2tb[3]) / 2);
         }
@@ -1205,6 +1203,17 @@ try {
     // =======================================================
     // 공용: 글자 (서체 규칙: 한글·공백 Spoqa, 영문·숫자·기호 GSMediumB1 +0.5pt)
     // =======================================================
+    // 세로 범례(그림 제작 규칙): 글자를 세워 한 글자씩 위→아래로 쌓은 글상자(줄은 \r, 가운데 맞춤, 줄 간격은 글자 크기의 1.2배)
+    function addStackedText(group, text) {
+        var rows = [];
+        for (var i = 0; i < text.length; i++) rows.push(text.charAt(i));
+        var frame = addText(group, rows.join("\r"));
+        frame.textRange.paragraphAttributes.justification = Justification.CENTER;
+        frame.textRange.characterAttributes.autoLeading = false;
+        frame.textRange.characterAttributes.leading = FONT_PT * 1.2;
+        return frame;
+    }
+
     function addText(group, text) {
         var frame = group.textFrames.add();
         frame.contents = text;

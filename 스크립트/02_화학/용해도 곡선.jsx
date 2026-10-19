@@ -492,13 +492,12 @@ function foldPanel(parent, title, collapsed, key) {
             labelsLeft = Math.min(labelsLeft, yLabel.geometricBounds[0]);
         }
 
-        // 축 제목: X는 숫자 아래 가운데, Y는 숫자 왼쪽에 세로로
+        // 축 제목(그림 제작 규칙): X는 숫자 아래 1mm 가운데, Y는 숫자 왼쪽 1mm에 글자를 세워 한 글자씩 위→아래로 쌓고 가운데 맞춤
         var titleGap = AXIS_TITLE_GAP_MM * MM_TO_PT;
         var xTitle = addText(group, X_TITLE);
         var xtb = xTitle.geometricBounds;
         xTitle.translate((left + right) / 2 - (xtb[0] + xtb[2]) / 2, labelsBottom - titleGap - xtb[1]);
-        var yTitle = addText(group, Y_TITLE);
-        yTitle.rotate(90);
+        var yTitle = addStackedText(group, Y_TITLE);
         var ytb = yTitle.geometricBounds;
         yTitle.translate(labelsLeft - titleGap - ytb[2], (bottom + top) / 2 - (ytb[1] + ytb[3]) / 2);
 
@@ -906,6 +905,17 @@ function foldPanel(parent, title, collapsed, key) {
     // -------------------------------------------------------
     // 글자 (서체 규칙: 한글·공백 Spoqa, 영문·숫자·기호 GSMediumB1 +0.5pt, 화학식 숫자는 아래첨자)
     // -------------------------------------------------------
+    // 세로 범례(그림 제작 규칙): 글자를 세워 한 글자씩 위→아래로 쌓은 글상자(줄은 \r, 가운데 맞춤, 줄 간격은 글자 크기의 1.2배)
+    function addStackedText(group, text) {
+        var rows = [];
+        for (var i = 0; i < text.length; i++) rows.push(text.charAt(i));
+        var frame = addText(group, rows.join("\r"));
+        frame.textRange.paragraphAttributes.justification = Justification.CENTER;
+        frame.textRange.characterAttributes.autoLeading = false;
+        frame.textRange.characterAttributes.leading = FONT_PT * 1.2;
+        return frame;
+    }
+
     function addText(group, text) {
         var frame = group.textFrames.add();
         frame.contents = text;
