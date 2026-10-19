@@ -275,8 +275,8 @@ try {
             var objectRow = addRow(rayPanel, "물체 거리", "objectDistance", 1, 150, "mm", 0.5, false);
             tip(objectRow, "물체 작도만. 선택한 도형의 가운데에서 렌즈·거울 중심선까지");
             var rayWidthRow = addRow(rayPanel, "광선 두께", "rayWidth", 0.1, 3, "pt", 0.1, false);
-            var arrowSizeRow = addRow(rayPanel, "화살촉 크기", "arrowMm", 0.5, 5, "mm", 0.1, false);
-            tip(arrowSizeRow, "길이. 폭은 길이의 0.8배");
+            var arrowSizeRow = addRow(rayPanel, "화살촉 크기", "arrowPct", 30, 350, "%", 5, false);
+            tip(arrowSizeRow, "일러스트레이터 화살촉 크기와 같은 %. 삼각형 길이 = 8.6 × 광선 두께 × 크기%");
             // 체크 줄에 붙이면 한 줄이 너무 넓어져 따로 한 줄을 둔다
             var headShapeRow = rayPanel.add("group");
             var headShapeLabel = headShapeRow.add("statictext", undefined, "화살촉 모양");
@@ -691,7 +691,8 @@ try {
                         if (o.rayArrows) {
                             // 입사 광선은 중심선 왼쪽, 꺾인 광선은 렌즈면 오른쪽·거울이면 왼쪽으로 같은 거리
                             var targetX = (s === 0 || !lens) ? -o.arrowPos : o.arrowPos;
-                            var triangle = arrowAt(rays[r].real[s], targetX, o.arrowMm);
+                            // 크기 100% = 일러스트레이터 100%: 삼각형 길이(pt) = 카탈로그 삼각형(8.6) × 광선 두께 × 크기% (그림 제작 규칙 4.7). 좌표는 mm라 mmToPt로 나눈다
+                            var triangle = arrowAt(rays[r].real[s], targetX, HEAD_CATALOG[HEAD_TRIANGLE].length * o.rayWidth * o.arrowPct / 100 / mmToPt);
                             if (triangle !== null) addHeadShape(g, headFromTriangle(triangle, o.headShape), "RayArrow", o.rayWidth);
                         }
                     }
@@ -1241,10 +1242,10 @@ try {
             function settingKeys() {
                 return {
                     keys: ["kind", "height", "centerThickness", "edgeThickness", "bulge", "index", "outlineWidth", "hatchMm", "reach",
-                        "focalLength", "labelSize", "rayCount", "raySpacing", "objectDistance", "rayWidth", "arrowMm", "arrowPos",
+                        "focalLength", "labelSize", "rayCount", "raySpacing", "objectDistance", "rayWidth", "arrowPct", "arrowPos",
                         "offsetX", "offsetY", "headShape"],
-                    mins: [0, 10, 0, 0, 0.5, 1.5, 0.1, 0.5, 10, 1, 4, 1, 1, 1, 0.1, 0.5, 0, -100, -100, 0],
-                    maxs: [3, 100, 20, 20, 30, 2, 3, 5, 150, 1000, 20, 9, 20, 150, 3, 5, 150, 100, 100, 2],
+                    mins: [0, 10, 0, 0, 0.5, 1.5, 0.1, 0.5, 10, 1, 4, 1, 1, 1, 0.1, 30, 0, -100, -100, 0],
+                    maxs: [3, 100, 20, 20, 30, 2, 3, 5, 150, 1000, 20, 9, 20, 150, 3, 350, 150, 100, 100, 2],
                     flags: ["hatch", "axis", "centerLine", "focus", "focusLabel", "nameLabels", "rays", "rayDashed", "rayArrows", "showImage", "preview"]
                 };
             }
@@ -1252,7 +1253,7 @@ try {
             function defaultOptions() {
                 return { kind: 0, height: 24, centerThickness: 8, edgeThickness: 1, bulge: 2.5, index: 1.5, outlineWidth: 0.5,
                     hatchMm: 1.5, reach: 40, focalLength: 20, labelSize: 8, rayCount: 5, raySpacing: 4, objectDistance: 45,
-                    rayWidth: 0.3, arrowMm: 1.5, arrowPos: 12, offsetX: 0, offsetY: 0, headShape: HEAD_TRIANGLE,
+                    rayWidth: 0.3, arrowPct: 100, arrowPos: 12, offsetX: 0, offsetY: 0, headShape: HEAD_TRIANGLE,
                     hatch: true, axis: true, centerLine: true, focus: true, focusLabel: true, nameLabels: true,
                     rays: true, rayDashed: false, rayArrows: true, showImage: true, preview: true };
             }
@@ -1262,7 +1263,7 @@ try {
                 try {
                     var spec = settingKeys();
                     var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-                    if (p[0] !== "v6" || p.length !== 1 + spec.keys.length + spec.flags.length) return result;
+                    if (p[0] !== "v7" || p.length !== 1 + spec.keys.length + spec.flags.length) return result;
                     for (var i = 0; i < spec.keys.length; i++) {
                         var raw = p[i + 1];
                         var value = Number(raw);
@@ -1283,7 +1284,7 @@ try {
             function saveSettings() {
                 try {
                     var spec = settingKeys();
-                    var parts = ["v6"];
+                    var parts = ["v7"];
                     for (var i = 0; i < spec.keys.length; i++) parts.push(options[spec.keys[i]]);
                     for (var j = 0; j < spec.flags.length; j++) parts.push(options[spec.flags[j]] ? 1 : 0);
                     app.preferences.setStringPreference(PREF_KEY, parts.join("|"));

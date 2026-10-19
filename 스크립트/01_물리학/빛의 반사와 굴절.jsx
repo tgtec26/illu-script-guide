@@ -173,7 +173,7 @@ try {
 
     var CHECK_KEYS = ["arrowOn", "normalOn", "boundaryOn", "rayLabelsOn", "angleOn", "mediumLabelsOn", "lineLabelsOn"];
     // 숫자 옵션: 키, 범위, 한 단계, 소수 자리. 저장 순서도 이 순서다
-    var NUMBER_KEYS = ["angleI", "angleT", "index1", "index2", "rayLen", "rayWidth", "rayK", "headSize", "headDist",
+    var NUMBER_KEYS = ["angleI", "angleT", "index1", "index2", "rayLen", "rayWidth", "rayK", "headPct", "headDist",
         "frameW", "frameH", "medium1K", "medium2K", "arcRadius", "offsetX", "offsetY"];
     var SPECS = {
         angleI: {range: [0, 85], step: 1, decimals: 0},
@@ -183,7 +183,7 @@ try {
         rayLen: {range: [5, 100], step: 0.5, decimals: 1},
         rayWidth: {range: [0.25, 4], step: 0.05, decimals: 2},
         rayK: {range: [0, 100], step: 10, decimals: 0},
-        headSize: {range: [1, 10], step: 0.1, decimals: 1},
+        headPct: {range: [30, 350], step: 5, decimals: 0},
         headDist: {range: [0, 100], step: 0.5, decimals: 1},
         frameW: {range: [20, 200], step: 1, decimals: 0},
         frameH: {range: [20, 200], step: 1, decimals: 0},
@@ -204,7 +204,7 @@ try {
         rayLabelsOn: true, angleOn: true, mediumLabelsOn: true, lineLabelsOn: true,
         angleMode: ANGLE_DIRECT, medium1: 0, medium2: 2, headShape: HEAD_TRIANGLE,
         medium1Name: "공기", medium2Name: "유리",
-        angleI: 45, angleT: 28, index1: 1, index2: 1.5, rayLen: 30, rayWidth: 1, rayK: 100, headSize: 3, headDist: 15,
+        angleI: 45, angleT: 28, index1: 1, index2: 1.5, rayLen: 30, rayWidth: 1, rayK: 100, headPct: 100, headDist: 15,
         frameW: 80, frameH: 60, medium1K: 0, medium2K: 20, arcRadius: 8,
         offsetX: 0, offsetY: 0,
         previewOn: true
@@ -247,7 +247,8 @@ try {
     var headShapeList = arrowRow.add("dropdownlist", undefined, [HEAD_SHAPES[3], HEAD_SHAPES[2], HEAD_SHAPES[0], HEAD_SHAPES[1]]);
     headShapeList.selection = [2, 3, 1, 0][options.headShape];
     headShapeList.helpTip = "작살형이 평가원식. 모두 일러스트레이터 화살촉을 측정한 모양";
-    addRow(rayPanel, "headSize", "화살촉 크기", "mm");
+    addRow(rayPanel, "headPct", "화살촉 크기", "%");
+    rows.headPct.input.helpTip = "일러스트레이터 화살촉 크기와 같은 %. 삼각형 길이 = 8.6 × 광선 두께 × 크기%";
     addRow(rayPanel, "headDist", "화살촉 위치", "mm");
     rows.headDist.input.helpTip = "입사점(반사·굴절 지점)에서 화살촉 가운데까지의 거리. 광선 길이를 넘으면 끝에 둡니다";
 
@@ -415,7 +416,7 @@ try {
 
     // 화살촉을 끄면 크기·위치 행을, 각을 끄면 호 반지름 행을 잠근다
     function applyCheckModes() {
-        setRowEnabled(rows.headSize, options.arrowOn);
+        setRowEnabled(rows.headPct, options.arrowOn);
         setRowEnabled(rows.headDist, options.arrowOn);
         headShapeList.enabled = options.arrowOn;
         setRowEnabled(rows.arcRadius, options.angleOn);
@@ -508,7 +509,8 @@ try {
             if (o.arrowOn) {
                 // 위치는 입사점에서의 거리: 입사광은 끝(입사점)에서 거슬러, 나머지는 시작점(입사점)에서
                 var fromStart = rayKey === "incident" ? o.rayLen - o.headDist : o.headDist;
-                var headShape = arrowHead(line, fromStart, o.headSize, o.headShape);
+                // 크기 100% = 일러스트레이터 100%: 삼각형 길이(pt) = 카탈로그 삼각형(8.6) × 광선 두께 × 크기% (그림 제작 규칙 4.7). 좌표는 mm라 MM으로 나눈다
+                var headShape = arrowHead(line, fromStart, HEAD_CATALOG[HEAD_TRIANGLE].length * o.rayWidth * o.headPct / 100 / MM, o.headShape);
                 var pagePoints = [];
                 for (var hp = 0; hp < headShape.points.length; hp++) pagePoints.push(pagePoint(headShape.points[hp]));
                 var head = group.pathItems.add();
@@ -792,12 +794,12 @@ try {
 
     // -------------------------------------------------------
     // 설정 저장 · 복원
-    // "v3" + 굴절각 모드 + 매질 1·2 + 화살촉 모양 + 체크(CHECK_KEYS 순서) + 미리보기 + 매질 이름 둘 + 숫자(NUMBER_KEYS 순서). 확인할 때만 저장
+    // "v4" + 굴절각 모드 + 매질 1·2 + 화살촉 모양 + 체크(CHECK_KEYS 순서) + 미리보기 + 매질 이름 둘 + 숫자(NUMBER_KEYS 순서). 확인할 때만 저장
     // -------------------------------------------------------
     function flag(value) { return value ? "1" : "0"; }
 
     function saveSettings() {
-        var parts = ["v3", options.angleMode, options.medium1, options.medium2, options.headShape];
+        var parts = ["v4", options.angleMode, options.medium1, options.medium2, options.headShape];
         for (var c = 0; c < CHECK_KEYS.length; c++) parts.push(flag(options[CHECK_KEYS[c]]));
         parts.push(flag(options.previewOn));
         // 구분자 | 는 이름에 쓸 수 없다
@@ -813,7 +815,7 @@ try {
         if (!raw) return;
         var p = raw.split("|");
         var head = 5 + CHECK_KEYS.length + 1 + 2;
-        if (p[0] !== "v3" || p.length !== head + NUMBER_KEYS.length) return;
+        if (p[0] !== "v4" || p.length !== head + NUMBER_KEYS.length) return;
         var mode = parseInt(p[1], 10);
         if (mode === ANGLE_DIRECT || mode === ANGLE_SNELL) options.angleMode = mode;
         for (var m = 0; m < 2; m++) {

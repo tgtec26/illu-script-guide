@@ -120,7 +120,7 @@ assert.ok(source.includes("ui_tab_helper.jsxinc"), "tab helper");
 assert.ok(source.includes("dlg.defaultElement = null"), "no default button");
 assert.ok(source.includes("var BOUNDARY_PT = 0.5;"), "boundary line is 0.5pt");
 assert.ok(source.includes('{name: "공기", n: 1}') && source.includes('{name: "물", n: 1.33}') && source.includes('{name: "유리", n: 1.5}') && source.includes('{name: "다이아몬드", n: 2.42}'), "medium presets");
-assert.ok(source.includes('["v3", options.angleMode, options.medium1, options.medium2, options.headShape]') && source.includes('p[0] !== "v3"'), "settings v3");
+assert.ok(source.includes('["v4", options.angleMode, options.medium1, options.medium2, options.headShape]') && source.includes('p[0] !== "v4"'), "settings v4");
 assert.ok(/medium1K: \{range: \[0, 100\], step: 10/.test(source) && /medium2K: \{range: \[0, 100\], step: 10/.test(source), "medium gray in K 10 steps");
 
 console.log("check-refraction: ok");
