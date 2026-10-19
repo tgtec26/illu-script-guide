@@ -65,6 +65,7 @@ var SCRIPT_KEY = "MiddleMath";
         spec.length = b.length * s;
         spec.halfWidth = b.halfWidth * s;
         spec.notch = spec.length - HEAD_CATALOG[headStyle.shape].lineEnd * spec.length / HEAD_CATALOG[HEAD_EXAM].length;
+        spec.rear = HEAD_CATALOG[headStyle.shape].length * spec.length / HEAD_CATALOG[HEAD_EXAM].length;   // 화살촉 끝에서 뒤끝까지(pt): 그래프는 X축 화살촉 뒤끝까지 진행한다 (그림 제작 규칙 7.7)
     }
 
     function applyHeadStyle() {
@@ -2188,6 +2189,8 @@ var SCRIPT_KEY = "MiddleMath";
                 var xStep = opt.piAxis ? Math.PI / 2 : 1;
                 var xLo = opt.xMin * xStep, xHi = opt.xMax * xStep;
                 var left = Math.min(xLo, 0) - 0.5, right = xHi + 0.8;
+                // 그래프는 X축 화살촉 가장 왼쪽(뒤끝)까지 진행한다 (그림 제작 규칙 7.7)
+                var plotHi = Math.max(xHi, right - (ARROW.rear || ARROW.length) / u);
                 var bottom = Math.min(opt.yMin, 0) - 0.5, top = opt.yMax + 0.8;
 
                 // 축 없이 모눈: 격자(0 줄 포함)만
@@ -2225,7 +2228,7 @@ var SCRIPT_KEY = "MiddleMath";
                 for (var a = 0; a < opt.asymptotes.length; a++) {
                     var line = opt.asymptotes[a];
                     if (line.axis === "x") lines.push(straight([[line.value * u, opt.yMin * u], [line.value * u, opt.yMax * u]], "guide"));
-                    else lines.push(straight([[xLo * u, line.value * u], [xHi * u, line.value * u]], "guide"));
+                    else lines.push(straight([[xLo * u, line.value * u], [plotHi * u, line.value * u]], "guide"));
                 }
                 // 실선 수직·수평선: 그래프와 같은 굵기. 식 글자는 수직선은 위쪽 끝 오른쪽에, 수평선은 오른쪽 끝 위에
                 var solid = opt.solidLines || [];
@@ -2233,11 +2236,11 @@ var SCRIPT_KEY = "MiddleMath";
                     var solidLine = solid[sl];
                     var vertical = solidLine.axis === "x";
                     if (vertical) lines.push(straight([[solidLine.value * u, opt.yMin * u], [solidLine.value * u, opt.yMax * u]], "graph"));
-                    else lines.push(straight([[xLo * u, solidLine.value * u], [xHi * u, solidLine.value * u]], "graph"));
+                    else lines.push(straight([[xLo * u, solidLine.value * u], [plotHi * u, solidLine.value * u]], "graph"));
                     if (opt.lineNames) {
                         var lineDisplay = formulaDisplay(solidLine.text);
                         texts.push({ text: lineDisplay.text, sup: lineDisplay.sup, sub: lineDisplay.sub, roman: lineDisplay.roman,
-                            at: vertical ? [solidLine.value * u, opt.yMax * u] : [xHi * u, solidLine.value * u], dir: vertical ? [1, 0] : [0, 1], clear: 0 });
+                            at: vertical ? [solidLine.value * u, opt.yMax * u] : [plotHi * u, solidLine.value * u], dir: vertical ? [1, 0] : [0, 1], clear: 0 });
                     }
                 }
                 if (opt.identity) {
@@ -2247,7 +2250,7 @@ var SCRIPT_KEY = "MiddleMath";
 
                 var formulaLabels = [];
                 for (var f = 0; f < opt.functions.length; f++) {
-                    var segments = plotFunction(opt.functions[f].fn, xLo, xHi, opt.yMin, opt.yMax);
+                    var segments = plotFunction(opt.functions[f].fn, xLo, plotHi, opt.yMin, opt.yMax);
                     for (var s = 0; s < segments.length; s++) {
                         if (segments[s].length < 2) continue;
                         lines.push({ points: toBezier(segments[s], u), kind: "graph" });
@@ -2317,7 +2320,7 @@ var SCRIPT_KEY = "MiddleMath";
                 function regionFills(conditions) {
                     var out = [];
                     if (!conditions || conditions.length === 0) return out;
-                    var polygons = regionPolygons(conditions, xLo, xHi, opt.yMin, opt.yMax);
+                    var polygons = regionPolygons(conditions, xLo, plotHi, opt.yMin, opt.yMax);
                     for (var rp = 0; rp < polygons.length; rp++) {
                         var scaled = [];
                         for (var rq = 0; rq < polygons[rp].length; rq++) scaled.push([polygons[rp][rq][0] * u, polygons[rp][rq][1] * u]);

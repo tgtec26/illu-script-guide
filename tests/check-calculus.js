@@ -162,4 +162,10 @@ return { set: setLineWidth, get: currentLineWidth, save: saveLineWidths };`)(app
   assert.ok(addPath.includes('"tick" ? TICK_PT') && addPath.includes('"grid" ? GRID_PT'));
   assert.ok(extractFunction("addFill").includes("path.strokeWidth = EDGE_PT;"));
 }
+// 그래프는 X축 화살촉 뒤끝(테스트 ARROW 길이 4)까지 진행한다 (그림 제작 규칙 7.7)
+{
+  const rightmost = (lines, kind) => Math.max(...lines.filter((l) => l.kind === kind).flatMap((l) => l.points.map((p) => (p.anchor ? p.anchor[0] : p[0]))));
+const d = build({ f: g.compileFunction("y=1"), shade: 0, xMin: -1, xMax: 5, yMin: -1, yMax: 5 });
+  assert.ok(Math.abs(rightmost(d.lines, "graph") - ((5 + 0.8) * 10 - 4)) < 1e-3, "graph reaches the arrowhead rear");
+}
 console.log("calculus checks passed");

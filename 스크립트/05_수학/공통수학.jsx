@@ -66,6 +66,7 @@ var SCRIPT_KEY = "HighMathCommon";
         spec.length = b.length * s;
         spec.halfWidth = b.halfWidth * s;
         spec.notch = spec.length - HEAD_CATALOG[headStyle.shape].lineEnd * spec.length / HEAD_CATALOG[HEAD_EXAM].length;
+        spec.rear = HEAD_CATALOG[headStyle.shape].length * spec.length / HEAD_CATALOG[HEAD_EXAM].length;   // 화살촉 끝에서 뒤끝까지(pt): 그래프는 X축 화살촉 뒤끝까지 진행한다 (그림 제작 규칙 7.7)
     }
 
     function applyHeadStyle() {
@@ -2479,6 +2480,8 @@ var SCRIPT_KEY = "HighMathCommon";
                 var box = [o.xMin, o.xMax, o.yMin, o.yMax];
 
                 var left = Math.min(o.xMin, 0) - 0.5, right = o.xMax + 0.8, bottom = Math.min(o.yMin, 0) - 0.5, top = o.yMax + 0.8;
+                // 경계선과 칠한 영역은 X축 화살촉 가장 왼쪽(뒤끝)까지 진행한다 (그림 제작 규칙 7.7)
+                var plotHi = Math.max(o.xMax, right - (ARROW.rear || ARROW.length) / u);
                 if (o.grid) {
                     for (var gx = o.xMin; gx <= o.xMax; gx++) if (gx !== 0) out.lines.push(straight([[gx * u, o.yMin * u], [gx * u, o.yMax * u]], "grid"));
                     for (var gy = o.yMin; gy <= o.yMax; gy++) if (gy !== 0) out.lines.push(straight([[o.xMin * u, gy * u], [o.xMax * u, gy * u]], "grid"));
@@ -2503,7 +2506,7 @@ var SCRIPT_KEY = "HighMathCommon";
 
                 // 영역
                 if (o.list.length > 0 && o.shade) {
-                    var polygons = regionPolygons(o.list, o.xMin, o.xMax, o.yMin, o.yMax, COLUMNS);
+                    var polygons = regionPolygons(o.list, o.xMin, plotHi, o.yMin, o.yMax, COLUMNS);
                     for (var p = 0; p < polygons.length; p++) {
                         var pts = [];
                         for (var q = 0; q < polygons[p].length; q++) pts.push([polygons[p][q][0] * u, polygons[p][q][1] * u]);
@@ -2517,7 +2520,7 @@ var SCRIPT_KEY = "HighMathCommon";
                 for (var b = 0; b < o.list.length; b++) {
                     var ineq = o.list[b], end = null;
                     if (ineq.kind === "above" || ineq.kind === "below") {
-                        var segments = plotFunction(ineq.fn, o.xMin, o.xMax, o.yMin, o.yMax);
+                        var segments = plotFunction(ineq.fn, o.xMin, plotHi, o.yMin, o.yMax);
                         for (var s = 0; s < segments.length; s++) {
                             if (segments[s].length < 2) continue;
                             out.lines.push({ points: toBezier(segments[s], u), kind: "boundary", dashed: ineq.strict });
@@ -4147,6 +4150,8 @@ var SCRIPT_KEY = "HighMathCommon";
                 function S(p) { return [p[0] * u, p[1] * u]; }
 
                 var left = Math.min(o.xMin, 0) - 0.5, right = o.xMax + 0.8, bottom = Math.min(o.yMin, 0) - 0.5, top = o.yMax + 0.8;
+                // 포물선·직선·열린 해는 X축 화살촉 가장 왼쪽(뒤끝)까지 진행한다 (그림 제작 규칙 7.7)
+                var plotHi = Math.max(o.xMax, right - (ARROW.rear || ARROW.length) / u);
                 if (o.grid) {
                     for (var gx = o.xMin; gx <= o.xMax; gx++) if (gx !== 0) out.lines.push(straight([[gx * u, o.yMin * u], [gx * u, o.yMax * u]], "grid"));
                     for (var gy = o.yMin; gy <= o.yMax; gy++) if (gy !== 0) out.lines.push(straight([[o.xMin * u, gy * u], [o.xMax * u, gy * u]], "grid"));
@@ -4170,7 +4175,7 @@ var SCRIPT_KEY = "HighMathCommon";
                 }
 
                 // 포물선 (y 범위 안 조각들)
-                var pieces = visibleIntervals(a, b, c, o.xMin, o.xMax, o.yMin, o.yMax), lastEnd = null;
+                var pieces = visibleIntervals(a, b, c, o.xMin, plotHi, o.yMin, o.yMax), lastEnd = null;
                 for (var p = 0; p < pieces.length; p++) {
                     out.lines.push({ points: parabolaPiece(a, b, c, pieces[p][0], pieces[p][1], u), kind: "graph" });
                     lastEnd = S([pieces[p][1], f(pieces[p][1])]);
@@ -4203,7 +4208,7 @@ var SCRIPT_KEY = "HighMathCommon";
                 if (o.inequality > 0) {
                     var solution = solveInequality(a, b, c, o.inequality);
                     for (var s = 0; s < solution.intervals.length; s++) {
-                        var seg = solution.intervals[s], lo = Math.max(seg[0], o.xMin), hi = Math.min(seg[1], o.xMax);
+                        var seg = solution.intervals[s], lo = Math.max(seg[0], o.xMin), hi = Math.min(seg[1], plotHi);
                         if (hi - lo > 1e-9) out.lines.push(straight([[lo * u, 0], [hi * u, 0]], "solution"));
                         if (isFinite(seg[0]) && seg[0] >= o.xMin) out.dots.push({ at: [seg[0] * u, 0], open: !seg[2] });
                         if (isFinite(seg[1]) && seg[1] <= o.xMax) out.dots.push({ at: [seg[1] * u, 0], open: !seg[3] });
@@ -4214,8 +4219,8 @@ var SCRIPT_KEY = "HighMathCommon";
 
                 // 직선과 교점
                 if (o.line) {
-                    var yl0 = o.m * o.xMin + o.n, yl1 = o.m * o.xMax + o.n;
-                    var seg2 = clipSegment([o.xMin, yl0], [o.xMax, yl1], o.yMin, o.yMax);
+                    var yl0 = o.m * o.xMin + o.n, yl1 = o.m * plotHi + o.n;
+                    var seg2 = clipSegment([o.xMin, yl0], [plotHi, yl1], o.yMin, o.yMax);
                     if (seg2) out.lines.push(straight([S(seg2[0]), S(seg2[1])], "graph"));
                     var meet = quadraticRoots(a, b - o.m, c - o.n), D2 = (b - o.m) * (b - o.m) - 4 * a * (c - o.n);
                     for (var k = 0; k < meet.length; k++) {
@@ -4896,6 +4901,8 @@ var SCRIPT_KEY = "HighMathCommon";
                 function S(v) { return [v[0] * u, v[1] * u]; }
 
                 var left = Math.min(o.xMin, 0) - 0.5, right = o.xMax + 0.8, bottom = Math.min(o.yMin, 0) - 0.5, top = o.yMax + 0.8;
+                // 유리·무리함수 그래프는 X축 화살촉 가장 왼쪽(뒤끝)까지 진행한다 (그림 제작 규칙 7.7)
+                var plotHi = Math.max(o.xMax, right - (ARROW.rear || ARROW.length) / u);
                 if (o.grid) {
                     for (var gx = o.xMin; gx <= o.xMax; gx++) if (gx !== 0) out.lines.push(straight([[gx * u, o.yMin * u], [gx * u, o.yMax * u]], "grid"));
                     for (var gy = o.yMin; gy <= o.yMax; gy++) if (gy !== 0) out.lines.push(straight([[o.xMin * u, gy * u], [o.xMax * u, gy * u]], "grid"));
@@ -4927,7 +4934,7 @@ var SCRIPT_KEY = "HighMathCommon";
                     var sides = [1, -1];
                     for (var b = 0; b < 2; b++) {
                         var side = sides[b];
-                        var wLo = Math.max(side > 0 ? o.xMin - p : p - o.xMax, 0), wHi = side > 0 ? o.xMax - p : p - o.xMin;
+                        var wLo = Math.max(side > 0 ? o.xMin - p : p - plotHi, 0), wHi = side > 0 ? plotHi - p : p - o.xMin;
                         var range = wHi > 0 ? branchRange(k * side, vLo, vHi, wLo, wHi) : null;
                         if (!range) continue;
                         out.lines.push({ points: hyperbolaBranch(k, p, q, side, range[0], range[1], u), kind: "graph" });
@@ -4943,8 +4950,8 @@ var SCRIPT_KEY = "HighMathCommon";
                             out.texts.push({ text: "x=" + fmt(p), at: [p * u, o.yMax * u], dir: [0, 1] });
                         }
                         if (q >= o.yMin && q <= o.yMax) {
-                            out.lines.push(straight([[o.xMin * u, q * u], [o.xMax * u, q * u]], "guide"));
-                            out.texts.push({ text: "y=" + fmt(q), at: [o.xMax * u, q * u], dir: [1, 0] });
+                            out.lines.push(straight([[o.xMin * u, q * u], [plotHi * u, q * u]], "guide"));
+                            out.texts.push({ text: "y=" + fmt(q), at: [plotHi * u, q * u], dir: [1, 0] });
                         }
                     }
                     if (Math.abs(p) > 1e-9) yCut = q - k / p;
@@ -4955,7 +4962,7 @@ var SCRIPT_KEY = "HighMathCommon";
                 } else {
                     var s = o.kind === 1 ? 1 : -1, a = o.a;
                     rising = s * a > 0;
-                    var rr = rootRange(s, a, p, q, o.xMin, o.xMax, o.yMin, o.yMax);
+                    var rr = rootRange(s, a, p, q, o.xMin, plotHi, o.yMin, o.yMax);
                     if (rr) {
                         out.lines.push({ points: rootPiece(s, a, p, q, rr[0], rr[1], u), kind: "graph" });
                         formulaAt = S([p + rr[1] * rr[1] / a, q + s * rr[1]]);

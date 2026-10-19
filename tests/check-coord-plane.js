@@ -326,4 +326,12 @@ assert.ok(source.includes("var FUNCTION_COUNT = 5;"));
 assert.ok(source.includes('line.kind === "grid" ? GRID_PT : GUIDE_PT'), "grid lines use their own width");
 assert.ok(source.includes('addValueRow(lineWidthPanel, "모눈", "pt", currentLineWidth("grid")'), "모눈 row");
 assert.ok(!/guideWidthControls\.input\.helpTip = "[^"]*모눈/.test(source), "보조선 tip no longer mentions 모눈");
+// 그래프는 X축 화살촉 뒤끝(테스트 ARROW 길이 4)까지 진행한다 (그림 제작 규칙 7.7)
+{
+  const rightmost = (lines, kind) => Math.max(...lines.filter((l) => l.kind === kind).flatMap((l) => l.points.map((p) => (p.anchor ? p.anchor[0] : p[0]))));
+const d = g.buildPlane({ xMin: -5, xMax: 5, yMin: -5, yMax: 5, unit: 10, tick: 2, grid: false, numbers: false, nameStyle: 0, hideAxes: false,
+    functions: [{ fn: g.compileFunction("y=0.5x+1"), label: "y=0.5x+1" }], region: [], points: [], coords: false, guides: false, piAxis: false,
+    intersections: false, identity: false, asymptotes: [], solidLines: [], fontSize: 8 });
+  assert.ok(Math.abs(rightmost(d.lines, "graph") - ((5 + 0.8) * 10 - 4)) < 1e-3, "graph reaches the arrowhead rear");
+}
 console.log("coord plane checks passed");

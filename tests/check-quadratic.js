@@ -113,4 +113,12 @@ return { set: setLineWidth, get: currentLineWidth, load: loadLineWidths, save: s
   store["T/lines"] = "v1|0.6|1|0.5"; lw.load();
   assert.deepStrictEqual([lw.get("axis"), lw.get("graph"), lw.get("guide"), lw.get("tick")], [0.6, 1, 0.5, 1.2], "v1 read; new groups untouched");
 }
+// 그래프는 X축 화살촉 뒤끝(테스트 ARROW 길이 4)까지 진행한다 (그림 제작 규칙 7.7)
+{
+  const rightmost = (lines, kind) => Math.max(...lines.filter((l) => l.kind === kind).flatMap((l) => l.points.map((p) => (p.anchor ? p.anchor[0] : p[0]))));
+const d = build({ a: 1, b: 0, c: -1, m: 0.2, n: 1, inequality: 1, xMin: -2, xMax: 5, yMin: -2, yMax: 8, vertex: false, axisLine: false, roots: false, intercept: false, line: true, formula: false });
+  const rear = (5 + 0.8) * 10 - 4;
+  assert.ok(Math.abs(rightmost(d.lines.filter((l) => l.kind === "graph" && l.points.length === 2), "graph") - rear) < 1e-3, "line reaches the arrowhead rear");
+  assert.ok(Math.abs(rightmost(d.lines, "solution") - rear) < 1e-3, "open solution reaches the arrowhead rear");
+}
 console.log("quadratic checks passed");

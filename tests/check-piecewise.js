@@ -117,4 +117,12 @@ return { set: setLineWidth, get: currentLineWidth, save: saveLineWidths };`)(app
   const addPath = extractFunction("addPath");
   assert.ok(addPath.includes('line.kind === "tick" ? TICK_PT') && addPath.includes('line.kind === "grid" ? GRID_PT'));
 }
+// 그래프는 X축 화살촉 뒤끝(테스트 ARROW 길이 4)까지 진행한다 (그림 제작 규칙 7.7)
+{
+  const rightmost = (lines, kind) => Math.max(...lines.filter((l) => l.kind === kind).flatMap((l) => l.points.map((p) => (p.anchor ? p.anchor[0] : p[0]))));
+const open = build([piece("y=1", "x>=1")], { xMin: -2, xMax: 5, yMin: -1, yMax: 6, guides: false });
+  assert.ok(Math.abs(rightmost(open.lines, "graph") - ((5 + 0.8) * 10 - 4)) < 1e-3, "open piece reaches the arrowhead rear");
+  const closed = build([piece("y=1", "1<=x<3")], { xMin: -2, xMax: 5, yMin: -1, yMax: 6, guides: false });
+  assert.ok(Math.abs(rightmost(closed.lines, "graph") - 30) < 1e-3, "closed piece ends at its own end");
+}
 console.log("piecewise checks passed");

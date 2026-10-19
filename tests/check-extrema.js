@@ -122,4 +122,10 @@ return { set: setLineWidth, get: currentLineWidth, save: saveLineWidths };`)(app
   for (const pair of ['"tick" ? TICK_PT', '"table" ? TABLE_PT', '"grid" ? GRID_PT', '"flat" ? THIN_PT']) assert.ok(addPath.includes(pair), pair);
   assert.ok(!/AXIS_PT = value; TABLE_PT/.test(extractFunction("setLineWidth")), "table is no longer linked to axis");
 }
+// 그래프는 X축 화살촉 뒤끝(테스트 ARROW 길이 4)까지 진행한다 (그림 제작 규칙 7.7)
+{
+  const rightmost = (lines, kind) => Math.max(...lines.filter((l) => l.kind === kind).flatMap((l) => l.points.map((p) => (p.anchor ? p.anchor[0] : p[0]))));
+const d = build({ f: f("y=1"), mode: 1, xMin: -3, xMax: 5, yMin: -3, yMax: 3, extrema: false, values: false });
+  assert.ok(Math.abs(rightmost(d.lines, "graph") - ((5 + 0.8) * 10 - 4)) < 1e-3, "graph reaches the arrowhead rear");
+}
 console.log("extrema checks passed");

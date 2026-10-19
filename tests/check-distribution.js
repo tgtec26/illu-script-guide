@@ -32,7 +32,7 @@ function extractFunction(name) {
 
 const names = ["buildNormal", "buildBinomial", "shadeRange", "addRangeMarks", "placeMarks", "addAxis", "probabilityText", "normalPoints",
   "normalDensity", "normalCdf", "binomialProbability", "straight", "formatValue"];
-const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, TAIL_SIGMAS = 3.5, BAR_RATIO = 0.6;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, TAIL_SIGMAS = 3.5, BAR_RATIO = 0.6, AXIS_MARGIN_RATIO = 0.04;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 const base = { width: 200, height: 50, tick: 2, shadeK: 20, axisName: "x", shade: 1, a: 40, b: 70, letters: false, meanLine: true, sigmaTicks: false };
 const normal = (o) => g.buildNormal(Object.assign({}, base, { curves: [{ m: 50, s: 10 }] }, o));
@@ -45,12 +45,12 @@ near(g.normalCdf(1) - g.normalCdf(-1), 0.6827, "±1σ", 1e-4);
 near(g.normalCdf(1.96), 0.975, "Φ(1.96)", 1e-4);
 near(g.binomialProbability(10, 5, 0.5), 252 / 1024, "C(10,5)/2^10", 1e-12);
 
-// 곡선: 베지어가 밀도 곡선에서 높이의 0.3% 안쪽, 꼭대기가 height, 양 끝이 그림 가장자리
+// 곡선: 베지어가 밀도 곡선에서 높이의 0.3% 안쪽, 꼭대기가 height, 왼쪽 끝은 그림 가장자리, 오른쪽 꼬리는 X축 화살촉 뒤끝까지(테스트 ARROW 길이 4)
 {
   const d = normal({ shade: 0 });
   const curve = d.lines.find((l) => l.kind === "curve").points;
   near(curve[0].anchor[0], 0, "left end");
-  near(curve[curve.length - 1].anchor[0], 200, "right end");
+  near(curve[curve.length - 1].anchor[0], 200 + 200 * 0.04, "right end: 화살촉 뒤끝 = 그림 오른쪽 + 축 여백");
   const sx = 200 / 70, sy = 50 / g.normalDensity(50, 50, 10);
   for (let i = 0; i + 1 < curve.length; i++) {
     for (const t of [0.25, 0.5, 0.75]) {

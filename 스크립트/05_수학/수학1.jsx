@@ -66,6 +66,7 @@ var SCRIPT_KEY = "HighMath1";
         spec.length = b.length * s;
         spec.halfWidth = b.halfWidth * s;
         spec.notch = spec.length - HEAD_CATALOG[headStyle.shape].lineEnd * spec.length / HEAD_CATALOG[HEAD_EXAM].length;
+        spec.rear = HEAD_CATALOG[headStyle.shape].length * spec.length / HEAD_CATALOG[HEAD_EXAM].length;   // 화살촉 끝에서 뒤끝까지(pt): 그래프는 X축 화살촉 뒤끝까지 진행한다 (그림 제작 규칙 7.7)
     }
 
     function applyHeadStyle() {
@@ -693,6 +694,8 @@ var SCRIPT_KEY = "HighMath1";
                 function inBox(p) { return p[0] >= o.xMin - 1e-9 && p[0] <= o.xMax + 1e-9 && p[1] >= o.yMin - 1e-9 && p[1] <= o.yMax + 1e-9; }
 
                 var left = Math.min(o.xMin, 0) - 0.5, right = o.xMax + 0.8, bottom = Math.min(o.yMin, 0) - 0.5, top = o.yMax + 0.8;
+                // 그래프는 X축 화살촉 가장 왼쪽(뒤끝)까지 진행한다 (그림 제작 규칙 7.7)
+                var plotHi = Math.max(o.xMax, right - (ARROW.rear || ARROW.length) / u);
                 if (o.grid) {
                     for (var gx = o.xMin; gx <= o.xMax; gx++) if (gx !== 0) out.lines.push(straight([[gx * u, o.yMin * u], [gx * u, o.yMax * u]], "grid"));
                     for (var gy = o.yMin; gy <= o.yMax; gy++) if (gy !== 0) out.lines.push(straight([[o.xMin * u, gy * u], [o.xMax * u, gy * u]], "grid"));
@@ -723,7 +726,7 @@ var SCRIPT_KEY = "HighMath1";
                 }
                 for (var k = 0; k < graphs.length; k++) {
                     var g = graphs[k], fn = graphFunction(g);
-                    var segments = plotFunction(fn, o.xMin, o.xMax, o.yMin, o.yMax);
+                    var segments = plotFunction(fn, o.xMin, plotHi, o.yMin, o.yMax);
                     for (var s = 0; s < segments.length; s++) if (segments[s].length >= 2) out.lines.push({ points: toBezier(segments[s], u), kind: "graph" });
                     if (o.formulas && segments.length > 0) {
                         var lastSegment = segments[segments.length - 1], end = lastSegment[lastSegment.length - 1];
@@ -733,7 +736,7 @@ var SCRIPT_KEY = "HighMath1";
                     if (!g.main) continue;
                     // 점근선: 지수 y=n, 로그 x=m
                     if (o.asymptotes) {
-                        if (g.kind === "exp" && g.n >= o.yMin && g.n <= o.yMax && g.n !== 0) out.lines.push(straight([[o.xMin * u, g.n * u], [o.xMax * u, g.n * u]], "guide"));
+                        if (g.kind === "exp" && g.n >= o.yMin && g.n <= o.yMax && g.n !== 0) out.lines.push(straight([[o.xMin * u, g.n * u], [plotHi * u, g.n * u]], "guide"));
                         if (g.kind === "log" && g.m >= o.xMin && g.m <= o.xMax && g.m !== 0) out.lines.push(straight([[g.m * u, o.yMin * u], [g.m * u, o.yMax * u]], "guide"));
                     }
                     // 지나는 점: 지수 (m, 1+n), (m+1, a+n) / 로그 (m+1, n), (m+a, 1+n)

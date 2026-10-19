@@ -66,6 +66,7 @@ var SCRIPT_KEY = "HighStatistics";
         spec.length = b.length * s;
         spec.halfWidth = b.halfWidth * s;
         spec.notch = spec.length - HEAD_CATALOG[headStyle.shape].lineEnd * spec.length / HEAD_CATALOG[HEAD_EXAM].length;
+        spec.rear = HEAD_CATALOG[headStyle.shape].length * spec.length / HEAD_CATALOG[HEAD_EXAM].length;   // 화살촉 끝에서 뒤끝까지(pt): 그래프는 X축 화살촉 뒤끝까지 진행한다 (그림 제작 규칙 7.7)
     }
 
     function applyHeadStyle() {
@@ -1085,6 +1086,7 @@ var SCRIPT_KEY = "HighStatistics";
             var LABEL_GAP_MM = 0.8;
             var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
+            var AXIS_MARGIN_RATIO = 0.04;   // 축이 그림 가장자리 밖으로 나가는 길이 / 가로 길이
             var TAIL_SIGMAS = 3.5;   // 곡선은 평균에서 ±3.5σ까지 (끝 높이가 꼭대기의 0.2%라 축에 닿아 보인다)
             var BAR_RATIO = 0.6;     // 막대 폭 / 막대 간격
             var MODES = ["정규분포", "이항분포"];
@@ -1483,6 +1485,8 @@ var SCRIPT_KEY = "HighStatistics";
                 }
                 var sx = o.width / (hi - lo), sy = o.height / peak;
                 function X(v) { return (v - lo) * sx; }
+                // 오른쪽 꼬리는 X축 화살촉 가장 왼쪽(뒤끝)까지 이어 그린다 (그림 제작 규칙 7.7)
+                var tailEnd = lo + Math.max(o.width, o.width * (1 + AXIS_MARGIN_RATIO) + ARROW.length - (ARROW.rear || ARROW.length)) / sx;
                 var first = o.curves[0];
                 var range = shadeRange(o, lo, hi);
 
@@ -1501,7 +1505,7 @@ var SCRIPT_KEY = "HighStatistics";
                 addAxis(out, o, 0, o.width);
                 for (var k = 0; k < o.curves.length; k++) {
                     var curve = o.curves[k];
-                    out.lines.push({ points: normalPoints(curve.m, curve.s, curve.m - TAIL_SIGMAS * curve.s, curve.m + TAIL_SIGMAS * curve.s, lo, sx, sy), kind: "curve" });
+                    out.lines.push({ points: normalPoints(curve.m, curve.s, curve.m - TAIL_SIGMAS * curve.s, Math.max(curve.m + TAIL_SIGMAS * curve.s, tailEnd), lo, sx, sy), kind: "curve" });
                     if (o.meanLine) out.lines.push({ points: straight([[X(curve.m), 0], [X(curve.m), normalDensity(curve.m, curve.m, curve.s) * sy]]), kind: "guide" });
                 }
 
@@ -1594,7 +1598,7 @@ var SCRIPT_KEY = "HighStatistics";
             }
 
             function addAxis(out, o, left, right) {
-                var margin = o.width * 0.04, end = right + margin + ARROW.length;
+                var margin = o.width * AXIS_MARGIN_RATIO, end = right + margin + ARROW.length;
                 out.lines.push({ points: straight([[left - margin, 0], [end - ARROW.length + ARROW.notch, 0]]), kind: "axis" });
                 out.arrows.push({ tip: [end, 0], dir: [1, 0] });
                 if (o.axisName) out.texts.push({ text: o.axisName, at: [end, 0], dir: [0, -1] });

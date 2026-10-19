@@ -70,8 +70,13 @@ for (const bad of ["1", "-2", "0", "x", "3,,a"]) assert.strictEqual(g.parseBases
   const d = build({ a: 0.5, m: 1, n: -2 });
   assert.strictEqual(d.notes[0], "y=(1/2)^(x-1)-2: 감소, 점근선 y=-2, 치역 y>-2");
   const guide = d.lines.find((l) => l.kind === "guide");
-  assert.deepStrictEqual(guide.points.map((p) => p.anchor), [[-30, -20], [50, -20]]);
+  // 점근선도 X축 화살촉 뒤끝(테스트 ARROW 길이 4)까지: (xMax 5 + 0.8) × 10 − 4 = 54
+  assert.deepStrictEqual(guide.points.map((p) => p.anchor[1]), [-20, -20]);
+  assert.ok(Math.abs(guide.points[0].anchor[0] + 30) < 1e-9 && Math.abs(guide.points[1].anchor[0] - 54) < 1e-9, "asymptote reaches the arrowhead rear");
   assert.deepStrictEqual(d.dots[0], [10, -10]);
+  // 줄어드는 지수 곡선도 X축 화살촉 뒤끝까지 간다
+  const curve = d.lines.find((l) => l.kind === "graph").points;
+  assert.ok(Math.abs(Math.max(...curve.map((p) => p.anchor[0])) - 54) < 1e-3, "curve reaches the arrowhead rear");
 }
 // 로그함수: x=m 점근선, 점 (1,0)(a,1), 정의역
 {

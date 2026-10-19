@@ -66,6 +66,7 @@ var SCRIPT_KEY = "HighMath2";
         spec.length = b.length * s;
         spec.halfWidth = b.halfWidth * s;
         spec.notch = spec.length - HEAD_CATALOG[headStyle.shape].lineEnd * spec.length / HEAD_CATALOG[HEAD_EXAM].length;
+        spec.rear = HEAD_CATALOG[headStyle.shape].length * spec.length / HEAD_CATALOG[HEAD_EXAM].length;   // 화살촉 끝에서 뒤끝까지(pt): 그래프는 X축 화살촉 뒤끝까지 진행한다 (그림 제작 규칙 7.7)
     }
 
     function applyHeadStyle() {
@@ -716,6 +717,8 @@ var SCRIPT_KEY = "HighMath2";
                 var u = o.unit;
                 var out = { lines: [], arrows: [], dots: [], texts: [], notes: [] };
                 var left = Math.min(o.xMin, 0) - 0.5, right = o.xMax + 0.8, bottom = Math.min(o.yMin, 0) - 0.5, top = o.yMax + 0.8;
+                // 끝이 열린 조각은 X축 화살촉 가장 왼쪽(뒤끝)까지 진행한다 (그림 제작 규칙 7.7)
+                var plotHi = Math.max(o.xMax, right - (ARROW.rear || ARROW.length) / u);
                 if (o.grid) {
                     for (var gx = o.xMin; gx <= o.xMax; gx++) if (gx !== 0) out.lines.push(straight([[gx * u, o.yMin * u], [gx * u, o.yMax * u]], "grid"));
                     for (var gy = o.yMin; gy <= o.yMax; gy++) if (gy !== 0) out.lines.push(straight([[o.xMin * u, gy * u], [o.xMax * u, gy * u]], "grid"));
@@ -763,7 +766,7 @@ var SCRIPT_KEY = "HighMath2";
                         breaks.push(r.lo);
                         continue;
                     }
-                    var from = Math.max(r.lo, o.xMin), to = Math.min(r.hi, o.xMax);
+                    var from = Math.max(r.lo, o.xMin), to = Math.min(r.hi, plotHi);
                     if (to > from) {
                         var segments = plotFunction(piece.fn, from, to, o.yMin, o.yMax);
                         for (var s = 0; s < segments.length; s++) if (segments[s].length >= 2) out.lines.push({ points: toBezier(segments[s], u), kind: "graph" });
@@ -1763,6 +1766,8 @@ var SCRIPT_KEY = "HighMath2";
 
                 if (showGraph) {
                     var left = Math.min(o.xMin, 0) - 0.5, right = o.xMax + 0.8, bottom = Math.min(o.yMin, 0) - 0.5, top = o.yMax + 0.8;
+                    // 그래프는 X축 화살촉 가장 왼쪽(뒤끝)까지 진행한다 (그림 제작 규칙 7.7)
+                    var plotHi = Math.max(o.xMax, right - (ARROW.rear || ARROW.length) / u);
                     if (o.grid) {
                         for (var gx = o.xMin; gx <= o.xMax; gx++) if (gx !== 0) out.lines.push(straight([[gx * u, o.yMin * u], [gx * u, o.yMax * u]], "grid"));
                         for (var gy = o.yMin; gy <= o.yMax; gy++) if (gy !== 0) out.lines.push(straight([[o.xMin * u, gy * u], [o.xMax * u, gy * u]], "grid"));
@@ -1784,7 +1789,7 @@ var SCRIPT_KEY = "HighMath2";
                         out.lines.push(straight([[-o.tick / 2, ty * u], [o.tick / 2, ty * u]], "tick"));
                         if (o.numbers) out.texts.push({ text: String(ty), at: [0, ty * u], dir: [-1, 0], clear: o.tick / 2, upright: true });
                     }
-                    var segments = plotFunction(fn, o.xMin, o.xMax, o.yMin, o.yMax), end = null;
+                    var segments = plotFunction(fn, o.xMin, plotHi, o.yMin, o.yMax), end = null;
                     for (var s = 0; s < segments.length; s++) {
                         if (segments[s].length < 2) continue;
                         out.lines.push({ points: toBezier(segments[s], u), kind: "graph" });
@@ -2838,6 +2843,8 @@ var SCRIPT_KEY = "HighMath2";
                 var out = { fills: [], lines: [], arrows: [], dots: [], texts: [], notes: [] };
                 var left = Math.min(o.xMin, 0) - 0.5, right = o.xMax + 0.8;
                 var bottom = Math.min(o.yMin, 0) - 0.5, top = o.yMax + 0.8;
+                // 그래프와 접선은 X축 화살촉 가장 왼쪽(뒤끝)까지 진행한다 (그림 제작 규칙 7.7)
+                var plotHi = Math.max(o.xMax, right - (ARROW.rear || ARROW.length) / u);
                 function value(fn, x) {
                     var y;
                     try { y = fn(x); } catch (e) { return NaN; }
@@ -2937,7 +2944,7 @@ var SCRIPT_KEY = "HighMath2";
                 var graphs = [{ fn: o.f, label: o.fLabel }];
                 if (o.g) graphs.push({ fn: o.g, label: o.gLabel });
                 for (var k = 0; k < graphs.length; k++) {
-                    var segments = plotFunction(graphs[k].fn, o.xMin, o.xMax, o.yMin, o.yMax);
+                    var segments = plotFunction(graphs[k].fn, o.xMin, plotHi, o.yMin, o.yMax);
                     for (var s = 0; s < segments.length; s++) {
                         if (segments[s].length < 2) continue;
                         out.lines.push({ points: toBezier(segments[s], u), kind: "graph" });
@@ -2956,7 +2963,7 @@ var SCRIPT_KEY = "HighMath2";
                     if (isNaN(ft) || isNaN(m)) out.notes.push("접점에서 미분할 수 없음");
                     else {
                         out.notes.push("접선 " + lineEquation(m, ft - m * t));
-                        var clip = clipLine(t, ft, m, o.xMin, o.xMax, o.yMin, o.yMax);
+                        var clip = clipLine(t, ft, m, o.xMin, plotHi, o.yMin, o.yMax);
                         if (clip !== null) {
                             out.lines.push(straight([[clip[0] * u, (ft + m * (clip[0] - t)) * u], [clip[1] * u, (ft + m * (clip[1] - t)) * u]], "graph"));
                             if (o.formulas) formulaLabels.push({ text: "", at: [clip[1] * u, (ft + m * (clip[1] - t)) * u], dir: [1, 0], skip: true });
