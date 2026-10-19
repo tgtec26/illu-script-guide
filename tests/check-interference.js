@@ -169,6 +169,7 @@ function maxCurveError(waves, from, to) {
 {
   const {catalog, expectedPoints, nearPoints} = require("./arrowhead-catalog.js");
   const k = geo.HEAD_LEN_MM / 8.6;
+  near(geo.HEAD_LEN_MM, 8.6 * 0.75 * 25.4 / 72, 1e-9, '일러스트레이터 100%: 삼각형 8.6 × 선 0.75pt');
   assert.deepStrictEqual(geo.HEAD_CATALOG, catalog.types.map((t) => ({length: t.length, lineEnd: t.lineEnd, poly: t.poly})), "same data as tools/arrowheads.json");
   for (let shape = 0; shape < 4; shape++) {
     // 오른쪽(+x)으로 가는 화살표

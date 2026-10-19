@@ -393,7 +393,7 @@ try {
         t.rect(0, land, W / 2, 0, 35, 100, 0.3);
         t.rect(W / 2, sea, W, 0, 12, 100, 0.3);
         var arrows = breezeArrows(W, H, land, seaToLand);
-        for (var i = 0; i < arrows.length; i++) t.arrow(arrows[i][0], arrows[i][1], 1, 100, 2.2 * mm);
+        for (var i = 0; i < arrows.length; i++) t.arrow(arrows[i][0], arrows[i][1], 1, 100);
         if (o.pressure) {
             t.text(seaToLand ? "저기압" : "고기압", W / 4, land / 2, F);
             t.text(seaToLand ? "고기압" : "저기압", W * 3 / 4, sea / 2, F);
@@ -731,13 +731,13 @@ try {
             formPaint(p, fillK, strokeK, width);
             return p;
         };
-        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리, 3 작살형), 크기는 o.headSize(%): 삼각형 머리 길이가 headLength × 크기이고 다른 모양도 같은 배율을 쓴다.
+        // a → b 화살표. 촉 모양은 o.headShape(0 삼각형, 1 꺾쇠, 2 제비꼬리, 3 작살형), 크기는 o.headSize(%): 삼각형 머리 길이가 headLength(없으면 8.6 × 선 두께 = 일러스트레이터 100%) × 크기이고 다른 모양도 같은 배율을 쓴다.
         // 선은 머리 속(lineEnd)에서 끝나 틈이 없다
         t.arrow = function(a, b, width, k, headLength) {
             if (k === undefined) k = 100;
             var scale = o && o.headSize ? o.headSize / 100 : 1;
             var shape = o && o.headShape ? o.headShape : 0;
-            var head = (headLength || 1.6 * FORM_MM) * scale;
+            var head = (headLength || HEAD_CATALOG[0].length * width) * scale;
             var dx = b[0] - a[0], dy = b[1] - a[1];
             var len = Math.sqrt(dx * dx + dy * dy);
             if (len < 0.01) return;

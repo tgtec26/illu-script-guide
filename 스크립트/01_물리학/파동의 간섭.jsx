@@ -38,7 +38,6 @@ try {
     var SAMPLES_PER_WAVELENGTH = 10;
     var LINE_MARGIN_MM = 1;
     var ARROW_LEN_MM = 8;
-    var HEAD_LEN_MM = 1.6;
     var HEAD_TRIANGLE = 0;
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
 
@@ -50,6 +49,9 @@ try {
         {length: 9.9, lineEnd: 7, poly: [[0, 0], [4.1, 9.9], [0, 7.6], [-4.1, 9.9]]},
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
+    var ARROW_STROKE_PT = 0.75;
+    // 화살촉 크기 100% = 일러스트레이터 100%: 삼각형 머리 길이(mm) = 카탈로그 삼각형(8.6) × 화살표 선 두께(pt) (그림 제작 규칙 4.7)
+    var HEAD_LEN_MM = HEAD_CATALOG[HEAD_TRIANGLE].length * ARROW_STROKE_PT * 25.4 / 72;
     var ARROW_GAP_MM = 3;
     var ARROW_STACK_MM = 3;
 
@@ -216,7 +218,6 @@ try {
     var MM = 2.834645669;
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var FONT_PT = 8;
-    var ARROW_STROKE_PT = 0.75;
     var DASH_PT = [3, 2];
     var DASHED_OPACITY = 60;
     var DOT_RADIUS_MM = 0.8;
