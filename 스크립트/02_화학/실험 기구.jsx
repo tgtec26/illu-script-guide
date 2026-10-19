@@ -16,6 +16,7 @@ try {
 //   - 기구 윤곽은 꼭짓점마다 모서리 반지름을 준 꺾은선을 베지어 원호로 둥글린 것이다 (시험관 바닥은 반원).
 //   - 액체: 기구 안쪽을 바닥부터 높이(%)까지 채운 면(선 없음, 이름 '액체')과 수면 선. 온도계는 액주 높이, 주사기는 피스톤 위치.
 //     주사기 속 공간은 선·면 없는 닫힌 패스 '기체'로 남긴다. 둘 다 입자 상태 모형(입자 상태 모형)으로 채울 수 있다.
+//   - 삼각 플라스크는 주둥이(목) 너비(mm)를 전체 너비와 따로 정한다(기본 전체 너비의 32%). 너비·높이처럼 선택한 사각형 크기에서 오므로 저장하지 않는다.
 //   - 눈금: 안쪽 왼쪽 벽을 따라 짧은 선 (5칸마다 길게). 온도계는 관 오른쪽 바깥.
 // 유리 선(기구 윤곽, 유리 두께가 있으면 두 겹 선의 테두리)·수면 선·눈금 선은 굵기(pt)를 따로 정한다. 기본 0.3pt 검정. 결과는 그룹 하나.
 
@@ -46,6 +47,9 @@ try {
     var SLIDER_WIDTH = 196;
     var POSITION_LIMIT_MM = 50;
     var SIZE_RANGE = [3, 300];
+    var NECK_RANGE = [2, 300];
+    var FLASK_NECK_RATIO = 0.32;
+    var FLASK_RIM_RATIO = 0.03;
     var LEVEL_RANGE = [0, 100];
     var K_RANGE = [0, 100];
     var TICK_RANGE = [2, 50];
@@ -80,9 +84,10 @@ try {
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다 (너비·높이는 선택한 사각형이나 종류별 기본 크기)
     var DEFAULTS = {levelPct: levelPct, liquidK: liquidK, tickCount: tickCount, glassMm: glassMm, glassLinePt: glassLinePt, surfaceLinePt: surfaceLinePt, tickLinePt: tickLinePt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
-    var widthMm, heightMm;
+    var widthMm, heightMm, neckMm;
     resetSize();
     var RECT_SIZE = rect !== null ? [widthMm, heightMm] : null;
+    neckMm = defaultNeckMm();
 
     var previewGroup = null;
 
@@ -104,6 +109,8 @@ try {
     kindList.preferredSize.width = 160;
     var widthRow = addValueRow(kindPanel, "너비", "mm", widthMm, SIZE_RANGE[0], SIZE_RANGE[1], 0.5, 1);
     var heightRow = addValueRow(kindPanel, "높이", "mm", heightMm, SIZE_RANGE[0], SIZE_RANGE[1], 0.5, 1);
+    var neckRow = addValueRow(kindPanel, "주둥이 너비", "mm", neckMm, NECK_RANGE[0], NECK_RANGE[1], 0.1, 1);
+    neckRow.input.helpTip = "삼각 플라스크 주둥이(목) 너비. 전체 너비와 따로 정하며 전체 너비의 94%까지. 다른 기구에서는 쓰지 않는다";
     var glassRow = addValueRow(kindPanel, "유리 두께", "mm", glassMm, GLASS_RANGE[0], GLASS_RANGE[1], 0.1, 1);
     glassRow.input.helpTip = "0이면 한 줄 선, 올리면 흰 안쪽의 두 겹 유리(바깥쪽으로 두꺼워지고 열린 끝은 둥글게 조금 더 두껍다). 받침·날개·피스톤은 그대로";
     var glassLineRow = addValueRow(kindPanel, "유리 선", "pt", glassLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2);
@@ -150,6 +157,8 @@ try {
             setRowValue(widthRow, widthMm);
             setRowValue(heightRow, heightMm);
         }
+        neckMm = defaultNeckMm();
+        setRowValue(neckRow, neckMm);
         levelRow.label.text = KINDS[kind].level + " (%):";
         syncEnabled();
         updatePreview();
@@ -158,6 +167,7 @@ try {
     tickCheck.onClick = function() { ticksOn = tickCheck.value; syncEnabled(); updatePreview(); };
     bindValueRow(widthRow, function() { return widthMm; }, function(v) { widthMm = v; }, function() { return RECT_SIZE !== null ? RECT_SIZE[0] : KINDS[kind].size[0]; });
     bindValueRow(heightRow, function() { return heightMm; }, function(v) { heightMm = v; }, function() { return RECT_SIZE !== null ? RECT_SIZE[1] : KINDS[kind].size[1]; });
+    bindValueRow(neckRow, function() { return neckMm; }, function(v) { neckMm = v; }, defaultNeckMm);
     bindValueRow(glassRow, function() { return glassMm; }, function(v) { glassMm = v; }, function() { return DEFAULTS.glassMm; });
     bindValueRow(glassLineRow, function() { return glassLinePt; }, function(v) { glassLinePt = v; }, function() { return DEFAULTS.glassLinePt; });
     bindValueRow(levelRow, function() { return levelPct; }, function(v) { levelPct = v; }, function() { return DEFAULTS.levelPct; });
@@ -198,6 +208,17 @@ try {
     }
     app.redraw();
 
+    // 삼각 플라스크 주둥이 기본 너비: 지금 전체 너비(선택한 사각형 또는 종류별 기본 크기)의 32%
+    function defaultNeckMm() {
+        var w = RECT_SIZE !== null ? RECT_SIZE[0] : KINDS[kind].size[0];
+        return Math.round(w * FLASK_NECK_RATIO * 10) / 10;
+    }
+
+    // 그릴 주둥이 너비(pt): 입구 테두리(양쪽 너비 3%)가 상자 밖으로 나가지 않게 전체 너비의 94%까지, 아래로는 2mm까지
+    function flaskNeckPt() {
+        return Math.min(Math.max(neckMm, NECK_RANGE[0]), widthMm * (1 - 2 * FLASK_RIM_RATIO)) * MM;
+    }
+
     function resetSize() {
         if (rect !== null) {
             var b = rect.geometricBounds;
@@ -211,6 +232,7 @@ try {
 
     // 액체 색은 온도계(액주)에도 쓴다. 액체를 끄면 높이·색을 잠근다. 칸 수는 눈금을 켰을 때만
     function syncEnabled() {
+        setRowEnabled(neckRow, kind === 1);
         setRowEnabled(levelRow, liquidOn || kind === 4);
         setRowEnabled(kRow, liquidOn);
         setRowEnabled(surfaceLineRow, liquidOn && kind !== 4);
@@ -243,7 +265,7 @@ try {
         var w = widthMm * MM;
         var h = heightMm * MM;
         var box = {left: center[0] - w / 2, top: center[1] + h / 2, width: w, height: h};
-        var g = glassware(kind, box, levelPct / 100, glassMm * MM);
+        var g = glassware(kind, box, levelPct / 100, glassMm * MM, kind === 1 ? flaskNeckPt() : undefined);
         var black = makeGray(100);
         var container = rect !== null ? rect.parent : findEditableLayer();
         previewGroup = container.groupItems.add();
@@ -319,7 +341,7 @@ try {
     // interiorBottom/Top, levelY, tickSide("inside" | "outside"), tickX(y)→눈금 시작 x, gas(다각형 또는 null).
     // glass: 0보다 크면 유리 벽(열린 벽, 온도계 관·구부) 윤곽은 안쪽 벽에서 두께 절반 바깥의 유리 가운데 선이고
     // glass에 두께가 들어간다. 받침·날개·피스톤은 그대로 한 줄 선이다. 안쪽(액체·눈금)은 두께와 관계없다
-    function glassware(kindIndex, box, level, glass) {
+    function glassware(kindIndex, box, level, glass, neckWidth) {
         var L = box.left;
         var T = box.top;
         var W = box.width;
@@ -338,8 +360,8 @@ try {
             result.outlines.push(wallOutline(wall, glass));
             result.interior = flattenBezier(roundPolyline(wall.slice(1), false));
         } else if (kindIndex === 1) {
-            // 삼각 플라스크: 목(너비 32%, 높이 28%) + 사다리꼴 몸통
-            var neck = W * 0.32;
+            // 삼각 플라스크: 목(너비 neckWidth, 없으면 전체 너비의 32%, 높이 28%) + 사다리꼴 몸통
+            var neck = neckWidth === undefined ? W * 0.32 : neckWidth;
             var neckH = H * 0.28;
             var rim = W * 0.03;
             var r1 = W * 0.07;

@@ -137,6 +137,22 @@ for (let kind = 0; kind < 6; kind++) {
   const bottom = Math.min(...tube.map((p) => p.anchor[1]));
   near(bottom, 0 - 1, 1e-9, "test tube bottom");
 }
+// 삼각 플라스크 주둥이 너비: 전체 너비와 따로, 없으면 전체 너비의 32%
+{
+  const flaskBox = {left: 0, top: 100, width: 40, height: 100};
+  const rimX = (neck) => lib.glassware(1, flaskBox, 0.5, 0, neck).outlines[0].points[0].anchor[0];
+  near(rimX(undefined), 20 - 40 * 0.32 / 2 - 40 * 0.03, 1e-9, "default neck is 32% of the width");
+  near(rimX(8), 20 - 8 / 2 - 40 * 0.03, 1e-9, "neck width is its own value");
+  assert.ok(rimX(16) < rimX(8), "wider neck reaches further out");
+  assert.deepStrictEqual(lib.glassware(0, flaskBox, 0.5, 0, 3).outlines[0].points, lib.glassware(0, flaskBox, 0.5, 0, 30).outlines[0].points, "other kinds ignore the neck");
+}
+assert.ok(source.includes('addValueRow(kindPanel, "주둥이 너비", "mm", neckMm, NECK_RANGE[0], NECK_RANGE[1], 0.1, 1)'), "neck row");
+assert.ok(source.includes("bindValueRow(neckRow, function() { return neckMm; }, function(v) { neckMm = v; }, defaultNeckMm);"), "neck row bound with its R default");
+assert.ok(source.includes("setRowEnabled(neckRow, kind === 1);"), "neck row only for the flask");
+assert.ok(source.includes("glassMm * MM, kind === 1 ? flaskNeckPt() : undefined);"), "preview passes the neck width to the flask only");
+assert.ok(source.includes("return Math.min(Math.max(neckMm, NECK_RANGE[0]), widthMm * (1 - 2 * FLASK_RIM_RATIO)) * MM;"), "neck capped inside the box");
+assert.ok(source.includes("neckMm = defaultNeckMm();\n        setRowValue(neckRow, neckMm);"), "kind change restores the neck");
+assert.ok(!/neckMm[^\n]*join|PREF_KEY[^\n]*neck/.test(source), "neck is derived from the size, not saved");
 assert.ok(source.includes('"v3",'), "settings tag bumped for the line weight fields");
 assert.ok(source.includes('if (!((p[0] === "v3" && p.length === 14) || (p[0] === "v2" && p.length === 11))) return;'), "v2 saves still load, v3 adds three fields");
 assert.ok(source.includes('if (p[0] === "v3") {'), "line weights are read only from v3 so v2 saves keep 0.3pt");
