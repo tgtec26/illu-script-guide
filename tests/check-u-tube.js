@@ -118,6 +118,11 @@ const isCorner = (p) => p.left[0] === p.anchor[0] && p.left[1] === p.anchor[1] &
   nearPoint(liquid[8].anchor, [6, 20], "inner arc end");
   nearPoint(liquid[9].anchor, [6, 60], "left surface on the inner wall");
 
+  // 수면: 두 관의 액체 윗면 선분. 왼쪽 [0, 6] 높이 60, 오른쪽 [34, 40] 높이 40 (관 두께 6)
+  assert.deepStrictEqual(g.surface, [[[0, 60], [6, 60]], [[34, 40], [40, 40]]], "surface spans the bore at each liquid level");
+  assert.deepStrictEqual(lib.tubeGeometry({left: 0, top: 100, width: 40, height: 100, bore: 6, diff: 0, glass: 2,
+    closedLeft: false, levelLeft: 60, levelRight: 40, membrane: false}).surface, g.surface, "surface ignores the glass");
+
   assert.deepStrictEqual(g.membrane, [[20, 0], [20, 6]], "membrane spans the bore at the bend centre");
   assert.strictEqual(lib.tubeGeometry({left: 0, top: 100, width: 40, height: 100, bore: 6, diff: 0,
     closedLeft: false, levelLeft: 60, levelRight: 40, membrane: false}).membrane, null);
@@ -183,11 +188,19 @@ assert.ok(source.includes('addValueRow(tubePanel, "막 굵기", "pt", membraneWe
 assert.ok(source.includes('addValueRow(liquidPanel, "액체 색", "K", liquidK, K_RANGE[0], K_RANGE[1], 10, 0)'),
   "liquid K row steps by 10");
 assert.ok(source.includes("styleStroke(line, black, membraneWeightPt, MEMBRANE_DASH)"), "membrane uses its own weight");
+assert.ok(source.includes('addValueRow(tubePanel, "유리 선", "pt", glassLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2)'), "glass line row");
+assert.ok(source.includes('addValueRow(liquidPanel, "수면 선", "pt", surfaceLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2)'), "surface line row");
+assert.ok(source.includes("styleStroke(surface, black, surfaceLinePt, [])"), "surface lines use their own weight");
+assert.ok(source.includes("styleStroke(outline, black, glassLinePt, [])"), "plain tube outline uses the glass line weight");
+assert.ok(/liquid\.stroked = false;/.test(source), "liquid is fill only so the surface weight cannot thicken the walls");
+assert.ok(!/styleStroke\(liquid,/.test(source), "liquid path carries no stroke");
 assert.ok(source.includes("liquid.fillColor = makeColor(liquidK)"), "liquid fill follows the K row");
-assert.ok(source.includes('if (p[0] !== "v3" || p.length !== 14) return;'), "settings tag bumped for the glass field");
+assert.ok(source.includes('"v4",'), "settings tag bumped for the line weight fields");
+assert.ok(source.includes('if (!((p[0] === "v4" && p.length === 16) || (p[0] === "v3" && p.length === 14))) return;'), "v3 saves still load, v4 adds two fields");
+assert.ok(source.includes('if (p[0] === "v4") {'), "line weights are read only from v4 so v3 saves keep 0.3pt");
 assert.ok(source.includes('addValueRow(tubePanel, "유리 두께", "mm", glassMm, GLASS_RANGE[0], GLASS_RANGE[1], 0.1, 1)'), "glass row");
 assert.ok(source.includes("var RIM_SCALE = 1.25;"), "rim beads like the glassware script");
-assert.ok(source.includes("drawGlassWall(previewGroup, geometry.outlines[i], o.glass * MM)"), "thick glass drawn per outline");
-assert.ok(source.includes("var layers = [[100, glass + LINE_WIDTH_PT * 2], [0, glass]];"), "black then white layers");
+assert.ok(source.includes("drawGlassWall(previewGroup, geometry.outlines[i], o.glass * MM, glassLinePt)"), "thick glass drawn per outline");
+assert.ok(source.includes("var layers = [[100, glass + linePt * 2], [0, glass]];"), "black then white layers follow the glass line weight");
 
 console.log("check-u-tube: ok");

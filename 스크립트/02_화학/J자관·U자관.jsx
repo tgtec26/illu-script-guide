@@ -21,7 +21,9 @@ try {
 //   - 액체는 바닥부터 채우고, 높이는 관 바닥(바깥) 기준 mm. 반원 바닥이 끝나는 높이(너비의 절반)부터
 //     관 꼭대기까지만 둔다. 좌우 같은 높이를 풀면 왼쪽·오른쪽을 따로 정한다. 색은 K 10 단위.
 //   - 반투과성막: 굽은 바닥 가운데에 관을 가로지르는 세로 파선(2pt 선·1pt 간격). 굵기(pt)를 따로 정한다.
-//   - 확인하면 원본 사각형은 지워지고 액체·관(·막)이 든 그룹 하나가 남는다. 관·액체 선은 0.3pt 검정.
+//   - 유리 선(관 윤곽, 유리 두께가 있으면 두 겹 선의 테두리)과 수면 선(액체 윗면)은 굵기(pt)를 따로 정한다. 둘 다 기본 0.3pt 검정.
+//     수면은 액체 패스와 별개의 선으로 그려 수면 선만 굵게 해도 관 벽이 굵어지지 않는다.
+//   - 확인하면 원본 사각형은 지워지고 액체·수면·관(·막)이 든 그룹 하나가 남는다.
 
 (function() {
     if (app.documents.length === 0) {
@@ -38,6 +40,7 @@ try {
     var RIM_SCALE = 1.25;
     var GLASS_RANGE = [0, 5];
     var MEMBRANE_WEIGHT_RANGE = [0.1, 3];
+    var LINE_WEIGHT_RANGE = [0.1, 3];
     var K_RANGE = [0, 100];
     var MIN_INNER_RADIUS_MM = 0.5;
     var LABEL_WIDTH = 100;
@@ -94,6 +97,8 @@ try {
     var levelRightMm = levelLeftMm;
     var membrane = false;
     var membraneWeightPt = 0.3;
+    var glassLinePt = LINE_WIDTH_PT;     // 유리(관 윤곽) 선 굵기
+    var surfaceLinePt = LINE_WIDTH_PT;   // 수면 선 굵기
     var liquidK = 30;
     var offsetXmm = 0;
     var offsetYmm = 0;
@@ -102,7 +107,7 @@ try {
     var previewGroup = null;
 
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다. 너비·높이는 선택한 사각형(없으면 기억한 틀)에서 온다
-    var DEFAULTS = {widthMm: widthMm, heightMm: heightMm, boreMm: boreMm, glassMm: glassMm, heightDiffMm: heightDiffMm, membraneWeightPt: membraneWeightPt, liquidK: liquidK, levelRightMm: levelRightMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm, levelLeftMm: levelLeftMm};
+    var DEFAULTS = {widthMm: widthMm, heightMm: heightMm, boreMm: boreMm, glassMm: glassMm, heightDiffMm: heightDiffMm, membraneWeightPt: membraneWeightPt, glassLinePt: glassLinePt, surfaceLinePt: surfaceLinePt, liquidK: liquidK, levelRightMm: levelRightMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm, levelLeftMm: levelLeftMm};
     applySettings();
 
     // -------------------------------------------------------
@@ -127,6 +132,8 @@ try {
     boreRow.input.helpTip = "관 안쪽 폭(두 선 사이 거리). 바닥이 반원이라 너비의 절반보다 작아야 한다";
     var glassRow = addValueRow(tubePanel, "유리 두께", "mm", glassMm, GLASS_RANGE[0], GLASS_RANGE[1], 0.1, 1);
     glassRow.input.helpTip = "0이면 한 줄 선, 올리면 흰 안쪽의 두 겹 유리(관 바깥쪽으로 두꺼워지고 열린 끝은 둥글게 조금 더 두껍다)";
+    var glassLineRow = addValueRow(tubePanel, "유리 선", "pt", glassLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2);
+    glassLineRow.input.helpTip = "관 윤곽 선 굵기. 유리 두께가 있으면 두 겹 선의 검정 테두리 굵기";
     var diffRow = addValueRow(tubePanel, "높이 차", "mm", heightDiffMm, 0, SIZE_RANGE[1], 0.5, 1);
     diffRow.input.helpTip = "J자관에서 왼쪽(막힌) 관이 오른쪽 관보다 낮은 만큼";
     var membraneCheck = tubePanel.add("checkbox", undefined, "가운데 반투과성막 (파선)");
@@ -138,6 +145,8 @@ try {
     var leftRow = addValueRow(liquidPanel, "왼쪽 높이", "mm", levelLeftMm, 0, SIZE_RANGE[1], 0.5, 1);
     var rightRow = addValueRow(liquidPanel, "오른쪽 높이", "mm", levelRightMm, 0, SIZE_RANGE[1], 0.5, 1);
     var liquidKRow = addValueRow(liquidPanel, "액체 색", "K", liquidK, K_RANGE[0], K_RANGE[1], 10, 0);
+    var surfaceLineRow = addValueRow(liquidPanel, "수면 선", "pt", surfaceLinePt, LINE_WEIGHT_RANGE[0], LINE_WEIGHT_RANGE[1], 0.05, 2);
+    surfaceLineRow.input.helpTip = "액체 윗면 선 굵기";
 
     var positionPanel = addPanel(dlg, "위치");
     var offsetXRow = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.1, 1);
@@ -178,7 +187,9 @@ try {
     bindValueRow(glassRow, function() { return glassMm; }, function(v) { glassMm = v; }, DEFAULTS.glassMm);
     bindValueRow(diffRow, function() { return heightDiffMm; }, function(v) { heightDiffMm = v; }, DEFAULTS.heightDiffMm);
     bindValueRow(membraneWeightRow, function() { return membraneWeightPt; }, function(v) { membraneWeightPt = v; }, DEFAULTS.membraneWeightPt);
+    bindValueRow(glassLineRow, function() { return glassLinePt; }, function(v) { glassLinePt = v; }, DEFAULTS.glassLinePt);
     bindValueRow(liquidKRow, function() { return liquidK; }, function(v) { liquidK = v; }, DEFAULTS.liquidK);
+    bindValueRow(surfaceLineRow, function() { return surfaceLinePt; }, function(v) { surfaceLinePt = v; }, DEFAULTS.surfaceLinePt);
     // 좌우 같은 높이면 왼쪽 값이 오른쪽에도 들어간다
     bindValueRow(leftRow, function() { return levelLeftMm; }, function(v) {
         levelLeftMm = v;
@@ -302,20 +313,27 @@ try {
         previewGroup.name = "UTube";
         if (rect !== null) previewGroup.move(rect, ElementPlacement.PLACEBEFORE);
 
+        // 액체는 채움만, 수면은 별도 선이라 수면 선만 굵게 해도 관 벽이 굵어지지 않는다
         var liquid = drawPath(previewGroup, geometry.liquid, true);
         liquid.name = "Liquid";
-        styleStroke(liquid, black, LINE_WIDTH_PT, []);
+        liquid.stroked = false;
         liquid.filled = true;
         liquid.fillColor = makeColor(liquidK);
+        for (var s = 0; s < geometry.surface.length; s++) {
+            var surface = drawPath(previewGroup, [corner(geometry.surface[s][0][0], geometry.surface[s][0][1]),
+                corner(geometry.surface[s][1][0], geometry.surface[s][1][1])], false);
+            surface.name = "Surface";
+            styleStroke(surface, black, surfaceLinePt, []);
+        }
 
         for (var i = 0; i < geometry.outlines.length; i++) {
             if (o.glass > 0) {
-                drawGlassWall(previewGroup, geometry.outlines[i], o.glass * MM);
+                drawGlassWall(previewGroup, geometry.outlines[i], o.glass * MM, glassLinePt);
                 continue;
             }
             var outline = drawPath(previewGroup, geometry.outlines[i], false);
             outline.name = "Tube";
-            styleStroke(outline, black, LINE_WIDTH_PT, []);
+            styleStroke(outline, black, glassLinePt, []);
         }
         if (geometry.membrane !== null) {
             var line = drawPath(previewGroup, [corner(geometry.membrane[0][0], geometry.membrane[0][1]),
@@ -369,7 +387,7 @@ try {
     // 관 상자(left, top, width, height)와 옵션(pt)에서 관 윤곽·액체·막의 점 목록을 만든다.
     // closedLeft면 왼쪽 관이 diff만큼 낮고 위가 반원(반지름 bore/2)으로 막혀 윤곽이 한 패스, 아니면 바깥·안쪽 두 패스.
     // 유리(glass)가 있으면 윤곽은 관 벽에서 두께 절반만큼 바깥(액체 반대쪽)으로 옮긴 유리 가운데 선이다.
-    // 액체는 닫힌 패스 하나, 막은 굽은 바닥 가운데를 가로지르는 두 점. 둘 다 유리와 관계없다
+    // 액체는 닫힌 패스 하나, 수면은 두 관의 액체 윗면 선분 둘, 막은 굽은 바닥 가운데를 가로지르는 두 점. 셋 다 유리와 관계없다
     function tubeGeometry(g) {
         var outerR = g.width / 2;
         var innerR = outerR - g.bore;
@@ -408,8 +426,9 @@ try {
         liquid = liquid.concat(arc(cx, bendY, innerR, -1));
         if (yl > bendY + 0.01) liquid.push(corner(xl + g.bore, yl));
 
+        var surface = [[[xl, yl], [xl + g.bore, yl]], [[xr - g.bore, yr], [xr, yr]]];
         var membrane = g.membrane ? [[cx, bottom], [cx, bottom + g.bore]] : null;
-        return {outlines: outlines, liquid: liquid, membrane: membrane};
+        return {outlines: outlines, liquid: liquid, surface: surface, membrane: membrane};
     }
 
     function corner(x, y) {
@@ -448,11 +467,12 @@ try {
     }
 
     // 두꺼운 유리 (실험 기구.jsx와 같은 방식): 유리 가운데 선에 검정(두께 + 테두리 두 줄) → 흰색(두께) 순서로
-    // 겹쳐 흰 안쪽의 두 겹 선을 만든다. 끝과 모서리는 둥글고, 열린 양 끝에는 두께의 RIM_SCALE배인 둥근 알을 같은 순서로 겹친다
-    function drawGlassWall(container, points, glass) {
+    // 겹쳐 흰 안쪽의 두 겹 선을 만든다. 끝과 모서리는 둥글고, 열린 양 끝에는 두께의 RIM_SCALE배인 둥근 알을 같은 순서로 겹친다.
+    // linePt는 검정 테두리 한 줄의 굵기(유리 선)
+    function drawGlassWall(container, points, glass, linePt) {
         var group = container.groupItems.add();
         group.name = "Tube";
-        var layers = [[100, glass + LINE_WIDTH_PT * 2], [0, glass]];
+        var layers = [[100, glass + linePt * 2], [0, glass]];
         var ends = [points[0].anchor, points[points.length - 1].anchor];
         for (var i = 0; i < layers.length; i++) {
             var wall = drawPath(group, points, false);
@@ -635,7 +655,7 @@ try {
     // -------------------------------------------------------
     function saveSettings() {
         var parts = [
-            "v3",
+            "v4",
             tubeType,
             boreMm,
             heightDiffMm,
@@ -648,7 +668,9 @@ try {
             offsetXmm,
             offsetYmm,
             previewEnabled ? "1" : "0",
-            glassMm
+            glassMm,
+            formatNumber(glassLinePt, 2),
+            formatNumber(surfaceLinePt, 2)
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -658,7 +680,8 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length !== 14) return;
+        // v3(유리 선·수면 선이 생기기 전)는 두 굵기를 기본 0.3pt로 두고 나머지를 그대로 읽는다
+        if (!((p[0] === "v4" && p.length === 16) || (p[0] === "v3" && p.length === 14))) return;
         tubeType = (p[1] === "1") ? 1 : 0;
         boreMm = restoreNumber(p[2], boreMm, BORE_RANGE, 0.1);
         heightDiffMm = restoreNumber(p[3], heightDiffMm, [0, SIZE_RANGE[1]], 0.5);
@@ -672,6 +695,10 @@ try {
         offsetYmm = restoreNumber(p[11], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         previewEnabled = (p[12] === "1");
         glassMm = restoreNumber(p[13], glassMm, GLASS_RANGE, 0.1);
+        if (p[0] === "v4") {
+            glassLinePt = restoreNumber(p[14], glassLinePt, LINE_WEIGHT_RANGE, 0.05);
+            surfaceLinePt = restoreNumber(p[15], surfaceLinePt, LINE_WEIGHT_RANGE, 0.05);
+        }
     }
 
     function restoreNumber(text, fallback, range, step) {
