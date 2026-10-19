@@ -23,6 +23,8 @@ try {
 
     var doc = app.activeDocument;
     var FORM_MM = 2.834645669;
+    var LEGEND_GAP_MM = 1;           // 축 범례와 축(또는 눈금 숫자·글자) 사이 간격
+    var LEGEND_LINE_HEIGHT = 1.2;    // 세로로 쌓은 범례의 줄 간격(글자 크기 배)
     var optionSchema = null, presetData = null;
     try {
         var helperRoot = new File($.fileName).parent.parent.fsName + "/00_세팅/";
@@ -252,8 +254,6 @@ try {
         t.stroke("wObj", t.path([[0, H - back], [0, 0], [W - back, 0]], false, null, 100, o.wObj));
         t.head([0, H], [0, 1]);
         t.head([W, 0], [1, 0]);
-        t.text(o.axes === 2 ? "절대 온도" : "압력", 0, H + 1.5 * m + size * 0.7, size, "center");
-        t.textAt(o.axes === 1 ? "절대 온도" : "부피", W + 2 * m, -2 * m, size, "right");
         t.textAt("0", -1.5 * m, -2 * m, size, "left");
         // 꼭짓점과 점선·눈금
         var corners = [], xs = [], ys = [];
@@ -304,6 +304,10 @@ try {
             var out = outward(corners[i][0], corners[i][1]);
             t.text(names[i], corners[i][0] + out[0] * 3 * m, corners[i][1] + out[1] * 3 * m, size, "center");
         }
+        // 축 범례(그림 제작 규칙): X는 화살촉 끝에 오른쪽 맞춤·축 아래 1mm, Y는 글자를 세워 한 글자씩 쌓고 위 끝 맞춤·축 왼쪽 1mm.
+        // 눈금 글자·점 이름과 겹치면 그 글자에서 1mm. 글자를 모두 그린 뒤에 놓는다
+        t.axisLegendX(o.axes === 1 ? "절대 온도" : "부피", size, 0, W, "right");
+        t.axisLegendY(o.axes === 2 ? "절대 온도" : "압력", size, 0, H, "top");
     }
 
     // ==== 창 ====
@@ -761,6 +765,7 @@ try {
     // 그리기 도구. 좌표는 pt, 색은 K값(0~100, null이면 없음)
     function makeFormTools(g, o, stylePaths) {
         var t = {mm: FORM_MM, group: g};
+        var frames = [];   // 그린 글자 글상자(축 범례가 눈금 숫자·다른 글자를 피하는 데 쓴다)
         t.stroke = function(key, item) {
             if (stylePaths && item) stylePaths.push({key: key, item: item});
             return item;
@@ -805,7 +810,8 @@ try {
             if (len > back) t.stroke("wRope", t.line(a, [b[0] - d[0] * back, b[1] - d[1] * back], width));
             t.head(b, d);
         };
-        // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). opts: italic 변수 글자(이탤릭), sub 글자 뒤 숫자를 아래 첨자로
+        // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). opts: italic 변수 글자(이탤릭), sub 글자 뒤 숫자를 아래 첨자로,
+        // stack 줄 사이를 글자 크기의 1.2배로 두고 가운데 맞춤(세로쓰기 축 범례)
         t.text = function(text, x, y, size, align, opts) {
             var frame = g.textFrames.add();
             frame.contents = String(text);
@@ -813,6 +819,12 @@ try {
             range.characterAttributes.size = size;
             range.characterAttributes.fillColor = formGray(100);
             formFonts(frame, opts);
+            if (opts && opts.stack) {
+                range.paragraphAttributes.justification = Justification.CENTER;
+                range.characterAttributes.autoLeading = false;
+                range.characterAttributes.leading = size * LEGEND_LINE_HEIGHT;
+            }
+            frames.push(frame);
             var b = frame.geometricBounds;
             var anchorX = align === "left" ? b[0] : (align === "right" ? b[2] : (b[0] + b[2]) / 2);
             frame.translate(x - anchorX, y - (b[1] + b[3]) / 2);
@@ -827,7 +839,80 @@ try {
             else frame.translate(x - ink[0], y - cy);
             return frame;
         };
+        // 지금까지 그린 글자의 윤곽 상자 [왼쪽, 아래, 오른쪽, 위]
+        function inkBoxes() {
+            var boxes = [];
+            for (var i = 0; i < frames.length; i++) {
+                var ink = formInkBounds(frames[i]);
+                boxes.push([ink[0], ink[3], ink[2], ink[1]]);
+            }
+            return boxes;
+        }
+        // 축 범례(그림 제작 규칙)는 눈금 숫자와 다른 글자를 모두 그린 뒤에 부른다.
+        // X 범례: (x, axisY)는 축선 위의 점. align "right"면 x가 글자 윤곽의 오른쪽 끝(화살촉 있는 축의 끝), "center"면 가운데.
+        //   윤곽 윗변이 축선에서 1mm 아래에 놓이고, 다른 글자와 겹치면 그 글자 아래 1mm로 내려간다
+        t.axisLegendX = function(text, size, axisY, x, align, opts) {
+            var boxes = inkBoxes();
+            var frame = t.text(text, 0, 0, size, "center", opts);
+            var ink = formInkBounds(frame), w = ink[2] - ink[0], h = ink[1] - ink[3];
+            var x1 = align === "right" ? x : x + w / 2, x0 = x1 - w;
+            var top = legendTop(axisY, x0, x1, h, LEGEND_GAP_MM * FORM_MM, boxes);
+            frame.translate(x0 - ink[0], top - ink[1]);
+            return frame;
+        };
+        // Y 범례: 글자를 곧게 세워 위→아래로 한 글자씩 쌓는다(글상자 하나, 줄은 \r). (axisX, y)는 축선 위의 점.
+        //   align "top"이면 y가 글자 윤곽의 윗끝(화살촉 있는 축의 끝), "center"면 쌓은 글자 전체의 가운데.
+        //   윤곽 오른쪽 끝이 축선에서 왼쪽 1mm에 놓이고, 다른 글자와 겹치면 그 글자 왼쪽 1mm로 옮겨진다
+        t.axisLegendY = function(text, size, axisX, y, align) {
+            var rows = legendRows(text);
+            if (rows.length === 0) return null;
+            var boxes = inkBoxes();
+            var frame = t.text(rows.join("\r"), 0, 0, size, "center", {stack: true});
+            var ink = formInkBounds(frame), w = ink[2] - ink[0], h = ink[1] - ink[3];
+            var y1 = align === "top" ? y : y + h / 2, y0 = y1 - h;
+            var right = legendRight(axisX, y0, y1, w, LEGEND_GAP_MM * FORM_MM, boxes);
+            frame.translate(right - ink[2], y1 - ink[1]);
+            return frame;
+        };
         return t;
+    }
+
+    // 축 범례 배치 규칙(웹 generators/axis-legend.js와 같다). 사각형은 [왼쪽, 아래, 오른쪽, 위], y 위쪽 +
+    // 세로 범례의 줄: 글자 하나씩(공백도 한 줄)
+    function legendRows(text) {
+        var rows = [], s = String(text);
+        for (var i = 0; i < s.length; i++) rows.push(s.charAt(i));
+        return rows;
+    }
+
+    // X 범례 윗변의 y. 축선 아래 gap에서 시작해, gap만큼 넓힌 글자 상자와 겹치면 그 글자 아래 gap으로 내린다
+    function legendTop(axisY, x0, x1, h, gap, boxes) {
+        var top = axisY - gap;
+        for (var i = 0; i < 64; i++) {
+            var hit = null;
+            for (var k = 0; k < boxes.length; k++) {
+                var b = boxes[k];
+                if (b[2] + gap > x0 && b[0] - gap < x1 && top > b[1] - gap && top - h < b[3] + gap) { hit = b; break; }
+            }
+            if (!hit) break;
+            top = hit[1] - gap;
+        }
+        return top;
+    }
+
+    // Y 범례 오른쪽 끝의 x. 축선 왼쪽 gap에서 시작해, gap만큼 넓힌 글자 상자와 겹치면 그 글자 왼쪽 gap으로 옮긴다
+    function legendRight(axisX, y0, y1, w, gap, boxes) {
+        var right = axisX - gap;
+        for (var i = 0; i < 64; i++) {
+            var hit = null;
+            for (var k = 0; k < boxes.length; k++) {
+                var b = boxes[k];
+                if (b[3] + gap > y0 && b[1] - gap < y1 && right > b[0] - gap && right - w < b[2] + gap) { hit = b; break; }
+            }
+            if (!hit) break;
+            right = hit[0] - gap;
+        }
+        return right;
     }
 
     function formFormat(value, decimals) {

@@ -18,6 +18,8 @@ try {
 
     var doc = app.activeDocument;
     var FORM_MM = 2.834645669;
+    var LEGEND_GAP_MM = 1;           // 축 범례와 축(또는 눈금 숫자·글자) 사이 간격
+    var LEGEND_LINE_HEIGHT = 1.2;    // 세로로 쌓은 범례의 줄 간격(글자 크기 배)
     var FORM_KOR_FONT = formFindFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
     // 화살촉 모양 4종류(tools/arrowheads.json과 같은 순서). 작살형(평가원식)이 1번이다.
@@ -138,8 +140,6 @@ try {
             t.line([X(temp), 0], [X(temp), tickSign * TICK], AXIS_PT);
             if ((temp + 100) % 40 === 0) t.text(String(temp), X(temp), -labelGap + 0.5 * mm - F * 0.5, F);
         }
-        t.text("높이(km)", 0, H + ARROW_MARGIN + F * 0.7, F);
-        t.text("기온(°C)", W + ARROW_MARGIN, -labelGap + 0.5 * mm - F * 0.5, F, "left");
 
         var points = atmosphereProfile(o.top);
         var line = [];
@@ -164,6 +164,9 @@ try {
             setStrokeArrowheads(heads, HEAD_BRACE_OUTER, HEAD_BRACE_INNER, BRACE_PT, o.headScale);
             setStrokeArrowheads(tails, HEAD_BRACE_INNER, HEAD_BRACE_OUTER, BRACE_PT, o.headScale);
         }
+        // 축 범례(그림 제작 규칙): 화살촉 있는 축이라 X는 오른쪽 끝, Y는 위 끝에 맞추고 축에서 1mm. 눈금 숫자와 겹치면 그 숫자에서 1mm
+        t.axisLegendY("높이(km)", F, 0, H + ARROW_MARGIN, "top");
+        t.axisLegendX("기온(°C)", F, 0, W + ARROW_MARGIN, "right");
     }
 
     // 끝 tip, 방향 단위 벡터 d(바깥쪽), 배율 k로 갈고리 촉의 베지어 점 [{a, l, r}]
@@ -338,11 +341,12 @@ try {
             }
             var axis = t.path([[-half, H + ARROW_MARGIN], [-half, 0], [half + ARROW_MARGIN, 0]], false, null, 100, AXIS_PT);
             if (o.axisArrows) setStrokeArrowheads([axis], headKindOf(o.headShape), headKindOf(o.headShape), AXIS_PT, 100);
-            t.text("높이", -half, H + ARROW_MARGIN + F * 0.7, F);
         } else {
             t.line([-half, 0], [half, 0], 0.5);
         }
         if (o.center) t.text(high ? "고기압" : "저기압", 0, -F * 0.8 - (o.axes && !o.tickIn ? TICK : 0), F);
+        // 축 범례(그림 제작 규칙): 화살촉 있는 축의 위 끝에 맞추고 축 왼쪽 1mm
+        if (o.axes) t.axisLegendY("높이", F, -half, H + ARROW_MARGIN, "top");
     }
 
     // ==== 해륙풍·계절풍 ====
@@ -691,6 +695,7 @@ try {
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다
     function makeFormTools(g, o) {
         var t = {mm: FORM_MM, group: g};
+        var frames = [];   // 그린 글자 글상자(축 범례가 눈금 숫자·다른 글자를 피하는 데 쓴다)
         t.gray = formGray;
         t.path = function(points, closed, fillK, strokeK, width, dashes) {
             var p = g.pathItems.add();
@@ -743,20 +748,119 @@ try {
             if (len > lineEnd) t.line(a, [b[0] - ux * lineEnd, b[1] - uy * lineEnd], width, k);
             t.path(catalogPoints(shape, b, [ux, uy], unit), true, k, null, 0);
         };
-        // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). sub: 글자 뒤 숫자를 아래 첨자로
-        t.text = function(text, x, y, size, align, k, sub) {
+        // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). sub: 글자 뒤 숫자를 아래 첨자로,
+        // stack: 줄 사이를 글자 크기의 1.2배로 두고 가운데 맞춤(세로쓰기 축 범례)
+        t.text = function(text, x, y, size, align, k, sub, stack) {
             var frame = g.textFrames.add();
             frame.contents = String(text).replace(/°/g, "˘");
             var range = frame.textRange;
             range.characterAttributes.size = size;
             range.characterAttributes.fillColor = formGray(k === undefined ? 100 : k);
             formFonts(frame, sub);
+            if (stack) {
+                range.paragraphAttributes.justification = Justification.CENTER;
+                range.characterAttributes.autoLeading = false;
+                range.characterAttributes.leading = size * LEGEND_LINE_HEIGHT;
+            }
+            frames.push(frame);
             var b = frame.geometricBounds;
             var anchorX = align === "left" ? b[0] : (align === "right" ? b[2] : (b[0] + b[2]) / 2);
             frame.translate(x - anchorX, y - (b[1] + b[3]) / 2);
             return frame;
         };
+        // 지금까지 그린 글자의 윤곽 상자 [왼쪽, 아래, 오른쪽, 위]
+        function inkBoxes() {
+            var boxes = [];
+            for (var i = 0; i < frames.length; i++) {
+                var ink = formInkBounds(frames[i]);
+                boxes.push([ink[0], ink[3], ink[2], ink[1]]);
+            }
+            return boxes;
+        }
+        // 축 범례(그림 제작 규칙)는 눈금 숫자와 다른 글자를 모두 그린 뒤에 부른다.
+        // X 범례: (x, axisY)는 축선 위의 점. align "right"면 x가 글자 윤곽의 오른쪽 끝(화살촉 있는 축의 끝), "center"면 가운데.
+        //   윤곽 윗변이 축선에서 1mm 아래에 놓이고, 다른 글자와 겹치면 그 글자 아래 1mm로 내려간다
+        t.axisLegendX = function(text, size, axisY, x, align, k) {
+            var boxes = inkBoxes();
+            var frame = t.text(text, 0, 0, size, "center", k);
+            var ink = formInkBounds(frame), w = ink[2] - ink[0], h = ink[1] - ink[3];
+            var x1 = align === "right" ? x : x + w / 2, x0 = x1 - w;
+            var top = legendTop(axisY, x0, x1, h, LEGEND_GAP_MM * FORM_MM, boxes);
+            frame.translate(x0 - ink[0], top - ink[1]);
+            return frame;
+        };
+        // Y 범례: 글자를 곧게 세워 위→아래로 한 글자씩 쌓는다(글상자 하나, 줄은 \r). (axisX, y)는 축선 위의 점.
+        //   align "top"이면 y가 글자 윤곽의 윗끝(화살촉 있는 축의 끝), "center"면 쌓은 글자 전체의 가운데.
+        //   윤곽 오른쪽 끝이 축선에서 왼쪽 1mm에 놓이고, 다른 글자와 겹치면 그 글자 왼쪽 1mm로 옮겨진다
+        t.axisLegendY = function(text, size, axisX, y, align, k) {
+            var rows = legendRows(text);
+            if (rows.length === 0) return null;
+            var boxes = inkBoxes();
+            var frame = t.text(rows.join("\r"), 0, 0, size, "center", k, false, true);
+            var ink = formInkBounds(frame), w = ink[2] - ink[0], h = ink[1] - ink[3];
+            var y1 = align === "top" ? y : y + h / 2, y0 = y1 - h;
+            var right = legendRight(axisX, y0, y1, w, LEGEND_GAP_MM * FORM_MM, boxes);
+            frame.translate(right - ink[2], y1 - ink[1]);
+            return frame;
+        };
         return t;
+    }
+
+    // 글자 윤곽의 경계 [왼쪽, 위, 오른쪽, 아래]: 복사본을 윤곽선으로 바꿔 재고 지운다. 실패하면 글상자 경계를 쓴다
+    function formInkBounds(frame) {
+        var copy = null, outlined = null;
+        try {
+            copy = frame.duplicate();
+            outlined = copy.createOutline();
+            copy = null;   // 윤곽선으로 바뀌어 복제본은 없어졌다
+            var b = outlined.geometricBounds;
+            return [b[0], b[1], b[2], b[3]];
+        } catch (e) {
+            var f = frame.geometricBounds;
+            return [f[0], f[1], f[2], f[3]];
+        } finally {
+            // 실패해도 잰 복제본·윤곽선을 남기지 않는다(남으면 글자가 겹쳐 보인다)
+            try { if (outlined) outlined.remove(); } catch (e2) {}
+            try { if (copy) copy.remove(); } catch (e3) {}
+        }
+    }
+
+    // 축 범례 배치 규칙(웹 generators/axis-legend.js와 같다). 사각형은 [왼쪽, 아래, 오른쪽, 위], y 위쪽 +
+    // 세로 범례의 줄: 글자 하나씩(공백도 한 줄)
+    function legendRows(text) {
+        var rows = [], s = String(text);
+        for (var i = 0; i < s.length; i++) rows.push(s.charAt(i));
+        return rows;
+    }
+
+    // X 범례 윗변의 y. 축선 아래 gap에서 시작해, gap만큼 넓힌 글자 상자와 겹치면 그 글자 아래 gap으로 내린다
+    function legendTop(axisY, x0, x1, h, gap, boxes) {
+        var top = axisY - gap;
+        for (var i = 0; i < 64; i++) {
+            var hit = null;
+            for (var k = 0; k < boxes.length; k++) {
+                var b = boxes[k];
+                if (b[2] + gap > x0 && b[0] - gap < x1 && top > b[1] - gap && top - h < b[3] + gap) { hit = b; break; }
+            }
+            if (!hit) break;
+            top = hit[1] - gap;
+        }
+        return top;
+    }
+
+    // Y 범례 오른쪽 끝의 x. 축선 왼쪽 gap에서 시작해, gap만큼 넓힌 글자 상자와 겹치면 그 글자 왼쪽 gap으로 옮긴다
+    function legendRight(axisX, y0, y1, w, gap, boxes) {
+        var right = axisX - gap;
+        for (var i = 0; i < 64; i++) {
+            var hit = null;
+            for (var k = 0; k < boxes.length; k++) {
+                var b = boxes[k];
+                if (b[3] + gap > y0 && b[1] - gap < y1 && right > b[0] - gap && right - w < b[2] + gap) { hit = b; break; }
+            }
+            if (!hit) break;
+            right = hit[0] - gap;
+        }
+        return right;
     }
 
     function formPaint(p, fillK, strokeK, width, dashes) {

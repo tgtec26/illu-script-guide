@@ -20,7 +20,7 @@ const f = new Function(`var NAME_GAP_MM = 1, RYDBERG_EV = 13.6;\nfunction formFo
 function run(o) {
   const calls = [];
   const t = { mm: 2.834645669 };
-  for (const k of ["line", "rect", "arrow", "path", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
+  for (const k of ["line", "rect", "arrow", "path", "text", "textAt", "axisLegendY"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   f.drawLevels(t, { wBody: 0.8, wObj: 0.4, wRope: 0.4, wGuide: 0.8, font: 8, count: 4, proportional: true, infinity: true, showAxis: true, showN: true,
     showHead: false, energy: 0, showUnit: true, width: 50, height: 60, transitions: "3-1, 4-2, 2-1", names: "a, b, c", absorb: false,
     spectrum: true, stripGap: 14, stripH: 8, ...o });
@@ -51,7 +51,11 @@ calls = run({});
 const axis = calls.filter((c) => c.k === "arrow" && c.a[0][0] === 0);
 assert.strictEqual(axis.length, 1);
 near(axis[0].a[0][1], -3 * MM, "축 아래 끝"); near(axis[0].a[1][1], 66 * MM, "축 위 끝");
-assert.ok(calls.some((c) => c.k === "text" && c.a[0] === "에너지" && c.a[1] === 0 && c.a[2] > 66 * MM), "에너지 머리글");
+// 축 범례: 글자를 세워 쌓고 윗끝을 축 끝(+6mm 위)에 맞춘다 (그림 제작 규칙)
+const legend = calls.filter((c) => c.k === "axisLegendY");
+assert.strictEqual(legend.length, 1);
+assert.deepStrictEqual([legend[0].a[0], legend[0].a[1], legend[0].a[4]], ["에너지", 8, "top"]);
+near(legend[0].a[2], 0, "축 x"); near(legend[0].a[3], 66 * MM, "축 위 끝");
 calls = run({ showAxis: false });
 assert.ok(!calls.some((c) => c.k === "arrow" && c.a[0][0] === 0) && !calls.some((c) => c.a[0] === "에너지"));
 

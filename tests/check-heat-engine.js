@@ -27,7 +27,7 @@ const invariant = (type, s) => [s.P, s.V, s.P * s.V, s.P * Math.pow(s.V, GAMMA)]
 function run(o) {
   const calls = [];
   const t = { stroke: (key, item) => item, mm: MM, headBack: () => 3, headLength: () => 4 };
-  for (const k of ["line", "path", "curve", "arrow", "head", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
+  for (const k of ["line", "path", "curve", "arrow", "head", "text", "textAt", "axisLegendX", "axisLegendY"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   f.drawCycle(t, { ...base, ...o });
   return calls;
 }
@@ -73,7 +73,12 @@ assert.strictEqual(curves.length, 1, "순환은 베지어 패스 하나");
 const anchors = curves[0].a[0];
 assert.ok(anchors.length >= 4 && anchors.length <= 14, `앵커가 적다: ${anchors.length}`);
 assert.strictEqual(anchors.filter((q) => q.smooth).length, anchors.length - 4, "상태 꼭짓점 네 개만 모서리");
-assert.deepStrictEqual(calls.filter((c) => c.k === "text" && c.a[4] === "center").map((c) => c.a[0]), ["압력", "A", "B", "C", "D"]);
+assert.deepStrictEqual(calls.filter((c) => c.k === "text" && c.a[4] === "center").map((c) => c.a[0]), ["A", "B", "C", "D"]);
+// 축 범례(그림 제작 규칙): X는 화살촉 끝 오른쪽 맞춤, Y는 세로쓰기·위 끝 맞춤
+const legX = calls.find((c) => c.k === "axisLegendX"), legY = calls.find((c) => c.k === "axisLegendY");
+assert.ok(legX && legY);
+assert.strictEqual(legX.a[0], "부피"); assert.strictEqual(legX.a[4], "right"); near(legX.a[2], 0, "X 범례 축선 y"); near(legX.a[3], 55 * MM, "X 범례 화살촉 끝");
+assert.strictEqual(legY.a[0], "압력"); assert.strictEqual(legY.a[4], "top"); near(legY.a[2], 0, "Y 범례 축선 x"); near(legY.a[3], 45 * MM, "Y 범례 화살촉 끝");
 // 순환이 축 길이 안(최대 82%)에 들어간다
 const xs = anchors.map((q) => q.a[0]), ys = anchors.map((q) => q.a[1]);
 near(Math.max(...xs), 0.82 * 55 * MM, "가로 최대", 1e-6); near(Math.max(...ys), 0.82 * 45 * MM, "세로 최대", 1e-6);
@@ -90,8 +95,8 @@ const rectCurve = run({ p1: 0, r1: 2, p2: 1, r2: 0.5, p3: 0, p4: 1 }).find((c) =
 assert.strictEqual(rectCurve.length, 4);
 assert.ok(rectCurve.every((q) => q.l[0] === q.a[0] && q.l[1] === q.a[1] && q.r[0] === q.a[0] && q.r[1] === q.a[1] && !q.smooth));
 // 축 이름
-assert.ok(run({ axes: 1 }).some((c) => c.k === "textAt" && c.a[0] === "절대 온도"));
-assert.ok(run({ axes: 2 }).some((c) => c.k === "text" && c.a[0] === "절대 온도"));
+assert.ok(run({ axes: 1 }).some((c) => c.k === "axisLegendX" && c.a[0] === "절대 온도"));
+assert.ok(run({ axes: 2 }).some((c) => c.k === "axisLegendY" && c.a[0] === "절대 온도"));
 // 과정 이름, 점선 안내선, 눈금 글
 assert.deepStrictEqual(run({ showProcess: true }).filter((c) => c.k === "text" && /^(등|단)/.test(c.a[0])).map((c) => c.a[0]), ["등온", "단열", "등온", "단열"]);
 calls = run({ p1: 0, r1: 2, p2: 1, r2: 0.5, p3: 0, p4: 1, showGuides: true, xTicks: "V0, 2V0", yTicks: "P0, 2P0" });
