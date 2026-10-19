@@ -13,7 +13,7 @@ try {
 // 화학 반응 모형: 분자를 공간 채움 모형(하이라이트가 있는 구)으로 그린다. 선택 없이 화면 가운데에 그린다.
 // 화학 반응 탭: 반응물 + 반응물 → 생성물을 분자 모형으로 늘어놓고 +·화살표로 잇고 이름을 단다 (이온 반응 포함). 분자 배치를 "상자 (반응 전·후)"로 하면 계수 × 배수만큼 상자에 담고, 화살표는 큰 화살표 또는 화살촉을 고르는 선 화살표다.
 // 기체 반응 탭: 분자를 정육면체 안에 담는다. 계수만큼 칸을 이어 붙이고(모서리는 경사 연결), 표 선·값은 그리지 않는다. 이름표는 고를 수 있다.
-// 두 탭 모두 컬러 / 회색 음영으로 바꿀 수 있다.
+// 두 탭 모두 컬러 / 회색 음영으로 바꿀 수 있고, 컬러 모드의 원소별 구 색은 색 패널의 #rrggbb 입력칸으로 고른다(웹은 색상 피커 단추).
 // 공간 채움 모형: 구 반지름 = 반데르발스 반지름(Bondi: H 1.20, C 1.70, N 1.55, O 1.52, Cl 1.75 Å), 구 중심 간격 = 실제 결합 길이·각도(NIST CCCBDB)라
 // 결합한 원자의 구는 서로 많이 겹친다. 이온 결합은 이온 반지름(Shannon: Na+ 1.02, Cl- 1.81, Ag+ 1.15 Å)으로 맞닿게 그린다.
 // 반응식은 "2H2+O2=2H2O"처럼 적는다. 화살표는 =, >, ->, → 모두 되고, ;로 이으면 반응 여러 개(기체 반응 탭은 세로로 쌓음).
@@ -78,6 +78,10 @@ try {
         O: [22, 70, 90],
         C: [55, 90, 100]
     };
+    // 원소마다 구 색(#rrggbb)을 고르는 옵션 이름과 입력줄 이름(색 이름 pal별). 값이 없거나 #rrggbb가 아니면 위 SPHERE_COLORS의 본색 (컬러 모드에서만 쓴다)
+    var ELEMENT_COLOR_KEYS = {H: "colorH", C: "colorC", N: "colorN", O: "colorO", Cl: "colorCl", Na: "colorNa", Ag: "colorAg"};
+    var ELEMENT_COLOR_LABELS = {H: "수소 색", C: "탄소 색", N: "질소 색", O: "산소 색", Cl: "염소 색", Na: "나트륨 색", Ag: "은 색"};
+    var ELEMENT_COLOR_ORDER = ["H", "C", "N", "O", "Cl", "Na", "Ag"];
     // 분자 모형: 원자는 [종류, x, y, z] (Å, 위쪽 +y, 보는 쪽 +z). 중심 간격이 실제 결합 길이·각도(NIST CCCBDB)이고
     // 보기 좋은 방향으로 돌려 놓았다. ref는 교재 비율에서 간격을 늘릴 기준 결합(원자 번호 둘)
     var NITRATE = [["O", 0, 1.24, 0], ["O", -1.074, -0.62, 0], ["O", 1.074, -0.62, 0], ["N", 0, 0, 0]];
@@ -184,8 +188,8 @@ try {
                 {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
                 {key: "plusColor", label: "더하기 색", items: ["파랑", "황토", "검정"], value: 0},
                 {key: "arrowThick", label: "화살표 굵기", unit: "%", min: 40, max: 250, step: 10, value: 100}
-            ],
-            version: "v8",
+            ].concat(elementColorControls()),
+            version: "v9",
             draw: drawReact
         });
     }
@@ -348,7 +352,8 @@ try {
                 {key: "coef", check: "화학식에 계수", value: true},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 20, step: 0.5, value: 8},
                 {key: "labelGap", label: "이름표 간격", unit: "mm", min: 0, max: 10, step: 0.5, value: 2.5}
-            ],
+            ].concat(elementColorControls()),
+            version: "v8",
             draw: drawGas
         });
     }
@@ -426,12 +431,12 @@ try {
 
     // ==== 분자 ====
     // 구 위에 쓰는 글자의 K값: 본색이 어두우면 흰색(0), 아니면 검정(100)
-    function sphereTextK(pal, mode) {
+    function sphereTextK(pal, mode, rgb) {
         var luminance;
         if (mode === 1) {
             luminance = 255 * (100 - SPHERE_GRAYS[pal][1]) / 100;
         } else {
-            var c = SPHERE_COLORS[pal][1];
+            var c = rgb || SPHERE_COLORS[pal][1];
             luminance = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
         }
         return luminance < 90 ? 0 : 100;
@@ -714,6 +719,71 @@ try {
         return radius * 2 / ANGSTROM;
     }
 
+    // #rrggbb(3자리·# 없이도 읽음) → [r, g, b], 읽을 수 없으면 null
+    function hexToRgb(text) {
+        var hex = String(text).replace(/^\s+|\s+$/g, "").replace(/^#/, "");
+        if (hex.length === 3) hex = hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2);
+        if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
+        return [parseInt(hex.substring(0, 2), 16), parseInt(hex.substring(2, 4), 16), parseInt(hex.substring(4, 6), 16)];
+    }
+
+    // [r, g, b] → "#rrggbb"(소문자)
+    function rgbToHexString(rgb) {
+        var hex = "#";
+        for (var i = 0; i < 3; i++) {
+            var part = Math.round(Math.min(255, Math.max(0, rgb[i]))).toString(16);
+            hex += part.length < 2 ? "0" + part : part;
+        }
+        return hex;
+    }
+
+    // 옵션에 적힌 원소 색 [r, g, b] — 없거나 #rrggbb가 아니면 null
+    function pickedRgb(options, pal) {
+        var v = options ? options[ELEMENT_COLOR_KEYS[pal]] : null;
+        return typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? hexToRgb(v) : null;
+    }
+
+    // 구 색 [하이라이트, 본색, 가장자리](RGB). 고른 색이 기본 본색이면 원래 3색, 다르면 본색을 밝기에 맞춰 밝게·어둡게 만든 3색 (웹 sphereColors와 같은 식)
+    function sphereColors(pal, options) {
+        var base = SPHERE_COLORS[pal], rgb = pickedRgb(options, pal);
+        if (rgb === null || (rgb[0] === base[1][0] && rgb[1] === base[1][1] && rgb[2] === base[1][2])) return base;
+        var lum = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+        var lighten = Math.min(1, Math.max(0.35, 0.2 + 0.8 * lum)), darken = 0.4 + 0.3 * lum;
+        var high = [], edge = [];
+        for (var i = 0; i < 3; i++) {
+            high.push(Math.round(rgb[i] + (255 - rgb[i]) * lighten));
+            edge.push(Math.round(rgb[i] * darken));
+        }
+        return [high, rgb, edge];
+    }
+
+    // 원소 색 입력줄: 색 패널 하나와 원소마다 한 줄. 처음 값은 원래 본색
+    function elementColorControls() {
+        var list = [{panel: "색"}];
+        for (var i = 0; i < ELEMENT_COLOR_ORDER.length; i++) {
+            var pal = ELEMENT_COLOR_ORDER[i];
+            list.push({key: ELEMENT_COLOR_KEYS[pal], label: ELEMENT_COLOR_LABELS[pal], color: true, pal: pal, value: rgbToHexString(SPHERE_COLORS[pal][1])});
+        }
+        return list;
+    }
+
+    // 반응식에 나오는 원소의 색 이름 {H: true, ...}. 반응식을 읽지 못하면 null
+    function formulaPals(text) {
+        var parsed = parseEquations(text);
+        if (typeof parsed === "string") return null;
+        var pals = {};
+        for (var r = 0; r < parsed.length; r++) {
+            var sides = [parsed[r].left, parsed[r].right];
+            for (var s = 0; s < 2; s++) {
+                for (var j = 0; j < sides[s].length; j++) {
+                    var atoms = MOLECULES[sides[s][j][1]].atoms;
+                    for (var a = 0; a < atoms.length; a++) pals[ELEMENTS[atoms[a][0]].pal] = true;
+                }
+            }
+        }
+        return pals;
+    }
+
     // 개수 → 모아 놓을 때 줄별 개수(위에서 아래로, 아래 줄이 가득 찬다). 3개는 [1, 2]
     function clusterRows(count) {
         var cols = Math.ceil(Math.sqrt(count)), rows = Math.ceil(count / cols), lens = [], left = count;
@@ -790,7 +860,7 @@ try {
                 if (regions[i].label === null) continue;
                 var el = ELEMENTS[lay.atoms[i].key], size = Math.max(4.5, Math.min(F, lay.atoms[i].d * unit * 0.55));
                 t.text(el.text + (el.sup || ""), cx + regions[i].label[0] * unit, cy + regions[i].label[1] * unit - size * 0.35, size, "center",
-                    sphereTextK(el.pal, t.mode), el.sup ? {supLast: 1} : null, mg);
+                    sphereTextK(el.pal, t.mode, pickedRgb(t.options, el.pal)), el.sup ? {supLast: 1} : null, mg);
             }
         }
         var br = lay.bracket;
@@ -935,6 +1005,7 @@ try {
                     checkRow = null;
                     if (ctl.items) addChoice(panel, ctl);
                     else if (ctl.text) addText(panel, ctl);
+                    else if (ctl.color) addColor(panel, ctl);
                     else addNumber(panel, ctl);
                 }
             }
@@ -1040,6 +1111,44 @@ try {
             apply.onClick = input.onChange;
         }
 
+        // 원소 색: #rrggbb 입력칸 (ScriptUI에는 앱의 색상 피커 창이 없다). 형식이 틀리면 되돌린다
+        function addColor(panel, ctl) {
+            var row = panel.add("group");
+            row.alignChildren = ["left", "center"];
+            row.add("statictext", undefined, ctl.label + ":").preferredSize.width = 100;
+            row.add("statictext", undefined, "#");
+            var input = row.add("edittext", undefined, String(o[ctl.key]).substring(1));
+            input.characters = 8;
+            input.helpTip = "#rrggbb (예: ff3e20). 컬러 모드에서만 쓴다";
+            ui[ctl.key] = input;
+            input.onChange = function() {
+                var rgb = hexToRgb(input.text);
+                if (rgb === null) { input.text = String(o[ctl.key]).substring(1); return; }
+                var hex = rgbToHexString(rgb);
+                input.text = hex.substring(1);
+                if (hex === o[ctl.key]) return;
+                o[ctl.key] = hex;
+                redraw();
+            };
+            var reset = row.add("button", undefined, "R");
+            reset.preferredSize.width = 34;
+            reset.helpTip = "처음 값으로 되돌리기";
+            reset.onClick = function() {
+                input.text = String(ctl.value).substring(1);
+                input.onChange();
+            };
+        }
+
+        // 원소 색 입력칸은 컬러 모드에서 반응식에 나오는 원소만 켠다 (회색 음영은 원소마다 정해진 K 음영)
+        function syncColorRows() {
+            var used = typeof o.formula === "string" ? formulaPals(o.formula) : null;
+            for (var c = 0; c < controls.length; c++) {
+                var ctl = controls[c];
+                if (!ctl.color || !ui[ctl.key]) continue;
+                try { ui[ctl.key].enabled = o.colorMode !== 1 && (used === null || used[ctl.pal] === true); } catch (e) {}
+            }
+        }
+
         function addCheck(row, ctl) {
             var box = row.add("checkbox", undefined, ctl.check);
             box.value = o[ctl.key];
@@ -1053,6 +1162,7 @@ try {
             if (drawing) { drawAgain = true; return; }
             drawing = true;
             try {
+                syncColorRows();
                 do {
                     drawAgain = false;
                     removeGroup();
@@ -1116,6 +1226,9 @@ try {
                 } else if (ctl.text) {
                     if (text.length > 200) return;
                     values.push(text);
+                } else if (ctl.color) {
+                    if (!/^#[0-9a-f]{6}$/.test(text)) return;
+                    values.push(text);
                 } else {
                     var value = Number(text);
                     if (text === "" || isNaN(value)) return;
@@ -1157,7 +1270,7 @@ try {
 
     // 그리기 도구. 좌표는 pt, 크기 인자는 따로 적지 않으면 pt다. 색은 K값(숫자) 또는 [r, g, b]
     function makeFormTools(g, o) {
-        var t = {mm: FORM_MM, group: g, mode: 0, molecules: {}};
+        var t = {mm: FORM_MM, group: g, mode: 0, molecules: {}, options: o};
         // 0 컬러 / 1 회색 음영. 그리기 전에 한 번 정한다
         t.setMode = function(mode) { t.mode = mode; };
         t.path = function(points, closed, fill, stroke, width, dashes, join, parent) {
@@ -1243,8 +1356,10 @@ try {
                 big.stroked = false;
                 big.filled = true;
                 var gradientColor = new GradientColor();
-                var gray = t.mode === 1, colors = gray ? SPHERE_GRAYS[pal] : SPHERE_COLORS[pal];
-                gradientColor.gradient = formGradient("RM_sphere_" + pal + (gray ? "_gray" : ""), GradientType.RADIAL,
+                var gray = t.mode === 1, colors = gray ? SPHERE_GRAYS[pal] : sphereColors(pal, o);
+                // 고른 색은 색마다 이름이 다른 그라데이션(원래 색은 예전 이름 그대로): 이미 그려 둔 그림의 그라데이션을 바꾸지 않는다
+                var gradientName = "RM_sphere_" + pal + (gray ? "_gray" : (colors === SPHERE_COLORS[pal] ? "" : "_" + rgbToHexString(colors[1]).substring(1)));
+                gradientColor.gradient = formGradient(gradientName, GradientType.RADIAL,
                     [[0, colors[0]], [30, colors[1]], [100, colors[2]]]);
                 big.fillColor = gradientColor;
                 var mask;

@@ -41,8 +41,8 @@ function extractVar(name) {
   return source.slice(start, end + 1);
 }
 
-const tables = ["MINUS", "ANGSTROM", "regionCache", "TEXTBOOK_OVERLAP", "TEXTBOOK_H_RADIUS", "ELEMENTS", "SPHERE_COLORS", "SPHERE_GRAYS", "NITRATE", "BRACKET", "MOLECULES", "REACT_PRESETS", "GAS_PRESETS"];
-const functions = ["dia", "atomRadius", "polygonArea", "pointInPolygon", "mergeHoles", "molRegions", "parseEquations", "parseSide", "molLayout", "clusterRows", "arrangeSpecies", "formSubFlags", "sphereTextK", "blockArrowPoints"];
+const tables = ["MINUS", "ANGSTROM", "regionCache", "TEXTBOOK_OVERLAP", "TEXTBOOK_H_RADIUS", "ELEMENTS", "SPHERE_COLORS", "SPHERE_GRAYS", "ELEMENT_COLOR_KEYS", "ELEMENT_COLOR_LABELS", "ELEMENT_COLOR_ORDER", "NITRATE", "BRACKET", "MOLECULES", "REACT_PRESETS", "GAS_PRESETS"];
+const functions = ["dia", "atomRadius", "polygonArea", "pointInPolygon", "mergeHoles", "molRegions", "parseEquations", "parseSide", "molLayout", "clusterRows", "arrangeSpecies", "formSubFlags", "sphereTextK", "blockArrowPoints", "hexToRgb", "rgbToHexString", "pickedRgb", "sphereColors", "elementColorControls", "formulaPals"];
 const names = tables.concat(functions);
 const lib = new Function(`${tables.map(extractVar).join("\n")}\n${functions.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
@@ -306,15 +306,59 @@ for (const presets of [lib.REACT_PRESETS, lib.GAS_PRESETS]) {
   assert.ok(/t\.headArrow\(\[x0, y\], \[x1, y\], o\.arrowThick \/ 100,/.test(source), "line arrow width follows thickness");
 }
 
-// 화살표 굵기 옵션: 화학 반응 탭 표시 패널 끝에 붙인다(앞의 행 순서를 바꾸면 UI 덮어쓰기 경로가 어긋난다). 화학 반응 탭만 저장 태그를 v8로 올린다
+// 화살표 굵기 옵션: 화학 반응 탭 표시 패널 끝에 붙인다(앞의 행 순서를 바꾸면 UI 덮어쓰기 경로가 어긋난다).
+// 원소 색 패널(위치 패널 바로 앞)이 두 탭에 붙으면서 저장 태그를 올린다: 화학 반응 탭 v9, 기체 반응 탭 v8
 {
   assert.ok(source.includes('{key: "arrowThick", label: "화살표 굵기", unit: "%", min: 40, max: 250, step: 10, value: 100}'), "arrowThick control");
   const react = source.slice(source.indexOf("function makeReactEngine()"), source.indexOf("function drawReact("));
   const gas = source.slice(source.indexOf("function makeGasEngine()"), source.indexOf("function drawGas("));
-  assert.ok(/value: 0\},\s*\{key: "arrowThick"[^\n]*\n\s*\],\s*version: "v8",/.test(react), "arrowThick is the last react control and the react tab is v8");
-  assert.ok(!gas.includes("arrowThick") && !gas.includes("version:"), "gas tab keeps its layout and v7 tag");
+  assert.ok(/value: 0\},\s*\{key: "arrowThick"[^\n]*\n\s*\]\.concat\(elementColorControls\(\)\),\s*version: "v9",/.test(react), "arrowThick is the last react control, then the colour panel; react tab is v9");
+  assert.ok(/\]\.concat\(elementColorControls\(\)\),\s*version: "v8",\s*draw: drawGas/.test(gas) && !gas.includes("arrowThick"), "gas tab: colour panel and v8");
   assert.ok(source.includes('spec.version || "v7"'), "tag comes from the engine, default v7");
   assert.ok(!source.includes('"v7")') || source.includes('(spec.version || "v7")'), "no hard-coded v7 tag left in save/load");
+}
+
+// 원소 색: 입력줄 7개(색 이름마다), 처음 값은 원래 본색. 웹 sci-illu-web의 colorH·colorC·… 옵션과 같은 이름·뜻
+{
+  const controls = lib.elementColorControls();
+  assert.deepStrictEqual(controls[0], {panel: "색"});
+  assert.deepStrictEqual(controls.slice(1).map((c) => c.key), ["colorH", "colorC", "colorN", "colorO", "colorCl", "colorNa", "colorAg"]);
+  for (const c of controls.slice(1)) {
+    assert.ok(c.color === true && c.label.length <= 6, `${c.key} label`);
+    assert.strictEqual(c.value, lib.rgbToHexString(lib.SPHERE_COLORS[c.pal][1]), `${c.key} default = old base colour`);
+    assert.strictEqual(lib.ELEMENT_COLOR_KEYS[c.pal], c.key);
+  }
+  assert.strictEqual(controls.find((c) => c.key === "colorO").value, "#ff3e20");
+  assert.deepStrictEqual(Object.keys(lib.ELEMENT_COLOR_KEYS).sort(), Object.keys(lib.SPHERE_COLORS).sort(), "one colour per palette name");
+  // 읽기: #rrggbb(3자리·# 없이도), 틀리면 null
+  assert.deepStrictEqual(lib.hexToRgb("#FF3e20"), [255, 62, 32]);
+  assert.deepStrictEqual(lib.hexToRgb(" f80 "), [255, 136, 0]);
+  for (const bad of ["", "#12", "red", "#gggggg", "#1234567"]) assert.strictEqual(lib.hexToRgb(bad), null, `bad ${bad}`);
+  assert.strictEqual(lib.rgbToHexString([255, 62, 32]), "#ff3e20");
+  assert.strictEqual(lib.rgbToHexString([0, 5, 300]), "#0005ff");
+  // 구 색: 옛 저장본(키 없음)·잘못된 값·기본 색은 원래 3색 그대로, 다른 색은 본색 + 밝은 하이라이트 + 어두운 가장자리
+  for (const pal of Object.keys(lib.SPHERE_COLORS)) {
+    assert.strictEqual(lib.sphereColors(pal, {}), lib.SPHERE_COLORS[pal], `${pal} no key`);
+    assert.strictEqual(lib.sphereColors(pal, null), lib.SPHERE_COLORS[pal], `${pal} no options`);
+    assert.strictEqual(lib.sphereColors(pal, {[lib.ELEMENT_COLOR_KEYS[pal]]: lib.rgbToHexString(lib.SPHERE_COLORS[pal][1])}), lib.SPHERE_COLORS[pal], `${pal} default colour`);
+    for (const bad of ["red", "#12", 5, null]) assert.strictEqual(lib.sphereColors(pal, {[lib.ELEMENT_COLOR_KEYS[pal]]: bad}), lib.SPHERE_COLORS[pal], `${pal} invalid ${bad}`);
+  }
+  const picked = lib.sphereColors("O", {colorO: "#1060d0"});
+  assert.deepStrictEqual(picked[1], [0x10, 0x60, 0xd0]);
+  assert.ok(picked[0].every((v, i) => v >= picked[1][i]) && picked[0].some((v, i) => v > picked[1][i]), "highlight lighter");
+  assert.ok(picked[2].every((v, i) => v <= picked[1][i]) && picked[2].some((v, i) => v < picked[1][i]), "edge darker");
+  // 글자: 어두운 본색이면 흰색(0), 밝으면 검정(100). 색을 안 주면 옛 규칙
+  assert.strictEqual(lib.sphereTextK("O", 0, [16, 16, 16]), 0);
+  assert.strictEqual(lib.sphereTextK("C", 0, [240, 240, 240]), 100);
+  assert.strictEqual(lib.sphereTextK("O", 0), 100);
+  // 반응식에 나오는 원소만
+  assert.deepStrictEqual(Object.keys(lib.formulaPals("2H2+O2=2H2O")).sort(), ["H", "O"]);
+  assert.strictEqual(lib.formulaPals("2H2+XYZ=H2O"), null);
+  // 그리기·저장·입력줄 연결: 색마다 이름이 다른 그라데이션(원래 색은 예전 이름), 회색 음영은 색을 쓰지 않음, 저장 불러오기는 #rrggbb만
+  assert.ok(source.includes('colors === SPHERE_COLORS[pal] ? "" : "_" + rgbToHexString(colors[1]).substring(1)'), "gradient name per colour");
+  assert.ok(source.includes("sphereColors(pal, o)") && source.includes("pickedRgb(t.options, el.pal)"), "drawing uses the picked colours");
+  assert.ok(/ctl\.color\) \{\s*if \(!\/\^#\[0-9a-f\]\{6\}\$\/\.test\(text\)\) return;/.test(source), "load keeps only #rrggbb");
+  assert.ok(source.includes("else if (ctl.color) addColor(panel, ctl);") && source.includes("o.colorMode !== 1 && (used === null || used[ctl.pal] === true)"), "colour rows are wired and follow colour mode/equation");
 }
 
 console.log("check-reaction-model: ok");
