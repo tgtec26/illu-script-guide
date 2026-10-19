@@ -30,9 +30,7 @@ try {
     var WAVE_WIDTH_PT = 0.5;
     var GUIDE_DASH = [2, 1.5];
     // 화살촉 기본 크기(화살촉 크기 100%). 그릴 때 HEAD_LENGTH·HEAD_WIDTH를 배율에 맞춘다
-    var BASE_HEAD_LENGTH = 1.6 * MM;
     var BASE_HEAD_WIDTH = 1.1 * MM;
-    var HEAD_LENGTH = BASE_HEAD_LENGTH;
     var HEAD_WIDTH = BASE_HEAD_WIDTH;
     var HEAD_TRIANGLE = 0;
     var HEAD_SHAPES = ["삼각형", "꺾쇠 (열린 V)", "제비꼬리", "작살형 (평가원식)"];
@@ -46,6 +44,9 @@ try {
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
     var HEAD_SIZE_RANGE = [30, 300];
+    // 화살촉 크기 100% = 일러스트레이터 100%: 삼각형 길이 = 카탈로그 삼각형(8.6) × 선 두께(pt) (그림 제작 규칙 4.7)
+    var BASE_HEAD_LENGTH = HEAD_CATALOG[HEAD_TRIANGLE].length * LINE_WIDTH_PT;
+    var HEAD_LENGTH = BASE_HEAD_LENGTH;
     var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
     var ENG_FONT_NAME = "GSMediumB1";
     var KINDS = ["횡파", "종파", "소리 비교"];

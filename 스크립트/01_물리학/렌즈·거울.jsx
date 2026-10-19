@@ -1306,7 +1306,8 @@ try {
             var GUIDE_DASH = [2, 1.5];
             // 화살촉 기본 크기(화살촉 크기 100%). 그릴 때 HEAD_LENGTH·HEAD_WIDTH를 배율에 맞춘다
             var HEAD_SIZE_RANGE = [30, 300];
-            var BASE_HEAD_LENGTH = 1.6 * MM;
+            // 크기 100% = 일러스트레이터 100%: 삼각형 길이 = 카탈로그 삼각형(8.6) × 광선 선 두께(pt). 물체·상 화살표는 addHead의 weightPt로 1pt에 맞춘다 (그림 제작 규칙 4.7)
+            var BASE_HEAD_LENGTH = HEAD_CATALOG[HEAD_TRIANGLE].length * LINE_WIDTH_PT;
             var BASE_HEAD_WIDTH = 1.1 * MM;
             var HEAD_LENGTH = BASE_HEAD_LENGTH;
             var HEAD_WIDTH = BASE_HEAD_WIDTH;
@@ -1444,12 +1445,12 @@ try {
                 var hatch = HATCH_MM * MM;
                 for (var y = g.bottom + hatch; y <= g.top + 1e-6; y += hatch) addLine([[0, y], [hatch, y - hatch]], null, "빗금");
                 // 물체와 상
-                var object = addArrow([g.object[0], g.object[1]], "물체");
+                var object = addArrow([g.object[0], g.object[1]], "물체", undefined, OBJECT_WIDTH_PT);
                 object.strokeWidth = OBJECT_WIDTH_PT;
                 var image = addLine([g.image[0], g.image[1]], GUIDE_DASH, "상");
                 image.strokeWidth = OBJECT_WIDTH_PT;
                 image.strokeColor = makeGray(IMAGE_K);
-                addHead(g.image[1], 0, 1).fillColor = makeGray(IMAGE_K);
+                addHead(g.image[1], 0, 1, undefined, OBJECT_WIDTH_PT).fillColor = makeGray(IMAGE_K);
                 var rays = [];
                 if (bottomRayOn) rays.push(0);
                 if (topRayOn) rays.push(1);
@@ -1646,9 +1647,16 @@ try {
                 return line;
             }
 
-                function addHead(tip, dx, dy, container) {
+                function addHead(tip, dx, dy, container, weightPt) {
                 var head = (container || previewGroup).pathItems.add();
+                // 촉은 붙는 선의 두께에 비례한다: 광선(LINE_WIDTH_PT) 기준 길이를 weightPt에 맞춰 늘려 그린 뒤 되돌린다
+                var scale = weightPt === undefined ? 1 : weightPt / LINE_WIDTH_PT;
+                var baseLength = HEAD_LENGTH, baseWidth = HEAD_WIDTH;
+                HEAD_LENGTH = baseLength * scale;
+                HEAD_WIDTH = baseWidth * scale;
                 var shape = arrowHeadShape(tip, dx, dy);
+                HEAD_LENGTH = baseLength;
+                HEAD_WIDTH = baseWidth;
                 head.setEntirePath(shape.points);
                 head.closed = shape.closed;
                 if (shape.closed) {
@@ -1668,10 +1676,10 @@ try {
             }
 
                 // 꺾은선 화살표: 마지막 점에 화살촉
-            function addArrow(points, name, container) {
+            function addArrow(points, name, container, weightPt) {
                 var line = addLine(points, null, name, container);
                 var a = points[points.length - 2], b = points[points.length - 1];
-                addHead(b, b[0] - a[0], b[1] - a[1], container);
+                addHead(b, b[0] - a[0], b[1] - a[1], container, weightPt);
                 return line;
             }
 
