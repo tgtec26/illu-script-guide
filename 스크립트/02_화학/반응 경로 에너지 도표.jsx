@@ -14,6 +14,8 @@ try {
 //   반응물·생성물 높이, 봉우리 높이(활성화 에너지 Ea), 발열(생성물이 낮음)·흡열(생성물이 높음)을 슬라이더와 목록으로 정한다.
 //   촉매를 쓰면 봉우리가 낮아진 둘째 곡선(파선)을 함께 그린다. 반응물·생성물 글자(A(g), B(g) …), 활성화 에너지 Ea 화살표, 반응 엔탈피 ΔH 화살표와 점선 안내선을 넣을 수 있다.
 //   곡선은 앵커가 적은 베지어 패스 하나라 나중에 손으로 고치기 쉽다. 화살촉은 측정한 일러스트레이터 화살촉 4종 중에서 고르고(기본 작살형) 크기를 %로 정한다.
+//   Ea·ΔH 구간 화살표는 양방향이고 촉 모양·크기를 축 화살촉과 따로 정한다. 촉매 곡선에도 Ea 구간 화살표를 넣는다.
+//   'Ea 문구'·'촉매 Ea 문구'를 적으면 짧은 글자 대신 긴 문구를 오른쪽 바깥 여백에 놓고 구간 화살표와 지시선으로 잇는다.
 // 선 두께는 곡선 1pt, 축·점선·화살표 0.4pt이고 '선 두께' 패널에서 고친다.
 // 글자는 한글 Spoqa, 영문·숫자 GSMediumB1, 변수(E, H)는 GSMediItaC1이다.
 
@@ -67,10 +69,14 @@ try {
                 {key: "prodName", label: "생성물 글자", text: true, value: "B(g)"},
                 {key: "xName", label: "가로축 글자", text: true, value: "반응 진행"},
                 {key: "yName", label: "세로축 글자", text: true, value: "에너지"},
+                {key: "eaText", label: "Ea 문구", text: true, value: ""},
+                {key: "catText", label: "촉매 Ea 문구", text: true, value: ""},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 14, step: 0.5, value: 8},
                 {panel: "화살촉"},
-                {key: "headShape", label: "화살촉 모양", items: HEAD_SHAPES, order: [3, 2, 0, 1], value: 3},
-                {key: "headSize", label: "화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100}
+                {key: "headShape", label: "축 화살촉 모양", items: HEAD_SHAPES, order: [3, 2, 0, 1], value: 3},
+                {key: "headSize", label: "축 화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100},
+                {key: "rangeHeadShape", label: "구간 화살촉 모양", items: HEAD_SHAPES, order: [3, 2, 0, 1], value: 3},
+                {key: "rangeHeadSize", label: "구간 화살촉 크기", unit: "%", min: 30, max: 300, step: 5, value: 100}
             ],
             draw: drawReactionPath
         });
@@ -88,21 +94,48 @@ try {
         ];
     }
 
+    // 곡선(베지어 점 목록) 위 x에서의 높이: x가 들어 있는 베지어 조각을 찾아 이분법으로 푼다 (구간 화살표 끝이 곡선에 닿게)
+    function curveYAt(pts, x) {
+        for (var i = 0; i < pts.length - 1; i++) {
+            var p0 = pts[i].a, p1 = pts[i].r, p2 = pts[i + 1].l, p3 = pts[i + 1].a;
+            if (x < p0[0] || x > p3[0]) continue;
+            var lo = 0, hi = 1, tt = 0, u = 1;
+            for (var k = 0; k < 40; k++) {
+                tt = (lo + hi) / 2;
+                u = 1 - tt;
+                var bx = u * u * u * p0[0] + 3 * u * u * tt * p1[0] + 3 * u * tt * tt * p2[0] + tt * tt * tt * p3[0];
+                if (bx < x) lo = tt; else hi = tt;
+            }
+            tt = (lo + hi) / 2;
+            u = 1 - tt;
+            return u * u * u * p0[1] + 3 * u * u * tt * p1[1] + 3 * u * tt * tt * p2[1] + tt * tt * tt * p3[1];
+        }
+        return pts[pts.length - 1].a[1];
+    }
+
     // 좌표는 pt(y 위쪽 +). 축의 원점이 (0, 0).
     function drawReactionPath(t, o) {
         var m = t.mm, size = o.font, w = o.width * m, er = o.reactant * m, dH = o.dH * m;
         var ep = o.kind === 0 ? er - dH : er + dH;
         if (ep < 2 * m) ep = 2 * m;
-        var peak = Math.max(er, ep) + o.ea * m;
+        var lo = Math.min(er, ep), hi = Math.max(er, ep);
+        var peak = hi + o.ea * m;
         var xp = w * 0.5, top = peak + 8 * m, xAxis = w + 6 * m;
+        // 화살촉 두 벌: 축 화살표는 headShape·headSize, 구간(Ea·ΔH) 화살표는 rangeHeadShape·rangeHeadSize. 구간 값이 없는 옛 저장본은 축과 같다
+        var rangeHead = {
+            shape: o.rangeHeadShape === undefined ? o.headShape : o.rangeHeadShape,
+            size: o.rangeHeadSize === undefined ? o.headSize : o.rangeHeadSize
+        };
         // 축
         t.arrow([0, 0], [xAxis, 0], o.wRope);
         t.arrow([0, 0], [0, top], o.wRope);
         // 곡선(반응 경로)과 촉매 곡선
-        t.curve(pathPoints(w, er, ep, peak, xp), false, null, 100, o.wBody);
+        var eaPts = pathPoints(w, er, ep, peak, xp);
+        t.curve(eaPts, false, null, 100, o.wBody);
+        var catPeak = hi + o.ea * m * o.catPct / 100, catPts = null;
         if (o.catalyst) {
-            var catPeak = Math.max(er, ep) + o.ea * m * o.catPct / 100;
-            var cat = t.curve(pathPoints(w, er, ep, catPeak, xp), false, null, 100, o.wBody);
+            catPts = pathPoints(w, er, ep, catPeak, xp);
+            var cat = t.curve(catPts, false, null, 100, o.wBody);
             cat.strokeDashes = [3, 2];
         }
         // 점선 안내선: 반응물·생성물 높이를 오른쪽 끝 너머까지
@@ -115,12 +148,36 @@ try {
             if (o.prodName !== "") t.textAt(o.prodName, w * 0.91, ep + 1.2 * m, size, "above");
         }
         if (o.showEa) {
-            t.arrow([xp, er], [xp, peak], o.wRope);
-            t.textAt("Ea", xp - 1.2 * m, (er + peak) / 2, size, "left", {italic: true});
+            // 활성화 에너지 구간 화살표(양방향): 반응물 높이에서 곡선까지. 촉매 곡선이 있으면 봉우리 양옆으로 나란히 둔다
+            var withCat = catPts !== null, gapX = 2.5 * m;
+            var x1 = withCat ? xp - gapX : xp, y1 = curveYAt(eaPts, x1);
+            t.arrow2([x1, er], [x1, y1], o.wRope, rangeHead);
+            var x2 = xp + gapX, y2 = withCat ? curveYAt(catPts, x2) : 0;
+            if (withCat) t.arrow2([x2, er], [x2, y2], o.wRope, rangeHead);
+            // 문구가 있거나 촉매 곡선이 있으면(곡선 안쪽이 좁다) 글자를 오른쪽 바깥 여백에 놓고 지시선으로 구간 화살표와 잇는다.
+            // 문구가 없으면 짧은 글자(Ea, Ea')를 쓰고, 촉매가 없을 때의 Ea는 화살표 옆에 둔다
+            var longEa = o.eaText !== undefined && o.eaText !== "", longCat = withCat && o.catText !== undefined && o.catText !== "";
+            var viaLeader = withCat || longEa;
+            if (!viaLeader) t.textAt("Ea", x1 - 1.2 * m, (er + y1) / 2, size, "left", {italic: true});
+            if (viaLeader) {
+                var xText = xAxis + 4 * m, xBend = xText - 3 * m, lineH = size * 0.72, minSep = lineH + 1 * m;
+                // 지시선은 화살표 윗부분에서 시작해 반응물·생성물 글자와 ΔH 화살표 위로 지난다
+                var floorY = hi + 1.2 * m + lineH + 1 * m;
+                var yA = Math.min(Math.max(((withCat ? catPeak : hi) + y1) / 2, floorY), y1 - 0.4 * m);
+                var yB = withCat ? Math.min(Math.max((hi + y2) / 2, floorY), y2 - 0.4 * m) : 0;
+                var labelA = yA, labelB = yB;
+                if (withCat && labelA - labelB < minSep) labelA = labelB + minSep;
+                var leaders = [[x1, yA, labelA, longEa ? o.eaText : "Ea", !longEa]];
+                if (withCat) leaders.push([x2, yB, labelB, longCat ? o.catText : "Ea'", !longCat]);
+                for (var li = 0; li < leaders.length; li++) {
+                    var ld = leaders[li];
+                    t.path([[ld[0], ld[1]], [xBend, ld[1]], [xText - 0.8 * m, ld[2]]], false, null, 100, o.wRope);
+                    t.textAt(ld[3], xText, ld[2], size, "right", ld[4] ? {italic: true} : undefined);
+                }
+            }
         }
         if (o.showDH) {
-            var lo = Math.min(er, ep), hi = Math.max(er, ep);
-            t.arrow(o.kind === 0 ? [guideEnd - 1 * m, hi] : [guideEnd - 1 * m, lo], o.kind === 0 ? [guideEnd - 1 * m, lo] : [guideEnd - 1 * m, hi], o.wRope);
+            t.arrow2([guideEnd - 1 * m, lo], [guideEnd - 1 * m, hi], o.wRope, rangeHead);
             t.textAt("ΔH", guideEnd + 0.4 * m, (er + ep) / 2, size, "right");
         }
         // 축 범례(그림 제작 규칙): 화살촉 있는 축이라 X는 오른쪽 끝, Y는 위 끝에 맞추고 축에서 1mm.
@@ -141,8 +198,12 @@ try {
     }
 
     // 고른 화살촉의 배율 k: 작살형 길이 HEAD_EXAM_LENGTH_PT × 크기%를 카탈로그 작살형 길이(12.1)로 나눈다
-    function headUnit(o) {
-        return HEAD_EXAM_LENGTH_PT * o.headSize / 100 / HEAD_CATALOG[HEAD_EXAM].length;
+    // style은 {shape, size}로, 구간 화살표처럼 모양·크기를 따로 줄 때만 넘긴다(없으면 축 화살촉 headShape·headSize)
+    function headUnit(o, style) {
+        return HEAD_EXAM_LENGTH_PT * (style && style.size !== undefined ? style.size : o.headSize) / 100 / HEAD_CATALOG[HEAD_EXAM].length;
+    }
+    function headShapeOf(o, style) {
+        return style && style.shape !== undefined ? style.shape : o.headShape;
     }
 
     // ==== 창 ====
@@ -520,18 +581,27 @@ try {
             return p;
         };
         // 화살촉: 끝 tip, 방향 단위 벡터 d. 고른 모양(작살형이 기본)의 채운 도형. 선은 headBack()만큼 물러나 촉 속에서 끝낸다
-        t.head = function(tip, d) {
-            return t.path(catalogPoints(o.headShape, tip, d, headUnit(o)), true, 100, null, 0);
+        t.head = function(tip, d, style) {
+            return t.path(catalogPoints(headShapeOf(o, style), tip, d, headUnit(o, style)), true, 100, null, 0);
         };
-        t.headBack = function() { return HEAD_CATALOG[o.headShape].lineEnd * headUnit(o); };
-        t.headLength = function() { return HEAD_CATALOG[o.headShape].length * headUnit(o); };
-        // a → b 화살표: 선은 촉 속에서 끝난다
-        t.arrow = function(a, b, width) {
+        t.headBack = function(style) { return HEAD_CATALOG[headShapeOf(o, style)].lineEnd * headUnit(o, style); };
+        t.headLength = function(style) { return HEAD_CATALOG[headShapeOf(o, style)].length * headUnit(o, style); };
+        // a → b 화살표: 선은 촉 속에서 끝난다. style은 화살촉 모양·크기를 따로 줄 때만 넘긴다
+        t.arrow = function(a, b, width, style) {
             var dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx * dx + dy * dy);
             if (len < 0.01) return;
-            var d = [dx / len, dy / len], back = t.headBack();
+            var d = [dx / len, dy / len], back = t.headBack(style);
             if (len > back) t.line(a, [b[0] - d[0] * back, b[1] - d[1] * back], width);
-            t.head(b, d);
+            t.head(b, d, style);
+        };
+        // a ↔ b 양방향 화살표: 양 끝에 화살촉, 선은 두 촉 속에서 끝난다 (촉 둘이 닿을 만큼 짧으면 촉만)
+        t.arrow2 = function(a, b, width, style) {
+            var dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx * dx + dy * dy);
+            if (len < 0.01) return;
+            var d = [dx / len, dy / len], back = t.headBack(style);
+            if (len > 2 * back) t.line([a[0] + d[0] * back, a[1] + d[1] * back], [b[0] - d[0] * back, b[1] - d[1] * back], width);
+            t.head(b, d, style);
+            t.head(a, [-d[0], -d[1]], style);
         };
         // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). opts: italic 변수 글자(이탤릭), sub 글자 뒤 숫자를 아래 첨자로,
         // stack 줄 사이를 글자 크기의 1.2배로 두고 가운데 맞춤(세로쓰기 축 범례)
