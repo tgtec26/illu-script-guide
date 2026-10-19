@@ -51,6 +51,7 @@ try {
     var RATIO_RANGE = [0, 100];
     var ARROW_RANGE = [0.5, 20];
     var ARROW_WIDTH_RANGE = [0.1, 5];
+    var PARTICLE_WIDTH_RANGE = [0.1, 3];
     var HEAD_RANGE = [20, 200];
     var SEED_RANGE = [1, 99];
     var MAX_PARTICLES = 3000;
@@ -70,6 +71,7 @@ try {
     var levelPct = 60;        // 고체·액체가 차는 높이 (도형 높이 %)
     var gasCount = 20;
     var particleK = 40;
+    var particleWidthPt = LINE_WIDTH_PT;   // 입자 선 두께
     var arrowRatio = 0;       // 화살표를 붙일 입자 비율 %
     var arrowMm = 3;
     var arrowWidthPt = LINE_WIDTH_PT;
@@ -80,7 +82,7 @@ try {
     var offsetYmm = 0;
     var previewEnabled = true;
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-    var DEFAULTS = {diameterMm: diameterMm, levelPct: levelPct, gasCount: gasCount, particleK: particleK, seed: seed, arrowRatio: arrowRatio, arrowMm: arrowMm, arrowWidthPt: arrowWidthPt, arrowK: arrowK, headScale: headScale, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    var DEFAULTS = {diameterMm: diameterMm, levelPct: levelPct, gasCount: gasCount, particleK: particleK, particleWidthPt: particleWidthPt, seed: seed, arrowRatio: arrowRatio, arrowMm: arrowMm, arrowWidthPt: arrowWidthPt, arrowK: arrowK, headScale: headScale, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     readSettings();
 
     var previewGroup = null;
@@ -104,6 +106,7 @@ try {
     var countRow = addValueRow(statePanel, "기체 입자 수", "개", gasCount, COUNT_RANGE[0], COUNT_RANGE[1], 1, 0);
     countRow.input.helpTip = "자리가 모자라면 들어가는 만큼만 놓는다";
     var kRow = addValueRow(statePanel, "입자 색", "K", particleK, K_RANGE[0], K_RANGE[1], 10, 0);
+    var particleWidthRow = addValueRow(statePanel, "입자 선 두께", "pt", particleWidthPt, PARTICLE_WIDTH_RANGE[0], PARTICLE_WIDTH_RANGE[1], 0.1, 1);
     var seedRow = addValueRow(statePanel, "배치 번호", "", seed, SEED_RANGE[0], SEED_RANGE[1], 1, 0);
 
     var arrowPanel = addPanel(dlg, "운동 화살표");
@@ -150,6 +153,7 @@ try {
     bindValueRow(levelRow, function() { return levelPct; }, function(v) { levelPct = v; }, DEFAULTS.levelPct);
     bindValueRow(countRow, function() { return gasCount; }, function(v) { gasCount = v; }, DEFAULTS.gasCount);
     bindValueRow(kRow, function() { return particleK; }, function(v) { particleK = v; }, DEFAULTS.particleK);
+    bindValueRow(particleWidthRow, function() { return particleWidthPt; }, function(v) { particleWidthPt = v; }, DEFAULTS.particleWidthPt);
     bindValueRow(seedRow, function() { return seed; }, function(v) { seed = v; }, DEFAULTS.seed);
     bindValueRow(ratioRow, function() { return arrowRatio; }, function(v) { arrowRatio = v; syncEnabled(); }, DEFAULTS.arrowRatio);
     bindValueRow(arrowRow, function() { return arrowMm; }, function(v) { arrowMm = v; }, DEFAULTS.arrowMm);
@@ -232,7 +236,7 @@ try {
         var prototype = particles.pathItems.ellipse(radius, -radius, 2 * radius, 2 * radius);
         prototype.stroked = true;
         prototype.strokeColor = stroke;
-        prototype.strokeWidth = LINE_WIDTH_PT;
+        prototype.strokeWidth = particleWidthPt;
         prototype.filled = true;
         prototype.fillColor = fill;
         for (var i = 0; i < centers.length; i++) {
@@ -572,8 +576,8 @@ try {
     // 설정 저장 · 복원
     // -------------------------------------------------------
     function saveSettings() {
-        var parts = ["v3", state, diameterMm, levelPct, gasCount, particleK, arrowRatio, arrowMm, arrowWidthPt, arrowK, headScale, seed,
-            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", headShape];
+        var parts = ["v4", state, diameterMm, levelPct, gasCount, particleK, arrowRatio, arrowMm, arrowWidthPt, arrowK, headScale, seed,
+            offsetXmm, offsetYmm, previewEnabled ? "1" : "0", headShape, particleWidthPt];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -582,7 +586,7 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length !== 16) return;
+        if (p[0] !== "v4" || p.length !== 17) return;
         state = restoreNumber(p[1], state, [0, STATES.length - 1], 1);
         diameterMm = restoreNumber(p[2], diameterMm, DIAMETER_RANGE, 0.1);
         levelPct = restoreNumber(p[3], levelPct, LEVEL_RANGE, 1);
@@ -598,6 +602,7 @@ try {
         offsetYmm = restoreNumber(p[13], offsetYmm, [-POSITION_LIMIT_MM, POSITION_LIMIT_MM], 0.1);
         previewEnabled = p[14] === "1";
         headShape = restoreNumber(p[15], headShape, [0, HEAD_SHAPES.length - 1], 1);
+        particleWidthPt = restoreNumber(p[16], particleWidthPt, PARTICLE_WIDTH_RANGE, 0.1);
     }
 
     function restoreNumber(text, fallback, range, step) {

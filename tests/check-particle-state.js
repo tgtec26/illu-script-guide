@@ -91,4 +91,9 @@ assert.ok(Math.abs(lib.distanceToSegment(5, 5, [0, 0], [10, 0]) - 5) < 1e-9);
   assert.strictEqual(new Set(picks).size, 5);
 }
 assert.ok(source.includes('var PREF_KEY = "ObjectParticleState/settings";'));
+// 입자 선 두께: 입자 테두리가 이 값을 쓰고, 저장 v4는 끝에 그 값을 더해 17칸이다
+assert.ok(source.includes("prototype.strokeWidth = particleWidthPt;"));
+assert.ok(source.includes('var parts = ["v4", ') && source.includes("headShape, particleWidthPt];"));
+assert.ok(source.includes('p[0] !== "v4" || p.length !== 17'));
+assert.ok(source.includes("particleWidthPt = restoreNumber(p[16], particleWidthPt, PARTICLE_WIDTH_RANGE, 0.1);"));
 console.log("particle state checks passed");

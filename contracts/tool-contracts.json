@@ -437,6 +437,13 @@
           "minimum": 0,
           "maximum": 100
         },
+        "particleWidthPt": {
+          "type": "number",
+          "default": 0.3,
+          "unit": "pt",
+          "minimum": 0.1,
+          "maximum": 3
+        },
         "arrowRatio": {
           "type": "number",
           "default": 0,
