@@ -1083,7 +1083,7 @@ var SCRIPT_KEY = "HighStatistics";
             var GUIDE_DASH = [2, 1.5];
             var TICK_MM = 1.2;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var TAIL_SIGMAS = 3.5;   // 곡선은 평균에서 ±3.5σ까지 (끝 높이가 꼭대기의 0.2%라 축에 닿아 보인다)
             var BAR_RATIO = 0.6;     // 막대 폭 / 막대 간격

@@ -1676,7 +1676,7 @@ var SCRIPT_KEY = "MiddleMath";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };   // pt. 평가원 축 화살촉처럼 가늘고 뒤가 파인 모양
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };   // pt. 평가원 축 화살촉처럼 가늘고 뒤가 파인 모양
             registerHead(ARROW);
             var SYMBOL_FONT_NAME = "Batang";   // ㉠, (가) 같은 그래프 이름 (한글·영문 서체 적용 규칙: 바탕체, 한 단계 크게)
             var NAME_STYLES = ["없음", "식", "㉠ ㉡ ㉢", "(가) (나) (다)"];
@@ -3183,7 +3183,7 @@ var SCRIPT_KEY = "MiddleMath";
             var LABEL_GAP_MM = 0.8;
             var LEGEND_GAP_MM = 1;           // 축 범례와 축(또는 눈금 숫자·글자) 사이 간격 (그림 제작 규칙)
             var LEGEND_LINE_HEIGHT = 1;      // 세로로 쌓은 범례의 줄 간격(글자 크기 배). 1 = 일러스트레이터 세로쓰기와 같은 간격
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };   // pt. 좌표평면과 같은 평가원식 화살촉
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };   // pt. 좌표평면과 같은 평가원식 화살촉
             registerHead(ARROW);
 
             var doc = app.activeDocument;
@@ -8011,7 +8011,7 @@ var SCRIPT_KEY = "MiddleMath";
             var LABEL_GAP_MM = 0.8;
             var LEGEND_GAP_MM = 1;           // 축 범례와 축(또는 눈금 숫자·글자) 사이 간격 (그림 제작 규칙)
             var LEGEND_LINE_HEIGHT = 1;      // 세로로 쌓은 범례의 줄 간격(글자 크기 배). 1 = 일러스트레이터 세로쓰기와 같은 간격
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var NUMBER_MODES = ["모든 눈금", "점의 좌표만", "없음"];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다

@@ -301,7 +301,7 @@ var SCRIPT_KEY = "HighMath2";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.7;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
             var FLAG_KEYS = ["guides", "formulas", "grid", "numbers"];
@@ -1324,7 +1324,7 @@ var SCRIPT_KEY = "HighMath2";
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
             var ROW_MM = 7;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var TREND_ARROW = { length: 1.8, halfWidth: 0.7, notch: 0.4 };   // 표 안의 ↗ ↘
             var MODES = ["그래프 + 증감표", "그래프만", "증감표만"];
@@ -2409,7 +2409,7 @@ var SCRIPT_KEY = "HighMath2";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var SHADES = ["칠하지 않음", "넓이 칠하기", "직사각형 (왼쪽 끝)", "직사각형 (오른쪽 끝)"];
             var ENDS = ["a, b", "값", "없음"];
@@ -3603,7 +3603,7 @@ var SCRIPT_KEY = "HighMath2";
             var GUIDE_PT = 0.3;
             var GUIDE_DASH = [2, 1.5];
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var STEPS = 64;          // 입체를 x 방향으로 나눈 조각 수
             var ARC_STEPS = 12;      // 반원 단면의 호를 나눈 수
@@ -4515,7 +4515,7 @@ var SCRIPT_KEY = "HighMath2";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
             var FLAG_KEYS = ["shade", "turns", "bounds", "formula", "grid", "numbers"];

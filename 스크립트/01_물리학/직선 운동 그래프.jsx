@@ -39,7 +39,7 @@ try {
     var AXIS_K = 100;
     var GRAPH_K = 60;
     // 축 끝 화살촉(pt): 길이, 반너비, 뒤쪽 오목 (05_수학의 평가원식 화살촉과 같은 치수)
-    var ARROW = {length: 4, halfWidth: 1.3, notch: 1};
+    var ARROW = {length: 4.84, halfWidth: 1.573, notch: 1.24};
     // 화살촉 모양: 작살형이 평가원식(기본)이다
     var HEAD_TRIANGLE = 0;
     var HEAD_EXAM = 3;

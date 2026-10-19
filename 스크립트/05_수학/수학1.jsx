@@ -308,7 +308,7 @@ var SCRIPT_KEY = "HighMath1";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var MODES = ["지수함수", "로그함수", "지수와 로그 (역함수)"];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
@@ -1321,7 +1321,7 @@ var SCRIPT_KEY = "HighMath1";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var SMALL_ARROW = { length: 2.4, halfWidth: 0.9, notch: 0.6 };
             registerHead(SMALL_ARROW);
@@ -2513,7 +2513,7 @@ var SCRIPT_KEY = "HighMath1";
             var GUIDE_DASH = [2, 1.5];
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };   // 축 화살촉 (pt)
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };   // 축 화살촉 (pt)
             registerHead(ARROW);
             var TURN_ARROW = { length: 2.4, halfWidth: 0.9, notch: 0.6 };   // 회전 호 끝 화살촉 (pt)
             registerHead(TURN_ARROW);
@@ -3156,7 +3156,7 @@ var SCRIPT_KEY = "HighMath1";
             var SMALL_DOT_RADIUS_MM = 0.4;
             var LABEL_GAP_MM = 0.8;
             var TAN_LIMIT = 2.5;   // tan 그림의 세로 범위 (반지름의 몇 배)
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var KINDS = ["y=sin x", "y=tan x"];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
@@ -4658,7 +4658,7 @@ var SCRIPT_KEY = "HighMath1";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var MODES = ["수열 그래프", "규칙 도형", "계차 도식"];
             var PATTERNS = ["정사각형 이어 붙이기", "정삼각형 이어 붙이기", "계단", "점 삼각형", "점 정사각형"];

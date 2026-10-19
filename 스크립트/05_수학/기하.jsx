@@ -322,7 +322,7 @@ var SCRIPT_KEY = "HighGeometry";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var KAPPA = 0.5522847498;   // 타원을 베지어 4개로
             var KINDS = ["포물선", "타원", "쌍곡선"];
@@ -1185,7 +1185,7 @@ var SCRIPT_KEY = "HighGeometry";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var KAPPA = 0.5522847498;   // 타원을 베지어 4개로
             var KINDS = ["포물선", "타원", "쌍곡선"];
@@ -2146,7 +2146,7 @@ var SCRIPT_KEY = "HighGeometry";
             var GS_SYMBOLS = "˘°±·";   // GSMediumB1에 있는 기호 (° 는 ˘ 로 바꿔 쓴다)
             var ENG_BASELINE_PT = 0.5;
             var AXIS_PT = 0.4;
-            var ARROW = {length: 4, halfWidth: 1.3, notch: 1};
+            var ARROW = {length: 4.84, halfWidth: 1.573, notch: 1.24};
             registerHead(ARROW);
             var GUIDE_PT = 0.3;
             var MARK_PT = 0.3;
@@ -4319,7 +4319,7 @@ var SCRIPT_KEY = "HighGeometry";
             var DOT_RADIUS_MM = 0.5;
             var RIGHT_MARK_MM = 1.5;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var VECTOR_ARROW = { length: 3.2, halfWidth: 1.2, notch: 0.8 };
             registerHead(VECTOR_ARROW);

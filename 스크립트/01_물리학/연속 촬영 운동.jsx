@@ -62,7 +62,7 @@ try {
     var GROUND_TEXT = "지표면";
     var GROUND_TEXT_GAP_MM = 1.5;
     // 거리 표시 화살촉(pt): 평가원식 (05_수학, MotionGraph와 같은 치수)
-    var ARROW = {length: 4, halfWidth: 1.3, notch: 1};
+    var ARROW = {length: 4.84, halfWidth: 1.573, notch: 1.24};
     // 화살촉 모양: 작살형이 평가원식(기본)이다
     var HEAD_TRIANGLE = 0;
     var HEAD_EXAM = 3;

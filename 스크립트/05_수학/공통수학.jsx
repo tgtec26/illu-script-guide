@@ -308,7 +308,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var SMALL_ARROW = { length: 2.4, halfWidth: 0.9, notch: 0.6 };
             registerHead(SMALL_ARROW);
@@ -995,7 +995,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var DOT_RADIUS_MM = 0.6;
             var RIGHT_MARK_MM = 1.5;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var KAPPA = 0.5522847498;   // 원을 베지어 4개로
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
@@ -2008,7 +2008,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var LABEL_GAP_MM = 0.8;
             var COLUMNS = 240;   // 칠하기 가로 나눔
             var KAPPA = 0.5522847498;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
             var FLAG_KEYS = ["shade", "formulas", "grid", "numbers"];
@@ -3725,7 +3725,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.7;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var INEQUALITIES = ["없음", "f(x) > 0", "f(x) ≥ 0", "f(x) < 0", "f(x) ≤ 0"];
             var ROOT_LABELS = ["값", "α, β"];
@@ -4494,7 +4494,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.7;
             var LABEL_GAP_MM = 0.8;
-            var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var HYPERBOLA_STEP = 0.25;   // ln|x-p| 간격. 도막 하나의 오차가 단위 길이의 1/10000 아래
             var KINDS = ["유리함수 y = k/(x-p)+q", "무리함수 y = √(a(x-p))+q", "무리함수 y = -√(a(x-p))+q"];
