@@ -27,7 +27,7 @@ const base = { width: 55, height: 40, periods: 4, xMode: 0, curveB: false, ratio
 function run(o) {
   const calls = [];
   const t = { mm: MM };
-  for (const k of ["line", "arrow", "dot", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
+  for (const k of ["line", "arrow", "dot", "text", "textAt", "axisLegendX", "axisLegendY"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   t.curve = (...a) => { calls.push({ k: "curve", a }); return { strokeDashes: null }; };
   f.drawHalfLife(t, { ...base, ...o });
   return calls;
@@ -62,7 +62,7 @@ assert.strictEqual(calls.filter((c) => c.k === "curve").length, 1);
 assert.strictEqual(calls.filter((c) => c.k === "dot").length, 4);
 assert.strictEqual(calls.filter((c) => c.k === "line" && c.a[3]).length, 8);
 assert.strictEqual(calls.filter((c) => c.k === "line" && !c.a[3]).length, 4 + 5);
-const texts = calls.filter((c) => c.k === "text" || c.k === "textAt").map((c) => c.a[0]);
+const texts = calls.filter((c) => c.k === "text" || c.k === "textAt" || c.k === "axisLegendX" || c.k === "axisLegendY").map((c) => c.a[0]);
 for (const w of ["0", "T", "2T", "4T", "100", "50", "25", "12.5", "시간", "남은 양(%)", "A"]) assert.ok(texts.includes(w), `글자 ${w}`);
 // 세로 눈금 글자는 위 글자와 글자 크기×1.2 이상 떨어진다. 가까우면 그 글자만 빼고 눈금·안내선은 남긴다
 // (높이 40mm, 8pt: 6.25는 12.5와 7pt 차이라 빠짐 / 높이 90mm면 16pt 차이라 들어감)

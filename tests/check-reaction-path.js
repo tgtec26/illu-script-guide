@@ -26,7 +26,7 @@ const base = { kind: 0, width: 50, reactant: 16, dH: 8, ea: 14, catalyst: false,
 function run(o) {
   const calls = [];
   const t = { mm: MM };
-  for (const k of ["line", "arrow", "text", "textAt"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
+  for (const k of ["line", "arrow", "text", "textAt", "axisLegendX", "axisLegendY"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   t.curve = (...a) => { calls.push({ k: "curve", a }); return {}; };
   f.drawReactionPath(t, { ...base, ...o });
   return calls;
@@ -75,5 +75,6 @@ near(curve[1].a[0][2].a[1], (16 + 14 * 0.55) * MM, "촉매 봉우리");
 calls = run({ showEa: false, showDH: false, showNames: false });
 assert.strictEqual(calls.filter((c) => c.k === "arrow").length, 2);
 assert.ok(!calls.some((c) => c.k === "textAt" && (c.a[0] === "A(g)" || c.a[0] === "Ea" || c.a[0] === "ΔH")));
-assert.ok(calls.some((c) => c.k === "text" && c.a[0] === "에너지"));
+assert.ok(calls.some((c) => c.k === "axisLegendY" && c.a[0] === "에너지" && c.a[4] === "top"), "Y 범례는 위 끝 세로쓰기");
+assert.ok(calls.some((c) => c.k === "axisLegendX" && c.a[0] === "반응 진행" && c.a[4] === "right" && c.a[2] === 0), "X 범례는 오른쪽 끝·축선 y=0");
 console.log("ok reaction-path");

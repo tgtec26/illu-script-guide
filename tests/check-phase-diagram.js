@@ -17,7 +17,7 @@ function extractFunction(name) {
   }
   throw new Error(`unbalanced: ${name}`);
 }
-const names = ["bezierAt", "curveXAtY", "drawPhase"];
+const names = ["bezierAt", "curveXAtY", "drawPhase", "legendRows", "legendTop", "legendRight"];
 const f = new Function(`${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 const MM = 2.834645669;
@@ -27,7 +27,7 @@ const base = { width: 50, height: 40, slope: 0, tpX: 30, tpY: 22, showAtm: true,
 function run(o) {
   const calls = [];
   const t = { mm: MM };
-  for (const k of ["line", "arrow", "dot", "text", "textAt", "curve"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
+  for (const k of ["line", "arrow", "dot", "text", "textAt", "curve", "axisLegendX", "axisLegendY"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   f.drawPhase(t, { ...base, ...o });
   return calls;
 }
@@ -74,7 +74,7 @@ const boilCheck = calls.filter((c) => c.k === "curve")[1].a[0];
 assert.ok(boilX > tp[0] && boilX < 0.86 * W, "끓는점은 삼중점과 임계점 사이");
 near(atm.a[1][0], boilX, "1기압 점선은 끓는점까지");
 // 글자: 영역 이름 3, 삼중점·임계점, Tf·Tb, 1
-const texts = calls.filter((c) => c.k === "text" || c.k === "textAt").map((c) => c.a[0]);
+const texts = calls.filter((c) => c.k === "text" || c.k === "textAt" || c.k === "axisLegendX" || c.k === "axisLegendY").map((c) => c.a[0]);
 for (const w of ["고체", "액체", "기체", "삼중점", "임계점", "Tf", "Tb", "1", "온도", "압력"]) assert.ok(texts.includes(w), `글자 ${w}`);
 // 1기압이 임계점 위면 끓는점 없음, 삼중점 아래면 어는점도 없음
 calls = run({ atmPct: 85 });
@@ -86,4 +86,29 @@ calls = run({ showAtm: false, showCrit: false, showTriple: false, showNames: fal
 assert.strictEqual(calls.filter((c) => c.k === "dot").length, 1);
 assert.strictEqual(calls.filter((c) => c.k === "line" && c.a[3]).length, 0);
 assert.ok(!calls.some((c) => c.k === "text" && c.a[0] === "고체"));
+
+// 축 범례(그림 제작 규칙): 화살촉 있는 축이라 X는 오른쪽 끝, Y는 위 끝. 글자를 모두 그린 뒤(마지막)에 놓는다
+calls = run({});
+const legendX = calls.find((c) => c.k === "axisLegendX"), legendY = calls.find((c) => c.k === "axisLegendY");
+assert.ok(legendX && legendY, "축 범례 호출");
+assert.deepStrictEqual(legendX.a, ["온도", 8, 0, W + 5 * MM, "right"]);
+assert.deepStrictEqual(legendY.a, ["압력", 8, 0, H + 5 * MM, "top"]);
+const lastText = calls.map((c, i) => (c.k === "text" || c.k === "textAt" ? i : -1)).reduce((a, b) => Math.max(a, b), -1);
+assert.ok(calls.indexOf(legendX) > lastText && calls.indexOf(legendY) > lastText, "범례는 다른 글자 뒤에");
+assert.ok(!run({ xName: "", yName: "" }).some((c) => c.k === "axisLegendX" || c.k === "axisLegendY"), "빈 칸이면 범례 없음");
+
+// 배치 규칙: 축 아래(왼쪽) 1mm, 글자가 겹치면 그 글자에서 1mm. 사각형은 [왼쪽, 아래, 오른쪽, 위]
+const gap = 2.83;
+assert.deepStrictEqual(f.legendRows("압력"), ["압", "력"]);
+assert.deepStrictEqual(f.legendRows("절대 온도"), ["절", "대", " ", "온", "도"]);
+assert.strictEqual(f.legendTop(0, 40, 60, 6, gap, []), -gap);
+assert.strictEqual(f.legendTop(0, 40, 60, 6, gap, [[10, -8, 20, -2]]), -gap);
+assert.strictEqual(f.legendTop(0, 40, 60, 6, gap, [[50, -9, 56, -3]]), -9 - gap);
+assert.strictEqual(f.legendTop(0, 40, 60, 6, gap, [[61, -9, 70, -3]]), -9 - gap);
+assert.strictEqual(f.legendTop(0, 40, 60, 6, gap, [[50, -9, 56, -3], [45, -20, 52, -12]]), -20 - gap);
+assert.strictEqual(f.legendTop(0, 40, 60, 6, gap, [[50, 1, 56, 9]]), -gap);
+assert.strictEqual(f.legendRight(0, 10, 30, 7, gap, []), -gap);
+assert.strictEqual(f.legendRight(0, 10, 30, 7, gap, [[-8, 40, -3, 50]]), -gap);
+assert.strictEqual(f.legendRight(0, 10, 30, 7, gap, [[-8, 20, -3, 26]]), -8 - gap);
+assert.strictEqual(f.legendRight(0, 10, 30, 7, gap, [[3, 20, 9, 26]]), -gap);
 console.log("ok phase-diagram");

@@ -27,7 +27,7 @@ const base = { width: 55, height: 50, xMode: 0, yMode: 0, showMain: true, showGi
 function run(o) {
   const calls = [];
   const t = { mm: MM };
-  for (const k of ["line", "arrow", "dot", "text", "textAt", "curve"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
+  for (const k of ["line", "arrow", "dot", "text", "textAt", "curve", "axisLegendX", "axisLegendY"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
   f.drawHR(t, { ...base, ...o });
   return calls;
 }
@@ -63,7 +63,7 @@ assert.strictEqual(calls.filter((c) => c.k === "dot").length, 3);
 near(calls.filter((c) => c.k === "dot")[1].a[0], W * 0.6, "별 B x");
 near(calls.filter((c) => c.k === "dot")[1].a[1], H * 0.4, "별 B y");
 assert.strictEqual(calls.filter((c) => c.k === "line").length, 7 + 5);
-const texts = calls.filter((c) => c.k === "text" || c.k === "textAt").map((c) => c.a[0]);
+const texts = calls.filter((c) => c.k === "text" || c.k === "textAt" || c.k === "axisLegendX" || c.k === "axisLegendY").map((c) => c.a[0]);
 for (const w of ["O", "M", "10", "분광형", "광도(태양=1)", "주계열성", "거성", "초거성", "백색 왜성", "A", "B", "C"]) assert.ok(texts.includes(w) || texts.includes(w + "4"), `글자 ${w}`);
 assert.ok(texts.includes("104") && texts.includes("10-4") && texts.includes("1"), "광도 눈금(^ 제거)");
 // 모든 별 무리 타원이 도표 폭 안쪽에 대체로 들어온다(주계열 끝점이 축 영역 안)
@@ -73,7 +73,7 @@ assert.ok(main.every((p) => p.a[0] > -2 * MM && p.a[0] < W + 4 * MM), "주계열
 assert.ok(main[0].a[1] < main[2].a[1] && main[0].a[0] > main[2].a[0]);
 // 표면 온도·절대 등급 모드, 무리 끄기·음영
 calls = run({ xMode: 1, yMode: 1, showMain: false, showGiant: false, showGroupNames: false, shade: 10 });
-const t2 = calls.filter((c) => c.k === "text" || c.k === "textAt").map((c) => c.a[0]);
+const t2 = calls.filter((c) => c.k === "text" || c.k === "textAt" || c.k === "axisLegendX" || c.k === "axisLegendY").map((c) => c.a[0]);
 assert.ok(t2.includes("30000") && t2.includes("15") && t2.includes("표면 온도(K)") && t2.includes("절대 등급"));
 assert.strictEqual(calls.filter((c) => c.k === "curve").length, 2);
 assert.ok(calls.filter((c) => c.k === "curve").every((c) => c.a[2] === 10), "무리 음영");
