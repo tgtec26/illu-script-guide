@@ -4535,11 +4535,13 @@ try {
                     var xLegend = addText(labelGroup, "파장(µm)", korFont, false);
                     var xLegendBounds = placeGlyph(xLegend, originX + plotW + axisMargin, (showTicks ? textBottom : originY) - TEXT_GAP_MM * MM, "right");
                     textBottom = xLegendBounds[3];
-                    // Y 범례: 글자를 세워 한 글자씩 위→아래로 쌓고(줄은 \r, 가운데 맞춤) 오른끝이 축 왼쪽 1mm, 윗끝이 축 끝(화살촉)
+                    // Y 범례: 글자를 세워 한 글자씩 위→아래로 쌓고(줄은 \r, 가운데 맞춤, 줄 간격 1배) 오른끝이 축 왼쪽 1mm, 윗끝이 축 끝(화살촉)
                     var yRows = [], yText = "복사 에너지의 세기(상대값)";
                     for (var yr = 0; yr < yText.length; yr++) yRows.push(yText.charAt(yr));
                     var yLegend = addText(labelGroup, yRows.join("\r"), korFont, false);
                     yLegend.textRange.paragraphAttributes.justification = Justification.CENTER;
+                    yLegend.textRange.characterAttributes.autoLeading = false;
+                    yLegend.textRange.characterAttributes.leading = 8;   // 줄 간격 = 글자 크기 8pt의 1배(일러스트레이터 세로쓰기와 같은 간격)
                     placeGlyph(yLegend, originX - TEXT_GAP_MM * MM, originY + plotH + axisMargin, "right");
                 }
 

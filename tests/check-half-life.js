@@ -28,6 +28,7 @@ function run(o) {
   const calls = [];
   const t = { mm: MM };
   for (const k of ["line", "arrow", "dot", "text", "textAt", "axisLegendX", "axisLegendY"]) t[k] = (...a) => { calls.push({ k, a }); return {}; };
+  t.headLength = () => 4.84;   // 작살형 100% = 일러스트레이터 100%(12.1 × 선 0.4pt)
   t.curve = (...a) => { calls.push({ k: "curve", a }); return { strokeDashes: null }; };
   f.drawHalfLife(t, { ...base, ...o });
   return calls;
@@ -59,6 +60,10 @@ assert.strictEqual(f.decayAnchors(0.25, 4, 10, 1).length, 17);
 const W = 55 * MM, H = 40 * MM;
 let calls = run({});
 assert.strictEqual(calls.filter((c) => c.k === "curve").length, 1);
+// 그림 제작 규칙 7.7: 곡선은 X축 화살촉의 가장 왼쪽(축 끝 W+4mm에서 촉 길이 4.84pt 앞)까지 진행하고, 점·안내선은 반감기 자리 그대로다
+const curveAnchors = calls.find((c) => c.k === "curve").a[0];
+near(curveAnchors[curveAnchors.length - 1].a[0], W + 4 * MM - 4.84, "곡선 끝 x = 화살촉 뒤끝");
+near(curveAnchors[4].a[0], W, "4번째 반감기 앵커는 그대로");
 assert.strictEqual(calls.filter((c) => c.k === "dot").length, 4);
 assert.strictEqual(calls.filter((c) => c.k === "line" && c.a[3]).length, 8);
 assert.strictEqual(calls.filter((c) => c.k === "line" && !c.a[3]).length, 4 + 5);

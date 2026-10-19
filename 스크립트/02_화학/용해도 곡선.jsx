@@ -905,14 +905,14 @@ function foldPanel(parent, title, collapsed, key) {
     // -------------------------------------------------------
     // 글자 (서체 규칙: 한글·공백 Spoqa, 영문·숫자·기호 GSMediumB1 +0.5pt, 화학식 숫자는 아래첨자)
     // -------------------------------------------------------
-    // 세로 범례(그림 제작 규칙): 글자를 세워 한 글자씩 위→아래로 쌓은 글상자(줄은 \r, 가운데 맞춤, 줄 간격은 글자 크기의 1.2배)
+    // 세로 범례(그림 제작 규칙): 글자를 세워 한 글자씩 위→아래로 쌓은 글상자(줄은 \r, 가운데 맞춤, 줄 간격은 글자 크기의 1배)
     function addStackedText(group, text) {
         var rows = [];
         for (var i = 0; i < text.length; i++) rows.push(text.charAt(i));
         var frame = addText(group, rows.join("\r"));
         frame.textRange.paragraphAttributes.justification = Justification.CENTER;
         frame.textRange.characterAttributes.autoLeading = false;
-        frame.textRange.characterAttributes.leading = FONT_PT * 1.2;
+        frame.textRange.characterAttributes.leading = FONT_PT * 1;   // 줄 간격 1 = 일러스트레이터 세로쓰기와 같은 간격
         return frame;
     }
 

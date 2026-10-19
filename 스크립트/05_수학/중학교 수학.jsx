@@ -3182,7 +3182,7 @@ var SCRIPT_KEY = "MiddleMath";
             var BOX_HEIGHT_MM = 6;
             var LABEL_GAP_MM = 0.8;
             var LEGEND_GAP_MM = 1;           // 축 범례와 축(또는 눈금 숫자·글자) 사이 간격 (그림 제작 규칙)
-            var LEGEND_LINE_HEIGHT = 1.2;    // 세로로 쌓은 범례의 줄 간격(글자 크기 배)
+            var LEGEND_LINE_HEIGHT = 1;      // 세로로 쌓은 범례의 줄 간격(글자 크기 배). 1 = 일러스트레이터 세로쓰기와 같은 간격
             var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };   // pt. 좌표평면과 같은 평가원식 화살촉
             registerHead(ARROW);
 
@@ -8010,7 +8010,7 @@ var SCRIPT_KEY = "MiddleMath";
             var DOT_RADIUS_MM = 0.6;
             var LABEL_GAP_MM = 0.8;
             var LEGEND_GAP_MM = 1;           // 축 범례와 축(또는 눈금 숫자·글자) 사이 간격 (그림 제작 규칙)
-            var LEGEND_LINE_HEIGHT = 1.2;    // 세로로 쌓은 범례의 줄 간격(글자 크기 배)
+            var LEGEND_LINE_HEIGHT = 1;      // 세로로 쌓은 범례의 줄 간격(글자 크기 배). 1 = 일러스트레이터 세로쓰기와 같은 간격
             var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
             registerHead(ARROW);
             var NUMBER_MODES = ["모든 눈금", "점의 좌표만", "없음"];

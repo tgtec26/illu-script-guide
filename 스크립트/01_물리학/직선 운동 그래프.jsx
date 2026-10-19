@@ -54,7 +54,6 @@ try {
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
     // 그래프가 차지하는 비율: 가로(축 길이 기준), 곡선·증가선 끝 높이, 감소선 시작 높이
-    var GRAPH_X_RATIO = 0.9;
     var Y_TOP_RATIO = 0.88;
     var Y_START_DOWN_RATIO = 0.76;
     // 곡선(점점 빠르게 증가): 시작 손잡이 길이(가로 비율)와 끝 손잡이 높이(Y_TOP 비율). 위로 볼록은 두 값을 가로·세로에 맞바꿔 쓴다
@@ -294,7 +293,8 @@ try {
 
         var g = graphGeometry({
             left: centerX - o.width * MM / 2, bottom: centerY - o.height * MM / 2,
-            width: o.width * MM, height: o.height * MM, pattern: options.pattern, yValue: o.yValue * MM
+            width: o.width * MM, height: o.height * MM, pattern: options.pattern, yValue: o.yValue * MM,
+            headLength: HEAD_CATALOG[options.headShape].length * ARROW.length * (options.headSize / 100) / HEAD_CATALOG[HEAD_EXAM].length
         });
 
         var host = rect ? rect.parent : findEditableLayer();
@@ -338,6 +338,8 @@ try {
         // 한 글자씩 세로로 쌓아 y축 끝 높이에서 시작한다
         var yLabel = makeText(group, Y_NAMES[options.yKind].split("").join("\r"));
         yLabel.name = "LabelY";
+        yLabel.textRange.characterAttributes.autoLeading = false;
+        yLabel.textRange.characterAttributes.leading = FONT_PT;   // 줄 간격 = 글자 크기의 1배(일러스트레이터 세로쓰기와 같은 간격, 그림 제작 규칙 8.2)
         placeText(yLabel, g.axes[1].tip[0] - gap, g.axes[1].tip[1], "r", "t");
 
         if (o.offsetX !== 0 || o.offsetY !== 0) group.translate(o.offsetX * MM, o.offsetY * MM);
@@ -358,12 +360,13 @@ try {
     }
 
     // 축(x축·y축: 시작, 선 끝, 화살촉 끝, 방향)과 그래프의 점 목록(pt). 축은 (left, bottom)에서 오른쪽·위쪽으로 width·height만큼.
-    // 축 선은 화살촉의 오목한 점에서 끝나 끝이 뾰족하게 보인다. 그래프는 x 방향으로 축 길이의 GRAPH_X_RATIO까지
+    // 축 선은 화살촉의 오목한 점에서 끝나 끝이 뾰족하게 보인다. 그래프는 x 방향으로 화살촉의 가장 왼쪽(축 끝에서 촉 길이 g.headLength 앞)까지
     function graphGeometry(g) {
         var notchBack = ARROW.length - ARROW.notch;
         var xTip = [g.left + g.width, g.bottom];
         var yTip = [g.left, g.bottom + g.height];
-        var spanX = g.width * GRAPH_X_RATIO;
+        // 그림 제작 규칙 7.7: 그래프의 진행은 X축 화살촉의 가장 왼쪽(촉 뒤끝)까지다
+        var spanX = g.width - g.headLength;
         var yTop = g.height * Y_TOP_RATIO;
         var points;
         if (g.pattern === 0) {

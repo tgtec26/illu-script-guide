@@ -22,7 +22,7 @@ try {
     var doc = app.activeDocument;
     var FORM_MM = 2.834645669;
     var LEGEND_GAP_MM = 1;           // 축 범례와 축(또는 눈금 숫자·글자) 사이 간격
-    var LEGEND_LINE_HEIGHT = 1.2;    // 세로로 쌓은 범례의 줄 간격(글자 크기 배)
+    var LEGEND_LINE_HEIGHT = 1;      // 세로로 쌓은 범례의 줄 간격(글자 크기 배). 1 = 일러스트레이터 세로쓰기와 같은 간격
     var FORM_KOR_FONT = formFindFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
     var FORM_ENG_FONT = formFindFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
     var FORM_ITALIC_FONT = formFindFont(["GSMediItaC1", "GSMediumB1"]);
@@ -553,7 +553,7 @@ try {
             t.head(b, d);
         };
         // (x, y)가 글자 가운데(align "left"면 왼쪽 끝, "right"면 오른쪽 끝). opts: italic 변수 글자(이탤릭), sub 글자 뒤 숫자를 아래 첨자로,
-        // stack 줄 사이를 글자 크기의 1.2배로 두고 가운데 맞춤(세로쓰기 축 범례)
+        // stack 줄 사이를 글자 크기의 LEGEND_LINE_HEIGHT배(1)로 두고 가운데 맞춤(세로쓰기 축 범례)
         t.text = function(text, x, y, size, align, opts) {
             var frame = g.textFrames.add();
             frame.contents = String(text);

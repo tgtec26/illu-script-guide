@@ -29,14 +29,14 @@ function extractVar(name) {
   return `var ${name} = ${match[1]};`;
 }
 
-const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_EXAM", "HEAD_CATALOG", "GRAPH_X_RATIO", "Y_TOP_RATIO", "Y_START_DOWN_RATIO", "CURVE_START_HANDLE", "CURVE_END_HANDLE",
+const constants = ["ARROW", "HEAD_TRIANGLE", "HEAD_EXAM", "HEAD_CATALOG", "Y_TOP_RATIO", "Y_START_DOWN_RATIO", "CURVE_START_HANDLE", "CURVE_END_HANDLE",
   "Y_CONST_MAX_RATIO", "WIDTH_RANGE", "HEIGHT_RANGE", "Y_VALUE_RANGE"];
 const names = ["graphGeometry", "catalogPoints", "arrowHeadShape", "shaftInset", "corner", "clampOptions", "clamp"];
 const lib = new Function(`${constants.map(extractVar).join("\n")}\n${names.map(extractFunction).join("\n")}\n` +
   `return {${[...constants, ...names].join(",")}};`)();
 
 const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol, `${label}: expected ${b}, got ${a}`);
-const box = {left: 100, bottom: 200, width: 90, height: 80, yValue: 50};
+const box = {left: 100, bottom: 200, width: 90, height: 80, yValue: 50, headLength: 4.84};   // 작살형 100% = 일러스트레이터 100%(12.1 × 선 0.4pt)
 const geo = (pattern) => lib.graphGeometry({...box, pattern});
 
 // 축: 원점에서 오른쪽·위쪽, 선은 화살촉의 오목한 점에서 끝나고 끝점은 축 길이만큼
@@ -73,7 +73,7 @@ const geo = (pattern) => lib.graphGeometry({...box, pattern});
 
 // 모양: 일정 / 직선 증가 / 직선 감소 / 아래로 볼록 곡선 / 위로 볼록 곡선
 {
-  const spanX = 90 * lib.GRAPH_X_RATIO;
+  const spanX = 90 - 4.84;   // 그림 제작 규칙 7.7: 그래프는 X축 화살촉의 가장 왼쪽까지 진행한다
   const top = 80 * lib.Y_TOP_RATIO;
   const flat = geo(0).graph;
   assert.deepStrictEqual([flat[0].anchor, flat[1].anchor], [[100, 250], [100 + spanX, 250]], "constant line at y value");
