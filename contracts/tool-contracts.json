@@ -2314,6 +2314,14 @@
           "type": "string",
           "default": "dash"
         },
+        "fieldArrows": {
+          "type": "string",
+          "default": "show"
+        },
+        "fieldLines": {
+          "type": "number",
+          "default": 3
+        },
         "fillColor": {
           "type": "string",
           "default": "#dcdcdc"
@@ -2322,6 +2330,14 @@
           "type": "number",
           "default": 0
         },
+        "headShape": {
+          "type": "number",
+          "default": 0
+        },
+        "headSize": {
+          "type": "number",
+          "default": 100
+        },
         "latitudes": {
           "type": "number",
           "default": 5
@@ -2329,6 +2345,18 @@
         "longitudes": {
           "type": "number",
           "default": 4
+        },
+        "magField": {
+          "type": "string",
+          "default": "hide"
+        },
+        "magTilt": {
+          "type": "number",
+          "default": 11
+        },
+        "magnet": {
+          "type": "string",
+          "default": "show"
         },
         "radius": {
           "type": "number",
