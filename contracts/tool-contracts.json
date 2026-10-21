@@ -2314,6 +2314,10 @@
           "type": "string",
           "default": "dash"
         },
+        "fillColor": {
+          "type": "string",
+          "default": "#dcdcdc"
+        },
         "gridRotation": {
           "type": "number",
           "default": 0
