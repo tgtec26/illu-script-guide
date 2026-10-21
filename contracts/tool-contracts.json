@@ -10846,45 +10846,6 @@
           "maximum": 200
         }
       }
-    },
-    "weather-front": {
-      "schemaVersion": 1,
-      "toolId": "weather-front",
-      "geometry": {
-        "lengthUnit": "mm",
-        "strokeUnit": "pt",
-        "yAxis": "up"
-      },
-      "properties": {
-        "bow": {
-          "type": "number",
-          "default": 6
-        },
-        "colorMode": {
-          "type": "string",
-          "default": "standard"
-        },
-        "frontType": {
-          "type": "string",
-          "default": "cold"
-        },
-        "gap": {
-          "type": "number",
-          "default": 4
-        },
-        "length": {
-          "type": "number",
-          "default": 40
-        },
-        "reversed": {
-          "type": "string",
-          "default": "no"
-        },
-        "size": {
-          "type": "number",
-          "default": 4
-        }
-      }
     }
   }
 }
