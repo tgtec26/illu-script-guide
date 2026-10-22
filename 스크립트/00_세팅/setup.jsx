@@ -16,7 +16,7 @@ try {
     6) 키보드 증감: 0.05mm
     7) 문자 크기/행간 증감: 1pt
     8) 고정점·핸들: 가장 크게
-    2) 기본 액션 세트 제거 + 옛 '최종훈' 세트 제거 + 내 액션(cjhaction*.aia) 로드
+    2) 기본 액션 세트 제거 + 옛 '최종훈' 세트 제거 + 내 액션(cjhaction*.aia 중 최신) 로드
 
   적용 후 현재값을 다시 읽어 alert로 자가검증한다.
 */
@@ -59,7 +59,7 @@ try {
     alert(
         "환경 세팅 완료.\n\n" + v.join("\n") +
         "\n\n※ 단위/문자증감은 일러스트 재시작 후 UI에 반영될 수 있음.\n" +
-        "※ 단축키는 [편집>키보드 단축키]에서 'cjh250907' 1회 선택 필요."
+        "※ 단축키는 [편집>키보드 단축키]에서 '" + ($.os.indexOf("Windows") >= 0 ? "cjhwin261022" : "cjhmac261022") + "' 1회 선택 필요."
     );
 
     function loadMyActions() {
@@ -80,8 +80,13 @@ try {
             for (var k = 0; k < 20; k++) {
                 try { app.unloadAction(MY_ACTION_SET, ""); removed++; } catch (e) { break; }
             }
-            app.loadAction(aias[0]);
-            return "로드됨 (" + aias[0].name + (removed > 0 ? ", 옛 '" + MY_ACTION_SET + "' 세트 " + removed + "개 교체" : "") + ")";
+            // 액션 파일이 여러 개면 이름(cjhaction_YYMMDD)이 가장 늦은 최신 파일을 쓴다
+            var latest = aias[0];
+            for (var j = 1; j < aias.length; j++) {
+                if (aias[j].name > latest.name) latest = aias[j];
+            }
+            app.loadAction(latest);
+            return "로드됨 (" + latest.name + (removed > 0 ? ", 옛 '" + MY_ACTION_SET + "' 세트 " + removed + "개 교체" : "") + ")";
         } catch (e) {
             return "실패: " + e;
         }

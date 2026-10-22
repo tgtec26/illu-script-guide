@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 $RepoUrl = "https://github.com/tgtec26/illu-script-guide.git"
 $CacheDir = Join-Path $env:USERPROFILE ".illu-script-updater\illu-script-guide"
 $SourceSubdir = "스크립트"
-$KysName = "cjh250907.kys"
+$KysName = "cjhwin261022.kys"
 $ArrowName = "화살표.ai"
 $WidthProfileName = "폭속성1.txt"
 
@@ -206,6 +206,8 @@ Get-ChildItem -Path $SourceDir -Directory | ForEach-Object {
     }
 
     # setup.jsx가 자기 폴더에서 액션 파일을 찾으므로 .aia는 실물로 함께 둔다
+    # 저장소에서 지운 옛 액션 파일이 남아 있으면 setup이 그것을 읽으므로 먼저 지운다
+    Get-ChildItem -Path $Dir -Filter *.aia -File -ErrorAction SilentlyContinue | Remove-Item -Force
     Get-ChildItem -Path $_.FullName -Filter *.aia -File -ErrorAction SilentlyContinue | ForEach-Object {
         Copy-Item -Path $_.FullName -Destination (Join-Path $Dir $_.Name) -Force
     }
@@ -340,7 +342,7 @@ Write-Host ""
 Write-Host "설치 끝. 남은 단계:"
 Write-Host "  1) 일러스트 실행"
 Write-Host "  2) 파일 > 스크립트 > setup 실행 (환경설정 + 액션 적용)"
-Write-Host "  3) 편집 > 키보드 단축키 에서 'cjh250907' 세트 1회 선택"
+Write-Host "  3) 편집 > 키보드 단축키 에서 'cjhwin261022' 세트 1회 선택"
 Write-Host "  4) 일러스트 재시작"
 Write-Host "  5) 획 패널의 프로파일 목록에 '폭 속성1'이 보이는지 확인"
 Write-Host "  6) 창 > 확장 프로그램 > 스크립트 패널 (처음이면 폴더 지정으로 스크립트 폴더 선택)"

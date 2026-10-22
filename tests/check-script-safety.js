@@ -1748,7 +1748,11 @@ for (const file of updaterFiles) {
     console.error("setup-mac.command: must prefer Korean localized Illustrator script folder");
     failures++;
   }
-  if (!source.includes('KYS_NAME="cjh250907.kys"') ||
+  if (!source.includes(`find "$dir" -maxdepth 1 -type f -name '*.aia' -delete`)) {
+    console.error("setup-mac.command: must remove old action files before copying the current one");
+    failures++;
+  }
+  if (!source.includes('KYS_NAME="cjhmac261022.kys"') ||
       !source.includes('ARROW_NAME="화살표.ai"') ||
       !source.includes('WIDTH_PROFILE_NAME="폭속성1.txt"') ||
       !source.includes('SETTINGS_BASE="$HOME/Library/Preferences/Adobe Illustrator $VER Settings"') ||
@@ -1776,6 +1780,11 @@ for (const file of updaterFiles) {
   }
   if (!source.includes("#Requires -Version 5.1")) {
     console.error("setup-windows.ps1: must explicitly support Windows PowerShell 5.1 or newer");
+    failures++;
+  }
+  if (!source.includes('$KysName = "cjhwin261022.kys"') ||
+      !source.includes("Get-ChildItem -Path $Dir -Filter *.aia -File -ErrorAction SilentlyContinue | Remove-Item -Force")) {
+    console.error("setup-windows.ps1: must install the Windows shortcut set and remove old action files");
     failures++;
   }
   if (/Write-Host\s+"완료\.[\s\S]*?Read-Host\s+"Enter 키를 누르면 닫습니다"/.test(source)) {

@@ -3,10 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.join(__dirname, '../스크립트');
-const aia = fs.readFileSync(path.join(root, '00_세팅/cjhaction_260624.aia'), 'utf8');
+// setup.jsx와 같이 이름(날짜)이 가장 늦은 액션 파일을 검사한다
+const aiaName = fs.readdirSync(path.join(root, '00_세팅')).filter((f) => f.endsWith('.aia')).sort().pop();
+const aia = fs.readFileSync(path.join(root, '00_세팅', aiaName), 'utf8');
 
-// 명령 메뉴 항목 이름(key 1818455661)은 UTF-8을 16진수로 적어 둔다
-const labels = [...aia.matchAll(/\/key 1818455661\s*\/showInPalette -1\s*\/type \(ustring\)\s*\/value \[ \d+\s*([0-9a-f\s]+?)\s*\]/g)]
+// 명령 메뉴 항목 이름(key 1818455661)은 UTF-8을 16진수로 적어 둔다. showInPalette는 저장한 일러 버전에 따라 -1 또는 4294967295
+const labels = [...aia.matchAll(/\/key 1818455661\s*\/showInPalette (?:-1|4294967295)\s*\/type \(ustring\)\s*\/value \[ \d+\s*([0-9a-f\s]+?)\s*\]/g)]
   .map((m) => Buffer.from(m[1].replace(/\s/g, ''), 'hex').toString('utf8'));
 const scriptLabels = labels.filter((l) => l.includes(': '));
 assert.ok(scriptLabels.length >= 19, `스크립트를 부르는 액션 단계가 너무 적다: ${scriptLabels.length}`);

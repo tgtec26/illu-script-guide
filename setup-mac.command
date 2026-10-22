@@ -5,7 +5,7 @@ set -euo pipefail
 REPO_URL="https://github.com/tgtec26/illu-script-guide.git"
 CACHE_DIR="$HOME/.illu-script-updater/illu-script-guide"
 SOURCE_SUBDIR="스크립트"
-KYS_NAME="cjh250907.kys"
+KYS_NAME="cjhmac261022.kys"
 ARROW_NAME="화살표.ai"
 WIDTH_PROFILE_NAME="폭속성1.txt"
 WIDTH_PROFILE_LABEL="폭 속성1"
@@ -146,6 +146,8 @@ for item in "$SOURCE_DIR"/*/; do
   done
 
   # setup.jsx가 자기 폴더에서 액션 파일을 찾으므로 .aia는 실물로 함께 둔다
+  # 저장소에서 지운 옛 액션 파일이 남아 있으면 setup이 그것을 읽으므로 먼저 지운다
+  find "$dir" -maxdepth 1 -type f -name '*.aia' -delete
   for asset in "$item"*.aia; do
     [ -f "$asset" ] || continue
     cp -f "$asset" "$dir/$(to_nfc "$(basename "$asset")")"
@@ -328,7 +330,7 @@ echo ""
 echo "Illustrator ${#APP_DIRS[@]}개 설치 끝. 아래 단계는 각 버전에서 진행하세요:"
 echo "  1) 일러스트 실행"
 echo "  2) 파일 > 스크립트 > setup 실행 (환경설정 + 액션 적용)"
-echo "  3) 편집 > 키보드 단축키 에서 'cjh250907' 세트 1회 선택"
+echo "  3) 편집 > 키보드 단축키 에서 'cjhmac261022' 세트 1회 선택"
 echo "  4) 일러스트 재시작"
 echo "  5) 획 패널의 프로파일 목록에 '폭 속성1'이 보이는지 확인"
 echo "  6) 창 > 확장 프로그램 > 스크립트 패널 (처음이면 폴더 지정으로 스크립트 폴더 선택)"

@@ -20,7 +20,10 @@ def check(names, explicit=None, version=None):
         scripts = repo / "스크립트" / "06_도형"
         scripts.mkdir(parents=True)
         (scripts / "테스트.jsx").write_text("// fixture")
-        (repo / "cjh250907.kys").write_bytes(b"test keys")
+        (repo / "스크립트" / "00_세팅").mkdir()
+        (repo / "스크립트" / "00_세팅" / "cjhaction_261022.aia").write_text("new action")
+        (repo / "cjhmac261022.kys").write_bytes(b"mac keys")
+        (repo / "cjhwin261022.kys").write_bytes(b"win keys")
         for name in names:
             app = apps / name
             (app / "Presets.localized" / "ko_KR").mkdir(parents=True)
@@ -39,6 +42,10 @@ def check(names, explicit=None, version=None):
         # Script folders are writable before setup, so sudo cannot be called.
         for name in names:
             (apps / name / "Presets.localized" / "ko_KR" / "스크립트").mkdir()
+            # An action file left by an earlier setup must not survive next to the new one.
+            old = apps / name / "Presets.localized" / "ko_KR" / "스크립트" / "00_세팅"
+            old.mkdir()
+            (old / "cjhaction_260624.aia").write_text("old action")
         result = subprocess.run(["bash", str(runner)], env=env, text=True, capture_output=True)
         assert result.returncode == 0, result.stdout + result.stderr
         expected = [explicit] if explicit else names
@@ -48,8 +55,12 @@ def check(names, explicit=None, version=None):
             if loader.exists():
                 assert str(scripts / "테스트.jsx") in loader.read_text()
         for name in expected:
+            actions = apps / name / "Presets.localized" / "ko_KR" / "스크립트" / "00_세팅"
+            assert sorted(p.name for p in actions.glob("*.aia")) == ["cjhaction_261022.aia"], result.stdout
             ver = version if explicit and version else ("31.0.0 Beta" if "Beta" in name else "30")
-            assert (home / "Library" / "Preferences" / ("Adobe Illustrator " + ver + " Settings") / "ko_KR" / "cjh250907.kys").exists(), result.stdout
+            settings = home / "Library" / "Preferences" / ("Adobe Illustrator " + ver + " Settings") / "ko_KR"
+            assert (settings / "cjhmac261022.kys").read_bytes() == b"mac keys", result.stdout
+            assert not (settings / "cjhwin261022.kys").exists(), result.stdout
 
 
 stable = "Adobe Illustrator 2026"
