@@ -1523,6 +1523,7 @@ function foldPanel(parent, title, collapsed, key) {
                 fills.push({kind: "poly", points: face.points, k: kFromShade(shadeOfViewNormal(toView(face.normal)))});
             }
             if (model.round) collectRoundFills(model, fills);
+            if (model.cutSphere) collectCutSphereFills(model.cutSphere, fills);
             return fills;
         }
 
@@ -1832,7 +1833,7 @@ function foldPanel(parent, title, collapsed, key) {
 
         // 구에서 1/4(x > 0, z > 0인 쐐기) 또는 1/8(x, y, z > 0인 팔분공간)을 잘라낸 입체. 반지름 = 가로의 절반.
         // 볼록이 아니라 가시성은 점에서 눈 쪽으로 쏜 광선이 남은 입체 안을 지나는지로 가른다.
-        // 선: 실루엣(시선에 수직인 대원 중 남은 부분), 적도(남은 부분), 자른 면의 테두리 호와 반지름 선분
+        // 선: 실루엣(시선에 수직인 대원 중 남은 부분), 적도(남은 부분), 자른 면의 테두리 호와 반지름 선분. 면은 collectCutSphereFills가 칠한다
         function buildCutSphereModel(kind, R) {
             var eighth = kind === "sphere8";
             var margin = R * 1e-4;
@@ -1879,7 +1880,8 @@ function foldPanel(parent, title, collapsed, key) {
                 curves.push(curveOf(function(t) { return [0, R * t, 0]; }, 0, 1, false));
                 curves.push(curveOf(function(t) { return [0, 0, R * t]; }, 0, 1, false));
             }
-            return {faces: [], edges: [], curves: curves, round: null, radius: R};
+            return {faces: [], edges: [], curves: curves, round: null, radius: R,
+                cutSphere: {eighth: eighth, R: R, removed: removed, silhouette: silhouette, kept: kept}};
         }
 
         // 닫힌 곡선 pointAt(0~2π)에서 cut에 든 호를 뺀 범위 [t0, t1, 닫힘]. 전부 들면 null
@@ -1910,6 +1912,148 @@ function foldPanel(parent, title, collapsed, key) {
             var t1 = refine(endIndex * step, (endIndex + 1) * step, false);
             while (t1 <= t0) t1 += 2 * Math.PI;
             return [t0, t1, false];
+        }
+
+        // 잘라낸 구: 앞을 보는 자른 면(반원·사분원)과 앞 반구에 남은 구면을 칠한다.
+        // 앞 반구의 구면은 아무것에도 가려지지 않고, 자른 면을 가리는 것은 늘 이 구면이라 자른 면 → 구면 순서로 칠한다.
+        // 구면 윤곽 = 남은 실루엣 호 + 앞 반구를 지나는 자른 면 테두리. 실루엣이 온전하면(잘라낸 곳이 통째로
+        // 앞이나 뒤) 원판을 먼저 칠하고, 앞을 보는 자른 면이 구멍 자리를 덮는다
+        function collectCutSphereFills(cs, fills) {
+            var R = cs.R;
+            var O = [0, 0, 0];
+            var faces, rim, i;
+            if (!cs.eighth) {
+                var north = [0, R, 0];
+                var south = [0, -R, 0];
+                var zRim = {pointAt: function(t) { return [R * Math.sin(t), R * Math.cos(t), 0]; }};   // 북극 → (R, 0, 0) → 남극
+                var xRim = {pointAt: function(t) { return [0, R * Math.cos(t), R * Math.sin(t)]; }};   // 북극 → (0, 0, R) → 남극
+                faces = [
+                    {normal: [0, 0, 1], segments: [arcSegment(zRim, 0, Math.PI), {kind: "line", a: south, b: north}]},
+                    {normal: [1, 0, 0], segments: [arcSegment(xRim, 0, Math.PI), {kind: "line", a: south, b: north}]}
+                ];
+                rim = [arcSegment(zRim, 0, Math.PI), arcSegment(xRim, Math.PI, 0)];
+            } else {
+                var a = [R, 0, 0];
+                var b = [0, R, 0];
+                var c = [0, 0, R];
+                var abRim = {pointAt: function(t) { return [R * Math.cos(t), R * Math.sin(t), 0]; }};
+                var bcRim = {pointAt: function(t) { return [0, R * Math.cos(t), R * Math.sin(t)]; }};
+                var caRim = {pointAt: function(t) { return [R * Math.sin(t), 0, R * Math.cos(t)]; }};
+                faces = [
+                    {normal: [0, 0, 1], segments: [{kind: "line", a: O, b: a}, arcSegment(abRim, 0, Math.PI / 2), {kind: "line", a: b, b: O}]},
+                    {normal: [1, 0, 0], segments: [{kind: "line", a: O, b: b}, arcSegment(bcRim, 0, Math.PI / 2), {kind: "line", a: c, b: O}]},
+                    {normal: [0, 1, 0], segments: [{kind: "line", a: O, b: c}, arcSegment(caRim, 0, Math.PI / 2), {kind: "line", a: a, b: O}]}
+                ];
+                rim = [arcSegment(abRim, 0, Math.PI / 2), arcSegment(bcRim, 0, Math.PI / 2), arcSegment(caRim, 0, Math.PI / 2)];
+            }
+            var faceFills = [];
+            for (i = 0; i < faces.length; i++) {
+                if (facingModel(O, faces[i].normal) <= FACING_EPSILON) continue;
+                faceFills.push({kind: "segments", segments: faces[i].segments, normal: faces[i].normal,
+                    k: kFromShade(shadeOfViewNormal(toView(faces[i].normal)))});
+            }
+            var k = kFromShade(sphereShade(cs));
+            var silhouetteCurve = {pointAt: cs.silhouette};
+            if (cs.kept[2]) {
+                fills.push({kind: "segments", segments: [arcSegment(silhouetteCurve, 0, 2 * Math.PI)], k: k});
+                for (i = 0; i < faceFills.length; i++) fills.push(faceFills[i]);
+                return;
+            }
+            // 실루엣이 잘라낸 곳으로 들어가는 점(uIn)과 나오는 점(uOut)이 테두리 고리를 둘로 나눈다. 가운데가 앞인 쪽이 구면 윤곽이다
+            var n = rim.length;
+            var uIn = rimParam(rim, cs.silhouette(cs.kept[1]));
+            var uOut = rimParam(rim, cs.silhouette(cs.kept[0]));
+            function ahead(from, to) { return to > from ? to : to + n; }
+            function midDepth(from, to) { return toView(rimPoint(rim, (from + ahead(from, to)) / 2))[2]; }
+            var chain;
+            if (midDepth(uIn, uOut) >= midDepth(uOut, uIn)) {
+                chain = rimSegments(rim, uIn, ahead(uIn, uOut));
+            } else {
+                var backward = rimSegments(rim, uOut, ahead(uOut, uIn));
+                chain = [];
+                for (i = backward.length - 1; i >= 0; i--) chain.push(arcSegment(backward[i].curve, backward[i].t1, backward[i].t0));
+            }
+            // 남은 실루엣은 나오는 점에서 들어가는 점까지 반시계로 돈다. 두 끝은 테두리 위의 점으로 맞춰 틈이 없게 한다
+            var tOut = silhouetteParam(rimPoint(rim, uOut));
+            var tIn = silhouetteParam(rimPoint(rim, uIn));
+            while (tIn <= tOut) tIn += 2 * Math.PI;
+            for (i = 0; i < faceFills.length; i++) fills.push(faceFills[i]);
+            fills.push({kind: "segments", segments: [arcSegment(silhouetteCurve, tOut, tIn)].concat(chain), k: k});
+        }
+
+        function arcSegment(curve, t0, t1) {
+            return {kind: "arc", curve: curve, t0: t0, t1: t1};
+        }
+
+        // 테두리 고리의 매개변수 u: 호 i의 비율 f에서 u = i + f
+        function rimPoint(rim, u) {
+            var i = Math.floor(u);
+            var seg = rim[i % rim.length];
+            return seg.curve.pointAt(seg.t0 + (seg.t1 - seg.t0) * (u - i));
+        }
+
+        // 고리에서 q에 가장 가까운 u: 거칠게 고른 뒤 이웃 구간에서 삼분 탐색
+        function rimParam(rim, q) {
+            var n = rim.length;
+            var steps = 360 * n;
+            function dist(u) {
+                var d = sub(rimPoint(rim, ((u % n) + n) % n), q);
+                return dot(d, d);
+            }
+            var best = 0;
+            for (var s = 1; s < steps; s++) {
+                if (dist(s * n / steps) < dist(best * n / steps)) best = s;
+            }
+            var lo = (best - 1) * n / steps;
+            var hi = (best + 1) * n / steps;
+            for (var k = 0; k < 60; k++) {
+                var m1 = lo + (hi - lo) / 3;
+                var m2 = hi - (hi - lo) / 3;
+                if (dist(m1) < dist(m2)) hi = m2; else lo = m1;
+            }
+            return (((lo + hi) / 2) % n + n) % n;
+        }
+
+        // u0에서 u1(> u0)까지 고리를 따라가는 호 조각들
+        function rimSegments(rim, u0, u1) {
+            var out = [];
+            var u = u0;
+            while (u < u1) {
+                var i = Math.floor(u);
+                var end = Math.min(u1, i + 1);
+                var seg = rim[i % rim.length];
+                out.push(arcSegment(seg.curve, seg.t0 + (seg.t1 - seg.t0) * (u - i), seg.t0 + (seg.t1 - seg.t0) * (end - i)));
+                u = end;
+            }
+            return out;
+        }
+
+        // 앞뒤 경계(깊이 0)의 점이 실루엣 대원의 어느 각도인가. 실루엣은 화면 가로·세로 방향 원이라
+        // 그 두 방향의 화면 성분으로 푼다 (관찰 각도의 사교 투영은 두 방향이 직교가 아니다)
+        function silhouetteParam(q) {
+            var ex = toView(toModel([1, 0, 0]));
+            var ey = toView(toModel([0, 1, 0]));
+            var v = toView(q);
+            var det = ex[0] * ey[1] - ex[1] * ey[0];
+            return Math.atan2((ex[0] * v[1] - ex[1] * v[0]) / det, (v[0] * ey[1] - v[1] * ey[0]) / det);
+        }
+
+        // 보이는 구면의 평균 밝기: 구면에 고르게 흩은 점 중 앞을 보고 남은 것을 화면에 보이는 넓이(깊이 성분)로 가중한다
+        function sphereShade(cs) {
+            var count = 400;
+            var golden = Math.PI * (3 - Math.sqrt(5));
+            var sum = 0;
+            var weight = 0;
+            for (var i = 0; i < count; i++) {
+                var y = 1 - 2 * (i + 0.5) / count;
+                var r = Math.sqrt(1 - y * y);
+                var normal = [r * Math.cos(golden * i), y, r * Math.sin(golden * i)];
+                var viewNormal = toView(normal);
+                if (viewNormal[2] <= 0 || cs.removed(scale(normal, cs.R))) continue;
+                sum += viewNormal[2] * shadeOfViewNormal(viewNormal);
+                weight += viewNormal[2];
+            }
+            return sum / weight;
         }
 
         // 각기둥·각뿔·각뿔대: 밑면 다각형은 XZ 평면. 밑면 회전 0이면 한 변이 정면을 보게 놓는다 (4각이면 반듯한 상자)
