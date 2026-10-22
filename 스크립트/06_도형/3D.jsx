@@ -193,7 +193,7 @@ function foldPanel(parent, title, collapsed, key) {
     var isoButton = presetRow.add("button", undefined, "등각");
     var sideButton = presetRow.add("button", undefined, "측면");
     var topButton = presetRow.add("button", undefined, "윗면");
-    var slightTopButton = presetRow.add("button", undefined, "약간 위");
+    var slightTopButton = presetRow.add("button", undefined, "15");
 
     var customRow = rotationGroup.add("group");
     customRow.alignChildren = ["left", "center"];

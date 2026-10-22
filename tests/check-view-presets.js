@@ -43,7 +43,7 @@ const parallax = listPresets(read("스크립트", "04_지구과학", "별 시차
 assert.deepStrictEqual(solid, [
   ["정면", 0, 0, 0], ["등각", 45, 35.3, 0], ["측면", 90, 0, 0], ["윗면", 0, 90, 0],
   // 요(가로 회전) 0, 롤(화면 회전) 0, 피치(위아래 기울기) 15: 정면에서 조금 위에서 내려다본다
-  ["약간 위", 0, 15, 0]
+  ["15", 0, 15, 0]
 ]);
 assert.deepStrictEqual(parallax, solid, "별 시차.jsx 시점 프리셋은 3D.jsx와 같은 값");
 

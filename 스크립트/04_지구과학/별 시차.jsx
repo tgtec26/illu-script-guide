@@ -60,7 +60,7 @@ try {
     // 시점 프리셋 (3D.jsx와 같은 값)
     var VIEW_PRESETS = [{name: "정면", y: 0, x: 0, z: 0}, {name: "등각", y: 45, x: 35.3, z: 0},
         {name: "측면", y: 90, x: 0, z: 0}, {name: "윗면", y: 0, x: 90, z: 0},
-        {name: "약간 위", y: 0, x: 15, z: 0}];
+        {name: "15", y: 0, x: 15, z: 0}];
 
     var doc = app.activeDocument;
     var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
