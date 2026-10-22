@@ -193,6 +193,7 @@ function foldPanel(parent, title, collapsed, key) {
     var isoButton = presetRow.add("button", undefined, "등각");
     var sideButton = presetRow.add("button", undefined, "측면");
     var topButton = presetRow.add("button", undefined, "윗면");
+    var slightTopButton = presetRow.add("button", undefined, "약간 위");
 
     var customRow = rotationGroup.add("group");
     customRow.alignChildren = ["left", "center"];
@@ -353,6 +354,7 @@ function foldPanel(parent, title, collapsed, key) {
     isoButton.onClick = function() { setView(45, 35.3, 0); };
     sideButton.onClick = function() { setView(90, 0, 0); };
     topButton.onClick = function() { setView(0, 90, 0); };
+    slightTopButton.onClick = function() { setView(0, 15, 0); };
     presetSaveButton.onClick = function() { setPresetSaveMode(!presetSaveMode); };
     for (presetIndex = 0; presetIndex < CUSTOM_PRESET_COUNT; presetIndex++) {
         customButtons[presetIndex].onClick = makeCustomPresetHandler(presetIndex);
