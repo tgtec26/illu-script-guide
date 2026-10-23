@@ -8,13 +8,13 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 대지 크기와 상관없이 작업물(보이는 개체 전체)만 1200ppi PNG로 내보내고, 그 이미지를 클립보드에 복사한다 (한글 등에 바로 붙여넣기)
+// 대지 크기와 상관없이 작업물(보이는 개체 전체)만 1200ppi PNG로 내보내고, 그 PNG 파일을 클립보드에 복사한다 (파일 복사와 같아 한글에 실제 크기로 붙는다)
 // PNG는 문서와 같은 폴더에 "<문서 이름>_1200ppi.png"로 남긴다 (저장 전 문서는 임시 폴더). 실행할 때마다 덮어쓴다
 // 일러스트레이터 스크립트에는 클립보드·외부 명령 기능이 없어, 임시 PowerShell 파일을 .vbs로 숨겨 실행한다(Windows 전용)
 (function() {
     var TARGET_PPI = 1200;
     var WAIT_MS = 60000;      // 클립보드 복사를 기다리는 최대 시간
-    var BACKGROUND_WHITE = true;   // 클립보드 이미지는 투명을 못 지켜 흰 배경으로 내보낸다
+    var BACKGROUND_WHITE = true;   // 흰 배경으로 내보낸다 (투명이 필요하면 false)
 
     if (app.documents.length === 0) { alert("열려있는 문서가 없습니다."); return; }
     if ($.os.indexOf("Windows") < 0) { alert("이 스크립트는 Windows에서만 클립보드에 복사할 수 있습니다."); return; }
@@ -56,15 +56,10 @@ try {
         return;
     }
     if (!pngFile.exists) { alert("PNG 파일이 만들어지지 않았습니다."); return; }
-    var copyNote = "";
-    if (saveFile !== null) {
-        try {
-            if (saveFile.exists) saveFile.remove();
-            if (!pngFile.copy(saveFile)) copyNote = "\nPNG를 문서 폴더에 저장하지 못했습니다: " + saveFile.fsName;
-        } catch (copyError) { copyNote = "\nPNG를 문서 폴더에 저장하지 못했습니다: " + copyError.message; }
-    }
+    var destFile = saveFile !== null ? saveFile : pngFile;
 
-    // 이미지를 복사본(Bitmap)으로 읽어 파일 잠금을 풀고 클립보드에 넣은 뒤, 결과를 표시 파일에 남긴다
+    // 일러의 스크립트 내보내기는 해상도 정보를 96ppi로 적는다. 1200ppi로 고쳐 다시 저장하고(한글이 실제 크기로 붙는다),
+    // 문서 폴더로 복사한 뒤, 파일 탐색기에서 파일을 복사한 것과 같이 그 파일을 클립보드에 올린다. 결과는 표시 파일에 남긴다
     var ps = [
         "$ErrorActionPreference = 'Stop'",
         "try {",
@@ -73,7 +68,12 @@ try {
         "  $bmp = New-Object System.Drawing.Bitmap($src)",
         "  $src.Dispose()",
         "  $bmp.SetResolution(" + TARGET_PPI + ", " + TARGET_PPI + ")",
-        "  [System.Windows.Forms.Clipboard]::SetImage($bmp)",
+        "  $bmp.Save(" + psQuote(pngFile.fsName) + ", [System.Drawing.Imaging.ImageFormat]::Png)",
+        "  $bmp.Dispose()",
+        "  if (" + psQuote(destFile.fsName) + " -ne " + psQuote(pngFile.fsName) + ") { Copy-Item -LiteralPath " + psQuote(pngFile.fsName) + " -Destination " + psQuote(destFile.fsName) + " -Force }",
+        "  $list = New-Object System.Collections.Specialized.StringCollection",
+        "  [void]$list.Add(" + psQuote(destFile.fsName) + ")",
+        "  [System.Windows.Forms.Clipboard]::SetFileDropList($list)",
         "  Set-Content -LiteralPath " + psQuote(markFile.fsName) + " -Value 'ok'",
         "} catch {",
         "  Set-Content -LiteralPath " + psQuote(markFile.fsName) + " -Value ('error: ' + $_.Exception.Message)",
@@ -103,8 +103,6 @@ try {
     removeFile(vbsFile);
     removeFile(markFile);
     if (!/^\s*ok/.test(result)) {
-        alert("클립보드 복사에 실패했습니다" + (result ? ": " + result : " (시간 초과)") + "\nPNG 파일: " + (saveFile !== null && saveFile.exists ? saveFile : pngFile).fsName + copyNote);
-    } else if (copyNote !== "") {
-        alert("클립보드에는 복사했습니다." + copyNote);
+        alert("클립보드 복사에 실패했습니다" + (result ? ": " + result : " (시간 초과)") + "\nPNG 파일: " + pngFile.fsName);
     }
 })();
