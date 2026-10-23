@@ -254,7 +254,7 @@ try {
 
     // --- 취소 버튼 ---
     var btnGroup = dlg.add("group");
-    btnGroup.alignment = "center";
+    btnGroup.alignment = "right";
     btnGroup.add("button", undefined, "취소", { name: "cancel" });
 
     if (typeof bindPanelFolds === "function") bindPanelFolds(dlg);

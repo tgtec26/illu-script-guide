@@ -153,7 +153,7 @@ try {
 
     // 하단 버튼
     var groupBtn = win.add("group");
-    groupBtn.alignment = ["center", "top"];
+    groupBtn.alignment = ["right", "top"];
     var chkPreview = groupBtn.add("checkbox", undefined, "미리보기");
     chkPreview.value = true;
     // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다

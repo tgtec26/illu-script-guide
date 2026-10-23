@@ -80,6 +80,7 @@ try {
     addRow(positionPanel, "세로", "offsetY", -100, 100, "mm", true);
     positionPanel.add("statictext", undefined, "양수: 오른쪽 / 위쪽 · 텍스트와 말풍선을 함께 이동");
     var footer = win.add("group");
+    footer.alignment = "right";
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
     previewCheck.value = options.preview;
     previewCheck.onClick = function() { options.preview = previewCheck.value; updatePreview(); };

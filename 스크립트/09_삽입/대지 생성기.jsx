@@ -51,7 +51,7 @@ function main() {
     inputGap.characters = 5;
 
     var groupBtns = dialog.add("group");
-    groupBtns.alignment = "center";
+    groupBtns.alignment = "right";
     // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
     var btnOk = groupBtns.add("button", undefined, "생성");
     btnOk.onClick = function() { dialog.close(1); };

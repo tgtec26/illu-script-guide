@@ -883,7 +883,7 @@ function collectStretchTargets(container, targets) {
             } else if (column) {
                 addStretchTarget(targets, child, child);
             }
-        } else if (child.type === "group" && kids && kids.length === 0 && !column && stretchFills(child) && !child.__noStretch) {
+        } else if (child.type === "group" && kids && kids.length === 0 && !column && stretchFills(child)) {
             if (container.parent && container.parent.orientation !== "row") addStretchTarget(targets, container, child);
         } else if (kids && kids.length) {
             collectStretchTargets(child, targets);

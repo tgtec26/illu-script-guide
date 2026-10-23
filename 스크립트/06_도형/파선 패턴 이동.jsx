@@ -68,7 +68,7 @@ try {
     var btnReset = btnGroup.add("button", undefined, "리셋");
 
     var closeGroup = dlg.add("group");
-    closeGroup.alignment = "center";
+    closeGroup.alignment = "right";
     var cancelBtn = closeGroup.add("button", undefined, "취소", { name: "cancel" });
     // 입력칸에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
     var okBtn = closeGroup.add("button", undefined, "확인");

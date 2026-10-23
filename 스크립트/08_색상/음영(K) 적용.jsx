@@ -89,7 +89,7 @@ try {
 
     // [버튼]
     var btnGroup = win.add("group");
-    btnGroup.alignment = "center";
+    btnGroup.alignment = "right";
     var btnOK = btnGroup.add("button", undefined, "적용", {name: "ok"});
     var btnCancel = btnGroup.add("button", undefined, "취소", {name: "cancel"});
 

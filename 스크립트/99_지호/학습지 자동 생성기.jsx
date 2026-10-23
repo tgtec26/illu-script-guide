@@ -69,7 +69,7 @@ try {
 
     // --- 3. 버튼 그룹 ---
     var grpBtn = win.add("group");
-    grpBtn.alignment = ["center", "top"];
+    grpBtn.alignment = ["right", "top"];
     grpBtn.spacing = 20;
     var btnOk = grpBtn.add("button", undefined, "만들기", {name: "ok"});
     var btnCancel = grpBtn.add("button", undefined, "취소", {name: "cancel"});

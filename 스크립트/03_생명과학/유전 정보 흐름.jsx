@@ -191,14 +191,13 @@ try {
         var footer = win.add("group");
         var previewCheck = footer.add("checkbox", undefined, "미리보기");
         previewCheck.value = true;
-        var footerSpacer = footer.add("group");
-        footerSpacer.alignment = ["fill", "center"];
-        // 확인·취소를 오른쪽에 붙이는 빈칸은 stretchRowsOnShow가 늘리지 않는다 (유전자 발현 탭에서 단추가 안 보이던 원인으로 추정, 일러 미확인)
-        footerSpacer.__noStretch = true;
+        // 확인·취소는 따로 한 줄에 두어 오른쪽에 붙인다 (빈칸을 늘리는 방식은 유전자 발현 탭에서 단추가 창 밖으로 밀렸다)
+        var buttons = win.add("group");
+        buttons.alignment = ["right", "center"];
         // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
-        var okButton = footer.add("button", undefined, "확인");
+        var okButton = buttons.add("button", undefined, "확인");
         try { win.defaultElement = null; } catch (defaultError) {}
-        var cancelButton = footer.add("button", undefined, "취소", {name: "cancel"});
+        var cancelButton = buttons.add("button", undefined, "취소", {name: "cancel"});
 
         var tabIndex = 0;
         if (engines.length > 1) {
@@ -1238,7 +1237,10 @@ try {
                 rect.stroked = true;
                 rect.strokeWidth = options.tickWidth;
                 rect.strokeColor = makeGray(100);
-                placeText(group, label, (left + right) / 2, centerY, null);
+                // 글상자가 아니라 보이는 글자 윤곽의 가운데를 박스 가운데에 맞춘다 (Ⅰ Ⅱ가 위로 뜨지 않게)
+                var frame = placeText(group, label, (left + right) / 2, centerY, null);
+                var ink = formInkBounds(frame);
+                frame.translate((left + right) / 2 - (ink[0] + ink[2]) / 2, centerY - (ink[1] + ink[3]) / 2);
             }
 
             // 코돈마다 중괄호 → 화살표 → 단백질 칸을 (켠 것만) 그린다. 단백질 칸은 가장 큰 칸 크기로 통일하고
