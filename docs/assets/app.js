@@ -441,6 +441,7 @@ const scripts = [
   { id: "visible-bounds", category: "정렬", name: "보이는 영역 정렬", file: "10_정렬/보이는 영역 정렬.jsx", summary: "기준 개체(큰/작은)를 고르고 가로 좌·중·우, 세로 상·중·하, 가로+세로 중앙 버튼을 눌러 보이는 경계 기준으로 정렬합니다.", tags: ["보이는 영역", "텍스트", "기준"] },
   { id: "leader-symbol", category: "정렬", name: "지시선 기호 정렬", file: "10_정렬/지시선 기호 정렬.jsx", summary: "사선 지시선과 기호를 함께 선택하면 지시선 연장선 위에 기호 중심을 놓고, 실제 잉크까지 0.5mm 간격을 맞춥니다.", tags: ["지시선", "정렬"] },
   { id: "output-600png", category: "내보내기", name: "600ppi PNG", file: "11_내보내기/600ppi PNG 내보내기.jsx", summary: "작업물을 600ppi PNG로 내보낼 때 사용합니다.", tags: ["PNG", "내보내기"] },
+  { id: "copy-1200png", category: "내보내기", name: "1200ppi PNG 클립보드 복사", file: "11_내보내기/1200ppi PNG 복사.jsx", summary: "활성 대지를 1200ppi PNG(흰 배경)로 내보내고 그 이미지를 클립보드에 복사합니다. 한글 등에 바로 붙여넣을 수 있습니다. Windows 전용.", tags: ["PNG", "내보내기", "클립보드", "한글"] },
   { id: "dup-anchor", category: "기타", name: "선택 앵커에 복제", file: "12_기타/선택한 앵커에 복제.jsx", summary: "선택한 앵커 위치에 개체를 복제합니다.", tags: ["앵커", "복제"] },
   { id: "downsample", category: "기타", name: "이미지 600ppi 다운샘플", file: "12_기타/이미지 600ppi 다운샘플.jsx", summary: "이미지 해상도를 600ppi 기준으로 정리할 때 사용합니다.", tags: ["이미지", "해상도"] },
   { id: "lock-all-raster", category: "기타", name: "래스터 전체 잠금", file: "12_기타/래스터 모두 잠금.jsx", summary: "문서 안 포함·링크 래스터 이미지를 제자리에서 모두 잠급니다. 이동이나 삭제 없이 잠금만 처리합니다.", tags: ["이미지", "잠금"] },
