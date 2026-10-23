@@ -193,6 +193,8 @@ try {
         previewCheck.value = true;
         var footerSpacer = footer.add("group");
         footerSpacer.alignment = ["fill", "center"];
+        // 확인·취소를 오른쪽에 붙이는 빈칸은 stretchRowsOnShow가 늘리지 않는다 (유전자 발현 탭에서 단추가 안 보이던 원인으로 추정, 일러 미확인)
+        footerSpacer.__noStretch = true;
         // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
         var okButton = footer.add("button", undefined, "확인");
         try { win.defaultElement = null; } catch (defaultError) {}
