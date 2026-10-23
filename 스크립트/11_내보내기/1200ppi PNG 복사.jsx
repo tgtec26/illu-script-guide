@@ -8,7 +8,8 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 활성 대지를 1200ppi PNG로 내보내고 그 이미지를 클립보드에 복사한다 (한글 등에 바로 붙여넣기)
+// 대지 크기와 상관없이 작업물(보이는 개체 전체)만 1200ppi PNG로 내보내고, 그 이미지를 클립보드에 복사한다 (한글 등에 바로 붙여넣기)
+// PNG는 문서와 같은 폴더에 "<문서 이름>_1200ppi.png"로 남긴다 (저장 전 문서는 임시 폴더). 실행할 때마다 덮어쓴다
 // 일러스트레이터 스크립트에는 클립보드·외부 명령 기능이 없어, 임시 PowerShell 파일을 .vbs로 숨겨 실행한다(Windows 전용)
 (function() {
     var TARGET_PPI = 1200;
@@ -21,7 +22,11 @@ try {
     // vbs는 ANSI라 한글 경로를 못 읽는다. 임시 폴더 경로에 한글이 있으면 공용 폴더를 쓴다
     var base = Folder.temp.fsName;
     if (/[^\x00-\x7F]/.test(base)) base = "C:\\Users\\Public";
+    var doc = app.activeDocument;
+    // 문서 폴더에 바로 내보내면 이름의 공백이 '-'로 바뀌어 파일을 못 찾는다. 임시 파일로 내보낸 뒤 복사한다
     var pngFile = new File(base + "\\illu_clip_" + TARGET_PPI + "ppi.png");
+    var saveFile = null;
+    try { saveFile = new File(doc.path.fsName + "\\" + doc.name.replace(/\.[^.]+$/, "") + "_" + TARGET_PPI + "ppi.png"); } catch (pathError) {}   // 저장한 적 없는 문서는 path를 읽을 수 없다
     var psFile = new File(base + "\\illu_clip_copy.ps1");
     var vbsFile = new File(base + "\\illu_clip_copy.vbs");
     var markFile = new File(base + "\\illu_clip_done.txt");
@@ -35,14 +40,13 @@ try {
     }
     function psQuote(text) { return "'" + String(text).replace(/'/g, "''") + "'"; }
 
-    var doc = app.activeDocument;
     removeFile(pngFile);
     removeFile(markFile);
 
     var options = new ExportOptionsPNG24();
     options.antiAliasing = true;
     options.transparency = !BACKGROUND_WHITE;
-    options.artBoardClipping = true;
+    options.artBoardClipping = false;   // 대지가 아니라 작업물 경계로 자른다
     options.horizontalScale = TARGET_PPI / 72.0 * 100.0;
     options.verticalScale = TARGET_PPI / 72.0 * 100.0;
     try {
@@ -52,6 +56,13 @@ try {
         return;
     }
     if (!pngFile.exists) { alert("PNG 파일이 만들어지지 않았습니다."); return; }
+    var copyNote = "";
+    if (saveFile !== null) {
+        try {
+            if (saveFile.exists) saveFile.remove();
+            if (!pngFile.copy(saveFile)) copyNote = "\nPNG를 문서 폴더에 저장하지 못했습니다: " + saveFile.fsName;
+        } catch (copyError) { copyNote = "\nPNG를 문서 폴더에 저장하지 못했습니다: " + copyError.message; }
+    }
 
     // 이미지를 복사본(Bitmap)으로 읽어 파일 잠금을 풀고 클립보드에 넣은 뒤, 결과를 표시 파일에 남긴다
     var ps = [
@@ -92,6 +103,8 @@ try {
     removeFile(vbsFile);
     removeFile(markFile);
     if (!/^\s*ok/.test(result)) {
-        alert("클립보드 복사에 실패했습니다" + (result ? ": " + result : " (시간 초과)") + "\nPNG 파일: " + pngFile.fsName);
+        alert("클립보드 복사에 실패했습니다" + (result ? ": " + result : " (시간 초과)") + "\nPNG 파일: " + (saveFile !== null && saveFile.exists ? saveFile : pngFile).fsName + copyNote);
+    } else if (copyNote !== "") {
+        alert("클립보드에는 복사했습니다." + copyNote);
     }
 })();
