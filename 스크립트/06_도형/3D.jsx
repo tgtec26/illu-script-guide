@@ -72,6 +72,8 @@ function foldPanel(parent, title, collapsed, key) {
     var fillMode = FILL_LIT;
     var brightness = 70;       // 100 - K 중간값
     var contrast = 40;         // 가장 밝은 면과 가장 어두운 면의 K 차이
+    var fillHue = 210;         // 면 색상 (°). 채도가 0이면 쓰지 않는다
+    var fillSaturation = 0;    // 면 채도 (%). 0 = 회색 (예전 그림)
     var lightAzimuth = -35;    // 광원 방위 (°). 음수 = 왼쪽
     var lightElevation = 50;   // 광원 높이 (°). 90 = 바로 위
     var offsetXmm = 0;
@@ -98,7 +100,7 @@ function foldPanel(parent, title, collapsed, key) {
     var strokeColor = makeStrokeColor();
     var documentIsCmyk = false;
     try { documentIsCmyk = doc.documentColorSpace === DocumentColorSpace.CMYK; } catch (colorSpaceError) {}
-    var kColorCache = {};       // K값별 채움색. 면마다 새로 만들지 않는다
+    var kColorCache = {};       // 색상·채도·K값별 채움색. 면마다 새로 만들지 않는다
 
     // ---- 선택 읽기 ------------------------------------------------------------
     // 엔진마다 선택을 따로 해석한다. 맞지 않으면 error에 안내문이 남고 그 탭은 꺼진다
@@ -114,7 +116,7 @@ function foldPanel(parent, title, collapsed, key) {
 
     var PREF_KEY = "Object3DLine/settings";
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-    var DEFAULTS = {rotY: rotY, rotX: rotX, rotZ: rotZ, perspectiveMm: perspectiveMm, angleR: angleR, angleL: angleL, depthPercent: depthPercent, brightness: brightness, contrast: contrast, lightAzimuth: lightAzimuth, lightElevation: lightElevation, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    var DEFAULTS = {rotY: rotY, rotX: rotX, rotZ: rotZ, perspectiveMm: perspectiveMm, angleR: angleR, angleL: angleL, depthPercent: depthPercent, brightness: brightness, contrast: contrast, fillHue: fillHue, fillSaturation: fillSaturation, lightAzimuth: lightAzimuth, lightElevation: lightElevation, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
     applySavedSettings();
     // 저장된 탭이 선택에 맞지 않으면 선택을 가장 구체적으로 쓰는 탭(회전체 > 돌출 > 입체 도형)으로 연다
     if (engines[tabIndex].error) {
@@ -268,6 +270,17 @@ function foldPanel(parent, title, collapsed, key) {
     var fillList = fillRow.add("dropdownlist", undefined, ["없음", "단일 음영", "광원 자동"]);
     fillList.selection = fillMode;
     fillList.preferredSize.width = SLIDER_WIDTH + 60;
+    var hueControl = addNumberRow(linePanel, "색상 (°)", fillHue, 0, 360, 1, 0,
+        "면 색상. 0 빨강, 120 초록, 240 파랑. 채도가 0이면 쓰지 않는다", function(value, live) {
+            fillHue = value;
+            updateLighting(live);
+        }, DEFAULTS.fillHue);
+    var saturationControl = addNumberRow(linePanel, "채도 (%)", fillSaturation, 0, 100, 1, 0,
+        "면 색의 진하기. 0이면 K값 회색. 밝기·대비·광원은 그대로 색의 밝기를 정한다", function(value, live) {
+            fillSaturation = value;
+            hueControl.row.enabled = fillMode !== FILL_NONE && fillSaturation > 0;
+            updateLighting(live);
+        }, DEFAULTS.fillSaturation);
     var brightnessControl = addNumberRow(linePanel, "밝기 (%)", brightness, 0, 100, 1, 0,
         "면 K값의 중간. 100이면 K0(흰색), 0이면 K100", function(value, live) {
             brightness = value;
@@ -503,6 +516,8 @@ function foldPanel(parent, title, collapsed, key) {
     }
 
     function syncFillRows() {
+        hueControl.row.enabled = fillMode !== FILL_NONE && fillSaturation > 0;
+        saturationControl.row.enabled = fillMode !== FILL_NONE;
         brightnessControl.row.enabled = fillMode !== FILL_NONE;
         contrastControl.row.enabled = fillMode === FILL_LIT;
         lightAzimuthControl.row.enabled = fillMode === FILL_LIT;
@@ -518,13 +533,15 @@ function foldPanel(parent, title, collapsed, key) {
             try {
                 if (previewRenderKey === renderKey(false)) return;
                 var fills = engine.previewFills();
+                var tint = tintKey();
                 if (fills && fills.length === previewFillTargets.length) {
                     for (var i = 0; i < fills.length; i++) {
                         var targets = previewFillTargets[i];
                         for (var j = 0; j < targets.length; j++) {
-                            if (targets[j].k === fills[i].k) continue;
+                            if (targets[j].k === fills[i].k && targets[j].tint === tint) continue;
                             targets[j].path.fillColor = makeKColor(fills[i].k);
                             targets[j].k = fills[i].k;
+                            targets[j].tint = tint;
                         }
                     }
                     previewRenderKey = renderKey(false);
@@ -647,7 +664,7 @@ function foldPanel(parent, title, collapsed, key) {
     }
 
     function renderKey(light) {
-        return geometryKey() + "|" + [brightness, contrast, lightAzimuth, lightElevation, light].join("|");
+        return geometryKey() + "|" + [brightness, contrast, fillHue, fillSaturation, lightAzimuth, lightElevation, light].join("|");
     }
 
     // 같은 값의 onChanging/onChange 중복은 생략. 돌출의 간소 미리보기는 손을 떼면 정밀 출력으로 바꾼다.
@@ -697,9 +714,9 @@ function foldPanel(parent, title, collapsed, key) {
 
     // 공통 항목 뒤에 엔진별 항목을 순서대로 잇는다. 엔진 항목 수가 바뀌면 v를 올린다
     function saveSettings() {
-        var parts = ["v4", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
+        var parts = ["v5", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
             offsetXmm, offsetYmm, fillMode, brightness, contrast, lightAzimuth, lightElevation,
-            angleR, angleL, depthPercent, previewEnabled ? 1 : 0];
+            angleR, angleL, depthPercent, previewEnabled ? 1 : 0, fillHue, fillSaturation];
         for (var i = 0; i < engines.length; i++) parts = parts.concat(engines[i].saveFields());
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (saveError) {}
     }
@@ -709,10 +726,11 @@ function foldPanel(parent, title, collapsed, key) {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (readError) { return; }
         if (!raw) return;
         var p = String(raw).split("|");
-        var sharedCount = p[0] === "v3" ? 18 : 19;
+        // v4까지는 색상·채도가 없다(회색). v3은 미리보기 항목도 없다
+        var sharedCount = p[0] === "v3" ? 18 : p[0] === "v4" ? 19 : 21;
         var expected = sharedCount;
         for (var i = 0; i < engines.length; i++) expected += engines[i].fieldCount;
-        if ((p[0] !== "v3" && p[0] !== "v4") || p.length !== expected) return;
+        if ((p[0] !== "v3" && p[0] !== "v4" && p[0] !== "v5") || p.length !== expected) return;
         tabIndex = restoreInteger(p[1], tabIndex, 0, p[0] === "v3" ? 3 : engines.length - 1);
         rotY = restoreNumber(p[2], rotY, -180, 180);
         rotX = restoreNumber(p[3], rotX, -180, 180);
@@ -731,6 +749,10 @@ function foldPanel(parent, title, collapsed, key) {
         angleL = restoreNumber(p[16], angleL, 91, 179);
         depthPercent = restoreNumber(p[17], depthPercent, 40, 160);
         // p[18](미리보기)은 저장만 하고 되살리지 않는다. 열 때는 항상 꺼진 상태로 시작한다
+        if (p[0] === "v5") {
+            fillHue = restoreNumber(p[19], fillHue, 0, 360);
+            fillSaturation = restoreNumber(p[20], fillSaturation, 0, 100);
+        }
         var at = sharedCount;
         for (i = 0; i < engines.length; i++) {
             engines[i].restoreFields(p.slice(at, at + engines[i].fieldCount));
@@ -995,7 +1017,7 @@ function foldPanel(parent, title, collapsed, key) {
 
     function recordFillTarget(path, k) {
         if (typeof activeFillTargets !== "undefined" && activeFillTargets !== null) {
-            activeFillTargets.push({path: path, k: k});
+            activeFillTargets.push({path: path, k: k, tint: tintKey()});
         }
     }
 
@@ -1017,10 +1039,51 @@ function foldPanel(parent, title, collapsed, key) {
         try { path.strokeJoin = StrokeJoin.MITERENDJOIN; } catch (joinError) {}
     }
 
+    // 채도가 0이면 빈 문자열: 예전과 같은 K 회색이다
+    function tintKey() {
+        return fillSaturation > 0 ? fillHue + "/" + fillSaturation : "";
+    }
+
+    // HSL(색상°, 채도 0~1, 밝기 0~1) → [r, g, b] 0~1. 웹 solid-view.js kToColor와 같은 식이다
+    function hslToRgb(hue, saturation, lightness) {
+        var c = (1 - Math.abs(2 * lightness - 1)) * saturation;
+        var h = (((hue % 360) + 360) % 360) / 60;
+        var x = c * (1 - Math.abs(h % 2 - 1));
+        var r = 0, g = 0, b = 0;
+        if (h < 1) { r = c; g = x; }
+        else if (h < 2) { r = x; g = c; }
+        else if (h < 3) { g = c; b = x; }
+        else if (h < 4) { g = x; b = c; }
+        else if (h < 5) { r = x; b = c; }
+        else { r = c; b = x; }
+        var m = lightness - c / 2;
+        return [r + m, g + m, b + m];
+    }
+
+    // 면 색: 밝기 L = 1 − K/100, 색상·채도를 입힌다. 채도 0이면 K 회색 그대로다.
+    // CMYK 문서는 그 RGB를 단순식(K = 1 − 가장 밝은 성분)으로 바꾼다
     function makeKColor(k) {
-        if (kColorCache[k]) return kColorCache[k];
+        var key = tintKey() + "|" + k;
+        if (kColorCache[key]) return kColorCache[key];
         var color;
-        if (documentIsCmyk) {
+        if (fillSaturation > 0) {
+            var rgb = hslToRgb(fillHue, Math.min(100, fillSaturation) / 100, Math.max(0, Math.min(1, 1 - k / 100)));
+            var red = Math.round(255 * rgb[0]), green = Math.round(255 * rgb[1]), blue = Math.round(255 * rgb[2]);
+            if (documentIsCmyk) {
+                color = new CMYKColor();
+                var maxChannel = Math.max(red, green, blue) / 255;
+                var black = 1 - maxChannel;
+                color.black = Math.round(black * 100);
+                color.cyan = maxChannel > 0 ? Math.round((maxChannel - red / 255) / maxChannel * 100) : 0;
+                color.magenta = maxChannel > 0 ? Math.round((maxChannel - green / 255) / maxChannel * 100) : 0;
+                color.yellow = maxChannel > 0 ? Math.round((maxChannel - blue / 255) / maxChannel * 100) : 0;
+            } else {
+                color = new RGBColor();
+                color.red = red;
+                color.green = green;
+                color.blue = blue;
+            }
+        } else if (documentIsCmyk) {
             color = new CMYKColor();
             color.cyan = 0;
             color.magenta = 0;
@@ -1033,7 +1096,7 @@ function foldPanel(parent, title, collapsed, key) {
             color.green = gray;
             color.blue = gray;
         }
-        kColorCache[k] = color;
+        kColorCache[key] = color;
         return color;
     }
 

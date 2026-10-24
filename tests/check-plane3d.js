@@ -77,18 +77,19 @@ console.log('plane3d: source safety, repeat preview, rotation, perspective and c
 // Host performance and source lifecycle: test real preview handlers with counted DOM operations.
 const previewCode = source.slice(source.indexOf('    function geometryKey()'), source.indexOf('    // 공통 항목 뒤에'));
 const lightingCode = source.slice(source.indexOf('    function updateLighting('), source.indexOf('    function setView('));
+const tintCode = source.slice(source.indexOf('    function tintKey()'), source.indexOf('    // HSL('));
 function previewHost() {
   let creates = 0, removes = 0, redraws = 0, writes = 0;
   const c = { tabIndex: 0, rotY: 45, rotX: 35.3, rotZ: 0, perspectiveOn: false, perspectiveMm: 300,
     angleR: 131, angleL: 109, depthPercent: 100, hiddenMode: 1, fillMode: 2, brightness: 70,
-    contrast: 40, lightAzimuth: -35, lightElevation: 50, offsetXmm: 0, offsetYmm: 0, MM_TO_PT: 2.834645669,
+    contrast: 40, fillHue: 210, fillSaturation: 0, lightAzimuth: -35, lightElevation: 50, offsetXmm: 0, offsetYmm: 0, MM_TO_PT: 2.834645669,
     previewEnabled: true, previewGroup: null, previewEngine: null, previewGeometryKey: '', previewRenderKey: '',
     previewIsLight: false, previewFillTargets: [], activeFillTargets: null, lastLiveRender: 0, LIVE_INTERVAL_MS: 60,
     app: { redraw() { redraws++; } }, translateItem() {}, makeKColor(k) { return k; },
     engine: { saveFields() { return [20]; }, create(light) { creates++; c.previewFillTargets = light ? [] : [[{path: { set fillColor(k) { writes++; } }, k: 30}]]; return { remove() { removes++; } }; },
       previewFills() { return [{k: 100 - c.brightness}]; } },
     counts() { return {creates, removes, redraws, writes}; } };
-  vm.createContext(c); vm.runInContext(previewCode + lightingCode, c);
+  vm.createContext(c); vm.runInContext(previewCode + lightingCode + tintCode, c);
   return c;
 }
 {
@@ -99,6 +100,11 @@ function previewHost() {
   assert.strictEqual(c.counts().writes, 1);
   c.updateLighting(false);
   assert.strictEqual(c.counts().writes, 1, 'unchanged K must not be reassigned');
+  c.fillSaturation = 60; c.updateLighting(false);
+  assert.strictEqual(c.counts().creates, 1, 'colour change must reuse geometry');
+  assert.strictEqual(c.counts().writes, 2, 'same K but new colour is repainted');
+  c.updateLighting(false);
+  assert.strictEqual(c.counts().writes, 2, 'unchanged colour must not be reassigned');
   c.rotY = 46; c.updatePreview();
   assert.strictEqual(c.counts().creates, 2, 'changed view rebuilds geometry');
   c.previewEnabled = false; c.updatePreview();
@@ -122,17 +128,23 @@ console.log('3dline preview: duplicate renders skipped, lighting reuses geometry
   c.app.preferences = { getStringPreference() { return raw; }, setStringPreference(k, value) { saved = value; } };
   vm.runInContext(prefs, c);
   c.tabIndex = 4; c.previewEnabled = false; c.saveSettings();
-  assert.ok(saved.startsWith('v4|4|'));
+  assert.ok(saved.startsWith('v5|4|'));
   raw = saved; c.previewEnabled = true; c.tabIndex = 0; c.applySavedSettings();
   assert.strictEqual(c.tabIndex, 4);
   assert.strictEqual(c.previewEnabled, true, 'saved preview flag is not restored: dialog always opens with preview off');
-  raw = saved.replace('v4|', 'v3|').split('|').slice(0, 18).join('|');
+  raw = saved.replace('v5|', 'v3|').split('|').slice(0, 18).join('|');
   c.rotX = 99; c.previewEnabled = true; c.applySavedSettings();
   assert.strictEqual(c.rotX, 35.3, 'legacy fields restored at old offsets');
   assert.strictEqual(c.previewEnabled, true, 'legacy version has no preview flag');
+  c.fillHue = 120; c.fillSaturation = 40; c.saveSettings();
+  raw = saved; c.fillHue = 0; c.fillSaturation = 0; c.applySavedSettings();
+  assert.deepStrictEqual([c.fillHue, c.fillSaturation], [120, 40], 'v5 restores colour');
+  raw = saved.replace('v5|', 'v4|').split('|').slice(0, 19).join('|'); c.rotX = 99; c.fillSaturation = 0; c.applySavedSettings();
+  assert.strictEqual(c.rotX, 35.3, 'v4 fields restored');
+  assert.strictEqual(c.fillSaturation, 0, 'v4 has no colour: stays grey');
   raw = saved + '|extra'; c.rotX = 99; c.applySavedSettings();
   assert.strictEqual(c.rotX, 99, 'wrong field count ignored');
   c.app.preferences.getStringPreference = () => {throw new Error('preference denied');};
   assert.doesNotThrow(() => c.applySavedSettings());
 }
-console.log('3dline preferences: v4 round trip, v3 migration, damaged values and read errors passed');
+console.log('3dline preferences: v5 round trip, v4·v3 migration, damaged values and read errors passed');

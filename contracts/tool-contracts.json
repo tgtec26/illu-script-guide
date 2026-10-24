@@ -10465,9 +10465,17 @@
           "type": "number",
           "default": 100
         },
+        "fillHue": {
+          "type": "number",
+          "default": 210
+        },
         "fillMode": {
           "type": "string",
           "default": "lit"
+        },
+        "fillSaturation": {
+          "type": "number",
+          "default": 0
         },
         "heightMm": {
           "type": "number",
