@@ -788,26 +788,30 @@ try {
             var templateRow = buildPanel.add("group");
             templateRow.alignChildren = ["left", "center"];
             addCaption(templateRow, "주형 가닥");
-            var templateList = templateRow.add("dropdownlist", undefined, TEMPLATE_CHOICES);
-            templateList.selection = options.templateTop ? 0 : 1;
-            templateList.helpTip = "RNA를 만드는 쪽. RNA는 주형의 반대 가닥과 같은 서열(U)이 됩니다";
-            templateList.onChange = function() {
-                if (templateList.selection === null) return;
-                options.templateTop = templateList.selection.index === 0;
-                updatePreview();
-            };
+            var templateRadios = [];
+            for (var tr = 0; tr < TEMPLATE_CHOICES.length; tr++) {
+                var templateRadio = templateRow.add("radiobutton", undefined, TEMPLATE_CHOICES[tr]);
+                templateRadio.value = (tr === 0) === options.templateTop;
+                templateRadio.helpTip = "RNA를 만드는 쪽. RNA는 주형의 반대 가닥과 같은 서열(U)이 됩니다";
+                templateRadio.onClick = makeRadioHandler(tr, function(idx) {
+                    options.templateTop = idx === 0;
+                    updatePreview();
+                });
+                templateRadios.push(templateRadio);
+            }
             var nameRow = buildPanel.add("group");
             nameRow.alignChildren = ["left", "center"];
             addCaption(nameRow, "이름 표기");
-            var nameList = nameRow.add("dropdownlist", undefined, NAME_CHOICES);
-            nameList.selection = options.nameKorean ? 0 : 1;
-            nameList.helpTip = "코돈 행과 단백질 칸의 '이름'에 쓸 표기. 한글은 2022 개정 교육과정 유전 부호표 표기";
-            nameList.onChange = function() {
-                if (nameList.selection === null) return;
-                options.nameKorean = nameList.selection.index === 0;
-                refreshCodonRows();
-                updatePreview();
-            };
+            for (var nr = 0; nr < NAME_CHOICES.length; nr++) {
+                var nameRadio = nameRow.add("radiobutton", undefined, NAME_CHOICES[nr]);
+                nameRadio.value = (nr === 0) === options.nameKorean;
+                nameRadio.helpTip = "코돈 행과 단백질 칸의 '이름'에 쓸 표기. 한글은 2022 개정 교육과정 유전 부호표 표기";
+                nameRadio.onClick = makeRadioHandler(nr, function(idx) {
+                    options.nameKorean = idx === 0;
+                    refreshCodonRows();
+                    updatePreview();
+                });
+            }
             var namesRow = buildPanel.add("group");
             namesRow.alignChildren = ["left", "center"];
             var namesCheck = namesRow.add("checkbox", undefined, "줄 이름");
@@ -968,6 +972,11 @@ try {
                     values[index] = list.selection.index;
                     updatePreview();
                 };
+            }
+
+            // 라디오 선택 번호를 apply(index)로 넘긴다
+            function makeRadioHandler(index, apply) {
+                return function() { apply(index); };
             }
 
             // 입력창 글을 options로 옮기고 아미노산이 바뀌면 코돈 행을 다시 채운다. 바뀐 게 있으면 true
