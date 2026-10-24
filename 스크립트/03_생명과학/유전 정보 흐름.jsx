@@ -714,6 +714,12 @@ try {
             var EXTRA_KEYS = ["braceGap", "dnaColor", "rnaColor"];
             var EXTRA_MINS = [0, 0, 0];
             var EXTRA_MAXS = [20, 100, 100];
+            // 박스 염기 숫자(칸 35~38): 박스 너비, 퓨린 길이, 피리미딘 길이, 박스 간격
+            var BOX_KEYS = ["boxWidth", "purineLen", "pyrimidineLen", "boxGap"];
+            var BOX_MINS = [2, 3, 2, 0];
+            var BOX_MAXS = [12, 30, 20, 3];
+            var LINE_ONLY_KEYS = ["tickLength", "baseGap", "strandGap"];   // 박스 염기에서는 박스 크기로 정해져 쓰지 않는 행
+            var PRIME_GAP_MM = 1.2;              // 골격 끝과 5′·3′ 글자 사이
 
             var doc = app.activeDocument;
             var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
@@ -721,6 +727,7 @@ try {
             var korFont = findTextFont(["SpoqaHanSansNeo-Regular", ENG_FONT_NAME]);
             var symbolFont = findTextFont(["Batang", "BatangOTF", ENG_FONT_NAME]);
             var romanFont = findRomanFont();
+            var mathFont = findTextFont(["HancomEQN", "HancomEQN-Regular", "HancomEQNRegular", ENG_FONT_NAME]);
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var DEFAULTS = defaultOptions();
             var options = readSettings();
@@ -731,6 +738,7 @@ try {
             var PREVIEW_INTERVAL_MS = 40;
             var committed = false;
             var refreshing = false;
+            var rowRefs = {};                    // 숫자 행(key → 행). 박스 염기 켜고 끌 때 행을 켜고 끈다
 
             removeLeftoverGroups();
 
@@ -826,6 +834,29 @@ try {
             var proteinCheck = belowRow.add("checkbox", undefined, "단백질 줄");
             proteinCheck.value = options.showProtein;
             proteinCheck.onClick = function() { options.showProtein = proteinCheck.value; updatePreview(); };
+            var primeRow = buildPanel.add("group");
+            primeRow.alignChildren = ["left", "center"];
+            var primeCheck = primeRow.add("checkbox", undefined, "5′ · 3′ 표시");
+            primeCheck.value = options.showPrime;
+            primeCheck.helpTip = "DNA 두 가닥과 RNA 줄 양 끝에 5′·3′을 표시합니다 (RNA는 왼쪽이 5′)";
+            primeCheck.onClick = function() {
+                options.showPrime = primeCheck.value;
+                flipCheck.enabled = options.showPrime;
+                updatePreview();
+            };
+            var flipCheck = primeRow.add("checkbox", undefined, "방향 반전");
+            flipCheck.value = options.flipDir;
+            flipCheck.enabled = options.showPrime;
+            flipCheck.helpTip = "RNA의 오른쪽이 5′ 끝이 되도록 그림을 좌우로 뒤집습니다. 염기 순서·코돈·단백질 칸도 거꾸로 놓입니다";
+            flipCheck.onClick = function() { options.flipDir = flipCheck.value; updatePreview(); };
+            var boxCheck = primeRow.add("checkbox", undefined, "박스 염기");
+            boxCheck.value = options.boxBases;
+            boxCheck.helpTip = "염기를 튀어나오거나 움푹 들어간 박스에 넣습니다. A·T(U)는 뾰족, G·C는 둥글고, 퓨린(A·G)은 길고 피리미딘(T·C·U)은 짧습니다";
+            boxCheck.onClick = function() {
+                options.boxBases = boxCheck.value;
+                refreshBoxRows();
+                updatePreview();
+            };
 
             // ---- 가릴 서열 ----
             var maskPanel = win.add("panel", undefined, "가릴 염기 번호 · 박스 문자");
@@ -870,6 +901,12 @@ try {
             addRow(gapPanel, "RNA–중괄호", "braceGap", 0, 20, "mm", false);
             addRow(gapPanel, "화살표 길이", "arrowLength", 2, 40, "mm", false);
 
+            var boxPanel = foldPanel(win, "박스 염기", true, "box");
+            addRow(boxPanel, "박스 너비", "boxWidth", 2, 12, "mm", false);
+            addRow(boxPanel, "퓨린 길이", "purineLen", 3, 30, "mm", false);
+            addRow(boxPanel, "피리미딘 길이", "pyrimidineLen", 2, 20, "mm", false);
+            addRow(boxPanel, "박스 간격", "boxGap", 0, 3, "mm", false);
+
             var positionPanel = win.add("panel", undefined, "위치");
             positionPanel.alignChildren = "fill";
             positionPanel.spacing = 2;
@@ -880,6 +917,7 @@ try {
             status.preferredSize.width = 380;
 
             refreshCodonRows();
+            refreshBoxRows();
 
             // 탭 호스트가 부르는 훅. 미리보기 체크는 호스트 것을 쓴다
             api.setPreview = function(on) { options.preview = on; updatePreview(); };
@@ -985,8 +1023,16 @@ try {
                 refreshing = false;
             }
 
+            // 박스 염기를 켜면 박스 행을 켜고, 박스 크기로 정해지는 행(연결선 길이·염기 간격·DNA 1–2)은 끈다
+            function refreshBoxRows() {
+                var i;
+                for (i = 0; i < BOX_KEYS.length; i++) rowRefs[BOX_KEYS[i]].enabled = options.boxBases;
+                for (i = 0; i < LINE_ONLY_KEYS.length; i++) rowRefs[LINE_ONLY_KEYS[i]].enabled = !options.boxBases;
+            }
+
             function addRow(panel, label, key, min, max, unit, positionOnly) {
                 var row = panel.add("group");
+                rowRefs[key] = row;
                 row.spacing = 3;
                 var caption = row.add("statictext", undefined, label + (unit ? " (" + unit + "):" : ":"));
                 caption.preferredSize.width = 80;
@@ -1116,11 +1162,16 @@ try {
                 var seq1 = strands.dna1;
                 var seq2 = strands.dna2;
                 var rna = strands.rna;
+                var boxMode = options.boxBases;
+                var flip = isFlipped();                              // 방향 반전: 그림을 좌우로 뒤집어 RNA의 오른쪽을 5′ 끝으로
+                if (flip) { seq1 = reverseText(seq1); seq2 = reverseText(seq2); rna = reverseText(rna); }
                 var fs = options.fontSize;
-                var gap = options.baseGap * mmToPt;
+                var bm = boxMetrics();
+                var rail = options.backboneWidth;                     // 골격 굵기(박스 염기에서는 박스가 골격 가장자리에 붙는다)
+                var gap = pitchPt();
                 var tick = options.tickLength * mmToPt;
-                var letterDrop = tick + fs * 0.65;                    // 골격에서 글자 중심까지
-                var boxHalf = fs * 0.7;                               // 글자 줄을 덮는 박스 반높이
+                var letterDrop = boxMode ? rail / 2 + fs * 0.6 : tick + fs * 0.65;   // 골격에서 글자 중심까지
+                var boxHalf = fs * (boxMode ? 0.55 : 0.7);            // 글자 줄을 덮는 박스 반높이
                 var braces = options.showBraces;
                 var arrows = options.showArrows;
                 var protein = options.showProtein;
@@ -1150,33 +1201,46 @@ try {
                 var processGap = LABEL_PROCESS_GAP_MM * mmToPt;       // (가)와 세로선 사이
                 var leftHalf = Math.max(centeredHalf, processWidth > 0 ? processWidth + processGap : 0);   // 세로선에서 왼쪽 끝까지
                 var leftBlock = hasLabels ? leftHalf + centeredHalf + LABEL_STRAND_GAP_MM * mmToPt : 0;
-                var width = leftBlock + count * codonWidth;
+                var primeSpace = options.showPrime ? PRIME_GAP_MM * mmToPt + fs : 0;   // 골격 끝 바깥의 5′·3′ 글자가 차지하는 폭(어림)
+                var primeLeft = Math.max(0, primeSpace - (hasLabels ? LABEL_STRAND_GAP_MM * mmToPt : 0));   // 줄 이름 칸 사이에 들어가지 않는 만큼
+                var width = leftBlock + primeLeft + count * codonWidth + primeSpace;
                 var left = viewCenter[0] - width / 2;                 // 그림 왼쪽 끝
                 var columnX = left + leftHalf;                        // 왼쪽 화살표를 놓는 세로선
-                var x0 = left + leftBlock + gap / 2;                  // 첫 염기 중심
+                var x0 = left + leftBlock + primeLeft + gap / 2;      // 첫 염기 중심
 
-                var rnaLetterOffset = options.strandGap * mmToPt + options.rnaGap * mmToPt + letterDrop;   // y1에서 RNA 글자 중심까지
-                var braceTopOffset = rnaLetterOffset + boxHalf + options.braceGap * mmToPt;
+                // 박스 염기: 두 DNA 골격 사이는 박스가 맞물리는 거리, RNA 박스는 골격 위로 서서 끝이 DNA 쪽을 향한다
+                var strandDrop = boxMode ? rail + bm.inner : options.strandGap * mmToPt;                    // DNA 1 → DNA 2 골격
+                var rnaDrop = boxMode ? rail + options.rnaGap * mmToPt + bm.lp : options.rnaGap * mmToPt;    // DNA 2 → RNA 골격
+                var rnaDir = boxMode ? 1 : -1;                        // RNA 글자·박스가 골격 위(1)로 서는지 아래(-1)로 매달리는지
+                var rnaBottomOffset = strandDrop + rnaDrop + (boxMode ? rail / 2 : letterDrop + boxHalf);    // y1에서 RNA 줄의 맨 아래까지
+                var braceTopOffset = rnaBottomOffset + options.braceGap * mmToPt;
                 var arrowStartOffset = braceTopOffset + braceDepth;
                 var arrowEndOffset = arrowStartOffset + arrowLength;
                 var proteinCenterOffset = arrowEndOffset + boxHeight / 2;
-                var height = rnaLetterOffset + boxHalf;
+                var height = rnaBottomOffset;
                 if (protein) height = proteinCenterOffset + boxHeight / 2;
                 else if (arrows) height = arrowEndOffset;
                 else if (braces) height = arrowStartOffset;
                 var y1 = viewCenter[1] + height / 2;                  // DNA 1 골격
-                var y2 = y1 - options.strandGap * mmToPt;             // DNA 2 골격
-                var y3 = y2 - options.rnaGap * mmToPt;                // RNA 골격
-                var rnaLetterY = y3 - letterDrop;
+                var y2 = y1 - strandDrop;                             // DNA 2 골격
+                var y3 = y2 - rnaDrop;                                // RNA 골격
+                var rnaLetterY = y3 + rnaDir * letterDrop;
                 var black = makeGray(100);
                 var dnaColor = makeGray(options.dnaColor);            // 골격선·연결선 색(글자는 항상 검정)
                 var rnaColor = makeGray(options.rnaColor);
                 var xs = [];
                 for (var i = 0; i < count * 3; i++) xs.push(x0 + i * gap);
 
-                drawStrand(group, seq1, xs, y1, -1, dnaColor);
-                drawStrand(group, seq2, xs, y2, 1, dnaColor);
-                drawStrand(group, rna, xs, y3, -1, rnaColor);
+                if (boxMode) {
+                    drawStrandBoxes(group, seq1, xs, y1, -1, dnaColor, bm);
+                    drawStrandBoxes(group, seq2, xs, y2, 1, dnaColor, bm);
+                    drawStrandBoxes(group, rna, xs, y3, 1, rnaColor, bm);
+                } else {
+                    drawStrand(group, seq1, xs, y1, -1, dnaColor);
+                    drawStrand(group, seq2, xs, y2, 1, dnaColor);
+                    drawStrand(group, rna, xs, y3, -1, rnaColor);
+                }
+                if (options.showPrime) drawPrimes(group, xs[0] - gap / 2, xs[xs.length - 1] + gap / 2, [y1, y2, y3], primeEnds(options.templateTop, flip));
 
                 var missing = [];
                 var rows = [y1 - letterDrop, y2 + letterDrop, rnaLetterY];
@@ -1225,12 +1289,98 @@ try {
                 }
             }
 
+            // 방향 반전은 5′·3′ 표시가 켜져 있을 때만 쓴다
+            function isFlipped() { return options.showPrime && options.flipDir; }
+
+            // 염기 간격(염기 중심 사이): 박스 염기에서는 박스 너비 + 박스 간격
+            function pitchPt() {
+                return (options.boxBases ? options.boxWidth + options.boxGap : options.baseGap) * mmToPt;
+            }
+
+            // 박스 염기의 치수(pt). d = 끝 모양 깊이(너비의 절반, 너무 짧은 박스에서는 줄임)라 맞은편 박스와 맞물린다.
+            // inner = 두 DNA 골격 가장자리 사이 거리: 퓨린 + 피리미딘 - 맞물린 깊이 + 간격
+            function boxMetrics() {
+                var w = options.boxWidth * mmToPt, lp = options.purineLen * mmToPt, lq = options.pyrimidineLen * mmToPt, g = options.boxGap * mmToPt;
+                var d = Math.min(w / 2, 0.8 * Math.min(lp, lq));
+                return {w: w, lp: lp, lq: lq, g: g, d: d, pitch: w + g, inner: lp + lq - d + g};
+            }
+
+            function reverseText(text) {
+                var out = "";
+                for (var i = text.length - 1; i >= 0; i--) out += text.charAt(i);
+                return out;
+            }
+
+            // 줄마다 [왼쪽 끝, 오른쪽 끝] 표시: [DNA 1, DNA 2, RNA]. RNA·코딩 가닥은 5′→3′이 오른쪽(방향 반전이면 왼쪽), 주형 가닥은 반대
+            function primeEnds(templateTop, flip) {
+                var prime = String.fromCharCode(0x2032);
+                var same = flip ? ["3" + prime, "5" + prime] : ["5" + prime, "3" + prime];
+                var opposite = flip ? ["5" + prime, "3" + prime] : ["3" + prime, "5" + prime];
+                return [templateTop ? opposite : same, templateTop ? same : opposite, same];
+            }
+
+            // 골격 양 끝 바깥에 5′·3′을 놓는다. 글자는 보이는 윤곽의 세로 가운데가 골격 높이에 오게 한다(윤곽은 한 번만 재고 모두에 쓴다)
+            function drawPrimes(group, leftX, rightX, ys, ends) {
+                var dy = null;
+                for (var s = 0; s < 3; s++) {
+                    for (var side = 0; side < 2; side++) {
+                        var frame = placeText(group, ends[s][side], side === 0 ? leftX : rightX, ys[s], null);
+                        if (dy === null) {
+                            var ink = formInkBounds(frame);
+                            dy = (ink[1] + ink[3]) / 2 - ys[s];
+                        }
+                        var b = frame.geometricBounds;
+                        frame.translate((side === 0 ? -1 : 1) * (PRIME_GAP_MM * mmToPt + (b[2] - b[0]) / 2), -dy);
+                    }
+                }
+            }
+
+            // 박스 염기 한 줄: 골격 가로선과 염기마다 박스·글자. dir: 박스가 자라는 쪽(-1 아래, +1 위)
+            function drawStrandBoxes(group, seq, xs, railY, dir, color, bm) {
+                var edgeY = railY + dir * options.backboneWidth / 2;       // 박스는 골격 선 가장자리에 붙는다
+                drawLine(group, xs[0] - bm.pitch / 2, railY, xs[xs.length - 1] + bm.pitch / 2, railY, options.backboneWidth, color);
+                for (var i = 0; i < seq.length; i++) drawBaseBox(group, bm, seq.charAt(i), xs[i], edgeY, dir, color);
+                for (var j = 0; j < seq.length; j++) placeText(group, seq.charAt(j), xs[j], edgeY + dir * options.fontSize * 0.6, engFont);
+            }
+
+            // 박스 한 칸. 골격 가장자리 edgeY에서 dir 쪽으로 자란다. 끝 모양: A 뾰족한 볼록, T·U 뾰족한 파임, G 둥근 볼록, C 둥근 파임.
+            // 점은 [가로, 길이, 왼쪽 핸들 가로·길이, 오른쪽 핸들 가로·길이]
+            function drawBaseBox(group, bm, base, cx, edgeY, dir, color) {
+                var hw = bm.w / 2, d = bm.d, kx = 0.5522847498 * hw, ku = 0.5522847498 * d;
+                var len = (base === "A" || base === "G") ? bm.lp : bm.lq;
+                function pt(x, u, lx, lu, rx, ru) {
+                    return lx === undefined ? [x, u, x, u, x, u] : [x, u, lx, lu, rx, ru];
+                }
+                var pts = [pt(-hw, 0), pt(hw, 0)];
+                if (base === "A") pts.push(pt(hw, len - d), pt(0, len), pt(-hw, len - d));
+                else if (base === "G") pts.push(pt(hw, len - d, hw, len - d, hw, len - d + ku), pt(0, len, kx, len, -kx, len), pt(-hw, len - d, -hw, len - d + ku, -hw, len - d));
+                else if (base === "C") pts.push(pt(hw, len, hw, len, hw, len - ku), pt(0, len - d, kx, len - d, -kx, len - d), pt(-hw, len, -hw, len - ku, -hw, len));
+                else pts.push(pt(hw, len), pt(0, len - d), pt(-hw, len));   // T·U
+                var path = group.pathItems.add();
+                var anchors = [];
+                for (var i = 0; i < pts.length; i++) anchors.push([cx + pts[i][0], edgeY + dir * pts[i][1]]);
+                path.setEntirePath(anchors);
+                for (var j = 0; j < pts.length; j++) {
+                    if (pts[j][2] === pts[j][0] && pts[j][3] === pts[j][1] && pts[j][4] === pts[j][0] && pts[j][5] === pts[j][1]) continue;
+                    path.pathPoints[j].leftDirection = [cx + pts[j][2], edgeY + dir * pts[j][3]];
+                    path.pathPoints[j].rightDirection = [cx + pts[j][4], edgeY + dir * pts[j][5]];
+                }
+                path.closed = true;
+                path.filled = true;
+                path.fillColor = makeGray(0);
+                path.stroked = true;
+                path.strokeWidth = options.tickWidth;
+                path.strokeColor = color;
+                return path;
+            }
+
             // 글자 위를 흰 사각형으로 덮고 가운데에 표시 문자를 쓴다
             function drawMask(group, xs, at, length, centerY, label) {
-                var gap = options.baseGap * mmToPt;
-                var half = options.fontSize * 0.7;
-                var left = xs[at] - gap / 2;
-                var right = xs[at + length - 1] + gap / 2;
+                var gap = pitchPt();
+                var half = options.fontSize * (options.boxBases ? 0.55 : 0.7);
+                var side = options.boxBases ? options.boxWidth * mmToPt / 2 : gap / 2;   // 박스 염기에서는 박스 가장자리까지만 덮는다
+                var left = xs[at] - side;
+                var right = xs[at + length - 1] + side;
                 var rect = group.pathItems.rectangle(centerY + half, left, right - left, half * 2);
                 rect.filled = true;
                 rect.fillColor = makeGray(0);
@@ -1248,10 +1398,12 @@ try {
             function drawBelow(group, xs, gap, count, braceTop, arrowFrom, arrowTo, braceWidth, centerY, boxHeight, lineLeft, color) {
                 var fs = options.fontSize;
                 var maxHalf = (3 * gap - 3) / 2;                      // 이웃 칸과 닿지 않는 반폭
-                var frames = [];
+                var frames = [];                                      // 왼쪽부터 센 코돈 자리 순서
+                var flip = isFlipped();
                 var natural = fs * 1.1;                               // 칸 반폭(글자 반폭 + 여백)의 최댓값
                 for (var i = 0; i < count; i++) {
-                    var cx = xs[i * 3 + 1];
+                    var col = flip ? count - 1 - i : i;               // 방향 반전이면 첫 아미노산이 오른쪽 끝
+                    var cx = xs[col * 3 + 1];
                     if (options.showBraces) drawBrace(group, bracePoints(cx - braceWidth / 2, cx + braceWidth / 2, braceTop, BRACE_HEIGHT_MM * mmToPt), options.arrowWidth, color);
                     if (options.showArrows) drawArrow(group, cx, arrowFrom, arrowTo, options.arrowWidth, color);
                     if (options.showProtein) {
@@ -1259,8 +1411,9 @@ try {
                         var text = choice === 0 ? aminoName(aaList[i], options.nameKorean) : LABELS[choice - 1];
                         var frame = placeText(group, text, cx, centerY, null);
                         var fb = frame.geometricBounds;
-                        frames.push({frame: frame, half: (fb[2] - fb[0]) / 2, boxed: choice < 2 || choice > 4});   // ⓐⓑⓒ는 글자 자체가 원이라 박스를 두지 않는다
-                        if (frames[i].boxed) natural = Math.max(natural, frames[i].half + fs * 0.45);
+                        var entry = {frame: frame, half: (fb[2] - fb[0]) / 2, boxed: choice < 2 || choice > 4};   // ⓐⓑⓒ는 글자 자체가 원이라 박스를 두지 않는다
+                        frames[col] = entry;
+                        if (entry.boxed) natural = Math.max(natural, entry.half + fs * 0.45);
                     }
                 }
                 if (!options.showProtein) return;
@@ -1370,6 +1523,9 @@ try {
                         attrs.baselineShift = 0;
                     } else if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32) {
                         attrs.textFont = korFont;
+                        attrs.baselineShift = 0;
+                    } else if (code === 0x2032) {   // ′ 는 수학 기호 서체(HancomEQN), 기준선 0
+                        attrs.textFont = mathFont;
                         attrs.baselineShift = 0;
                     } else {
                         attrs.textFont = engFont;
@@ -1582,16 +1738,18 @@ try {
                     templateTop: true, showNames: true, showBraces: true, showArrows: true, showProtein: true, nameKorean: true, names: "DNA, , RNA, (가), 단백질",
                     masks: ["1-3", "4-9", "4-9"], labels: [0, 7, 8],
                     backboneWidth: 1, tickWidth: 0.3, tickLength: 3, arrowWidth: 0.5, fontSize: 10,
-                    baseGap: 6, strandGap: 16, rnaGap: 14, arrowLength: 7, offsetX: 0, offsetY: 0, braceGap: 1.5, dnaColor: 100, rnaColor: 50, preview: true };
+                    baseGap: 6, strandGap: 16, rnaGap: 14, arrowLength: 7, offsetX: 0, offsetY: 0, braceGap: 1.5, dnaColor: 100, rnaColor: 50, preview: true,
+                    showPrime: false, flipDir: false, boxBases: false, boxWidth: 5.4, purineLen: 12.5, pyrimidineLen: 7, boxGap: 0.6 };
             }
 
-            // v6: 숫자 11개, 주형·줄 이름 표시·단백질 줄 표시(0/1), 줄 이름, 아미노산 서열, 코돈 선택·단백질 칸(쉼표 목록),
-            //     가릴 염기 번호 3개(예: 1~5, 8~10), 박스 문자 번호 3개, 미리보기(0/1), 한글 이름(0/1), 중괄호·화살표 표시(0/1), 덧붙인 숫자 3개
+            // v7: 숫자 11개, 주형·줄 이름 표시·단백질 줄 표시(0/1), 줄 이름, 아미노산 서열, 코돈 선택·단백질 칸(쉼표 목록),
+            //     가릴 염기 번호 3개(예: 1~5, 8~10), 박스 문자 번호 3개, 미리보기(0/1), 한글 이름(0/1), 중괄호·화살표 표시(0/1), 덧붙인 숫자 3개,
+            //     5′·3′ 표시·방향 반전·박스 염기(0/1), 박스 숫자 4개
             function readSettings() {
                 var result = defaultOptions();
                 try {
                     var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-                    if (p[0] !== "v6" || p.length !== 32) return result;
+                    if (p[0] !== "v7" || p.length !== 39) return result;
                     for (var i = 0; i < NUMBER_KEYS.length; i++) {
                         var value = Number(p[i + 1]);
                         if (!/\S/.test(p[i + 1]) || !isFinite(value) || value < NUMBER_MINS[i] || value > NUMBER_MAXS[i]) return result;
@@ -1600,7 +1758,14 @@ try {
                         var extra = Number(p[29 + e]);
                         if (!/\S/.test(p[29 + e]) || !isFinite(extra) || extra < EXTRA_MINS[e] || extra > EXTRA_MAXS[e]) return result;
                     }
-                    if (!/^[01]$/.test(p[12]) || !/^[01]$/.test(p[13]) || !/^[01]$/.test(p[14]) || !/^[01]$/.test(p[25]) || !/^[01]$/.test(p[26]) || !/^[01]$/.test(p[27]) || !/^[01]$/.test(p[28])) return result;
+                    for (var bx = 0; bx < BOX_KEYS.length; bx++) {
+                        var boxValue = Number(p[35 + bx]);
+                        if (!/\S/.test(p[35 + bx]) || !isFinite(boxValue) || boxValue < BOX_MINS[bx] || boxValue > BOX_MAXS[bx]) return result;
+                    }
+                    var flagFields = [12, 13, 14, 25, 26, 27, 28, 32, 33, 34];
+                    for (var fl = 0; fl < flagFields.length; fl++) {
+                        if (!/^[01]$/.test(p[flagFields[fl]])) return result;
+                    }
                     var parsed = parseAminoAcids(p[16]);
                     if (parsed.error !== null || parsed.list.length > MAX_AMINO) return result;
                     var picks = readList(p[17], MAX_AMINO, 5);
@@ -1626,6 +1791,10 @@ try {
                     result.showBraces = p[27] === "1";
                     result.showArrows = p[28] === "1";
                     for (var x = 0; x < EXTRA_KEYS.length; x++) result[EXTRA_KEYS[x]] = Number(p[29 + x]);
+                    result.showPrime = p[32] === "1";
+                    result.flipDir = p[33] === "1";
+                    result.boxBases = p[34] === "1";
+                    for (var y = 0; y < BOX_KEYS.length; y++) result[BOX_KEYS[y]] = Number(p[35 + y]);
                 } catch (e) {}
                 return result;
             }
@@ -1644,14 +1813,16 @@ try {
 
             function saveSettings() {
                 try {
-                    var parts = ["v6"];
+                    var parts = ["v7"];
                     for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
                     parts.push(options.templateTop ? 1 : 0, options.showNames ? 1 : 0, options.showProtein ? 1 : 0,
                         options.names, options.aaText, options.picks.join(","), options.proteins.join(","),
                         options.masks[0], options.masks[1], options.masks[2],
                         options.labels[0], options.labels[1], options.labels[2], options.preview ? 1 : 0, options.nameKorean ? 1 : 0,
                         options.showBraces ? 1 : 0, options.showArrows ? 1 : 0,
-                        options.braceGap, options.dnaColor, options.rnaColor);
+                        options.braceGap, options.dnaColor, options.rnaColor,
+                        options.showPrime ? 1 : 0, options.flipDir ? 1 : 0, options.boxBases ? 1 : 0);
+                    for (var b = 0; b < BOX_KEYS.length; b++) parts.push(options[BOX_KEYS[b]]);
                     app.preferences.setStringPreference(PREF_KEY, parts.join("|"));
                 } catch (e) {}
             }
