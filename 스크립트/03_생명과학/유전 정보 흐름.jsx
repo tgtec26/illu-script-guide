@@ -835,7 +835,7 @@ try {
             braceCheck.onClick = function() { options.showBraces = braceCheck.value; updatePreview(); };
             var arrowCheck = belowRow.add("checkbox", undefined, "화살표");
             arrowCheck.value = options.showArrows;
-            arrowCheck.helpTip = "코돈 중괄호 아래 화살표, 왼쪽 줄 이름 사이 화살표, 오른쪽 DNA–RNA 사이 화살표";
+            arrowCheck.helpTip = "코돈 중괄호 아래 화살표, 왼쪽 과정 이름 사이 화살표, 그림 가운데 DNA–RNA 사이 화살표";
             arrowCheck.onClick = function() { options.showArrows = arrowCheck.value; updatePreview(); };
             var proteinCheck = belowRow.add("checkbox", undefined, "단백질 줄");
             proteinCheck.value = options.showProtein;
@@ -1318,13 +1318,20 @@ try {
                 }
 
                 if (arrows) {
-                    // 오른쪽 DNA–RNA 화살표: 마지막 코돈의 가운데 염기 자리에서 DNA 2 아래·RNA 위(박스 염기는 RNA 박스 끝)를 1mm씩 띄운다
-                    var rightBase = rna.charAt(xs.length - 2);
-                    var rnaRightLen = boxMode ? ((rightBase === "A" || rightBase === "G") ? bm.lp : bm.lq) : 0;
+                    // DNA–RNA 화살표: 그림 가운데 세로선에 놓고, DNA 2 아래·RNA 위(박스 염기는 가운데를 덮는 RNA 박스 끝)를 1mm씩 띄운다
+                    var strandX = (xs[0] + xs[xs.length - 1]) / 2;
+                    var rnaTopLen = 0;
+                    if (boxMode) {
+                        for (var bi = 0; bi < xs.length; bi++) {
+                            if (Math.abs(xs[bi] - strandX) >= bm.w / 2) continue;
+                            var rb = rna.charAt(bi);
+                            rnaTopLen = Math.max(rnaTopLen, (rb === "A" || rb === "G") ? bm.lp : bm.lq);
+                        }
+                    }
                     var strandGap = STRAND_ARROW_GAP_MM * mmToPt;
                     var arrowFromY = y2 - rail / 2 - strandGap;
-                    var arrowTipY = y3 + rail / 2 + rnaRightLen + strandGap;
-                    if (arrowFromY > arrowTipY) drawArrow(group, xs[xs.length - 2], arrowFromY, arrowTipY, options.arrowWidth, black);
+                    var arrowTipY = y3 + rail / 2 + rnaTopLen + strandGap;
+                    if (arrowFromY > arrowTipY) drawArrow(group, strandX, arrowFromY, arrowTipY, options.arrowWidth, black);
                 }
 
                 if (hasLabels) {
@@ -1799,7 +1806,7 @@ try {
             // 첨부 그림(기출형)을 처음 값으로 한다: Gly Arg Glu, 주형은 위 가닥, DNA 1의 염기 1~3·DNA 2와 RNA의 염기 4~9를 가림
             function defaultOptions() {
                 return { aaText: "Gly Arg Glu", picks: [2, 0, 0, 0, 0, 0, 0, 0], proteins: [2, 1, 5, 0, 0, 0, 0, 0],
-                    templateTop: true, showNames: true, showBraces: true, showArrows: true, showProtein: true, nameKorean: true, names: "DNA, , RNA, (가), 단백질",
+                    templateTop: true, showNames: true, showBraces: true, showArrows: true, showProtein: true, nameKorean: true, names: "DNA, 전사, RNA, 번역, 단백질",
                     masks: ["1-3", "4-9", "4-9"], labels: [[0, 0, 0, 0, 0, 0, 0, 0], [7, 0, 0, 0, 0, 0, 0, 0], [8, 0, 0, 0, 0, 0, 0, 0]],
                     backboneWidth: 1, tickWidth: 0.3, tickLength: 3, arrowWidth: 0.5, fontSize: 10,
                     baseGap: 6, strandGap: 16, rnaGap: 14, arrowLength: 7, offsetX: 0, offsetY: 0, braceGap: 1.5, dnaColor: 100, rnaColor: 50, preview: true,
