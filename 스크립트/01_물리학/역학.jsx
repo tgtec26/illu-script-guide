@@ -2888,12 +2888,13 @@ try {
 
         // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번)
         function fitsRadioChoice(items) {
-            var total = 0;
+            // 라벨 폭 어림(한글 12px, 그 밖 7px, 단추당 34px). 넘칠 만하면 드롭다운으로 둔다
+            var width = items.length * 34;
             for (var i = 0; i < items.length; i++) {
-                if (String(items[i]).length > 14) return false;
-                total += String(items[i]).length;
+                var text = String(items[i]);
+                for (var c = 0; c < text.length; c++) width += text.charCodeAt(c) > 255 ? 12 : 7;
             }
-            return items.length <= 3 && total <= 22;
+            return items.length <= 3 && width <= 255;
         }
 
         function addRadioChoice(parent, items) {

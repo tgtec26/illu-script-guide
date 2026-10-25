@@ -1391,8 +1391,8 @@ var SCRIPT_KEY = "HighMath2";
             fInput.helpTip = "y=x^3-3x, y=-x^3+3x^2, y=x^4-2x^2, y=x+1/x, y=x e^x. ^는 거듭제곱";
             var modeRow = functionPanel.add("group");
             modeRow.add("statictext", undefined, "그림:");
-            var modeList = addRadioChoice(modeRow, MODES);
-            setRadioChoice(modeList, mode);
+            var modeList = modeRow.add("dropdownlist", undefined, MODES);
+            modeList.selection = mode;
 
             var markPanel = addPanel(win, "표시", "fold1");
             addCheckRow(markPanel, [["extrema", "극대·극소 점"], ["values", "극값 글자"], ["flat", "수평 접선"]]);
@@ -1436,7 +1436,7 @@ var SCRIPT_KEY = "HighMath2";
             var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
 
             fInput.onChanging = function() { fText = fInput.text; updatePreview(); };
-            modeList.onChange = function() { mode = modeList.index; updatePreview(); };
+            modeList.onChange = function() { mode = modeList.selection ? modeList.selection.index : 0; updatePreview(); };
             bindValueRow(xMinControls, function(value) { xMin = value; }, defaults.xMin);
             bindValueRow(xMaxControls, function(value) { xMax = value; }, defaults.xMax);
             bindValueRow(yMinControls, function(value) { yMin = value; }, defaults.yMin);

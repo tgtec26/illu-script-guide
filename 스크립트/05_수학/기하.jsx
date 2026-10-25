@@ -5162,8 +5162,8 @@ var SCRIPT_KEY = "HighGeometry";
             var shapePanel = addPanel(win, "그림");
             var modeRow = shapePanel.add("group");
             modeRow.add("statictext", undefined, "종류:");
-            var modeList = addRadioChoice(modeRow, MODES);
-            setRadioChoice(modeList, mode);
+            var modeList = modeRow.add("dropdownlist", undefined, MODES);
+            modeList.selection = mode;
             var planeControls = addValueRow(shapePanel, "평면 너비", "mm", planeMm, 30, 120, 1, 0);
             var thetaControls = addValueRow(shapePanel, "각 θ", "°", thetaDeg, 5, 85, 1, 0);
             var lengthControls = addValueRow(shapePanel, "선분 AB", "mm", lengthMm, 10, 100, 1, 0);
@@ -5202,7 +5202,7 @@ var SCRIPT_KEY = "HighGeometry";
 
             refreshEnabled();
             modeList.onChange = function() {
-                mode = modeList.index;
+                mode = modeList.selection ? modeList.selection.index : 0;
                 refreshEnabled();
                 updatePreview();
             };
