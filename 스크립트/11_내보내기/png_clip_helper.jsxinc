@@ -3,8 +3,8 @@
 // (탐색기에서 파일을 복사한 것과 같아 한글에 실제 크기로 붙는다). PNG는 문서와 같은 폴더에 "<문서 이름>_<ppi>ppi.png"로 남긴다
 // (저장 전 문서는 임시 폴더). 실행할 때마다 덮어쓴다.
 // 일러스트레이터 스크립트에는 클립보드·외부 명령 기능이 없어, 임시 PowerShell 파일을 .vbs로 숨겨 실행한다(Windows 전용)
+// 일러는 PowerShell을 기다리지 않고 바로 끝난다. 기다리면 일러가 멈춘 채 시간 초과가 날 수 있어서, 실패는 PowerShell이 메시지 상자로 알린다
 function exportPngToClipboard(TARGET_PPI) {
-    var WAIT_MS = 60000;      // 클립보드 복사를 기다리는 최대 시간
     if (app.documents.length === 0) { alert("열려있는 문서가 없습니다."); return; }
     if ($.os.indexOf("Windows") < 0) { alert("이 스크립트는 Windows에서만 클립보드에 복사할 수 있습니다."); return; }
 
@@ -18,7 +18,6 @@ function exportPngToClipboard(TARGET_PPI) {
     try { saveFile = new File(doc.path.fsName + "\\" + doc.name.replace(/\.[^.]+$/, "") + "_" + TARGET_PPI + "ppi.png"); } catch (pathError) {}   // 저장한 적 없는 문서는 path를 읽을 수 없다
     var psFile = new File(base + "\\illu_clip_copy.ps1");
     var vbsFile = new File(base + "\\illu_clip_copy.vbs");
-    var markFile = new File(base + "\\illu_clip_done.txt");
 
     function removeFile(f) { try { if (f.exists) f.remove(); } catch (e) {} }
     function writeFile(f, text, encoding) {
@@ -30,7 +29,7 @@ function exportPngToClipboard(TARGET_PPI) {
     function psQuote(text) { return "'" + String(text).replace(/'/g, "''") + "'"; }
 
     removeFile(pngFile);
-    removeFile(markFile);
+    removeFile(psFile);   // 이전 실행의 PowerShell 파일(실행이 끝나면 남을 수 있다)
 
     var options = new ExportOptionsPNG24();
     options.antiAliasing = true;
@@ -48,9 +47,10 @@ function exportPngToClipboard(TARGET_PPI) {
     var destFile = saveFile !== null ? saveFile : pngFile;
 
     // 일러의 스크립트 내보내기는 해상도 정보를 96ppi로 적는다. TARGET_PPI로 고쳐 다시 저장하고(한글이 실제 크기로 붙는다),
-    // 문서 폴더로 복사한 뒤, 파일 탐색기에서 파일을 복사한 것과 같이 그 파일을 클립보드에 올린다. 결과는 표시 파일에 남긴다
+    // 문서 폴더로 복사한 뒤, 파일 탐색기에서 파일을 복사한 것과 같이 그 파일을 클립보드에 올린다. 실패하면 메시지 상자로 알린다
     var ps = [
         "$ErrorActionPreference = 'Stop'",
+        "Remove-Item -LiteralPath " + psQuote(vbsFile.fsName) + " -Force -ErrorAction SilentlyContinue",
         "try {",
         "  Add-Type -AssemblyName System.Windows.Forms, System.Drawing",
         "  $src = [System.Drawing.Image]::FromFile(" + psQuote(pngFile.fsName) + ")",
@@ -63,9 +63,9 @@ function exportPngToClipboard(TARGET_PPI) {
         "  $list = New-Object System.Collections.Specialized.StringCollection",
         "  [void]$list.Add(" + psQuote(destFile.fsName) + ")",
         "  [System.Windows.Forms.Clipboard]::SetFileDropList($list)",
-        "  Set-Content -LiteralPath " + psQuote(markFile.fsName) + " -Value 'ok'",
         "} catch {",
-        "  Set-Content -LiteralPath " + psQuote(markFile.fsName) + " -Value ('error: ' + $_.Exception.Message)",
+        "  Add-Type -AssemblyName System.Windows.Forms",
+        "  [void][System.Windows.Forms.MessageBox]::Show('클립보드 복사에 실패했습니다: ' + $_.Exception.Message + [Environment]::NewLine + " + psQuote("PNG 파일: " + pngFile.fsName) + ", " + psQuote(TARGET_PPI + "ppi PNG 복사") + ")",
         "}"
     ].join("\r\n");
     var vbs = 'CreateObject("WScript.Shell").Run "powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File ""' +
@@ -76,22 +76,5 @@ function exportPngToClipboard(TARGET_PPI) {
         vbsFile.execute();
     } catch (runError) {
         alert("클립보드 복사를 시작하지 못했습니다: " + runError.message + "\nPNG 파일: " + pngFile.fsName);
-        return;
-    }
-
-    var waited = 0;
-    while (!markFile.exists && waited < WAIT_MS) { $.sleep(200); waited += 200; }
-    var result = "";
-    if (markFile.exists) {
-        markFile.encoding = "UTF-8";
-        markFile.open("r");
-        result = markFile.read();
-        markFile.close();
-    }
-    removeFile(psFile);
-    removeFile(vbsFile);
-    removeFile(markFile);
-    if (!/^\s*ok/.test(result)) {
-        alert("클립보드 복사에 실패했습니다" + (result ? ": " + result : " (시간 초과)") + "\nPNG 파일: " + pngFile.fsName);
     }
 }
