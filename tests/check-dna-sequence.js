@@ -136,9 +136,9 @@ assert.deepStrictEqual(g.splitNames("", 5), ["", "", "", "", ""]);
   assert.ok(narrow[2].anchor[0] >= narrow[1].anchor[0] - 1e-9, "shoulders stay ordered");
 }
 
-// 설정 문자열: v7, 39칸. 저장 칸 수와 읽는 칸 수가 같다
+// 설정 문자열: v8, 39칸. 저장 칸 수와 읽는 칸 수가 같다
 {
-  assert.ok(source.includes('p[0] !== "v7" || p.length !== 39'), "settings string must be v7 with 39 fields");
+  assert.ok(source.includes('p[0] !== "v8" || p.length !== 39'), "settings string must be v7 with 39 fields");
   assert.strictEqual((source.match(/join\("\|"\)/g) || []).length, 1, "one saveSettings join");
   const keys = source.match(/var NUMBER_KEYS = \[([^\]]*)\]/)[1].split(",").length;
   assert.strictEqual(keys, 11);
@@ -147,7 +147,7 @@ assert.deepStrictEqual(g.splitNames("", 5), ["", "", "", "", ""]);
   const boxKeys = source.match(/var BOX_KEYS = \[([^\]]*)\]/)[1].split(",").length;
   assert.strictEqual(1 + keys + 17 + extra + 3 + boxKeys, 39);
     // 저장하는 태그와 읽는 태그가 같아야 저장한 옵션이 복원된다
-  assert.ok(source.includes('var parts = ["v7"];'), "saveSettings tag must match readSettings tag");
+  assert.ok(source.includes('var parts = ["v8"];'), "saveSettings tag must match readSettings tag");
   // 읽기 전에 써야 하는 상수가 readSettings 호출(var options = readSettings();)보다 위에 있다
   const call = source.indexOf("var options = readSettings();");
   for (const name of ["NUMBER_KEYS", "NUMBER_MINS", "NUMBER_MAXS", "EXTRA_KEYS", "EXTRA_MINS", "EXTRA_MAXS", "BOX_KEYS", "BOX_MINS", "BOX_MAXS", "MAX_AMINO", "PROTEIN_CHOICES"]) {

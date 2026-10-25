@@ -695,8 +695,10 @@ try {
             var ENG_FONT_NAME = "GSMediumB1";
             var MAX_AMINO = 8;                   // 코돈 행 수(아미노산 최대 개수)
             var BRACE_HEIGHT_MM = 3;             // 코돈 중괄호 높이
+            var MAX_RANGES = 8;                  // 가릴 구간 최대 개수(구간마다 기호 드롭다운 하나)
             var LABEL_STRAND_GAP_MM = 8.5;       // 줄 이름 칸과 염기 줄 사이
             var LABEL_PROCESS_GAP_MM = 1.5;      // 과정 이름(가)와 왼쪽 화살표 사이
+            var STRAND_ARROW_GAP_MM = 1;         // 오른쪽 DNA–RNA 화살표와 DNA 2·RNA 사이
             // 작살형 화살촉(끝이 원점, 뒤쪽이 +y, 선 두께 1pt 기준 pt). 선은 lineEnd만큼 줄인다
             var ARROW_HEAD = {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]};
             var LABELS = ["?",
@@ -833,7 +835,7 @@ try {
             braceCheck.onClick = function() { options.showBraces = braceCheck.value; updatePreview(); };
             var arrowCheck = belowRow.add("checkbox", undefined, "화살표");
             arrowCheck.value = options.showArrows;
-            arrowCheck.helpTip = "코돈 중괄호 아래 화살표와 왼쪽 줄 이름 사이 화살표";
+            arrowCheck.helpTip = "코돈 중괄호 아래 화살표, 왼쪽 줄 이름 사이 화살표, 오른쪽 DNA–RNA 사이 화살표";
             arrowCheck.onClick = function() { options.showArrows = arrowCheck.value; updatePreview(); };
             var proteinCheck = belowRow.add("checkbox", undefined, "단백질 줄");
             proteinCheck.value = options.showProtein;
@@ -868,6 +870,7 @@ try {
             maskPanel.spacing = 2;
             maskPanel.margins = [8, 12, 8, 6];
             var maskInputs = [];
+            var maskLabelLists = [];
             for (var m = 0; m < 3; m++) {
                 var maskRow = maskPanel.add("group");
                 maskRow.alignChildren = ["left", "center"];
@@ -878,10 +881,16 @@ try {
                 maskInput.helpTip = "그 줄의 왼쪽부터 센 염기 번호. 예: 1~5, 8~10 (쉼표로 여러 구간). 비우면 가리지 않음";
                 maskInput.onChange = function() { applyInputs(); };
                 maskInputs.push(maskInput);
-                var labelList = maskRow.add("dropdownlist", undefined, LABELS);
-                labelList.selection = options.labels[m];
-                labelList.helpTip = "박스 안에 쓸 문자";
-                labelList.onChange = makePickHandler(m, labelList, options.labels);
+                var lists = [];
+                for (var q = 0; q < MAX_RANGES; q++) {
+                    var labelList = maskRow.add("dropdownlist", undefined, LABELS);
+                    labelList.selection = options.labels[m][q];
+                    labelList.helpTip = "구간 " + (q + 1) + "의 박스 안에 쓸 문자 (쉼표 순서대로)";
+                    labelList.onChange = makePickHandler(q, labelList, options.labels[m]);
+                    labelList.visible = false;
+                    lists.push(labelList);
+                }
+                maskLabelLists.push(lists);
                 var maskButton = maskRow.add("button", undefined, "완료");
                 maskButton.preferredSize.width = 50;
                 maskButton.applyTo = maskInput;
@@ -922,12 +931,14 @@ try {
 
             refreshCodonRows();
             refreshBoxRows();
+            refreshMaskRows(false);
 
             // 탭 호스트가 부르는 훅. 미리보기 체크는 호스트 것을 쓴다
             api.setPreview = function(on) { options.preview = on; updatePreview(); };
             api.updatePreview = function() { updatePreview(); };
             api.clearPreview = function() { if (!committed) clearPreview(); };
             api.commit = function() {
+                if (maskTooMany()) return false;
                 var parsedNow = parseAminoAcids(seqInput.text);
                 if (parsedNow.error !== null) {
                     status.text = parsedNow.error;
@@ -981,6 +992,7 @@ try {
 
             // 입력창 글을 options로 옮기고 아미노산이 바뀌면 코돈 행을 다시 채운다. 바뀐 게 있으면 true
             function applyInputs(quiet) {
+                if (maskTooMany()) return false;
                 var changed = false;
                 var parsed = parseAminoAcids(seqInput.text);
                 if (parsed.error !== null) {
@@ -998,10 +1010,12 @@ try {
                     changed = true;
                 }
                 if (namesInput.text !== options.names) { options.names = namesInput.text.replace(/\|/g, ""); changed = true; }
+                var maskChanged = false;
                 for (var i = 0; i < 3; i++) {
                     var mask = maskInputs[i].text.replace(/[^0-9~\-–, ]/g, "");
-                    if (mask !== options.masks[i]) { options.masks[i] = mask; changed = true; }
+                    if (mask !== options.masks[i]) { options.masks[i] = mask; changed = true; maskChanged = true; }
                 }
+                if (maskChanged) refreshMaskRows(true);
                 if (changed && quiet !== true) updatePreview();
                 return changed;
             }
@@ -1037,6 +1051,37 @@ try {
                 var i;
                 for (i = 0; i < BOX_KEYS.length; i++) rowRefs[BOX_KEYS[i]].enabled = options.boxBases;
                 for (i = 0; i < LINE_ONLY_KEYS.length; i++) rowRefs[LINE_ONLY_KEYS[i]].enabled = !options.boxBases;
+            }
+
+            // 가릴 구간이 기호 드롭다운 수(MAX_RANGES)보다 많으면 알리고 막는다
+            function maskTooMany() {
+                for (var i = 0; i < 3; i++) {
+                    if (maskRangeCount(maskInputs[i].text) > MAX_RANGES) {
+                        status.text = "가릴 구간은 " + MAX_RANGES + "개까지 입력할 수 있습니다.";
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // 쉼표로 나눈 구간 수(빈 칸은 0)
+            function maskRangeCount(text) {
+                var s = String(text).replace(/\s+/g, "");
+                return s === "" ? 0 : s.split(",").length;
+            }
+
+            // 줄마다 구간 수만큼 기호 드롭다운을 보이고 나머지는 숨긴다. relayout이면 창을 다시 배치한다
+            function refreshMaskRows(relayout) {
+                refreshing = true;
+                for (var m = 0; m < 3; m++) {
+                    var n = maskRangeCount(options.masks[m]);
+                    for (var q = 0; q < MAX_RANGES; q++) {
+                        maskLabelLists[m][q].visible = q < n;
+                        maskLabelLists[m][q].selection = options.labels[m][q];
+                    }
+                }
+                refreshing = false;
+                if (relayout) win.layout.layout(true);
             }
 
             function addRow(panel, label, key, min, max, unit, positionOnly) {
@@ -1258,7 +1303,7 @@ try {
                     if (ranges === null) continue;
                     if (ranges.error) { missing.push(maskNames[k]); continue; }
                     for (var q = 0; q < ranges.list.length; q++) {
-                        drawMask(group, xs, ranges.list[q].from - 1, ranges.list[q].to - ranges.list[q].from + 1, rows[k], LABELS[options.labels[k]]);
+                        drawMask(group, xs, ranges.list[q].from - 1, ranges.list[q].to - ranges.list[q].from + 1, rows[k], LABELS[options.labels[k][q]]);
                     }
                 }
 
@@ -1270,6 +1315,16 @@ try {
                         lineLeft = columnX + (pb[2] - pb[0]) / 2 + 1.5 * mmToPt;
                     }
                     drawBelow(group, xs, gap, count, y1 - braceTopOffset, y1 - arrowStartOffset, y1 - arrowEndOffset, braceWidth, proteinY, boxHeight, lineLeft, black);
+                }
+
+                if (arrows) {
+                    // 오른쪽 DNA–RNA 화살표: 마지막 코돈의 가운데 염기 자리에서 DNA 2 아래·RNA 위(박스 염기는 RNA 박스 끝)를 1mm씩 띄운다
+                    var rightBase = rna.charAt(xs.length - 2);
+                    var rnaRightLen = boxMode ? ((rightBase === "A" || rightBase === "G") ? bm.lp : bm.lq) : 0;
+                    var strandGap = STRAND_ARROW_GAP_MM * mmToPt;
+                    var arrowFromY = y2 - rail / 2 - strandGap;
+                    var arrowTipY = y3 + rail / 2 + rnaRightLen + strandGap;
+                    if (arrowFromY > arrowTipY) drawArrow(group, xs[xs.length - 2], arrowFromY, arrowTipY, options.arrowWidth, black);
                 }
 
                 if (hasLabels) {
@@ -1745,20 +1800,20 @@ try {
             function defaultOptions() {
                 return { aaText: "Gly Arg Glu", picks: [2, 0, 0, 0, 0, 0, 0, 0], proteins: [2, 1, 5, 0, 0, 0, 0, 0],
                     templateTop: true, showNames: true, showBraces: true, showArrows: true, showProtein: true, nameKorean: true, names: "DNA, , RNA, (가), 단백질",
-                    masks: ["1-3", "4-9", "4-9"], labels: [0, 7, 8],
+                    masks: ["1-3", "4-9", "4-9"], labels: [[0, 0, 0, 0, 0, 0, 0, 0], [7, 0, 0, 0, 0, 0, 0, 0], [8, 0, 0, 0, 0, 0, 0, 0]],
                     backboneWidth: 1, tickWidth: 0.3, tickLength: 3, arrowWidth: 0.5, fontSize: 10,
                     baseGap: 6, strandGap: 16, rnaGap: 14, arrowLength: 7, offsetX: 0, offsetY: 0, braceGap: 1.5, dnaColor: 100, rnaColor: 50, preview: true,
                     showPrime: false, flipDir: false, boxBases: false, boxWidth: 5.4, purineLen: 12.5, pyrimidineLen: 7, boxGap: 0.6 };
             }
 
-            // v7: 숫자 11개, 주형·줄 이름 표시·단백질 줄 표시(0/1), 줄 이름, 아미노산 서열, 코돈 선택·단백질 칸(쉼표 목록),
-            //     가릴 염기 번호 3개(예: 1~5, 8~10), 박스 문자 번호 3개, 미리보기(0/1), 한글 이름(0/1), 중괄호·화살표 표시(0/1), 덧붙인 숫자 3개,
+            // v8: 숫자 11개, 주형·줄 이름 표시·단백질 줄 표시(0/1), 줄 이름, 아미노산 서열, 코돈 선택·단백질 칸(쉼표 목록),
+            //     가릴 염기 번호 3개(예: 1~5, 8~10), 줄마다 구간별 박스 문자 번호 8자리(구간 하나에 한 자리), 미리보기(0/1), 한글 이름(0/1), 중괄호·화살표 표시(0/1), 덧붙인 숫자 3개,
             //     5′·3′ 표시·방향 반전·박스 염기(0/1), 박스 숫자 4개
             function readSettings() {
                 var result = defaultOptions();
                 try {
                     var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-                    if (p[0] !== "v7" || p.length !== 39) return result;
+                    if (p[0] !== "v8" || p.length !== 39) return result;
                     for (var i = 0; i < NUMBER_KEYS.length; i++) {
                         var value = Number(p[i + 1]);
                         if (!/\S/.test(p[i + 1]) || !isFinite(value) || value < NUMBER_MINS[i] || value > NUMBER_MAXS[i]) return result;
@@ -1781,7 +1836,7 @@ try {
                     var proteins = readList(p[18], MAX_AMINO, PROTEIN_CHOICES.length - 1);
                     if (picks === null || proteins === null) return result;
                     for (var m = 0; m < 3; m++) {
-                        if (!/^[0-9~\-–, ]*$/.test(p[19 + m]) || !/^[0-9]$/.test(p[22 + m])) return result;
+                        if (!/^[0-9~\-–, ]*$/.test(p[19 + m]) || !/^[0-9]{8}$/.test(p[22 + m])) return result;
                     }
                     for (var k = 0; k < NUMBER_KEYS.length; k++) result[NUMBER_KEYS[k]] = Number(p[k + 1]);
                     result.templateTop = p[12] === "1";
@@ -1793,7 +1848,8 @@ try {
                     result.proteins = proteins;
                     for (var l = 0; l < 3; l++) {
                         result.masks[l] = p[19 + l];
-                        result.labels[l] = Number(p[22 + l]);
+                        result.labels[l] = [];
+                        for (var d = 0; d < MAX_RANGES; d++) result.labels[l].push(Number(p[22 + l].charAt(d)));
                     }
                     result.preview = p[25] === "1";
                     result.nameKorean = p[26] === "1";
@@ -1822,12 +1878,12 @@ try {
 
             function saveSettings() {
                 try {
-                    var parts = ["v7"];
+                    var parts = ["v8"];
                     for (var i = 0; i < NUMBER_KEYS.length; i++) parts.push(options[NUMBER_KEYS[i]]);
                     parts.push(options.templateTop ? 1 : 0, options.showNames ? 1 : 0, options.showProtein ? 1 : 0,
                         options.names, options.aaText, options.picks.join(","), options.proteins.join(","),
                         options.masks[0], options.masks[1], options.masks[2],
-                        options.labels[0], options.labels[1], options.labels[2], options.preview ? 1 : 0, options.nameKorean ? 1 : 0,
+                        options.labels[0].join(""), options.labels[1].join(""), options.labels[2].join(""), options.preview ? 1 : 0, options.nameKorean ? 1 : 0,
                         options.showBraces ? 1 : 0, options.showArrows ? 1 : 0,
                         options.braceGap, options.dnaColor, options.rnaColor,
                         options.showPrime ? 1 : 0, options.flipDir ? 1 : 0, options.boxBases ? 1 : 0);

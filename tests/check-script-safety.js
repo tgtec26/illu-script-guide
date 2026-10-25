@@ -2620,7 +2620,7 @@ for (const file of cabinetFiles) {
   const fns = new Function(`${pure}; return {complement};`)();
   assert.strictEqual(fns.complement("GGAGCACTT"), "CCTCGTGAA", `${file} complement`);
   // 아미노산·코돈·가닥 계산은 tests/check-dna-sequence.js가 따로 검사한다
-  assert.ok(sequenceSource.includes('p[0] !== "v7" || p.length !== 39'), `${file}: settings string must be v7 with 39 fields`);
+  assert.ok(sequenceSource.includes('p[0] !== "v8" || p.length !== 39'), `${file}: settings string must be v8 with 39 fields`);
   assert.strictEqual((sequenceSource.match(/join\("\|"\)/g) || []).length, 1, `${file}: one saveSettings join`);
 }
 
