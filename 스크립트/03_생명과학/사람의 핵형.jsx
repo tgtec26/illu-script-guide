@@ -91,6 +91,26 @@ try {
     ];
     var DENVER_GAPS = [[2], [], [1], [0.3, 0.7]];
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번)
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     function indexOfValue(list, value) {
         for (var i = 0; i < list.length; i++) {
             if (list[i] === value) return i;
@@ -678,7 +698,7 @@ try {
     var cenRow = shapePanel.add("group");
     cenRow.alignChildren = ["left", "center"];
     cenRow.add("statictext", undefined, "동원체:").preferredSize.width = LABEL_WIDTH;
-    var cenList = cenRow.add("dropdownlist", undefined, CEN_NAMES);
+    var cenList = addRadioChoice(cenRow, CEN_NAMES);
     var renderRow = shapePanel.add("group");
     renderRow.alignChildren = ["left", "center"];
     renderRow.add("statictext", undefined, "표현:").preferredSize.width = LABEL_WIDTH;
@@ -724,7 +744,7 @@ try {
     listInput.text = chromText;
     karyList.selection = karyIdx;
     shapeList.selection = shapeIdx;
-    cenList.selection = cenIdx;
+    setRadioChoice(cenList, cenIdx);
     colorList.selection = colorIdx;
     chromatidRadios[chromatidCount - 1].value = true;
     renderRadios[renderIdx].value = true;
@@ -766,8 +786,7 @@ try {
     }
     gbandCheck.onClick = function() { gbandOn = gbandCheck.value; updatePreview(); };
     cenList.onChange = function() {
-        if (cenList.selection === null) return;
-        cenIdx = cenList.selection.index;
+        cenIdx = cenList.index;
         updatePreview();
     };
     for (var rr = 0; rr < renderRadios.length; rr++) {

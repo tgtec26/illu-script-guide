@@ -22,6 +22,25 @@ var SCRIPT_KEY = "HighGeometry";
 
     var TAB_PREF_KEY = "HighGeometry/tab";   // 마지막에 쓴 탭. 각 탭의 옵션은 탭마다 따로 저장한다
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번). 드롭다운의 selection.index 대신 .index, selection = n 대신 setRadioChoice
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     // ==== 화살촉 (모든 탭 공통: 창 아래의 화살촉 모양·크기) ====
     // 작살형(평가원식)가 기본이다. 규격(길이·반폭·오목)은 registerHead로 등록하고, 모양·크기가 바뀌면 applyHeadStyle()이 등록된 규격을 다시 쓴다.
     // 규격의 length는 작살형(평가원식) 머리 길이로 보고, 모양은 아래 카탈로그를 같은 배율로 그린다. 선이 머리와 만나는 거리가 길이 − 오목이라
@@ -366,8 +385,8 @@ var SCRIPT_KEY = "HighGeometry";
 
             var curvePanel = addPanel(win, "곡선");
             var kindRow = curvePanel.add("group");
-            var kindList = kindRow.add("dropdownlist", undefined, KINDS);
-            kindList.selection = kind;
+            var kindList = addRadioChoice(kindRow, KINDS);
+            setRadioChoice(kindList, kind);
             var directionList = kindRow.add("dropdownlist", undefined, DIRECTIONS);
             directionList.selection = direction;
             directionList.helpTip = "포물선: 가로 y²=4px, 세로 x²=4py. 쌍곡선: 가로 …=1, 세로 …=-1. 타원은 a, b 중 큰 쪽이 장축";
@@ -415,7 +434,7 @@ var SCRIPT_KEY = "HighGeometry";
 
             refreshEnabled();
             kindList.onChange = function() {
-                kind = kindList.selection ? kindList.selection.index : 0;
+                kind = kindList.index;
                 refreshEnabled();
                 updatePreview();
             };
@@ -1232,8 +1251,8 @@ var SCRIPT_KEY = "HighGeometry";
 
             var curvePanel = addPanel(win, "곡선 (중심·꼭짓점은 원점)");
             var kindRow = curvePanel.add("group");
-            var kindList = kindRow.add("dropdownlist", undefined, KINDS);
-            kindList.selection = kind;
+            var kindList = addRadioChoice(kindRow, KINDS);
+            setRadioChoice(kindList, kind);
             var directionList = kindRow.add("dropdownlist", undefined, DIRECTIONS);
             directionList.selection = direction;
             directionList.helpTip = "포물선: 가로 y²=4px, 세로 x²=4py. 쌍곡선: 가로 …=1, 세로 …=-1. 타원은 a, b 중 큰 쪽이 장축";
@@ -1286,7 +1305,7 @@ var SCRIPT_KEY = "HighGeometry";
 
             refreshEnabled();
             kindList.onChange = function() {
-                kind = kindList.selection ? kindList.selection.index : 0;
+                kind = kindList.index;
                 refreshEnabled();
                 updatePreview();
             };
@@ -5143,8 +5162,8 @@ var SCRIPT_KEY = "HighGeometry";
             var shapePanel = addPanel(win, "그림");
             var modeRow = shapePanel.add("group");
             modeRow.add("statictext", undefined, "종류:");
-            var modeList = modeRow.add("dropdownlist", undefined, MODES);
-            modeList.selection = mode;
+            var modeList = addRadioChoice(modeRow, MODES);
+            setRadioChoice(modeList, mode);
             var planeControls = addValueRow(shapePanel, "평면 너비", "mm", planeMm, 30, 120, 1, 0);
             var thetaControls = addValueRow(shapePanel, "각 θ", "°", thetaDeg, 5, 85, 1, 0);
             var lengthControls = addValueRow(shapePanel, "선분 AB", "mm", lengthMm, 10, 100, 1, 0);
@@ -5183,7 +5202,7 @@ var SCRIPT_KEY = "HighGeometry";
 
             refreshEnabled();
             modeList.onChange = function() {
-                mode = modeList.selection ? modeList.selection.index : 0;
+                mode = modeList.index;
                 refreshEnabled();
                 updatePreview();
             };

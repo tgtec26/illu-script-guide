@@ -244,6 +244,26 @@ try {
     }
 
     // ==== 염색체 모형 ====
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번)
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     function makeChromosomeEngine() {
         var api = {label: "염색체 모형", error: null, addRows: addRows,
             setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
@@ -369,9 +389,8 @@ try {
                 var onCheck = head.add("checkbox", undefined, "그리기");
                 onCheck.value = c.on;
                 var chromatidLabel = head.add("statictext", undefined, "염색 분체:");
-                var chromatidList = head.add("dropdownlist", undefined, ["1개", "2개"]);
-                chromatidList.selection = c.chromatids - 1;
-                chromatidList.preferredSize.width = 60;
+                var chromatidList = addRadioChoice(head, ["1개", "2개"]);
+                setRadioChoice(chromatidList, c.chromatids - 1);
                 var gray0 = head.add("button", undefined, "흰색");
                 var gray30 = head.add("button", undefined, "30%");
                 var gray80 = head.add("button", undefined, "80%");
@@ -405,7 +424,7 @@ try {
                     updatePreview();
                 };
                 chromatidList.onChange = function() {
-                    c.chromatids = chromatidList.selection.index + 1;
+                    c.chromatids = chromatidList.index + 1;
                     setSpreadEnabled();
                     updatePreview();
                 };

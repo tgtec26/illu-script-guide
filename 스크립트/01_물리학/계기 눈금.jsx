@@ -73,13 +73,33 @@ try {
     try { font = app.textFonts.getByName("GSMediumB1"); }
     catch (fontError) { alert("GSMediumB1 서체를 설치한 뒤 실행해주세요."); return; }
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     var win = new Window("dialog", "계기 눈금 — 검류계 · 전류계 · 전압계");
     win.orientation = "column";
     win.alignChildren = "fill";
     var typeRow = win.add("group");
     typeRow.add("statictext", undefined, "종류:");
-    var kindList = typeRow.add("dropdownlist", undefined, NAMES);
-    kindList.selection = settings.kind;
+    var kindList = addRadioChoice(typeRow, NAMES);
+    setRadioChoice(kindList, settings.kind);
     kindList.helpTip = "검류계는 −최대값~최대값, 전류계·전압계는 0~최대값. 종류를 바꾸면 기본 눈금 범위를 적용합니다.";
     var shapePanel = panel("크기와 곡률");
     numberRow(shapePanel, "너비 (mm):", "width", 0.5);
@@ -114,7 +134,7 @@ try {
     win.defaultElement = null;
 
     kindList.onChange = function() {
-        settings.kind = kindList.selection.index;
+        settings.kind = kindList.index;
         settings.maximum = settings.kind === 0 ? 30 : (settings.kind === 1 ? 3 : 15);
         settings.divisions = settings.kind === 0 ? 6 : 3;
         setRow("maximum"); setRow("divisions"); updatePreview();

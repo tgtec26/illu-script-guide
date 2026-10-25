@@ -258,18 +258,16 @@ function foldPanel(parent, title, collapsed, key) {
     var hiddenRow = linePanel.add("group");
     hiddenRow.alignChildren = ["left", "center"];
     hiddenRow.add("statictext", undefined, "숨은선:").preferredSize.width = LABEL_WIDTH;
-    var hiddenList = hiddenRow.add("dropdownlist", undefined, ["표시 안 함", "파선", "실선"]);
-    hiddenList.selection = hiddenMode;
-    hiddenList.preferredSize.width = SLIDER_WIDTH + 60;
+    var hiddenList = addRadioChoice(hiddenRow, ["표시 안 함", "파선", "실선"]);
+    setRadioChoice(hiddenList, hiddenMode);
 
     var fillRow = linePanel.add("group");
     fillRow.alignChildren = ["left", "center"];
     var fillCaption = fillRow.add("statictext", undefined, "면 채우기:");
     fillCaption.preferredSize.width = LABEL_WIDTH;
     fillCaption.helpTip = "광원 자동: 화면 기준 광원으로 면마다 K값을 정한다 (정육면체 등각: 윗면 > 앞면 > 옆면). 곡면은 펴진 조각 수만큼 단계가 진다";
-    var fillList = fillRow.add("dropdownlist", undefined, ["없음", "단일 음영", "광원 자동"]);
-    fillList.selection = fillMode;
-    fillList.preferredSize.width = SLIDER_WIDTH + 60;
+    var fillList = addRadioChoice(fillRow, ["없음", "단일 음영", "광원 자동"]);
+    setRadioChoice(fillList, fillMode);
     var hueControl = addNumberRow(linePanel, "색상 (°)", fillHue, 0, 360, 1, 0,
         "면 색상. 0 빨강, 120 초록, 240 파랑. 채도가 0이면 쓰지 않는다", function(value, live) {
             fillHue = value;
@@ -323,6 +321,26 @@ function foldPanel(parent, title, collapsed, key) {
     try { win.defaultElement = null; } catch (defaultError) {}
     var cancelButton = buttonRow.add("button", undefined, "취소", {name: "cancel"});
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번)
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     function selectTab(next) {
         if (next === tabIndex) return;
         if (engines[next].error) {
@@ -350,7 +368,7 @@ function foldPanel(parent, title, collapsed, key) {
         updatePreview();
     };
     hiddenList.onChange = function() {
-        hiddenMode = hiddenList.selection ? hiddenList.selection.index : HIDDEN_NONE;
+        hiddenMode = hiddenList.index;
         updatePreview();
     };
     previewCheck.onClick = function() {
@@ -358,7 +376,7 @@ function foldPanel(parent, title, collapsed, key) {
         updatePreview();
     };
     fillList.onChange = function() {
-        fillMode = fillList.selection ? fillList.selection.index : FILL_NONE;
+        fillMode = fillList.index;
         syncFillRows();
         updatePreview();
     };

@@ -159,9 +159,8 @@ try {
     var modeRow = rayPanel.add("group");
     modeRow.alignChildren = ["left", "center"];
     modeRow.add("statictext", undefined, "변화 방식:").preferredSize.width = 90;
-    var modeList = modeRow.add("dropdownlist", undefined, LENGTH_MODES);
-    modeList.preferredSize.width = 120;
-    modeList.selection = lengthMode;
+    var modeList = addRadioChoice(modeRow, LENGTH_MODES);
+    setRadioChoice(modeList, lengthMode);
     modeList.helpTip = "무작위: 줄기마다 다른 길이, 번갈아: 긴 줄기와 짧은 줄기가 교대";
     var shuffleButton = modeRow.add("button", undefined, "다시 섞기");
     shuffleButton.helpTip = "무작위 길이를 새로 뽑는다";
@@ -214,7 +213,7 @@ try {
         setRow(widthRow, rayWidth);
         setRow(widthVarRow, widthVar);
         setRow(haloRow, haloRatio);
-        modeList.selection = lengthMode;
+        setRadioChoice(modeList, lengthMode);
         updatePreview();
     };
     colorList.onChange = function() {
@@ -228,8 +227,7 @@ try {
         updatePreview();
     };
     modeList.onChange = function() {
-        if (!modeList.selection) return;
-        lengthMode = modeList.selection.index;
+        lengthMode = modeList.index;
         updatePreview();
     };
     coreCheck.onClick = function() {
@@ -373,6 +371,26 @@ try {
 
     function inRange(value, limit) {
         return !isNaN(value) && value >= limit[0] && value <= limit[1];
+    }
+
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
     }
 
     function presetNames() {

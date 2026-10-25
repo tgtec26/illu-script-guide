@@ -690,14 +690,33 @@ try {
         return panel;
     }
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번)
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     function addSidePanel(parent, side) {
         var panel = addPanel(parent, side.title);
         var countRow = panel.add("group");
         countRow.alignChildren = ["left", "center"];
         countRow.add("statictext", undefined, "형제 수").preferredSize.width = LABEL_WIDTH;
-        var countList = countRow.add("dropdownlist", undefined, ["0", "1", "2"]);
-        countList.selection = side.count;
-        countList.preferredSize.width = 56;
+        var countList = addRadioChoice(countRow, ["0", "1", "2"]);
+        setRadioChoice(countList, side.count);
 
         var grandLabels = side.title === "친가" ? ["할아버지", "할머니", "아버지"] : ["외할아버지", "외할머니", "어머니"];
         addMemberRow(panel, grandLabels[0], side.grand[0], null);
@@ -711,7 +730,7 @@ try {
             for (var r = 0; r < siblingRows.length; r++) siblingRows[r].row.enabled = r < side.count;
         }
         countList.onChange = function() {
-            side.count = countList.selection.index;
+            side.count = countList.index;
             refreshRows();
             updatePreview();
         };

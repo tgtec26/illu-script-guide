@@ -37,6 +37,25 @@ var SCRIPT_KEY = "HighStatistics";
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번). 드롭다운의 selection.index 대신 .index, selection = n 대신 setRadioChoice
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
     function catalogPoints(shape, tip, d, k) {
         var n = [-d[1], d[0]];
@@ -373,8 +392,8 @@ var SCRIPT_KEY = "HighStatistics";
             var seatPanel = addPanel(win, "원순열 (둘러앉기)", "fold3");
             var tableRow = seatPanel.add("group");
             tableRow.add("statictext", undefined, "탁자:");
-            var tableList = tableRow.add("dropdownlist", undefined, TABLES);
-            tableList.selection = tableShape;
+            var tableList = addRadioChoice(tableRow, TABLES);
+            setRadioChoice(tableList, tableShape);
             var arrowCheck = tableRow.add("checkbox", undefined, "회전 화살표");
             arrowCheck.value = rotationArrow;
             var seatControls = addValueRow(seatPanel, "원탁 인원", "명", seatCount, 3, 10, 1, 0);
@@ -416,7 +435,7 @@ var SCRIPT_KEY = "HighStatistics";
             passInput.onChanging = function() { passText = passInput.text; updatePreview(); };
             blockedInput.onChanging = function() { blockedText = blockedInput.text; updatePreview(); };
             gridNumbersCheck.onClick = function() { gridNumbers = gridNumbersCheck.value; updatePreview(); };
-            tableList.onChange = function() { tableShape = tableList.selection ? tableList.selection.index : 0; refreshEnabled(); updatePreview(); };
+            tableList.onChange = function() { tableShape = tableList.index; refreshEnabled(); updatePreview(); };
             arrowCheck.onClick = function() { rotationArrow = arrowCheck.value; updatePreview(); };
             bindValueRow(seatControls, function(value) { seatCount = value; }, defaults.seatCount);
             bindValueRow(sideAControls, function(value) { sideA = value; }, defaults.sideA);
@@ -1134,11 +1153,11 @@ var SCRIPT_KEY = "HighStatistics";
             var distPanel = addPanel(win, "분포");
             var modeRow = distPanel.add("group");
             modeRow.add("statictext", undefined, "종류:");
-            var modeList = modeRow.add("dropdownlist", undefined, MODES);
-            modeList.selection = mode;
+            var modeList = addRadioChoice(modeRow, MODES);
+            setRadioChoice(modeList, mode);
             modeRow.add("statictext", undefined, "축 이름:");
-            var axisList = modeRow.add("dropdownlist", undefined, AXIS_NAMES);
-            axisList.selection = axisName;
+            var axisList = addRadioChoice(modeRow, AXIS_NAMES);
+            setRadioChoice(axisList, axisName);
             var meanControls = addValueRow(distPanel, "평균 m", "", mean, -500, 500, 0.5, 1);
             var sigmaControls = addValueRow(distPanel, "표준편차 σ", "", sigma, 0.1, 100, 0.1, 1);
             var secondRow = distPanel.add("group");
@@ -1155,8 +1174,8 @@ var SCRIPT_KEY = "HighStatistics";
             var shadeList = shadeRow.add("dropdownlist", undefined, SHADES);
             shadeList.selection = shade;
             shadeRow.add("statictext", undefined, "글자:");
-            var labelList = shadeRow.add("dropdownlist", undefined, LABELS);
-            labelList.selection = labelKind;
+            var labelList = addRadioChoice(shadeRow, LABELS);
+            setRadioChoice(labelList, labelKind);
             var aControls = addValueRow(probPanel, "a", "", aValue, -500, 500, 0.5, 1);
             var bControls = addValueRow(probPanel, "b", "", bValue, -500, 500, 0.5, 1);
             var shadeControls = addValueRow(probPanel, "음영", "K", shadeK, 5, 60, 5, 0);
@@ -1198,11 +1217,11 @@ var SCRIPT_KEY = "HighStatistics";
 
             refreshEnabled();
             modeList.onChange = function() {
-                mode = modeList.selection ? modeList.selection.index : 0;
+                mode = modeList.index;
                 refreshEnabled();
                 updatePreview();
             };
-            axisList.onChange = function() { axisName = axisList.selection ? axisList.selection.index : 0; updatePreview(); };
+            axisList.onChange = function() { axisName = axisList.index; updatePreview(); };
             bindValueRow(meanControls, function(value) { mean = value; }, defaults.mean);
             bindValueRow(sigmaControls, function(value) { sigma = value; }, defaults.sigma);
             bindValueRow(mean2Controls, function(value) { mean2 = value; }, defaults.mean2);
@@ -1210,7 +1229,7 @@ var SCRIPT_KEY = "HighStatistics";
             bindValueRow(trialsControls, function(value) { trials = value; }, defaults.trials);
             bindValueRow(chanceControls, function(value) { chance = value; }, defaults.chance);
             shadeList.onChange = function() { shade = shadeList.selection ? shadeList.selection.index : 0; refreshEnabled(); updatePreview(); };
-            labelList.onChange = function() { labelKind = labelList.selection ? labelList.selection.index : 0; updatePreview(); };
+            labelList.onChange = function() { labelKind = labelList.index; updatePreview(); };
             bindValueRow(aControls, function(value) { aValue = value; }, defaults.aValue);
             bindValueRow(bControls, function(value) { bValue = value; }, defaults.bValue);
             bindValueRow(shadeControls, function(value) { shadeK = value; }, defaults.shadeK);

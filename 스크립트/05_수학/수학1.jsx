@@ -37,6 +37,25 @@ var SCRIPT_KEY = "HighMath1";
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번). 드롭다운의 selection.index 대신 .index, selection = n 대신 setRadioChoice
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
     function catalogPoints(shape, tip, d, k) {
         var n = [-d[1], d[0]];
@@ -349,8 +368,8 @@ var SCRIPT_KEY = "HighMath1";
             var functionPanel = addPanel(win, "함수");
             var modeRow = functionPanel.add("group");
             modeRow.add("statictext", undefined, "그래프:");
-            var modeList = modeRow.add("dropdownlist", undefined, MODES);
-            modeList.selection = mode;
+            var modeList = addRadioChoice(modeRow, MODES);
+            setRadioChoice(modeList, mode);
             var baseControls = addValueRow(functionPanel, "밑 a", "", baseValue, 0.1, 10, 0.1, 1);
             var mControls = addValueRow(functionPanel, "x축 방향 m", "", mValue, -10, 10, 0.5, 1);
             var nControls = addValueRow(functionPanel, "y축 방향 n", "", nValue, -10, 10, 0.5, 1);
@@ -393,7 +412,7 @@ var SCRIPT_KEY = "HighMath1";
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
             var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
 
-            modeList.onChange = function() { mode = modeList.selection ? modeList.selection.index : 0; updatePreview(); };
+            modeList.onChange = function() { mode = modeList.index; updatePreview(); };
             bindValueRow(baseControls, function(value) { baseValue = value; }, DEFAULTS.baseValue);
             bindValueRow(mControls, function(value) { mValue = value; }, DEFAULTS.mValue);
             bindValueRow(nControls, function(value) { nValue = value; }, DEFAULTS.nValue);
@@ -1371,8 +1390,8 @@ var SCRIPT_KEY = "HighMath1";
             var functionPanel = addPanel(win, "y = a sin b(x - c) + d");
             var kindRow = functionPanel.add("group");
             kindRow.add("statictext", undefined, "함수:");
-            var kindList = kindRow.add("dropdownlist", undefined, KINDS);
-            kindList.selection = graphs[0].kind;
+            var kindList = addRadioChoice(kindRow, KINDS);
+            setRadioChoice(kindList, graphs[0].kind);
             kindRow.add("statictext", undefined, "고칠 그래프:");
             var editRadios = [kindRow.add("radiobutton", undefined, "첫째 f(x)"), kindRow.add("radiobutton", undefined, "둘째")];
             editRadios[0].value = true;
@@ -1400,8 +1419,8 @@ var SCRIPT_KEY = "HighMath1";
             inequalityList.selection = inequality;
             inequalityList.helpTip = "f(x)는 첫째 그래프. 가로 범위 안의 해를 x축 위 굵은 선분(경계 ●/○)으로 그린다";
             inequalityRow.add("statictext", undefined, "g(x):");
-            var targetList = inequalityRow.add("dropdownlist", undefined, TARGETS);
-            targetList.selection = target;
+            var targetList = addRadioChoice(inequalityRow, TARGETS);
+            setRadioChoice(targetList, target);
 
             var rangePanel = addPanel(win, "범위 · 눈금", "fold6");
             var xMinControls = addValueRow(rangePanel, "x 최솟값", "×π/2", xMinHalf, -8, 0, 1, 0);
@@ -1437,7 +1456,7 @@ var SCRIPT_KEY = "HighMath1";
             var syncing = false;   // 고칠 그래프를 바꿔 행을 채우는 동안은 다시 그리지 않는다
             kindList.onChange = function() {
                 if (syncing) return;
-                graphs[editing].kind = kindList.selection ? kindList.selection.index : 0;
+                graphs[editing].kind = kindList.index;
                 updatePreview();
             };
             for (var er = 0; er < editRadios.length; er++) bindEditRadio(er);
@@ -1447,7 +1466,7 @@ var SCRIPT_KEY = "HighMath1";
             bindValueRow(dControls, function(value) { graphs[editing].d = value; }, function() { return DEFAULTS.graphs[editing].d; });
             bindKRow(kControls);
             inequalityList.onChange = function() { inequality = inequalityList.selection ? inequalityList.selection.index : 0; updatePreview(); };
-            targetList.onChange = function() { target = targetList.selection ? targetList.selection.index : 0; updatePreview(); };
+            targetList.onChange = function() { target = targetList.index; updatePreview(); };
             bindValueRow(xMinControls, function(value) { xMinHalf = value; }, DEFAULTS.xMinHalf);
             bindValueRow(xMaxControls, function(value) { xMaxHalf = value; }, DEFAULTS.xMaxHalf);
             bindValueRow(piControls, function(value) { piMm = value; }, DEFAULTS.piMm);
@@ -1504,7 +1523,7 @@ var SCRIPT_KEY = "HighMath1";
                     editing = index;
                     var g = graphs[editing];
                     syncing = true;
-                    kindList.selection = g.kind;
+                    setRadioChoice(kindList, g.kind);
                     syncing = false;
                     setRowValue(aControls, g.a);
                     setRowValue(bControls, g.b);
@@ -3200,8 +3219,8 @@ var SCRIPT_KEY = "HighMath1";
             var functionPanel = addPanel(win, "함수 · 각");
             var kindRow = functionPanel.add("group");
             kindRow.add("statictext", undefined, "함수:");
-            var kindList = kindRow.add("dropdownlist", undefined, KINDS);
-            kindList.selection = kind;
+            var kindList = addRadioChoice(kindRow, KINDS);
+            setRadioChoice(kindList, kind);
             var divisionControls = addValueRow(functionPanel, "분할 수", "", divisionCount, 4, 24, 1, 0);
             divisionControls.input.helpTip = "한 바퀴를 몇 등분해 점을 옮길지. 12 = 30°마다";
             var thetaControls = addValueRow(functionPanel, "강조 각 θ", "°", thetaDeg, 0, 360, 5, 0);
@@ -3243,7 +3262,7 @@ var SCRIPT_KEY = "HighMath1";
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
             var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
 
-            kindList.onChange = function() { kind = kindList.selection ? kindList.selection.index : 0; updatePreview(); };
+            kindList.onChange = function() { kind = kindList.index; updatePreview(); };
             bindValueRow(divisionControls, function(value) { divisionCount = value; }, DEFAULTS.divisionCount);
             bindValueRow(thetaControls, function(value) { thetaDeg = value; }, DEFAULTS.thetaDeg);
             bindValueRow(radiusControls, function(value) { radiusMm = value; }, DEFAULTS.radiusMm);
@@ -4056,11 +4075,11 @@ var SCRIPT_KEY = "HighMath1";
             var stylePanel = addPanel(win, "표시", "fold4");
             var styleRow = stylePanel.add("group");
             styleRow.add("statictext", undefined, "변 글자:");
-            var sideList = styleRow.add("dropdownlist", undefined, SIDE_STYLES);
-            sideList.selection = sideStyle;
+            var sideList = addRadioChoice(styleRow, SIDE_STYLES);
+            setRadioChoice(sideList, sideStyle);
             styleRow.add("statictext", undefined, "각 표시:");
-            var angleList = styleRow.add("dropdownlist", undefined, ANGLE_STYLES);
-            angleList.selection = angleStyle;
+            var angleList = addRadioChoice(styleRow, ANGLE_STYLES);
+            setRadioChoice(angleList, angleStyle);
             var circleRow = stylePanel.add("group");
             var circleCheck = circleRow.add("checkbox", undefined, "외접원");
             var centerCheck = circleRow.add("checkbox", undefined, "중심 O와 반지름 R");
@@ -4095,8 +4114,8 @@ var SCRIPT_KEY = "HighMath1";
                 updatePreview();
             };
             for (var key in rows) bindKeyRow(key);
-            sideList.onChange = function() { sideStyle = sideList.selection ? sideList.selection.index : 0; updatePreview(); };
-            angleList.onChange = function() { angleStyle = angleList.selection ? angleList.selection.index : 0; updatePreview(); };
+            sideList.onChange = function() { sideStyle = sideList.index; updatePreview(); };
+            angleList.onChange = function() { angleStyle = angleList.index; updatePreview(); };
             circleCheck.onClick = function() { showCircle = circleCheck.value; updatePreview(); };
             centerCheck.onClick = function() { showCenter = centerCheck.value; updatePreview(); };
             bindValueRow(unitControls, function(value) { unitMm = value; }, DEFAULTS.unitMm);
@@ -4705,8 +4724,8 @@ var SCRIPT_KEY = "HighMath1";
             var sequencePanel = addPanel(win, "수열");
             var modeRow = sequencePanel.add("group");
             modeRow.add("statictext", undefined, "그림:");
-            var modeList = modeRow.add("dropdownlist", undefined, MODES);
-            modeList.selection = mode;
+            var modeList = addRadioChoice(modeRow, MODES);
+            setRadioChoice(modeList, mode);
             var inputRow = sequencePanel.add("group");
             inputRow.add("statictext", undefined, "수열:");
             var sequenceInput = inputRow.add("edittext", undefined, sequenceText);
@@ -4740,8 +4759,8 @@ var SCRIPT_KEY = "HighMath1";
             var patternList = patternRow.add("dropdownlist", undefined, PATTERNS);
             patternList.selection = pattern;
             patternRow.add("statictext", undefined, "이름:");
-            var stageNameList = patternRow.add("dropdownlist", undefined, STAGE_NAMES);
-            stageNameList.selection = stageName;
+            var stageNameList = addRadioChoice(patternRow, STAGE_NAMES);
+            setRadioChoice(stageNameList, stageName);
             var stageControls = addValueRow(patternPanel, "단계 수", "", stageCount, 1, 6, 1, 0);
 
             var fontControls = addValueRow(win, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
@@ -4768,7 +4787,7 @@ var SCRIPT_KEY = "HighMath1";
 
             refreshEnabled();
             modeList.onChange = function() {
-                mode = modeList.selection ? modeList.selection.index : 0;
+                mode = modeList.index;
                 refreshEnabled();
                 updatePreview();
             };
@@ -4777,7 +4796,7 @@ var SCRIPT_KEY = "HighMath1";
             bindValueRow(cellControls, function(value) { cellMm = value; }, DEFAULTS.cellMm);
             bindValueRow(heightControls, function(value) { heightMm = value; }, DEFAULTS.heightMm);
             patternList.onChange = function() { pattern = patternList.selection ? patternList.selection.index : 0; updatePreview(); };
-            stageNameList.onChange = function() { stageName = stageNameList.selection ? stageNameList.selection.index : 0; updatePreview(); };
+            stageNameList.onChange = function() { stageName = stageNameList.index; updatePreview(); };
             bindValueRow(stageControls, function(value) { stageCount = value; }, DEFAULTS.stageCount);
             bindValueRow(fontControls, function(value) { fontPt = value; }, DEFAULTS.fontPt);
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다

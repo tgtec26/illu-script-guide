@@ -22,6 +22,25 @@ var SCRIPT_KEY = "HighMath2";
 
     var TAB_PREF_KEY = "HighMath2/tab";   // 마지막에 쓴 탭. 각 탭의 옵션은 탭마다 따로 저장한다
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번). 드롭다운의 selection.index 대신 .index, selection = n 대신 setRadioChoice
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     // ==== 화살촉 (모든 탭 공통: 창 아래의 화살촉 모양·크기) ====
     // 작살형(평가원식)가 기본이다. 규격(길이·반폭·오목)은 registerHead로 등록하고, 모양·크기가 바뀌면 applyHeadStyle()이 등록된 규격을 다시 쓴다.
     // 규격의 length는 작살형(평가원식) 머리 길이로 보고, 모양은 아래 카탈로그를 같은 배율로 그린다. 선이 머리와 만나는 거리가 길이 − 오목이라
@@ -1372,8 +1391,8 @@ var SCRIPT_KEY = "HighMath2";
             fInput.helpTip = "y=x^3-3x, y=-x^3+3x^2, y=x^4-2x^2, y=x+1/x, y=x e^x. ^는 거듭제곱";
             var modeRow = functionPanel.add("group");
             modeRow.add("statictext", undefined, "그림:");
-            var modeList = modeRow.add("dropdownlist", undefined, MODES);
-            modeList.selection = mode;
+            var modeList = addRadioChoice(modeRow, MODES);
+            setRadioChoice(modeList, mode);
 
             var markPanel = addPanel(win, "표시", "fold1");
             addCheckRow(markPanel, [["extrema", "극대·극소 점"], ["values", "극값 글자"], ["flat", "수평 접선"]]);
@@ -1417,7 +1436,7 @@ var SCRIPT_KEY = "HighMath2";
             var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
 
             fInput.onChanging = function() { fText = fInput.text; updatePreview(); };
-            modeList.onChange = function() { mode = modeList.selection ? modeList.selection.index : 0; updatePreview(); };
+            modeList.onChange = function() { mode = modeList.index; updatePreview(); };
             bindValueRow(xMinControls, function(value) { xMin = value; }, defaults.xMin);
             bindValueRow(xMaxControls, function(value) { xMax = value; }, defaults.xMax);
             bindValueRow(yMinControls, function(value) { yMin = value; }, defaults.yMin);
@@ -2496,8 +2515,8 @@ var SCRIPT_KEY = "HighMath2";
             var shadeControls = addValueRow(areaPanel, "음영", "K", shadeK, 5, 60, 5, 0);
             var endRow = areaPanel.add("group");
             endRow.add("statictext", undefined, "끝 글자:");
-            var endList = endRow.add("dropdownlist", undefined, ENDS);
-            endList.selection = ends;
+            var endList = addRadioChoice(endRow, ENDS);
+            setRadioChoice(endList, ends);
             var boundsCheck = endRow.add("checkbox", undefined, "경계 점선");
             bindOption(boundsCheck, "bounds");
 
@@ -2556,7 +2575,7 @@ var SCRIPT_KEY = "HighMath2";
             bindValueRow(bControls, function(value) { bValue = value; }, defaults.bValue);
             bindValueRow(countControls, function(value) { countValue = value; }, defaults.countValue);
             bindValueRow(shadeControls, function(value) { shadeK = value; }, defaults.shadeK);
-            endList.onChange = function() { ends = endList.selection ? endList.selection.index : 0; updatePreview(); };
+            endList.onChange = function() { ends = endList.index; updatePreview(); };
             tangentNameInput.onChanging = function() { tangentName = tangentNameInput.text; updatePreview(); };
             bindValueRow(tControls, function(value) { tValue = value; }, defaults.tValue);
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다

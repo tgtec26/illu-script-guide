@@ -36,6 +36,25 @@ var SCRIPT_KEY = "MiddleMath";
         {length: 12.1, lineEnd: 9, poly: [[0, 0], [1.4, 6.1], [3.7, 12], [0, 9.9], [-3.7, 12], [-1.4, 6.1]]}
     ];
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번). 드롭다운의 selection.index 대신 .index, selection = n 대신 setRadioChoice
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     // 끝 tip, 방향 단위 벡터 d, 배율 k(카탈로그 1pt가 k)로 shape 모양의 점들
     function catalogPoints(shape, tip, d, k) {
         var n = [-d[1], d[0]];
@@ -8072,8 +8091,8 @@ var SCRIPT_KEY = "MiddleMath";
             var yStepControls = addValueRow(axisPanel, "y 눈금 간격", "", yStep, 0.5, 2000, 0.5, 1);
             var numberRow = axisPanel.add("group");
             numberRow.add("statictext", undefined, "눈금 숫자:");
-            var numberList = numberRow.add("dropdownlist", undefined, NUMBER_MODES);
-            numberList.selection = numberMode;
+            var numberList = addRadioChoice(numberRow, NUMBER_MODES);
+            setRadioChoice(numberList, numberMode);
             var checkRow = axisPanel.add("group");
             var dotsCheck = checkRow.add("checkbox", undefined, "점 찍기");
             var guidesCheck = checkRow.add("checkbox", undefined, "축까지 점선");
@@ -8115,7 +8134,7 @@ var SCRIPT_KEY = "MiddleMath";
             bindValueRow(xStepControls, function(value) { xStep = value; }, initial.xStep);
             bindValueRow(yMaxControls, function(value) { yMax = value; }, initial.yMax);
             bindValueRow(yStepControls, function(value) { yStep = value; }, initial.yStep);
-            numberList.onChange = function() { numberMode = numberList.selection ? numberList.selection.index : 0; updatePreview(); };
+            numberList.onChange = function() { numberMode = numberList.index; updatePreview(); };
             dotsCheck.onClick = function() { opt.dots = dotsCheck.value; updatePreview(); };
             guidesCheck.onClick = function() { opt.guides = guidesCheck.value; updatePreview(); };
             gridCheck.onClick = function() { opt.grid = gridCheck.value; updatePreview(); };

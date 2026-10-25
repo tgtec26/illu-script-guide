@@ -22,6 +22,25 @@ var SCRIPT_KEY = "HighMathCommon";
 
     var TAB_PREF_KEY = "HighCommon/tab";   // 마지막에 쓴 탭. 각 탭의 옵션은 탭마다 따로 저장한다
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번). 드롭다운의 selection.index 대신 .index, selection = n 대신 setRadioChoice
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     // ==== 화살촉 (모든 탭 공통: 창 아래의 화살촉 모양·크기) ====
     // 작살형(평가원식)가 기본이다. 규격(길이·반폭·오목)은 registerHead로 등록하고, 모양·크기가 바뀌면 applyHeadStyle()이 등록된 규격을 다시 쓴다.
     // 규격의 length는 작살형(평가원식) 머리 길이로 보고, 모양은 아래 카탈로그를 같은 배율로 그린다. 선이 머리와 만나는 거리가 길이 − 오목이라
@@ -3115,8 +3134,8 @@ var SCRIPT_KEY = "HighMathCommon";
             var setPanel = addPanel(win, "집합");
             var countRow = setPanel.add("group");
             countRow.add("statictext", undefined, "집합 수:");
-            var countList = countRow.add("dropdownlist", undefined, COUNTS);
-            countList.selection = setCount;
+            var countList = addRadioChoice(countRow, COUNTS);
+            setRadioChoice(countList, setCount);
             var shadeRow = setPanel.add("group");
             shadeRow.add("statictext", undefined, "색칠:");
             var shadeInput = shadeRow.add("edittext", undefined, shadeText);
@@ -3140,7 +3159,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
             var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
 
-            countList.onChange = function() { setCount = countList.selection ? countList.selection.index : 0; updatePreview(); };
+            countList.onChange = function() { setCount = countList.index; updatePreview(); };
             shadeInput.onChanging = function() { shadeText = shadeInput.text; updatePreview(); };
             bindValueRow(radiusControls, function(value) { radiusMm = value; }, defaults.radiusMm);
             bindValueRow(overlapControls, function(value) { overlapPct = value; }, defaults.overlapPct);
@@ -3776,8 +3795,8 @@ var SCRIPT_KEY = "HighMathCommon";
             var inequalityList = solveRow.add("dropdownlist", undefined, INEQUALITIES);
             inequalityList.selection = inequality;
             solveRow.add("statictext", undefined, "근 글자:");
-            var rootList = solveRow.add("dropdownlist", undefined, ROOT_LABELS);
-            rootList.selection = rootLabel;
+            var rootList = addRadioChoice(solveRow, ROOT_LABELS);
+            setRadioChoice(rootList, rootLabel);
             addCheckRow(functionPanel, [["vertex", "꼭짓점"], ["axisLine", "축 점선"], ["roots", "x절편"]]);
             addCheckRow(functionPanel, [["intercept", "y절편"], ["formula", "식 글자"], ["line", "직선 y=mx+n"]]);
             var mControls = addValueRow(functionPanel, "직선 m", "", mValue, -10, 10, 0.5, 1);
@@ -3818,7 +3837,7 @@ var SCRIPT_KEY = "HighMathCommon";
             bindValueRow(bControls, function(value) { bValue = value; }, defaults.bValue);
             bindValueRow(cControls, function(value) { cValue = value; }, defaults.cValue);
             inequalityList.onChange = function() { inequality = inequalityList.selection ? inequalityList.selection.index : 0; updatePreview(); };
-            rootList.onChange = function() { rootLabel = rootList.selection ? rootList.selection.index : 0; updatePreview(); };
+            rootList.onChange = function() { rootLabel = rootList.index; updatePreview(); };
             bindValueRow(mControls, function(value) { mValue = value; }, defaults.mValue);
             bindValueRow(nControls, function(value) { nValue = value; }, defaults.nValue);
             bindValueRow(xMinControls, function(value) { xMin = value; }, defaults.xMin);

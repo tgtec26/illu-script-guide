@@ -134,8 +134,8 @@ function drawIsometricBox() {
     shapeRow.orientation = "row";
     shapeRow.alignChildren = ["left", "center"];
     shapeRow.add("statictext", undefined, "곡선 형태:");
-    var shapeList = shapeRow.add("dropdownlist", undefined, ["종형 (봉우리)", "S형 (봉우리+골)"]);
-    shapeList.selection = 0;
+    var shapeList = addRadioChoice(shapeRow, ["종형 (봉우리)", "S형 (봉우리+골)"]);
+    setRadioChoice(shapeList, 0);
     shapeList.onChange = function() { updatePreview(); };
 
     // 위치 패널: 화면 중앙 기준 오프셋 (mm). X는 +오른쪽, Y는 +위쪽.
@@ -229,6 +229,26 @@ function drawIsometricBox() {
         }
     }
 
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번)
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+    }
+
     function addCompressControl(parent, label, defaultPct, minPct, maxPct) {
         var control = {};
         control.min = minPct;
@@ -315,7 +335,7 @@ function drawIsometricBox() {
     }
 
     function readShapeInput() {
-        return (shapeList.selection && shapeList.selection.index === 1) ? 1 : 0;
+        return shapeList.index === 1 ? 1 : 0;
     }
 
     // 0 = 사각형, 1 = 타원, 2 = 정원
@@ -481,7 +501,7 @@ function drawIsometricBox() {
             if (parts.length >= 11) {
                 var shapeVal = parseSize(parts[10]);
                 if (!isNaN(shapeVal)) {
-                    shapeList.selection = (shapeVal === 1 ? 1 : 0);
+                    setRadioChoice(shapeList, shapeVal === 1 ? 1 : 0);
                 }
             }
 

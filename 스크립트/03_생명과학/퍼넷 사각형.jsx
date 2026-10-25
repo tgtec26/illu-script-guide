@@ -82,8 +82,8 @@ try {
     var shapePanel = addPanel(win, "모양");
     var shapeRow = shapePanel.add("group");
     shapeRow.add("statictext", undefined, "모양:").preferredSize.width = LABEL_WIDTH;
-    var shapeList = shapeRow.add("dropdownlist", undefined, SHAPES);
-    shapeList.selection = shape;
+    var shapeList = addRadioChoice(shapeRow, SHAPES);
+    setRadioChoice(shapeList, shape);
     var checkRow = shapePanel.add("group");
     var mergeCheck = checkRow.add("checkbox", undefined, "같은 생식세포 합치기");
     var circleCheck = checkRow.add("checkbox", undefined, "생식세포 원");
@@ -114,8 +114,7 @@ try {
     p1Input.onChanging = function() { parent1 = p1Input.text; updatePreview(); };
     p2Input.onChanging = function() { parent2 = p2Input.text; updatePreview(); };
     shapeList.onChange = function() {
-        if (shapeList.selection === null) { shapeList.selection = shape; return; }
-        shape = shapeList.selection.index;
+        shape = shapeList.index;
         updatePreview();
     };
     mergeCheck.onClick = function() { mergeOn = mergeCheck.value; updatePreview(); };
@@ -423,6 +422,26 @@ try {
         rgb.green = value;
         rgb.blue = value;
         return rgb;
+    }
+
+    // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번)
+    function addRadioChoice(parent, items) {
+        var g = parent.add("group");
+        g.alignChildren = ["left", "center"];
+        g.spacing = 12;
+        g.radios = [];
+        g.index = 0;
+        for (var i = 0; i < items.length; i++) {
+            var r = g.add("radiobutton", undefined, items[i]);
+            r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+            g.radios.push(r);
+        }
+        return g;
+    }
+
+    function setRadioChoice(g, n) {
+        g.index = n;
+        for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
     }
 
     // -------------------------------------------------------

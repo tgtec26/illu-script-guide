@@ -84,7 +84,7 @@ const row = (log, label) => {
 let saved;
 for (const [kind, maximum] of [[1, 3], [2, 15]]) {
   const {log, original} = run(log => {
-    const list = log.controls.find(c => c.type === 'dropdownlist'); list.selection = kind; list.onChange();
+    const radios = log.controls.filter(c => c.type === 'radiobutton'); radios[kind].onClick();
     assert.strictEqual(row(log, '최대값:').input.text, String(maximum));
     const curve = row(log, '곡률 (%):'); curve.input.text = '0'; curve.input.onChange();
     const g = log.groups[log.groups.length - 1];

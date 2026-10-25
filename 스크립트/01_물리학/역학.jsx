@@ -2886,13 +2886,45 @@ try {
             input.onChange = function() { apply(parseFloat(String(input.text).replace(",", "."))); };
         }
 
+        // 선택지가 적고 짧으면 드롭다운 대신 한 줄 라디오 (클릭 1번)
+        function fitsRadioChoice(items) {
+            var total = 0;
+            for (var i = 0; i < items.length; i++) {
+                if (String(items[i]).length > 14) return false;
+                total += String(items[i]).length;
+            }
+            return items.length <= 3 && total <= 22;
+        }
+
+        function addRadioChoice(parent, items) {
+            var g = parent.add("group");
+            g.alignChildren = ["left", "center"];
+            g.spacing = 12;
+            g.radios = [];
+            g.index = 0;
+            for (var i = 0; i < items.length; i++) {
+                var r = g.add("radiobutton", undefined, items[i]);
+                r.onClick = (function(k) { return function() { g.index = k; if (g.onChange) g.onChange(); }; })(i);
+                g.radios.push(r);
+            }
+            return g;
+        }
+
+        function setRadioChoice(g, n) {
+            g.index = n;
+            for (var i = 0; i < g.radios.length; i++) g.radios[i].value = (i === n);
+        }
+
         function addChoice(panel, ctl) {
             var row = panel.add("group");
             row.alignChildren = ["left", "center"];
             row.add("statictext", undefined, ctl.label).preferredSize.width = 76;
-            var list = row.add("dropdownlist", undefined, ctl.items);
-            list.selection = o[ctl.key];
+            var useRadio = fitsRadioChoice(ctl.items);
+            var list;
+            if (useRadio) { list = addRadioChoice(row, ctl.items); setRadioChoice(list, o[ctl.key]); }
+            else { list = row.add("dropdownlist", undefined, ctl.items); list.selection = o[ctl.key]; }
             list.onChange = function() {
+                if (useRadio) { o[ctl.key] = list.index; redraw(); return; }
                 if (list.selection === null) { list.selection = o[ctl.key]; return; }
                 o[ctl.key] = list.selection.index;
                 redraw();
