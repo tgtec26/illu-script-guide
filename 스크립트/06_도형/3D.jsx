@@ -57,6 +57,15 @@ function foldPanel(parent, title, collapsed, key) {
     var FILL_FLAT = 1;
     var FILL_LIT = 2;
 
+    // 곡면 음영 그라데이션 (웹 sci-illu-web src/generators/shade-gradient.js·solid3d.js와 같은 값)
+    var GRADIENT_MIN_DK = 3;          // 곡면 안에서 K가 이보다 적게 바뀌면 그라데이션을 쓰지 않는다
+    var GRADIENT_BINS = 24;           // 그라데이션 방향으로 K를 모으는 칸 수
+    var GRADIENT_TOL_K = 1;           // 정지점을 줄일 때 허용하는 K 차이
+    var GRADIENT_FIT_K = 4;           // 표본 K와 그라데이션의 차이(RMS)가 이보다 크면 평균 K 단색으로 둔다
+    var GRADIENT_SEARCH_SAMPLES = 1500; // 선형 방향을 훑을 때 쓰는 표본 수 (많으면 솎는다)
+    var SURFACE_CELLS_T = 24;         // 곡면 표본: 둘레 방향 칸 수
+    var SURFACE_CELLS_S = 8;          // 곡면 표본: 높이 방향 칸 수
+
     // 탭들이 같이 쓰는 옵션
     var tabIndex = 0;
     var rotY = 45;      // 가로 회전 (턴테이블). 회전체는 쓰지 않는다
@@ -101,6 +110,9 @@ function foldPanel(parent, title, collapsed, key) {
     var documentIsCmyk = false;
     try { documentIsCmyk = doc.documentColorSpace === DocumentColorSpace.CMYK; } catch (colorSpaceError) {}
     var kColorCache = {};       // 색상·채도·K값별 채움색. 면마다 새로 만들지 않는다
+    var shadeGradients = {};    // 정지점별 곡면 그라데이션 견본. 그릴 때마다 안 쓴 것은 지운다(미리보기마다 쌓이지 않게)
+    var shadeGradientsUsed = {};
+    var shadeGradientCount = 0;
 
     // ---- 선택 읽기 ------------------------------------------------------------
     // 엔진마다 선택을 따로 해석한다. 맞지 않으면 error에 안내문이 남고 그 탭은 꺼진다
@@ -432,6 +444,7 @@ function foldPanel(parent, title, collapsed, key) {
             try { doc.selection = null; finalGroup.selected = true; } catch (selectError) {}
         }
     } else clearPreview();
+    pruneShadeGradients();
     app.redraw();
 
     // ---- 다이얼로그 도우미 ------------------------------------------------
@@ -552,7 +565,10 @@ function foldPanel(parent, title, collapsed, key) {
                 if (previewRenderKey === renderKey(false)) return;
                 var fills = engine.previewFills();
                 var tint = tintKey();
-                if (fills && fills.length === previewFillTargets.length) {
+                // 곡면 그라데이션은 색만 바꿀 수 없어 다시 그린다
+                var curved = false;
+                for (var c = 0; fills && c < fills.length; c++) if (fills[c].samples) curved = true;
+                if (fills && !curved && fills.length === previewFillTargets.length) {
                     for (var i = 0; i < fills.length; i++) {
                         var targets = previewFillTargets[i];
                         for (var j = 0; j < targets.length; j++) {
@@ -701,6 +717,7 @@ function foldPanel(parent, title, collapsed, key) {
         } else {
             clearPreview();
             previewGroup = engine.create(light, false);
+            pruneShadeGradients();
             activeFillTargets = null;
             if (previewGroup !== null) {
                 previewEngine = engine;
@@ -728,6 +745,7 @@ function foldPanel(parent, title, collapsed, key) {
         previewRenderKey = "";
         previewFillTargets = [];
         activeFillTargets = null;
+        shadeGradientsUsed = {};
     }
 
     // 공통 항목 뒤에 엔진별 항목을 순서대로 잇는다. 엔진 항목 수가 바뀌면 v를 올린다
@@ -1025,6 +1043,241 @@ function foldPanel(parent, title, collapsed, key) {
         path.filled = true;
         try { path.fillColor = makeKColor(k); } catch (fillError) {}
         recordFillTarget(path, k);
+    }
+
+    // ---- 곡면 음영 그라데이션 -------------------------------------------------
+    // 곡면 칠(표본 samples가 있는 칠)은 광원 자동일 때 표본으로 맞춘 그라데이션으로, 맞지 않으면 평균 K 단색으로 칠한다
+    function applyShadeFill(path, k, samples) {
+        var grad = fillMode === FILL_LIT && samples ? fitShadeGradient(samples) : null;
+        if (grad === null) {
+            applyFill(path, k);
+            return;
+        }
+        path.stroked = false;
+        path.filled = true;
+        try {
+            var color = new GradientColor();
+            color.gradient = shadeGradient(grad);
+            path.fillColor = color;
+            placeShadeGradient(path, grad);
+        } catch (gradientError) {
+            try { path.fillColor = makeKColor(k); } catch (fillError) {}
+        }
+        recordFillTarget(path, k);
+    }
+
+    // 정지점(위치, K)이 같은 견본은 다시 쓴다. 이번 그리기에서 쓴 견본을 표시해 두고 pruneShadeGradients가 나머지를 지운다
+    function shadeGradient(grad) {
+        var key = grad.type + "|" + tintKey();
+        var i;
+        for (i = 0; i < grad.stops.length; i++) key += "|" + grad.stops[i][0] + ":" + grad.stops[i][1];
+        shadeGradientsUsed[key] = true;
+        if (shadeGradients[key]) return shadeGradients[key];
+        var gradient = doc.gradients.add();
+        shadeGradientCount++;
+        gradient.name = "3D 음영 " + shadeGradientCount;
+        gradient.type = grad.type === "radial" ? GradientType.RADIAL : GradientType.LINEAR;
+        while (gradient.gradientStops.length < grad.stops.length) gradient.gradientStops.add();
+        // 새 견본은 정지점이 0·100에 있다. 뒤에서부터 위치를 써야 앞 점이 뒤 점을 넘어가며 순서가 바뀌지 않는다
+        for (i = grad.stops.length - 1; i >= 0; i--) gradient.gradientStops[i].rampPoint = grad.stops[i][0] * 100;
+        for (i = 0; i < grad.stops.length; i++) gradient.gradientStops[i].color = makeKColor(grad.stops[i][1]);
+        shadeGradients[key] = gradient;
+        return gradient;
+    }
+
+    function pruneShadeGradients() {
+        for (var key in shadeGradients) {
+            if (!shadeGradients.hasOwnProperty(key) || shadeGradientsUsed[key]) continue;
+            try { shadeGradients[key].remove(); } catch (removeError) {}
+            delete shadeGradients[key];
+        }
+    }
+
+    // 일러는 GradientColor의 origin·angle 대입을 무시하고 채움을 패스 바운딩 박스에 맞춘다(AGENTS.md "Gradient Angle").
+    // 그래서 읽어 온 각도·길이·원점과의 차이만큼 채움만 돌리고(rotate) 늘리고(resize) 옮긴다(translate).
+    // 선형은 원점 = 시작점, 원형은 원점 = 가운데이고 길이 = 반지름이다
+    function placeShadeGradient(path, grad) {
+        var dx = grad.end[0] - grad.start[0];
+        var dy = grad.end[1] - grad.start[1];
+        var length = grad.type === "radial" ? grad.radius : Math.sqrt(dx * dx + dy * dy);
+        if (grad.type !== "radial") {
+            var angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            path.rotate(angle - path.fillColor.angle, false, false, true, false, Transformation.CENTER);
+        }
+        var current = path.fillColor.length;
+        if (current > 1e-6) {
+            var percent = length / current * 100;
+            path.resize(percent, percent, false, false, true, false, 100, Transformation.CENTER);
+        }
+        var origin = path.fillColor.origin;
+        path.translate(grad.start[0] - origin[0], grad.start[1] - origin[1], false, false, true, false);
+    }
+
+    // 곡면 표본 {x, y, k, w} → {type: "linear"|"radial", start, end, radius, stops: [[0~1, K]…]} | null.
+    // 웹 shade-gradient.js fitGradient와 같은 계산이다(tests/check-3d-shade-gradient.js가 비교한다).
+    // 선형: K ≈ 1차식의 기울기 둘레 ±15°를 1° → 0.1°로 훑어 칸 평균 정지점과 가장 덜 어긋나는 방향.
+    // 원형: K ≈ a + d·x + e·y + b·(x² + y²)의 가운데(구의 밝은 곳)에서 잰 거리. 덜 어긋나는 쪽을 쓴다
+    function fitShadeGradient(samples) {
+        var n = samples.length;
+        var i, s;
+        var sw = 0, sx = 0, sy = 0;
+        for (i = 0; i < n; i++) {
+            s = samples[i];
+            sw += s.w; sx += s.w * s.x; sy += s.w * s.y;
+        }
+        if (sw <= 0) return null;
+        var mx = sx / sw, my = sy / sw;
+        var spread = 0;
+        for (i = 0; i < n; i++) spread = Math.max(spread, Math.sqrt((samples[i].x - mx) * (samples[i].x - mx) + (samples[i].y - my) * (samples[i].y - my)));
+        if (!spread) spread = 1;
+        var pts = [];
+        for (i = 0; i < n; i++) pts.push([(samples[i].x - mx) / spread, (samples[i].y - my) / spread]);
+        var linear = null, radial = null;
+        var rows = [];
+        for (i = 0; i < n; i++) rows.push([1, pts[i][0], pts[i][1]]);
+        var lin = solveShadeLeastSquares(rows, samples);
+        if (lin !== null && Math.sqrt(lin[1] * lin[1] + lin[2] * lin[2]) > 1e-9) {
+            var stride = Math.max(1, Math.floor(n / GRADIENT_SEARCH_SAMPLES));
+            var few = [], fewPts = [], fewW = 0;
+            for (i = 0; i < n; i += stride) {
+                few.push(samples[i]); fewPts.push(pts[i]); fewW += samples[i].w;
+            }
+            var angle = Math.atan2(lin[2], lin[1]);
+            var first = shadeLinearFit(angle, few, fewPts, fewW);
+            var bestErr = first !== null ? first.err : Infinity;
+            var steps = [Math.PI / 180, Math.PI / 1800];
+            for (var si = 0; si < steps.length; si++) {
+                var center = angle;
+                for (var d = -15; d <= 15; d++) {
+                    if (d === 0) continue;
+                    var trial = shadeLinearFit(center + d * steps[si], few, fewPts, fewW);
+                    if (trial !== null && trial.err < bestErr) { bestErr = trial.err; angle = center + d * steps[si]; }
+                }
+            }
+            var fit = shadeLinearFit(angle, samples, pts, sw);
+            if (fit !== null) {
+                linear = {type: "linear", profile: fit.profile, err: fit.err,
+                    start: [mx + fit.dir[0] * fit.t0 * spread, my + fit.dir[1] * fit.t0 * spread],
+                    end: [mx + fit.dir[0] * fit.t1 * spread, my + fit.dir[1] * fit.t1 * spread]};
+            }
+        }
+        rows = [];
+        for (i = 0; i < n; i++) rows.push([1, pts[i][0], pts[i][1], pts[i][0] * pts[i][0] + pts[i][1] * pts[i][1]]);
+        var quad = solveShadeLeastSquares(rows, samples);
+        if (quad !== null && Math.abs(quad[3]) > 1e-9) {
+            var cx = -quad[1] / (2 * quad[3]), cy = -quad[2] / (2 * quad[3]);
+            if (Math.sqrt(cx * cx + cy * cy) < 3) {   // 가운데가 면에서 멀면 선형과 다를 게 없다
+                var rs = [], r1 = -Infinity;
+                for (i = 0; i < n; i++) {
+                    rs.push(Math.sqrt((pts[i][0] - cx) * (pts[i][0] - cx) + (pts[i][1] - cy) * (pts[i][1] - cy)));
+                    r1 = Math.max(r1, rs[i]);
+                }
+                var ring = fitShadeProfile(samples, rs, 0, r1, sw);
+                if (ring !== null) {
+                    var middle = [mx + cx * spread, my + cy * spread];
+                    radial = {type: "radial", profile: ring.profile, err: ring.err, start: middle, end: middle, radius: r1 * spread};
+                }
+            }
+        }
+        var best = linear;
+        if (radial !== null && (best === null || radial.err < best.err)) best = radial;
+        if (best === null || best.err > GRADIENT_FIT_K) return null;
+        var reduced = reduceShadeStops(best.profile);
+        var stops = [];
+        for (i = 0; i < reduced.length; i++) stops.push([Math.round(reduced[i][0] * 1000) / 1000, Math.round(reduced[i][1])]);
+        return {type: best.type, start: best.start, end: best.end, radius: best.radius, stops: stops};
+    }
+
+    // 방향 angle(라디안)으로 표본을 늘어놓고 칸 평균 정지점을 맞춘다
+    function shadeLinearFit(angle, list, at, weight) {
+        var dir = [Math.cos(angle), Math.sin(angle)];
+        var ts = [];
+        var t0 = Infinity, t1 = -Infinity;
+        for (var i = 0; i < at.length; i++) {
+            ts.push(dir[0] * at[i][0] + dir[1] * at[i][1]);
+            t0 = Math.min(t0, ts[i]);
+            t1 = Math.max(t1, ts[i]);
+        }
+        var fit = fitShadeProfile(list, ts, t0, t1, weight);
+        if (fit === null) return null;
+        return {profile: fit.profile, err: fit.err, dir: dir, t0: t0, t1: t1};
+    }
+
+    // 가중 최소제곱: rows[i]·x ≈ samples[i].k (정규 방정식, 가우스 소거)
+    function solveShadeLeastSquares(rows, samples) {
+        var n = rows[0].length;
+        var A = [];
+        var a, b, r, c, k;
+        for (a = 0; a < n; a++) {
+            A.push([]);
+            for (b = 0; b <= n; b++) A[a].push(0);
+        }
+        for (r = 0; r < rows.length; r++) {
+            var w = samples[r].w, value = samples[r].k;
+            for (a = 0; a < n; a++) {
+                for (b = 0; b < n; b++) A[a][b] += w * rows[r][a] * rows[r][b];
+                A[a][n] += w * rows[r][a] * value;
+            }
+        }
+        for (c = 0; c < n; c++) {
+            var pivot = c;
+            for (r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[pivot][c])) pivot = r;
+            if (Math.abs(A[pivot][c]) < 1e-12) return null;
+            var swap = A[c]; A[c] = A[pivot]; A[pivot] = swap;
+            for (r = 0; r < n; r++) {
+                if (r === c) continue;
+                var f = A[r][c] / A[c][c];
+                for (k = c; k <= n; k++) A[r][k] -= f * A[c][k];
+            }
+        }
+        var x = [];
+        for (a = 0; a < n; a++) x.push(A[a][n] / A[a][a]);
+        return x;
+    }
+
+    // 표본을 그라데이션 위치 t(lo~hi)의 칸에 모아 평균 K 정지점과 표본 K와의 차이(RMS)를 낸다
+    function fitShadeProfile(samples, ts, lo, hi, sw) {
+        if (hi - lo < 1e-9) return null;
+        var sumW = [], sumK = [];
+        var b, i;
+        for (b = 0; b < GRADIENT_BINS; b++) { sumW.push(0); sumK.push(0); }
+        for (i = 0; i < samples.length; i++) {
+            b = Math.min(GRADIENT_BINS - 1, Math.max(0, Math.floor((ts[i] - lo) / (hi - lo) * GRADIENT_BINS)));
+            sumW[b] += samples[i].w + 1e-12;
+            sumK[b] += (samples[i].w + 1e-12) * samples[i].k;
+        }
+        var filled = [];
+        for (b = 0; b < GRADIENT_BINS; b++) if (sumW[b] > 0) filled.push([(b + 0.5) / GRADIENT_BINS, sumK[b] / sumW[b]]);
+        if (filled.length < 2) return null;
+        var profile = [[0, filled[0][1]]].concat(filled, [[1, filled[filled.length - 1][1]]]);
+        var lowK = Infinity, highK = -Infinity;
+        for (i = 0; i < profile.length; i++) { lowK = Math.min(lowK, profile[i][1]); highK = Math.max(highK, profile[i][1]); }
+        if (highK - lowK < GRADIENT_MIN_DK) return null;
+        var err = 0;
+        for (i = 0; i < samples.length; i++) {
+            var o = (ts[i] - lo) / (hi - lo);
+            var j = 1;
+            while (j < profile.length - 1 && profile[j][0] < o) j++;
+            var p0 = profile[j - 1], p1 = profile[j];
+            var kAt = p1[0] - p0[0] < 1e-12 ? p1[1] : p0[1] + (p1[1] - p0[1]) * (o - p0[0]) / (p1[0] - p0[0]);
+            err += samples[i].w * (samples[i].k - kAt) * (samples[i].k - kAt);
+        }
+        return {profile: profile, err: Math.sqrt(err / sw)};
+    }
+
+    // 정지점 줄이기: 이웃 사이 직선에서 GRADIENT_TOL_K 안인 점을 뺀다 (더글러스-포이커)
+    function reduceShadeStops(pts) {
+        if (pts.length <= 2) return pts;
+        var a = pts[0], b = pts[pts.length - 1];
+        var worst = 0, at = -1;
+        for (var i = 1; i < pts.length - 1; i++) {
+            var k = a[1] + (b[1] - a[1]) * (pts[i][0] - a[0]) / (b[0] - a[0] || 1);
+            var gap = Math.abs(pts[i][1] - k);
+            if (gap > worst) { worst = gap; at = i; }
+        }
+        if (worst <= GRADIENT_TOL_K) return [a, b];
+        var left = reduceShadeStops(pts.slice(0, at + 1));
+        return left.slice(0, left.length - 1).concat(reduceShadeStops(pts.slice(at)));
     }
 
     function beginFillTarget() {
@@ -1629,7 +1882,8 @@ function foldPanel(parent, title, collapsed, key) {
                     var t = lateral.t0 + (lateral.t1 - lateral.t0) * (i + 0.5) / shadeSamples;
                     shadeSum += shadeOfViewNormal(toView(round.normalAt(t, 0.5)));
                 }
-                fills.push({kind: "outline", round: round, span: lateral, k: kFromShade(shadeSum / shadeSamples)});
+                fills.push({kind: "outline", round: round, span: lateral, k: kFromShade(shadeSum / shadeSamples),
+                    samples: surfaceSamples(round.pointAt, round.normalAt, lateral.t0, lateral.t1, null)});
             }
             if (model.tube) {
                 collectTubeFills(model, fills);
@@ -1672,6 +1926,9 @@ function foldPanel(parent, title, collapsed, key) {
             }
             if (shadeCount === 0) return;
             var wallK = kFromShade(shadeSum / shadeCount);
+            // 안쪽 벽 표본: 바깥 법선이 뒤를 보는 띠의 안쪽 면 (법선 -n)
+            var wallSamples = surfaceSamples(tube.innerPoint, function(t, s) { return scale(round.normalAt(t, s), -1); }, 0, 2 * Math.PI,
+                function(t) { return facingModel(round.pointAt(t, 0.5), round.normalAt(t, 0.5)) < 0; });
 
             // 가까운 안쪽 테두리 중 먼 구멍과 겹치는 호(렌즈 경계)를 찾는다
             var lensCurve = {
@@ -1694,14 +1951,14 @@ function foldPanel(parent, title, collapsed, key) {
             if (wallSpan === null) return;                       // 축 방향으로 보면 구멍이 그대로 뚫려 보인다
             if (wallSpan.closed || lensSpan === null || lensSpan.closed) {
                 // 먼 구멍이 전혀 안 보인다: 안쪽 원 전체가 벽
-                fills.push({kind: "cap", curve: nearInner, k: wallK});
+                fills.push({kind: "cap", curve: nearInner, k: wallK, samples: wallSamples});
                 return;
             }
             var nearEndPoint = projectModel(nearInner.pointAt(wallSpan.t1));
             var farStart = projectModel(farInner.pointAt(lensSpan.t0));
             var farEndPoint = projectModel(farInner.pointAt(lensSpan.t1));
             var farForward = distance2(farEndPoint, nearEndPoint) > distance2(farStart, nearEndPoint);
-            fills.push({kind: "segments", k: wallK, segments: [
+            fills.push({kind: "segments", k: wallK, samples: wallSamples, segments: [
                 {kind: "arc", curve: nearInner, t0: wallSpan.t0, t1: wallSpan.t1},
                 farForward ? {kind: "arc", curve: farInner, t0: lensSpan.t0, t1: lensSpan.t1}
                     : {kind: "arc", curve: farInner, t0: lensSpan.t1, t1: lensSpan.t0}
@@ -1729,7 +1986,7 @@ function foldPanel(parent, title, collapsed, key) {
                 } else {
                     path = makeLateralOutline(group, fill.round, fill.span);
                 }
-                applyFill(path, fill.k);
+                applyShadeFill(path, fill.k, fill.samples);
             }
         }
 
@@ -2034,9 +2291,10 @@ function foldPanel(parent, title, collapsed, key) {
                     k: kFromShade(shadeOfViewNormal(toView(faces[i].normal)))});
             }
             var k = kFromShade(sphereShade(cs));
+            var sphereSamplesList = sphereSamples(cs);
             var silhouetteCurve = {pointAt: cs.silhouette};
             if (cs.kept[2]) {
-                fills.push({kind: "segments", segments: [arcSegment(silhouetteCurve, 0, 2 * Math.PI)], k: k});
+                fills.push({kind: "segments", segments: [arcSegment(silhouetteCurve, 0, 2 * Math.PI)], k: k, samples: sphereSamplesList});
                 for (i = 0; i < faceFills.length; i++) fills.push(faceFills[i]);
                 return;
             }
@@ -2059,7 +2317,7 @@ function foldPanel(parent, title, collapsed, key) {
             var tIn = silhouetteParam(rimPoint(rim, uIn));
             while (tIn <= tOut) tIn += 2 * Math.PI;
             for (i = 0; i < faceFills.length; i++) fills.push(faceFills[i]);
-            fills.push({kind: "segments", segments: [arcSegment(silhouetteCurve, tOut, tIn)].concat(chain), k: k});
+            fills.push({kind: "segments", segments: [arcSegment(silhouetteCurve, tOut, tIn)].concat(chain), k: k, samples: sphereSamplesList});
         }
 
         function arcSegment(curve, t0, t1) {
@@ -2135,6 +2393,44 @@ function foldPanel(parent, title, collapsed, key) {
                 weight += viewNormal[2];
             }
             return sum / weight;
+        }
+
+        // 곡면 그라데이션 표본 (웹 solid3d.js surfaceSamples와 같다): 곡면 P(t, s)를 둘레 24칸 × 높이 8칸으로 나눠
+        // 칸 가운데의 화면 위치·K와 칸의 화면 넓이(가중치)를 낸다. keep이 있으면 그 칸만
+        function surfaceSamples(pointAt, normalAt, t0, t1, keep) {
+            var samples = [];
+            var dt = (t1 - t0) / SURFACE_CELLS_T;
+            var ds = 1 / SURFACE_CELLS_S;
+            for (var i = 0; i < SURFACE_CELLS_T; i++) {
+                for (var j = 0; j < SURFACE_CELLS_S; j++) {
+                    var t = t0 + dt * (i + 0.5);
+                    var s = ds * (j + 0.5);
+                    if (keep !== null && !keep(t, s)) continue;
+                    var q = projectModel(pointAt(t, s));
+                    var a = projectModel(pointAt(t - dt / 2, s)), b = projectModel(pointAt(t + dt / 2, s));
+                    var c = projectModel(pointAt(t, s - ds / 2)), d = projectModel(pointAt(t, s + ds / 2));
+                    var w = Math.abs((b[0] - a[0]) * (d[1] - c[1]) - (b[1] - a[1]) * (d[0] - c[0]));
+                    samples.push({x: q[0], y: q[1], k: kFromShade(shadeOfViewNormal(toView(normalAt(t, s)))), w: w});
+                }
+            }
+            return samples;
+        }
+
+        // 남은 구면 표본: sphereShade와 같은 고른 점 400개 중 보이는 점. 가중치는 화면 넓이에 비례하는 법선의 깊이 성분
+        function sphereSamples(cs) {
+            var count = 400;
+            var golden = Math.PI * (3 - Math.sqrt(5));
+            var samples = [];
+            for (var i = 0; i < count; i++) {
+                var y = 1 - 2 * (i + 0.5) / count;
+                var r = Math.sqrt(1 - y * y);
+                var normal = [r * Math.cos(golden * i), y, r * Math.sin(golden * i)];
+                var viewNormal = toView(normal);
+                if (viewNormal[2] <= 0 || cs.removed(scale(normal, cs.R))) continue;
+                var q = projectModel(scale(normal, cs.R));
+                samples.push({x: q[0], y: q[1], k: kFromShade(shadeOfViewNormal(viewNormal)), w: viewNormal[2]});
+            }
+            return samples;
         }
 
         // 각기둥·각뿔·각뿔대: 밑면 다각형은 XZ 평면. 밑면 회전 0이면 한 변이 정면을 보게 놓는다 (4각이면 반듯한 상자)

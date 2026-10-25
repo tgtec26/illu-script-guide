@@ -85,7 +85,7 @@ function previewHost() {
     contrast: 40, fillHue: 210, fillSaturation: 0, lightAzimuth: -35, lightElevation: 50, offsetXmm: 0, offsetYmm: 0, MM_TO_PT: 2.834645669,
     previewEnabled: true, previewGroup: null, previewEngine: null, previewGeometryKey: '', previewRenderKey: '',
     previewIsLight: false, previewFillTargets: [], activeFillTargets: null, lastLiveRender: 0, LIVE_INTERVAL_MS: 60,
-    app: { redraw() { redraws++; } }, translateItem() {}, makeKColor(k) { return k; },
+    app: { redraw() { redraws++; } }, translateItem() {}, makeKColor(k) { return k; }, pruneShadeGradients() {},
     engine: { saveFields() { return [20]; }, create(light) { creates++; c.previewFillTargets = light ? [] : [[{path: { set fillColor(k) { writes++; } }, k: 30}]]; return { remove() { removes++; } }; },
       previewFills() { return [{k: 100 - c.brightness}]; } },
     counts() { return {creates, removes, redraws, writes}; } };
