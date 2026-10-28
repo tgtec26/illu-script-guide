@@ -325,6 +325,7 @@ var SCRIPT_KEY = "MiddleMath";
             var ENG_BASELINE_PT = 0.5;
             var MARK_GAP_MM = 0.7;   // 겹호·눈금·평행 표시 사이 간격
             var SHAPE_STROKE_PT = 0.8;
+            var DIMENSION_LABEL_GAP_MM = 0.7;   // 치수선 글자 윤곽에서 흰 배경까지 (기하.jsx와 같다)
 
             var VERTEX_MARKS = ["없음", "호", "호 2겹", "호 3겹", "직각"];
             var SIDE_MARKS = ["없음", "눈금 1", "눈금 2", "눈금 3", "평행 >", "평행 >>"];
@@ -369,6 +370,8 @@ var SCRIPT_KEY = "MiddleMath";
             var offsetYmm = 0;
             var previewEnabled = true;
             var normalizeStroke = true;
+            var showDimensions = false;   // 변 글자를 점선 치수선 위에
+            var dimensionRiseMm = 3;
             var vertexMarks = [], vertexTexts = [], sideMarks = [], sideTexts = [];
             for (var v = 0; v < vertexCount; v++) {
                 vertexMarks.push(0);
@@ -377,7 +380,7 @@ var SCRIPT_KEY = "MiddleMath";
                 sideTexts.push("");
             }
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-            var initial = {fontPt: fontPt, labelGapMm: labelGapMm, arcRadiusMm: arcRadiusMm, tickMm: tickMm, strokePt: strokePt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+            var initial = {fontPt: fontPt, labelGapMm: labelGapMm, arcRadiusMm: arcRadiusMm, tickMm: tickMm, strokePt: strokePt, offsetXmm: offsetXmm, offsetYmm: offsetYmm, dimensionRiseMm: dimensionRiseMm};
             applySettings();
 
             var previewGroup = null;
@@ -403,6 +406,11 @@ var SCRIPT_KEY = "MiddleMath";
             var markRows = [];
             for (var r = 0; r < vertexCount; r++) markRows.push(addMarkRow(markPanel, r));
 
+            var dimensionPanel = addPanel(win, "치수선", "dimensions");
+            var dimensionCheck = dimensionPanel.add("checkbox", undefined, "점선 치수선");
+            dimensionCheck.helpTip = "변 글자를 바깥쪽 곡선의 가운데에 두고, 글자 양쪽으로 점선 치수선을 그립니다";
+            var dimensionControls = addValueRow(dimensionPanel, "높이", "mm", dimensionRiseMm, 0.5, 10, 0.5, 1);
+
             var sizePanel = addPanel(win, "크기");
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var gapControls = addValueRow(sizePanel, "글자 간격", "mm", labelGapMm, 0, 5, 0.1, 1);
@@ -423,6 +431,8 @@ var SCRIPT_KEY = "MiddleMath";
             showNamesCheck.value = showNames;
             clockwiseCheck.value = clockwise;
             normalizeCheck.value = normalizeStroke;
+            dimensionCheck.value = showDimensions;
+            enableDimensionControls();
             refreshRowCaptions();
 
             showNamesCheck.onClick = function() { showNames = showNamesCheck.value; updatePreview(); };
@@ -435,12 +445,17 @@ var SCRIPT_KEY = "MiddleMath";
                 updatePreview();
             };
             normalizeCheck.onClick = function() { normalizeStroke = normalizeCheck.value; updatePreview(); };
+            function enableDimensionControls() {
+                dimensionControls.input.enabled = dimensionControls.slider.enabled = dimensionControls.reset.enabled = showDimensions;
+            }
+            dimensionCheck.onClick = function() { showDimensions = dimensionCheck.value; enableDimensionControls(); updatePreview(); };
 
             bindValueRow(fontControls, function(value) { fontPt = value; }, initial.fontPt);
             bindValueRow(gapControls, function(value) { labelGapMm = value; }, initial.labelGapMm);
             bindValueRow(arcControls, function(value) { arcRadiusMm = value; }, initial.arcRadiusMm);
             bindValueRow(tickControls, function(value) { tickMm = value; }, initial.tickMm);
             bindValueRow(strokeControls, function(value) { strokePt = value; }, initial.strokePt);
+            bindValueRow(dimensionControls, function(value) { dimensionRiseMm = value; }, initial.dimensionRiseMm);
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, initial.offsetXmm);
             bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, initial.offsetYmm);
@@ -496,14 +511,18 @@ var SCRIPT_KEY = "MiddleMath";
                     vertexMarks: vertexMarks, vertexTexts: vertexTexts,
                     sideMarks: sideMarks, sideTexts: sideTexts,
                     arcRadius: arcRadiusMm * MM_TO_PT, gap: MARK_GAP_MM * MM_TO_PT,
-                    tick: tickMm * MM_TO_PT, labelGap: labelGapMm * MM_TO_PT
+                    tick: tickMm * MM_TO_PT, labelGap: labelGapMm * MM_TO_PT,
+                    dimensionRise: showDimensions ? dimensionRiseMm * MM_TO_PT : 0
                 });
 
                 previewGroup = target.parent.groupItems.add();
                 previewGroup.move(target, ElementPlacement.PLACEBEFORE);
                 previewGroup.name = "도형 표기";
                 for (var i = 0; i < marks.paths.length; i++) drawMarkPath(marks.paths[i]);
-                for (var j = 0; j < marks.texts.length; j++) drawLabel(marks.texts[j]);
+                for (var j = 0; j < marks.texts.length; j++) {
+                    var item = drawLabel(marks.texts[j]);
+                    if (marks.texts[j].dimension) addDimension(marks.texts[j], item);
+                }
                 if (offsetXmm !== 0 || offsetYmm !== 0) previewGroup.translate(offsetXmm * MM_TO_PT, offsetYmm * MM_TO_PT);
             }
 
@@ -524,6 +543,70 @@ var SCRIPT_KEY = "MiddleMath";
                 path.strokeWidth = strokePt;
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.MITERENDJOIN;
+                return path;
+            }
+
+            // 점선 치수선 (기하.jsx와 같은 모양): 표기 두께의 점선 베지어 하나 + 글자 윤곽에서 띄운 흰 배경 + 글자를 한 그룹으로.
+            // 곡선은 꼭짓점 중심에서 도형 선 두께의 절반만큼 물러난다.
+            // 기울어진 변은 글상자 모서리가 변 쪽으로 내려와 흰 배경이 도형 변·눈금을 덮으므로,
+            // 흰 배경이 변에서 clear(눈금 끝, 적어도 도형 선 두께 절반)만큼 떨어질 때까지 그 변의 곡선만 높이고 글자도 옮긴다
+            function addDimension(label, item) {
+                if (!item) return;
+                var spec = label.dimension;
+                var shapeWidth = normalizeStroke ? SHAPE_STROKE_PT : originalStrokeWidth;
+                var gap = DIMENSION_LABEL_GAP_MM * MM_TO_PT;
+                var bounds = dimensionLabelBounds(item);
+                var rect = [bounds[0] - gap, bounds[1] + gap, bounds[2] + gap, bounds[3] - gap];
+                var middle = [(spec.a[0] + spec.b[0]) / 2, (spec.a[1] + spec.b[1]) / 2];
+                var corners = [[rect[0], rect[1]], [rect[2], rect[1]], [rect[0], rect[3]], [rect[2], rect[3]]];
+                var low = Infinity;
+                for (var k = 0; k < corners.length; k++) low = Math.min(low, (corners[k][0] - middle[0]) * spec.normal[0] + (corners[k][1] - middle[1]) * spec.normal[1]);
+                var clear = Math.max(spec.clear, shapeWidth / 2), rise = spec.rise;
+                if (low < clear) {
+                    var lift = clear - low, dx = spec.normal[0] * lift, dy = spec.normal[1] * lift;
+                    rise += lift;
+                    item.translate(dx, dy);
+                    rect = [rect[0] + dx, rect[1] + dy, rect[2] + dx, rect[3] + dy];
+                }
+                var pieces = dimensionCurve(spec.a, spec.b, spec.normal, rise, shapeWidth / 2);
+                if (pieces.length === 0) return;
+                var group = previewGroup.groupItems.add();
+                group.name = "치수선 " + label.text;
+                var curve = drawMarkPath(pieces[0]);
+                curve.name = "점선 베지어";
+                curve.strokeDashes = [2, 1.5];
+                curve.move(group, ElementPlacement.PLACEATEND);
+                var mask = group.pathItems.rectangle(rect[1], rect[0], rect[2] - rect[0], rect[1] - rect[3]);
+                mask.name = "글자 배경";
+                mask.stroked = false;
+                mask.filled = true;
+                mask.fillColor = makeGray(0);
+                mask.fillOverprint = false;
+                item.move(group, ElementPlacement.PLACEATBEGINNING);
+            }
+
+            // 실제 글자 윤곽을 재어 숫자·영문·분수 모두 같은 여백을 준다 (기하.jsx와 같다)
+            function dimensionLabelBounds(item) {
+                var copy = null;
+                try {
+                    copy = item.duplicate();
+                    if (copy.typename === "TextFrame") copy = copy.createOutline();
+                    else outlineChildren(copy);
+                    var bounds = copy.visibleBounds;
+                    return [bounds[0], bounds[1], bounds[2], bounds[3]];
+                } catch (e) {
+                    var fallback = item.visibleBounds;
+                    return [fallback[0], fallback[1], fallback[2], fallback[3]];
+                } finally {
+                    if (copy !== null) try { copy.remove(); } catch (removeError) {}
+                }
+                function outlineChildren(group) {
+                    for (var i = group.pageItems.length - 1; i >= 0; i--) {
+                        var child = group.pageItems[i];
+                        if (child.typename === "TextFrame") child.createOutline();
+                        else if (child.typename === "GroupItem") outlineChildren(child);
+                    }
+                }
             }
 
             // at에서 dir 방향으로 gap만큼 떨어진 곳에 글자의 가까운 가장자리가 오게 둔다
@@ -550,8 +633,7 @@ var SCRIPT_KEY = "MiddleMath";
 
             function drawLabel(label) {
                 if (typeof buildStackedLabel === "function" && hasFractionText(label.text)) {
-                    buildStackedLabel(previewGroup, label, fontPt, label.gap, stackFrame, stackBar);
-                    return;
+                    return buildStackedLabel(previewGroup, label, fontPt, label.gap, stackFrame, stackBar);
                 }
                 var frame = previewGroup.textFrames.add();
                 frame.contents = label.text.replace(/\u00B0/g, "\u02D8");
@@ -575,6 +657,7 @@ var SCRIPT_KEY = "MiddleMath";
                     }
                 }
                 frame.translate(x - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                return frame;
             }
 
             // 글자 서체 (07_문자/한글·영문 서체 적용.jsx 규칙): 한글·공백은 Spoqa(기준선 0), 영문·숫자·기호는 GSMediumB1(기준선 +0.5pt).
@@ -740,9 +823,41 @@ var SCRIPT_KEY = "MiddleMath";
                         }
                     }
                     var clear = sideMark >= 1 && sideMark <= 3 ? opt.tick / 2 : (sideMark > 3 ? opt.tick * 0.45 : 0);
-                    if (opt.sideTexts[s]) texts.push({ text: opt.sideTexts[s], at: offsetPoint(middle, normal, clear), dir: normal, gap: opt.labelGap });
+                    if (opt.sideTexts[s] && opt.dimensionRise > 0) {
+                        // 점선 치수선: 글자를 바깥쪽으로 dimensionRise만큼 부푼 곡선의 꼭대기 가운데에
+                        texts.push({ text: opt.sideTexts[s], at: offsetPoint(middle, normal, opt.dimensionRise), dir: [0, 0], gap: 0,
+                            dimension: { a: a, b: b, normal: normal, rise: opt.dimensionRise, clear: clear } });
+                    } else if (opt.sideTexts[s]) texts.push({ text: opt.sideTexts[s], at: offsetPoint(middle, normal, clear), dir: normal, gap: opt.labelGap });
                 }
                 return { paths: paths, texts: texts };
+            }
+
+            // 치수선은 하나의 3차 베지어다 (기하.jsx와 같다). 글자 부분도 자르지 않는다.
+            // 꼭짓점 중심에서 retreat(도형 선 두께의 절반)만큼 물러난다
+            function dimensionCurve(a, b, normal, rise, retreat) {
+                var dx = b[0] - a[0], dy = b[1] - a[1], length = Math.sqrt(dx * dx + dy * dy);
+                if (length < 1e-6) return [];
+                function Q(t) { return [a[0] + dx * t + normal[0] * 4 * rise * t * (1 - t), a[1] + dy * t + normal[1] * 4 * rise * t * (1 - t)]; }
+                function D(t) { return [dx + normal[0] * 4 * rise * (1 - 2 * t), dy + normal[1] * 4 * rise * (1 - 2 * t)]; }
+                function piece(t0, t1) {
+                    var p = Q(t0), q = Q(t1), dp = D(t0), dq = D(t1), scale = (t1 - t0) / 3;
+                    return {kind: "dimension", closed: false, points: [
+                        {anchor: p, left: p, right: [p[0] + dp[0] * scale, p[1] + dp[1] * scale]},
+                        {anchor: q, left: [q[0] - dq[0] * scale, q[1] - dq[1] * scale], right: q}]};
+                }
+                retreat = Math.max(0, retreat || 0);
+                var low = 0, high = 0.5;
+                var end = Q(high), ex = end[0] - a[0], ey = end[1] - a[1];
+                if (retreat >= Math.sqrt(ex * ex + ey * ey)) return [];
+                if (retreat > 0) {
+                    for (var step = 0; step < 24; step++) {
+                        var mid = (low + high) / 2, at = Q(mid);
+                        var ox = at[0] - a[0], oy = at[1] - a[1];
+                        if (ox * ox + oy * oy < retreat * retreat) low = mid; else high = mid;
+                    }
+                }
+                var inset = retreat > 0 ? (low + high) / 2 : 0;
+                return [piece(inset, 1 - inset)];
             }
 
             // 꼭짓점 안쪽 각: start에서 반시계로 sweep(라디안). 열린 패스는 작은 쪽 각
@@ -944,12 +1059,13 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             function saveSettings() {
                 var parts = [
-                    "v2",
+                    "v3",
                     showNames ? "1" : "0", encodeURIComponent(startLetter), clockwise ? "1" : "0",
                     fontPt, labelGapMm, arcRadiusMm, tickMm, strokePt,
                     offsetXmm, offsetYmm, previewEnabled ? "1" : "0", normalizeStroke ? "1" : "0",
                     vertexCount + (closed ? "c" : "o"),
-                    vertexMarks.join(","), encodeList(vertexTexts), sideMarks.join(","), encodeList(sideTexts)
+                    vertexMarks.join(","), encodeList(vertexTexts), sideMarks.join(","), encodeList(sideTexts),
+                    showDimensions ? "1" : "0", dimensionRiseMm
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -965,7 +1081,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v2" || p.length !== 18) return;
+                // v3 = v2 + 점선 치수선(켬, 높이). v2도 읽는다
+                if (!((p[0] === "v2" && p.length === 18) || (p[0] === "v3" && p.length === 20))) return;
                 try {
                     showNames = p[1] === "1";
                     var letter = decodeURIComponent(p[2]);
@@ -980,6 +1097,10 @@ var SCRIPT_KEY = "MiddleMath";
                     offsetYmm = restoreNumber(p[10], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[11] === "1";
                     normalizeStroke = p[12] === "1";
+                    if (p[0] === "v3") {
+                        showDimensions = p[18] === "1";
+                        dimensionRiseMm = restoreNumber(p[19], dimensionRiseMm, 0.5, 10);
+                    }
                     if (p[13] !== vertexCount + (closed ? "c" : "o")) return;
                     var vm = p[14].split(","), vt = p[15].split(","), sm = p[16].split(","), st = p[17].split(",");
                     if (vm.length !== vertexCount || vt.length !== vertexCount || sm.length !== vertexCount || st.length !== vertexCount) return;

@@ -31,7 +31,7 @@ function extractFunction(name) {
 }
 
 const names = ["dedupePoints", "orderVertices", "signedArea", "vertexNames", "buildMarks", "angleSpan",
-  "arcPath", "rightAnglePath", "linePath", "offsetPoint", "sub", "unit"];
+  "arcPath", "rightAnglePath", "linePath", "offsetPoint", "sub", "unit", "dimensionCurve"];
 const g = new Function(`${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} vs ${b}`);
 const opt = (extra) => Object.assign({ names: null, vertexMarks: [], vertexTexts: [], sideMarks: [], sideTexts: [],
@@ -119,4 +119,41 @@ assert.ok(source.includes("\\u02D8"), "degree sign uses the GSMediumB1 glyph");
   assert.ok(!source.includes("sizePanel.add(\"checkbox\"") && !source.includes('addValueRow(sizePanel, "선 두께"'), "moved out of 크기");
   assert.ok(source.includes("strokePt = restoreNumber(p[8], strokePt, 0.1, 1);"), "still saved in the main settings");
 }
+// 점선 치수선(기하.jsx와 같은 모양): 변 글자는 바깥쪽으로 높이만큼 부푼 곡선의 꼭대기 가운데, 곡선은 꼭짓점에서 물러난 베지어 하나
+{
+  const sq = [[0, 40], [0, 0], [40, 0], [40, 40]];
+  assert.strictEqual(g.buildMarks(sq, true, opt({ sideTexts: ["", "6 cm", "", ""] })).texts[0].dimension, undefined, "off by default");
+  const m = g.buildMarks(sq, true, opt({ sideMarks: [0, 1, 0, 0], sideTexts: ["", "6 cm", "", ""], dimensionRise: 5 }));
+  const t = m.texts[0];
+  assert.deepStrictEqual(t.at, [20, -5], "label at the top of the curve, outside");
+  assert.deepStrictEqual(t.dir, [0, 0]);
+  assert.deepStrictEqual(t.dimension, { a: [0, 0], b: [40, 0], normal: [0, -1], rise: 5, clear: 2 }, "clear: tick reach outside the side");
+  assert.strictEqual(m.paths.length, 1, "tick stays on the side");
+  const curve = g.dimensionCurve([0, 0], [40, 0], [0, -1], 5, 0.4);
+  assert.strictEqual(curve.length, 1);
+  const pts = curve[0].points;
+  near(Math.hypot(pts[0].anchor[0], pts[0].anchor[1]), 0.4, "starts half a stroke away from the vertex");
+  near(Math.hypot(pts[1].anchor[0] - 40, pts[1].anchor[1]), 0.4, "ends half a stroke away from the vertex");
+  // 베지어 가운데(t=0.5)가 변 가운데에서 높이 5만큼 바깥
+  const [p0, p1, p2, p3] = [pts[0].anchor, pts[0].right, pts[1].left, pts[1].anchor];
+  const mid = [0, 1].map((k) => (p0[k] + 3 * p1[k] + 3 * p2[k] + p3[k]) / 8);
+  near(mid[0], 20, "apex x");
+  assert.ok(Math.abs(mid[1] + 5) < 0.01, "apex y " + mid[1]);
+  assert.deepStrictEqual(g.dimensionCurve([0, 0], [0, 0], [0, -1], 5, 0.4), [], "zero-length side");
+}
+
+// 웹 생성기(sci-illu-web math-geo-marks.js)의 buildMarks와 글자 그대로 같다 (웹 저장소가 옆 폴더에 있을 때만)
+{
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-geo-marks.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8");
+    const start = web.indexOf("export function buildMarks(");
+    const end = web.indexOf("\n}\n", start) + 2;
+    // 스크립트는 4칸, 웹은 2칸 들여쓰기
+    const scriptText = extractFunction("buildMarks").split("\n")
+      .map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+    assert.strictEqual(scriptText, web.slice(start + "export ".length, end), "buildMarks differs from the web generator");
+  }
+}
+
 console.log("geo marks checks passed");
