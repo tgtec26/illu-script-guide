@@ -750,7 +750,7 @@ function foldPanel(parent, title, collapsed, key) {
 
     // 공통 항목 뒤에 엔진별 항목을 순서대로 잇는다. 엔진 항목 수가 바뀌면 v를 올린다
     function saveSettings() {
-        var parts = ["v6", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
+        var parts = ["v7", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
             offsetXmm, offsetYmm, fillMode, brightness, contrast, lightAzimuth, lightElevation,
             angleR, angleL, depthPercent, previewEnabled ? 1 : 0, fillHue, fillSaturation];
         for (var i = 0; i < engines.length; i++) parts = parts.concat(engines[i].saveFields());
@@ -762,13 +762,17 @@ function foldPanel(parent, title, collapsed, key) {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (readError) { return; }
         if (!raw) return;
         var p = String(raw).split("|");
-        // v4까지는 색상·채도가 없다(회색). v3은 미리보기 항목도 없다. v5까지는 입체 도형 엔진에 치수 글자가 없다(legacyFieldCount)
+        // v4까지는 색상·채도가 없다(회색). v3은 미리보기 항목도 없다. 입체 도형 엔진은 v5까지 치수 글자가 없고(legacyFieldCount),
+        // v6까지 회전축·단면이 없다(v6FieldCount)
         var sharedCount = p[0] === "v3" ? 18 : p[0] === "v4" ? 19 : 21;
-        var legacy = p[0] !== "v6";
-        function countOf(e) { return legacy && e.legacyFieldCount !== undefined ? e.legacyFieldCount : e.fieldCount; }
+        function countOf(e) {
+            if (p[0] === "v7") return e.fieldCount;
+            if (p[0] === "v6") return e.v6FieldCount !== undefined ? e.v6FieldCount : e.fieldCount;
+            return e.legacyFieldCount !== undefined ? e.legacyFieldCount : e.fieldCount;
+        }
         var expected = sharedCount;
         for (var i = 0; i < engines.length; i++) expected += countOf(engines[i]);
-        if ((p[0] !== "v3" && p[0] !== "v4" && p[0] !== "v5" && p[0] !== "v6") || p.length !== expected) return;
+        if ((p[0] !== "v3" && p[0] !== "v4" && p[0] !== "v5" && p[0] !== "v6" && p[0] !== "v7") || p.length !== expected) return;
         tabIndex = restoreInteger(p[1], tabIndex, 0, p[0] === "v3" ? 3 : engines.length - 1);
         rotY = restoreNumber(p[2], rotY, -180, 180);
         rotX = restoreNumber(p[3], rotX, -180, 180);
@@ -787,7 +791,7 @@ function foldPanel(parent, title, collapsed, key) {
         angleL = restoreNumber(p[16], angleL, 91, 179);
         depthPercent = restoreNumber(p[17], depthPercent, 40, 160);
         // p[18](미리보기)은 저장만 하고 되살리지 않는다. 열 때는 항상 꺼진 상태로 시작한다
-        if (p[0] === "v5" || p[0] === "v6") {
+        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7") {
             fillHue = restoreNumber(p[19], fillHue, 0, 360);
             fillSaturation = restoreNumber(p[20], fillSaturation, 0, 100);
         }
@@ -1488,6 +1492,10 @@ function foldPanel(parent, title, collapsed, key) {
         var DOT_RADIUS_PT = 0.9;     // 반지름 선의 가운데 점
         var MARK_MM = 1.8;           // 직각 표시 한 변
         var dimInputs = {};
+        // 회전체: 회전축(일점쇄선)과 이름·축을 도는 화살표, 단면 칠하기 (웹 solid3d.js와 같다). 단면: 0 없음, 1 축을 품는 단면, 2 축에 수직(높이 %)
+        var showAxis = false, axisName = "l", sectionMode = 0, sectionHeight = 50, sectionK = 30;
+        var AXIS_EXTRA_MM = 4, AXIS_DASH_PT = [4, 1.5, 0.8, 1.5], TURN_RADIUS_MM = 2.5, TURN_HEAD_MM = 1;
+        var SECTION_NAMES = ["없음", "축을 품는 단면 (회전체)", "축에 수직인 단면 (높이 %)"];
 
         // 실행 시 선택한 오브젝트가 있으면 그 중심을 생성 기준점으로 쓰고, 확인 시 지운다.
         // (취소하면 그대로 둔다.) 선택이 없으면 화면 중앙에 만든다.
@@ -1502,7 +1510,8 @@ function foldPanel(parent, title, collapsed, key) {
             liveWireframe: false,
             originX: 0,
             originY: 0,
-            fieldCount: 14,
+            fieldCount: 19,
+            v6FieldCount: 14,      // 설정 v6 (회전축·단면 없음)
             legacyFieldCount: 9,   // 설정 v5까지 (치수 글자 없음)
             prepare: prepare,
             addRows: addRows,
@@ -1617,6 +1626,31 @@ function foldPanel(parent, title, collapsed, key) {
                 bindDimInput(DIM_FIELDS[dk][0], dimInput);
             }
 
+            // 회전축 · 단면
+            var turnPanel = page.add("panel", undefined, "회전축 · 단면");
+            turnPanel.alignChildren = "fill";
+            var axisRow = turnPanel.add("group");
+            var axisCheck = axisRow.add("checkbox", undefined, "회전축 (일점쇄선, 축을 도는 화살표)");
+            axisCheck.value = showAxis;
+            axisRow.add("statictext", undefined, "이름:");
+            var axisNameInput = axisRow.add("edittext", undefined, axisName);
+            axisNameInput.characters = 4;
+            axisCheck.onClick = function() { showAxis = axisCheck.value; updatePreview(); };
+            axisNameInput.onChanging = function() { axisName = axisNameInput.text; updatePreview(); };
+            var sectionRow = turnPanel.add("group");
+            sectionRow.add("statictext", undefined, "단면:").preferredSize.width = LABEL_WIDTH;
+            var sectionList = sectionRow.add("dropdownlist", undefined, SECTION_NAMES);
+            sectionList.selection = sectionMode;
+            sectionList.onChange = function() { sectionMode = sectionList.selection ? sectionList.selection.index : 0; updatePreview(); };
+            addNumberRow(turnPanel, "단면 높이 (%)", sectionHeight, 0, 100, 1, 0, "축에 수직인 단면의 높이 (밑면 0 %, 위 100 %)", function(value, live) {
+                sectionHeight = value;
+                updatePreview(live);
+            }, 50);
+            addNumberRow(turnPanel, "단면 농도 (K)", sectionK, 0, 100, 5, 0, "단면을 칠할 회색 농도", function(value, live) {
+                sectionK = value;
+                updatePreview(live);
+            }, 30);
+
             shapeList.onChange = function() {
                 shapeIndex = shapeList.selection ? shapeList.selection.index : 0;
                 syncShapeRows();
@@ -1701,7 +1735,8 @@ function foldPanel(parent, title, collapsed, key) {
 
         function saveFields() {
             return [shapeIndex, widthMm, depthMm, heightMm, linkWidthDepth ? 1 : 0, sideCount, baseRotation, topRatio, showNames ? 1 : 0,
-                encodeURIComponent(dimWidth), encodeURIComponent(dimDepth), encodeURIComponent(dimHeight), encodeURIComponent(dimRadius), encodeURIComponent(dimSlant)];
+                encodeURIComponent(dimWidth), encodeURIComponent(dimDepth), encodeURIComponent(dimHeight), encodeURIComponent(dimRadius), encodeURIComponent(dimSlant),
+                showAxis ? 1 : 0, encodeURIComponent(axisName), sectionMode, sectionHeight, sectionK];
         }
 
         function restoreFields(f) {
@@ -1721,6 +1756,13 @@ function foldPanel(parent, title, collapsed, key) {
                 dimRadius = decodeURIComponent(f[12]);
                 dimSlant = decodeURIComponent(f[13]);
             }
+            if (f.length >= 19) {
+                showAxis = f[14] === "1";
+                axisName = decodeURIComponent(f[15]);
+                sectionMode = restoreInteger(f[16], sectionMode, 0, 2);
+                sectionHeight = restoreNumber(f[17], sectionHeight, 0, 100);
+                sectionK = restoreNumber(f[18], sectionK, 0, 100);
+            }
         }
 
         // ---- 그리기 -----------------------------------------------------------
@@ -1738,8 +1780,10 @@ function foldPanel(parent, title, collapsed, key) {
             var parts = collectParts(model);
             // 치수 글자의 보조선(반지름·높이 점선, 직각 표시)을 모서리와 같이 그린다
             var dims = dimensionItems(model);
-            parts.visible = parts.visible.concat(dims.visible);
+            var turn = revolutionItems(model);
+            parts.visible = parts.visible.concat(dims.visible, turn.lines);
             parts.hidden = parts.hidden.concat(dims.hidden);
+            dims.labels = dims.labels.concat(turn.labels);
             var group;
             try {
                 group = doc.groupItems.add();
@@ -1753,11 +1797,18 @@ function foldPanel(parent, title, collapsed, key) {
                     fillGroup.name = "면";
                     drawFills(fillGroup, collectFills(model));
                 }
+                // 단면은 면 채우기와 따로 (면 채우기를 꺼도 칠한다), 면 위에 쌓는다
+                if (turn.fills.length > 0) {
+                    var sectionGroup = group.groupItems.add();
+                    sectionGroup.name = "단면";
+                    drawFills(sectionGroup, turn.fills);
+                }
                 var lineGroup = group.groupItems.add();
                 lineGroup.name = "선";
                 if (hiddenMode !== HIDDEN_NONE) drawParts(lineGroup, parts.hidden, hiddenMode === HIDDEN_DASHED);
                 drawParts(lineGroup, parts.visible, false);
                 if (showNames && model.verts) drawVertexNames(group, model);
+                if (turn.marks.length > 0) drawTurnMarks(group, turn.marks);
                 if (dims.labels.length > 0 || dims.dots.length > 0) drawDimensions(group, dims);
             } catch (drawError) {
                 try { group.remove(); } catch (cleanupError) {}
@@ -1969,8 +2020,9 @@ function foldPanel(parent, title, collapsed, key) {
         function drawDimensions(group, dims) {
             var dimGroup = group.groupItems.add();
             dimGroup.name = "치수";
-            var font = null, i;
+            var font = null, italic = null, i;
             try { font = app.textFonts.getByName(NAME_FONT_NAME); } catch (fontError) {}
+            try { italic = app.textFonts.getByName("GSMediItaC1"); } catch (italicError) {}   // 소문자 한 글자(축 이름 l, a, r)는 변수라 이탤릭 (그림 제작 규칙 5.1)
             for (i = 0; i < dims.dots.length; i++) {
                 var d = dims.dots[i], r = DOT_RADIUS_PT;
                 var dot = dimGroup.pathItems.ellipse(d[1] + r, d[0] - r, 2 * r, 2 * r);
@@ -1984,11 +2036,141 @@ function foldPanel(parent, title, collapsed, key) {
                 frame.contents = lab.text;
                 try {
                     frame.textRange.characterAttributes.size = NAME_SIZE_PT;
-                    if (font !== null) frame.textRange.characterAttributes.textFont = font;
+                    var useFont = /^[a-z]$/.test(lab.text) && italic !== null ? italic : font;
+                    if (useFont !== null) frame.textRange.characterAttributes.textFont = useFont;
                     frame.textRange.characterAttributes.fillColor = strokeColor;
                 } catch (styleError) {}
                 var b = frame.geometricBounds;
                 frame.translate(lab.at[0] - (b[0] + b[2]) / 2, lab.at[1] - (b[1] + b[3]) / 2);
+            }
+        }
+
+        // ---- 회전축·단면 (웹 solid3d.js revolutionItems와 같은 규칙) ----------------
+        function heightRange(model) {
+            if (model.round) return [model.round.pointAt(0, 0)[1], model.round.pointAt(0, 1)[1]];
+            if (model.cutSphere) return [model.cutSphere.kind === "hemisphere" ? 0 : -model.cutSphere.R, model.cutSphere.R];
+            var lo = Infinity, hi = -Infinity, verts = model.verts || [[0, 0, 0]];
+            for (var i = 0; i < verts.length; i++) { lo = Math.min(lo, verts[i][1]); hi = Math.max(hi, verts[i][1]); }
+            return [lo, hi];
+        }
+
+        // 회전축: 아래로 AXIS_EXTRA_MM, 위로는 회전 화살표 위 1.5 mm까지 일점쇄선, 위 끝 오른쪽에 이름.
+        // 회전 화살표: 입체의 화면 맨 위보다 1 mm 위의 수평 원에서 앞(+z)을 가운데로 3/4바퀴, 끝에 꺾쇠 머리.
+        // 단면: 축을 품는 평면(화면 오른쪽 방향과 축) 또는 높이 h%에서 축에 수직인 평면으로 자른 면 (농도 sectionK)
+        function revolutionItems(model) {
+            var out = {marks: [], labels: [], fills: [], lines: []};
+            var range = heightRange(model), yBottom = range[0], yTop = range[1], i;
+            var right = toModel([1, 0, 0]);
+            var flat = Math.sqrt(right[0] * right[0] + right[2] * right[2]) > 1e-6 ? normalize([right[0], 0, right[2]]) : [1, 0, 0];
+            function P(q) { return projectModel(q); }
+            if (showAxis) {
+                var ext = AXIS_EXTRA_MM * MM_TO_PT, r = TURN_RADIUS_MM * MM_TO_PT, samples = [];
+                for (i = 0; i < 72; i++) {
+                    var tt = 2 * Math.PI * i / 72;
+                    if (model.round) samples.push(model.round.pointAt(tt, 1));
+                    else if (model.cutSphere) samples.push(model.cutSphere.silhouette(tt));
+                }
+                if (!model.round && !model.cutSphere && model.verts) samples = model.verts;
+                var topScreen = P([0, yTop, 0])[1];
+                for (i = 0; i < samples.length; i++) topScreen = Math.max(topScreen, P(samples[i])[1]);
+                var p0 = P([0, 0, 0])[1], dy = (P([0, 1, 0])[1] - p0) || 1, lowOff = Infinity, highOff = -Infinity;
+                for (i = 0; i < 72; i++) {
+                    var off = P([r * Math.cos(2 * Math.PI * i / 72), 0, r * Math.sin(2 * Math.PI * i / 72)])[1] - p0;
+                    lowOff = Math.min(lowOff, off); highOff = Math.max(highOff, off);
+                }
+                var y = (topScreen + MM_TO_PT - p0 - lowOff) / dy;
+                var top = [0, y + (highOff + 1.5 * MM_TO_PT) / dy, 0];
+                out.marks.push({part: {kind: "line", a: [0, yBottom - ext, 0], b: top}, dash: AXIS_DASH_PT});
+                var ring = {pointAt: function(t) { return [r * Math.cos(t), y, r * Math.sin(t)]; }};
+                var t0 = Math.PI / 2 - Math.PI * 0.75, t1 = Math.PI / 2 + Math.PI * 0.75;
+                var end = P(ring.pointAt(t1)), before = P(ring.pointAt(t1 - 0.05));
+                var len = Math.sqrt((end[0] - before[0]) * (end[0] - before[0]) + (end[1] - before[1]) * (end[1] - before[1])) || 1;
+                var d = [(end[0] - before[0]) / len, (end[1] - before[1]) / len], head = TURN_HEAD_MM * MM_TO_PT, wing = head * 0.6;
+                out.marks.push({arc: {curve: ring, t0: t0, t1: t1}, head: [[end[0] - d[0] * head - d[1] * wing, end[1] - d[1] * head + d[0] * wing], end,
+                    [end[0] - d[0] * head + d[1] * wing, end[1] - d[1] * head - d[0] * wing]], dash: null});
+                var name = String(axisName || "").replace(/^\s+|\s+$/g, "");
+                if (name !== "") {
+                    var at = P(top), width = name.length * 0.55 * NAME_SIZE_PT;
+                    out.labels.push({text: name, width: width, at: [at[0] + DIM_GAP_PT + width / 2, at[1]]});
+                }
+            }
+            if (sectionMode !== 1 && sectionMode !== 2) return out;
+            var k = clamp(sectionK, 0, 100);
+            function circle(pointAt) { return {pointAt: pointAt, tMin: 0, tMax: 2 * Math.PI}; }
+            if (sectionMode === 2) {
+                var f = clamp(sectionHeight, 0, 100) / 100, yc = yBottom + (yTop - yBottom) * f, c;
+                if (model.round) {
+                    c = circle(function(t) { return model.round.pointAt(t, f); });
+                    out.fills.push({kind: "cap", curve: c, k: k});
+                    out.lines.push({kind: "arc", curve: c, t0: 0, t1: 2 * Math.PI, closed: true});
+                } else if (model.cutSphere) {
+                    var rr = Math.sqrt(Math.max(0, model.cutSphere.R * model.cutSphere.R - yc * yc));
+                    if (rr > 1e-6) {
+                        c = circle(function(t) { return [rr * Math.cos(t), yc, rr * Math.sin(t)]; });
+                        out.fills.push({kind: "cap", curve: c, k: k});
+                        out.lines.push({kind: "arc", curve: c, t0: 0, t1: 2 * Math.PI, closed: true});
+                    }
+                } else if (model.edges) {
+                    // 다면체: 높이 yc를 가로지르는 모서리마다 교점, 축 둘레 각도 순으로 잇는다
+                    var pts = [];
+                    for (i = 0; i < model.edges.length; i++) {
+                        var e = model.edges[i];
+                        if ((e.a[1] - yc) * (e.b[1] - yc) >= 0) continue;
+                        var s2 = (yc - e.a[1]) / (e.b[1] - e.a[1]);
+                        pts.push(add(e.a, scale(sub(e.b, e.a), s2)));
+                    }
+                    pts.sort(function(u, v) { return Math.atan2(u[2], u[0]) - Math.atan2(v[2], v[0]); });
+                    if (pts.length >= 3) {
+                        out.fills.push({kind: "poly", points: pts, k: k});
+                        out.lines.push({kind: "poly", points: pts, closed: true});
+                    }
+                }
+                return out;
+            }
+            // 축을 품는 단면: 화면 오른쪽 방향(flat)과 축
+            if (model.round) {
+                var ta = Math.atan2(flat[2], flat[0]);
+                var quad = [model.round.pointAt(ta, 0), model.round.pointAt(ta + Math.PI, 0), model.round.pointAt(ta + Math.PI, 1), model.round.pointAt(ta, 1)];
+                var gap3 = sub(quad[2], quad[3]);
+                if (Math.sqrt(dot(gap3, gap3)) < 1e-6) quad.pop();   // 원뿔은 꼭짓점 하나
+                out.fills.push({kind: "poly", points: quad, k: k});
+                out.lines.push({kind: "poly", points: quad, closed: true});
+            } else if (model.cutSphere) {
+                var R = model.cutSphere.R;
+                var great = function(t) { return add(scale(flat, R * Math.cos(t)), [0, R * Math.sin(t), 0]); };
+                if (model.cutSphere.kind === "hemisphere") {
+                    var halfCurve = {pointAt: great};
+                    out.fills.push({kind: "segments", segments: [arcSegment(halfCurve, 0, Math.PI), {kind: "line", a: great(Math.PI), b: great(0)}], k: k});
+                    out.lines.push({kind: "arc", curve: halfCurve, t0: 0, t1: Math.PI, closed: false}, {kind: "line", a: great(Math.PI), b: great(0)});
+                } else {
+                    var whole = circle(great);
+                    out.fills.push({kind: "cap", curve: whole, k: k});
+                    out.lines.push({kind: "arc", curve: whole, t0: 0, t1: 2 * Math.PI, closed: true});
+                }
+            }
+            return out;
+        }
+
+        // 회전축(일점쇄선)과 회전 화살표(호 + 꺾쇠 머리)
+        function drawTurnMarks(group, marks) {
+            var markGroup = group.groupItems.add();
+            markGroup.name = "회전축";
+            for (var i = 0; i < marks.length; i++) {
+                var m = marks[i], path;
+                if (m.part) {
+                    path = markGroup.pathItems.add();
+                    path.setEntirePath([projectModel(m.part.a), projectModel(m.part.b)]);
+                    path.closed = false;
+                    applyStroke(path, false);
+                    try { path.strokeDashes = m.dash; } catch (dashError) {}
+                } else {
+                    path = makeCurvePath(markGroup, m.arc.curve, m.arc.t0, m.arc.t1, false);
+                    applyStroke(path, false);
+                    var head = markGroup.pathItems.add();
+                    head.setEntirePath(m.head);
+                    head.closed = false;
+                    applyStroke(head, false);
+                }
             }
         }
 
@@ -2099,7 +2281,7 @@ function foldPanel(parent, title, collapsed, key) {
                     for (var q = 0; q < part.points.length; q++) anchors.push(projectModel(part.points[q]));
                     path = group.pathItems.add();
                     path.setEntirePath(anchors);
-                    path.closed = false;
+                    path.closed = !!part.closed;
                 } else {
                     path = makeCurvePath(group, part.curve, part.t0, part.t1, part.closed);
                 }

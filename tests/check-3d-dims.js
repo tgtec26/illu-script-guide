@@ -43,8 +43,9 @@ function loadEngine(state) {
   return new Function("app", "PointType", "CMYKColor", "RGBColor", "DocumentColorSpace",
     prelude + body + `
     ${keys.map((k) => `${k} = ${JSON.stringify(state[k])};`).join("\n")}
-    return { buildModel, beginView, collectParts, collectFills, dimensionItems, projectModel, saveFields, restoreFields, SHAPES,
-      get: function() { return [dimWidth, dimDepth, dimHeight, dimRadius, dimSlant]; } };`
+    return { buildModel, beginView, collectParts, collectFills, dimensionItems, revolutionItems, projectModel, saveFields, restoreFields, SHAPES,
+      get: function() { return [dimWidth, dimDepth, dimHeight, dimRadius, dimSlant]; },
+      getTurn: function() { return [showAxis, axisName, sectionMode, sectionHeight, sectionK]; } };`
   )({}, { SMOOTH: "smooth", CORNER: "corner" }, function () {}, function () {}, { CMYK: "CMYK" });
 }
 
@@ -108,14 +109,42 @@ const labelOf = (d, text) => d.labels.find((l) => l.text === text);
 {
   const api = loadEngine({ dimWidth: "a|b", dimRadius: "3 cm" });
   const saved = api.saveFields().map(String);
-  assert.strictEqual(saved.length, 14);
+  assert.strictEqual(saved.length, 19);
   const fresh = loadEngine({});
   fresh.restoreFields(saved);
   assert.deepStrictEqual(fresh.get(), ["a|b", "", "", "3 cm", ""]);
   const old = loadEngine({ dimWidth: "x" });
   old.restoreFields(saved.slice(0, 9));
   assert.deepStrictEqual(old.get(), ["x", "", "", "", ""], "9칸이면 치수 글자는 그대로");
-  assert.ok(source.includes('"v6"') && /p\[0\] === "v5"/.test(source), "설정 v6, v5도 읽는다");
+  assert.ok(source.includes('"v7"') && /p\[0\] === "v6"/.test(source), "설정 v7, v6·v5도 읽는다");
+  const v6 = loadEngine({ showAxis: true });
+  v6.restoreFields(saved.slice(0, 14));
+  assert.deepStrictEqual(v6.get(), ["a|b", "", "", "3 cm", ""], "v6(14칸)도 치수는 읽는다");
+  assert.strictEqual(v6.getTurn()[0], true, "v6에는 회전축 칸이 없어 그대로");
+}
+
+// 회전축·회전 화살표·단면 (웹 solid3d.test.js와 같은 경우)
+{
+  const turn = (state) => {
+    const api = loadEngine(Object.assign({ widthMm: 20, depthMm: 20, heightMm: 20, linkWidthDepth: true, sideCount: 4, baseRotation: 0, topRatio: 50, rotY: 0, rotX: 20 }, state));
+    const model = api.buildModel();
+    api.beginView(model);
+    return api.revolutionItems(model);
+  };
+  let t = turn({ shapeIndex: indexOf("cone"), showAxis: true, axisName: "l" });
+  assert.strictEqual(t.marks.length, 2, "축 + 화살표");
+  assert.strictEqual(t.marks[0].dash.length, 4, "일점쇄선");
+  assert.ok(t.labels.some((l) => l.text === "l"));
+  t = turn({ shapeIndex: indexOf("cone"), sectionMode: 1, sectionK: 30 });
+  assert.strictEqual(t.fills.length, 1);
+  assert.strictEqual(t.fills[0].points.length, 3, "원뿔 축 단면은 삼각형");
+  assert.strictEqual(t.lines.length, 1);
+  t = turn({ shapeIndex: indexOf("pyramid"), sectionMode: 2, sectionHeight: 50 });
+  assert.strictEqual(t.fills[0].points.length, 4, "사각뿔 수평 단면은 사각형");
+  t = turn({ shapeIndex: indexOf("cylinder"), sectionMode: 2, sectionHeight: 50 });
+  assert.strictEqual(t.fills[0].kind, "cap");
+  t = turn({ shapeIndex: indexOf("hemisphere"), sectionMode: 1 });
+  assert.strictEqual(t.fills[0].kind, "segments");
 }
 
 console.log("3d dims checks passed");
