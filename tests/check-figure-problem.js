@@ -29,7 +29,7 @@ function extractFunction(name) {
 
 const names = ["buildFigure", "outward", "awayFrom", "lerp", "dist", "extend", "unitVector", "circleLayout", "convexHull", "beltPoints", "circlePoints",
   "arcPoints", "join", "polyline", "splitNames", "productText", "splitTerm", "expansionText", "numText", "rootText", "formatValue",
-  "bagPoints", "roundRectPoints", "pipSpots", "fractionText"];
+  "bagPoints", "roundRectPoints", "pipSpots", "fractionText", "spinnerPoint"];
 const g = new Function(`var RIGHT_MARK_MM = 1.5;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 const base = { kind: 0, p: [3, 4, 0, 0], across: "a,b", down: "a,b", cards: "1,2,3,4,5,6,7", unit: 10, names: true, guides: true, lengths: true, extra: false };
@@ -205,4 +205,53 @@ assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript
 assert.strictEqual(build({}).lines.filter((l) => l.kind === "thin").length, 1, "right-angle mark at A");
 assert.strictEqual(build({ kind: 5, p: [3, 3, 0, 0] }).lines.filter((l) => l.kind === "thin").length, 1, "radius mark");
 assert.ok(source.includes('line.kind === "main" ? MAIN_PT : (line.kind === "thin" ? MARK_PT : GUIDE_PT)'), "thin marks drawn with MARK_PT");
+// 회전판 (웹 math-figure-problem.test.js와 같은 경우): 12시에서 시계 방향으로 나눈 칸, 칸 글자, *로 칠한 칸, 글자별 확률
+{
+  const d = build({ kind: 12, p: [4, 30, 0, 0], spinner: "1,1,2*,3", extra: false });
+  assert.strictEqual(d.lines.length, 5);
+  assert.deepStrictEqual(d.texts.map((t) => t.text), ["1", "1", "2", "3"]);
+  assert.strictEqual(d.fills.length, 1);
+  assert.strictEqual(d.notes[0], "칸 4개: 1 → 1/2, 2 → 1/4, 3 → 1/4");
+  const at = (i) => d.texts[i].at;
+  assert.ok(at(0)[0] > 0 && at(0)[1] > 0 && at(3)[0] < 0 && at(3)[1] > 0);
+  const fx = d.fills[0].reduce((s, p) => s + p.anchor[0], 0), fy = d.fills[0].reduce((s, p) => s + p.anchor[1], 0);
+  assert.ok(fx < 0 && fy < 0, "셋째 칸이 왼쪽 아래");
+  assert.deepStrictEqual(build({ kind: 12, p: [3, 30, 0, 0], spinner: "A" }).texts.map((t) => t.text), ["A"]);
+  assert.deepStrictEqual(build({ kind: 12, p: [2, 30, 0, 0], spinner: "A,B,C" }).texts.map((t) => t.text), ["A", "B"]);
+  const n = build({ kind: 12, p: [6, 90, 0, 0], spinner: "1,2,3,4,5,6", extra: true });
+  assert.deepStrictEqual([n.lines.length, n.dots.length, n.pips.length], [8, 1, 1]);
+  const tip = n.pips[0].reduce((best, p) => (p.anchor[0] > best[0] ? p.anchor : best), [-Infinity, 0]);
+  assert.ok(tip[0] > 0 && Math.abs(tip[1]) < 1e-6 && tip[0] < Math.hypot(...n.texts[0].at) - 2, "바늘은 3시 방향, 칸 글자보다 안쪽");
+}
+// 저장: v3(14칸, 회전판 칸 글자)로 쓰고, 회전판이 생기기 전 v2(13칸, 종류 12개)도 수치까지 읽는다
+{
+  const kindsDecl = source.slice(source.indexOf("var KINDS = ["), source.indexOf("];", source.indexOf("var KINDS = [")) + 2);
+  const store = {};
+  const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const make = () => new Function("app", [
+    'var PREF_KEY = "T", PARAM_COUNT = 4, POSITION_LIMIT_MM = 100;', kindsDecl,
+    'var FLAG_KEYS = ["names", "guides", "lengths", "extra"], opt = {names: true, guides: true, lengths: true, extra: false};',
+    "var params = []; for (var k = 0; k < KINDS.length; k++) { params.push([]); for (var i = 0; i < PARAM_COUNT; i++) params[k].push(KINDS[k].params[i] ? KINDS[k].params[i][4] : 0); }",
+    'var kind = 0, piecesAcross = "a,b", piecesDown = "a,b", cardText = "1,2,3,4,5,6,7", spinnerText = "1,2,3,4,5,6", unitMm = 6, shadeK = 20, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true;',
+    "function saveLineWidths() {}",
+    ...["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].filter((n) => source.includes(`function ${n}(`)).map(extractFunction),
+    "return { load: applySettings, save: saveSettings, state: function() { return { kind: kind, params: params, spinnerText: spinnerText, cardText: cardText }; } };",
+  ].join("\n"))(app);
+  const v2groups = Array.from({ length: 12 }, (_, k) => (k === 11 ? "3,0,0,0" : "")).map((v, k) => v || "0,0,0,0");
+  store.T = ["v2", 11, v2groups.join(";"), "a,b", "a,b", 6, 20, 8, "1100", 0, 0, "1", encodeURIComponent("1,2,3")].join("|");
+  const old = make();
+  old.load();
+  assert.strictEqual(old.state().kind, 11);
+  assert.strictEqual(old.state().params[11][0], 3, "v2 갈림 횟수");
+  assert.strictEqual(old.state().cardText, "1,2,3");
+  assert.strictEqual(old.state().spinnerText, "1,2,3,4,5,6", "v2에는 회전판 글자가 없어 기본값");
+  old.save();
+  const saved = store.T.split("|");
+  assert.deepStrictEqual([saved[0], saved.length, saved[2].split(";").length], ["v3", 14, 13]);
+  store.T = saved.slice(0, 13).concat([encodeURIComponent("A,B*")]).join("|");
+  const again = make();
+  again.load();
+  assert.strictEqual(again.state().spinnerText, "A,B*");
+}
+require("./es3-lint")(extractFunction("buildFigure") + extractFunction("spinnerPoint"), "도형 문제 회전판");
 console.log("figure problem checks passed");

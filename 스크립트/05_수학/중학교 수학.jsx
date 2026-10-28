@@ -6887,6 +6887,7 @@ var SCRIPT_KEY = "MiddleMath";
     // 평행선과 선분의 비(세 평행선 l·m·n과 두 직선), 사다리꼴 ABCD와 AD∥EF∥BC(대각선 AC와 교점 G),
     // 넓이 모형(큰 정사각형에서 작은 정사각형을 뺀 도형과 재배열한 직사각형, 곱셈 공식 직사각형 (a+b)(c+d)),
     // 원 묶음과 끈(한 줄·삼각형·사각형 격자로 놓은 원을 끈으로 묶은 모양: 선분 + 부채꼴 호). 계산값(길이·넓이·끈 길이)은 창에 보여 준다.
+    // 확률 소재: 번호 공과 주머니, 숫자 카드, 주사위 눈, 갈림길, 회전판(12시에서 시계 방향으로 나눈 칸·칸 글자·*로 칠한 칸·바늘, 같은 글자의 칸 수로 구한 확률).
     // 선 두께: 도형 0.8pt, 보조선 0.3pt 점선. 선택은 필요 없다. 화면 가운데에 만들고 미리보기를 보면서 옮긴다.
     function makeFigureProblemEngine() {
         var api = {label: "도형 문제", error: null, addRows: addRows,
@@ -6926,7 +6927,8 @@ var SCRIPT_KEY = "MiddleMath";
                 { name: "확률: 공 주머니", params: [["공 개수", 2, 20, 1, 12], ["한 줄 개수", 2, 8, 1, 4], null, null], extra: "주머니 그리기" },
                 { name: "확률: 숫자 카드", params: [null, null, null, null], extra: "", pieces: "카드 글자:" },
                 { name: "확률: 주사위", params: [["주사위 개수", 1, 3, 1, 2], ["첫째 눈", 1, 6, 1, 3], ["둘째 눈", 1, 6, 1, 5], ["셋째 눈", 1, 6, 1, 6]], extra: "" },
-                { name: "확률: 갈림길", params: [["갈림 횟수", 1, 4, 1, 2], null, null, null], extra: "갈림길마다 1/2" }
+                { name: "확률: 갈림길", params: [["갈림 횟수", 1, 4, 1, 2], null, null, null], extra: "갈림길마다 1/2" },
+                { name: "확률: 회전판", params: [["칸 수", 2, 12, 1, 6], ["바늘 각 (°)", 0, 355, 5, 30], null, null], extra: "바늘 그리기", pieces: "칸 글자:" }
             ];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
             var FLAG_KEYS = ["names", "guides", "lengths", "extra"];
@@ -6949,6 +6951,7 @@ var SCRIPT_KEY = "MiddleMath";
             }
             var piecesAcross = "a,b", piecesDown = "a,b";
             var cardText = "1,2,3,4,5,6,7";
+            var spinnerText = "1,2,3,4,5,6";   // 회전판 칸 글자 (끝의 *는 그 칸을 칠한다)
             var unitMm = 6;
             var shadeK = 20;
             var fontPt = 8;
@@ -7025,6 +7028,7 @@ var SCRIPT_KEY = "MiddleMath";
             for (var bp = 0; bp < PARAM_COUNT; bp++) bindParamRow(bp);
             acrossInput.onChanging = function() {
                 if (isCardKind()) cardText = acrossInput.text;
+                else if (isSpinnerKind()) spinnerText = acrossInput.text;
                 else piecesAcross = acrossInput.text;
                 updatePreview();
             };
@@ -7081,16 +7085,18 @@ var SCRIPT_KEY = "MiddleMath";
                     } catch (e) {}
                     setRowValue(controls, params[kind][i]);
                 }
-                // 곱셈 공식은 가로·세로 조각 이름, 숫자 카드는 카드 글자 하나
+                // 곱셈 공식은 가로·세로 조각 이름, 숫자 카드는 카드 글자 하나, 회전판은 칸 글자 하나
                 piecesRow.enabled = !!KINDS[kind].pieces;
                 piecesRow.children[0].text = KINDS[kind].pieces || "조각 이름:";
-                acrossInput.text = isCardKind() ? cardText : piecesAcross;
-                downInput.enabled = !isCardKind();
+                acrossInput.text = isCardKind() ? cardText : (isSpinnerKind() ? spinnerText : piecesAcross);
+                acrossInput.helpTip = isSpinnerKind() ? "12시에서 시계 방향으로 칸마다 쓸 글자를 쉼표로 나눠 쓴다. 끝에 *를 붙이면 그 칸을 칠한다 (1,2*,3)" : "";
+                downInput.enabled = !isCardKind() && !isSpinnerKind();
                 extraCheck.enabled = KINDS[kind].extra !== "";
                 extraCheck.text = KINDS[kind].extra !== "" ? KINDS[kind].extra : "추가";
             }
 
             function isCardKind() { return KINDS[kind].name === "확률: 숫자 카드"; }
+            function isSpinnerKind() { return KINDS[kind].name === "확률: 회전판"; }
 
             function bindParamRow(index) {
                 bindValueRow(paramControls[index], function(value) { params[kind][index] = value; }, function() { return KINDS[kind].params[index][4]; });
@@ -7114,7 +7120,7 @@ var SCRIPT_KEY = "MiddleMath";
 
             function buildPreview() {
                 var drawing = buildFigure({
-                    kind: kind, p: params[kind], across: piecesAcross, down: piecesDown, cards: cardText, unit: unitMm * MM_TO_PT,
+                    kind: kind, p: params[kind], across: piecesAcross, down: piecesDown, cards: cardText, spinner: spinnerText, unit: unitMm * MM_TO_PT,
                     names: opt.names, guides: opt.guides, lengths: opt.lengths, extra: opt.extra
                 });
                 messageText.text = drawing.notes.length > 0 ? drawing.notes.join("\n") : " ";
@@ -7533,6 +7539,35 @@ var SCRIPT_KEY = "MiddleMath";
                         comb = comb * (levels - e2) / (e2 + 1);
                     }
                     out.notes.push("끝 지점에 갈 확률: " + probs.join(", ") + " (갈림 " + levels + "번, 갈림길마다 1/2)");
+                } else if (o.kind === 12) {
+                    // 회전판: 반지름 3 단위인 원을 칸 수만큼 똑같이 나눈다. 첫 칸은 12시에서 시계 방향, 칸 글자는 쉼표로 나누고 끝의 *는 그 칸을 칠한다.
+                    // 바늘은 가운데에서 12시부터 시계 방향으로 잰 각도를 가리키고, 어느 각도에서도 칸 글자(반지름의 0.66배)에 닿지 않게 0.48배까지만 긋는다.
+                    // 확률은 같은 글자의 칸 수 / 전체 칸 수
+                    var nS = Math.round(p[0]), RS = 3, stepS = 360 / nS, spinLabels = String(o.spinner === undefined ? "" : o.spinner).split(","), counts = {}, order = [];
+                    for (var si = 0; si < nS; si++) {
+                        var rawS = si < spinLabels.length ? spinLabels[si].replace(/^\s+|\s+$/g, "") : "", shadeS = /\*$/.test(rawS), labelS = rawS.replace(/\*$/, "");
+                        if (shadeS) {
+                            var sector = [[0, 0]];
+                            for (var sk = 0; sk <= 24; sk++) sector.push(spinnerPoint(si * stepS + stepS * sk / 24, RS));
+                            fillPoly(sector);
+                        }
+                        if (labelS === "") continue;
+                        out.texts.push({ text: labelS, at: S(spinnerPoint((si + 0.5) * stepS, RS * 0.66)), dir: [0, 0], upright: true });
+                        if (!counts.hasOwnProperty(labelS)) { counts[labelS] = 0; order.push(labelS); }
+                        counts[labelS]++;
+                    }
+                    out.lines.push({ points: circlePoints(S([0, 0]), RS * u), closed: true, kind: "main" });
+                    S([-RS, -RS]); S([RS, RS]);
+                    for (si = 0; si < nS; si++) seg([0, 0], spinnerPoint(si * stepS, RS));
+                    if (o.extra) {
+                        var tipS = spinnerPoint(p[1], RS * 0.48), dirS = unitVector(tipS), baseS = [tipS[0] - dirS[0] * 0.45, tipS[1] - dirS[1] * 0.45];
+                        seg([0, 0], baseS);
+                        out.pips.push(polyline([S(tipS), S([baseS[0] - dirS[1] * 0.18, baseS[1] + dirS[0] * 0.18]), S([baseS[0] + dirS[1] * 0.18, baseS[1] - dirS[0] * 0.18])]));
+                        out.dots.push(S([0, 0]));
+                    }
+                    var probsS = [];
+                    for (var oi = 0; oi < order.length; oi++) probsS.push(order[oi] + " → " + fractionText(counts[order[oi]], nS));
+                    out.notes.push("칸 " + nS + "개: " + probsS.join(", "));
                 } else {
                     // 원 묶음: 중심을 반지름 1 단위로 놓고, 중심들의 볼록 껍질을 반지름만큼 밖으로 민 끈
                     var r = p[0], centers = circleLayout(o.kind, p);
@@ -7581,6 +7616,12 @@ var SCRIPT_KEY = "MiddleMath";
             }
 
             // 공 주머니: 아래가 둥근 자루, 위로 좁아진 목과 묶은 끈 (반지름·높이는 단위 좌표, u로 pt 변환)
+            // 회전판 위의 점: 12시에서 시계 방향으로 deg도, 가운데에서 r (단위 좌표)
+            function spinnerPoint(deg, r) {
+                var a = deg * Math.PI / 180;
+                return [r * Math.sin(a), r * Math.cos(a)];
+            }
+
             function bagPoints(halfW, top, bottom, u) {
                 var neck = halfW * 0.35, r = Math.min(halfW, (top - bottom) / 2) * 0.8;
                 var pieces = [
@@ -7955,8 +7996,8 @@ var SCRIPT_KEY = "MiddleMath";
                 var flags = "", values = [];
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
                 for (var k = 0; k < KINDS.length; k++) values.push(params[k].join(","));
-                var parts = ["v2", kind, values.join(";"), encodeURIComponent(piecesAcross), encodeURIComponent(piecesDown), unitMm, shadeK, fontPt, flags,
-                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", encodeURIComponent(cardText)];
+                var parts = ["v3", kind, values.join(";"), encodeURIComponent(piecesAcross), encodeURIComponent(piecesDown), unitMm, shadeK, fontPt, flags,
+                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", encodeURIComponent(cardText), encodeURIComponent(spinnerText)];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -7965,12 +8006,14 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v2" || p.length !== 13 || p[8].length !== FLAG_KEYS.length) return;
+                // v3는 회전판 칸 글자까지 14칸, 옛 v2는 회전판이 생기기 전(13칸, 종류 12개)이다
+                var fieldCount = p[0] === "v3" ? 14 : (p[0] === "v2" ? 13 : -1);
+                if (p.length !== fieldCount || p[8].length !== FLAG_KEYS.length) return;
                 try {
                     kind = Math.round(restoreNumber(p[1], kind, 0, KINDS.length - 1));
                     var groups = p[2].split(";");
-                    if (groups.length === KINDS.length) {
-                        for (var k = 0; k < KINDS.length; k++) {
+                    if (groups.length <= KINDS.length) {
+                        for (var k = 0; k < groups.length; k++) {
                             var values = groups[k].split(",");
                             if (values.length !== PARAM_COUNT) continue;
                             for (var i = 0; i < PARAM_COUNT; i++) {
@@ -7989,6 +8032,7 @@ var SCRIPT_KEY = "MiddleMath";
                     offsetYmm = restoreNumber(p[10], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[11] === "1";
                     cardText = decodeURIComponent(p[12]);
+                    if (fieldCount === 14) spinnerText = decodeURIComponent(p[13]);
                 } catch (restoreError) {}
             }
 
