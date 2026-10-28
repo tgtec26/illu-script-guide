@@ -128,18 +128,20 @@ console.log('3dline preview: duplicate renders skipped, lighting reuses geometry
   c.app.preferences = { getStringPreference() { return raw; }, setStringPreference(k, value) { saved = value; } };
   vm.runInContext(prefs, c);
   c.tabIndex = 4; c.previewEnabled = false; c.saveSettings();
-  assert.ok(saved.startsWith('v5|4|'));
+  assert.ok(saved.startsWith('v6|4|'));
   raw = saved; c.previewEnabled = true; c.tabIndex = 0; c.applySavedSettings();
   assert.strictEqual(c.tabIndex, 4);
   assert.strictEqual(c.previewEnabled, true, 'saved preview flag is not restored: dialog always opens with preview off');
-  raw = saved.replace('v5|', 'v3|').split('|').slice(0, 18).join('|');
+  raw = saved.replace('v6|', 'v3|').split('|').slice(0, 18).join('|');
   c.rotX = 99; c.previewEnabled = true; c.applySavedSettings();
   assert.strictEqual(c.rotX, 35.3, 'legacy fields restored at old offsets');
   assert.strictEqual(c.previewEnabled, true, 'legacy version has no preview flag');
   c.fillHue = 120; c.fillSaturation = 40; c.saveSettings();
   raw = saved; c.fillHue = 0; c.fillSaturation = 0; c.applySavedSettings();
-  assert.deepStrictEqual([c.fillHue, c.fillSaturation], [120, 40], 'v5 restores colour');
-  raw = saved.replace('v5|', 'v4|').split('|').slice(0, 19).join('|'); c.rotX = 99; c.fillSaturation = 0; c.applySavedSettings();
+  assert.deepStrictEqual([c.fillHue, c.fillSaturation], [120, 40], 'v6 restores colour');
+  raw = saved.replace('v6|', 'v5|'); c.fillHue = 0; c.applySavedSettings();
+  assert.strictEqual(c.fillHue, 120, 'v5 (same fields here) still restores');
+  raw = saved.replace('v6|', 'v4|').split('|').slice(0, 19).join('|'); c.rotX = 99; c.fillSaturation = 0; c.applySavedSettings();
   assert.strictEqual(c.rotX, 35.3, 'v4 fields restored');
   assert.strictEqual(c.fillSaturation, 0, 'v4 has no colour: stays grey');
   raw = saved + '|extra'; c.rotX = 99; c.applySavedSettings();
@@ -147,4 +149,4 @@ console.log('3dline preview: duplicate renders skipped, lighting reuses geometry
   c.app.preferences.getStringPreference = () => {throw new Error('preference denied');};
   assert.doesNotThrow(() => c.applySavedSettings());
 }
-console.log('3dline preferences: v5 round trip, v4·v3 migration, damaged values and read errors passed');
+console.log('3dline preferences: v6 round trip, v5, v4·v3 migration, damaged values and read errors passed');

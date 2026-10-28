@@ -10543,6 +10543,26 @@
           "type": "number",
           "default": 100
         },
+        "dimDepth": {
+          "type": "string",
+          "default": ""
+        },
+        "dimHeight": {
+          "type": "string",
+          "default": ""
+        },
+        "dimRadius": {
+          "type": "string",
+          "default": ""
+        },
+        "dimSlant": {
+          "type": "string",
+          "default": ""
+        },
+        "dimWidth": {
+          "type": "string",
+          "default": ""
+        },
         "fillHue": {
           "type": "number",
           "default": 210

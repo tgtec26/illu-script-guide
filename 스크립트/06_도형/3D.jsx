@@ -750,7 +750,7 @@ function foldPanel(parent, title, collapsed, key) {
 
     // 공통 항목 뒤에 엔진별 항목을 순서대로 잇는다. 엔진 항목 수가 바뀌면 v를 올린다
     function saveSettings() {
-        var parts = ["v5", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
+        var parts = ["v6", tabIndex, rotY, rotX, rotZ, perspectiveOn ? 1 : 0, perspectiveMm, hiddenMode,
             offsetXmm, offsetYmm, fillMode, brightness, contrast, lightAzimuth, lightElevation,
             angleR, angleL, depthPercent, previewEnabled ? 1 : 0, fillHue, fillSaturation];
         for (var i = 0; i < engines.length; i++) parts = parts.concat(engines[i].saveFields());
@@ -762,11 +762,13 @@ function foldPanel(parent, title, collapsed, key) {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (readError) { return; }
         if (!raw) return;
         var p = String(raw).split("|");
-        // v4까지는 색상·채도가 없다(회색). v3은 미리보기 항목도 없다
+        // v4까지는 색상·채도가 없다(회색). v3은 미리보기 항목도 없다. v5까지는 입체 도형 엔진에 치수 글자가 없다(legacyFieldCount)
         var sharedCount = p[0] === "v3" ? 18 : p[0] === "v4" ? 19 : 21;
+        var legacy = p[0] !== "v6";
+        function countOf(e) { return legacy && e.legacyFieldCount !== undefined ? e.legacyFieldCount : e.fieldCount; }
         var expected = sharedCount;
-        for (var i = 0; i < engines.length; i++) expected += engines[i].fieldCount;
-        if ((p[0] !== "v3" && p[0] !== "v4" && p[0] !== "v5") || p.length !== expected) return;
+        for (var i = 0; i < engines.length; i++) expected += countOf(engines[i]);
+        if ((p[0] !== "v3" && p[0] !== "v4" && p[0] !== "v5" && p[0] !== "v6") || p.length !== expected) return;
         tabIndex = restoreInteger(p[1], tabIndex, 0, p[0] === "v3" ? 3 : engines.length - 1);
         rotY = restoreNumber(p[2], rotY, -180, 180);
         rotX = restoreNumber(p[3], rotX, -180, 180);
@@ -785,14 +787,14 @@ function foldPanel(parent, title, collapsed, key) {
         angleL = restoreNumber(p[16], angleL, 91, 179);
         depthPercent = restoreNumber(p[17], depthPercent, 40, 160);
         // p[18](미리보기)은 저장만 하고 되살리지 않는다. 열 때는 항상 꺼진 상태로 시작한다
-        if (p[0] === "v5") {
+        if (p[0] === "v5" || p[0] === "v6") {
             fillHue = restoreNumber(p[19], fillHue, 0, 360);
             fillSaturation = restoreNumber(p[20], fillSaturation, 0, 100);
         }
         var at = sharedCount;
         for (i = 0; i < engines.length; i++) {
-            engines[i].restoreFields(p.slice(at, at + engines[i].fieldCount));
-            at += engines[i].fieldCount;
+            engines[i].restoreFields(p.slice(at, at + countOf(engines[i])));
+            at += countOf(engines[i]);
         }
     }
 
@@ -1460,7 +1462,10 @@ function foldPanel(parent, title, collapsed, key) {
         {id: "tube", label: "빨대 (속 빈 원기둥)", taper: true, tube: true},
         {id: "cutcube", label: "잘린 정육면체 (꼭짓점 자르기)"},
         {id: "sphere4", label: "구 (1/4 잘라냄)", regular: true, sphere: true},
-        {id: "sphere8", label: "구 (1/8 잘라냄)", regular: true, sphere: true}
+        {id: "sphere8", label: "구 (1/8 잘라냄)", regular: true, sphere: true},
+        // 예전 저장값의 종류 번호를 지키려고 끝에 둔다
+        {id: "sphere", label: "구", regular: true, sphere: true},
+        {id: "hemisphere", label: "반구 (둥근 면이 위)", regular: true, sphere: true}
     ];
 
         var shapeIndex = 0;
@@ -1477,6 +1482,12 @@ function foldPanel(parent, title, collapsed, key) {
         var NAME_FONT_NAME = "GSMediumB1";
         var NAME_SIZE_PT = 8;
         var NAME_GAP_PT = 2.5;
+        // 치수 글자 (교과서 겉넓이·부피 그림, 웹 solid3d.js와 같다). 비우면 없음
+        var dimWidth = "", dimDepth = "", dimHeight = "", dimRadius = "", dimSlant = "";
+        var DIM_GAP_PT = 2;          // 치수 글자와 모서리 사이
+        var DOT_RADIUS_PT = 0.9;     // 반지름 선의 가운데 점
+        var MARK_MM = 1.8;           // 직각 표시 한 변
+        var dimInputs = {};
 
         // 실행 시 선택한 오브젝트가 있으면 그 중심을 생성 기준점으로 쓰고, 확인 시 지운다.
         // (취소하면 그대로 둔다.) 선택이 없으면 화면 중앙에 만든다.
@@ -1491,7 +1502,8 @@ function foldPanel(parent, title, collapsed, key) {
             liveWireframe: false,
             originX: 0,
             originY: 0,
-            fieldCount: 9,
+            fieldCount: 14,
+            legacyFieldCount: 9,   // 설정 v5까지 (치수 글자 없음)
             prepare: prepare,
             addRows: addRows,
             sync: syncShapeRows,
@@ -1591,6 +1603,20 @@ function foldPanel(parent, title, collapsed, key) {
                 updatePreview();
             };
 
+            // 치수 글자: 비우면 쓰지 않는다. 도형마다 쓰는 칸만 켠다 (syncShapeRows)
+            var dimPanel = page.add("panel", undefined, "치수 글자 (비우면 없음, 예: 4 cm)");
+            dimPanel.alignChildren = "fill";
+            var DIM_FIELDS = [["dimWidth", "가로·밑변:"], ["dimDepth", "세로:"], ["dimHeight", "높이:"], ["dimRadius", "반지름:"], ["dimSlant", "모선·옆 모서리:"]];
+            for (var dk = 0; dk < DIM_FIELDS.length; dk++) {
+                var dimRow = dimPanel.add("group");
+                dimRow.add("statictext", undefined, DIM_FIELDS[dk][1]).preferredSize.width = LABEL_WIDTH;
+                var dimInput = dimRow.add("edittext", undefined, { dimWidth: dimWidth, dimDepth: dimDepth, dimHeight: dimHeight, dimRadius: dimRadius, dimSlant: dimSlant }[DIM_FIELDS[dk][0]]);
+                dimInput.preferredSize.width = SLIDER_WIDTH;
+                dimInput.helpTip = "그 길이 옆에 쓸 글자(4 cm, a, 2r). 반지름은 가운데 점과 반지름 선, 각뿔·원뿔의 높이는 점선과 직각 표시를 함께 긋는다";
+                dimInputs[DIM_FIELDS[dk][0]] = dimInput;
+                bindDimInput(DIM_FIELDS[dk][0], dimInput);
+            }
+
             shapeList.onChange = function() {
                 shapeIndex = shapeList.selection ? shapeList.selection.index : 0;
                 syncShapeRows();
@@ -1605,6 +1631,17 @@ function foldPanel(parent, title, collapsed, key) {
                 }
             };
             return true;
+        }
+
+        function bindDimInput(key, input) {
+            input.onChanging = function() {
+                if (key === "dimWidth") dimWidth = input.text;
+                else if (key === "dimDepth") dimDepth = input.text;
+                else if (key === "dimHeight") dimHeight = input.text;
+                else if (key === "dimRadius") dimRadius = input.text;
+                else dimSlant = input.text;
+                updatePreview();
+            };
         }
 
         function setSideCount(value) {
@@ -1638,10 +1675,19 @@ function foldPanel(parent, title, collapsed, key) {
             linkCheck.enabled = shape.regular !== true;
             // 이름은 꼭짓점이 있는 다면체만
             if (namesCheck) namesCheck.enabled = !isRound(shape.id);
+            // 치수 글자: 도형마다 쓰는 칸 (웹 solid3d-tool.jsx DIM_ROWS와 같다)
+            var uses = {
+                box: "dimWidth dimDepth dimHeight", prism: "dimWidth dimDepth dimHeight", pyramid: "dimWidth dimHeight dimSlant", frustum: "dimWidth dimHeight dimSlant",
+                cylinder: "dimRadius dimHeight", tube: "dimRadius dimHeight", cone: "dimRadius dimHeight dimSlant", conefrustum: "dimRadius dimHeight dimSlant",
+                sphere: "dimRadius", hemisphere: "dimRadius"
+            }[shape.id] || "";
+            for (var key in dimInputs) {
+                if (dimInputs.hasOwnProperty(key)) dimInputs[key].parent.enabled = uses.indexOf(key) >= 0;
+            }
         }
 
         function isRound(id) {
-            return id === "cylinder" || id === "cone" || id === "conefrustum" || id === "tube" || id === "sphere4" || id === "sphere8";
+            return id === "cylinder" || id === "cone" || id === "conefrustum" || id === "tube" || id === "sphere" || id === "hemisphere" || id === "sphere4" || id === "sphere8";
         }
 
         function finish(group) {
@@ -1654,7 +1700,8 @@ function foldPanel(parent, title, collapsed, key) {
         }
 
         function saveFields() {
-            return [shapeIndex, widthMm, depthMm, heightMm, linkWidthDepth ? 1 : 0, sideCount, baseRotation, topRatio, showNames ? 1 : 0];
+            return [shapeIndex, widthMm, depthMm, heightMm, linkWidthDepth ? 1 : 0, sideCount, baseRotation, topRatio, showNames ? 1 : 0,
+                encodeURIComponent(dimWidth), encodeURIComponent(dimDepth), encodeURIComponent(dimHeight), encodeURIComponent(dimRadius), encodeURIComponent(dimSlant)];
         }
 
         function restoreFields(f) {
@@ -1667,6 +1714,13 @@ function foldPanel(parent, title, collapsed, key) {
             baseRotation = restoreNumber(f[6], baseRotation, 0, 360);
             topRatio = restoreNumber(f[7], topRatio, 0, 100);
             showNames = f[8] === "1";
+            if (f.length >= 14) {
+                dimWidth = decodeURIComponent(f[9]);
+                dimDepth = decodeURIComponent(f[10]);
+                dimHeight = decodeURIComponent(f[11]);
+                dimRadius = decodeURIComponent(f[12]);
+                dimSlant = decodeURIComponent(f[13]);
+            }
         }
 
         // ---- 그리기 -----------------------------------------------------------
@@ -1682,6 +1736,10 @@ function foldPanel(parent, title, collapsed, key) {
             if (SHAPES[shapeIndex].sphere) perspectiveActive = false;
 
             var parts = collectParts(model);
+            // 치수 글자의 보조선(반지름·높이 점선, 직각 표시)을 모서리와 같이 그린다
+            var dims = dimensionItems(model);
+            parts.visible = parts.visible.concat(dims.visible);
+            parts.hidden = parts.hidden.concat(dims.hidden);
             var group;
             try {
                 group = doc.groupItems.add();
@@ -1700,6 +1758,7 @@ function foldPanel(parent, title, collapsed, key) {
                 if (hiddenMode !== HIDDEN_NONE) drawParts(lineGroup, parts.hidden, hiddenMode === HIDDEN_DASHED);
                 drawParts(lineGroup, parts.visible, false);
                 if (showNames && model.verts) drawVertexNames(group, model);
+                if (dims.labels.length > 0 || dims.dots.length > 0) drawDimensions(group, dims);
             } catch (drawError) {
                 try { group.remove(); } catch (cleanupError) {}
                 return null;
@@ -1732,6 +1791,204 @@ function foldPanel(parent, title, collapsed, key) {
                 var b = frame.geometricBounds, halfW = (b[2] - b[0]) / 2, halfH = (b[1] - b[3]) / 2;
                 var reach = NAME_GAP_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 frame.translate(at[0] + dir[0] * reach - (b[0] + b[2]) / 2, at[1] + dir[1] * reach - (b[1] + b[3]) / 2);
+            }
+        }
+
+        // ---- 치수 글자·보조선 (웹 solid3d.js dimensionItems와 같은 규칙) ----------------
+        // 직육면체·각기둥은 아래 앞 모서리(가로·세로)와 오른쪽 세로 모서리(높이) 바깥에 글자, 각뿔·각뿔대·원뿔·원뿔대의 높이는
+        // 밑면 가운데로 내린 점선과 직각 표시, 원기둥은 윗면, 원뿔은 밑면, 구는 적도에 가운데 점과 화면 오른쪽으로 가는 반지름 선.
+        // 모선(옆 모서리)은 오른쪽 옆선 바깥. 글자 at은 아트보드 좌표(y 위). 글자 폭은 어림(일러는 글상자 가운데를 at에 맞춘다)
+        function dimensionItems(model) {
+            var out = {visible: [], hidden: [], dots: [], labels: []};
+            var texts = {dimWidth: dimWidth, dimDepth: dimDepth, dimHeight: dimHeight, dimRadius: dimRadius, dimSlant: dimSlant};
+            function want(key) { return String(texts[key] || "").replace(/^\s+|\s+$/g, ""); }
+            if (want("dimWidth") + want("dimDepth") + want("dimHeight") + want("dimRadius") + want("dimSlant") === "") return out;
+            var kind = SHAPES[shapeIndex].id;
+            var fontPt = NAME_SIZE_PT, gap = DIM_GAP_PT, textHalfH = NAME_SIZE_PT * 1.107 / 2;
+            var origin = projectModel([0, 0, 0]);
+            function P(q) { return projectModel(q); }
+            function line(a, b, hidden) { (hidden ? out.hidden : out.visible).push({kind: "line", a: a, b: b}); }
+            function approxWidth(text) { return text.length * 0.55 * fontPt; }
+            function label(key, a3, b3, dir, f) {
+                var text = want(key);
+                if (text === "") return;
+                if (f === undefined) f = 0.5;
+                var a = P(a3), b = P(b3), mid = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+                if (!dir) {
+                    var len = Math.sqrt((b[0] - a[0]) * (b[0] - a[0]) + (b[1] - a[1]) * (b[1] - a[1])) || 1;
+                    dir = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
+                    if (dir[0] * (mid[0] - origin[0]) + dir[1] * (mid[1] - origin[1]) < 0) dir = [-dir[0], -dir[1]];
+                }
+                var width = approxWidth(text);
+                var reach = gap + width / 2 * Math.abs(dir[0]) + textHalfH * Math.abs(dir[1]);
+                out.labels.push({text: text, width: width, at: [mid[0] + dir[0] * reach, mid[1] + dir[1] * reach]});
+            }
+            // 다면체 모서리(화면 선분)가 글상자에 얼마나 들어오는가
+            function overlap(lab) {
+                var hw = lab.width / 2 + 1.5, hh = textHalfH + 1, hits = 0;
+                for (var e = 0; e < (model.edges || []).length; e++) {
+                    var a = P(model.edges[e].a), b = P(model.edges[e].b);
+                    for (var k = 0; k <= 32; k++) {
+                        var x = a[0] + (b[0] - a[0]) * k / 32, y = a[1] + (b[1] - a[1]) * k / 32;
+                        if (Math.abs(x - lab.at[0]) < hw && Math.abs(y - lab.at[1]) < hh) hits++;
+                    }
+                }
+                return hits;
+            }
+            // 높이 글자: 높이 선 왼쪽·오른쪽, 아래쪽 몇 자리 중 모서리가 가장 적게 지나는 자리
+            function heightLabel(top, foot) {
+                var tries = [[[-1, 0], 0.7], [[1, 0], 0.7], [[-1, 0], 0.85], [[1, 0], 0.85], [[-1, 0], 0.55], [[1, 0], 0.55], [[-1, 0], 0.4], [[1, 0], 0.4]];
+                var best = null;
+                for (var t = 0; t < tries.length; t++) {
+                    label("dimHeight", top, foot, tries[t][0], tries[t][1]);
+                    var lab = out.labels.pop();
+                    if (!lab) return;
+                    var score = overlap(lab);
+                    if (best === null || score < best.score) best = {lab: lab, score: score};
+                    if (score === 0) break;
+                }
+                out.labels.push(best.lab);
+            }
+            // 직각 표시: 발 h에서 u·v 방향으로 size만큼 (세 점 꺾은선)
+            function rightMark(h, u, v, size) {
+                var a = add(h, scale(u, size)), b = add(h, scale(v, size));
+                out.visible.push({kind: "poly", points: [a, add(a, scale(v, size)), b]});
+            }
+            function depth(q) { return toView(q)[2]; }
+            function dist(a, b) { var d = sub(a, b); return Math.sqrt(dot(d, d)); }
+            var right = toModel([1, 0, 0]);
+            var flat = Math.sqrt(right[0] * right[0] + right[2] * right[2]) > 1e-6 ? normalize([right[0], 0, right[2]]) : [1, 0, 0];
+            var up = [0, 1, 0];
+            var i;
+
+            if (model.verts && model.faces.length) {
+                var yMin = Infinity, yMax = -Infinity;
+                for (i = 0; i < model.verts.length; i++) { yMin = Math.min(yMin, model.verts[i][1]); yMax = Math.max(yMax, model.verts[i][1]); }
+                var tol = 1e-6 * (yMax - yMin + 1);
+                function near(y, t) { return Math.abs(y - t) < tol; }
+                var bottom = [], lateral = [];
+                for (i = 0; i < model.edges.length; i++) {
+                    var e = model.edges[i];
+                    if (near(e.a[1], yMin) && near(e.b[1], yMin)) bottom.push(e);
+                    else if ((near(e.a[1], yMin) && near(e.b[1], yMax)) || (near(e.a[1], yMax) && near(e.b[1], yMin))) lateral.push(e);
+                }
+                bottom.sort(function(e, f) { return depth(add(f.a, f.b)) - depth(add(e.a, e.b)); });
+                lateral.sort(function(e, f) { return (P(f.a)[0] + P(f.b)[0]) - (P(e.a)[0] + P(e.b)[0]); });
+                // 가로 = 앞 두 모서리 중 모델 x축에 가까운 것, 세로 = 다른 것 (각기둥·각뿔은 가장 앞 모서리가 밑변)
+                function alongX(e) { return Math.abs(normalize(sub(e.b, e.a))[0]); }
+                var wEdge = bottom[0], dEdge = bottom[1];
+                if (kind === "box" && bottom.length >= 2 && alongX(bottom[1]) > alongX(bottom[0])) { wEdge = bottom[1]; dEdge = bottom[0]; }
+                if (wEdge) label("dimWidth", wEdge.a, wEdge.b);
+                if (dEdge) label("dimDepth", dEdge.a, dEdge.b);
+                var bottomCenter = [0, yMin, 0], apex = null;
+                for (i = 0; i < model.faces.length; i++) {
+                    if (model.faces[i].normal[1] < -0.99) bottomCenter = model.faces[i].center;
+                    if (model.faces[i].normal[1] > 0.99) apex = model.faces[i].center;
+                }
+                if (apex === null) for (i = 0; i < model.verts.length; i++) if (near(model.verts[i][1], yMax)) apex = model.verts[i];
+                if (kind === "pyramid" || kind === "frustum") {
+                    if (want("dimHeight") !== "" && wEdge) {
+                        // 높이: 꼭짓점(윗면 가운데)에서 밑면 가운데로 점선, 밑면 가운데에서 앞 모서리 가운데로 점선, 그 사이 직각 표시
+                        var foot = scale(add(wEdge.a, wEdge.b), 0.5);
+                        line(apex, bottomCenter, true);
+                        line(bottomCenter, foot, true);
+                        rightMark(bottomCenter, up, normalize(sub(foot, bottomCenter)),
+                            Math.min(MARK_MM * MM_TO_PT, 0.15 * (yMax - yMin), 0.3 * dist(foot, bottomCenter)));
+                        heightLabel(apex, bottomCenter);
+                    }
+                    if (lateral.length > 0) label("dimSlant", lateral[0].a, lateral[0].b);
+                } else if (lateral.length > 0) {
+                    label("dimHeight", lateral[0].a, lateral[0].b);
+                }
+                return out;
+            }
+
+            if (model.round) {
+                var yBottom = model.round.pointAt(0, 0)[1], yTop = model.round.pointAt(0, 1)[1];
+                var topR = dist(model.round.pointAt(0, 1), [0, yTop, 0]);
+                var bottomC = [0, yBottom, 0], topC = [0, yTop, 0];
+                var tFlat = Math.atan2(flat[2], flat[0]);
+                // 화면에서 가장 오른쪽인 테두리 점(옆선의 끝)
+                function rightmost(sv) {
+                    var bestQ = null;
+                    for (var k = 0; k < 360; k++) {
+                        var q = model.round.pointAt(2 * Math.PI * k / 360, sv);
+                        if (bestQ === null || P(q)[0] > P(bestQ)[0]) bestQ = q;
+                    }
+                    return bestQ;
+                }
+                if (kind === "cylinder" || kind === "tube") {
+                    if (want("dimRadius") !== "") {
+                        var topRim = model.round.pointAt(tFlat, 1);
+                        line(topC, topRim, facingModel(topC, up) <= FACING_EPSILON);
+                        out.dots.push(P(topC));
+                        label("dimRadius", topC, topRim, [0, 1]);
+                    }
+                    label("dimHeight", rightmost(0), rightmost(1), [1, 0]);
+                    return out;
+                }
+                // 원뿔·원뿔대: 밑면 반지름과 높이는 입체 안이라 점선, 직각 표시는 실선
+                var rim = model.round.pointAt(tFlat, 0);
+                if (want("dimRadius") !== "") {
+                    line(bottomC, rim, facingModel(bottomC, [0, -1, 0]) <= FACING_EPSILON);
+                    out.dots.push(P(bottomC));
+                    label("dimRadius", bottomC, rim, [0, -1]);   // 위는 높이 선·직각 표시라 아래에
+                }
+                if (want("dimHeight") !== "") {
+                    line(topC, bottomC, true);
+                    rightMark(bottomC, up, flat, Math.min(MARK_MM * MM_TO_PT, 0.15 * (yTop - yBottom), 0.3 * dist(rim, bottomC)));
+                    label("dimHeight", topC, bottomC, [-1, 0], 0.7);
+                }
+                if (want("dimSlant") !== "") {
+                    // 모선: 오른쪽 옆선 (원뿔은 꼭짓점에서 밑면 테두리에 닿는 접선, 원뿔대는 두 테두리의 오른쪽 끝을 잇는다)
+                    var footQ = rightmost(0);
+                    if (topR < 1e-6) {
+                        var ap = P(topC), bestAngle = -Infinity;
+                        for (var k2 = 0; k2 < 720; k2++) {
+                            var q2 = model.round.pointAt(2 * Math.PI * k2 / 720, 0), b2 = P(q2);
+                            var angle = Math.atan2(b2[1] - ap[1], b2[0] - ap[0]);
+                            if (angle > bestAngle) { bestAngle = angle; footQ = q2; }
+                        }
+                    }
+                    label("dimSlant", topR < 1e-6 ? topC : rightmost(1), footQ);
+                }
+                return out;
+            }
+
+            if (model.cutSphere && want("dimRadius") !== "") {
+                // 구는 적도 위 실선, 반구는 밑면 안이라 점선(아래에서 보면 실선)
+                var O = [0, 0, 0], edge = scale(flat, model.cutSphere.R);
+                line(O, edge, kind === "hemisphere" && facingModel(O, [0, -1, 0]) <= FACING_EPSILON);
+                out.dots.push(P(O));
+                label("dimRadius", O, edge, [0, kind === "hemisphere" ? -1 : 1]);
+            }
+            return out;
+        }
+
+        // 치수 글자(글상자 가운데를 at에)와 반지름 선의 가운데 점
+        function drawDimensions(group, dims) {
+            var dimGroup = group.groupItems.add();
+            dimGroup.name = "치수";
+            var font = null, i;
+            try { font = app.textFonts.getByName(NAME_FONT_NAME); } catch (fontError) {}
+            for (i = 0; i < dims.dots.length; i++) {
+                var d = dims.dots[i], r = DOT_RADIUS_PT;
+                var dot = dimGroup.pathItems.ellipse(d[1] + r, d[0] - r, 2 * r, 2 * r);
+                dot.stroked = false;
+                dot.filled = true;
+                dot.fillColor = strokeColor;
+            }
+            for (i = 0; i < dims.labels.length; i++) {
+                var lab = dims.labels[i];
+                var frame = dimGroup.textFrames.add();
+                frame.contents = lab.text;
+                try {
+                    frame.textRange.characterAttributes.size = NAME_SIZE_PT;
+                    if (font !== null) frame.textRange.characterAttributes.textFont = font;
+                    frame.textRange.characterAttributes.fillColor = strokeColor;
+                } catch (styleError) {}
+                var b = frame.geometricBounds;
+                frame.translate(lab.at[0] - (b[0] + b[2]) / 2, lab.at[1] - (b[1] + b[3]) / 2);
             }
         }
 
@@ -1836,6 +2093,12 @@ function foldPanel(parent, title, collapsed, key) {
                 if (part.kind === "line") {
                     path = group.pathItems.add();
                     path.setEntirePath([projectModel(part.a), projectModel(part.b)]);
+                    path.closed = false;
+                } else if (part.kind === "poly") {
+                    var anchors = [];
+                    for (var q = 0; q < part.points.length; q++) anchors.push(projectModel(part.points[q]));
+                    path = group.pathItems.add();
+                    path.setEntirePath(anchors);
                     path.closed = false;
                 } else {
                     path = makeCurvePath(group, part.curve, part.t0, part.t1, part.closed);
@@ -2144,7 +2407,7 @@ function foldPanel(parent, title, collapsed, key) {
                 return buildPrismModel(kind, halfW, halfD, height);
             }
             if (kind === "cutcube") return buildCutCubeModel(halfW, halfD, height);
-            if (kind === "sphere4" || kind === "sphere8") return buildCutSphereModel(kind, halfW);
+            if (kind === "sphere4" || kind === "sphere8" || kind === "sphere" || kind === "hemisphere") return buildCutSphereModel(kind, halfW);
             return buildPlatonicModel(kind, halfW, halfD, height);
         }
 
@@ -2178,7 +2441,10 @@ function foldPanel(parent, title, collapsed, key) {
             // 실루엣이 시점에 따라 달라지므로 여기서 시점을 먼저 정한다 (평행 투영)
             beginView({radius: R});
             perspectiveActive = false;
+            // 구는 아무것도 잘라내지 않고, 반구는 아래 반(y < 0)을 잘라낸다(둥근 면이 위)
             function removed(q) {
+                if (kind === "sphere") return false;
+                if (kind === "hemisphere") return q[1] < -margin;
                 return q[0] > margin && q[2] > margin && (!eighth || q[1] > margin);
             }
             function inSolid(q) {
@@ -2202,7 +2468,12 @@ function foldPanel(parent, title, collapsed, key) {
             var silhouette = function(t) { return add(scale(ex, R * Math.cos(t)), scale(ey, R * Math.sin(t))); };
             var kept = keptRange(silhouette, removed);
             if (kept) curves.push(curveOf(silhouette, kept[0], kept[1], kept[2]));
-            // 적도 (y = 0): 잘라낸 쐐기(0 < φ < 90°) 밖만. 1/8이면 그 부분은 자른 면의 호가 된다
+            // 적도 (y = 0): 구·반구는 한 바퀴(반구는 밑면 테두리), 잘라낸 구는 쐐기(0 < φ < 90°) 밖만. 1/8이면 그 부분은 자른 면의 호가 된다
+            if (kind === "sphere" || kind === "hemisphere") {
+                curves.push(curveOf(function(t) { return [R * Math.cos(t), 0, R * Math.sin(t)]; }, 0, 2 * Math.PI, true));
+                return {faces: [], edges: [], curves: curves, round: null, radius: R,
+                    cutSphere: {kind: kind, eighth: eighth, R: R, removed: removed, silhouette: silhouette, kept: kept}};
+            }
             curves.push(curveOf(function(t) { return [R * Math.cos(t), 0, R * Math.sin(t)]; }, Math.PI / 2, 2 * Math.PI, false));
             if (!eighth) {
                 // 자른 두 반원 면의 테두리 (위 극 → 아래 극)와 두 면이 만나는 축
@@ -2219,7 +2490,7 @@ function foldPanel(parent, title, collapsed, key) {
                 curves.push(curveOf(function(t) { return [0, 0, R * t]; }, 0, 1, false));
             }
             return {faces: [], edges: [], curves: curves, round: null, radius: R,
-                cutSphere: {eighth: eighth, R: R, removed: removed, silhouette: silhouette, kept: kept}};
+                cutSphere: {kind: kind, eighth: eighth, R: R, removed: removed, silhouette: silhouette, kept: kept}};
         }
 
         // 닫힌 곡선 pointAt(0~2π)에서 cut에 든 호를 뺀 범위 [t0, t1, 닫힘]. 전부 들면 null
@@ -2260,7 +2531,15 @@ function foldPanel(parent, title, collapsed, key) {
             var R = cs.R;
             var O = [0, 0, 0];
             var faces, rim, i;
-            if (!cs.eighth) {
+            if (cs.kind === "sphere") {
+                faces = [];
+                rim = [];
+            } else if (cs.kind === "hemisphere") {
+                // 평평한 밑면(아래를 본다)과 그 테두리
+                var equator = {pointAt: function(t) { return [R * Math.cos(t), 0, R * Math.sin(t)]; }};
+                faces = [{normal: [0, -1, 0], segments: [arcSegment(equator, 0, 2 * Math.PI)]}];
+                rim = [arcSegment(equator, 0, 2 * Math.PI)];
+            } else if (!cs.eighth) {
                 var north = [0, R, 0];
                 var south = [0, -R, 0];
                 var zRim = {pointAt: function(t) { return [R * Math.sin(t), R * Math.cos(t), 0]; }};   // 북극 → (R, 0, 0) → 남극
