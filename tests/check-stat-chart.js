@@ -32,8 +32,8 @@ function extractFunction(name) {
 
 const names = ["buildHistogram", "buildBoxPlot", "buildScatter", "emptyDrawing", "addAxes", "addYTicks", "niceAxis",
   "formatValue", "padAxis", "quartiles", "median", "parseNumberList", "parsePairs", "strictNumber", "roundTo",
-  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups", "buildStemLeaf"];
-const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups", "buildStemLeaf", "buildCategoryChart", "wavePath", "parseCategories"];
+const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, MM_TO_PT = 2.834645669, WAVE_ROOM_MM = 5, WAVE_HALF_MM = 1.6, WAVE_AMP_MM = 0.5, WAVE_GAP_MM = 1;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const size = { width: 70, height: 40, tick: 2, xName: "(cm)", yName: "(명)" };
 const texts = (d, dir) => d.texts.filter((t) => t.dir[0] === dir[0] && t.dir[1] === dir[1]).map((t) => t.text);
 
@@ -184,6 +184,36 @@ assert.ok(/function addBar\([^)]*\) \{[^}]*strokeWidth = EDGE_PT;/.test(source),
     const web = fs.readFileSync(webPath, "utf8"), start = web.indexOf("export function buildStemLeaf("), end = web.indexOf("\n}\n", start) + 2;
     const scriptText = extractFunction("buildStemLeaf").split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
     assert.strictEqual(scriptText, web.slice(start + "export ".length, end), "buildStemLeaf differs from the web");
+  }
+}
+
+// 막대·꺾은선 그래프와 물결선 (웹 math-stat-chart.test.js와 같은 경우)
+{
+  assert.deepStrictEqual(g.parseCategories("월, 화 ,수"), ["월", "화", "수"]);
+  assert.deepStrictEqual(g.parseCategories("봄 여름  가을"), ["봄", "여름", "가을"]);
+  const bars = g.buildCategoryChart(size, ["월", "화", "수", "목", "금"], [{ name: "", values: [12, 15, 9, 18, 14] }], false, 0, true);
+  assert.strictEqual(bars.bars.length, 5);
+  assert.deepStrictEqual(texts(bars, [0, -1]), ["월", "화", "수", "목", "금"]);
+  assert.strictEqual(bars.lines.filter((l) => l.grid).length, 4);
+  const line = g.buildCategoryChart(size, ["9시", "10시", "11시", "12시"], [{ name: "", values: [12, 15, 17, 20] }], true, 10, true);
+  assert.deepStrictEqual(texts(line, [-1, 0]), ["0", "10", "12", "14", "16", "18", "20"]);
+  assert.strictEqual(line.lines.filter((l) => l.curve).length, 2, "물결선 두 줄");
+  assert.strictEqual(line.dots.length, 4);
+  const two = g.buildCategoryChart(size, ["1월", "2월", "3월"], [{ name: "서울", values: [2, 5, 9] }, { name: "부산", values: [4, 7, 11] }], true, 0, false);
+  const polys = two.lines.filter((l) => l.main);
+  assert.ok(polys.length === 2 && !polys[0].dashed && polys[1].dashed);
+  assert.strictEqual(g.wavePath(0, 10, 4, 1).length, 3);
+  assert.ok(source.includes('p[0] === "v4" && p.length === 26') && source.includes('p[0] === "v3" && p.length === 21'), "settings v4 reads v3");
+  assert.ok(source.includes('"막대 · 꺾은선 그래프"'), "종류 목록");
+  // 웹 math-stat-chart.js와 글자 그대로 같다 (들여쓰기만 다름)
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-stat-chart.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8");
+    for (const name of ["buildCategoryChart", "wavePath", "parseCategories"]) {
+      const start = web.indexOf("export function " + name + "("), end = web.indexOf("\n}\n", start) + 2;
+      const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+      assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
+    }
   }
 }
 

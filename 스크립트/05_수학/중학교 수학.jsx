@@ -3668,7 +3668,7 @@ var SCRIPT_KEY = "MiddleMath";
             var SLIDER_WIDTH = 196;
             var RESET_BUTTON_WIDTH = 34;
             var TEXT_WIDTH = 300;
-            var KINDS = ["히스토그램 · 도수분포다각형", "상자그림", "산점도", "줄기와 잎 그림"];
+            var KINDS = ["히스토그램 · 도수분포다각형", "상자그림", "산점도", "줄기와 잎 그림", "막대 · 꺾은선 그래프"];
             var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
             var ENG_FONT_NAME = "GSMediumB1";
             var ITALIC_FONT_NAME = "GSMediItaC1";
@@ -3681,6 +3681,10 @@ var SCRIPT_KEY = "MiddleMath";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var BOX_HEIGHT_MM = 6;
+            var WAVE_ROOM_MM = 5;     // 물결선으로 줄인 세로축 0~시작값 칸의 높이
+            var WAVE_HALF_MM = 1.6;   // 물결선 반 너비 (세로축 양쪽으로)
+            var WAVE_AMP_MM = 0.5;    // 물결 높이
+            var WAVE_GAP_MM = 1;      // 두 물결선 사이
             var GUIDE_PT = 0.3;                 // 산점도 모눈·y=x 점선 (보조선)
             var GRID_K = 30;
             var GUIDE_DASH = [2, 1.5];
@@ -3712,6 +3716,8 @@ var SCRIPT_KEY = "MiddleMath";
             var scatterText = "(160,50) (165,55) (170,58) (155,48) (175,65)";
             var scatterGrid = false, scatterIdentity = false;   // 산점도 모눈(K30)·y=x 점선
             var stemUnit = "";   // 줄기와 잎 그림 범례의 단위: (1|2는 12점)
+            // 막대·꺾은선 그래프: 항목, 값(| 로 집단, 꺾은선만), 꺾은선(끄면 막대), 세로축 시작(0보다 크면 물결선), 가로 모눈
+            var categoryText = "월, 화, 수, 목, 금", valueText = "12, 15, 9, 18, 14", categoryLine = false, categoryStart = "", categoryGrid = true;
             var xName = "(cm)";
             var yName = "(명)";
             var offsetXmm = 0;
@@ -3761,6 +3767,15 @@ var SCRIPT_KEY = "MiddleMath";
             scatterIdentityCheck.helpTip = "두 값을 비교하는 기준선 y=x (보조 점선)";
             var stemUnitInput = addTextRow(dataPanel, "단위:", stemUnit, "줄기와 잎 그림 범례 (1|2는 12점)의 단위. 자료는 상자그림 칸(0 이상의 정수)을 쓴다");
 
+            var categoryPanel = addPanel(win, "항목 · 값");
+            var categoryInput = addTextRow(categoryPanel, "항목:", categoryText, "가로축에 차례로 쓸 항목 이름을 쉼표로 (월, 화, 수 / 9시, 10시, 11시)");
+            var valueInput = addTextRow(categoryPanel, "값:", valueText, "항목마다 값을 쉼표로, 항목 수와 같게. 꺾은선 두 개: 서울: 2, 5, 9 | 부산: 4, 7, 11 (둘째는 점선, 이름은 끝 점 오른쪽)");
+            var categoryStartInput = addTextRow(categoryPanel, "세로축 시작:", categoryStart, "비우면 0. 0보다 크게 쓰면(10 등) 세로축 0과 그 값 사이를 물결선(≈)으로 줄인다. 가장 작은 값 이하로 쓴다");
+            var categoryChecks = categoryPanel.add("group");
+            var categoryLineCheck = categoryChecks.add("checkbox", undefined, "꺾은선 (끄면 막대)");
+            var categoryGridCheck = categoryChecks.add("checkbox", undefined, "가로 모눈");
+            categoryGridCheck.helpTip = "세로축 눈금마다 회색(K30) 가로선";
+
             var axisPanel = addPanel(win, "축 이름", "fold6");
             var xNameInput = addTextRow(axisPanel, "가로:", xName, "가로축 끝에 붙는 글자 (cm), 키 (cm)");
             var yNameInput = addTextRow(axisPanel, "세로:", yName, "세로축 위에 붙는 글자 (명). 상대도수를 켜면 비워도 된다");
@@ -3788,6 +3803,8 @@ var SCRIPT_KEY = "MiddleMath";
             relativeCheck.value = relative;
             scatterGridCheck.value = scatterGrid;
             scatterIdentityCheck.value = scatterIdentity;
+            categoryLineCheck.value = categoryLine;
+            categoryGridCheck.value = categoryGrid;
             refreshEnabled();
 
             kindList.onChange = function() {
@@ -3811,6 +3828,11 @@ var SCRIPT_KEY = "MiddleMath";
             scatterGridCheck.onClick = function() { scatterGrid = scatterGridCheck.value; updatePreview(); };
             scatterIdentityCheck.onClick = function() { scatterIdentity = scatterIdentityCheck.value; updatePreview(); };
             stemUnitInput.onChanging = function() { stemUnit = stemUnitInput.text; updatePreview(); };
+            categoryInput.onChanging = function() { categoryText = categoryInput.text; updatePreview(); };
+            valueInput.onChanging = function() { valueText = valueInput.text; updatePreview(); };
+            categoryStartInput.onChanging = function() { categoryStart = categoryStartInput.text; updatePreview(); };
+            categoryLineCheck.onClick = function() { categoryLine = categoryLineCheck.value; updatePreview(); };
+            categoryGridCheck.onClick = function() { categoryGrid = categoryGridCheck.value; updatePreview(); };
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, initial.offsetXmm);
             bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, initial.offsetYmm);
@@ -3841,6 +3863,7 @@ var SCRIPT_KEY = "MiddleMath";
                 stemUnitInput.parent.enabled = kind === 3;
                 scatterInput.parent.enabled = kind === 2;
                 scatterChecks.enabled = kind === 2;
+                categoryPanel.enabled = kind === 4;
                 heightControls.input.parent.enabled = kind !== 1;
             }
 
@@ -3879,6 +3902,19 @@ var SCRIPT_KEY = "MiddleMath";
                     for (var si = 0; whole && si < stems.length; si++) if (stems[si] < 0 || stems[si] !== Math.floor(stems[si])) whole = false;
                     if (!whole) problem = "자료는 0 이상의 정수로 넣어주세요";
                     else drawing = buildStemLeaf(stems, fontPt, stemUnit);
+                } else if (kind === 4) {
+                    var categories = parseCategories(categoryText), series = parseGroups(valueText), fits = series !== null;
+                    for (var ci = 0; fits && ci < series.length; ci++) if (series[ci].values.length !== categories.length) fits = false;
+                    var startText = categoryStart.replace(/^\s+|\s+$/g, ""), start = startText === "" ? 0 : strictNumber(startText), above = true;
+                    for (ci = 0; fits && above && start !== null && ci < series.length; ci++) {
+                        for (var cv = 0; cv < series[ci].values.length; cv++) if (series[ci].values[cv] < start) above = false;
+                    }
+                    if (categories.length === 0) problem = "항목을 넣어주세요";
+                    else if (!fits) problem = "값을 항목 수와 같게 넣어주세요";
+                    else if (!categoryLine && series.length > 1) problem = "막대그래프는 한 집단만 그립니다";
+                    else if (start === null || start < 0) problem = "세로축 시작을 읽지 못함";
+                    else if (!above) problem = "세로축 시작은 가장 작은 값 이하로";
+                    else drawing = buildCategoryChart(size, categories, series, categoryLine, start, categoryGrid);
                 } else {
                     var pairs = parsePairs(scatterText);
                     if (pairs === null || pairs.length === 0) problem = "순서쌍을 읽지 못함";
@@ -3900,10 +3936,19 @@ var SCRIPT_KEY = "MiddleMath";
                     viewCenter[1] - size.height / 2 + offsetYmm * MM_TO_PT);
             }
 
-            // line: {points, main, tick, closed, dashed(둘째 집단 다각형), grid(산점도 모눈 K30), guide(y=x 보조 점선)}
+            // line: {points, main, tick, closed, dashed(둘째 집단 다각형), grid(산점도 모눈 K30), guide(y=x 보조 점선), curve(베지어 점의 물결선)}
             function addLine(line) {
                 var path = previewGroup.pathItems.add();
-                path.setEntirePath(line.points);
+                if (line.curve) {
+                    // 물결선: 앵커와 핸들이 있는 베지어 점
+                    for (var lp = 0; lp < line.points.length; lp++) {
+                        var point = path.pathPoints.add();
+                        point.anchor = line.points[lp].anchor;
+                        point.leftDirection = line.points[lp].left;
+                        point.rightDirection = line.points[lp].right;
+                        point.pointType = PointType.SMOOTH;
+                    }
+                } else path.setEntirePath(line.points);
                 path.closed = !!line.closed;
                 path.filled = false;
                 path.stroked = true;
@@ -4292,6 +4337,70 @@ var SCRIPT_KEY = "MiddleMath";
                 return out;
             }
 
+            // 막대그래프·꺾은선그래프. 항목마다 한 칸, 막대는 칸 너비의 0.6(가운데), 꺾은선은 칸 가운데 점을 잇는다(집단이 둘 이상이면 둘째부터 점선,
+            // 이름은 마지막 점 오른쪽). start가 0보다 크면 세로축 0과 start 사이를 물결선 두 줄로 줄이고 세로축을 그 사이에서 끊는다.
+            // grid면 눈금마다 가로 모눈(K30)
+            function buildCategoryChart(size, categories, groups, line, start, grid) {
+                var out = emptyDrawing();
+                var n = categories.length, top = start, room = start > 0 ? WAVE_ROOM_MM * MM_TO_PT : 0;
+                for (var g = 0; g < groups.length; g++) for (var i = 0; i < n; i++) top = Math.max(top, groups[g].values[i]);
+                var axis = niceAxis(start, top > start ? top : start + 1);
+                var sx = size.width / n, sy = (size.height - room) / (axis.max - axis.min);
+                function yOf(v) { return room + (v - axis.min) * sy; }
+
+                // 모눈은 축보다 먼저(뒤에) 그린다
+                if (grid) {
+                    for (var gv = room > 0 ? axis.min : axis.min + axis.step; gv <= axis.max + axis.step / 2; gv += axis.step) out.lines.push({ points: [[0, yOf(gv)], [size.width, yOf(gv)]], grid: true });
+                }
+                addAxes(out, size, size.xName, size.yName);
+                if (room > 0) {
+                    // 세로축을 두 물결선 사이에서 끊는다. 물결선은 축 굵기
+                    var yAxis = out.lines[out.lines.length - 1], mid = room / 2, gap = WAVE_GAP_MM * MM_TO_PT / 2;
+                    yAxis.points = [[0, mid + gap], yAxis.points[1]];
+                    out.lines.push({ points: [[0, 0], [0, mid - gap]] });
+                    out.lines.push({ points: wavePath(0, mid - gap, WAVE_HALF_MM * MM_TO_PT, WAVE_AMP_MM * MM_TO_PT), curve: true });
+                    out.lines.push({ points: wavePath(0, mid + gap, WAVE_HALF_MM * MM_TO_PT, WAVE_AMP_MM * MM_TO_PT), curve: true });
+                    out.texts.push({ text: "0", at: [0, 0], dir: [-1, 0], clear: size.tick / 2 });
+                }
+                for (var v = axis.min; v <= axis.max + axis.step / 2; v += axis.step) {
+                    if (v > axis.min || room > 0) out.lines.push({ points: [[-size.tick / 2, yOf(v)], [size.tick / 2, yOf(v)]] });
+                    out.texts.push({ text: formatValue(v, axis.step), at: [0, yOf(v)], dir: [-1, 0], clear: size.tick / 2 });
+                }
+                for (var c = 0; c < n; c++) out.texts.push({ text: categories[c], at: [(c + 0.5) * sx, 0], dir: [0, -1], clear: 0 });
+                if (!line) {
+                    for (var b = 0; b < n; b++) if (groups[0].values[b] > 0) out.bars.push([(b + 0.2) * sx, 0, (b + 0.8) * sx, yOf(groups[0].values[b])]);
+                    return out;
+                }
+                for (var s = 0; s < groups.length; s++) {
+                    var points = [];
+                    for (var p = 0; p < n; p++) points.push([(p + 0.5) * sx, yOf(groups[s].values[p])]);
+                    out.lines.push(s > 0 ? { points: points, main: true, dashed: true } : { points: points, main: true });
+                    for (var q = 0; q < points.length; q++) out.dots.push(points[q]);
+                    if (groups[s].name) out.texts.push({ text: groups[s].name, at: points[n - 1], dir: [1, 0], clear: 0 });
+                }
+                return out;
+            }
+
+            // 물결선 한 줄: (cx, cy)를 가운데로 가로 [cx-half, cx+half]에서 위로 한 번, 아래로 한 번 (높이 amp). 앵커 셋의 베지어
+            function wavePath(cx, cy, half, amp) {
+                var h = half / 3, k = amp * 4 / 3;
+                return [
+                    { anchor: [cx - half, cy], left: [cx - half, cy], right: [cx - half + h, cy + k] },
+                    { anchor: [cx, cy], left: [cx - h, cy + k], right: [cx + h, cy - k] },
+                    { anchor: [cx + half, cy], left: [cx + half - h, cy - k], right: [cx + half, cy] }
+                ];
+            }
+
+            // "월, 화, 수" 또는 "월 화 수" → ["월","화","수"]. 쉼표가 있으면 쉼표로만 나눈다(항목 안의 공백을 지킨다)
+            function parseCategories(text) {
+                var s = String(text), parts = s.indexOf(",") >= 0 || s.indexOf("，") >= 0 ? s.split(/[,，]/) : s.split(/\s+/), list = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var item = parts[i].replace(/^\s+|\s+$/g, "");
+                    if (item !== "") list.push(item);
+                }
+                return list;
+            }
+
             // 산점도: 가장 작은 자료가 축 위에 얹히지 않게 한 칸 넓힌다
             function padAxis(axis, values) {
                 if (Math.min.apply(null, values) - axis.min < axis.step * 0.25) axis.min = roundTo(axis.min - axis.step, axis.step / 1000);
@@ -4574,10 +4683,11 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v3", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
+                    "v4", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
                     showBars ? "1" : "0", showPolygon ? "1" : "0", relative ? "1" : "0",
                     encodeURIComponent(boxText), encodeURIComponent(scatterText), encodeURIComponent(xName), encodeURIComponent(yName),
-                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", scatterGrid ? "1" : "0", scatterIdentity ? "1" : "0", encodeURIComponent(stemUnit)
+                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", scatterGrid ? "1" : "0", scatterIdentity ? "1" : "0", encodeURIComponent(stemUnit),
+                    encodeURIComponent(categoryText), encodeURIComponent(valueText), categoryLine ? "1" : "0", encodeURIComponent(categoryStart), categoryGrid ? "1" : "0"
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -4587,8 +4697,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v2 = v1 + 산점도 모눈·y=x, v3 = v2 + 줄기와 잎 단위. v2·v1도 읽는다
-                if (!((p[0] === "v3" && p.length === 21) || (p[0] === "v2" && p.length === 20) || (p[0] === "v1" && p.length === 18))) return;
+                // v2 = v1 + 산점도 모눈·y=x, v3 = v2 + 줄기와 잎 단위, v4 = v3 + 막대·꺾은선. v3·v2·v1도 읽는다
+                if (!((p[0] === "v4" && p.length === 26) || (p[0] === "v3" && p.length === 21) || (p[0] === "v2" && p.length === 20) || (p[0] === "v1" && p.length === 18))) return;
                 try {
                     kind = Math.round(restoreNumber(p[1], kind, 0, KINDS.length - 1));
                     widthMm = restoreNumber(p[2], widthMm, 20, 150);
@@ -4607,11 +4717,18 @@ var SCRIPT_KEY = "MiddleMath";
                     offsetXmm = restoreNumber(p[15], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[16], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[17] === "1";
-                    if (p[0] === "v2" || p[0] === "v3") {
+                    if (p[0] === "v2" || p[0] === "v3" || p[0] === "v4") {
                         scatterGrid = p[18] === "1";
                         scatterIdentity = p[19] === "1";
                     }
-                    if (p[0] === "v3") stemUnit = decodeURIComponent(p[20]);
+                    if (p[0] === "v3" || p[0] === "v4") stemUnit = decodeURIComponent(p[20]);
+                    if (p[0] === "v4") {
+                        categoryText = decodeURIComponent(p[21]);
+                        valueText = decodeURIComponent(p[22]);
+                        categoryLine = p[23] === "1";
+                        categoryStart = decodeURIComponent(p[24]);
+                        categoryGrid = p[25] === "1";
+                    }
                 } catch (restoreError) {}
             }
 

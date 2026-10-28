@@ -6520,6 +6520,22 @@
           "type": "string",
           "default": "3, 5, 6, 7, 8, 9, 10, 12, 15"
         },
+        "categoryGrid": {
+          "type": "boolean",
+          "default": true
+        },
+        "categoryLine": {
+          "type": "boolean",
+          "default": false
+        },
+        "categoryStart": {
+          "type": "string",
+          "default": ""
+        },
+        "categoryText": {
+          "type": "string",
+          "default": "월, 화, 수, 목, 금"
+        },
         "classStart": {
           "type": "number",
           "default": 140,
@@ -6597,6 +6613,10 @@
         "stemUnit": {
           "type": "string",
           "default": ""
+        },
+        "valueText": {
+          "type": "string",
+          "default": "12, 15, 9, 18, 14"
         },
         "widthMm": {
           "type": "number",
