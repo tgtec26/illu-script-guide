@@ -1847,6 +1847,9 @@ var SCRIPT_KEY = "MiddleMath";
             var showGuides = true;
             var nameStyle = 1;   // 그래프 끝 이름: 없음 · 식 · ㉠ · (가)
             var hideAxes = false;
+            var xAxisName = "x", yAxisName = "y";   // 축 이름 (t, v(t), x(cm) 등)
+            var axisMode = 0;                       // 축 모양: 0 두 축, 1 x축만(부등식 개형 그림), 2 축 없이 그래프만
+            var xTick = 1, yTick = 1;               // 눈금 간격 (10이면 10, 20, 30 …). 격자도 같은 간격
             var regionText = "";
             var regionK = 15;
             var piAxis = false;
@@ -1884,11 +1887,13 @@ var SCRIPT_KEY = "MiddleMath";
             var win = page;   // 탭 페이지에 그대로 쌓는다
 
             var rangePanel = addPanel(win, "범위 · 눈금", "fold3");
-            var xMinControls = addValueRow(rangePanel, "x 최솟값", "", xMin, -20, 0, 1, 0);
-            var xMaxControls = addValueRow(rangePanel, "x 최댓값", "", xMax, 1, 20, 1, 0);
-            var yMinControls = addValueRow(rangePanel, "y 최솟값", "", yMin, -20, 0, 1, 0);
-            var yMaxControls = addValueRow(rangePanel, "y 최댓값", "", yMax, 1, 20, 1, 0);
-            var unitControls = addValueRow(rangePanel, "단위 길이", "mm", unitMm, 2, 20, 0.5, 1);
+            var xMinControls = addValueRow(rangePanel, "x 최솟값", "", xMin, -200, 0, 1, 0);
+            var xMaxControls = addValueRow(rangePanel, "x 최댓값", "", xMax, 1, 200, 1, 0);
+            var yMinControls = addValueRow(rangePanel, "y 최솟값", "", yMin, -200, 0, 1, 0);
+            var yMaxControls = addValueRow(rangePanel, "y 최댓값", "", yMax, 1, 200, 1, 0);
+            var xTickControls = addValueRow(rangePanel, "x 눈금 간격", "", xTick, 0.1, 50, 0.1, 1);
+            var yTickControls = addValueRow(rangePanel, "y 눈금 간격", "", yTick, 0.1, 50, 0.1, 1);
+            var unitControls = addValueRow(rangePanel, "단위 길이", "mm", unitMm, 0.2, 20, 0.1, 1);
             var fontControls = addValueRow(rangePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var axisChecks = rangePanel.add("group");
             var gridCheck = axisChecks.add("checkbox", undefined, "격자");
@@ -1899,6 +1904,18 @@ var SCRIPT_KEY = "MiddleMath";
             hideAxesCheck.helpTip = "축·화살촉·눈금 숫자를 빼고 격자만 그린다 (모눈종이 위 도형, 격자점 위 꼭짓점)";
             var tickCheck = axisChecks.add("checkbox", undefined, "눈금선");
             tickCheck.helpTip = "축의 짧은 눈금선(눈금 숫자와 따로). 끄면 눈금선 없이 축만 그린다";
+            var axisNameRow = rangePanel.add("group");
+            axisNameRow.add("statictext", undefined, "축 모양:");
+            var axisModeList = axisNameRow.add("dropdownlist", undefined, ["두 축", "x축만 (부등식 개형 그림)", "축 없이 그래프만"]);
+            axisModeList.selection = axisMode;
+            axisNameRow.add("statictext", undefined, "축 이름 x:");
+            var xAxisNameInput = axisNameRow.add("edittext", undefined, xAxisName);
+            xAxisNameInput.characters = 5;
+            axisNameRow.add("statictext", undefined, "y:");
+            var yAxisNameInput = axisNameRow.add("edittext", undefined, yAxisName);
+            yAxisNameInput.characters = 5;
+            xAxisNameInput.helpTip = "가로축 끝 글자: t, x(cm) 등. 비우면 쓰지 않는다";
+            yAxisNameInput.helpTip = "세로축 끝 글자: v(t), s, f(x) 등. 비우면 쓰지 않는다";
             var axisMarkRow = rangePanel.add("group");
             axisMarkRow.add("statictext", undefined, "축 위 글자:");
             var axisMarkInput = axisMarkRow.add("edittext", undefined, axisMarkText);
@@ -2065,6 +2082,11 @@ var SCRIPT_KEY = "MiddleMath";
             numbersCheck.onClick = function() { showNumbers = numbersCheck.value; updatePreview(); };
             nameList.onChange = function() { nameStyle = nameList.selection ? nameList.selection.index : 0; updatePreview(); };
             hideAxesCheck.onClick = function() { hideAxes = hideAxesCheck.value; updatePreview(); };
+            axisModeList.onChange = function() { axisMode = axisModeList.selection ? axisModeList.selection.index : 0; updatePreview(); };
+            xAxisNameInput.onChanging = function() { xAxisName = xAxisNameInput.text; updatePreview(); };
+            yAxisNameInput.onChanging = function() { yAxisName = yAxisNameInput.text; updatePreview(); };
+            bindValueRow(xTickControls, function(value) { xTick = value; }, 1);
+            bindValueRow(yTickControls, function(value) { yTick = value; }, 1);
             regionInput.onChanging = function() { regionText = regionInput.text; updatePreview(); };
             bindValueRow(regionKControls, function(value) { regionK = value; }, initial.regionK);
             coordsCheck.onClick = function() { showCoords = coordsCheck.value; updatePreview(); };
@@ -2208,6 +2230,7 @@ var SCRIPT_KEY = "MiddleMath";
 
                 var drawing = buildPlane({
                     xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unit: unitMm * MM_TO_PT,
+                    xName: xAxisName, yName: yAxisName, axisMode: axisMode, xTick: xTick, yTick: yTick,
                     tick: TICK_MM * MM_TO_PT, grid: showGrid, numbers: showNumbers,
                     functions: functions, parametric: parametric, tangents: tangents, nameStyle: nameStyle, hideAxes: hideAxes, region: region || [],
                     points: points.list, coords: showCoords, guides: showGuides,
@@ -2454,40 +2477,57 @@ var SCRIPT_KEY = "MiddleMath";
                 // 가로축 π 단위면 최솟값·최댓값은 π/2의 몇 배
                 var xStep = opt.piAxis ? Math.PI / 2 : 1;
                 var xLo = opt.xMin * xStep, xHi = opt.xMax * xStep;
-                var left = Math.min(xLo, 0) - 0.5, right = xHi + 0.8;
+                // 축 끝 여유는 눈금 한 칸 기준 (눈금 간격이 10이면 여유도 10배)
+                var xSpan = opt.xTick > 0 ? opt.xTick : 1, ySpan = opt.yTick > 0 ? opt.yTick : 1;
+                var left = Math.min(xLo, 0) - 0.5 * xSpan, right = xHi + 0.8 * xSpan;
                 // 그래프는 X축 화살촉 가장 왼쪽(뒤끝)까지 진행한다 (그림 제작 규칙 7.7)
                 var plotHi = Math.max(xHi, right - (ARROW.rear || ARROW.length) / u);
-                var bottom = Math.min(opt.yMin, 0) - 0.5, top = opt.yMax + 0.8;
+                var bottom = Math.min(opt.yMin, 0) - 0.5 * ySpan, top = opt.yMax + 0.8 * ySpan;
 
+                // 눈금 간격 xTick·yTick의 배수만 (k = 눈금 번호). 소수 간격의 부동소수점 오차는 10자리에서 자른다 (웹 math-coord-plane.js와 같다)
+                var xTick = opt.xTick > 0 ? opt.xTick : 1, yTick = opt.yTick > 0 ? opt.yTick : 1;
+                var stepsOf = function(lo, hi, step) {
+                    var out = [];
+                    for (var k = Math.ceil(lo / step - 1e-9); k * step <= hi + 1e-9; k++) out.push(Number((k * step).toFixed(10)));
+                    return out;
+                };
+                var xs = stepsOf(opt.xMin, opt.xMax, xTick), ys = stepsOf(opt.yMin, opt.yMax, yTick);
+                var axisMode = opt.axisMode || 0;
                 // 축 없이 모눈: 격자(0 줄 포함)만
                 if (opt.hideAxes) {
-                    for (var hx = opt.xMin; hx <= opt.xMax; hx++) lines.push(straight([[hx * xStep * u, opt.yMin * u], [hx * xStep * u, opt.yMax * u]], "grid"));
-                    for (var hy = opt.yMin; hy <= opt.yMax; hy++) lines.push(straight([[xLo * u, hy * u], [xHi * u, hy * u]], "grid"));
+                    for (var hx = 0; hx < xs.length; hx++) lines.push(straight([[xs[hx] * xStep * u, opt.yMin * u], [xs[hx] * xStep * u, opt.yMax * u]], "grid"));
+                    for (var hy = 0; hy < ys.length; hy++) lines.push(straight([[xLo * u, ys[hy] * u], [xHi * u, ys[hy] * u]], "grid"));
                 } else if (opt.grid) {
-                    for (var gx = opt.xMin; gx <= opt.xMax; gx++) if (gx !== 0) lines.push(straight([[gx * xStep * u, opt.yMin * u], [gx * xStep * u, opt.yMax * u]], "grid"));
-                    for (var gy = opt.yMin; gy <= opt.yMax; gy++) if (gy !== 0) lines.push(straight([[xLo * u, gy * u], [xHi * u, gy * u]], "grid"));
+                    for (var gx = 0; gx < xs.length; gx++) if (xs[gx] !== 0) lines.push(straight([[xs[gx] * xStep * u, opt.yMin * u], [xs[gx] * xStep * u, opt.yMax * u]], "grid"));
+                    for (var gy = 0; gy < ys.length; gy++) if (ys[gy] !== 0) lines.push(straight([[xLo * u, ys[gy] * u], [xHi * u, ys[gy] * u]], "grid"));
                 }
 
-                // 축은 화살촉 뒤에서 끝낸다 (선 끝이 뾰족한 촉 밖으로 나오지 않게)
-                if (!opt.hideAxes) {
+                // 축은 화살촉 뒤에서 끝낸다 (선 끝이 뾰족한 촉 밖으로 나오지 않게). 축 모양 1은 x축만, 2는 축 없음
+                var axisName = function(name, at, dir) {
+                    var d = formulaDisplay(String(name));
+                    texts.push({ text: d.text, sup: d.sup, sub: d.sub, roman: d.roman, at: at, dir: dir, clear: 0 });
+                };
+                if (!opt.hideAxes && axisMode !== 2) {
                     lines.push(straight([[left * u, 0], [right * u - ARROW.length + ARROW.notch, 0]], "axis"));
-                    lines.push(straight([[0, bottom * u], [0, top * u - ARROW.length + ARROW.notch]], "axis"));
                     arrows.push({ tip: [right * u, 0], dir: [1, 0] });
-                    arrows.push({ tip: [0, top * u], dir: [0, 1] });
-                    texts.push({ text: "x", at: [right * u, 0], dir: [0, -1], clear: 0 });
-                    texts.push({ text: "y", at: [0, top * u], dir: [-1, 0], clear: 0 });
-                    texts.push({ text: "O", at: [0, 0], dir: [-0.7071, -0.7071], clear: 0, upright: true });
-
-                    for (var tx = opt.xMin; tx <= opt.xMax; tx++) {
-                        if (tx === 0) continue;
-                        var tickX = tx * xStep * u;
-                        if (opt.ticks !== false) lines.push(straight([[tickX, -opt.tick / 2], [tickX, opt.tick / 2]], "tick"));
-                        if (opt.numbers) texts.push({ text: opt.piAxis ? piLabel(tx) : String(tx), at: [tickX, 0], dir: [0, -1], clear: opt.tick / 2 });
+                    if (opt.xName !== "") axisName(opt.xName === undefined ? "x" : opt.xName, [right * u, 0], [0, -1]);
+                    if (axisMode !== 1) {
+                        lines.push(straight([[0, bottom * u], [0, top * u - ARROW.length + ARROW.notch]], "axis"));
+                        arrows.push({ tip: [0, top * u], dir: [0, 1] });
+                        if (opt.yName !== "") axisName(opt.yName === undefined ? "y" : opt.yName, [0, top * u], [-1, 0]);
+                        texts.push({ text: "O", at: [0, 0], dir: [-0.7071, -0.7071], clear: 0, upright: true });
                     }
-                    for (var ty = opt.yMin; ty <= opt.yMax; ty++) {
-                        if (ty === 0) continue;
-                        if (opt.ticks !== false) lines.push(straight([[-opt.tick / 2, ty * u], [opt.tick / 2, ty * u]], "tick"));
-                        if (opt.numbers) texts.push({ text: String(ty), at: [0, ty * u], dir: [-1, 0], clear: opt.tick / 2 });
+
+                    for (var tx = 0; tx < xs.length; tx++) {
+                        if (xs[tx] === 0) continue;
+                        var tickX = xs[tx] * xStep * u;
+                        if (opt.ticks !== false) lines.push(straight([[tickX, -opt.tick / 2], [tickX, opt.tick / 2]], "tick"));
+                        if (opt.numbers) texts.push({ text: opt.piAxis ? piLabel(xs[tx]) : String(xs[tx]), at: [tickX, 0], dir: [0, -1], clear: opt.tick / 2 });
+                    }
+                    for (var ty = 0; axisMode !== 1 && ty < ys.length; ty++) {
+                        if (ys[ty] === 0) continue;
+                        if (opt.ticks !== false) lines.push(straight([[-opt.tick / 2, ys[ty] * u], [opt.tick / 2, ys[ty] * u]], "tick"));
+                        if (opt.numbers) texts.push({ text: String(ys[ty]), at: [0, ys[ty] * u], dir: [-1, 0], clear: opt.tick / 2 });
                     }
                 }
                 // 축 위 글자: 그 값에 눈금, x축은 아래·y축은 왼쪽에 글자 (변수 a, α 등. 웹 math-coord-plane.js와 같다)
@@ -3644,7 +3684,7 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v8", xMin, xMax, yMin, yMax, unitMm, fontPt,
+                    "v9", xMin, xMax, yMin, yMax, unitMm, fontPt,
                     showGrid ? "1" : "0", showNumbers ? "1" : "0", nameStyle,
                     encodeList(functionTexts),
                     encodeURIComponent(pointsText), showCoords ? "1" : "0", showGuides ? "1" : "0",
@@ -3655,7 +3695,8 @@ var SCRIPT_KEY = "MiddleMath";
                     encodeURIComponent(labelText), encodeURIComponent(segmentText), encodeURIComponent(regionText2), regionK2, showTicks ? "1" : "0", parameterA, parameterB, parameterC,
                     encodeURIComponent(parametricX), encodeURIComponent(parametricY), encodeURIComponent(parametricMin), encodeURIComponent(parametricMax),
                     encodeURIComponent(tangentText),
-                    regionHatch ? "1" : "0", regionHatch2 ? "1" : "0", encodeURIComponent(axisMarkText), lineDashes.join(",")
+                    regionHatch ? "1" : "0", regionHatch2 ? "1" : "0", encodeURIComponent(axisMarkText), lineDashes.join(","),
+                    encodeURIComponent(xAxisName), encodeURIComponent(yAxisName), axisMode, xTick, yTick
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -3672,13 +3713,13 @@ var SCRIPT_KEY = "MiddleMath";
                 if (!raw) return;
                 var p = raw.split("|");
                 // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다. v6 = v5 + 매개변수곡선 4칸, v7 = v6 + 접선, v8 = v7 + 빗금 둘·축 위 글자·점선
-                if (!((p[0] === "v8" && p.length === 45) || (p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
+                if (!((p[0] === "v9" && p.length === 50) || (p[0] === "v8" && p.length === 45) || (p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
                 try {
-                    xMin = Math.round(restoreNumber(p[1], xMin, -20, 0));
-                    xMax = Math.round(restoreNumber(p[2], xMax, 1, 20));
-                    yMin = Math.round(restoreNumber(p[3], yMin, -20, 0));
-                    yMax = Math.round(restoreNumber(p[4], yMax, 1, 20));
-                    unitMm = restoreNumber(p[5], unitMm, 2, 20);
+                    xMin = Math.round(restoreNumber(p[1], xMin, -200, 0));
+                    xMax = Math.round(restoreNumber(p[2], xMax, 1, 200));
+                    yMin = Math.round(restoreNumber(p[3], yMin, -200, 0));
+                    yMax = Math.round(restoreNumber(p[4], yMax, 1, 200));
+                    unitMm = restoreNumber(p[5], unitMm, 0.2, 20);
                     fontPt = restoreNumber(p[6], fontPt, 5, 14);
                     showGrid = p[7] === "1";
                     showNumbers = p[8] === "1";
@@ -3700,7 +3741,7 @@ var SCRIPT_KEY = "MiddleMath";
                     hideAxes = p[21] === "1";
                     regionText = decodeURIComponent(p[22]);
                     regionK = restoreNumber(p[23], regionK, 5, 60);
-                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8") {
+                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9") {
                         var savedNames = p[24].split(",");
                         if (savedNames.length === FUNCTION_COUNT) {
                             for (var sn = 0; sn < FUNCTION_COUNT; sn++) nameTexts[sn] = decodeURIComponent(savedNames[sn]);
@@ -3716,13 +3757,13 @@ var SCRIPT_KEY = "MiddleMath";
                         regionText2 = decodeURIComponent(p[30]);
                         regionK2 = restoreNumber(p[31], regionK2, 5, 60);
                         showTicks = p[32] === "1";
-                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8") {
+                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9") {
                             parameterA = restoreNumber(p[33], parameterA, -10, 10);
                             parameterB = restoreNumber(p[34], parameterB, -10, 10);
                             parameterC = restoreNumber(p[35], parameterC, -10, 10);
                         }
-                        if (p[0] === "v7" || p[0] === "v8") tangentText = decodeURIComponent(p[40]);
-                        if (p[0] === "v8") {
+                        if (p[0] === "v7" || p[0] === "v8" || p[0] === "v9") tangentText = decodeURIComponent(p[40]);
+                        if (p[0] === "v8" || p[0] === "v9") {
                             regionHatch = p[41] === "1";
                             regionHatch2 = p[42] === "1";
                             axisMarkText = decodeURIComponent(p[43]);
@@ -3731,7 +3772,14 @@ var SCRIPT_KEY = "MiddleMath";
                                 for (var sd = 0; sd < FUNCTION_COUNT; sd++) lineDashes[sd] = savedDashes[sd] === "true";
                             }
                         }
-                        if (p[0] === "v6" || p[0] === "v7" || p[0] === "v8") {
+                        if (p[0] === "v9") {
+                            xAxisName = decodeURIComponent(p[45]);
+                            yAxisName = decodeURIComponent(p[46]);
+                            axisMode = Math.round(restoreNumber(p[47], axisMode, 0, 2));
+                            xTick = restoreNumber(p[48], xTick, 0.1, 50);
+                            yTick = restoreNumber(p[49], yTick, 0.1, 50);
+                        }
+                        if (p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9") {
                             parametricX = decodeURIComponent(p[36]);
                             parametricY = decodeURIComponent(p[37]);
                             parametricMin = decodeURIComponent(p[38]);
