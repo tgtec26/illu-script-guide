@@ -1838,6 +1838,7 @@ var SCRIPT_KEY = "MiddleMath";
             var showGrid = false;
             var showNumbers = true;
             var functionTexts = ["y=2x+1", "", "", "", ""];
+            var parameterA = 1, parameterB = 0, parameterC = 0;
             var pointsText = "";
             var showCoords = true;
             var showGuides = true;
@@ -1899,9 +1900,13 @@ var SCRIPT_KEY = "MiddleMath";
                 functionRow.add("statictext", undefined, (f + 1) + ":").preferredSize.width = 20;
                 var functionInput = functionRow.add("edittext", undefined, functionTexts[f]);
                 functionInput.preferredSize.width = 320;
-                functionInput.helpTip = "y=2x+1, y=-x^2+4, y=6/x, y=√x, y=2^x, y=log_2 x, y=ln x, y=sin 2x, y=|x-1|, y=e^x. ^는 거듭제곱, 곱셈 기호는 생략해도 된다";
+                functionInput.helpTip = "y=2x+1, y=-x^2+4, y=6/x, y=√x, y=2^x, y=log_2 x, y=ln x, y=sin 2x, y=|x-1|, y=e^x. a·b·c는 계수 패널에서 조절한다. ^는 거듭제곱, 곱셈 기호는 생략해도 된다";
                 functionInputs.push(functionInput);
             }
+            var paramPanel = addPanel(win, "계수 a·b·c", "foldParameters");
+            var paramAControls = addValueRow(paramPanel, "a", "", parameterA, -10, 10, 0.1, 1);
+            var paramBControls = addValueRow(paramPanel, "b", "", parameterB, -10, 10, 0.1, 1);
+            var paramCControls = addValueRow(paramPanel, "c", "", parameterC, -10, 10, 0.1, 1);
             var functionChecks = functionPanel.add("group");
             functionChecks.add("statictext", undefined, "이름:");
             var nameList = functionChecks.add("dropdownlist", undefined, NAME_STYLES);
@@ -2009,6 +2014,9 @@ var SCRIPT_KEY = "MiddleMath";
             bindValueRow(yMaxControls, function(value) { yMax = value; }, initial.yMax);
             bindValueRow(unitControls, function(value) { unitMm = value; }, initial.unitMm);
             bindValueRow(fontControls, function(value) { fontPt = value; }, initial.fontPt);
+            bindValueRow(paramAControls, function(value) { parameterA = value; }, 1);
+            bindValueRow(paramBControls, function(value) { parameterB = value; }, 0);
+            bindValueRow(paramCControls, function(value) { parameterC = value; }, 0);
             gridCheck.onClick = function() { showGrid = gridCheck.value; updatePreview(); };
             numbersCheck.onClick = function() { showNumbers = numbersCheck.value; updatePreview(); };
             nameList.onChange = function() { nameStyle = nameList.selection ? nameList.selection.index : 0; updatePreview(); };
@@ -2089,14 +2097,15 @@ var SCRIPT_KEY = "MiddleMath";
             function buildPreview() {
                 var problems = [];
                 var functions = [];
+                var variables = {a: parameterA, b: parameterB, c: parameterC};
                 for (var i = 0; i < FUNCTION_COUNT; i++) {
                     if (String(functionTexts[i]).replace(/\s/g, "") === "") continue;
-                    var compiled = compileFunction(functionTexts[i]);
+                    var compiled = compileFunction(functionTexts[i], variables);
                     if (compiled === null) problems.push((i + 1) + "번 식");
                     else functions.push({ fn: compiled, label: functionTexts[i], name: String(nameTexts[i]).replace(/^\s+|\s+$/g, ""), at: nameAts[i] });
                 }
                 // 점·글자 좌표 안의 f(3), g(1/2) 같은 함수값을 식의 값으로 바꾼다
-                var values = functionValueTable(functionTexts);
+                var values = functionValueTable(functionTexts, variables);
                 var points = parsePointList(substituteFunctionValues(pointsText, values));
                 if (points.bad.length > 0) problems.push("점 " + points.bad.join(", "));
                 var notes = parsePointList(substituteFunctionValues(labelText, values));
@@ -2635,11 +2644,11 @@ var SCRIPT_KEY = "MiddleMath";
 
             // "x=1, y=2" → [{axis, value}]. 빈 칸은 [], 못 읽으면 null
             // 1번~5번 식의 함수값표: f·f1=1번, g·f2=2번, h·f3=3번, f4, f5. 읽지 못한 칸은 null
-            function functionValueTable(functionTexts) {
+            function functionValueTable(functionTexts, variables) {
                 var table = {}, names = [["f", "f1"], ["g", "f2"], ["h", "f3"], ["f4"], ["f5"]];
                 for (var i = 0; i < names.length; i++) {
                     var text = (functionTexts || [])[i] || "";
-                    var fn = text.replace(/\s/g, "") === "" ? null : compileFunction(text);
+                    var fn = text.replace(/\s/g, "") === "" ? null : compileFunction(text, variables);
                     for (var k = 0; k < names[i].length; k++) table[names[i][k]] = fn;
                 }
                 return table;
@@ -2902,7 +2911,7 @@ var SCRIPT_KEY = "MiddleMath";
 
             // "y=…", "f(x)=…" 또는 식만. x의 함수(function)로 만들고, 못 읽으면 null.
             // 2x, 1/2x(=½x), x^2, √x, |x-1|, 2^x, e^x, π(pi), sin 2x, cos(x+1), tan x, log_2 x, log x(밑 10), ln x
-            function compileFunction(text) {
+            function compileFunction(text, variables) {
                 var s = String(text).split("−").join("-").split("×").join("*").split("÷").join("/")
                     .split("²").join("^2").split("³").join("^3").split("π").join("pi");
                 // log_2 x처럼 밑 뒤의 빈칸은 밑의 끝이다 (빈칸을 지운 log_23x와 구별)
@@ -2911,6 +2920,7 @@ var SCRIPT_KEY = "MiddleMath";
                 if (eq >= 0) s = s.substring(eq + 1);
                 if (s === "") return null;
                 var NAMES = ["arcsin", "arccos", "arctan", "sqrt", "sin", "cos", "tan", "sec", "log", "ln", "pi", "e", "x"];
+                if (variables) NAMES = NAMES.concat(["a", "b", "c"]);
                 var FUNCS = { sin: Math.sin, cos: Math.cos, tan: Math.tan, sqrt: Math.sqrt, arcsin: Math.asin, arccos: Math.acos, arctan: Math.atan, sec: function(v) { return 1 / Math.cos(v); } };
                 var pos = 0, absDepth = 0;
                 function peek() { return s.charAt(pos); }
@@ -2978,6 +2988,7 @@ var SCRIPT_KEY = "MiddleMath";
                     if (name !== null) {
                         pos += name.length;
                         if (name === "x") return function(x) { return x; };
+                        if (variables && (name === "a" || name === "b" || name === "c")) { var value = variables[name]; return function() { return value; }; }
                         if (name === "pi") return function() { return Math.PI; };
                         if (name === "e") return function() { return Math.E; };
                         if (name === "log") {
@@ -3200,7 +3211,7 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v4", xMin, xMax, yMin, yMax, unitMm, fontPt,
+                    "v5", xMin, xMax, yMin, yMax, unitMm, fontPt,
                     showGrid ? "1" : "0", showNumbers ? "1" : "0", nameStyle,
                     encodeList(functionTexts),
                     encodeURIComponent(pointsText), showCoords ? "1" : "0", showGuides ? "1" : "0",
@@ -3208,7 +3219,7 @@ var SCRIPT_KEY = "MiddleMath";
                     piAxis ? "1" : "0", showIntersections ? "1" : "0", showIdentity ? "1" : "0", encodeURIComponent(asymptoteText),
                     hideAxes ? "1" : "0", encodeURIComponent(regionText), regionK,
                     encodeList(nameTexts), nameAts.join(","), encodeURIComponent(lineText), showLineNames ? "1" : "0",
-                    encodeURIComponent(labelText), encodeURIComponent(segmentText), encodeURIComponent(regionText2), regionK2, showTicks ? "1" : "0"
+                    encodeURIComponent(labelText), encodeURIComponent(segmentText), encodeURIComponent(regionText2), regionK2, showTicks ? "1" : "0", parameterA, parameterB, parameterC
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -3225,7 +3236,7 @@ var SCRIPT_KEY = "MiddleMath";
                 if (!raw) return;
                 var p = raw.split("|");
                 // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다
-                if (!((p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
+                if (!((p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
                 try {
                     xMin = Math.round(restoreNumber(p[1], xMin, -20, 0));
                     xMax = Math.round(restoreNumber(p[2], xMax, 1, 20));
@@ -3253,7 +3264,7 @@ var SCRIPT_KEY = "MiddleMath";
                     hideAxes = p[21] === "1";
                     regionText = decodeURIComponent(p[22]);
                     regionK = restoreNumber(p[23], regionK, 5, 60);
-                    if (p[0] === "v4") {
+                    if (p[0] === "v4" || p[0] === "v5") {
                         var savedNames = p[24].split(",");
                         if (savedNames.length === FUNCTION_COUNT) {
                             for (var sn = 0; sn < FUNCTION_COUNT; sn++) nameTexts[sn] = decodeURIComponent(savedNames[sn]);
@@ -3269,6 +3280,11 @@ var SCRIPT_KEY = "MiddleMath";
                         regionText2 = decodeURIComponent(p[30]);
                         regionK2 = restoreNumber(p[31], regionK2, 5, 60);
                         showTicks = p[32] === "1";
+                        if (p[0] === "v5") {
+                            parameterA = restoreNumber(p[33], parameterA, -10, 10);
+                            parameterB = restoreNumber(p[34], parameterB, -10, 10);
+                            parameterC = restoreNumber(p[35], parameterC, -10, 10);
+                        }
                     }
                 } catch (restoreError) {}
             }

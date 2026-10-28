@@ -279,7 +279,7 @@ assert.ok(source.includes("var FUNCTION_COUNT = 5;"));
   assert.strictEqual(withTicks.lines.length - noTicks.lines.length, 20);
   assert.strictEqual(g.buildPlane(base).lines.length, withTicks.lines.length, "옛 호출은 눈금선이 있다");
   // 설정 저장 형식: v4와 옛 v3를 모두 읽는다
-  assert.ok(source.includes('"v4", xMin, xMax,') && source.includes('p[0] === "v3" && p.length === 24'));
+  assert.ok(source.includes('"v5", xMin, xMax,') && source.includes('p[0] === "v3" && p.length === 24'));
 }
 
 // 선 두께: "/lines"는 v2 + LINE_KEYS 9칸(10필드). v1(축·그래프·보조선)도 읽고, 필드 수가 다르면 무시한다
@@ -337,4 +337,32 @@ const d = g.buildPlane({ xMin: -5, xMax: 5, yMin: -5, yMax: 5, unit: 10, tick: 2
 console.log("coord plane checks passed");
 for (const [expr, value] of [["sqrt(9)", 3], ["arcsin(1)", Math.PI/2], ["sec(0)", 1]]) {
   const fn = g.compileFunction(expr); assert.ok(fn, expr); near(fn(0), value, expr);
+}
+{
+  const variables = {a: 2, b: -1, c: 3};
+  const fn = g.compileFunction("y=a*x^2+b*x+c", variables);
+  assert.ok(fn, "계수를 포함한 식");
+  near(fn(2), 9, "계수 반영");
+  const table = g.functionValueTable(["y=a*x^2+b*x+c"], variables);
+  near(table.f(2), 9, "점의 함수값에도 계수 반영");
+  assert.ok(source.includes('p[0] === "v5" && p.length === 36'), "v5 저장값");
+  assert.ok(source.includes('p[0] === "v4" && p.length === 33'), "v4 호환");
+}
+{
+  const store = {};
+  const app = { preferences: { getStringPreference: k => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const prelude = `var PREF_KEY="T", FUNCTION_COUNT=5, NAME_STYLES=[0,1,2,3], POSITION_LIMIT_MM=1000;
+  var xMin=-5,xMax=5,yMin=-5,yMax=5,unitMm=6,fontPt=8,showGrid=false,showNumbers=true,nameStyle=1;
+  var functionTexts=["y=2x+1","","","",""],pointsText="",showCoords=true,showGuides=true,offsetXmm=0,offsetYmm=0,previewEnabled=true;
+  var piAxis=false,showIntersections=false,showIdentity=false,asymptoteText="",hideAxes=false,regionText="",regionK=15;
+  var nameTexts=["","","","",""],nameAts=[0,0,0,0,0],lineText="",showLineNames=true,labelText="",segmentText="",regionText2="",regionK2=35,showTicks=true;
+  var parameterA=1,parameterB=0,parameterC=0; function saveLineWidths() {}`;
+  const body = prelude + ["saveSettings","encodeList","applySettings","restoreNumber","parseNumber","clamp"].map(extractFunction).join("\n") +
+    `return {saveSettings,applySettings,set:function(a,b,c){parameterA=a;parameterB=b;parameterC=c;},get:function(){return [parameterA,parameterB,parameterC];}};`;
+  const make = () => new Function("app",body)(app);
+  const first = make(); first.set(2,-3,0.5); first.saveSettings();
+  assert.equal(store.T.split("|").length,36);
+  const restored = make(); restored.applySettings(); assert.deepEqual(restored.get(),[2,-3,0.5]);
+  store.T = store.T.split("|").slice(0,33).join("|").replace(/^v5/,"v4");
+  const old = make(); old.applySettings(); assert.deepEqual(old.get(),[1,0,0]);
 }
