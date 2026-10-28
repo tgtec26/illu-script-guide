@@ -29,9 +29,9 @@ function extractFunction(name) {
 
 const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readChains", "readPairTexts", "circumcircle", "readCircles", "readEllipses", "readAngles", "trimText", "curvePoints", "ccwSweep", "readArcs", "readFills",
   "readChainPaths", "dimensionCurve", "display", "straight", "circleLine", "unitVector", "offsetPoint", "arcPoints", "rightAnglePoints", "buildGeometry", "clamp", "parseNumber",
-  "ConstructFail", "readConstructions", "constructPoint"];
+  "ConstructFail", "readConstructions", "constructPoint", "touchingCircle"];
 const make = new Function("state", `
-var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, KAPPA = 0.5522847498;
+var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, SYMBOL_MM = 0.6, KAPPA = 0.5522847498;
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
 var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
 var text = state.text, showNames = state.showNames, showAxes = state.showAxes, showDimensions = !!state.showDimensions, dimensionRiseMm = 3, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
@@ -272,6 +272,17 @@ function lineWidthStore(constNames, raw) {
   assert.deepStrictEqual(r.notes, ["작도 A=mid(A,B) (이름 겹침)", "작도 M=foo(A,B)", "작도 N=mid(A,Z) (모르는 점)",
     "작도 O=circum(A,B,C) (한 직선 위의 세 점)", "작도 P=mid(O,A) (모르는 점)", "작도 Q=div(A,B,1:-1)", "작도 R=foot(A,B,B) (같은 두 점)", "작도 bad", "작도 X=cross(AB,A~B~C)"]);
   assert.deepStrictEqual(r.names, ["A", "B", "C"]);
+  // 각의 이등분선(안·바깥)·방심·접선의 접점 (웹 math-geometry.test.js와 같은 경우)
+  r = build({ A: [0, 3], B: [0, 0], C: [4, 0] }, "D=bisect(A,B,C), E=bisect(A,B,C,out), J=excenter(A,B,C)");
+  assert.deepStrictEqual(r.notes, []);
+  at(r, "D", 12 / 7, 12 / 7); at(r, "E", -12, 12); at(r, "J", 3, -3);
+  r = build({ A: [-1, 2], B: [0, 0], C: [1, 2] }, "E=bisect(A,B,C,out)");
+  assert.deepStrictEqual(r.notes, ["작도 E=bisect(A,B,C,out) (평행해 만나지 않음)"]);
+  r = build({ O: [0, 0], A: [1, 0], P: [2, 0], Q: [0.5, 0] }, "T=tan(P,O~A,1), U=tan(P,O~A,2), V=tan(P,O:1), W=tan(Q,O~A)");
+  at(r, "T", 0.5, Math.sqrt(3) / 2); at(r, "U", 0.5, -Math.sqrt(3) / 2); at(r, "V", 0.5, Math.sqrt(3) / 2);
+  assert.deepStrictEqual(r.notes, ["작도 W=tan(Q,O~A) (원 안의 점)"]);
+  r = build({ O: [0, 0], A: [1, 0], P: [2, 0], T: [0.5, Math.sqrt(3) / 2] }, "U=tan(P,O~A)");
+  at(r, "U", 0.5, -Math.sqrt(3) / 2);
   // 만든 점은 선분·이름에 좌표로 준 점처럼 쓰인다
   const d = api({ pointsText: "A(0,3) B(0,0) C(4,0)", constructText: "M=mid(B,C)", segmentText: "A-B-C-A, A-M" }).buildGeometry();
   assert.deepStrictEqual(d.notes, []);
@@ -307,3 +318,37 @@ function lineWidthStore(constNames, raw) {
 require("./es3-lint")(["readChainPaths", "dimensionCurve", "ConstructFail", "readConstructions", "constructPoint"].map(extractFunction).join("\n"), "기하 새 도형 함수");
 new Function(bundle);
 console.log("geometry checks passed");
+
+// 내접원·방접원, 같은 각 기호, 이름 숨기기, 평행 표시 (웹 math-geometry.test.js와 같은 경우)
+{
+  const tri = { pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A" };
+  let d = api(Object.assign({}, tri, { circleText: "in(ABC), ex(ABC,A)" })).buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  const circles = d.lines.filter(l => l.closed && l.points.length === 4);
+  assert.strictEqual(circles.length, 2);
+  const radius = (c) => (c.points[0].anchor[0] - c.points[2].anchor[0]) / 2;
+  near(radius(circles[1]) / radius(circles[0]), 3, "방접원 반지름 3 : 내접원 반지름 1");
+  assert.deepStrictEqual(api(Object.assign({}, tri, { circleText: "ex(ABC,D), in(AB)" })).buildGeometry().notes, ["원 ex(ABC,D)", "원 in(AB)"]);
+  const g = api({ pointsText: "A(0,3) B(0,0) C(4,0) D(1.7,1.7)", segmentText: "A-B-C-A, B-D", angleText: "ABD:•, DBC:•:0, BAC:∘:0, ACB:×:0" });
+  d = g.buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  assert.ok(!d.texts.some(t => /[•∘×]/.test(t.text)), "기호는 글자가 아니다");
+  assert.strictEqual(d.lines.filter(l => l.kind === "fill" && l.fillK === 100).length, 2, "• 두 개");
+  assert.strictEqual(d.lines.filter(l => l.kind === "mark" && l.closed && l.points.length === 4).length, 1, "∘ 하나");
+  assert.strictEqual(d.lines.filter(l => l.kind === "mark" && !l.closed && l.points.length === 2 && l.points[0].left === l.points[0].anchor).length, 2, "× 선 두 개");
+  d = api({ pointsText: "A(0,3) B(0,0) C(4,0)", constructText: "I=incenter(A,B,C)", labelDirText: "I:x, A:ul" }).buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  assert.deepStrictEqual(d.texts.filter(t => t.upright).map(t => t.text).sort(), ["A", "B", "C"]);
+  d = api({ pointsText: "A(0,3) B(0,0) C(4,0)", constructText: "I=incenter(A,B,C)", labelDirText: "I:숨김" }).buildGeometry();
+  assert.deepStrictEqual(d.texts.filter(t => t.upright).map(t => t.text).sort(), ["A", "B", "C"]);
+  d = api({ pointsText: "A(0,4) B(0,0) C(4,0) D(4,4)", segmentText: "A-B-C-D-A", tickText: "AD:>, BC:>, AB:>>" }).buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  const marks = d.lines.filter(l => l.kind === "mark" && l.points.length === 3);
+  assert.strictEqual(marks.length, 4);
+  for (const m of marks) {
+    const [p, tip, q] = m.points.map(x => x.anchor), back = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+    assert.ok(tip[0] - back[0] > 1e-6 || tip[1] - back[1] > 1e-6, "오른쪽 또는 위쪽");
+  }
+}
+
+console.log("geometry new marks ok");

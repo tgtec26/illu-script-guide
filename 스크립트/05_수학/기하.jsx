@@ -2171,6 +2171,7 @@ var SCRIPT_KEY = "HighGeometry";
             var GUIDE_PT = 0.3;
             var MARK_PT = 0.3;
             var MARK_GAP_MM = 0.7;
+            var SYMBOL_MM = 0.6;   // 같은 각 기호(•·∘·×)의 반지름·반 너비 (• 지름 약 1 mm)
             var DOT_RADIUS_MM = 0.6;
             var GUIDE_DASH = [2, 1.5];
             var DIMENSION_LABEL_GAP_MM = 0.7;
@@ -2218,21 +2219,21 @@ var SCRIPT_KEY = "HighGeometry";
             var pointPanel = addPanel(win, "점");
             var inputs = {};
             addTextRow(pointPanel, "점", "pointsText", "점 이름과 좌표: A(0,3) B(0,0) C(4,0). 같은 길이 단위로 쓴다 (√13, 1/2, π도 된다). 이름은 O_1처럼 아래첨자도 된다");
-            addTextRow(pointPanel, "작도", "constructText", "이름=명령(…)으로 점을 계산해 만든다(앞에서부터 차례로, 만든 점은 다른 칸에서 쓴다). mid(A,B) 중점, div(A,B,2:1) 내분점(2:-1은 외분점), along(A,B,3) A에서 B 쪽으로 3, foot(P,A,B) 수선의 발, cross(AB,CD) 교점(직선 AB, P//AB 평행선, P⊥AB 수선, 원 ABC·O:3·O~A; 둘째 교점은 cross(…,2), 안 쓰면 이미 있는 점이 아닌 쪽), rot(P,O,60) 반시계 60° 회전, ref(P,A,B)·ref(P,O) 대칭점, centroid·circum·incenter·ortho(A,B,C) 무게중심·외심·내심·수심");
+            addTextRow(pointPanel, "작도", "constructText", "이름=명령(…)으로 점을 계산해 만든다(앞에서부터 차례로, 만든 점은 다른 칸에서 쓴다). mid(A,B) 중점, div(A,B,2:1) 내분점(2:-1은 외분점), along(A,B,3) A에서 B 쪽으로 3, foot(P,A,B) 수선의 발, cross(AB,CD) 교점(직선 AB, P//AB 평행선, P⊥AB 수선, 원 ABC·O:3·O~A; 둘째 교점은 cross(…,2), 안 쓰면 이미 있는 점이 아닌 쪽), rot(P,O,60) 반시계 60° 회전, ref(P,A,B)·ref(P,O) 대칭점, centroid·circum·incenter·ortho(A,B,C) 무게중심·외심·내심·수심, bisect(A,B,C) ∠B의 이등분선과 AC의 교점(bisect(A,B,C,out)은 바깥각), excenter(A,B,C) A의 맞은편 방심, tan(P,O~A) P에서 원에 그은 접선의 접점(tan(P,O~A,2)는 다른 접점)");
             addTextRow(pointPanel, "선분", "segmentText", "이어 그릴 점 이름: A-B-C-A, A-D (쉼표로 나눈다)");
             addTextRow(pointPanel, "점선", "dashedText", "점선으로 이을 점 이름: A-D");
             addTextRow(pointPanel, "화살표", "arrowText", "끝에 화살촉이 있는 선분(벡터). O-A는 O에서 A로, O-A-B는 O→A, A→B (쉼표로 여러 개)");
-            addTextRow(pointPanel, "원", "circleText", "ABC 세 점을 지나는 원, AB 지름이 AB인 원, O:3 중심 O·반지름 3, (1,2):3 좌표 중심, O~A 중심 O에 A를 지나는 원");
+            addTextRow(pointPanel, "원", "circleText", "ABC 세 점을 지나는 원, AB 지름이 AB인 원, O:3 중심 O·반지름 3, (1,2):3 좌표 중심, O~A 중심 O에 A를 지나는 원, in(ABC) 내접원, ex(ABC,A) A의 맞은편 방접원");
             addTextRow(pointPanel, "타원", "ellipseText", "O:6x4 중심 O·가로 반지름 6·세로 반지름 4, (1,2):6x4 좌표 중심, 6x4 중심 원점 (쉼표로 여러 개, x 대신 ×도 된다)");
             addTextRow(pointPanel, "호", "arcText", "O:A>B 중심 O, 점 A에서 B 쪽으로 반시계로 도는 호(O:A<B는 시계), AC:u AC를 지름으로 하는 반원(바깥쪽 u 위·d 아래·l 왼쪽·r 오른쪽). 쉼표로 여러 개");
             addTextRow(pointPanel, "색칠", "fillText", "경로를 >로 이어 칠한다(저절로 닫힘). 점 이름은 직선, arc+(O,B)·arc-(O,B)는 지금 점에서 B 방향까지 O를 중심으로 반시계·시계로 도는 호, circle(O,3)·circle(O,A)는 원판. 뒤의 :30은 농도(K, 안 쓰면 20)");
-            addTextRow(pointPanel, "각", "angleText", "BAC:60° (꼭짓점 A에서 AB와 AC 사이의 각), ABC:R 직각 표시, BAC 글자 없이 호, BAC:60°:2 호 2겹");
+            addTextRow(pointPanel, "각", "angleText", "BAC:60° (꼭짓점 A에서 AB와 AC 사이의 각), ABC:R 직각 표시, BAC 글자 없이 호, BAC:60°:2 호 2겹, ABD:• 같은 각 기호(• ∘ ×), ABD:•:0 호 없이 기호만");
 
             var markPanel = addPanel(win, "표시");
-            addTextRow(markPanel, "같은 길이", "tickText", "AB:1, CD:2 — 변 가운데에 눈금 1~3개");
+            addTextRow(markPanel, "같은 길이", "tickText", "AB:1, CD:2 — 변 가운데에 눈금 1~3개, AB:> · AB:>> 평행 표시");
             addTextRow(markPanel, "변 길이", "lengthText", "AB:5, BC:2√3 — 변 가운데에서 바깥쪽에 글자");
             addTextRow(markPanel, "점 찍기", "dotText", "점으로 찍을 점 이름: P Q");
-            addTextRow(markPanel, "글자 방향", "labelDirText", "점 이름 글자 방향: A:ul, P:r (u 위, d 아래, l 왼쪽, r 오른쪽, ul·ur·dl·dr 대각선). 안 쓰면 그림 가운데에서 바깥쪽");
+            addTextRow(markPanel, "글자 방향", "labelDirText", "점 이름 글자 방향: A:ul, P:r (u 위, d 아래, l 왼쪽, r 오른쪽, ul·ur·dl·dr 대각선). 안 쓰면 그림 가운데에서 바깥쪽. I:x는 그 점의 이름을 쓰지 않는다(작도용 보조점)");
             var nameCheck = markPanel.add("checkbox", undefined, "점 이름 쓰기");
             nameCheck.value = showNames;
             var axesCheck = markPanel.add("checkbox", undefined, "좌표축 (원점 O)");
@@ -2708,6 +2709,9 @@ var SCRIPT_KEY = "HighGeometry";
             //     k가 없으면 이미 있는 점과 겹치지 않는 쪽("다른 교점"), 그 밖에는 1번
             //   rot(P,O,θ) 반시계 θ(π가 있으면 라디안, 없으면 도) · ref(P,A,B) 직선 AB 대칭 · ref(P,O) 점 O 대칭
             //   centroid·circum·incenter·ortho(A,B,C) 무게중심·외심·내심·수심
+            //   bisect(A,B,C) ∠ABC의 이등분선과 AC의 교점(AD:DC = BA:BC), bisect(A,B,C,out) 바깥각의 이등분선과 직선 AC의 교점
+            //   excenter(A,B,C) A의 맞은편 방심 · tan(P,원[,k]) P에서 원(O~A·O:r·ABC)에 그은 접선의 접점. 원 중심에서 P를 볼 때
+            //     왼쪽이 1번, k가 없으면 cross와 같이 이미 있는 점이 아닌 쪽. P가 원 위면 P, 원 안이면 실패
             // 앞에서부터 차례로 계산해 table·names에 더한다. 실패하면 "작도 <항목> (이유)"를 notes에 남기고 그 점은 만들지 않는다
             function ConstructFail(why) { this.why = why || ""; }
 
@@ -2752,6 +2756,14 @@ var SCRIPT_KEY = "HighGeometry";
                 function existing(p) {
                     for (var k = 0; k < names.length; k++) if (dist(p, table[names[k]]) < EPS * scale) return true;
                     return false;
+                }
+                // 교점이 둘이면 k번(1·2), k가 없으면 이미 있는 점과 겹치지 않는 쪽, 그 밖에는 1번
+                function choose(found, raw) {
+                    var pick = raw === undefined ? "" : raw.replace(/^\s+|\s+$/g, "");
+                    if (pick !== "" && pick !== "1" && pick !== "2") fail("");
+                    if (found.length === 1) return found[0];
+                    if (pick !== "") return found[parseInt(pick, 10) - 1];
+                    return existing(found[0]) && !existing(found[1]) ? found[1] : found[0];
                 }
                 // 직선 {p, d} 또는 원 {c, r}
                 function shape(raw) {
@@ -2871,23 +2883,49 @@ var SCRIPT_KEY = "HighGeometry";
                 }
                 if (fn === "cross") {
                     if (args.length !== 2 && args.length !== 3) fail("");
-                    var pick = args.length === 3 ? args[2].replace(/^\s+|\s+$/g, "") : "";
-                    if (pick !== "" && pick !== "1" && pick !== "2") fail("");
-                    var found = intersect(shape(args[0]), shape(args[1]));
-                    if (found.length === 1) return found[0];
-                    if (pick !== "") return found[parseInt(pick, 10) - 1];
-                    return existing(found[0]) && !existing(found[1]) ? found[1] : found[0];
+                    return choose(intersect(shape(args[0]), shape(args[1])), args[2]);
+                }
+                if (fn === "bisect") {
+                    if (args.length !== 3 && args.length !== 4) fail("");
+                    var outer = args.length === 4 ? args[3].replace(/\s/g, "").toLowerCase() : "";
+                    if (outer !== "" && outer !== "out") fail("");
+                    a = point(args[0]); b = point(args[1]); c = point(args[2]);
+                    var ba = dist(b, a), bc = dist(b, c);
+                    if (ba < EPS * scale || bc < EPS * scale) fail("같은 두 점");
+                    // AD:DC = BA:BC. 안쪽은 내분, 바깥각은 외분(BA = BC면 바깥각의 이등분선이 AC와 평행)
+                    var weight = outer ? bc - ba : bc + ba, side = outer ? -ba : ba;
+                    if (Math.abs(weight) < EPS * scale) fail("평행해 만나지 않음");
+                    return [(bc * a[0] + side * c[0]) / weight, (bc * a[1] + side * c[1]) / weight];
+                }
+                if (fn === "excenter") {
+                    list = three(); a = list[0]; b = list[1]; c = list[2];
+                    var ea = dist(b, c), eb = dist(c, a), ec = dist(a, b), ew = eb + ec - ea;
+                    if (ew < EPS * scale) fail("한 직선 위의 세 점");
+                    return [(-ea * a[0] + eb * b[0] + ec * c[0]) / ew, (-ea * a[1] + eb * b[1] + ec * c[1]) / ew];
+                }
+                if (fn === "tan") {
+                    if (args.length !== 2 && args.length !== 3) fail("");
+                    p = point(args[0]);
+                    var round = shape(args[1]);
+                    if (!(round.r > 0)) fail("");
+                    var far = dist(p, round.c);
+                    if (Math.abs(far - round.r) <= EPS * scale) return p;
+                    if (far < round.r) fail("원 안의 점");
+                    // 접점은 원과 지름 PO인 원의 교점이다(탈레스). 원 중심 → 지름 원 중심(P 쪽)을 볼 때 왼쪽이 1번
+                    return choose(intersect(round, {c: [(p[0] + round.c[0]) / 2, (p[1] + round.c[1]) / 2], r: far / 2}), args[2]);
                 }
                 return fail("");
             }
 
-            // 원: "ABC"(세 점), "AB"(지름), "O:3", "(1,2):3", "O~A"
+            // 원: "ABC"(세 점), "AB"(지름), "O:3", "(1,2):3", "O~A", "in(ABC)"(내접원), "ex(ABC,A)"(A의 맞은편 방접원)
             function readCircles(source, table, names, notes) {
                 var out = [];
                 var items = splitItems(source);
                 for (var i = 0; i < items.length; i++) {
                     var item = items[i], circle = null, t, u;
-                    if (item.indexOf("~") >= 0) {
+                    var touching = item.replace(/\s/g, "").match(/^(in|ex)\((.*)\)$/i);
+                    if (touching) circle = touchingCircle(touching[1].toLowerCase(), splitItems(touching[2]), table, names);
+                    else if (item.indexOf("~") >= 0) {
                         var halves = item.split("~");
                         t = tokenizeNames(halves[0], names);
                         u = tokenizeNames(halves[1] || "", names);
@@ -2921,6 +2959,29 @@ var SCRIPT_KEY = "HighGeometry";
                     if (circle) out.push(circle); else notes.push("원 " + item);
                 }
                 return out;
+            }
+
+            // 내접원(in, 인자 "ABC")·방접원(ex, 인자 "ABC"와 맞은편 꼭짓점). 세 점이 한 직선 위거나 못 읽으면 null
+            function touchingCircle(kind, args, table, names) {
+                if (args.length !== (kind === "in" ? 1 : 2)) return null;
+                var t = tokenizeNames(args[0], names);
+                if (t === null || t.length !== 3) return null;
+                var order = t;
+                if (kind === "ex") {
+                    var v = tokenizeNames(args[1], names);
+                    if (v === null || v.length !== 1) return null;
+                    order = null;
+                    for (var i = 0; i < 3; i++) if (t[i] === v[0]) order = [t[i], t[(i + 1) % 3], t[(i + 2) % 3]];
+                    if (order === null) return null;
+                }
+                var a = table[order[0]], b = table[order[1]], c = table[order[2]];
+                var la = Math.sqrt((b[0] - c[0]) * (b[0] - c[0]) + (b[1] - c[1]) * (b[1] - c[1]));
+                var lb = Math.sqrt((c[0] - a[0]) * (c[0] - a[0]) + (c[1] - a[1]) * (c[1] - a[1]));
+                var lc = Math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]));
+                var area = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2, s = (la + lb + lc) / 2;
+                if (area < 1e-12 * s * s) return null;
+                var wa = kind === "in" ? la : -la, w = wa + lb + lc;
+                return {c: [(wa * a[0] + lb * b[0] + lc * c[0]) / w, (wa * a[1] + lb * b[1] + lc * c[1]) / w], r: kind === "in" ? area / s : area / (s - la)};
             }
 
             // 타원: "O:6x4"(중심 O, 가로 반지름 6·세로 반지름 4), "(1,2):6x4", "6x4"(중심 원점). x 대신 ×도 된다
@@ -3054,8 +3115,11 @@ var SCRIPT_KEY = "HighGeometry";
                     if (t === null || t.length !== 3) { notes.push("각 " + items[i]); continue; }
                     var label = (parts[1] || "").replace(/^\s+|\s+$/g, "");
                     var right = /^(r|R|직각|90°?|π\/2)$/.test(label);
-                    var arcs = Math.min(3, Math.max(1, parseInt(parts[2], 10) || 1));
-                    out.push({names: t, text: right ? "" : label, right: right, arcs: arcs});
+                    // 같은 각 기호 •·∘·×: 각 안쪽에 도형으로 그린다. "ABD:•:0"은 호 없이 기호만
+                    var symbol = right ? null : ({"\u2022": "dot", "\u25CF": "dot", "\u2218": "ring", "\u25CB": "ring", "\u00D7": "cross"})[label] || null;
+                    var count = parseInt(parts[2], 10);
+                    var arcs = symbol && count === 0 ? 0 : Math.min(3, Math.max(1, count || 1));
+                    out.push({names: t, text: right || symbol ? "" : label, right: right, arcs: arcs, symbol: symbol});
                 }
                 return out;
             }
@@ -3156,12 +3220,13 @@ var SCRIPT_KEY = "HighGeometry";
                     t = tokenizeNames(dotItems[i], names);
                     if (t === null) notes.push("점 찍기 " + dotItems[i]); else for (k = 0; k < t.length; k++) dotNames.push(t[k]);
                 }
-                var dirOverride = {};
+                var dirOverride = {}, hiddenNames = {};
                 var dirItems = splitItems(text.labelDirText);
                 for (i = 0; i < dirItems.length; i++) {
                     var m = dirItems[i].split(":");
                     t = tokenizeNames(m[0], names);
                     var code = (m[1] || "").replace(/\s/g, "");
+                    if (t !== null && t.length === 1 && (code === "x" || code === "숨김")) { hiddenNames[t[0]] = true; continue; }   // 이름 숨기기
                     if (t === null || t.length !== 1 || !DIRS.hasOwnProperty(code)) { notes.push("글자 방향 " + dirItems[i]); continue; }
                     dirOverride[t[0]] = code;
                 }
@@ -3253,6 +3318,7 @@ var SCRIPT_KEY = "HighGeometry";
                 var centroid = [cx0 / names.length, cy0 / names.length];
                 if (showNames) {
                     for (i = 0; i < names.length; i++) {
+                        if (hiddenNames.hasOwnProperty(names[i])) continue;
                         var at = P(names[i]);
                         var dir;
                         if (dirOverride.hasOwnProperty(names[i])) dir = unitVector(DIRS[dirOverride[names[i]]]);
@@ -3283,6 +3349,24 @@ var SCRIPT_KEY = "HighGeometry";
                         for (k = 0; k < angle.arcs; k++) out.lines.push(straight(arcPoints(v, arcR + k * gap, start, sweep), "mark", false));
                         reach = arcR + (angle.arcs - 1) * gap;
                     }
+                    if (angle.symbol) {
+                        // 같은 각 기호: 각의 이등분선 위, 첫 호 안쪽(호 반지름의 0.55배). 좁은 각은 기호가 두 변에 닿지 않을 만큼 멀리
+                        var smid = start + sweep / 2, sdir = [Math.cos(smid), Math.sin(smid)], size = SYMBOL_MM * MM_TO_PT;
+                        var shalf = Math.min(Math.max(sweep / 2, 1e-3), Math.PI / 2);
+                        var sc = offsetPoint(v, sdir, Math.max(arcR * 0.55, (size + 0.3 * MM_TO_PT) / Math.sin(shalf)));
+                        if (angle.symbol === "dot") {
+                            var dot = circleLine(sc[0], sc[1], size * 0.8);
+                            dot.kind = "fill"; dot.fillK = 100;
+                            out.lines.push(dot);
+                        } else if (angle.symbol === "ring") {
+                            var ring = circleLine(sc[0], sc[1], size * 0.8);
+                            ring.kind = "mark";
+                            out.lines.push(ring);
+                        } else {
+                            out.lines.push(straight([[sc[0] - size, sc[1] - size], [sc[0] + size, sc[1] + size]], "mark", false));
+                            out.lines.push(straight([[sc[0] - size, sc[1] + size], [sc[0] + size, sc[1] - size]], "mark", false));
+                        }
+                    }
                     if (angle.text) {
                         var mid = start + sweep / 2, inward = [Math.cos(mid), Math.sin(mid)];
                         var angleLabel = display(angle.text);
@@ -3293,19 +3377,24 @@ var SCRIPT_KEY = "HighGeometry";
                     }
                 }
 
-                // 같은 길이 눈금: 변 가운데에 수직으로
-                var tickKeys = {};
+                // 같은 길이 눈금: 변 가운데에 수직으로. 평행 표시(AB:>, AB:>>)는 도형 표기 탭과 같은 꺾쇠로, 어느 변이든 오른쪽(세로 변은 위쪽)을 가리킨다
+                var tickKeys = {};   // 변 → 표시가 변 바깥으로 나온 길이 (길이 글자를 그만큼 뗀다)
                 for (i = 0; i < ticks.length; i++) {
-                    var count = Math.min(3, Math.max(1, parseInt(ticks[i].text, 10) || 1));
+                    var parallel = /^>{1,3}$/.test(ticks[i].text);
+                    var count = parallel ? ticks[i].text.length : Math.min(3, Math.max(1, parseInt(ticks[i].text, 10) || 1));
                     var ta = P(ticks[i].names[0]), tb = P(ticks[i].names[1]);
                     var along = unitVector([tb[0] - ta[0], tb[1] - ta[1]]), normal = [-along[1], along[0]];
                     var middle = [(ta[0] + tb[0]) / 2, (ta[1] + tb[1]) / 2];
+                    var pointing = (along[0] < -1e-6 || (Math.abs(along[0]) <= 1e-6 && along[1] < 0)) ? [-along[0], -along[1]] : along;
                     for (k = 0; k < count; k++) {
                         var tc = offsetPoint(middle, along, (k - (count - 1) / 2) * gap);
-                        out.lines.push(straight([offsetPoint(tc, normal, -tick / 2), offsetPoint(tc, normal, tick / 2)], "mark", false));
+                        if (parallel) {
+                            var tip = offsetPoint(tc, pointing, tick * 0.3), back = offsetPoint(tip, pointing, -tick * 0.6);
+                            out.lines.push(straight([offsetPoint(back, normal, tick * 0.45), tip, offsetPoint(back, normal, -tick * 0.45)], "mark", false));
+                        } else out.lines.push(straight([offsetPoint(tc, normal, -tick / 2), offsetPoint(tc, normal, tick / 2)], "mark", false));
                     }
-                    tickKeys[ticks[i].names[0] + "|" + ticks[i].names[1]] = true;
-                    tickKeys[ticks[i].names[1] + "|" + ticks[i].names[0]] = true;
+                    tickKeys[ticks[i].names[0] + "|" + ticks[i].names[1]] = parallel ? tick * 0.45 : tick / 2;
+                    tickKeys[ticks[i].names[1] + "|" + ticks[i].names[0]] = parallel ? tick * 0.45 : tick / 2;
                 }
 
                 // 변 길이 글자: 변 가운데에서 그림 바깥쪽으로
@@ -3318,7 +3407,7 @@ var SCRIPT_KEY = "HighGeometry";
                     if (lnormal[0] * (lmid[0] - centroid[0]) + lnormal[1] * (lmid[1] - centroid[1]) < 0) lnormal = [-lnormal[0], -lnormal[1]];
                     var lengthLabel = display(lengths[i].text);
                     lengthLabel.at = lmid; lengthLabel.dir = lnormal;
-                    lengthLabel.clear = tickKeys[lengths[i].names[0] + "|" + lengths[i].names[1]] ? tick / 2 : 0;
+                    lengthLabel.clear = tickKeys[lengths[i].names[0] + "|" + lengths[i].names[1]] || 0;
                     if (showDimensions) {
                         var rise = dimensionRiseMm * MM_TO_PT;
                         lengthLabel.dimension = {a: la, b: lb, normal: lnormal, rise: rise, clear: lengthLabel.clear};
