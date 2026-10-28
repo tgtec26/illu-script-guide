@@ -31,7 +31,8 @@ function extractFunction(name) {
 }
 
 const names = ["buildHistogram", "buildBoxPlot", "buildScatter", "emptyDrawing", "addAxes", "addYTicks", "niceAxis",
-  "formatValue", "padAxis", "quartiles", "median", "parseNumberList", "parsePairs", "strictNumber", "roundTo"];
+  "formatValue", "padAxis", "quartiles", "median", "parseNumberList", "parsePairs", "strictNumber", "roundTo",
+  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const size = { width: 70, height: 40, tick: 2, xName: "(cm)", yName: "(명)" };
 const texts = (d, dir) => d.texts.filter((t) => t.dir[0] === dir[0] && t.dir[1] === dir[1]).map((t) => t.text);
@@ -149,6 +150,28 @@ assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript
   assert.strictEqual(s.lines.filter((l) => l.tick).length, 5 + 4);
   assert.strictEqual(axes(s), 2);
 }
-assert.ok(source.includes("line.main ? MAIN_PT : (line.tick ? TICK_PT : AXIS_PT)"), "ticks drawn with TICK_PT");
+assert.ok(source.includes("line.main ? MAIN_PT : (line.grid || line.guide ? GUIDE_PT : (line.tick ? TICK_PT : AXIS_PT))"), "ticks drawn with TICK_PT (grid·guide 0.3pt)");
 assert.ok(/function addBar\([^)]*\) \{[^}]*strokeWidth = EDGE_PT;/.test(source), "bar outlines drawn with EDGE_PT");
+// 두 집단 비교(웹 math-stat-chart.test.js와 같은 경우): | 로 집단, 앞의 "이름:"은 이름. 집단 하나면 예전과 같다
+{
+  assert.deepStrictEqual(g.parseGroups("1반: 3, 5, 7 | 2반: 4 6 8"), [{ name: "1반", values: [3, 5, 7] }, { name: "2반", values: [4, 6, 8] }]);
+  assert.deepStrictEqual(g.parseGroups("3, 5, 7"), [{ name: "", values: [3, 5, 7] }]);
+  assert.strictEqual(g.parseGroups("1반: | 2반: 4"), null);
+  const two = g.buildBoxPlotGroups(size, [{ name: "1반", values: [3, 5, 7, 9, 11] }, { name: "2반", values: [6, 8, 10, 12, 20] }], 17);
+  const boxes = two.lines.filter((l) => l.closed);
+  assert.strictEqual(boxes.length, 2);
+  assert.ok(Math.max(...boxes[0].points.map((p) => p[1])) > Math.max(...boxes[1].points.map((p) => p[1])), "first group on top");
+  assert.strictEqual(two.texts.filter((t) => t.text === "1반" || t.text === "2반").length, 2);
+  const hist = g.buildHistogramGroups(size, 140, 5, [{ name: "1반", values: [2, 5, 8, 4, 1] }, { name: "2반", values: [1, 3, 6, 7, 3] }], true, false, true);
+  assert.strictEqual(hist.bars.length, 0);
+  const polys = hist.lines.filter((l) => l.main);
+  assert.ok(polys.length === 2 && !polys[0].dashed && polys[1].dashed);
+  const plain = g.buildScatter(size, [[160, 150], [165, 168], [170, 172], [155, 160]]);
+  const extra = g.buildScatter(size, [[160, 150], [165, 168], [170, 172], [155, 160]], { grid: true, identity: true });
+  assert.strictEqual(plain.lines.filter((l) => l.grid || l.guide).length, 0);
+  assert.ok(extra.lines.filter((l) => l.grid).length >= 6);
+  assert.strictEqual(extra.lines.filter((l) => l.guide).length, 1);
+  assert.ok(source.includes('p[0] === "v2" && p.length === 20') && source.includes('p[0] === "v1" && p.length === 18'), "settings v2 reads v1");
+}
+
 console.log("stat chart checks passed");

@@ -3528,6 +3528,9 @@ var SCRIPT_KEY = "MiddleMath";
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
             var BOX_HEIGHT_MM = 6;
+            var GUIDE_PT = 0.3;                 // 산점도 모눈·y=x 점선 (보조선)
+            var GRID_K = 30;
+            var GUIDE_DASH = [2, 1.5];
             var LABEL_GAP_MM = 0.8;
             var LEGEND_GAP_MM = 1;           // 축 범례와 축(또는 눈금 숫자·글자) 사이 간격 (그림 제작 규칙)
             var LEGEND_LINE_HEIGHT = 1;      // 세로로 쌓은 범례의 줄 간격(글자 크기 배). 1 = 일러스트레이터 세로쓰기와 같은 간격
@@ -3554,6 +3557,7 @@ var SCRIPT_KEY = "MiddleMath";
             var relative = false;
             var boxText = "3, 5, 6, 7, 8, 9, 10, 12, 15";
             var scatterText = "(160,50) (165,55) (170,58) (155,48) (175,65)";
+            var scatterGrid = false, scatterIdentity = false;   // 산점도 모눈(K30)·y=x 점선
             var xName = "(cm)";
             var yName = "(명)";
             var offsetXmm = 0;
@@ -3587,15 +3591,20 @@ var SCRIPT_KEY = "MiddleMath";
             var histogramPanel = addPanel(win, "도수분포");
             var startControls = addValueRow(histogramPanel, "첫 계급 시작", "", classStart, 0, 1000, 1, 0);
             var classControls = addValueRow(histogramPanel, "계급 크기", "", classWidth, 0.5, 100, 0.5, 1);
-            var frequencyInput = addTextRow(histogramPanel, "도수:", frequencyText, "계급마다 도수를 쉼표로 (2, 5, 8, 4, 1)");
+            var frequencyInput = addTextRow(histogramPanel, "도수:", frequencyText, "계급마다 도수를 쉼표로 (2, 5, 8, 4, 1). 두 집단 비교: 1반: 2, 5, 8 | 2반: 1, 6, 7 (막대 없이 다각형을 겹치고 둘째는 점선)");
             var histogramChecks = histogramPanel.add("group");
             var barsCheck = histogramChecks.add("checkbox", undefined, "히스토그램");
             var polygonCheck = histogramChecks.add("checkbox", undefined, "도수분포다각형");
             var relativeCheck = histogramChecks.add("checkbox", undefined, "상대도수");
 
             var dataPanel = addPanel(win, "자료");
-            var boxInput = addTextRow(dataPanel, "상자그림:", boxText, "자료 값을 쉼표로 (3, 5, 6, 7, …)");
+            var boxInput = addTextRow(dataPanel, "상자그림:", boxText, "자료 값을 쉼표로 (3, 5, 6, 7, …). 여러 집단 비교: 1반: 3, 5, 7 | 2반: 4, 6, 8 (같은 수직선 위에 위에서부터 쌓는다)");
             var scatterInput = addTextRow(dataPanel, "산점도:", scatterText, "(x,y) 순서쌍을 공백으로 ((160,50) (165,55))");
+            var scatterChecks = dataPanel.add("group");
+            var scatterGridCheck = scatterChecks.add("checkbox", undefined, "모눈");
+            scatterGridCheck.helpTip = "산점도 눈금마다 회색(K30) 모눈";
+            var scatterIdentityCheck = scatterChecks.add("checkbox", undefined, "y=x 점선");
+            scatterIdentityCheck.helpTip = "두 값을 비교하는 기준선 y=x (보조 점선)";
 
             var axisPanel = addPanel(win, "축 이름", "fold6");
             var xNameInput = addTextRow(axisPanel, "가로:", xName, "가로축 끝에 붙는 글자 (cm), 키 (cm)");
@@ -3622,6 +3631,8 @@ var SCRIPT_KEY = "MiddleMath";
             barsCheck.value = showBars;
             polygonCheck.value = showPolygon;
             relativeCheck.value = relative;
+            scatterGridCheck.value = scatterGrid;
+            scatterIdentityCheck.value = scatterIdentity;
             refreshEnabled();
 
             kindList.onChange = function() {
@@ -3642,6 +3653,8 @@ var SCRIPT_KEY = "MiddleMath";
             barsCheck.onClick = function() { showBars = barsCheck.value; updatePreview(); };
             polygonCheck.onClick = function() { showPolygon = polygonCheck.value; updatePreview(); };
             relativeCheck.onClick = function() { relative = relativeCheck.value; updatePreview(); };
+            scatterGridCheck.onClick = function() { scatterGrid = scatterGridCheck.value; updatePreview(); };
+            scatterIdentityCheck.onClick = function() { scatterIdentity = scatterIdentityCheck.value; updatePreview(); };
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, initial.offsetXmm);
             bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, initial.offsetYmm);
@@ -3670,6 +3683,7 @@ var SCRIPT_KEY = "MiddleMath";
                 histogramPanel.enabled = kind === 0;
                 boxInput.parent.enabled = kind === 1;
                 scatterInput.parent.enabled = kind === 2;
+                scatterChecks.enabled = kind === 2;
                 heightControls.input.parent.enabled = kind !== 1;
             }
 
@@ -3693,17 +3707,20 @@ var SCRIPT_KEY = "MiddleMath";
                 var size = { width: widthMm * MM_TO_PT, height: heightMm * MM_TO_PT, tick: TICK_MM * MM_TO_PT, xName: xName, yName: yName };
                 var drawing = null, problem = "";
                 if (kind === 0) {
-                    var frequencies = parseNumberList(frequencyText);
-                    if (frequencies === null || frequencies.length === 0) problem = "도수를 읽지 못함";
-                    else drawing = buildHistogram(size, classStart, classWidth, frequencies, showBars, showPolygon, relative);
+                    var groups = parseGroups(frequencyText), sameCount = groups !== null;
+                    for (var gi = 1; sameCount && gi < groups.length; gi++) if (groups[gi].values.length !== groups[0].values.length) sameCount = false;
+                    if (groups === null) problem = "도수를 읽지 못함";
+                    else if (!sameCount) problem = "집단마다 계급 수가 같아야 합니다";
+                    else drawing = buildHistogramGroups(size, classStart, classWidth, groups, showBars, showPolygon, relative);
                 } else if (kind === 1) {
-                    var values = parseNumberList(boxText);
-                    if (values === null || values.length < 2) problem = "자료를 2개 이상 넣어주세요";
-                    else drawing = buildBoxPlot(size, values, BOX_HEIGHT_MM * MM_TO_PT);
+                    var boxes = parseGroups(boxText), enough = boxes !== null;
+                    for (var bi = 0; enough && bi < boxes.length; bi++) if (boxes[bi].values.length < 2) enough = false;
+                    if (!enough) problem = "자료를 2개 이상 넣어주세요";
+                    else drawing = buildBoxPlotGroups(size, boxes, BOX_HEIGHT_MM * MM_TO_PT);
                 } else {
                     var pairs = parsePairs(scatterText);
                     if (pairs === null || pairs.length === 0) problem = "순서쌍을 읽지 못함";
-                    else drawing = buildScatter(size, pairs);
+                    else drawing = buildScatter(size, pairs, {grid: scatterGrid, identity: scatterIdentity});
                 }
                 messageText.text = problem || " ";
                 if (drawing === null) return;
@@ -3721,17 +3738,18 @@ var SCRIPT_KEY = "MiddleMath";
                     viewCenter[1] - size.height / 2 + offsetYmm * MM_TO_PT);
             }
 
-            // line: {points, main, tick, closed}
+            // line: {points, main, tick, closed, dashed(둘째 집단 다각형), grid(산점도 모눈 K30), guide(y=x 보조 점선)}
             function addLine(line) {
                 var path = previewGroup.pathItems.add();
                 path.setEntirePath(line.points);
                 path.closed = !!line.closed;
                 path.filled = false;
                 path.stroked = true;
-                path.strokeColor = makeGray(100);
-                path.strokeWidth = line.main ? MAIN_PT : (line.tick ? TICK_PT : AXIS_PT);
+                path.strokeColor = makeGray(line.grid ? GRID_K : 100);
+                path.strokeWidth = line.main ? MAIN_PT : (line.grid || line.guide ? GUIDE_PT : (line.tick ? TICK_PT : AXIS_PT));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.MITERENDJOIN;
+                if (line.dashed || line.guide) path.strokeDashes = GUIDE_DASH;
             }
 
             // [left, bottom, right, top]
@@ -3957,14 +3975,22 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             // 계급 i(0부터)는 가로 [i+1, i+2] 칸. 앞뒤 한 칸은 도수 0인 계급이라 다각형이 축에서 시작하고 끝난다
             function buildHistogram(size, start, width, frequencies, bars, polygon, isRelative) {
+                return buildHistogramGroups(size, start, width, [{ name: "", values: frequencies }], bars, polygon, isRelative);
+            }
+
+            // 집단이 둘 이상이면 막대 없이 도수분포다각형을 겹친다(둘째 집단은 점선). 집단 이름은 다각형 꼭대기 위에 (웹 math-stat-chart.js와 같다)
+            function buildHistogramGroups(size, start, width, groups, bars, polygon, isRelative) {
                 var out = emptyDrawing();
-                var n = frequencies.length;
-                var total = 0, top = 0;
-                for (var i = 0; i < n; i++) total += frequencies[i];
-                var ys = [];
-                for (var j = 0; j < n; j++) {
-                    ys.push(isRelative ? (total > 0 ? frequencies[j] / total : 0) : frequencies[j]);
-                    top = Math.max(top, ys[j]);
+                var n = groups[0].values.length, many = groups.length > 1;
+                var top = 0, series = [];
+                for (var g = 0; g < groups.length; g++) {
+                    var frequencies = groups[g].values, total = 0, ys = [];
+                    for (var i = 0; i < n; i++) total += frequencies[i];
+                    for (var j = 0; j < n; j++) {
+                        ys.push(isRelative ? (total > 0 ? frequencies[j] / total : 0) : frequencies[j]);
+                        top = Math.max(top, ys[j]);
+                    }
+                    series.push(ys);
                 }
                 var yAxis = niceAxis(0, top > 0 ? top : 1);
                 var sx = size.width / (n + 2), sy = size.height / yAxis.max;
@@ -3976,24 +4002,40 @@ var SCRIPT_KEY = "MiddleMath";
                     out.lines.push({ points: [[x, -size.tick / 2], [x, size.tick / 2]], tick: true });
                     out.texts.push({ text: formatValue(start + b * width, width), at: [x, 0], dir: [0, -1], clear: size.tick / 2 });
                 }
-                if (bars) {
-                    for (var c = 0; c < n; c++) if (ys[c] > 0) out.bars.push([(c + 1) * sx, 0, (c + 2) * sx, ys[c] * sy]);
+                if (bars && !many) {
+                    for (var c = 0; c < n; c++) if (series[0][c] > 0) out.bars.push([(c + 1) * sx, 0, (c + 2) * sx, series[0][c] * sy]);
                 }
-                if (polygon) {
-                    var points = [[0.5 * sx, 0]];
-                    for (var p = 0; p < n; p++) points.push([(p + 1.5) * sx, ys[p] * sy]);
-                    points.push([(n + 1.5) * sx, 0]);
-                    out.lines.push({ points: points, main: true });
-                    for (var q = 0; q < points.length; q++) out.dots.push(points[q]);
+                if (polygon || many) {
+                    for (var s = 0; s < series.length; s++) {
+                        var points = [[0.5 * sx, 0]], peak = 1;
+                        for (var p = 0; p < n; p++) {
+                            points.push([(p + 1.5) * sx, series[s][p] * sy]);
+                            if (points[p + 1][1] > points[peak][1]) peak = p + 1;
+                        }
+                        points.push([(n + 1.5) * sx, 0]);
+                        out.lines.push(s > 0 ? { points: points, main: true, dashed: true } : { points: points, main: true });
+                        for (var q = 0; q < points.length; q++) out.dots.push(points[q]);
+                        if (groups[s].name) out.texts.push({ text: groups[s].name, at: points[peak], dir: [0, 1], clear: 0 });
+                    }
                 }
                 return out;
             }
 
             // 가로 수직선 위에 상자그림. 상자는 축 위로 boxHeight
             function buildBoxPlot(size, values, boxHeight) {
+                return buildBoxPlotGroups(size, [{ name: "", values: values }], boxHeight);
+            }
+
+            // 집단마다 상자그림 하나를 같은 수직선 위에 위에서부터 쌓는다(첫 집단이 맨 위). 이름은 상자 높이 가운데의 축 왼쪽에
+            function buildBoxPlotGroups(size, groups, boxHeight) {
                 var out = emptyDrawing();
-                var s = quartiles(values);
-                var axis = niceAxis(s.min, s.max);
+                var low = Infinity, high = -Infinity, stats = [];
+                for (var g = 0; g < groups.length; g++) {
+                    stats.push(quartiles(groups[g].values));
+                    low = Math.min(low, stats[g].min);
+                    high = Math.max(high, stats[g].max);
+                }
+                var axis = niceAxis(low, high);
                 var scale = size.width / (axis.max - axis.min);
                 function X(v) { return (v - axis.min) * scale; }
 
@@ -4006,18 +4048,23 @@ var SCRIPT_KEY = "MiddleMath";
                 // 화살촉 없이 눈금만 있는 축이라 X 범례(그림 제작 규칙)는 가운데 정렬
                 if (size.xName) out.legends.push({ kind: "x", align: "center", text: size.xName, at: [size.width / 2, 0] });
 
-                var y0 = boxHeight * 0.8, y1 = y0 + boxHeight, mid = (y0 + y1) / 2;
-                out.lines.push({ points: [[X(s.q1), y0], [X(s.q3), y0], [X(s.q3), y1], [X(s.q1), y1]], closed: true, main: true });
-                out.lines.push({ points: [[X(s.median), y0], [X(s.median), y1]], main: true });
-                out.lines.push({ points: [[X(s.min), mid], [X(s.q1), mid]], main: true });
-                out.lines.push({ points: [[X(s.q3), mid], [X(s.max), mid]], main: true });
                 var cap = boxHeight * 0.25;
-                out.lines.push({ points: [[X(s.min), mid - cap], [X(s.min), mid + cap]], main: true });
-                out.lines.push({ points: [[X(s.max), mid - cap], [X(s.max), mid + cap]], main: true });
+                for (var k = 0; k < stats.length; k++) {
+                    var s = stats[k];
+                    var y0 = boxHeight * 0.8 + (stats.length - 1 - k) * boxHeight * 1.6, y1 = y0 + boxHeight, mid = (y0 + y1) / 2;
+                    out.lines.push({ points: [[X(s.q1), y0], [X(s.q3), y0], [X(s.q3), y1], [X(s.q1), y1]], closed: true, main: true });
+                    out.lines.push({ points: [[X(s.median), y0], [X(s.median), y1]], main: true });
+                    out.lines.push({ points: [[X(s.min), mid], [X(s.q1), mid]], main: true });
+                    out.lines.push({ points: [[X(s.q3), mid], [X(s.max), mid]], main: true });
+                    out.lines.push({ points: [[X(s.min), mid - cap], [X(s.min), mid + cap]], main: true });
+                    out.lines.push({ points: [[X(s.max), mid - cap], [X(s.max), mid + cap]], main: true });
+                    if (groups[k].name) out.texts.push({ text: groups[k].name, at: [Math.min(0, X(s.min)), mid], dir: [-1, 0], clear: 0 });
+                }
                 return out;
             }
 
-            function buildScatter(size, pairs) {
+            // extras: {grid: 눈금마다 K30 모눈, identity: y=x 점선(두 축이 같이 담는 범위)}. 없으면 예전과 같다
+            function buildScatter(size, pairs, extras) {
                 var out = emptyDrawing();
                 var xs = [], ys = [];
                 for (var i = 0; i < pairs.length; i++) {
@@ -4028,7 +4075,16 @@ var SCRIPT_KEY = "MiddleMath";
                 var yAxis = padAxis(niceAxis(Math.min.apply(null, ys), Math.max.apply(null, ys)), ys);
                 var sx = size.width / (xAxis.max - xAxis.min), sy = size.height / (yAxis.max - yAxis.min);
 
+                // 모눈은 축보다 먼저(뒤에) 그린다
+                if (extras && extras.grid) {
+                    for (var gx = xAxis.min + xAxis.step; gx <= xAxis.max + xAxis.step / 2; gx += xAxis.step) out.lines.push({ points: [[(gx - xAxis.min) * sx, 0], [(gx - xAxis.min) * sx, size.height]], grid: true });
+                    for (var gy = yAxis.min + yAxis.step; gy <= yAxis.max + yAxis.step / 2; gy += yAxis.step) out.lines.push({ points: [[0, (gy - yAxis.min) * sy], [size.width, (gy - yAxis.min) * sy]], grid: true });
+                }
                 addAxes(out, size, size.xName, size.yName);
+                if (extras && extras.identity) {
+                    var lo = Math.max(xAxis.min, yAxis.min), hi = Math.min(xAxis.max, yAxis.max);
+                    if (hi > lo) out.lines.push({ points: [[(lo - xAxis.min) * sx, (lo - yAxis.min) * sy], [(hi - xAxis.min) * sx, (hi - yAxis.min) * sy]], guide: true });
+                }
                 for (var v = xAxis.min; v <= xAxis.max + xAxis.step / 2; v += xAxis.step) {
                     var x = (v - xAxis.min) * sx;
                     if (v > xAxis.min) out.lines.push({ points: [[x, -size.tick / 2], [x, size.tick / 2]], tick: true });
@@ -4114,6 +4170,23 @@ var SCRIPT_KEY = "MiddleMath";
             function median(sorted) {
                 var n = sorted.length;
                 return n % 2 === 1 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+            }
+
+            // "1반: 3, 5, 7 | 2반: 4, 6, 8" → [{name, values}]. | 로 집단을 나누고, 앞의 "이름:"은 집단 이름(없으면 "").
+            // 집단 하나라도 숫자 목록을 못 읽거나 비면 null
+            function parseGroups(text) {
+                var parts = String(text).split("|"), groups = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var part = parts[i], colon = part.indexOf(":"), name = "";
+                    if (colon >= 0) {
+                        name = part.substring(0, colon).replace(/^\s+|\s+$/g, "");
+                        part = part.substring(colon + 1);
+                    }
+                    var values = parseNumberList(part);
+                    if (values === null || values.length === 0) return null;
+                    groups.push({ name: name, values: values });
+                }
+                return groups;
             }
 
             // "2, 5, 8" 또는 "2 5 8" → [2,5,8]. 하나라도 숫자가 아니면 null
@@ -4310,10 +4383,10 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v1", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
+                    "v2", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
                     showBars ? "1" : "0", showPolygon ? "1" : "0", relative ? "1" : "0",
                     encodeURIComponent(boxText), encodeURIComponent(scatterText), encodeURIComponent(xName), encodeURIComponent(yName),
-                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0"
+                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", scatterGrid ? "1" : "0", scatterIdentity ? "1" : "0"
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -4323,7 +4396,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 18) return;
+                // v2 = v1 + 산점도 모눈·y=x. v1도 읽는다
+                if (!((p[0] === "v2" && p.length === 20) || (p[0] === "v1" && p.length === 18))) return;
                 try {
                     kind = Math.round(restoreNumber(p[1], kind, 0, KINDS.length - 1));
                     widthMm = restoreNumber(p[2], widthMm, 20, 150);
@@ -4342,6 +4416,10 @@ var SCRIPT_KEY = "MiddleMath";
                     offsetXmm = restoreNumber(p[15], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[16], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[17] === "1";
+                    if (p[0] === "v2") {
+                        scatterGrid = p[18] === "1";
+                        scatterIdentity = p[19] === "1";
+                    }
                 } catch (restoreError) {}
             }
 

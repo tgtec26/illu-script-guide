@@ -6574,6 +6574,14 @@
           "type": "boolean",
           "default": false
         },
+        "scatterGrid": {
+          "type": "boolean",
+          "default": false
+        },
+        "scatterIdentity": {
+          "type": "boolean",
+          "default": false
+        },
         "scatterText": {
           "type": "string",
           "default": "(160,50) (165,55) (170,58) (155,48) (175,65)"
