@@ -7,6 +7,8 @@ const dir = path.resolve(__dirname, "..", "스크립트", "05_수학");
 let helper = null;
 for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".jsx"))) {
   const source = fs.readFileSync(path.join(dir, file), "utf8");
+  // 폼 틀 스크립트(쌓기나무 등)는 눈금 숫자를 그리지 않고 글자를 t.text로 넣는다
+  if (/\n    runFormHost\(/.test(source)) continue;
   const bodies = source.split(/function addLabel\(/).slice(1);
   assert.ok(bodies.length > 0, file + ": addLabel");
   for (const body of bodies) {

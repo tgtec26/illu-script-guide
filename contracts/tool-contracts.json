@@ -10551,6 +10551,69 @@
         }
       }
     },
+    "stacked-cubes": {
+      "schemaVersion": 1,
+      "toolId": "stacked-cubes",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "cell": {
+          "type": "number",
+          "default": 6,
+          "minimum": 3,
+          "maximum": 15
+        },
+        "figure": {
+          "type": "number",
+          "default": 0
+        },
+        "font": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 14
+        },
+        "gap": {
+          "type": "number",
+          "default": 6,
+          "minimum": 2,
+          "maximum": 20
+        },
+        "heights": {
+          "type": "string",
+          "default": "1 2 1 / 2 3 1 / 1 1 0"
+        },
+        "projection": {
+          "type": "number",
+          "default": 0
+        },
+        "shade": {
+          "type": "number",
+          "default": 1
+        },
+        "showTitles": {
+          "type": "boolean",
+          "default": true
+        },
+        "side": {
+          "type": "number",
+          "default": 0
+        },
+        "viewFill": {
+          "type": "boolean",
+          "default": false
+        },
+        "wBody": {
+          "type": "number",
+          "default": 0.5,
+          "minimum": 0.1,
+          "maximum": 3
+        }
+      }
+    },
     "star-trails": {
       "schemaVersion": 1,
       "toolId": "star-trails",
