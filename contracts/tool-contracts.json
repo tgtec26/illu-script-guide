@@ -5118,6 +5118,10 @@
           "type": "string",
           "default": ""
         },
+        "constructText": {
+          "type": "string",
+          "default": ""
+        },
         "dashedText": {
           "type": "string",
           "default": ""

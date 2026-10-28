@@ -2143,6 +2143,7 @@ var SCRIPT_KEY = "HighGeometry";
     // 평면기하 그림(삼각형·사각형·원·각·같은 길이 눈금)을 점 좌표로 그린다. 웹 도구 "기하 도형"과 같은 글 형식이다.
     // 점 이름(A(0,3) B(0,0))을 먼저 정하고 그 이름으로 선분(A-B-C-A)·점선·원(ABC 세 점, AB 지름, O:3 중심과 반지름, O~A 중심과 지나는 점)
     // ·각 표시(BAC:60° 꼭짓점 A, ABC:R 직각, BAC::2 호 2겹)·같은 길이 눈금(AB:1)·변 길이 글자(AB:5)·점 찍기를 적는다.
+    // 다른 점에서 정해지는 점(중점·내분점·수선의 발·교점·회전·대칭·삼각형의 중심)은 작도 칸에 M=mid(B,C)처럼 적어 계산한다.
     // 좌표는 같은 길이 단위로 쓰고(길이가 3, 4, √13이면 그 수 그대로) 그림 크기는 가장 긴 쪽을 mm로 맞춘다. 숫자는 √·분수·π도 된다.
     // 점 이름 O_1은 O₁처럼 아래첨자가 된다. 점 이름 글자 방향은 u d l r ul ur dl dr로 고칠 수 있다.
     // 선 두께: 도형 0.8pt, 점선·치수선 0.3pt(보조선), 각 호·직각·같은 길이 눈금 0.3pt(표시), 좌표축 0.4pt. 모두 "선 두께" 패널에서 조절한다. 선택은 필요 없다.
@@ -2175,7 +2176,7 @@ var SCRIPT_KEY = "HighGeometry";
             var DIMENSION_LABEL_GAP_MM = 0.7;
             var KAPPA = 0.5522847498;
             var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
-            var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText"];
+            var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText", "constructText"];
 
             var doc = app.activeDocument;
             var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
@@ -2187,7 +2188,7 @@ var SCRIPT_KEY = "HighGeometry";
 
             // 옵션
             var text = {pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "",
-                angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: ""};
+                angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: "", constructText: ""};
             var showNames = true;
             var showAxes = false;
             var sizeMm = 50;
@@ -2217,6 +2218,7 @@ var SCRIPT_KEY = "HighGeometry";
             var pointPanel = addPanel(win, "점");
             var inputs = {};
             addTextRow(pointPanel, "점", "pointsText", "점 이름과 좌표: A(0,3) B(0,0) C(4,0). 같은 길이 단위로 쓴다 (√13, 1/2, π도 된다). 이름은 O_1처럼 아래첨자도 된다");
+            addTextRow(pointPanel, "작도", "constructText", "이름=명령(…)으로 점을 계산해 만든다(앞에서부터 차례로, 만든 점은 다른 칸에서 쓴다). mid(A,B) 중점, div(A,B,2:1) 내분점(2:-1은 외분점), along(A,B,3) A에서 B 쪽으로 3, foot(P,A,B) 수선의 발, cross(AB,CD) 교점(직선 AB, P//AB 평행선, P⊥AB 수선, 원 ABC·O:3·O~A; 둘째 교점은 cross(…,2), 안 쓰면 이미 있는 점이 아닌 쪽), rot(P,O,60) 반시계 60° 회전, ref(P,A,B)·ref(P,O) 대칭점, centroid·circum·incenter·ortho(A,B,C) 무게중심·외심·내심·수심");
             addTextRow(pointPanel, "선분", "segmentText", "이어 그릴 점 이름: A-B-C-A, A-D (쉼표로 나눈다)");
             addTextRow(pointPanel, "점선", "dashedText", "점선으로 이을 점 이름: A-D");
             addTextRow(pointPanel, "화살표", "arrowText", "끝에 화살촉이 있는 선분(벡터). O-A는 O에서 A로, O-A-B는 O→A, A→B (쉼표로 여러 개)");
@@ -2699,6 +2701,186 @@ var SCRIPT_KEY = "HighGeometry";
                 return {c: [ux, uy], r: Math.sqrt((a[0] - ux) * (a[0] - ux) + (a[1] - uy) * (a[1] - uy))};
             }
 
+            // 작도: 다른 점에서 계산해 점을 만든다. "M=mid(B,C), H=foot(A,B,C), P=cross(AM,O~A)". 웹 math-geometry.js의 readConstructions와 같은 규칙이다.
+            //   mid(A,B) 중점 · div(A,B,m:n) 내분(m:-n은 외분) · along(A,B,d) A에서 B 쪽으로 거리 d · foot(P,A,B) 직선 AB에 내린 수선의 발
+            //   cross(X,Y[,k]) 교점. X·Y는 직선 AB, 평행선 P//AB, 수선 P⊥AB(P_|_AB), 원 ABC·O:r·O~A. 교점이 둘이면 직선은 방향(A→B,
+            //     수선은 AB를 반시계로 90° 돌린 쪽)을 따라 먼저 나오는 점, 두 원은 첫 원 중심에서 둘째 원 중심을 볼 때 왼쪽이 1번.
+            //     k가 없으면 이미 있는 점과 겹치지 않는 쪽("다른 교점"), 그 밖에는 1번
+            //   rot(P,O,θ) 반시계 θ(π가 있으면 라디안, 없으면 도) · ref(P,A,B) 직선 AB 대칭 · ref(P,O) 점 O 대칭
+            //   centroid·circum·incenter·ortho(A,B,C) 무게중심·외심·내심·수심
+            // 앞에서부터 차례로 계산해 table·names에 더한다. 실패하면 "작도 <항목> (이유)"를 notes에 남기고 그 점은 만들지 않는다
+            function ConstructFail(why) { this.why = why || ""; }
+
+            function readConstructions(source, table, names, notes) {
+                var items = splitItems(source);
+                for (var i = 0; i < items.length; i++) {
+                    var m = items[i].match(/^([^=()]+)=\s*([A-Za-z]+)\s*\((.*)\)\s*$/);
+                    var name = m ? m[1].replace(/\s/g, "") : "";
+                    try {
+                        if (!m || name === "") throw new ConstructFail("");
+                        if (table.hasOwnProperty(name)) throw new ConstructFail("이름 겹침");
+                        table[name] = constructPoint(m[2].toLowerCase(), splitItems(m[3]), table, names);
+                        names.push(name);
+                    } catch (e) {
+                        if (!(e instanceof ConstructFail)) throw e;
+                        notes.push("작도 " + items[i] + (e.why ? " (" + e.why + ")" : ""));
+                    }
+                }
+            }
+
+            function constructPoint(fn, args, table, names) {
+                var EPS = 1e-9, scale = 1, i;
+                for (i = 0; i < names.length; i++) scale = Math.max(scale, 1 + Math.abs(table[names[i]][0]), 1 + Math.abs(table[names[i]][1]));
+                function fail(why) { throw new ConstructFail(why); }
+                function dist(a, b) { return Math.sqrt((b[0] - a[0]) * (b[0] - a[0]) + (b[1] - a[1]) * (b[1] - a[1])); }
+                function need(n) { if (args.length !== n) fail(""); }
+                function num(source) { var v = evalNumber(source); if (v === null) fail(""); return v; }
+                function point(source) { var t = tokenizeNames(source, names); if (t === null || t.length !== 1) fail("모르는 점"); return table[t[0]]; }
+                function apart(a, b) { if (dist(a, b) < EPS * scale) fail("같은 두 점"); return [a, b]; }
+                function pair(source) {
+                    var t = tokenizeNames(source, names);
+                    if (t === null) fail("모르는 점");
+                    if (t.length !== 2) fail("");
+                    return apart(table[t[0]], table[t[1]]);
+                }
+                function three() { need(3); return [point(args[0]), point(args[1]), point(args[2])]; }
+                function footOn(p, a, b) {
+                    var dx = b[0] - a[0], dy = b[1] - a[1], t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy);
+                    return [a[0] + t * dx, a[1] + t * dy];
+                }
+                function circumcenter(a, b, c) { var o = circumcircle(a, b, c); if (o === null) fail("한 직선 위의 세 점"); return o.c; }
+                function existing(p) {
+                    for (var k = 0; k < names.length; k++) if (dist(p, table[names[k]]) < EPS * scale) return true;
+                    return false;
+                }
+                // 직선 {p, d} 또는 원 {c, r}
+                function shape(raw) {
+                    var s = raw.replace(/\s/g, ""), t, q, colon, r;
+                    var through = s.match(/^(.+?)(\/\/|⊥|_\|_)(.+)$/);
+                    if (through) {
+                        var at = point(through[1]), ends = pair(through[3]);
+                        var dx = ends[1][0] - ends[0][0], dy = ends[1][1] - ends[0][1];
+                        return through[2] === "//" ? {p: at, d: [dx, dy]} : {p: at, d: [-dy, dx]};
+                    }
+                    if (s.indexOf("~") >= 0) {
+                        var parts = s.split("~");
+                        if (parts.length !== 2) fail("");
+                        q = apart(point(parts[0]), point(parts[1]));
+                        return {c: q[0], r: dist(q[0], q[1])};
+                    }
+                    if (s.indexOf(":") >= 0) {
+                        colon = s.lastIndexOf(":");
+                        r = num(s.substring(colon + 1));
+                        if (!(r > 0)) fail("");
+                        return {c: point(s.substring(0, colon)), r: r};
+                    }
+                    t = tokenizeNames(s, names);
+                    if (t === null) fail("모르는 점");
+                    if (t.length === 2) { q = pair(s); return {p: q[0], d: [q[1][0] - q[0][0], q[1][1] - q[0][1]]}; }
+                    if (t.length === 3) {
+                        var o = circumcircle(table[t[0]], table[t[1]], table[t[2]]);
+                        if (o === null) fail("한 직선 위의 세 점");
+                        return {c: o.c, r: o.r};
+                    }
+                    return fail("");
+                }
+                // 교점 목록 (차례는 readConstructions 위 주석). 없으면 실패
+                function intersect(x, y) {
+                    var den, t, line, circle, fx, fy, a, b, c, disc, tol, out, ts, dx, dy, d, along, h2, ux, uy, bx, by, h;
+                    if (x.d && y.d) {
+                        den = x.d[0] * y.d[1] - x.d[1] * y.d[0];
+                        if (Math.abs(den) < EPS * Math.sqrt(x.d[0] * x.d[0] + x.d[1] * x.d[1]) * Math.sqrt(y.d[0] * y.d[0] + y.d[1] * y.d[1])) fail("평행해 만나지 않음");
+                        t = ((y.p[0] - x.p[0]) * y.d[1] - (y.p[1] - x.p[1]) * y.d[0]) / den;
+                        return [[x.p[0] + t * x.d[0], x.p[1] + t * x.d[1]]];
+                    }
+                    if (x.d || y.d) {
+                        line = x.d ? x : y;
+                        circle = x.d ? y : x;
+                        fx = line.p[0] - circle.c[0]; fy = line.p[1] - circle.c[1];
+                        a = line.d[0] * line.d[0] + line.d[1] * line.d[1];
+                        b = 2 * (fx * line.d[0] + fy * line.d[1]);
+                        c = fx * fx + fy * fy - circle.r * circle.r;
+                        disc = b * b - 4 * a * c;
+                        tol = EPS * (b * b + 4 * a * (fx * fx + fy * fy + circle.r * circle.r));
+                        if (disc < -tol) fail("만나지 않음");
+                        ts = disc <= tol ? [-b / (2 * a)] : [(-b - Math.sqrt(disc)) / (2 * a), (-b + Math.sqrt(disc)) / (2 * a)];
+                        out = [];
+                        for (var k = 0; k < ts.length; k++) out.push([line.p[0] + ts[k] * line.d[0], line.p[1] + ts[k] * line.d[1]]);
+                        return out;
+                    }
+                    dx = y.c[0] - x.c[0]; dy = y.c[1] - x.c[1];
+                    d = Math.sqrt(dx * dx + dy * dy);
+                    if (d < EPS * scale) fail("만나지 않음");
+                    along = (x.r * x.r - y.r * y.r + d * d) / (2 * d);
+                    h2 = x.r * x.r - along * along;
+                    tol = EPS * x.r * x.r;
+                    if (h2 < -tol) fail("만나지 않음");
+                    ux = dx / d; uy = dy / d;
+                    bx = x.c[0] + along * ux; by = x.c[1] + along * uy;
+                    if (h2 <= tol) return [[bx, by]];
+                    h = Math.sqrt(h2);
+                    return [[bx - h * uy, by + h * ux], [bx + h * uy, by - h * ux]];
+                }
+
+                var a, b, c, p, o, f, list;
+                if (fn === "mid") { need(2); a = point(args[0]); b = point(args[1]); return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; }
+                if (fn === "div") {
+                    need(3);
+                    a = point(args[0]); b = point(args[1]);
+                    var ratio = args[2].split(":");
+                    if (ratio.length !== 2) fail("");
+                    var m = num(ratio[0]), n = num(ratio[1]);
+                    if (Math.abs(m + n) < EPS) fail("");
+                    return [(n * a[0] + m * b[0]) / (m + n), (n * a[1] + m * b[1]) / (m + n)];
+                }
+                if (fn === "along") {
+                    need(3);
+                    list = apart(point(args[0]), point(args[1]));
+                    a = list[0]; b = list[1];
+                    var length = num(args[2]), ab = dist(a, b);
+                    return [a[0] + length * (b[0] - a[0]) / ab, a[1] + length * (b[1] - a[1]) / ab];
+                }
+                if (fn === "foot") { need(3); p = point(args[0]); list = apart(point(args[1]), point(args[2])); return footOn(p, list[0], list[1]); }
+                if (fn === "rot") {
+                    need(3);
+                    p = point(args[0]); o = point(args[1]);
+                    var s = args[2].replace(/\s/g, "");
+                    var angle = /π|pi/.test(s) ? num(s) : num(s.replace(/°$/, "")) * Math.PI / 180;
+                    var cs = Math.cos(angle), sn = Math.sin(angle), x = p[0] - o[0], y = p[1] - o[1];
+                    return [o[0] + cs * x - sn * y, o[1] + sn * x + cs * y];
+                }
+                if (fn === "ref") {
+                    p = point(args[0]);
+                    if (args.length === 2) { o = point(args[1]); return [2 * o[0] - p[0], 2 * o[1] - p[1]]; }
+                    need(3);
+                    list = apart(point(args[1]), point(args[2]));
+                    f = footOn(p, list[0], list[1]);
+                    return [2 * f[0] - p[0], 2 * f[1] - p[1]];
+                }
+                if (fn === "centroid") { list = three(); return [(list[0][0] + list[1][0] + list[2][0]) / 3, (list[0][1] + list[1][1] + list[2][1]) / 3]; }
+                if (fn === "circum") { list = three(); return circumcenter(list[0], list[1], list[2]); }
+                if (fn === "incenter") {
+                    list = three(); a = list[0]; b = list[1]; c = list[2];
+                    var la = dist(b, c), lb = dist(c, a), lc = dist(a, b), sum = la + lb + lc;
+                    if (sum < EPS * scale) fail("같은 두 점");
+                    return [(la * a[0] + lb * b[0] + lc * c[0]) / sum, (la * a[1] + lb * b[1] + lc * c[1]) / sum];
+                }
+                if (fn === "ortho") {
+                    list = three(); o = circumcenter(list[0], list[1], list[2]);
+                    return [list[0][0] + list[1][0] + list[2][0] - 2 * o[0], list[0][1] + list[1][1] + list[2][1] - 2 * o[1]];
+                }
+                if (fn === "cross") {
+                    if (args.length !== 2 && args.length !== 3) fail("");
+                    var pick = args.length === 3 ? args[2].replace(/^\s+|\s+$/g, "") : "";
+                    if (pick !== "" && pick !== "1" && pick !== "2") fail("");
+                    var found = intersect(shape(args[0]), shape(args[1]));
+                    if (found.length === 1) return found[0];
+                    if (pick !== "") return found[parseInt(pick, 10) - 1];
+                    return existing(found[0]) && !existing(found[1]) ? found[1] : found[0];
+                }
+                return fail("");
+            }
+
             // 원: "ABC"(세 점), "AB"(지름), "O:3", "(1,2):3", "O~A"
             function readCircles(source, table, names, notes) {
                 var out = [];
@@ -2957,6 +3139,7 @@ var SCRIPT_KEY = "HighGeometry";
                     if (notes.length === 0) notes.push("점을 적어 주세요 (예: A(0,3) B(0,0) C(4,0))");
                     return out;
                 }
+                readConstructions(text.constructText, table, names, notes);
                 var segments = readChainPaths(text.segmentText, names, "선분", notes);
                 var dashed = readChainPaths(text.dashedText, names, "점선", notes);
                 var circles = readCircles(text.circleText, table, names, notes);
@@ -3378,7 +3561,7 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v3"];
+                var parts = ["v4"];
                 for (var i = 0; i < TEXT_KEYS.length; i++) parts.push(encodeURIComponent(text[TEXT_KEYS[i]]));
                 parts.push(showNames ? "1" : "0", showAxes ? "1" : "0", sizeMm, fontPt, labelGapMm, arcRadiusMm, tickMm, strokePt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0");
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
@@ -3389,22 +3572,25 @@ var SCRIPT_KEY = "HighGeometry";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v3" || p.length !== 25) return;
+                // v4는 글 14칸(작도 글 constructText까지), 옛 v3는 작도 글이 없는 13칸이다
+                var textCount = p[0] === "v4" ? TEXT_KEYS.length : (p[0] === "v3" ? TEXT_KEYS.length - 1 : -1);
+                if (textCount < 0 || p.length !== textCount + 12) return;
                 try {
                     var restored = {};
-                    for (var i = 0; i < TEXT_KEYS.length; i++) restored[TEXT_KEYS[i]] = decodeURIComponent(p[1 + i]);
-                    for (i = 0; i < TEXT_KEYS.length; i++) text[TEXT_KEYS[i]] = restored[TEXT_KEYS[i]];
-                    showNames = p[14] === "1";
-                    showAxes = p[15] === "1";
-                    sizeMm = restoreNumber(p[16], sizeMm, 20, 140);
-                    fontPt = restoreNumber(p[17], fontPt, 5, 14);
-                    labelGapMm = restoreNumber(p[18], labelGapMm, 0, 5);
-                    arcRadiusMm = restoreNumber(p[19], arcRadiusMm, 1, 10);
-                    tickMm = restoreNumber(p[20], tickMm, 0.5, 5);
-                    strokePt = restoreNumber(p[21], strokePt, 0.1, 1.5);
-                    offsetXmm = restoreNumber(p[22], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-                    offsetYmm = restoreNumber(p[23], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-                    previewEnabled = p[24] === "1";
+                    for (var i = 0; i < textCount; i++) restored[TEXT_KEYS[i]] = decodeURIComponent(p[1 + i]);
+                    for (i = 0; i < textCount; i++) text[TEXT_KEYS[i]] = restored[TEXT_KEYS[i]];
+                    var n = 1 + textCount;
+                    showNames = p[n] === "1";
+                    showAxes = p[n + 1] === "1";
+                    sizeMm = restoreNumber(p[n + 2], sizeMm, 20, 140);
+                    fontPt = restoreNumber(p[n + 3], fontPt, 5, 14);
+                    labelGapMm = restoreNumber(p[n + 4], labelGapMm, 0, 5);
+                    arcRadiusMm = restoreNumber(p[n + 5], arcRadiusMm, 1, 10);
+                    tickMm = restoreNumber(p[n + 6], tickMm, 0.5, 5);
+                    strokePt = restoreNumber(p[n + 7], strokePt, 0.1, 1.5);
+                    offsetXmm = restoreNumber(p[n + 8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[n + 9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[n + 10] === "1";
                 } catch (restoreError) {}
             }
 
