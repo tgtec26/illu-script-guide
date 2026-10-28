@@ -1816,6 +1816,7 @@ var SCRIPT_KEY = "MiddleMath";
             var GUIDE_DASH = [2, 1.5];
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
+            var OPEN_DOT_PT = 0.5;   // 빈 점(○) 테두리 (구간별 함수 탭과 같다)
             var LABEL_GAP_MM = 0.8;
             var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };   // pt. 평가원 축 화살촉처럼 가늘고 뒤가 파인 모양
             registerHead(ARROW);
@@ -1901,7 +1902,7 @@ var SCRIPT_KEY = "MiddleMath";
                 functionRow.add("statictext", undefined, (f + 1) + ":").preferredSize.width = 20;
                 var functionInput = functionRow.add("edittext", undefined, functionTexts[f]);
                 functionInput.preferredSize.width = 320;
-                functionInput.helpTip = "y=2x+1, y=-x^2+4, y=6/x, y=√x, y=2^x, y=log_2 x, y=ln x, y=sin 2x, y=|x-1|, y=e^x. a·b·c는 계수 패널에서 조절한다. ^는 거듭제곱, 곱셈 기호는 생략해도 된다";
+                functionInput.helpTip = "y=2x+1, y=-x^2+4, y=6/x, y=√x, y=2^x, y=log_2 x, y=ln x, y=sin 2x, y=|x-1|, y=e^x. a·b·c는 계수 패널에서 조절한다. ^는 거듭제곱, 곱셈 기호는 생략해도 된다. 식 뒤에 {0<=x<2}처럼 정의역을 쓰면 그 범위만 그리고 끝점에 ●(포함)·○(빠짐)";
                 functionInputs.push(functionInput);
             }
             var paramPanel = addPanel(win, "계수 a·b·c", "foldParameters");
@@ -1982,7 +1983,7 @@ var SCRIPT_KEY = "MiddleMath";
             pointsRow.add("statictext", undefined, "점:").preferredSize.width = 20;
             var pointsInput = pointsRow.add("edittext", undefined, pointsText);
             pointsInput.preferredSize.width = 320;
-            pointsInput.helpTip = "A(2,3) B(-1,-2) P(1/2,√2). 이름 없이 (2,3)만 써도 된다. 좌표에 f(3)처럼 쓰면 1번 식(g는 2번, h는 3번)의 값을 계산해 넣는다: P(3,f(3))";
+            pointsInput.helpTip = "A(2,3) B(-1,-2) P(1/2,√2). 이름 없이 (2,3)만 써도 된다. 좌표에 f(3)처럼 쓰면 1번 식(g는 2번, h는 3번)의 값을 계산해 넣는다: P(3,f(3)). 닫는 괄호 뒤에 o를 붙이면 속이 빈 점(○): A(1,2)o";
             var segmentRow = pointPanel.add("group");
             segmentRow.add("statictext", undefined, "선분:").preferredSize.width = 20;
             var segmentInput = segmentRow.add("edittext", undefined, segmentText);
@@ -2125,9 +2126,13 @@ var SCRIPT_KEY = "MiddleMath";
                 var variables = {a: parameterA, b: parameterB, c: parameterC};
                 for (var i = 0; i < FUNCTION_COUNT; i++) {
                     if (String(functionTexts[i]).replace(/\s/g, "") === "") continue;
-                    var compiled = compileFunction(functionTexts[i], variables);
+                    // 식 뒤의 {0<=x<2}는 정의역: 범위 밖은 그리지 않고 끝점에 ●·○ (웹 math-coord-plane.js와 같다)
+                    var braces = splitDomain(functionTexts[i]);
+                    var domain = braces ? parseDomain(braces.domainText) : null;
+                    var body = braces ? braces.body : functionTexts[i];
+                    var compiled = braces && domain === null ? null : compileFunction(body, variables);
                     if (compiled === null) problems.push((i + 1) + "번 식");
-                    else functions.push({ fn: compiled, label: functionTexts[i], name: String(nameTexts[i]).replace(/^\s+|\s+$/g, ""), at: nameAts[i] });
+                    else functions.push({ fn: domain ? restrict(compiled, domain) : compiled, raw: compiled, domain: domain, label: String(body).replace(/^\s+|\s+$/g, ""), name: String(nameTexts[i]).replace(/^\s+|\s+$/g, ""), at: nameAts[i] });
                 }
                 // 점·글자 좌표 안의 f(3), g(1/2) 같은 함수값을 식의 값으로 바꾼다
                 var values = functionValueTable(functionTexts, variables);
@@ -2171,6 +2176,7 @@ var SCRIPT_KEY = "MiddleMath";
                 previewGroup.name = "좌표평면";
                 for (var j = 0; j < drawing.lines.length; j++) addPath(drawing.lines[j]);
                 for (var k = 0; k < drawing.arrows.length; k++) addArrow(drawing.arrows[k]);
+                for (var od = 0; od < drawing.openDots.length; od++) addOpenDot(drawing.openDots[od]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
                 if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
@@ -2231,6 +2237,17 @@ var SCRIPT_KEY = "MiddleMath";
                 circle.stroked = false;
                 circle.filled = true;
                 circle.fillColor = makeGray(100);
+            }
+
+            // 속이 빈 점(○): 흰 속에 OPEN_DOT_PT 테두리
+            function addOpenDot(at) {
+                var r = DOT_RADIUS_MM * MM_TO_PT;
+                var circle = previewGroup.pathItems.ellipse(at[1] + r, at[0] - r, r * 2, r * 2);
+                circle.filled = true;
+                circle.fillColor = makeGray(0);
+                circle.stroked = true;
+                circle.strokeColor = makeGray(100);
+                circle.strokeWidth = OPEN_DOT_PT;
             }
 
             // at에서 dir 쪽으로 gap(+clear)을 두고 글자의 가까운 가장자리가 오게 둔다. sup: 위첨자 글자 위치
@@ -2487,6 +2504,21 @@ var SCRIPT_KEY = "MiddleMath";
                     }
                 }
 
+                // 정의역 끝점: 포함은 ●, 빠짐은 ○ (끝점이 그림 상자 안에 있을 때만)
+                var openDots = [];
+                for (var df = 0; df < opt.functions.length; df++) {
+                    var dom = opt.functions[df].domain;
+                    if (!dom) continue;
+                    var ends = [[dom.lo, dom.loIn], [dom.hi, dom.hiIn]];
+                    for (var de = 0; de < 2; de++) {
+                        var ex = ends[de][0];
+                        if (!isFinite(ex) || ex < xLo || ex > plotHi) continue;
+                        var ey = opt.functions[df].raw(ex);
+                        if (typeof ey !== "number" || !isFinite(ey) || ey < opt.yMin || ey > opt.yMax) continue;
+                        (ends[de][1] ? dots : openDots).push([ex * u, ey * u]);
+                    }
+                }
+
                 for (var p = 0; p < opt.points.length; p++) {
                     var point = opt.points[p];
                     var at = [point.x * u, point.y * u];
@@ -2496,7 +2528,7 @@ var SCRIPT_KEY = "MiddleMath";
                     }
                     // 이름이 _로 시작하는 점은 점도 이름도 그리지 않고 선분·안내선의 기준으로만 쓴다
                     if (point.name.charAt(0) === "_") continue;
-                    dots.push(at);
+                    (point.open ? openDots : dots).push(at);
                     var name = point.name;
                     if (opt.coords) name += "(" + point.xText + ", " + point.yText + ")";
                     if (name) texts.push({ text: name, at: at, dir: [point.x < 0 ? -0.7071 : 0.7071, 0.7071], clear: 0, upright: true });
@@ -2518,7 +2550,7 @@ var SCRIPT_KEY = "MiddleMath";
                     }
                     return out;
                 }
-                return { lines: lines, arrows: arrows, dots: dots, texts: texts, fills: regionFills(opt.region), fills2: regionFills(opt.region2) };
+                return { lines: lines, arrows: arrows, dots: dots, openDots: openDots, texts: texts, fills: regionFills(opt.region), fills2: regionFills(opt.region2) };
             }
 
             // 그래프 이름 기호: ㉠㉡㉢… (2) 또는 (가)(나)(다)… (3). index는 0부터
@@ -2689,7 +2721,10 @@ var SCRIPT_KEY = "MiddleMath";
                 var table = {}, names = [["f", "f1"], ["g", "f2"], ["h", "f3"], ["f4"], ["f5"]];
                 for (var i = 0; i < names.length; i++) {
                     var text = (functionTexts || [])[i] || "";
-                    var fn = text.replace(/\s/g, "") === "" ? null : compileFunction(text, variables);
+                    // 식 뒤의 정의역 {…}은 떼고, 범위 밖 값은 NaN(못 계산)
+                    var braces = splitDomain(text), domain = braces ? parseDomain(braces.domainText) : null;
+                    var fn = text.replace(/\s/g, "") === "" || (braces && domain === null) ? null : compileFunction(braces ? braces.body : text, variables);
+                    if (fn !== null && domain !== null) fn = restrict(fn, domain);
                     for (var k = 0; k < names[i].length; k++) table[names[i][k]] = fn;
                 }
                 return table;
@@ -3227,6 +3262,52 @@ var SCRIPT_KEY = "MiddleMath";
             }
 
             // "A(2,3) B(-1,-2) (1/2,√2)" → [{name, x, y, xText, yText}]. 괄호 밖의 공백·쉼표·세미콜론은 구분자
+            // 식 뒤의 정의역 글을 뗀다: "y=x^2 {0<=x<2}" → {body: "y=x^2 ", domainText: "0<=x<2"}. 중괄호가 없으면 null,
+            // 닫는 괄호가 없거나 뒤에 글이 더 있으면 domainText가 null (일러 ExtendScript가 멈추지 않게 정규식 match 없이 읽는다)
+            function splitDomain(text) {
+                var s = String(text), open = s.indexOf("\u007B"), close = s.lastIndexOf("\u007D");
+                if (open < 0) return null;
+                if (close < open || s.substring(close + 1).replace(/\s/g, "") !== "") return { body: s.substring(0, open), domainText: null };
+                return { body: s.substring(0, open), domainText: s.substring(open + 1, close) };
+            }
+
+            // 정의역 "0<=x<2", "-1<x≤3", "x>=1", "x<5" → {lo, loIn, hi, hiIn} (없는 쪽은 ±Infinity). 못 읽거나 비면 null
+            function parseDomain(text) {
+                if (text === null) return null;
+                var s = String(text).replace(/\s/g, "").split("\u2264").join("<=").split("\u2265").join(">=");
+                var at = s.indexOf("x");
+                if (at < 0 || s.indexOf("x", at + 1) >= 0) return null;
+                var left = s.substring(0, at), right = s.substring(at + 1), ops = ["<=", ">=", "<", ">"];
+                if (left === "" && right === "") return null;
+                var d = { lo: -Infinity, loIn: false, hi: Infinity, hiIn: false };
+                // 수와 부등호. numberOnLeft면 "0<=" 꼴(수가 x 왼쪽), 아니면 "<2" 꼴
+                function bound(part, numberOnLeft) {
+                    for (var i = 0; i < ops.length; i++) {
+                        var op = ops[i], hit = numberOnLeft ? part.length > op.length && part.substring(part.length - op.length) === op : part.indexOf(op) === 0;
+                        if (!hit) continue;
+                        var numText = numberOnLeft ? part.substring(0, part.length - op.length) : part.substring(op.length);
+                        if (/[<>=]/.test(numText)) return false;
+                        var v = evaluateNumber(numText);
+                        if (v === null) return false;
+                        var lower = numberOnLeft ? op.charAt(0) === "<" : op.charAt(0) === ">";
+                        if (lower) { d.lo = v; d.loIn = op.length === 2; } else { d.hi = v; d.hiIn = op.length === 2; }
+                        return true;
+                    }
+                    return false;
+                }
+                if (left !== "" && !bound(left, true)) return null;
+                if (right !== "" && !bound(right, false)) return null;
+                return d.lo < d.hi ? d : null;
+            }
+
+            // 정의역 밖에서는 NaN을 돌려주는 함수 (그래프·교점·함수값이 범위를 따른다)
+            function restrict(fn, d) {
+                return function(x) {
+                    if (x < d.lo || x > d.hi) return NaN;
+                    return fn(x);
+                };
+            }
+
             function parsePointList(text) {
                 var s = String(text);
                 var list = [], bad = [];
@@ -3247,9 +3328,11 @@ var SCRIPT_KEY = "MiddleMath";
                     var yText = comma >= 0 ? inside.substring(comma + 1).replace(/\s/g, "") : "";
                     var x = comma >= 0 ? evaluateNumber(xText) : null;
                     var y = comma >= 0 ? evaluateNumber(yText) : null;
+                    // 닫는 괄호 바로 뒤의 o(또는 ○)는 속이 빈 점: A(1,2)o
+                    var hollow = (s.charAt(close + 1) === "o" || s.charAt(close + 1) === "\u25CB") && /^[\s,;]?$/.test(s.charAt(close + 2));
                     if (x === null || y === null) bad.push(s.substring(i, close + 1));
-                    else list.push({ name: name, x: x, y: y, xText: xText, yText: yText });
-                    i = close + 1;
+                    else list.push(hollow ? { name: name, x: x, y: y, xText: xText, yText: yText, open: true } : { name: name, x: x, y: y, xText: xText, yText: yText });
+                    i = close + (hollow ? 2 : 1);
                 }
                 return { list: list, bad: bad };
             }

@@ -32,7 +32,7 @@ function extractFunction(name) {
 
 const names = ["compileFunction", "evaluateNumber", "parsePointList", "plotFunction", "toBezier", "formulaDisplay", "buildPlane", "straight",
   "piLabel", "findIntersections", "parseAsymptotes", "graphSymbol", "parseRegion", "regionPolygons", "dropCollinear",
-  "functionValueTable", "substituteFunctionValues", "parseSolidLines", "parseSegments", "hasHangul", "notesWithNames", "plotParametric", "toBezierCurve"];
+  "functionValueTable", "substituteFunctionValues", "parseSolidLines", "parseSegments", "hasHangul", "notesWithNames", "plotParametric", "toBezierCurve", "parseDomain", "restrict", "splitDomain"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
@@ -357,6 +357,40 @@ const d = g.buildPlane({ xMin: -5, xMax: 5, yMin: -5, yMax: 5, unit: 10, tick: 2
     for (const name of ["plotParametric", "toBezierCurve"]) {
       const start = web.indexOf(`export function ${name}(`);
       const end = web.indexOf("\n}\n", start) + 2;
+      const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+      assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
+    }
+  }
+}
+
+// 정의역 {a<=x<b}(끝점 ●·○)과 점 칸의 열린 점 A(1,2)o (웹 math-coord-plane.test.js와 같은 경우)
+{
+  assert.deepStrictEqual(g.parseDomain("0<=x<2"), { lo: 0, loIn: true, hi: 2, hiIn: false });
+  assert.deepStrictEqual(g.parseDomain("-1 < x ≤ 3"), { lo: -1, loIn: false, hi: 3, hiIn: true });
+  assert.deepStrictEqual(g.parseDomain("x>=1"), { lo: 1, loIn: true, hi: Infinity, hiIn: false });
+  for (const bad of ["", "x", "2<x<1", "0<y<1"]) assert.strictEqual(g.parseDomain(bad), null, bad);
+  const raw = g.compileFunction("y=x^2"), domain = g.parseDomain("0<=x<2");
+  const plane = (functions, points) => g.buildPlane({ xMin: -3, xMax: 3, yMin: -1, yMax: 5, unit: 17, tick: 3.4, grid: false, numbers: true, functions,
+    nameStyle: 0, hideAxes: false, region: [], points, coords: false, guides: false, piAxis: false, intersections: false, identity: false, asymptotes: [], fontSize: 8,
+    ticks: true, solidLines: [], lineNames: true, notes: [], segments: [], region2: [] });
+  const d = plane([{ fn: g.restrict(raw, domain), raw, domain, label: "y=x^2", name: "", at: 0 }], []);
+  assert.deepStrictEqual(d.dots.map((p) => p.map((v) => Math.round(v / 17 * 1e6) / 1e6)), [[0, 0]], "포함 끝 ●");
+  assert.deepStrictEqual(d.openDots.map((p) => p.map((v) => Math.round(v / 17 * 1e6) / 1e6)), [[2, 4]], "빠진 끝 ○");
+  const xs = d.lines.filter((l) => l.kind === "graph").flatMap((l) => l.points.map((q) => q.anchor[0] / 17));
+  assert.ok(Math.min(...xs) > -1e-6 && Math.max(...xs) < 2 + 1e-6);
+  const pts = g.parsePointList("A(1,2)o B(-1,1)").list;
+  assert.deepStrictEqual(pts.map((q) => !!q.open), [true, false]);
+  const e = plane([], pts);
+  assert.strictEqual(e.openDots.length, 1);
+  assert.strictEqual(e.dots.length, 1);
+  const values = g.functionValueTable(["y=x^2 {0<=x<2}"], null);
+  near(values.f(1), 1, "f(1) 범위 안");
+  assert.ok(isNaN(values.f(3)), "f(3) 범위 밖");
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-coord-plane.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8");
+    for (const name of ["parseDomain", "restrict", "splitDomain"]) {
+      const start = web.indexOf(`export function ${name}(`), end = web.indexOf("\n}\n", start) + 2;
       const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
       assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
     }
