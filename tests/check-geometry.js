@@ -31,7 +31,7 @@ const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readC
   "readChainPaths", "dimensionCurve", "display", "straight", "circleLine", "unitVector", "offsetPoint", "arcPoints", "rightAnglePoints", "buildGeometry", "clamp", "parseNumber",
   "ConstructFail", "readConstructions", "constructPoint", "touchingCircle"];
 const make = new Function("state", `
-var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, SYMBOL_MM = 0.6, KAPPA = 0.5522847498;
+var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, SYMBOL_MM = 0.6, TRACE_MM = 3, KAPPA = 0.5522847498;
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
 var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
 var text = state.text, showNames = state.showNames, showAxes = state.showAxes, showDimensions = !!state.showDimensions, dimensionRiseMm = 3, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
@@ -352,3 +352,36 @@ console.log("geometry checks passed");
 }
 
 console.log("geometry new marks ok");
+
+// 호 글자·호 눈금·작도 흔적 호 (웹 math-geometry.test.js와 같은 경우)
+{
+  const base = { pointsText: "O(0,0) A(2,0) B(0,2) C(-2,0)" };
+  let d = api(Object.assign({}, base, { arcText: "O:A>B:4π, AC:d:2π" })).buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  const top = d.texts.find(t => t.text === "4π"), bottom = d.texts.find(t => t.text === "2π");
+  near(top.dir[0], Math.SQRT1_2, "바깥 x"); near(top.dir[1], Math.SQRT1_2, "바깥 y");
+  near(bottom.dir[1], -1, "아래쪽");
+  const arc = d.lines.find(l => l.kind === "main" && l.points.length > 8);
+  const mid = arc.points[Math.floor(arc.points.length / 2)].anchor;
+  near(top.at[0], mid[0], "글자 x", 1e-6); near(top.at[1], mid[1], "글자 y", 1e-6);
+
+  d = api(Object.assign({}, base, { arcText: "O:A>B:||:4π" })).buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  const ticks = d.lines.filter(l => l.kind === "mark" && l.points.length === 2);
+  assert.strictEqual(ticks.length, 2);
+  for (const m of ticks) {
+    const [p, q] = m.points.map(x => x.anchor);
+    near(Math.hypot(p[0] - q[0], p[1] - q[1]), 1.6 * 2.834645669, "눈금 길이", 1e-6);
+  }
+  assert.ok(d.texts.find(t => t.text === "4π").clear > 0, "눈금이 있으면 글자를 뗀다");
+
+  d = api({ pointsText: "O(0,0) A(2,0) B(0,2)", arcText: "O:~A, B:~A" }).buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  const traces = d.lines.filter(l => l.kind === "mark" && l.points.length > 2);
+  assert.strictEqual(traces.length, 2);
+  const tp = traces[0].points.map(x => x.anchor), first = tp[0], last = tp[tp.length - 1];
+  const chord = Math.hypot(first[0] - last[0], first[1] - last[1]);
+  assert.ok(chord > 5.5 * 2.834645669 && chord < 6 * 2.834645669, "지나는 점 양쪽 3 mm: " + chord);
+  assert.ok(api({ pointsText: "O(0,0) A(1,0)", arcText: "O:~X" }).buildGeometry().notes.length === 1);
+}
+console.log("geometry arc marks ok");

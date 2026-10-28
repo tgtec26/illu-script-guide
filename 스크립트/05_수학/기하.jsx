@@ -2171,6 +2171,7 @@ var SCRIPT_KEY = "HighGeometry";
             var GUIDE_PT = 0.3;
             var MARK_PT = 0.3;
             var MARK_GAP_MM = 0.7;
+            var TRACE_MM = 3;      // 작도 흔적 호가 지나는 점 양쪽으로 뻗는 길이
             var SYMBOL_MM = 0.6;   // 같은 각 기호(•·∘·×)의 반지름·반 너비 (• 지름 약 1 mm)
             var DOT_RADIUS_MM = 0.6;
             var GUIDE_DASH = [2, 1.5];
@@ -2225,7 +2226,7 @@ var SCRIPT_KEY = "HighGeometry";
             addTextRow(pointPanel, "화살표", "arrowText", "끝에 화살촉이 있는 선분(벡터). O-A는 O에서 A로, O-A-B는 O→A, A→B (쉼표로 여러 개)");
             addTextRow(pointPanel, "원", "circleText", "ABC 세 점을 지나는 원, AB 지름이 AB인 원, O:3 중심 O·반지름 3, (1,2):3 좌표 중심, O~A 중심 O에 A를 지나는 원, in(ABC) 내접원, ex(ABC,A) A의 맞은편 방접원");
             addTextRow(pointPanel, "타원", "ellipseText", "O:6x4 중심 O·가로 반지름 6·세로 반지름 4, (1,2):6x4 좌표 중심, 6x4 중심 원점 (쉼표로 여러 개, x 대신 ×도 된다)");
-            addTextRow(pointPanel, "호", "arcText", "O:A>B 중심 O, 점 A에서 B 쪽으로 반시계로 도는 호(O:A<B는 시계), AC:u AC를 지름으로 하는 반원(바깥쪽 u 위·d 아래·l 왼쪽·r 오른쪽). 쉼표로 여러 개");
+            addTextRow(pointPanel, "호", "arcText", "O:A>B 중심 O, 점 A에서 B 쪽으로 반시계로 도는 호(O:A<B는 시계), AC:u AC를 지름으로 하는 반원(바깥쪽 u 위·d 아래·l 왼쪽·r 오른쪽), O:~A O를 중심으로 A를 지나는 짧은 작도 흔적 호(가는 선). 뒤에 :4π는 호 가운데 바깥 글자, :| :|| :|||는 같은 호 눈금(O:A>B:|:4π처럼 함께). 쉼표로 여러 개");
             addTextRow(pointPanel, "색칠", "fillText", "경로를 >로 이어 칠한다(저절로 닫힘). 점 이름은 직선, arc+(O,B)·arc-(O,B)는 지금 점에서 B 방향까지 O를 중심으로 반시계·시계로 도는 호, circle(O,3)·circle(O,A)는 원판. 뒤의 :30은 농도(K, 안 쓰면 20)");
             addTextRow(pointPanel, "각", "angleText", "BAC:60° (꼭짓점 A에서 AB와 AC 사이의 각), ABC:R 직각 표시, BAC 글자 없이 호, BAC:60°:2 호 2겹, ABD:• 같은 각 기호(• ∘ ×), ABD:•:0 호 없이 기호만");
 
@@ -3025,17 +3026,26 @@ var SCRIPT_KEY = "HighGeometry";
                 return d < 0 ? d + Math.PI * 2 : d;
             }
 
-            // 호: "O:A>B"(중심 O, A에서 B 쪽으로 반시계), "O:A<B"(시계), "AC:u"(AC를 지름으로 하는 반원, 바깥쪽 u 위·d 아래·l 왼쪽·r 오른쪽)
+            // 호: "O:A>B"(중심 O, A에서 B 쪽으로 반시계), "O:A<B"(시계), "AC:u"(AC를 지름으로 하는 반원, 바깥쪽 u 위·d 아래·l 왼쪽·r 오른쪽),
+            //   "O:~A"(O를 중심으로 A를 지나는 짧은 작도 흔적 호). 뒤에 ":4π"는 호 가운데 바깥의 글자, ":|"·":||"·":|||"는 같은 호 눈금
             function readArcs(source, table, names, notes) {
                 var out = [];
                 var items = splitItems(source);
                 for (var i = 0; i < items.length; i++) {
-                    var item = items[i], colon = item.indexOf(":");
-                    var head = colon >= 0 ? trimText(item.substring(0, colon)) : "";
-                    var rest = colon >= 0 ? trimText(item.substring(colon + 1)) : "";
+                    var item = items[i], parts = item.split(":");
+                    for (var q = 0; q < parts.length; q++) parts[q] = trimText(parts[q]);
+                    var head = parts.length > 1 ? parts[0] : "";
+                    var rest = parts.length > 1 ? parts[1] : "";
                     var arc = null;
                     var turn = rest.indexOf(">") >= 0 ? ">" : (rest.indexOf("<") >= 0 ? "<" : null);
-                    if (turn) {
+                    if (rest.charAt(0) === "~") {
+                        var tc = tokenizeNames(head, names), tp = tokenizeNames(rest.substring(1), names);
+                        if (tc && tc.length === 1 && tp && tp.length === 1) {
+                            var tcen = table[tc[0]], tthr = table[tp[0]];
+                            arc = {c: tcen, r: Math.sqrt((tthr[0] - tcen[0]) * (tthr[0] - tcen[0]) + (tthr[1] - tcen[1]) * (tthr[1] - tcen[1])),
+                                a0: Math.atan2(tthr[1] - tcen[1], tthr[0] - tcen[0]), sweep: 0, trace: true};
+                        }
+                    } else if (turn) {
                         var c = tokenizeNames(head, names), ends = rest.split(turn);
                         var e0 = ends.length === 2 ? tokenizeNames(ends[0], names) : null, e1 = ends.length === 2 ? tokenizeNames(ends[1], names) : null;
                         if (c && c.length === 1 && e0 && e0.length === 1 && e1 && e1.length === 1) {
@@ -3055,7 +3065,12 @@ var SCRIPT_KEY = "HighGeometry";
                             arc = {c: mid, r: rr, a0: s0, sweep: bulge[0] * DIRS[rest][0] + bulge[1] * DIRS[rest][1] >= 0 ? Math.PI : -Math.PI};
                         }
                     }
-                    if (arc && arc.r > 0) out.push(arc); else notes.push("호 " + item);
+                    if (arc && arc.r > 0) {
+                        for (q = 2; q < parts.length; q++) {
+                            if (/^\|{1,3}$/.test(parts[q])) arc.ticks = parts[q].length; else if (parts[q]) arc.text = parts[q];
+                        }
+                        out.push(arc);
+                    } else notes.push("호 " + item);
                 }
                 return out;
             }
@@ -3272,7 +3287,13 @@ var SCRIPT_KEY = "HighGeometry";
                     out.lines.push(fillLine);
                 }
                 for (i = 0; i < fills.length; i++) out.lines.push(straight(mapped(fills[i].pts), "main", true));
-                for (i = 0; i < arcs.length; i++) out.lines.push(straight(mapped(curvePoints(arcs[i].c, arcs[i].r, arcs[i].a0, arcs[i].sweep)), "main", false));
+                for (i = 0; i < arcs.length; i++) {
+                    if (arcs[i].trace) {
+                        // 작도 흔적 호: 지나는 점 양쪽으로 TRACE_MM씩, 표시 선 두께
+                        var half = Math.min(Math.PI / 3, TRACE_MM * MM_TO_PT / (arcs[i].r * scale));
+                        out.lines.push(straight(mapped(curvePoints(arcs[i].c, arcs[i].r, arcs[i].a0 - half, 2 * half)), "mark", false));
+                    } else out.lines.push(straight(mapped(curvePoints(arcs[i].c, arcs[i].r, arcs[i].a0, arcs[i].sweep)), "main", false));
+                }
                 for (i = 0; i < circles.length; i++) {
                     var cc = T(circles[i].c);
                     out.lines.push(circleLine(cc[0], cc[1], circles[i].r * scale));
@@ -3416,6 +3437,22 @@ var SCRIPT_KEY = "HighGeometry";
                         lengthLabel.clear = 0;
                     }
                     out.texts.push(lengthLabel);
+                }
+
+                // 호 눈금(같은 호)·호 글자: 호 가운데에서 중심 바깥쪽으로
+                for (i = 0; i < arcs.length; i++) {
+                    if (!arcs[i].ticks && !arcs[i].text) continue;
+                    var ac = T(arcs[i].c), ar = arcs[i].r * scale, amid = arcs[i].a0 + arcs[i].sweep / 2;
+                    for (k = 0; k < (arcs[i].ticks || 0); k++) {
+                        var at2 = amid + (k - (arcs[i].ticks - 1) / 2) * gap / ar, aout = [Math.cos(at2), Math.sin(at2)];
+                        out.lines.push(straight([offsetPoint(ac, aout, ar - tick / 2), offsetPoint(ac, aout, ar + tick / 2)], "mark", false));
+                    }
+                    if (arcs[i].text) {
+                        var adir = [Math.cos(amid), Math.sin(amid)], arcLabel = display(arcs[i].text);
+                        arcLabel.at = offsetPoint(ac, adir, ar); arcLabel.dir = adir;
+                        arcLabel.clear = arcs[i].ticks ? tick / 2 : 0;
+                        out.texts.push(arcLabel);
+                    }
                 }
 
                 for (i = 0; i < dotNames.length; i++) out.dots.push(P(dotNames[i]));
