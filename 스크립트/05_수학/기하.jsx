@@ -4083,7 +4083,9 @@ var SCRIPT_KEY = "HighGeometry";
             var CURVE_STEPS = 96;
             var PRESETS = ["직접 좌표", "n각기둥", "n각뿔", "원기둥", "원뿔", "구"];
             var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
-            var TEXT_KEYS = ["radiusText", "heightText", "pointsText", "segmentText", "dashedText", "dotText", "labelDirText"];
+            var TEXT_KEYS = ["radiusText", "heightText", "pointsText", "segmentText", "dashedText", "dotText", "labelDirText", "lengthText", "angleText", "fillText"];
+            var MARK_MM = 1.8;   // 직각 표시 한 변 (화면에서)
+            var ARC_MM = 3;      // 각 호 반지름 (화면에서)
 
             var doc = app.activeDocument;
             var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
@@ -4094,7 +4096,7 @@ var SCRIPT_KEY = "HighGeometry";
             var eqnFont = findTextFont([EQN_FONT_NAME, ENG_FONT_NAME]);
 
             // 옵션
-            var text = {radiusText: "2", heightText: "3", pointsText: "", segmentText: "", dashedText: "", dotText: "", labelDirText: ""};
+            var text = {radiusText: "2", heightText: "3", pointsText: "", segmentText: "", dashedText: "", dotText: "", labelDirText: "", lengthText: "", angleText: "", fillText: ""};
             var preset = 1;
             var sides = 4;
             var showNames = true;
@@ -4143,6 +4145,9 @@ var SCRIPT_KEY = "HighGeometry";
             addTextRow(extraPanel, "선분", "segmentText", "점 이름으로 잇는 실선: P-A3, A1-A3 (쉼표로 여러 개)");
             addTextRow(extraPanel, "점선", "dashedText", "점선 선분(높이·가려진 선): O-V");
             addTextRow(extraPanel, "점 찍기", "dotText", "점을 작은 원으로 찍는다. 원기둥·원뿔·구의 중심은 여기에 적을 때만 이름이 붙는다");
+            addTextRow(extraPanel, "길이 글자", "lengthText", "모서리 옆에 길이 글자(그림 바깥쪽): A1B1:3, PA1:√13 (쉼표로 여러 개)");
+            addTextRow(extraPanel, "각 표시", "angleText", "꼭짓점이 가운데인 점 이름 셋: PHA1:R 직각 표시, PA1H:60° 호와 글자(글자 없으면 호만). 두 선분이 이루는 평면 위에 그린다");
+            addTextRow(extraPanel, "단면 칠하기", "fillText", "점 이름(셋 이상)을 이은 다각형을 칠한다(단면·삼각형): PA1A3:30 (뒤의 수는 농도 K, 안 쓰면 20)");
             addTextRow(extraPanel, "이름 방향", "labelDirText", "A1:ul, P:r (u 위, d 아래, l 왼쪽, r 오른쪽, ul·ur·dl·dr 대각선). 안 쓰면 그림 가운데에서 바깥쪽");
 
             var viewPanel = addPanel(win, "시점 · 크기");
@@ -4259,10 +4264,17 @@ var SCRIPT_KEY = "HighGeometry";
                     }
                 }
                 path.closed = !!line.closed;
+                if (line.kind === "fill") {
+                    // 단면 칠하기: 선 없이 회색
+                    path.filled = true;
+                    path.fillColor = makeGray(line.fillK);
+                    path.stroked = false;
+                    return;
+                }
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(100);
-                path.strokeWidth = line.kind === "dashed" ? GUIDE_PT : strokePt;
+                path.strokeWidth = line.kind === "dashed" || line.kind === "mark" ? GUIDE_PT : strokePt;
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
                 if (line.kind === "dashed") path.strokeDashes = GUIDE_DASH;
@@ -4683,6 +4695,19 @@ var SCRIPT_KEY = "HighGeometry";
                     dirOverride[nt[0]] = code;
                 }
 
+                // 길이 글자·각·칠하기: 점 이름으로 읽는다 (웹 math-solid3d.js와 같다). count 0은 셋 이상
+                function pairTexts(source, label, count) {
+                    var list = [], items = splitItems(source);
+                    for (var a = 0; a < items.length; a++) {
+                        var colon = items[a].indexOf(":");
+                        var t = tokenizeNames(colon >= 0 ? items[a].substring(0, colon) : items[a], names);
+                        if (t === null || (count === 0 ? t.length < 3 : t.length !== count)) { notes.push(label + " " + items[a]); continue; }
+                        list.push({names: t, text: colon >= 0 ? items[a].substring(colon + 1).replace(/^\s+|\s+$/g, "") : ""});
+                    }
+                    return list;
+                }
+                var lengths = pairTexts(text.lengthText, "길이", 2), angleMarks = pairTexts(text.angleText, "각", 3), fillItems = pairTexts(text.fillText, "칠하기", 0);
+
                 // 그릴 선들을 화면 좌표로 모은다: {pts, hidden, user}
                 var lines = [];
                 function nearSide(p, c) { return dot3(sub3(p, c), view.d) > 1e-9; }
@@ -4752,6 +4777,14 @@ var SCRIPT_KEY = "HighGeometry";
                 var scale = sizeMm * MM_TO_PT / extent, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
                 function T(p) { return [(p[0] - mx) * scale, (p[1] - my) * scale]; }
 
+                // 단면 칠하기는 맨 아래 (농도 K, 안 쓰면 20)
+                for (i = 0; i < fillItems.length; i++) {
+                    var fillPts = [];
+                    for (k = 0; k < fillItems[i].names.length; k++) fillPts.push(T(S(table[fillItems[i].names[k]])));
+                    var fillLine = straight(fillPts, "fill", true);
+                    fillLine.fillK = /^\d+(\.\d+)?$/.test(fillItems[i].text) ? parseFloat(fillItems[i].text) : 20;
+                    out.lines.push(fillLine);
+                }
                 if (sphereRadius > 0) {
                     var c = T(S([0, 0, 0])), rr = sphereRadius * scale, outline = [];
                     for (i = 0; i < CURVE_STEPS; i++) outline.push([c[0] + rr * Math.cos(2 * Math.PI * i / CURVE_STEPS), c[1] + rr * Math.sin(2 * Math.PI * i / CURVE_STEPS)]);
@@ -4783,6 +4816,48 @@ var SCRIPT_KEY = "HighGeometry";
                         var label = display(name.replace(/^([A-Za-z])(\d+)$/, "$1_$2"));
                         label.at = at; label.dir = dir; label.upright = true;
                         out.texts.push(label);
+                    }
+                }
+                // 길이 글자: 선분 가운데에서 그림 가운데의 반대쪽 법선 방향으로
+                for (i = 0; i < lengths.length; i++) {
+                    if (!lengths[i].text) continue;
+                    var la = T(S(table[lengths[i].names[0]])), lb = T(S(table[lengths[i].names[1]]));
+                    var ldir = unitVector([-(lb[1] - la[1]), lb[0] - la[0]]), lmid = [(la[0] + lb[0]) / 2, (la[1] + lb[1]) / 2];
+                    if (ldir[0] * (lmid[0] - centroid[0]) + ldir[1] * (lmid[1] - centroid[1]) < 0) ldir = [-ldir[0], -ldir[1]];
+                    var lengthLabel = display(lengths[i].text);
+                    lengthLabel.at = lmid; lengthLabel.dir = ldir;
+                    out.texts.push(lengthLabel);
+                }
+                // 각: 꼭짓점 V에서 두 선분이 이루는 평면 위에. R(직각)은 꺾은선, 그 밖은 호와 글자. 크기는 화면 mm로 맞춘다
+                for (i = 0; i < angleMarks.length; i++) {
+                    var pa = table[angleMarks[i].names[0]], vv = table[angleMarks[i].names[1]], pb = table[angleMarks[i].names[2]];
+                    var u3 = sub3(pa, vv), w3 = sub3(pb, vv), lu = Math.sqrt(dot3(u3, u3)), lw = Math.sqrt(dot3(w3, w3));
+                    if (lu < 1e-12 || lw < 1e-12) { notes.push("각 " + angleMarks[i].names.join("")); continue; }
+                    var u = [u3[0] / lu, u3[1] / lu, u3[2] / lu], w0 = [w3[0] / lw, w3[1] / lw, w3[2] / lw];
+                    if (/^(r|R|직각|90°?)$/.test(angleMarks[i].text)) {
+                        var size = MARK_MM * MM_TO_PT / scale;
+                        var ma = [vv[0] + u[0] * size, vv[1] + u[1] * size, vv[2] + u[2] * size];
+                        var mb = [vv[0] + w0[0] * size, vv[1] + w0[1] * size, vv[2] + w0[2] * size];
+                        var corner = [ma[0] + w0[0] * size, ma[1] + w0[1] * size, ma[2] + w0[2] * size];
+                        out.lines.push(straight([T(S(ma)), T(S(corner)), T(S(mb))], "mark", false));
+                        continue;
+                    }
+                    // 두 방향 사이의 호: u에서 w 쪽으로 (평면의 직교 방향 n = w − (w·u)u)
+                    var theta = Math.acos(Math.max(-1, Math.min(1, dot3(u, w0))));
+                    var cu = dot3(w0, u), nRaw = [w0[0] - cu * u[0], w0[1] - cu * u[1], w0[2] - cu * u[2]];
+                    var nl = Math.sqrt(dot3(nRaw, nRaw)) || 1, nv = [nRaw[0] / nl, nRaw[1] / nl, nRaw[2] / nl];
+                    var r3 = ARC_MM * MM_TO_PT / scale, arcPts = [];
+                    for (k = 0; k <= 24; k++) {
+                        var tk = theta * k / 24, ct = Math.cos(tk), st = Math.sin(tk);
+                        arcPts.push(T(S([vv[0] + r3 * (ct * u[0] + st * nv[0]), vv[1] + r3 * (ct * u[1] + st * nv[1]), vv[2] + r3 * (ct * u[2] + st * nv[2])])));
+                    }
+                    out.lines.push(straight(arcPts, "mark", false));
+                    if (angleMarks[i].text) {
+                        var hc = Math.cos(theta / 2), hs = Math.sin(theta / 2);
+                        var atA = T(S([vv[0] + r3 * (hc * u[0] + hs * nv[0]), vv[1] + r3 * (hc * u[1] + hs * nv[1]), vv[2] + r3 * (hc * u[2] + hs * nv[2])]));
+                        var vt = T(S(vv)), angleLabel = display(angleMarks[i].text);
+                        angleLabel.at = atA; angleLabel.dir = unitVector([atA[0] - vt[0], atA[1] - vt[1]]);
+                        out.texts.push(angleLabel);
                     }
                 }
                 for (i = 0; i < dotNames.length; i++) out.dots.push(T(S(table[dotNames[i]])));
@@ -4904,7 +4979,7 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v1"];
+                var parts = ["v2"];
                 for (var i = 0; i < TEXT_KEYS.length; i++) parts.push(encodeURIComponent(text[TEXT_KEYS[i]]));
                 parts.push(preset, sides, showNames ? "1" : "0", showHidden ? "1" : "0", azimuthDeg, elevationDeg, sizeMm, fontPt, labelGapMm, strokePt,
                     offsetXmm, offsetYmm, previewEnabled ? "1" : "0");
@@ -4916,24 +4991,26 @@ var SCRIPT_KEY = "HighGeometry";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 21) return;
+                // v2는 글 10칸(길이 글자·각 표시·단면 칠하기까지), v1은 앞의 7칸이다. 숫자 항목은 글 뒤에 이어진다
+                if (!((p[0] === "v2" && p.length === 24) || (p[0] === "v1" && p.length === 21))) return;
+                var textCount = p[0] === "v2" ? TEXT_KEYS.length : 7, o = textCount - 7;
                 try {
                     var restored = {};
-                    for (var i = 0; i < TEXT_KEYS.length; i++) restored[TEXT_KEYS[i]] = decodeURIComponent(p[1 + i]);
-                    for (i = 0; i < TEXT_KEYS.length; i++) text[TEXT_KEYS[i]] = restored[TEXT_KEYS[i]];
-                    preset = Math.round(restoreNumber(p[8], preset, 0, PRESETS.length - 1));
-                    sides = Math.round(restoreNumber(p[9], sides, 3, 8));
-                    showNames = p[10] === "1";
-                    showHidden = p[11] === "1";
-                    azimuthDeg = restoreNumber(p[12], azimuthDeg, -80, 80);
-                    elevationDeg = restoreNumber(p[13], elevationDeg, 5, 80);
-                    sizeMm = restoreNumber(p[14], sizeMm, 20, 140);
-                    fontPt = restoreNumber(p[15], fontPt, 5, 14);
-                    labelGapMm = restoreNumber(p[16], labelGapMm, 0, 5);
-                    strokePt = restoreNumber(p[17], strokePt, 0.1, 1.5);
-                    offsetXmm = restoreNumber(p[18], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-                    offsetYmm = restoreNumber(p[19], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-                    previewEnabled = p[20] === "1";
+                    for (var i = 0; i < textCount; i++) restored[TEXT_KEYS[i]] = decodeURIComponent(p[1 + i]);
+                    for (i = 0; i < textCount; i++) text[TEXT_KEYS[i]] = restored[TEXT_KEYS[i]];
+                    preset = Math.round(restoreNumber(p[8 + o], preset, 0, PRESETS.length - 1));
+                    sides = Math.round(restoreNumber(p[9 + o], sides, 3, 8));
+                    showNames = p[10 + o] === "1";
+                    showHidden = p[11 + o] === "1";
+                    azimuthDeg = restoreNumber(p[12 + o], azimuthDeg, -80, 80);
+                    elevationDeg = restoreNumber(p[13 + o], elevationDeg, 5, 80);
+                    sizeMm = restoreNumber(p[14 + o], sizeMm, 20, 140);
+                    fontPt = restoreNumber(p[15 + o], fontPt, 5, 14);
+                    labelGapMm = restoreNumber(p[16 + o], labelGapMm, 0, 5);
+                    strokePt = restoreNumber(p[17 + o], strokePt, 0.1, 1.5);
+                    offsetXmm = restoreNumber(p[18 + o], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[19 + o], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[20 + o] === "1";
                 } catch (restoreError) {}
             }
 

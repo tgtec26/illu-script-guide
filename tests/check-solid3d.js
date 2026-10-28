@@ -28,13 +28,13 @@ function extractFunction(name) {
 const names = ["dot3", "sub3", "cross3", "makeView", "parsePoints3D", "ringPoint", "polyhedron", "buildPreset", "ringRuns", "buildSolid3D",
   "evalNumber", "splitItems", "tokenizeNames", "display", "straight", "unitVector"];
 const make = new Function("s", `
-var MM_TO_PT = 2.834645669, CURVE_STEPS = 96;
+var MM_TO_PT = 2.834645669, CURVE_STEPS = 96, MARK_MM = 1.8, ARC_MM = 3;
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
 var text = s.text, preset = s.preset, sides = s.sides, showNames = s.showNames, showHidden = s.showHidden;
 var azimuthDeg = 20, elevationDeg = 25, sizeMm = 50;
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
-const TEXT0 = { radiusText: "2", heightText: "3", pointsText: "", segmentText: "", dashedText: "", dotText: "", labelDirText: "" };
+const TEXT0 = { radiusText: "2", heightText: "3", pointsText: "", segmentText: "", dashedText: "", dotText: "", labelDirText: "", lengthText: "", angleText: "", fillText: "" };
 const api = ({ text = {}, ...rest } = {}) => make(Object.assign({ preset: 1, sides: 4, showNames: true, showHidden: true }, rest, { text: Object.assign({}, TEXT0, text) }));
 const dashed = (d) => d.lines.filter((l) => l.kind === "dashed").length;
 
@@ -92,7 +92,7 @@ function lineWidthStore(constNames, raw) {
   assert.deepStrictEqual(labels, ["모서리", "보조선"]);
   assert.ok(source.includes('addValueRow(lineWidthPanel, "모서리", "pt", strokePt, 0.1, 1.5, 0.1, 1)'), "모서리 행은 strokePt 범위 그대로");
   assert.ok(!source.includes('addValueRow(viewPanel, "선 두께"'), "시점 · 크기 패널에서 옮겼다");
-  assert.ok(source.includes("strokePt = restoreNumber(p[17], strokePt, 0.1, 1.5);"), "모서리 값은 기본 설정 문자열에 그대로 저장");
+  assert.ok(source.includes("strokePt = restoreNumber(p[17 + o], strokePt, 0.1, 1.5);"), "모서리 값은 기본 설정 문자열에 그대로 저장 (v2는 글 3칸만큼 뒤로)");
   // 보조선 기본값 = 모서리 기본값이라 기본 그림은 예전과 같다
   const num = (name) => parseFloat(source.slice(source.indexOf(`var ${name} = `) + name.length + 7));
   assert.strictEqual(num("GUIDE_PT"), num("strokePt"));
@@ -112,3 +112,26 @@ function lineWidthStore(constNames, raw) {
 // 보조선을 저장한 적이 없으면 가려진 모서리 점선이 복원된 모서리 두께로 시작한다 (저장값 복원 뒤, 불러오기 전)
 assert.ok(/applySettings\(\);[\s\S]*?GUIDE_PT = strokePt;\s*loadLineWidths\(\);/.test(source), "hidden edges start from restored edge width");
 console.log("solid3d checks passed");
+
+// 길이 글자·각 표시·단면 칠하기 (웹 math-solid3d.test.js와 같은 경우)
+{
+  let d = api({ text: { lengthText: "B1B2:4, A1B1:3" } }).buildSolid3D();
+  assert.deepStrictEqual(d.notes, []);
+  assert.ok(d.texts.some((t) => t.text === "4") && d.texts.some((t) => t.text === "3"));
+  assert.ok(api({ text: { lengthText: "B1X:4" } }).buildSolid3D().notes.length > 0);
+  const pyr = { preset: 2, text: { pointsText: "H(0,0,0)", dashedText: "P-H-A1" } };
+  const plain = api(pyr).buildSolid3D();
+  d = api({ preset: 2, text: { pointsText: "H(0,0,0)", dashedText: "P-H-A1", angleText: "PHA1:R" } }).buildSolid3D();
+  assert.deepStrictEqual(d.notes, []);
+  assert.strictEqual(d.lines.length, plain.lines.length + 1);
+  assert.ok(d.lines.some((l) => l.kind === "mark" && l.points.length === 3), "직각 표시");
+  d = api({ preset: 2, text: { pointsText: "H(0,0,0)", angleText: "PA1H:60°" } }).buildSolid3D();
+  assert.ok(d.lines.some((l) => l.kind === "mark" && l.points.length >= 8), "호");
+  assert.ok(d.texts.some((t) => t.text === "60°"));
+  d = api({ preset: 2, text: { fillText: "PA1A3:30, A1A2A3" } }).buildSolid3D();
+  assert.deepStrictEqual(d.notes, []);
+  assert.deepStrictEqual([d.lines[0].kind, d.lines[0].fillK, d.lines[1].fillK], ["fill", 30, 20], "칠하기는 맨 아래");
+  assert.ok(api({ text: { fillText: "A1B1" } }).buildSolid3D().notes.length > 0);
+  assert.ok(source.includes('p[0] === "v2" && p.length === 24') && source.includes('p[0] === "v1" && p.length === 21'), "설정 v2, v1도 읽는다");
+}
+console.log("solid3d marks ok");

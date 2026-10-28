@@ -6340,6 +6340,10 @@
         "yAxis": "up"
       },
       "properties": {
+        "angleText": {
+          "type": "string",
+          "default": ""
+        },
         "axisPt": {
           "type": "number",
           "default": 0.4
@@ -6363,6 +6367,10 @@
           "default": 25,
           "minimum": 5,
           "maximum": 80
+        },
+        "fillText": {
+          "type": "string",
+          "default": ""
         },
         "fontPt": {
           "type": "number",
@@ -6391,6 +6399,10 @@
           "default": 1.2,
           "minimum": 0,
           "maximum": 5
+        },
+        "lengthText": {
+          "type": "string",
+          "default": ""
         },
         "pointsText": {
           "type": "string",
