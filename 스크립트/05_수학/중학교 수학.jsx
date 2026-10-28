@@ -1852,6 +1852,7 @@ var SCRIPT_KEY = "MiddleMath";
             var showIntersections = false;
             var showIdentity = false;
             var asymptoteText = "";
+            var tangentText = "";   // 접선 1:2 = 1번 식의 x=2에서의 접선
             var nameTexts = ["", "", "", "", ""];   // 그래프마다 직접 쓰는 이름(l, C_1 …)
             var nameAts = [0, 0, 0, 0, 0];           // 이름 자리: 0 오른쪽 끝, 1 왼쪽 끝(바깥), 2 왼쪽 끝(안쪽)
             var lineText = "";                        // 실선 수직·수평선 x=2, y=-1
@@ -1941,6 +1942,11 @@ var SCRIPT_KEY = "MiddleMath";
             var asymptoteInput = asymptoteRow.add("edittext", undefined, asymptoteText);
             asymptoteInput.preferredSize.width = 290;
             asymptoteInput.helpTip = "x=1, y=2처럼 쉼표로 나눈다 (x=π/2도 된다). 점선으로 그린다";
+            var tangentRow = functionPanel.add("group");
+            tangentRow.add("statictext", undefined, "접선:");
+            var tangentInput = tangentRow.add("edittext", undefined, tangentText);
+            tangentInput.preferredSize.width = 290;
+            tangentInput.helpTip = "식 번호:x. 1:2는 1번 식의 x=2에서의 접선(그래프 굵기 직선, 접점에 점). 쉼표로 여러 개: 1:2, 2:-1/2";
             var lineRow = functionPanel.add("group");
             lineRow.add("statictext", undefined, "실선:");
             var lineInput = lineRow.add("edittext", undefined, lineText);
@@ -2051,6 +2057,7 @@ var SCRIPT_KEY = "MiddleMath";
             intersectCheck.onClick = function() { showIntersections = intersectCheck.value; updatePreview(); };
             identityCheck.onClick = function() { showIdentity = identityCheck.value; updatePreview(); };
             asymptoteInput.onChanging = function() { asymptoteText = asymptoteInput.text; updatePreview(); };
+            tangentInput.onChanging = function() { tangentText = tangentInput.text; updatePreview(); };
             tickCheck.onClick = function() { showTicks = tickCheck.value; updatePreview(); };
             lineInput.onChanging = function() { lineText = lineInput.text; updatePreview(); };
             lineNamesCheck.onClick = function() { showLineNames = lineNamesCheck.value; updatePreview(); };
@@ -2122,7 +2129,7 @@ var SCRIPT_KEY = "MiddleMath";
 
             function buildPreview() {
                 var problems = [];
-                var functions = [];
+                var functions = [], byIndex = [];
                 var variables = {a: parameterA, b: parameterB, c: parameterC};
                 for (var i = 0; i < FUNCTION_COUNT; i++) {
                     if (String(functionTexts[i]).replace(/\s/g, "") === "") continue;
@@ -2132,7 +2139,20 @@ var SCRIPT_KEY = "MiddleMath";
                     var body = braces ? braces.body : functionTexts[i];
                     var compiled = braces && domain === null ? null : compileFunction(body, variables);
                     if (compiled === null) problems.push((i + 1) + "번 식");
-                    else functions.push({ fn: domain ? restrict(compiled, domain) : compiled, raw: compiled, domain: domain, label: String(body).replace(/^\s+|\s+$/g, ""), name: String(nameTexts[i]).replace(/^\s+|\s+$/g, ""), at: nameAts[i] });
+                    else {
+                        functions.push({ fn: domain ? restrict(compiled, domain) : compiled, raw: compiled, domain: domain, label: String(body).replace(/^\s+|\s+$/g, ""), name: String(nameTexts[i]).replace(/^\s+|\s+$/g, ""), at: nameAts[i] });
+                        byIndex[i] = functions[functions.length - 1].fn;
+                    }
+                }
+                // 접선: 식 번호와 x. 없는 식이거나 그 점에서 미분할 수 없으면 알린다 (웹 math-coord-plane.js와 같다)
+                var tangents = [], tangentItems = parseTangents(tangentText);
+                if (tangentItems === null) problems.push("접선");
+                else {
+                    for (var ti = 0; ti < tangentItems.length; ti++) {
+                        var tfn = byIndex[tangentItems[ti].index];
+                        if (!tfn || tangentSegment(tfn, tangentItems[ti].x, -1e9, 1e9, -1e9, 1e9) === null) problems.push("접선 " + (tangentItems[ti].index + 1) + ":" + tangentItems[ti].xText);
+                        else tangents.push({fn: tfn, x: tangentItems[ti].x});
+                    }
                 }
                 // 점·글자 좌표 안의 f(3), g(1/2) 같은 함수값을 식의 값으로 바꾼다
                 var values = functionValueTable(functionTexts, variables);
@@ -2165,7 +2185,7 @@ var SCRIPT_KEY = "MiddleMath";
                 var drawing = buildPlane({
                     xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unit: unitMm * MM_TO_PT,
                     tick: TICK_MM * MM_TO_PT, grid: showGrid, numbers: showNumbers,
-                    functions: functions, parametric: parametric, nameStyle: nameStyle, hideAxes: hideAxes, region: region || [],
+                    functions: functions, parametric: parametric, tangents: tangents, nameStyle: nameStyle, hideAxes: hideAxes, region: region || [],
                     points: points.list, coords: showCoords, guides: showGuides,
                     piAxis: piAxis, intersections: showIntersections, identity: showIdentity, asymptotes: asymptotes || [], fontSize: fontPt,
                     ticks: showTicks, solidLines: solidLines || [], lineNames: showLineNames, notes: notesWithNames(notes.list),
@@ -2502,6 +2522,16 @@ var SCRIPT_KEY = "MiddleMath";
                         dots.push(cross);
                         texts.push({ text: String.fromCharCode(65 + c), at: cross, dir: [0.7071, 0.7071], clear: 0, upright: true });
                     }
+                }
+
+                // 접선: 그래프 굵기 직선(상자로 자름)과 접점
+                var tangents = opt.tangents || [];
+                for (var tg = 0; tg < tangents.length; tg++) {
+                    var touch = tangentSegment(tangents[tg].fn, tangents[tg].x, xLo, plotHi, opt.yMin, opt.yMax);
+                    if (touch === null) continue;
+                    lines.push(straight([[touch[0][0] * u, touch[0][1] * u], [touch[1][0] * u, touch[1][1] * u]], "graph"));
+                    var ty0 = tangents[tg].fn(tangents[tg].x);
+                    if (tangents[tg].x >= xLo && tangents[tg].x <= plotHi && ty0 >= opt.yMin && ty0 <= opt.yMax) dots.push([tangents[tg].x * u, ty0 * u]);
                 }
 
                 // 정의역 끝점: 포함은 ●, 빠짐은 ○ (끝점이 그림 상자 안에 있을 때만)
@@ -3308,6 +3338,44 @@ var SCRIPT_KEY = "MiddleMath";
                 };
             }
 
+            // 접선 "1:2, 2:-1/2" → [{index(0부터), x, xText}]. 비면 []. 식 번호(1~5)나 x를 못 읽으면 null
+            function parseTangents(text) {
+                var parts = String(text).split(";").join(",").split(","), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var item = parts[i].replace(/\s/g, "");
+                    if (item === "") continue;
+                    var colon = item.indexOf(":");
+                    if (colon < 0) return null;
+                    var index = parseInt(item.substring(0, colon), 10), xText = item.substring(colon + 1);
+                    var x = xText === "" ? null : evaluateNumber(xText);
+                    if (!(index >= 1 && index <= 5) || String(index) !== item.substring(0, colon) || x === null) return null;
+                    out.push({ index: index - 1, x: x, xText: xText });
+                }
+                return out;
+            }
+
+            // 함수 fn의 x=a에서의 접선을 상자 [x0,x1]×[y0,y1]로 자른 선분 [[x,y],[x,y]]. 정의되지 않거나 꺾인 점(|x|의 꼭짓점)이거나
+            // 상자를 지나지 않으면 null
+            function tangentSegment(fn, a, x0, x1, y0, y1) {
+                var h = 1e-5 * (1 + Math.abs(a)), ya = fn(a), yl = fn(a - h), yr = fn(a + h);
+                if (!isFinite(ya) || !isFinite(yl) || !isFinite(yr)) return null;
+                var m = (yr - yl) / (2 * h), left = (ya - yl) / h, right = (yr - ya) / h;
+                if (Math.abs(left - right) > 1e-3 * (1 + Math.abs(m))) return null;
+                var lo = -Infinity, hi = Infinity, d = [1, m], p = [a, ya];
+                var checks = [[-d[0], p[0] - x0], [d[0], x1 - p[0]], [-d[1], p[1] - y0], [d[1], y1 - p[1]]];
+                for (var i = 0; i < 4; i++) {
+                    var q = checks[i][0], r = checks[i][1];
+                    if (q === 0) {
+                        if (r < 0) return null;
+                        continue;
+                    }
+                    var t = r / q;
+                    if (q < 0) lo = Math.max(lo, t); else hi = Math.min(hi, t);
+                }
+                if (!(lo < hi)) return null;
+                return [[p[0] + lo * d[0], p[1] + lo * d[1]], [p[0] + hi * d[0], p[1] + hi * d[1]]];
+            }
+
             function parsePointList(text) {
                 var s = String(text);
                 var list = [], bad = [];
@@ -3476,7 +3544,7 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v6", xMin, xMax, yMin, yMax, unitMm, fontPt,
+                    "v7", xMin, xMax, yMin, yMax, unitMm, fontPt,
                     showGrid ? "1" : "0", showNumbers ? "1" : "0", nameStyle,
                     encodeList(functionTexts),
                     encodeURIComponent(pointsText), showCoords ? "1" : "0", showGuides ? "1" : "0",
@@ -3485,7 +3553,8 @@ var SCRIPT_KEY = "MiddleMath";
                     hideAxes ? "1" : "0", encodeURIComponent(regionText), regionK,
                     encodeList(nameTexts), nameAts.join(","), encodeURIComponent(lineText), showLineNames ? "1" : "0",
                     encodeURIComponent(labelText), encodeURIComponent(segmentText), encodeURIComponent(regionText2), regionK2, showTicks ? "1" : "0", parameterA, parameterB, parameterC,
-                    encodeURIComponent(parametricX), encodeURIComponent(parametricY), encodeURIComponent(parametricMin), encodeURIComponent(parametricMax)
+                    encodeURIComponent(parametricX), encodeURIComponent(parametricY), encodeURIComponent(parametricMin), encodeURIComponent(parametricMax),
+                    encodeURIComponent(tangentText)
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -3501,8 +3570,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다. v6 = v5 + 매개변수곡선 4칸
-                if (!((p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
+                // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다. v6 = v5 + 매개변수곡선 4칸, v7 = v6 + 접선
+                if (!((p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
                 try {
                     xMin = Math.round(restoreNumber(p[1], xMin, -20, 0));
                     xMax = Math.round(restoreNumber(p[2], xMax, 1, 20));
@@ -3530,7 +3599,7 @@ var SCRIPT_KEY = "MiddleMath";
                     hideAxes = p[21] === "1";
                     regionText = decodeURIComponent(p[22]);
                     regionK = restoreNumber(p[23], regionK, 5, 60);
-                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6") {
+                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7") {
                         var savedNames = p[24].split(",");
                         if (savedNames.length === FUNCTION_COUNT) {
                             for (var sn = 0; sn < FUNCTION_COUNT; sn++) nameTexts[sn] = decodeURIComponent(savedNames[sn]);
@@ -3546,12 +3615,13 @@ var SCRIPT_KEY = "MiddleMath";
                         regionText2 = decodeURIComponent(p[30]);
                         regionK2 = restoreNumber(p[31], regionK2, 5, 60);
                         showTicks = p[32] === "1";
-                        if (p[0] === "v5" || p[0] === "v6") {
+                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7") {
                             parameterA = restoreNumber(p[33], parameterA, -10, 10);
                             parameterB = restoreNumber(p[34], parameterB, -10, 10);
                             parameterC = restoreNumber(p[35], parameterC, -10, 10);
                         }
-                        if (p[0] === "v6") {
+                        if (p[0] === "v7") tangentText = decodeURIComponent(p[40]);
+                        if (p[0] === "v6" || p[0] === "v7") {
                             parametricX = decodeURIComponent(p[36]);
                             parametricY = decodeURIComponent(p[37]);
                             parametricMin = decodeURIComponent(p[38]);

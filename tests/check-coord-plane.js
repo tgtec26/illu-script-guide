@@ -32,7 +32,7 @@ function extractFunction(name) {
 
 const names = ["compileFunction", "evaluateNumber", "parsePointList", "plotFunction", "toBezier", "formulaDisplay", "buildPlane", "straight",
   "piLabel", "findIntersections", "parseAsymptotes", "graphSymbol", "parseRegion", "regionPolygons", "dropCollinear",
-  "functionValueTable", "substituteFunctionValues", "parseSolidLines", "parseSegments", "hasHangul", "notesWithNames", "plotParametric", "toBezierCurve", "parseDomain", "restrict", "splitDomain"];
+  "functionValueTable", "substituteFunctionValues", "parseSolidLines", "parseSegments", "hasHangul", "notesWithNames", "plotParametric", "toBezierCurve", "parseDomain", "restrict", "splitDomain", "parseTangents", "tangentSegment"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
@@ -279,7 +279,7 @@ assert.ok(source.includes("var FUNCTION_COUNT = 5;"));
   assert.strictEqual(withTicks.lines.length - noTicks.lines.length, 20);
   assert.strictEqual(g.buildPlane(base).lines.length, withTicks.lines.length, "옛 호출은 눈금선이 있다");
   // 설정 저장 형식: v6(= v5 + 매개변수곡선 4칸)으로 쓰고, v5·v4와 옛 v3를 모두 읽는다
-  assert.ok(source.includes('"v6", xMin, xMax,') && source.includes('p[0] === "v6" && p.length === 40') && source.includes('p[0] === "v5" && p.length === 36') && source.includes('p[0] === "v3" && p.length === 24'));
+  assert.ok(source.includes('"v7", xMin, xMax,') && source.includes('p[0] === "v7" && p.length === 41') && source.includes('p[0] === "v6" && p.length === 40') && source.includes('p[0] === "v5" && p.length === 36') && source.includes('p[0] === "v3" && p.length === 24'));
 }
 
 // 선 두께: "/lines"는 v2 + LINE_KEYS 9칸(10필드). v1(축·그래프·보조선)도 읽고, 필드 수가 다르면 무시한다
@@ -389,12 +389,21 @@ const d = g.buildPlane({ xMin: -5, xMax: 5, yMin: -5, yMax: 5, unit: 10, tick: 2
   const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-coord-plane.js");
   if (fs.existsSync(webPath)) {
     const web = fs.readFileSync(webPath, "utf8");
-    for (const name of ["parseDomain", "restrict", "splitDomain"]) {
+    for (const name of ["parseDomain", "restrict", "splitDomain", "parseTangents", "tangentSegment"]) {
       const start = web.indexOf(`export function ${name}(`), end = web.indexOf("\n}\n", start) + 2;
       const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
       assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
     }
   }
+}
+
+// 접선 1:2 (웹과 같은 경우)
+{
+  assert.deepStrictEqual(g.parseTangents("1:2, 2:-1/2"), [{ index: 0, x: 2, xText: "2" }, { index: 1, x: -0.5, xText: "-1/2" }]);
+  for (const bad of ["0:1", "6:1", "1:", "1:a", "2"]) assert.strictEqual(g.parseTangents(bad), null, bad);
+  const seg = g.tangentSegment((x) => x * x, 1, -5, 5, -5, 5);
+  for (const [x, y] of seg) near(y, 2 * x - 1, "y = 2x - 1", 1e-6);
+  assert.strictEqual(g.tangentSegment((x) => Math.abs(x), 0, -5, 5, -5, 5), null, "|x| corner");
 }
 
 console.log("coord plane checks passed");
@@ -419,15 +428,15 @@ for (const [expr, value] of [["sqrt(9)", 3], ["arcsin(1)", Math.PI/2], ["sec(0)"
   var functionTexts=["y=2x+1","","","",""],pointsText="",showCoords=true,showGuides=true,offsetXmm=0,offsetYmm=0,previewEnabled=true;
   var piAxis=false,showIntersections=false,showIdentity=false,asymptoteText="",hideAxes=false,regionText="",regionK=15;
   var nameTexts=["","","","",""],nameAts=[0,0,0,0,0],lineText="",showLineNames=true,labelText="",segmentText="",regionText2="",regionK2=35,showTicks=true;
-  var parameterA=1,parameterB=0,parameterC=0,parametricX="",parametricY="",parametricMin="0",parametricMax="2π"; function saveLineWidths() {}`;
+  var parameterA=1,parameterB=0,parameterC=0,parametricX="",parametricY="",parametricMin="0",parametricMax="2π",tangentText=""; function saveLineWidths() {}`;
   const body = prelude + ["saveSettings","encodeList","applySettings","restoreNumber","parseNumber","clamp"].map(extractFunction).join("\n") +
     `return {saveSettings,applySettings,set:function(a,b,c){parameterA=a;parameterB=b;parameterC=c;parametricX="3cos(t)";parametricY="2sin(t)";parametricMax="π";},get:function(){return [parameterA,parameterB,parameterC];},curve:function(){return [parametricX,parametricY,parametricMin,parametricMax];}};`;
   const make = () => new Function("app",body)(app);
   const first = make(); first.set(2,-3,0.5); first.saveSettings();
-  assert.equal(store.T.split("|").length,40);
+  assert.equal(store.T.split("|").length,41);
   const restored = make(); restored.applySettings(); assert.deepEqual(restored.get(),[2,-3,0.5]);
   assert.deepEqual(restored.curve(),["3cos(t)","2sin(t)","0","π"], "매개변수곡선도 저장한다");
-  const v5 = store.T.split("|").slice(0,36).join("|").replace(/^v6/,"v5");
+  const v5 = store.T.split("|").slice(0,36).join("|").replace(/^v7/,"v5");
   store.T = v5;
   const fromV5 = make(); fromV5.applySettings(); assert.deepEqual(fromV5.get(),[2,-3,0.5]); assert.deepEqual(fromV5.curve(),["","","0","2π"]);
   store.T = v5.split("|").slice(0,33).join("|").replace(/^v5/,"v4");
