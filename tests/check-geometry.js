@@ -29,12 +29,13 @@ function extractFunction(name) {
 
 const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readChains", "readPairTexts", "circumcircle", "readCircles", "readEllipses", "readAngles", "trimText", "curvePoints", "ccwSweep", "readArcs", "readFills",
   "readChainPaths", "dimensionCurve", "display", "straight", "circleLine", "unitVector", "offsetPoint", "arcPoints", "rightAnglePoints", "buildGeometry", "clamp", "parseNumber",
-  "ConstructFail", "readConstructions", "constructPoint", "touchingCircle", "readAreas", "measureLength", "measureAngle", "measureArea", "readLoci", "withT", "traceLocus", "plotParametric", "toBezierCurve"];
+  "ConstructFail", "readConstructions", "constructPoint", "touchingCircle", "readAreas", "measureLength", "measureAngle", "measureArea", "readLoci", "withT", "traceLocus", "plotParametric", "toBezierCurve", "usesLater"];
 const make = new Function("state", `
+var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "arcText", "fillText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "areaText"];
 var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, SYMBOL_MM = 0.6, TRACE_MM = 3, KAPPA = 0.5522847498;
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
 var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
-var text = state.text, showNames = state.showNames, showAxes = state.showAxes, showDimensions = !!state.showDimensions, dimensionRiseMm = 3, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
+var text = state.text, stepCount = state.stepCount || 0, showNames = state.showNames, showAxes = state.showAxes, showDimensions = !!state.showDimensions, dimensionRiseMm = 3, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
 const api = (text = {}, extra = {}) => make(Object.assign({
@@ -326,7 +327,7 @@ function lineWidthStore(constNames, raw) {
   assert.strictEqual(store(saved.slice(0, 27).join("|")).text.pointsText, "P0", "칸 수가 틀리면 무시");
 }
 require("./es3-lint")(["readChainPaths", "dimensionCurve", "ConstructFail", "readConstructions", "constructPoint", "readAreas", "measureLength", "measureAngle", "measureArea",
-  "readLoci", "traceLocus", "withT", "plotParametric", "toBezierCurve"].map(extractFunction).join("\n"), "기하 새 도형 함수");
+  "readLoci", "traceLocus", "withT", "plotParametric", "toBezierCurve", "usesLater"].map(extractFunction).join("\n"), "기하 새 도형 함수");
 new Function(bundle);
 console.log("geometry checks passed");
 
@@ -447,3 +448,21 @@ console.log("geometry measure ok");
   }
 }
 console.log("geometry locus ok");
+
+// 작도 단계 (웹 math-geometry.test.js와 같은 경우)
+{
+  const text = { pointsText: "A(0,0) B(4,0)", constructText: "M=mid(A,B), H=rot(B,M,90)", segmentText: "A-B, M-H", arcText: "A:~H", angleText: "AMH:R", lengthText: "AM:2, MH:?", dotText: "M, H", labelDirText: "H:u" };
+  const names = (d) => d.texts.filter((t) => t.upright).map((t) => t.text).sort();
+  const all = api(text).buildGeometry(), one = api(text, { stepCount: 1 }).buildGeometry();
+  assert.deepStrictEqual([all.notes, one.notes], [[], []]);
+  assert.deepStrictEqual(names(one), ["A", "B", "M"]);
+  assert.deepStrictEqual(names(all), ["A", "B", "H", "M"]);
+  assert.ok(one.lines.length < all.lines.length);
+  assert.deepStrictEqual(names(api(text, { stepCount: 9 }).buildGeometry()), ["A", "B", "H", "M"]);
+  assert.ok(api(Object.assign({}, text, { segmentText: "A-X" }), { stepCount: 1 }).buildGeometry().notes.length > 0, "원래 틀린 항목은 알린다");
+  // 단계마다 같은 틀: A 글자 자리가 같다
+  const at = (d, n) => d.texts.find((t) => t.text === n).at;
+  assert.deepStrictEqual(at(one, "A"), at(all, "A"));
+  assert.ok(source.includes("작도 단계"), "대화상자");
+}
+console.log("geometry steps ok");

@@ -2171,6 +2171,7 @@ var SCRIPT_KEY = "HighGeometry";
             var GUIDE_PT = 0.3;
             var MARK_PT = 0.3;
             var MARK_GAP_MM = 0.7;
+            var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "arcText", "fillText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "areaText"];
             var TRACE_MM = 3;      // 작도 흔적 호가 지나는 점 양쪽으로 뻗는 길이
             var SYMBOL_MM = 0.6;   // 같은 각 기호(•·∘·×)의 반지름·반 너비 (• 지름 약 1 mm)
             var DOT_RADIUS_MM = 0.6;
@@ -2192,6 +2193,7 @@ var SCRIPT_KEY = "HighGeometry";
             var text = {pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "",
                 angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: "", constructText: "", areaText: "", locusText: ""};
             var showNames = true;
+            var stepCount = 0;   // 작도 단계: 0이면 모두, k면 작도 칸의 앞 k개만 (보기용이라 저장하지 않는다)
             var showAxes = false;
             var sizeMm = 50;
             var fontPt = 8;
@@ -2222,6 +2224,8 @@ var SCRIPT_KEY = "HighGeometry";
             addTextRow(pointPanel, "점", "pointsText", "점 이름과 좌표: A(0,3) B(0,0) C(4,0). 같은 길이 단위로 쓴다 (√13, 1/2, π도 된다). 이름은 O_1처럼 아래첨자도 된다");
             addTextRow(pointPanel, "작도", "constructText", "이름=명령(…)으로 점을 계산해 만든다(앞에서부터 차례로, 만든 점은 다른 칸에서 쓴다). mid(A,B) 중점, div(A,B,2:1) 내분점(2:-1은 외분점), along(A,B,3) A에서 B 쪽으로 3, foot(P,A,B) 수선의 발, cross(AB,CD) 교점(직선 AB, P//AB 평행선, P⊥AB 수선, 원 ABC·O:3·O~A; 둘째 교점은 cross(…,2), 안 쓰면 이미 있는 점이 아닌 쪽), rot(P,O,60) 반시계 60° 회전, ref(P,A,B)·ref(P,O) 대칭점, centroid·circum·incenter·ortho(A,B,C) 무게중심·외심·내심·수심, bisect(A,B,C) ∠B의 이등분선과 AC의 교점(bisect(A,B,C,out)은 바깥각), excenter(A,B,C) A의 맞은편 방심, tan(P,O~A) P에서 원에 그은 접선의 접점(tan(P,O~A,2)는 다른 접점)");
             addTextRow(pointPanel, "자취", "locusText", "작도 칸에 t를 쓰고(P=rot(A,O,t), P=along(A,B,t)) 여기에 P:0~360처럼 쓰면 t를 0부터 360까지 바꿔 가며 점 P가 지나는 길을 그린다. P:0~360:90은 그림 속 점 P를 t=90 자리에 둔다(없으면 시작값)");
+            var stepControls = addValueRow(pointPanel, "작도 단계", "", stepCount, 0, 20, 1, 0);
+            stepControls.input.helpTip = "0이면 모두. k로 두면 작도 칸의 앞 k개만 계산하고 아직 안 만든 점을 쓰는 선·표시는 빼서 작도 순서 그림(①, ②, …)을 만든다. 단계마다 크기·자리는 전체 그림과 같다";
             addTextRow(pointPanel, "선분", "segmentText", "이어 그릴 점 이름: A-B-C-A, A-D (쉼표로 나눈다)");
             addTextRow(pointPanel, "점선", "dashedText", "점선으로 이을 점 이름: A-D");
             addTextRow(pointPanel, "화살표", "arrowText", "끝에 화살촉이 있는 선분(벡터). O-A는 O에서 A로, O-A-B는 O→A, A→B (쉼표로 여러 개)");
@@ -2272,6 +2276,7 @@ var SCRIPT_KEY = "HighGeometry";
             nameCheck.onClick = function() { showNames = nameCheck.value; updatePreview(); };
             axesCheck.onClick = function() { showAxes = axesCheck.value; updatePreview(); };
             bindValueRow(sizeControls, function(value) { sizeMm = value; }, DEFAULTS.sizeMm);
+            bindValueRow(stepControls, function(value) { stepCount = Math.round(value); }, 0);
             bindValueRow(fontControls, function(value) { fontPt = value; }, DEFAULTS.fontPt);
             bindValueRow(strokeControls, function(value) { strokePt = value; }, DEFAULTS.strokePt);
             bindValueRow(gapControls, function(value) { labelGapMm = value; }, DEFAULTS.labelGapMm);
@@ -2751,14 +2756,24 @@ var SCRIPT_KEY = "HighGeometry";
                 return out;
             }
 
+            // 작도 단계: 이 항목이 아직 만들지 않은 점(later)을 쓰는지. 대문자로 시작하는 이름 덩어리마다 지금 있는 이름(known)으로는
+            // 못 읽고 나중 이름까지 넣으면 읽히면 나중 점을 쓰는 것이다 (A-X처럼 원래 틀린 항목은 그대로 두어 알린다)
+            function usesLater(item, known, later) {
+                var runs = item.match(/[A-Z][A-Za-z0-9_']*/g) || [];
+                for (var i = 0; i < runs.length; i++) {
+                    if (tokenizeNames(runs[i], known) === null && tokenizeNames(runs[i], known.concat(later)) !== null) return true;
+                }
+                return false;
+            }
+
             // 자취 하나: 처음 점들(baseTable)에서 작도 글의 t만 바꿔 다시 계산한 점이 지나는 곡선 조각들. 한 번도 못 구하면 null
-            function traceLocus(locus, baseTable, baseNames) {
+            function traceLocus(locus, baseTable, baseNames, constructText) {
                 var lastT = NaN, lastP = null;
                 function at(t) {
                     if (t !== lastT) {
                         var copy = {}, copyNames = baseNames.slice();
                         for (var i = 0; i < baseNames.length; i++) copy[baseNames[i]] = baseTable[baseNames[i]];
-                        readConstructions(withT(text.constructText, t), copy, copyNames, []);
+                        readConstructions(withT(constructText, t), copy, copyNames, []);
                         lastT = t;
                         lastP = copy.hasOwnProperty(locus.name) ? copy[locus.name] : null;
                     }
@@ -3433,7 +3448,14 @@ var SCRIPT_KEY = "HighGeometry";
                 return [a, [a[0] + w[0] * size, a[1] + w[1] * size], c];
             }
 
-            function buildGeometry() {
+            function buildGeometry(frame) {
+                // 작도 단계 그림은 전체 그림의 틀(크기·가운데)을 쓴다: 단계마다 같은 자리에 겹쳐 맞는다
+                if (stepCount > 0 && !frame) {
+                    var keepStep = stepCount;
+                    stepCount = 0;
+                    frame = buildGeometry().frame;
+                    stepCount = keepStep;
+                }
                 var out = {lines: [], arrows: [], dots: [], texts: [], notes: []};
                 var notes = out.notes;
                 var read = readPoints(text.pointsText, notes);
@@ -3445,25 +3467,42 @@ var SCRIPT_KEY = "HighGeometry";
                 // 자취: 작도 칸의 t를 바꿔 가며 다시 계산한다. 그림 속 t는 첫 자취의 셋째 값(없으면 시작값), 자취 칸을 못 읽으면 t = 0 (웹 math-geometry.js와 같다)
                 var loci = readLoci(text.locusText, notes), baseNames = names.slice(), baseTable = {};
                 for (var bn = 0; bn < names.length; bn++) baseTable[names[bn]] = table[names[bn]];
+                // 작도 단계 k: 작도 칸의 앞 k개만 계산한다
+                var constructItems = splitItems(text.constructText), constructText = stepCount > 0 ? constructItems.slice(0, stepCount).join(", ") : text.constructText;
                 var tNow = loci.length ? loci[0].t : (text.locusText.replace(/\s/g, "") !== "" ? 0 : null);
-                readConstructions(tNow === null ? text.constructText : withT(text.constructText, tNow), table, names, notes);
+                readConstructions(tNow === null ? constructText : withT(constructText, tNow), table, names, notes);
+                // 아직 만들지 않은 점을 쓰는 항목은 알리지 않고 뺀다 (웹 math-geometry.js와 같다)
+                var later = [], src = {}, sf, si;
+                for (si = stepCount > 0 ? stepCount : constructItems.length; si < constructItems.length; si++) {
+                    var laterName = constructItems[si].split("=")[0].replace(/\s/g, "");
+                    if (laterName !== "" && !table.hasOwnProperty(laterName)) later.push(laterName);
+                }
+                for (sf in text) if (text.hasOwnProperty(sf)) src[sf] = text[sf];
+                for (sf = 0; later.length > 0 && sf < STEP_FIELDS.length; sf++) {
+                    var stepItems = splitItems(text[STEP_FIELDS[sf]]), kept = [];
+                    for (si = 0; si < stepItems.length; si++) if (!usesLater(stepItems[si], names, later)) kept.push(stepItems[si]);
+                    src[STEP_FIELDS[sf]] = kept.join(", ");
+                }
                 var locusCurves = [];
                 for (var li = 0; li < loci.length; li++) {
-                    var traced = table.hasOwnProperty(loci[li].name) ? traceLocus(loci[li], baseTable, baseNames) : null;
+                    var isLater = false;
+                    for (si = 0; si < later.length; si++) if (later[si] === loci[li].name) isLater = true;
+                    if (isLater) continue;
+                    var traced = table.hasOwnProperty(loci[li].name) ? traceLocus(loci[li], baseTable, baseNames, constructText) : null;
                     if (traced === null) { notes.push("자취 " + loci[li].item); continue; }
                     for (var lc = 0; lc < traced.length; lc++) if (traced[lc].length >= 2) locusCurves.push(traced[lc]);
                 }
-                var segments = readChainPaths(text.segmentText, names, "선분", notes);
-                var dashed = readChainPaths(text.dashedText, names, "점선", notes);
-                var circles = readCircles(text.circleText, table, names, notes);
-                var ellipses = readEllipses(text.ellipseText, table, names, notes);
-                var arrows = readChains(text.arrowText, names, "화살표", notes);
-                var arcs = readArcs(text.arcText, table, names, notes);
-                var fills = readFills(text.fillText, table, names, notes);
-                var angles = readAngles(text.angleText, names, notes);
-                var ticks = readPairTexts(text.tickText, names, "눈금", notes);
-                var lengths = readPairTexts(text.lengthText, names, "길이", notes);
-                var areas = readAreas(text.areaText, names, notes);
+                var segments = readChainPaths(src.segmentText, names, "선분", notes);
+                var dashed = readChainPaths(src.dashedText, names, "점선", notes);
+                var circles = readCircles(src.circleText, table, names, notes);
+                var ellipses = readEllipses(src.ellipseText, table, names, notes);
+                var arrows = readChains(src.arrowText, names, "화살표", notes);
+                var arcs = readArcs(src.arcText, table, names, notes);
+                var fills = readFills(src.fillText, table, names, notes);
+                var angles = readAngles(src.angleText, names, notes);
+                var ticks = readPairTexts(src.tickText, names, "눈금", notes);
+                var lengths = readPairTexts(src.lengthText, names, "길이", notes);
+                var areas = readAreas(src.areaText, names, notes);
                 var dotNames = [], i, k, t;
                 // 측정: 길이·각 글자에 ?를 쓰면 좌표로 잰 값을 쓴다 (AB:? → √13, BAC:? → 60°. 웹 math-geometry.js와 같다)
                 for (i = 0; i < lengths.length; i++) {
@@ -3477,13 +3516,13 @@ var SCRIPT_KEY = "HighGeometry";
                     var w1 = [mp[0] - mv[0], mp[1] - mv[1]], w2 = [mq[0] - mv[0], mq[1] - mv[1]];
                     angles[i].text = measureAngle(Math.abs(Math.atan2(w1[0] * w2[1] - w1[1] * w2[0], w1[0] * w2[0] + w1[1] * w2[1])));
                 }
-                var dotItems = splitItems(text.dotText);
+                var dotItems = splitItems(src.dotText);
                 for (i = 0; i < dotItems.length; i++) {
                     t = tokenizeNames(dotItems[i], names);
                     if (t === null) notes.push("점 찍기 " + dotItems[i]); else for (k = 0; k < t.length; k++) dotNames.push(t[k]);
                 }
                 var dirOverride = {}, hiddenNames = {};
-                var dirItems = splitItems(text.labelDirText);
+                var dirItems = splitItems(src.labelDirText);
                 for (i = 0; i < dirItems.length; i++) {
                     var m = dirItems[i].split(":");
                     t = tokenizeNames(m[0], names);
@@ -3526,6 +3565,8 @@ var SCRIPT_KEY = "HighGeometry";
                 }
                 var extent = Math.max(x1 - x0, y1 - y0) || 1;
                 var scale = sizeMm * MM_TO_PT / extent, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+                if (frame) { scale = frame.scale; mx = frame.mx; my = frame.my; }
+                out.frame = {scale: scale, mx: mx, my: my};
                 function T(p) { return [(p[0] - mx) * scale, (p[1] - my) * scale]; }
                 function P(name) { return T(table[name]); }
 

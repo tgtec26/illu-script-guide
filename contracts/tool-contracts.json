@@ -5206,6 +5206,12 @@
           "minimum": 20,
           "maximum": 140
         },
+        "stepCount": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 20
+        },
         "strokePt": {
           "type": "number",
           "default": 0.8,
