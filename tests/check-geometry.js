@@ -146,6 +146,13 @@ const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}
   assert.deepStrictEqual(g.dimensionCurve([0,0], [0,0], [1,0], 3, 2), []);
   assert.strictEqual(g.dimensionCurve([0,0], [2,0], [0,1], 3, 0).length, 1, "짧은 치수선도 흰 사각형으로 가린다");
 }
+// 치수선 clear: 그 변에 같은 길이 눈금이 있으면 눈금이 변 바깥으로 나온 길이(눈금 절반), 없으면 0 (흰 배경이 이만큼 떨어지게 곡선을 높인다, addDimension)
+{
+  const g = api({ pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A", tickText: "AB:1", lengthText: "AB:3 cm, BC:4 cm" }, {showDimensions: true});
+  const clears = {};
+  for (const label of g.buildGeometry().texts.filter(t => t.dimension)) clears[label.text] = label.dimension.clear;
+  assert.deepStrictEqual(clears, { "3 cm": 1.6 * 2.834645669 / 2, "4 cm": 0 });
+}
 // 치수선 양 끝은 변 두께 절반만큼 곡선을 따라 후퇴한다.
 {
   const g = api();

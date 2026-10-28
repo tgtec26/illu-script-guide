@@ -3321,7 +3321,7 @@ var SCRIPT_KEY = "HighGeometry";
                     lengthLabel.clear = tickKeys[lengths[i].names[0] + "|" + lengths[i].names[1]] ? tick / 2 : 0;
                     if (showDimensions) {
                         var rise = dimensionRiseMm * MM_TO_PT;
-                        lengthLabel.dimension = {a: la, b: lb, normal: lnormal, rise: rise};
+                        lengthLabel.dimension = {a: la, b: lb, normal: lnormal, rise: rise, clear: lengthLabel.clear};
                         lengthLabel.at = offsetPoint(lmid, lnormal, rise);
                         lengthLabel.dir = [0, 0];
                         lengthLabel.clear = 0;
@@ -3389,13 +3389,26 @@ var SCRIPT_KEY = "HighGeometry";
                 return [bounds[0] - gap, bounds[1] + gap, bounds[2] + gap, bounds[3] - gap];
             }
 
+            // 기울어진 변은 글상자 모서리가 변 쪽으로 내려와 흰 배경이 도형 변·눈금을 덮으므로,
+            // 흰 배경이 변에서 clear(눈금 끝, 적어도 변 두께 절반)만큼 떨어질 때까지 그 변의 곡선만 높이고 글자도 옮긴다 (중학교 수학.jsx 표기 탭과 같다)
             function addDimension(label) {
                 if (!label.dimension || !label.item) return;
                 var spec = label.dimension;
-                var paths = dimensionCurve(spec.a, spec.b, spec.normal, spec.rise, strokePt / 2);
-                if (paths.length === 0) return;
                 var bounds = dimensionLabelBounds(label.item);
                 var rect = dimensionMaskRect(bounds, DIMENSION_LABEL_GAP_MM * MM_TO_PT);
+                var middle = [(spec.a[0] + spec.b[0]) / 2, (spec.a[1] + spec.b[1]) / 2];
+                var corners = [[rect[0], rect[1]], [rect[2], rect[1]], [rect[0], rect[3]], [rect[2], rect[3]]];
+                var low = Infinity;
+                for (var k = 0; k < corners.length; k++) low = Math.min(low, (corners[k][0] - middle[0]) * spec.normal[0] + (corners[k][1] - middle[1]) * spec.normal[1]);
+                var clear = Math.max(spec.clear || 0, strokePt / 2), rise = spec.rise;
+                if (low < clear) {
+                    var lift = clear - low, dx = spec.normal[0] * lift, dy = spec.normal[1] * lift;
+                    rise += lift;
+                    label.item.translate(dx, dy);
+                    rect = [rect[0] + dx, rect[1] + dy, rect[2] + dx, rect[3] + dy];
+                }
+                var paths = dimensionCurve(spec.a, spec.b, spec.normal, rise, strokePt / 2);
+                if (paths.length === 0) return;
                 var group = previewGroup.groupItems.add();
                 group.name = "치수선 " + label.text;
                 var curve = addPath(paths[0]);
