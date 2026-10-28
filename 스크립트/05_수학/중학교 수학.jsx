@@ -2735,7 +2735,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 그 뒤에 괄호·첨자가 없으면 한 칸 띄운다 (sin x). pi는 π
             function formulaDisplay(text) {
                 var source = String(text).replace(/\s/g, "").split("pi").join("π");
-                var FUNCS = ["sin", "cos", "tan", "log", "ln"];
+                var FUNCS = ["arcsin", "arccos", "arctan", "sqrt", "sin", "cos", "tan", "sec", "log", "ln"];
                 var out = "", sup = [], sub = [], roman = [];
                 for (var i = 0; i < source.length; i++) {
                     var ch = source.charAt(i);
@@ -2789,8 +2789,8 @@ var SCRIPT_KEY = "MiddleMath";
                 var eq = s.indexOf("=");
                 if (eq >= 0) s = s.substring(eq + 1);
                 if (s === "") return null;
-                var NAMES = ["sin", "cos", "tan", "log", "ln", "pi", "e", "x"];
-                var FUNCS = { sin: Math.sin, cos: Math.cos, tan: Math.tan };
+                var NAMES = ["arcsin", "arccos", "arctan", "sqrt", "sin", "cos", "tan", "sec", "log", "ln", "pi", "e", "x"];
+                var FUNCS = { sin: Math.sin, cos: Math.cos, tan: Math.tan, sqrt: Math.sqrt, arcsin: Math.asin, arccos: Math.acos, arctan: Math.atan, sec: function(v) { return 1 / Math.cos(v); } };
                 var pos = 0, absDepth = 0;
                 function peek() { return s.charAt(pos); }
                 function isDigit(ch) { return ch >= "0" && ch <= "9"; }
@@ -2841,7 +2841,7 @@ var SCRIPT_KEY = "MiddleMath";
                     while (startsFactor() && peek() !== "(" && !isFunctionName(nameAt())) node = binary("*", node, power());
                     return node;
                 }
-                function isFunctionName(name) { return name === "sin" || name === "cos" || name === "tan" || name === "log" || name === "ln"; }
+                function isFunctionName(name) { return Object.prototype.hasOwnProperty.call(FUNCS, name) || name === "log" || name === "ln"; }
                 function primary() {
                     var ch = peek();
                     if (ch === "|") {

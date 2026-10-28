@@ -335,3 +335,6 @@ const d = g.buildPlane({ xMin: -5, xMax: 5, yMin: -5, yMax: 5, unit: 10, tick: 2
   assert.ok(Math.abs(rightmost(d.lines, "graph") - ((5 + 0.8) * 10 - 4)) < 1e-3, "graph reaches the arrowhead rear");
 }
 console.log("coord plane checks passed");
+for (const [expr, value] of [["sqrt(9)", 3], ["arcsin(1)", Math.PI/2], ["sec(0)", 1]]) {
+  const fn = g.compileFunction(expr); assert.ok(fn, expr); near(fn(0), value, expr);
+}
