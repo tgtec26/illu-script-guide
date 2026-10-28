@@ -5554,6 +5554,20 @@
           "minimum": 3,
           "maximum": 60
         },
+        "dicePips": {
+          "type": "boolean",
+          "default": false
+        },
+        "faceText": {
+          "type": "string",
+          "default": ""
+        },
+        "fontPt": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 14
+        },
         "graphPt": {
           "type": "number",
           "default": 0.8
@@ -5578,6 +5592,10 @@
           "minimum": 3,
           "maximum": 80
         },
+        "lengthText": {
+          "type": "string",
+          "default": ""
+        },
         "net": {
           "type": "number",
           "default": 1,
@@ -5589,6 +5607,12 @@
           "default": 8,
           "minimum": 2,
           "maximum": 40
+        },
+        "shadeK": {
+          "type": "number",
+          "default": 20,
+          "minimum": 5,
+          "maximum": 60
         },
         "side": {
           "type": "number",

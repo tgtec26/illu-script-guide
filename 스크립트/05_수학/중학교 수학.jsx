@@ -4749,6 +4749,10 @@ var SCRIPT_KEY = "MiddleMath";
             var OUTLINE_PT = 0.8;
             var FOLD_PT = 0.4;
             var FOLD_DASH = [2, 1.5];
+            var LABEL_GAP_MM = 0.8;          // 길이 글자와 모서리 사이
+            var ENG_BASELINE_PT = 0.5;
+            // 길이 글자 칸에 쓰는 크기 항목 이름 (USES에서 전개도 번호·밑면 변 수를 뺀 순서)
+            var LENGTH_NAMES = {side: "한 변", depth: "세로", height: "높이", lateral: "옆모서리", radius: "반지름", slant: "모선"};
             var KINDS = ["정육면체", "직육면체", "각기둥", "각뿔", "원기둥", "원뿔", "정사면체", "정팔면체", "정이십면체"];
             // 각 종류가 쓰는 입력 (다이얼로그에서 나머지는 끈다)
             var USES = [
@@ -4757,6 +4761,11 @@ var SCRIPT_KEY = "MiddleMath";
             ];
 
             var doc = app.activeDocument;
+            var korFont = findTextFont(["SpoqaHanSansNeo-Regular", "GSMediumB1"]);
+            var engFont = findTextFont(["GSMediumB1", "SpoqaHanSansNeo-Regular"]);
+            var italicFont = findTextFont(["GSMediItaC1", "GSMediumB1"]);
+            var eqnFont = findTextFont(["HancomEQN", "GSMediumB1"]);
+            var symbolFont = findTextFont(["Batang", "SpoqaHanSansNeo-Regular"]);
             var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
             var layer = findEditableLayer();
 
@@ -4764,11 +4773,13 @@ var SCRIPT_KEY = "MiddleMath";
             var kind = 0;
             var values = { net: 1, count: 4, side: 15, depth: 10, height: 20, lateral: 20, radius: 8, slant: 20 };
             var dashedFolds = true;
+            // 표시: 면 글자(위에서 아래·왼쪽에서 오른쪽, 끝의 *는 칠하기), 길이 글자(크기 항목 순서), 주사위 눈, 칠하기 농도, 글자 크기
+            var faceText = "", lengthText = "", dicePips = false, shadeK = 20, fontPt = 8;
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-            var initial = {net: values.net, count: values.count, side: values.side, depth: values.depth, height: values.height, lateral: values.lateral, radius: values.radius, slant: values.slant, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+            var initial = {net: values.net, count: values.count, side: values.side, depth: values.depth, height: values.height, lateral: values.lateral, radius: values.radius, slant: values.slant, offsetXmm: offsetXmm, offsetYmm: offsetYmm, shadeK: shadeK, fontPt: fontPt};
             applySettings();
             var LINE_DEFAULTS = {graph: OUTLINE_PT, guide: FOLD_PT};
             loadLineWidths();
@@ -4798,6 +4809,13 @@ var SCRIPT_KEY = "MiddleMath";
             };
             rows.net.input.helpTip = "1~6: 1-4-1형, 7~9: 2-3-1형, 10: 2-2-2형, 11: 3-3형";
             var dashedCheck = sizePanel.add("checkbox", undefined, "접는 선 점선");
+            var markPanel = addPanel(win, "표시");
+            var faceInput = addTextInputRow(markPanel, "면 글자", faceText,
+                "면마다 쓸 글자를 쉼표로 나눠 쓴다. 면 순서는 위에서 아래, 같은 줄은 왼쪽에서 오른쪽(원기둥·원뿔은 원과 부채꼴도 한 면). 비우면 건너뛰고, 끝에 *를 붙이면 그 면을 칠한다 (가,나*,,라). ㉠·(가)·①은 바탕체");
+            var lengthInput = addTextInputRow(markPanel, "길이 글자", lengthText, "");
+            var pipCheck = markPanel.add("checkbox", undefined, "주사위 눈 (정육면체 1~6)");
+            var shadeControls = addValueRow(markPanel, "칠하기 농도", "K", shadeK, 5, 60, 5, 0);
+            var fontControls = addValueRow(markPanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var messageText = win.add("statictext", undefined, " ");
             messageText.preferredSize.width = 360;
 
@@ -4822,6 +4840,12 @@ var SCRIPT_KEY = "MiddleMath";
             };
             for (var key in rows) bindKeyRow(key);
             dashedCheck.onClick = function() { dashedFolds = dashedCheck.value; updatePreview(); };
+            pipCheck.value = dicePips;
+            pipCheck.onClick = function() { dicePips = pipCheck.value; updatePreview(); };
+            faceInput.onChange = function() { faceText = faceInput.text; updatePreview(); };
+            lengthInput.onChange = function() { lengthText = lengthInput.text; updatePreview(); };
+            bindValueRow(shadeControls, function(value) { shadeK = value; }, initial.shadeK);
+            bindValueRow(fontControls, function(value) { fontPt = value; }, initial.fontPt);
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, initial.offsetXmm);
             bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, initial.offsetYmm);
@@ -4856,6 +4880,26 @@ var SCRIPT_KEY = "MiddleMath";
                     for (var i = 0; i < USES[kind].length; i++) if (USES[kind][i] === key) used = true;
                     rows[key].input.parent.enabled = used;
                 }
+                var names = [], keys = lengthKeys();
+                for (var k = 0; k < keys.length; k++) names.push(LENGTH_NAMES[keys[k]]);
+                lengthInput.helpTip = "이 종류의 길이를 " + names.join(", ") + " 순서로 쉼표로 나눠 쓴다 (예: 5 cm, x). 같은 길이의 바깥 모서리 중 가장 아래쪽에 붙고, 반지름은 밑면 원에 반지름 선을, 모선은 부채꼴 변에 붙는다";
+            }
+
+            function lengthKeys() {
+                var keys = [];
+                for (var i = 0; i < USES[kind].length; i++) if (USES[kind][i] !== "net" && USES[kind][i] !== "count") keys.push(USES[kind][i]);
+                return keys;
+            }
+
+            // 라벨 | 넓은 글 입력칸. 글은 Enter·포커스 이동(onChange) 때 반영한다
+            function addTextInputRow(parent, label, value, tip) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.add("statictext", undefined, label + ":").preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, value);
+                input.preferredSize.width = 220;
+                input.helpTip = tip;
+                return input;
             }
 
             // -------------------------------------------------------
@@ -4882,17 +4926,24 @@ var SCRIPT_KEY = "MiddleMath";
                 if (net.faces.length === 0 && net.circles.length === 0 && net.sectors.length === 0) return;
                 var drawing = netLines(net);
 
+                var marks = netMarks(net, lengthKeys(), sizes, {faceText: faceText, lengthText: lengthText, dicePips: dicePips});
+
                 previewGroup = layer.groupItems.add();
                 previewGroup.name = "전개도 (" + KINDS[kind] + ")";
+                // 칠하기 → 선 → 원 → 반지름 선 → 주사위 눈 → 글자 순서
+                for (var f = 0; f < marks.fills.length; f++) addRegionFill(marks.fills[f]);
                 for (var i = 0; i < drawing.length; i++) addPath(drawing[i]);
                 for (var c = 0; c < net.circles.length; c++) addCircle(net.circles[c]);
+                for (var m = 0; m < marks.lines.length; m++) addPath(straight(marks.lines[m], false, true), true);
+                for (var d = 0; d < marks.pips.length; d++) addPip(marks.pips[d]);
+                for (var l = 0; l < marks.labels.length; l++) addLabel(marks.labels[l]);
                 var b = netBounds(net);
                 previewGroup.translate(viewCenter[0] - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT,
                     viewCenter[1] - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
             }
 
-            // line: {points:[{anchor,left,right}], closed, fold}
-            function addPath(line) {
+            // line: {points:[{anchor,left,right}], closed, fold}. solid면 접는 선 두께의 실선(반지름 선)
+            function addPath(line, solid) {
                 var path = previewGroup.pathItems.add();
                 var anchors = [];
                 for (var i = 0; i < line.points.length; i++) anchors.push(line.points[i].anchor);
@@ -4909,7 +4960,90 @@ var SCRIPT_KEY = "MiddleMath";
                 path.strokeWidth = line.fold ? FOLD_PT : OUTLINE_PT;
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.MITERENDJOIN;
-                if (line.fold && dashedFolds) path.strokeDashes = FOLD_DASH;
+                if (line.fold && dashedFolds && !solid) path.strokeDashes = FOLD_DASH;
+            }
+
+            // 칠할 자리: 면(다각형)·원·부채꼴
+            function addRegionFill(region) {
+                var path;
+                if (region.kind === "circle") {
+                    var r = region.circle.radius;
+                    path = previewGroup.pathItems.ellipse(region.circle.center[1] + r, region.circle.center[0] - r, r * 2, r * 2);
+                } else {
+                    var points = region.kind === "sector"
+                        ? [{anchor: region.sector.center, left: region.sector.center, right: region.sector.center}].concat(arcPoints(region.sector.center, region.sector.radius, region.sector.start, region.sector.sweep))
+                        : straight(region.points, true, false).points;
+                    path = previewGroup.pathItems.add();
+                    var anchors = [];
+                    for (var i = 0; i < points.length; i++) anchors.push(points[i].anchor);
+                    path.setEntirePath(anchors);
+                    for (var j = 0; j < points.length; j++) {
+                        path.pathPoints[j].leftDirection = points[j].left;
+                        path.pathPoints[j].rightDirection = points[j].right;
+                    }
+                    path.closed = true;
+                }
+                path.stroked = false;
+                path.filled = true;
+                path.fillColor = makeGray(shadeK);
+            }
+
+            function addPip(pip) {
+                var r = pip.radius;
+                var dot = previewGroup.pathItems.ellipse(pip.center[1] + r, pip.center[0] - r, r * 2, r * 2);
+                dot.stroked = false;
+                dot.filled = true;
+                dot.fillColor = makeGray(100);
+            }
+
+            // 면 글자는 면 가운데(dir 0), 길이 글자는 모서리에서 바깥쪽으로 간격을 두고 가까운 가장자리가 오게
+            function addLabel(label) {
+                var frame = previewGroup.textFrames.add();
+                frame.contents = label.text;
+                var attributes = frame.textRange.characterAttributes;
+                attributes.size = fontPt;
+                attributes.fillColor = makeGray(100);
+                // ㉠, (가), ①: 글자 전체를 바탕체로 한 단계 크게. 글자마다 서체를 나눈 뒤 전체 속성을 바꾸면 illegal text range가 나므로 둘 중 하나만 한다
+                if (label.symbol) {
+                    attributes.textFont = symbolFont;
+                    attributes.size = fontPt + 1;
+                    attributes.baselineShift = 0;
+                } else applyTextFonts(frame, label.upright);
+                var b = frame.geometricBounds;
+                var halfW = (b[2] - b[0]) / 2, halfH = (b[1] - b[3]) / 2, dir = label.dir;
+                var reach = (dir[0] === 0 && dir[1] === 0) ? 0 : LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
+                var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
+                frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+            }
+
+            // 글자 서체 (07_문자/한글·영문 서체 적용.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자·기호 GSMediumB1(기준선 +0.5pt),
+            // 소문자 변수(x)는 GSMediItaC1, GSMediumB1에 없는 기호는 HancomEQN
+            function applyTextFonts(frame, upright) {
+                var text = frame.contents;
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    var attributes = frame.textRange.characters[i].characterAttributes;
+                    if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
+                        attributes.textFont = korFont;
+                        attributes.baselineShift = 0;
+                    } else if (code > 126) {
+                        attributes.textFont = eqnFont;
+                        attributes.baselineShift = 0;
+                    } else if (!upright && code >= 97 && code <= 122) {
+                        attributes.textFont = italicFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    } else {
+                        attributes.textFont = engFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    }
+                }
+            }
+
+            function findTextFont(names) {
+                for (var i = 0; i < names.length; i++) {
+                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
+                }
+                return app.textFonts[0];
             }
 
             function addCircle(circle) {
@@ -5198,6 +5332,126 @@ var SCRIPT_KEY = "MiddleMath";
             function midpoint(a, b) { return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; }
             function sub(a, b) { return [a[0] - b[0], a[1] - b[1]]; }
             function offset(point, dir, distance) { return [point[0] + dir[0] * distance, point[1] + dir[1] * distance]; }
+            // 글자를 붙일 자리(면·원·부채꼴)를 읽는 순서로: 위에서 아래, 같은 줄은 왼쪽에서 오른쪽. 줄은 가장 작은 자리 크기의 1/4 안이면 같다
+            function netRegions(net) {
+                var regions = [], i, k;
+                for (i = 0; i < net.faces.length; i++) {
+                    var f = net.faces[i], cx = 0, cy = 0, x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+                    for (k = 0; k < f.length; k++) {
+                        cx += f[k][0] / f.length; cy += f[k][1] / f.length;
+                        x0 = Math.min(x0, f[k][0]); x1 = Math.max(x1, f[k][0]); y0 = Math.min(y0, f[k][1]); y1 = Math.max(y1, f[k][1]);
+                    }
+                    regions.push({kind: "poly", points: f, center: [cx, cy], size: Math.min(x1 - x0, y1 - y0)});
+                }
+                for (i = 0; i < net.circles.length; i++) regions.push({kind: "circle", circle: net.circles[i], center: net.circles[i].center, size: net.circles[i].radius});
+                for (i = 0; i < net.sectors.length; i++) {
+                    var sc = net.sectors[i], mid = sc.start + sc.sweep / 2;
+                    regions.push({kind: "sector", sector: sc, center: [sc.center[0] + Math.cos(mid) * sc.radius * 0.6, sc.center[1] + Math.sin(mid) * sc.radius * 0.6], size: sc.radius * 0.5});
+                }
+                var tol = Infinity;
+                for (i = 0; i < regions.length; i++) tol = Math.min(tol, regions[i].size * 0.25);
+                regions.sort(function(a, b) { return Math.abs(a.center[1] - b.center[1]) > tol ? b.center[1] - a.center[1] : a.center[0] - b.center[0]; });
+                return regions;
+            }
+
+            // 한 면에만 있는 모서리(바깥 모서리)와 그 면의 가운데(inside)
+            function netOuterEdges(net) {
+                var edges = {}, order = [], out = [];
+                for (var f = 0; f < net.faces.length; f++) {
+                    var face = net.faces[f], cx = 0, cy = 0, k;
+                    for (k = 0; k < face.length; k++) { cx += face[k][0] / face.length; cy += face[k][1] / face.length; }
+                    for (k = 0; k < face.length; k++) {
+                        var a = face[k], b = face[(k + 1) % face.length], key = edgeKey(a, b);
+                        if (!edges[key]) { edges[key] = {a: a, b: b, inside: [cx, cy], count: 0}; order.push(key); }
+                        edges[key].count++;
+                    }
+                }
+                for (var j = 0; j < order.length; j++) if (edges[order[j]].count === 1) out.push(edges[order[j]]);
+                return out;
+            }
+
+            // ㉠·(가)·①은 바탕체로 한 단계 크게(그림 제작 규칙 5.3), 홀로 쓴 소문자(x)만 변수로 기울인다(5.5)
+            function netLabelStyle(text) {
+                return {upright: !/^[a-z]$/.test(text), symbol: /^([\u3260-\u327F\u2460-\u2473]|\([가-힣]\))$/.test(text)};
+            }
+
+            // 주사위 눈 자리 (가운데 0, 모서리 ±1)
+            function netPipSpots(n) {
+                var c = [0, 0], tl = [-1, 1], tr = [1, 1], bl = [-1, -1], br = [1, -1], ml = [-1, 0], mr = [1, 0];
+                return [[], [c], [tl, br], [tl, c, br], [tl, tr, bl, br], [tl, tr, c, bl, br], [tl, tr, ml, mr, bl, br]][n] || [];
+            }
+
+            // 면 글자(faceText)·칠하기(끝의 *)·주사위 눈(dicePips)·길이 글자(lengthText, keys 순서) → {fills: 자리, pips, labels, lines: 반지름 선}
+            function netMarks(net, keys, sizes, o) {
+                var marks = {fills: [], pips: [], labels: [], lines: []};
+                var regions = netRegions(net), items = String(o.faceText || "").split(","), circleLabels = [], i, k;
+                for (i = 0; i < regions.length && i < items.length; i++) {
+                    var raw = items[i].replace(/^\s+|\s+$/g, ""), text = raw.replace(/\*$/, "").replace(/\s+$/, ""), region = regions[i];
+                    if (/\*$/.test(raw)) marks.fills.push(region);
+                    if (text === "") continue;
+                    if (o.dicePips && region.kind === "poly" && region.points.length === 4 && /^[1-6]$/.test(text)) {
+                        var spots = netPipSpots(Number(text)), side = region.size;
+                        for (k = 0; k < spots.length; k++) {
+                            marks.pips.push({center: [region.center[0] + spots[k][0] * side * 0.27, region.center[1] + spots[k][1] * side * 0.27], radius: side * (text === "1" ? 0.13 : 0.09)});
+                        }
+                        continue;
+                    }
+                    var style = netLabelStyle(text), faceLabel = {text: text, at: region.center, dir: [0, 0], upright: style.upright, symbol: style.symbol};
+                    marks.labels.push(faceLabel);
+                    if (region.kind === "circle") circleLabels.push({circle: region.circle, label: faceLabel});
+                }
+                var lengths = String(o.lengthText || "").split(","), edges = netOuterEdges(net), used = {};
+                for (i = 0; i < keys.length && i < lengths.length; i++) {
+                    var label = lengths[i].replace(/^\s+|\s+$/g, ""), key = keys[i], size = sizes[key];
+                    if (label === "") continue;
+                    var lstyle = netLabelStyle(label);
+                    if (key === "radius" && net.circles.length > 0) {
+                        // 면 글자가 없는 원 중 가장 아래에 가운데에서 오른쪽으로 반지름 선, 글자는 그 위.
+                        // 모든 원에 글자가 있으면 가장 아래 원에 긋고 그 원의 면 글자를 반지름 선 왼쪽으로 비킨다
+                        var low = null, lowLabeled = null, c;
+                        for (k = 0; k < net.circles.length; k++) {
+                            var labeledAt = null;
+                            for (c = 0; c < circleLabels.length; c++) if (circleLabels[c].circle === net.circles[k]) labeledAt = circleLabels[c].label;
+                            if (labeledAt === null && (low === null || net.circles[k].center[1] < low.center[1])) low = net.circles[k];
+                            if (lowLabeled === null || net.circles[k].center[1] < lowLabeled.circle.center[1]) lowLabeled = {circle: net.circles[k], label: labeledAt};
+                        }
+                        if (low === null) {
+                            low = lowLabeled.circle;
+                            lowLabeled.label.at = [low.center[0] - low.radius * 0.5, low.center[1]];
+                        }
+                        var end = [low.center[0] + low.radius, low.center[1]];
+                        marks.lines.push([low.center, end]);
+                        marks.labels.push({text: label, at: midpoint(low.center, end), dir: [0, 1], upright: lstyle.upright, symbol: lstyle.symbol});
+                        continue;
+                    }
+                    if (key === "slant" && net.sectors.length > 0) {
+                        // 부채꼴의 시작 쪽 반지름 변: 부채꼴은 반시계로 열리므로 바깥은 시계 방향 법선
+                        var sc = net.sectors[0], tip = [sc.center[0] + Math.cos(sc.start) * sc.radius, sc.center[1] + Math.sin(sc.start) * sc.radius];
+                        var along = unit(sub(tip, sc.center));
+                        marks.labels.push({text: label, at: midpoint(sc.center, tip), dir: [along[1], -along[0]], upright: lstyle.upright, symbol: lstyle.symbol});
+                        continue;
+                    }
+                    // 같은 길이의 바깥 모서리 중 가장 아래(같으면 왼쪽)에, 그 면의 바깥쪽으로. 이미 쓴 모서리는 건너뛴다
+                    var best = -1, bestY = 0, bestX = 0;
+                    for (k = 0; k < edges.length; k++) {
+                        var ed = edges[k], len = Math.sqrt((ed.b[0] - ed.a[0]) * (ed.b[0] - ed.a[0]) + (ed.b[1] - ed.a[1]) * (ed.b[1] - ed.a[1]));
+                        if (used[k] || !(size > 0) || Math.abs(len - size) > size * 0.005) continue;
+                        var my = (ed.a[1] + ed.b[1]) / 2, mx = (ed.a[0] + ed.b[0]) / 2;
+                        if (best < 0 || my < bestY - 1e-6 || (Math.abs(my - bestY) <= 1e-6 && mx < bestX)) { best = k; bestY = my; bestX = mx; }
+                    }
+                    if (best < 0) continue;
+                    used[best] = true;
+                    var be = edges[best], at = midpoint(be.a, be.b), d = unit(sub(be.b, be.a)), n = [d[1], -d[0]];
+                    if ((be.inside[0] - at[0]) * n[0] + (be.inside[1] - at[1]) * n[1] > 0) n = [-n[0], -n[1]];
+                    marks.labels.push({text: label, at: at, dir: [n[0] + 0, n[1] + 0], upright: lstyle.upright, symbol: lstyle.symbol});   // + 0: -0을 0으로
+                }
+                return marks;
+            }
+
+            // -------------------------------------------------------
+            // 기하 (일러 DOM을 쓰지 않는다 → tests/check-net.js). 길이는 pt
+            // -------------------------------------------------------
+
             function unit(v) {
                 var length = Math.sqrt(v[0] * v[0] + v[1] * v[1]) || 1;
                 return [v[0] / length, v[1] / length];
@@ -5331,8 +5585,9 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v1", kind, values.net, values.count, values.side, values.depth, values.height, values.lateral,
-                    values.radius, values.slant, dashedFolds ? "1" : "0", offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v2", kind, values.net, values.count, values.side, values.depth, values.height, values.lateral,
+                    values.radius, values.slant, dashedFolds ? "1" : "0", offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
+                    encodeURIComponent(faceText), encodeURIComponent(lengthText), dicePips ? "1" : "0", shadeK, fontPt];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -5341,7 +5596,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 14) return;
+                // v2는 표시(면 글자·길이 글자·주사위 눈·칠하기 농도·글자 크기)까지 19칸, 옛 v1은 14칸
+                if (!((p[0] === "v2" && p.length === 19) || (p[0] === "v1" && p.length === 14))) return;
                 kind = Math.round(restoreNumber(p[1], kind, 0, KINDS.length - 1));
                 values.net = Math.round(restoreNumber(p[2], values.net, 1, 11));
                 values.count = Math.round(restoreNumber(p[3], values.count, 3, 8));
@@ -5355,6 +5611,15 @@ var SCRIPT_KEY = "MiddleMath";
                 offsetXmm = restoreNumber(p[11], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 offsetYmm = restoreNumber(p[12], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 previewEnabled = p[13] === "1";
+                if (p[0] === "v2") {
+                    try {
+                        faceText = decodeURIComponent(p[14]);
+                        lengthText = decodeURIComponent(p[15]);
+                    } catch (decodeError) {}
+                    dicePips = p[16] === "1";
+                    shadeK = restoreNumber(p[17], shadeK, 5, 60);
+                    fontPt = restoreNumber(p[18], fontPt, 5, 14);
+                }
             }
 
             function restoreNumber(text, fallback, minimum, maximum) {
