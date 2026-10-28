@@ -1816,6 +1816,7 @@ var SCRIPT_KEY = "MiddleMath";
             var GUIDE_DASH = [2, 1.5];
             var TICK_MM = 1.2;
             var DOT_RADIUS_MM = 0.6;
+            var HATCH_MM = 1;   // 빗금 간격 (선은 보조선 굵기)
             var OPEN_DOT_PT = 0.5;   // 빈 점(○) 테두리 (구간별 함수 탭과 같다)
             var LABEL_GAP_MM = 0.8;
             var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };   // pt. 평가원 축 화살촉처럼 가늘고 뒤가 파인 모양
@@ -1853,6 +1854,9 @@ var SCRIPT_KEY = "MiddleMath";
             var showIdentity = false;
             var asymptoteText = "";
             var tangentText = "";   // 접선 1:2 = 1번 식의 x=2에서의 접선
+            var regionHatch = false, regionHatch2 = false;   // 칠하기 대신 빗금 (첫째 45°, 둘째 -45°)
+            var axisMarkText = "";   // 축 위 글자 x=1:a, y=2:k: 그 값에 눈금과 글자
+            var lineDashes = [false, false, false, false, false];   // 식마다 그래프를 점선으로
             var nameTexts = ["", "", "", "", ""];   // 그래프마다 직접 쓰는 이름(l, C_1 …)
             var nameAts = [0, 0, 0, 0, 0];           // 이름 자리: 0 오른쪽 끝, 1 왼쪽 끝(바깥), 2 왼쪽 끝(안쪽)
             var lineText = "";                        // 실선 수직·수평선 x=2, y=-1
@@ -1895,6 +1899,11 @@ var SCRIPT_KEY = "MiddleMath";
             hideAxesCheck.helpTip = "축·화살촉·눈금 숫자를 빼고 격자만 그린다 (모눈종이 위 도형, 격자점 위 꼭짓점)";
             var tickCheck = axisChecks.add("checkbox", undefined, "눈금선");
             tickCheck.helpTip = "축의 짧은 눈금선(눈금 숫자와 따로). 끄면 눈금선 없이 축만 그린다";
+            var axisMarkRow = rangePanel.add("group");
+            axisMarkRow.add("statictext", undefined, "축 위 글자:");
+            var axisMarkInput = axisMarkRow.add("edittext", undefined, axisMarkText);
+            axisMarkInput.preferredSize.width = 250;
+            axisMarkInput.helpTip = "축의 그 값에 눈금을 긋고 글자를 쓴다(x축은 아래, y축은 왼쪽). x=1:a, x=π/2:α, y=2:k처럼 쉼표로. 같은 자리의 눈금 숫자와 겹치면 '눈금 숫자'를 끈다";
 
             var functionPanel = addPanel(win, "함수 그래프");
             var functionInputs = [];
@@ -1960,16 +1969,19 @@ var SCRIPT_KEY = "MiddleMath";
             regionInput.preferredSize.width = 290;
             regionInput.helpTip = "모두 만족하는 영역을 칠한다. y<=-x+4, y>=0, x>=0처럼 쉼표로 나눈다 (y 부등식은 식, x 부등식은 수). 두 직선과 축으로 둘러싸인 도형 등";
             var regionKControls = addValueRow(functionPanel, "칠하기 농도", "K", regionK, 5, 60, 5, 0);
+            var hatchCheck = functionPanel.add("checkbox", undefined, "칠하기 대신 빗금 (45°)");
+            hatchCheck.helpTip = "칠한 영역을 회색 대신 보조선 굵기의 빗금으로 채운다";
             var region2Row = functionPanel.add("group");
             region2Row.add("statictext", undefined, "둘째 칠하기:");
             var region2Input = region2Row.add("edittext", undefined, regionText2);
             region2Input.preferredSize.width = 250;
             region2Input.helpTip = "첫째와 따로 한 영역을 더 칠한다 (영역 A, B를 서로 다른 농도로). 쓰는 법은 칠하기와 같다";
             var regionK2Controls = addValueRow(functionPanel, "둘째 농도", "K", regionK2, 5, 60, 5, 0);
+            var hatch2Check = functionPanel.add("checkbox", undefined, "둘째도 빗금 (-45°, 겹치면 엇갈림)");
 
             // 그래프 이름 직접 쓰기: 식을 넣은 그래프마다 이름과 자리 (비우면 위 '이름' 설정대로)
             var namePanel = addPanel(win, "그래프 이름 (직접 쓰기)", "fold4");
-            var nameInputs = [], placeLists = [];
+            var nameInputs = [], placeLists = [], dashChecks = [];
             var PLACE_NAMES = ["끝 (오른쪽)", "시작 (왼쪽 바깥)", "시작 (오른쪽 안쪽)"];
             for (var nf = 0; nf < FUNCTION_COUNT; nf++) {
                 var nameRow = namePanel.add("group");
@@ -1980,8 +1992,12 @@ var SCRIPT_KEY = "MiddleMath";
                 var placeList = nameRow.add("dropdownlist", undefined, PLACE_NAMES);
                 placeList.selection = nameAts[nf];
                 placeList.preferredSize.width = 150;
+                var dashCheck = nameRow.add("checkbox", undefined, "점선");
+                dashCheck.value = lineDashes[nf];
+                dashCheck.helpTip = "이 그래프를 그래프 굵기의 점선으로 그린다";
                 nameInputs.push(nameInput);
                 placeLists.push(placeList);
+                dashChecks.push(dashCheck);
             }
 
             var pointPanel = addPanel(win, "점");
@@ -2062,6 +2078,11 @@ var SCRIPT_KEY = "MiddleMath";
             lineInput.onChanging = function() { lineText = lineInput.text; updatePreview(); };
             lineNamesCheck.onClick = function() { showLineNames = lineNamesCheck.value; updatePreview(); };
             region2Input.onChanging = function() { regionText2 = region2Input.text; updatePreview(); };
+            axisMarkInput.onChanging = function() { axisMarkText = axisMarkInput.text; updatePreview(); };
+            hatchCheck.value = regionHatch;
+            hatch2Check.value = regionHatch2;
+            hatchCheck.onClick = function() { regionHatch = hatchCheck.value; updatePreview(); };
+            hatch2Check.onClick = function() { regionHatch2 = hatch2Check.value; updatePreview(); };
             bindValueRow(regionK2Controls, function(value) { regionK2 = value; }, initial.regionK2);
             segmentInput.onChanging = function() { segmentText = segmentInput.text; updatePreview(); };
             labelInput.onChanging = function() { labelText = labelInput.text; updatePreview(); };
@@ -2102,6 +2123,7 @@ var SCRIPT_KEY = "MiddleMath";
                     nameAts[index] = placeLists[index].selection ? placeLists[index].selection.index : 0;
                     updatePreview();
                 };
+                dashChecks[index].onClick = function() { lineDashes[index] = dashChecks[index].value; updatePreview(); };
             }
 
             function bindFunctionInput(index) {
@@ -2140,7 +2162,7 @@ var SCRIPT_KEY = "MiddleMath";
                     var compiled = braces && domain === null ? null : compileFunction(body, variables);
                     if (compiled === null) problems.push((i + 1) + "번 식");
                     else {
-                        functions.push({ fn: domain ? restrict(compiled, domain) : compiled, raw: compiled, domain: domain, label: String(body).replace(/^\s+|\s+$/g, ""), name: String(nameTexts[i]).replace(/^\s+|\s+$/g, ""), at: nameAts[i] });
+                        functions.push({ fn: domain ? restrict(compiled, domain) : compiled, raw: compiled, domain: domain, label: String(body).replace(/^\s+|\s+$/g, ""), name: String(nameTexts[i]).replace(/^\s+|\s+$/g, ""), at: nameAts[i], dashed: lineDashes[i] });
                         byIndex[i] = functions[functions.length - 1].fn;
                     }
                 }
@@ -2170,6 +2192,8 @@ var SCRIPT_KEY = "MiddleMath";
                 if (asymptotes === null) problems.push("점근선");
                 var region = parseRegion(regionText);
                 if (region === null) problems.push("칠하기");
+                var axisMarks = parseAxisMarks(axisMarkText);
+                if (axisMarks === null) problems.push("축 위 글자");
                 // 매개변수곡선: x(t)·y(t)가 둘 다 있어야 그린다 (웹 math-coord-plane.js readCoordPlaneInputs와 같다)
                 var parametric = null;
                 var px = String(parametricX).replace(/^\s+|\s+$/g, ""), py = String(parametricY).replace(/^\s+|\s+$/g, "");
@@ -2189,7 +2213,7 @@ var SCRIPT_KEY = "MiddleMath";
                     points: points.list, coords: showCoords, guides: showGuides,
                     piAxis: piAxis, intersections: showIntersections, identity: showIdentity, asymptotes: asymptotes || [], fontSize: fontPt,
                     ticks: showTicks, solidLines: solidLines || [], lineNames: showLineNames, notes: notesWithNames(notes.list),
-                    segments: segments || [], region2: region2 || []
+                    segments: segments || [], region2: region2 || [], axisMarks: axisMarks || []
                 });
 
                 previewGroup = layer.groupItems.add();
@@ -2201,8 +2225,13 @@ var SCRIPT_KEY = "MiddleMath";
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
                 if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 // 칠한 영역은 격자보다 뒤로
-                for (var r = 0; r < drawing.fills.length; r++) addFill(drawing.fills[r], regionK);
-                for (var r2 = 0; r2 < drawing.fills2.length; r2++) addFill(drawing.fills2[r2], regionK2);
+                // 빗금을 고르면 칠하기 대신 평행선 (첫째 45°, 둘째 -45°)
+                for (var r = 0; r < drawing.fills.length; r++) {
+                    if (regionHatch) addHatch(drawing.fills[r], Math.PI / 4); else addFill(drawing.fills[r], regionK);
+                }
+                for (var r2 = 0; r2 < drawing.fills2.length; r2++) {
+                    if (regionHatch2) addHatch(drawing.fills2[r2], -Math.PI / 4); else addFill(drawing.fills2[r2], regionK2);
+                }
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -2226,8 +2255,24 @@ var SCRIPT_KEY = "MiddleMath";
                 path.strokeWidth = line.kind === "graph" ? GRAPH_PT : (line.kind === "axis" ? AXIS_PT : (line.kind === "tick" ? TICK_PT : (line.kind === "grid" ? GRID_PT : GUIDE_PT)));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
-                if (line.kind === "guide") path.strokeDashes = GUIDE_DASH;
+                if (line.kind === "guide" || line.dashed) path.strokeDashes = GUIDE_DASH;
                 if (line.kind === "grid") path.zOrder(ZOrderMethod.SENDTOBACK);
+            }
+
+            // 빗금: 영역 안의 평행선(보조선 굵기), 칠하기처럼 맨 뒤
+            function addHatch(points, angle) {
+                var pieces = hatchSegments(points, HATCH_MM * MM_TO_PT, angle);
+                for (var h = pieces.length - 1; h >= 0; h--) {
+                    var path = previewGroup.pathItems.add();
+                    path.setEntirePath(pieces[h]);
+                    path.closed = false;
+                    path.filled = false;
+                    path.stroked = true;
+                    path.strokeColor = makeGray(100);
+                    path.strokeWidth = GUIDE_PT;
+                    path.strokeCap = StrokeCap.BUTTENDCAP;
+                    path.zOrder(ZOrderMethod.SENDTOBACK);
+                }
             }
 
             // 칠한 영역: 선 없는 닫힌 패스, K regionK, 맨 뒤
@@ -2445,6 +2490,13 @@ var SCRIPT_KEY = "MiddleMath";
                         if (opt.numbers) texts.push({ text: String(ty), at: [0, ty * u], dir: [-1, 0], clear: opt.tick / 2 });
                     }
                 }
+                // 축 위 글자: 그 값에 눈금, x축은 아래·y축은 왼쪽에 글자 (변수 a, α 등. 웹 math-coord-plane.js와 같다)
+                var marks = opt.axisMarks || [];
+                for (var am = 0; am < marks.length; am++) {
+                    var onX = marks[am].axis === "x", markAt = onX ? [marks[am].value * u, 0] : [0, marks[am].value * u], markDisplay = formulaDisplay(marks[am].text);
+                    lines.push(straight(onX ? [[markAt[0], -opt.tick / 2], [markAt[0], opt.tick / 2]] : [[-opt.tick / 2, markAt[1]], [opt.tick / 2, markAt[1]]], "tick"));
+                    texts.push({ text: markDisplay.text, sup: markDisplay.sup, sub: markDisplay.sub, roman: markDisplay.roman, at: markAt, dir: onX ? [0, -1] : [-1, 0], clear: opt.tick / 2 });
+                }
 
                 for (var a = 0; a < opt.asymptotes.length; a++) {
                     var line = opt.asymptotes[a];
@@ -2480,7 +2532,9 @@ var SCRIPT_KEY = "MiddleMath";
                     var segments = plotFunction(opt.functions[f].fn, xLo, plotHi, opt.yMin, opt.yMax);
                     for (var s = 0; s < segments.length; s++) {
                         if (segments[s].length < 2) continue;
-                        lines.push({ points: toBezier(segments[s], u), kind: "graph" });
+                        var graphLine = { points: toBezier(segments[s], u), kind: "graph" };
+                        if (opt.functions[f].dashed) graphLine.dashed = true;   // 식마다 고른 점선
+                        lines.push(graphLine);
                     }
                     var custom = opt.functions[f].name || "";
                     if ((opt.nameStyle > 0 || custom !== "") && segments.length > 0) {
@@ -2676,6 +2730,9 @@ var SCRIPT_KEY = "MiddleMath";
                         lower.push([samples[s][0], samples[s][1][0]]);
                     }
                     lower.reverse();
+                    // 위·아래 경계가 한 점에서 만나는 끝(꼭짓점)은 한 번만 넣는다. 두 번 넣으면 dropCollinear가 둘 다 지워 꼭짓점이 사라진다
+                    if (samples[0][1][1] - samples[0][1][0] < 1e-6) lower.pop();
+                    if (samples.length > 1 && samples[samples.length - 1][1][1] - samples[samples.length - 1][1][0] < 1e-6) lower.shift();
                     return dropCollinear(upper.concat(lower));
                 }
             }
@@ -3376,6 +3433,49 @@ var SCRIPT_KEY = "MiddleMath";
                 return [[p[0] + lo * d[0], p[1] + lo * d[1]], [p[0] + hi * d[0], p[1] + hi * d[1]]];
             }
 
+            // 빗금: 다각형(점 목록) 안을 angle(라디안) 방향의 평행선으로 채운다. 선은 원점을 지나는 선에서 gap 간격마다 놓여 두 영역의 빗금이 줄을 맞춘다.
+            // 한 줄이 다각형 변과 만나는 점을 정렬해 두 개씩 이어 안쪽 조각만 남긴다(오목해도 된다). 경계와 겹치는 줄과 길이 0인 조각은 뺀다. [[p, q], …]
+            function hatchSegments(polygon, gap, angle) {
+                var d = [Math.cos(angle), Math.sin(angle)], n = [-d[1], d[0]], lo = Infinity, hi = -Infinity, out = [];
+                for (var i = 0; i < polygon.length; i++) {
+                    var level0 = polygon[i][0] * n[0] + polygon[i][1] * n[1];
+                    lo = Math.min(lo, level0);
+                    hi = Math.max(hi, level0);
+                }
+                for (var k = Math.floor(lo / gap + 1e-9) + 1; k * gap < hi - 1e-9; k++) {
+                    var level = k * gap, hits = [];
+                    for (var j = 0; j < polygon.length; j++) {
+                        var p = polygon[j], q = polygon[(j + 1) % polygon.length];
+                        var sp = p[0] * n[0] + p[1] * n[1], sq = q[0] * n[0] + q[1] * n[1];
+                        if ((sp <= level) === (sq <= level)) continue;
+                        var t = (level - sp) / (sq - sp);
+                        hits.push((p[0] + (q[0] - p[0]) * t) * d[0] + (p[1] + (q[1] - p[1]) * t) * d[1]);
+                    }
+                    hits.sort(function(a, b) { return a - b; });
+                    for (var h = 0; h + 1 < hits.length; h += 2) {
+                        if (hits[h + 1] - hits[h] < 1e-6) continue;   // 한 점에서 닿기만 하는 곳(겹친 변·꼭짓점)
+                        out.push([[level * n[0] + hits[h] * d[0], level * n[1] + hits[h] * d[1]], [level * n[0] + hits[h + 1] * d[0], level * n[1] + hits[h + 1] * d[1]]]);
+                    }
+                }
+                return out;
+            }
+
+            // 축 위 글자 "x=1:a, x=π/2:α, y=2:k" → [{axis, value, text}]. 빈 글이면 [], 하나라도 못 읽으면 null
+            function parseAxisMarks(text) {
+                var parts = String(text).split(","), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var item = parts[i].replace(/^\s+|\s+$/g, "");
+                    if (item === "") continue;
+                    var colon = item.indexOf(":");
+                    if (colon < 0) return null;
+                    var head = item.substring(0, colon).replace(/\s/g, ""), label = item.substring(colon + 1).replace(/^\s+|\s+$/g, "");
+                    var axis = head.charAt(0), value = head.charAt(1) === "=" ? evaluateNumber(head.substring(2)) : null;
+                    if ((axis !== "x" && axis !== "y") || value === null || label === "") return null;
+                    out.push({ axis: axis, value: value, text: label });
+                }
+                return out;
+            }
+
             function parsePointList(text) {
                 var s = String(text);
                 var list = [], bad = [];
@@ -3544,7 +3644,7 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v7", xMin, xMax, yMin, yMax, unitMm, fontPt,
+                    "v8", xMin, xMax, yMin, yMax, unitMm, fontPt,
                     showGrid ? "1" : "0", showNumbers ? "1" : "0", nameStyle,
                     encodeList(functionTexts),
                     encodeURIComponent(pointsText), showCoords ? "1" : "0", showGuides ? "1" : "0",
@@ -3554,7 +3654,8 @@ var SCRIPT_KEY = "MiddleMath";
                     encodeList(nameTexts), nameAts.join(","), encodeURIComponent(lineText), showLineNames ? "1" : "0",
                     encodeURIComponent(labelText), encodeURIComponent(segmentText), encodeURIComponent(regionText2), regionK2, showTicks ? "1" : "0", parameterA, parameterB, parameterC,
                     encodeURIComponent(parametricX), encodeURIComponent(parametricY), encodeURIComponent(parametricMin), encodeURIComponent(parametricMax),
-                    encodeURIComponent(tangentText)
+                    encodeURIComponent(tangentText),
+                    regionHatch ? "1" : "0", regionHatch2 ? "1" : "0", encodeURIComponent(axisMarkText), lineDashes.join(",")
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -3570,8 +3671,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다. v6 = v5 + 매개변수곡선 4칸, v7 = v6 + 접선
-                if (!((p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
+                // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다. v6 = v5 + 매개변수곡선 4칸, v7 = v6 + 접선, v8 = v7 + 빗금 둘·축 위 글자·점선
+                if (!((p[0] === "v8" && p.length === 45) || (p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
                 try {
                     xMin = Math.round(restoreNumber(p[1], xMin, -20, 0));
                     xMax = Math.round(restoreNumber(p[2], xMax, 1, 20));
@@ -3599,7 +3700,7 @@ var SCRIPT_KEY = "MiddleMath";
                     hideAxes = p[21] === "1";
                     regionText = decodeURIComponent(p[22]);
                     regionK = restoreNumber(p[23], regionK, 5, 60);
-                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7") {
+                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8") {
                         var savedNames = p[24].split(",");
                         if (savedNames.length === FUNCTION_COUNT) {
                             for (var sn = 0; sn < FUNCTION_COUNT; sn++) nameTexts[sn] = decodeURIComponent(savedNames[sn]);
@@ -3615,13 +3716,22 @@ var SCRIPT_KEY = "MiddleMath";
                         regionText2 = decodeURIComponent(p[30]);
                         regionK2 = restoreNumber(p[31], regionK2, 5, 60);
                         showTicks = p[32] === "1";
-                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7") {
+                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8") {
                             parameterA = restoreNumber(p[33], parameterA, -10, 10);
                             parameterB = restoreNumber(p[34], parameterB, -10, 10);
                             parameterC = restoreNumber(p[35], parameterC, -10, 10);
                         }
-                        if (p[0] === "v7") tangentText = decodeURIComponent(p[40]);
-                        if (p[0] === "v6" || p[0] === "v7") {
+                        if (p[0] === "v7" || p[0] === "v8") tangentText = decodeURIComponent(p[40]);
+                        if (p[0] === "v8") {
+                            regionHatch = p[41] === "1";
+                            regionHatch2 = p[42] === "1";
+                            axisMarkText = decodeURIComponent(p[43]);
+                            var savedDashes = p[44].split(",");
+                            if (savedDashes.length === FUNCTION_COUNT) {
+                                for (var sd = 0; sd < FUNCTION_COUNT; sd++) lineDashes[sd] = savedDashes[sd] === "true";
+                            }
+                        }
+                        if (p[0] === "v6" || p[0] === "v7" || p[0] === "v8") {
                             parametricX = decodeURIComponent(p[36]);
                             parametricY = decodeURIComponent(p[37]);
                             parametricMin = decodeURIComponent(p[38]);
