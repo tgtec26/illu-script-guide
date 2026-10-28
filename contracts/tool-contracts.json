@@ -10594,6 +10594,10 @@
           "type": "number",
           "default": 1
         },
+        "showDirections": {
+          "type": "boolean",
+          "default": true
+        },
         "showTitles": {
           "type": "boolean",
           "default": true
@@ -10604,13 +10608,29 @@
         },
         "viewFill": {
           "type": "boolean",
-          "default": false
+          "default": true
+        },
+        "viewFrame": {
+          "type": "boolean",
+          "default": true
+        },
+        "wArrow": {
+          "type": "number",
+          "default": 0.4,
+          "minimum": 0.1,
+          "maximum": 2
         },
         "wBody": {
           "type": "number",
           "default": 0.5,
           "minimum": 0.1,
           "maximum": 3
+        },
+        "wRope": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0.1,
+          "maximum": 2
         }
       }
     },

@@ -12,10 +12,11 @@ try {
 
 // 쌓기나무: 초등 6학년 '공간과 입체'의 쌓기나무 그림을 그린다. 선택 없이 화면 가운데에 만든다. 웹 도구 "쌓기나무"와 같은 그림이다.
 //   위에서 본 모양의 칸마다 쌓은 층수를 적으면(첫 줄이 뒤, 마지막 줄이 앞: "1 2 1 / 2 3 1 / 1 1 0") 쌓은 모양(입체),
-//   위·앞·옆에서 본 모양, 위에서 본 모양에 수 쓰기, 층별로 나타낸 모양을 그린다.
-//   입체는 등각(30°) 또는 사투상(앞면이 정사각형)으로, 오른쪽 앞 또는 왼쪽 앞에서 본다. 정육면체를 뒤에서 앞으로 칠해 앞의 것이 뒤를 가리고,
-//   이웃한 쌓기나무와 맞닿아 늘 가려지는 면은 그리지 않는다. 옆에서 본 모양은 입체에서 보이는 옆면 쪽에서 본다.
-// 선 두께는 모서리 0.5pt이고 '선 두께' 패널에서 고친다. 글자는 한글 Spoqa, 숫자 GSMediumB1이다.
+//   입체 + 위에서 본 모양(45° 돌린 모눈), 위·앞·옆에서 본 모양, 위에서 본 모양에 수 쓰기, 층별로 나타낸 모양을 그린다.
+//   기본값은 6학년 교과서·평가 그림 실측(2015 개정 미래엔·비상 평가 94문항, 2026-10-28 조사)을 따른다: 오른쪽 앞 위에서 본 축측 투상
+//   (앞면 16°·옆면 23°), 윗면·앞면·옆면 K10·25·40, 모서리 0.5pt, 위·앞·옆 방향 화살표, 본 모양은 칠한 칸 + 점선 틀 + 위쪽 이름.
+//   정육면체를 뒤에서 앞으로 칠해 앞의 것이 뒤를 가리고, 이웃한 쌓기나무와 맞닿아 늘 가려지는 면은 그리지 않는다.
+// 선 두께는 모서리 0.5pt, 점선 틀 0.3pt, 방향 화살표 0.4pt이고 '선 두께' 패널에서 고친다. 글자는 한글 Spoqa, 숫자 GSMediumB1이다.
 
 (function() {
     if (app.documents.length === 0) { alert("문서를 열어주세요."); return; }
@@ -41,12 +42,15 @@ try {
     var HEAD_EXAM_LENGTH_PT = 4.84;  // 크기 100%일 때 작살형의 길이(pt) = 일러스트레이터 100%(12.1 × 선 0.4pt, 그림 제작 규칙 4.7). 다른 모양도 같은 배율로 그린다
 
     // ==== 쌓기나무 ====
-    var CUBE_FIGURES = ["쌓은 모양", "쌓은 모양 + 위·앞·옆", "위·앞·옆에서 본 모양", "위에서 본 모양에 수 쓰기", "층별로 나타낸 모양"];
-    var CUBE_PROJECTIONS = ["등각 (30°)", "사투상 (앞면 정사각형)"];
+    var CUBE_FIGURES = ["쌓은 모양", "쌓은 모양 + 위에서 본 모양", "쌓은 모양 + 위·앞·옆", "위·앞·옆에서 본 모양", "위에서 본 모양에 수 쓰기", "층별로 나타낸 모양"];
+    var CUBE_PROJECTIONS = ["교과서 (앞 16°·옆 23°)", "등각 (30°)", "사투상 (앞면 정사각형)"];
     var CUBE_SIDES = ["오른쪽 앞에서", "왼쪽 앞에서"];
-    var CUBE_SHADES = ["없음 (모두 흰색)", "옅게 (0·10·25)", "진하게 (0·20·40)"];
-    var CUBE_MAX = 9;           // 한 칸에 쌓는 최대 층수
-    var CUBE_MAX_CELLS = 10;    // 가로·세로 최대 칸 수
+    var CUBE_SHADES = ["없음 (모두 흰색)", "교과서 (10·25·40)", "옅게 (0·10·25)"];
+    var CUBE_SHADE_K = [[0, 0, 0], [10, 25, 40], [0, 10, 25]];   // 윗면·앞면·옆면 K
+    var CUBE_VIEW_K = 20;        // 본 모양에서 쌓기나무가 있는 칸의 K
+    var CUBE_DASH = [2, 1.5];    // 본 모양의 점선 틀
+    var CUBE_MAX = 9;            // 한 칸에 쌓는 최대 층수
+    var CUBE_MAX_CELLS = 10;     // 가로·세로 최대 칸 수
 
     // 위에서 본 모양의 층수 글 → 줄 목록(첫 줄이 뒤). 줄은 / · 쉼표 · 줄바꿈으로, 칸은 공백으로 나눈다.
     // 공백 없이 숫자만 쓴 줄("121")은 한 글자가 한 칸이다. 숫자가 아닌 칸은 0(쌓기나무 없음)이다
@@ -79,63 +83,106 @@ try {
         return {W: W, D: rows.length, h: h, maxH: maxH, count: count};
     }
 
-    // 입체의 투영 축(화면 pt, 한 칸 = s). 보는 쪽 side 0 = 오른쪽 앞, 1 = 왼쪽 앞.
-    // 등각: 가로(x)와 깊이(d) 축이 수평선과 30°. 사투상: 가로는 수평, 깊이는 45° 위로 반 길이
+    // 입체의 투영 축(화면 pt, 한 칸 = s). 보는 쪽 side 0 = 오른쪽 앞(앞면이 왼쪽, 오른쪽 옆면이 오른쪽), 1 = 왼쪽 앞.
+    // 교과서: 앞면 가로 모서리가 16°·0.875배, 옆면이 23°·0.77배(6학년 교과서·평가 그림 실측). 등각: 둘 다 30°·1배.
+    // 사투상: 앞면은 정사각형 그대로, 깊이는 48°·0.65배(2학년 그림 실측)
     function cubeAxes(projection, side, s) {
-        var f = side === 0 ? 1 : -1, c30 = Math.cos(Math.PI / 6), k = 0.5 * Math.SQRT1_2;
-        if (projection === 0) return {x: [s * c30, -s * 0.5 * f], d: [s * c30 * f, s * 0.5], z: [0, s]};
-        return {x: [s, 0], d: [s * k * f, s * k], z: [0, s]};
+        var f = side === 0 ? 1 : -1;
+        function dir(deg, len, sx, sy) { var r = deg * Math.PI / 180; return [sx * s * len * Math.cos(r), sy * s * len * Math.sin(r)]; }
+        if (projection === 0) return {x: dir(16, 0.875, 1, -f), d: dir(23, 0.77, f, 1), z: [0, s]};
+        if (projection === 1) return {x: dir(30, 1, 1, -f), d: dir(30, 1, f, 1), z: [0, s]};
+        return {x: [s, 0], d: dir(48, 0.65, f, 1), z: [0, s]};
     }
 
-    // 입체 그림의 화면 범위(가장 왼쪽·아래·오른쪽·위)를 원점 기준으로 잰다
-    function cubeExtent(g, ax) {
-        var box = [Infinity, Infinity, -Infinity, -Infinity], x, d, z, a, b, c;
+    function cubeProject(ax, x, d, z) {
+        return [x * ax.x[0] + d * ax.d[0] + z * ax.z[0], x * ax.x[1] + d * ax.d[1] + z * ax.z[1]];
+    }
+
+    function cubeUnit(v) {
+        var len = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
+        return [v[0] / len, v[1] / len];
+    }
+
+    // 삼각형 화살촉(측정한 일러스트레이터 화살촉 0번)을 단 화살표. 촉 크기는 선 두께에 비례한다(그림 제작 규칙 4.7a ①)
+    function cubeArrow(t, tail, tip, width) {
+        var d = cubeUnit([tip[0] - tail[0], tip[1] - tail[1]]), back = HEAD_CATALOG[0].lineEnd * width;
+        t.line(tail, [tip[0] - d[0] * back, tip[1] - d[1] * back], width);
+        t.path(catalogPoints(0, tip, d, width), true, 100, null, 0);
+    }
+
+    // 쌓은 모양: (ox, oy)가 그림 범위의 왼쪽 아래. 정육면체를 뒤에서 앞으로 칠하고, 맞닿아 늘 가려지는 면은 그리지 않는다.
+    // 방향 표시를 켜면 앞면·보이는 옆면을 향한 화살표(앞·옆)와 위에서 아래로 향한 화살표(위)를 단다
+    function drawCubeSolid(t, o, g, ox, oy) {
+        var m = t.mm, s = o.cell * m, ax = cubeAxes(o.projection, o.side, s), f = o.side === 0 ? 1 : -1;
+        var shades = CUBE_SHADE_K[o.shade], cubes = [], arrows = [], x, d, z, i, a, b, c;
+        var box = [Infinity, Infinity, -Infinity, -Infinity];
+        function grow(p, r) { box[0] = Math.min(box[0], p[0] - r); box[1] = Math.min(box[1], p[1] - r); box[2] = Math.max(box[2], p[0] + r); box[3] = Math.max(box[3], p[1] + r); }
         for (d = 0; d < g.D; d++) for (x = 0; x < g.W; x++) {
-            var top = g.h(x, d);
-            if (top === 0) continue;
-            for (a = 0; a <= 1; a++) for (b = 0; b <= 1; b++) for (c = 0; c <= 1; c++) {
-                z = c === 0 ? 0 : top;
-                var px = (x + a) * ax.x[0] + (d + b) * ax.d[0] + z * ax.z[0], py = (x + a) * ax.x[1] + (d + b) * ax.d[1] + z * ax.z[1];
-                box[0] = Math.min(box[0], px); box[1] = Math.min(box[1], py); box[2] = Math.max(box[2], px); box[3] = Math.max(box[3], py);
+            for (z = 0; z < g.h(x, d); z++) cubes.push([x, d, z]);
+            if (g.h(x, d) > 0) for (a = 0; a <= 1; a++) for (b = 0; b <= 1; b++) for (c = 0; c <= 1; c++) grow(cubeProject(ax, x + a, d + b, c * g.h(x, d)), 0);
+        }
+        if (o.showDirections) {
+            var len = 5 * m, gap = 1.2 * m, top = box[3];
+            // 앞: 앞줄 바닥 모서리 가운데를 깊이 방향으로, 옆: 보이는 옆면 바닥 모서리 가운데를 그 면 쪽으로
+            var front = cubeProject(ax, g.W / 2, 0, 0), uFront = cubeUnit(ax.d);
+            var sideAt = cubeProject(ax, o.side === 0 ? g.W : 0, g.D / 2, 0), uSide = cubeUnit([-f * ax.x[0], -f * ax.x[1]]);
+            var topX = cubeProject(ax, g.W / 2, g.D / 2, g.maxH)[0];
+            arrows.push({tip: [front[0] - uFront[0] * gap, front[1] - uFront[1] * gap], u: uFront, label: "앞"});
+            arrows.push({tip: [sideAt[0] - uSide[0] * gap, sideAt[1] - uSide[1] * gap], u: uSide, label: "옆"});
+            arrows.push({tip: [topX, top + gap], u: [0, -1], label: "위"});
+            for (i = 0; i < arrows.length; i++) {
+                var w = arrows[i];
+                w.tail = [w.tip[0] - w.u[0] * len, w.tip[1] - w.u[1] * len];
+                w.text = [w.tail[0] - w.u[0] * (gap + 0.45 * o.font), w.tail[1] - w.u[1] * (gap + 0.45 * o.font)];
+                grow(w.tip, 0); grow(w.tail, 0); grow(w.text, 0.6 * o.font);
             }
         }
-        return box;
-    }
-
-    // 쌓은 모양: (ox, oy)가 그림 범위의 왼쪽 아래. 정육면체를 뒤에서 앞으로 칠하고, 맞닿아 늘 가려지는 면은 그리지 않는다
-    function drawCubeSolid(t, o, g, ox, oy) {
-        var s = o.cell * t.mm, ax = cubeAxes(o.projection, o.side, s), box = cubeExtent(g, ax);
-        var f = o.side === 0 ? 1 : -1, shades = [[0, 0, 0], [0, 10, 25], [0, 20, 40]][o.shade], cubes = [], x, d, z, i;
-        for (d = 0; d < g.D; d++) for (x = 0; x < g.W; x++) for (z = 0; z < g.h(x, d); z++) cubes.push([x, d, z]);
-        // 보는 쪽에 가까울수록 나중에 칠한다. 등각은 같은 값끼리 겹치지 않고, 사투상은 앞줄이 뒷줄을 모두 가린다
-        function nearness(cube) { return o.projection === 0 ? f * cube[0] - cube[1] + cube[2] : -1000 * cube[1] + f * cube[0] + cube[2]; }
-        cubes.sort(function(a, b) { return nearness(a) - nearness(b); });
+        // 보는 쪽에 가까울수록(오른쪽 앞이면 x가 크고 d가 작고 z가 클수록) 나중에 칠한다. 이 순서면 뒤의 것이 앞의 것을 가리지 않는다
+        function nearness(cube) { return f * cube[0] - cube[1] + cube[2]; }
+        cubes.sort(function(p, q) { return nearness(p) - nearness(q); });
         function has(cx, cd, cz) { return cz >= 0 && cz < g.h(cx, cd); }
-        function P(px, pd, pz) {
-            return [ox - box[0] + px * ax.x[0] + pd * ax.d[0] + pz * ax.z[0], oy - box[1] + px * ax.x[1] + pd * ax.d[1] + pz * ax.z[1]];
-        }
+        function P(px, pd, pz) { var q = cubeProject(ax, px, pd, pz); return [ox - box[0] + q[0], oy - box[1] + q[1]]; }
         for (i = 0; i < cubes.length; i++) {
             x = cubes[i][0]; d = cubes[i][1]; z = cubes[i][2];
-            if (!has(x, d, z + 1)) t.path([P(x, d, z + 1), P(x + 1, d, z + 1), P(x + 1, d + 1, z + 1), P(x, d + 1, z + 1)], true, shades[0], 100, o.wBody);
-            if (!has(x, d - 1, z)) t.path([P(x, d, z), P(x + 1, d, z), P(x + 1, d, z + 1), P(x, d, z + 1)], true, shades[1], 100, o.wBody);
+            // 면은 경사 연결: 옆면처럼 좁은 평행사변형의 뾰족한 모서리에서 각진 연결은 선이 길게 튀어나온다
+            if (!has(x, d, z + 1)) t.path([P(x, d, z + 1), P(x + 1, d, z + 1), P(x + 1, d + 1, z + 1), P(x, d + 1, z + 1)], true, shades[0], 100, o.wBody, null, "bevel");
+            if (!has(x, d - 1, z)) t.path([P(x, d, z), P(x + 1, d, z), P(x + 1, d, z + 1), P(x, d, z + 1)], true, shades[1], 100, o.wBody, null, "bevel");
             var sx = f > 0 ? x + 1 : x;
-            if (!has(x + f, d, z)) t.path([P(sx, d, z), P(sx, d + 1, z), P(sx, d + 1, z + 1), P(sx, d, z + 1)], true, shades[2], 100, o.wBody);
+            if (!has(x + f, d, z)) t.path([P(sx, d, z), P(sx, d + 1, z), P(sx, d + 1, z + 1), P(sx, d, z + 1)], true, shades[2], 100, o.wBody, null, "bevel");
+        }
+        for (i = 0; i < arrows.length; i++) {
+            var shift = [ox - box[0], oy - box[1]];
+            cubeArrow(t, [arrows[i].tail[0] + shift[0], arrows[i].tail[1] + shift[1]], [arrows[i].tip[0] + shift[0], arrows[i].tip[1] + shift[1]], o.wArrow);
+            t.text(arrows[i].label, arrows[i].text[0] + shift[0], arrows[i].text[1] + shift[1], o.font, "center");
         }
         return {w: box[2] - box[0], h: box[3] - box[1]};
     }
 
-    // 모눈 모양: cells[r][c](첫 줄이 위)가 0이 아니면 칸을 그린다. (ox, oy)가 왼쪽 아래. 숫자(numbers)면 칸 가운데에 값을 쓴다
-    function drawCubeCells(t, o, cells, ox, oy, numbers) {
+    // 모눈 모양: cells[r][c](첫 줄이 위)가 0이 아니면 칸을 그린다. (ox, oy)가 그림 범위의 왼쪽 아래.
+    // numbers면 칸 가운데에 값을 쓴다. 점선 틀을 켜면 모든 칸을 점선으로 먼저 긋는다. turn은 모눈을 돌리는 각(도, 반시계 +)
+    function drawCubeCells(t, o, cells, ox, oy, numbers, turn) {
         var s = o.cell * t.mm, rows = cells.length, cols = 0, r, c;
         for (r = 0; r < rows; r++) cols = Math.max(cols, cells[r].length);
+        var ang = turn * Math.PI / 180, ca = Math.cos(ang), sa = Math.sin(ang);
+        function raw(cx, ry) { var px = cx * s, py = (rows - ry) * s; return [px * ca - py * sa, px * sa + py * ca]; }
+        var corners = [raw(0, 0), raw(cols, 0), raw(0, rows), raw(cols, rows)], box = [Infinity, Infinity, -Infinity, -Infinity];
+        for (c = 0; c < 4; c++) {
+            box[0] = Math.min(box[0], corners[c][0]); box[1] = Math.min(box[1], corners[c][1]);
+            box[2] = Math.max(box[2], corners[c][0]); box[3] = Math.max(box[3], corners[c][1]);
+        }
+        function P(cx, ry) { var q = raw(cx, ry); return [ox - box[0] + q[0], oy - box[1] + q[1]]; }
+        if (o.viewFrame) {
+            for (r = 0; r <= rows; r++) t.line(P(0, r), P(cols, r), o.wRope, CUBE_DASH);
+            for (c = 0; c <= cols; c++) t.line(P(c, 0), P(c, rows), o.wRope, CUBE_DASH);
+        }
         for (r = 0; r < rows; r++) for (c = 0; c < cells[r].length; c++) {
             if (!cells[r][c]) continue;
-            var left = ox + c * s, top = oy + (rows - r) * s;
-            t.rect(left, top, left + s, top - s, o.viewFill ? 15 : 0, 100, o.wBody);
+            t.path([P(c, r), P(c + 1, r), P(c + 1, r + 1), P(c, r + 1)], true, o.viewFill ? CUBE_VIEW_K : 0, 100, o.wBody, null, "bevel");
             // 숫자 윤곽(높이 0.72배)의 가운데가 칸 가운데에 오게 윤곽 윗변을 놓는다
-            if (numbers) t.textAt(String(cells[r][c]), left + s / 2, top - s / 2 + 0.36 * o.font, o.font, "below", null);
+            var mid = P(c + 0.5, r + 0.5);
+            if (numbers) t.textAt(String(cells[r][c]), mid[0], mid[1] + 0.36 * o.font, o.font, "below", null);
         }
-        return {w: cols * s, h: rows * s};
+        return {w: box[2] - box[0], h: box[3] - box[1]};
     }
 
     // 위·앞·옆·층별 모눈: 각각 cells(첫 줄이 위)
@@ -176,30 +223,37 @@ try {
         return out;
     }
 
-    // 좌표는 pt(y 위쪽 +). 그림들은 왼쪽부터 가로로 늘어놓고 아랫선을 맞춘다. 이름 글자는 그림 아래 가운데
+    // 좌표는 pt(y 위쪽 +). 그림들은 왼쪽부터 가로로 늘어놓고 아랫선을 맞춘다. 본 모양의 이름(위·앞·옆·1층)은 모눈 위에 쓰고,
+    // 방향 표시를 켜면 위에서 본 모양·층별 모양 아래에 '앞'과 ↑ 화살표를 단다(아래쪽이 앞)
     function drawStackedCubes(t, o) {
         var m = t.mm, size = o.font, g = cubeGrid(o.heights), gap = o.gap * m, x = 0, i;
         if (g.count === 0) return;
-        var labelY = -1.5 * m;
         function place(kind, title) {
-            var made;
+            var made, front = false;
             if (kind === "solid") made = drawCubeSolid(t, o, g, x, 0);
-            else if (kind === "top") made = drawCubeCells(t, o, cubeTopCells(g, 0), x, 0, false);
-            else if (kind === "front") made = drawCubeCells(t, o, cubeFrontCells(g), x, 0, false);
-            else if (kind === "side") made = drawCubeCells(t, o, cubeSideCells(g, o.side), x, 0, false);
-            else if (kind === "numbers") made = drawCubeCells(t, o, cubeTopCells(g, 0), x, 0, true);
-            else made = drawCubeCells(t, o, cubeTopCells(g, kind), x, 0, false);
-            if (o.showTitles && title !== "") t.textAt(title, x + made.w / 2, labelY, size, "below");
+            else if (kind === "turned") made = drawCubeCells(t, o, cubeTopCells(g, 0), x, 0, false, o.side === 0 ? -45 : 45);
+            else if (kind === "top") { made = drawCubeCells(t, o, cubeTopCells(g, 0), x, 0, false, 0); front = true; }
+            else if (kind === "front") made = drawCubeCells(t, o, cubeFrontCells(g), x, 0, false, 0);
+            else if (kind === "side") made = drawCubeCells(t, o, cubeSideCells(g, o.side), x, 0, false, 0);
+            else if (kind === "numbers") { made = drawCubeCells(t, o, cubeTopCells(g, 0), x, 0, true, 0); front = true; }
+            else { made = drawCubeCells(t, o, cubeTopCells(g, kind), x, 0, false, 0); front = true; }
+            if (o.showTitles && title !== "") t.text(title, x + made.w / 2, made.h + 1.2 * m + 0.44 * size, size, "center");
+            if (o.showDirections && front) {
+                var cx = x + made.w / 2;
+                cubeArrow(t, [cx, -1.2 * m - 3.5 * m], [cx, -1.2 * m], o.wArrow);
+                t.text("앞", cx, -2.4 * m - 3.5 * m - 0.44 * size, size, "center");
+            }
             x += made.w + gap;
         }
-        if (o.figure === 0 || o.figure === 1) place("solid", "");
-        if (o.figure === 1 || o.figure === 2) {
+        if (o.figure <= 2) place("solid", "");
+        if (o.figure === 1) place("turned", "");
+        if (o.figure === 2 || o.figure === 3) {
             place("top", "위");
             place("front", "앞");
             place("side", "옆");
         }
-        if (o.figure === 3) place("numbers", "");
-        if (o.figure === 4) for (i = 1; i <= g.maxH; i++) place(i, i + "층");
+        if (o.figure === 4) place("numbers", "");
+        if (o.figure === 5) for (i = 1; i <= g.maxH; i++) place(i, i + "층");
     }
 
     // 목록·표가 다 정해진 뒤에 창을 띄운다. 창은 runFormHost 안에서 닫힐 때까지 떠 있어서, 이 줄보다 아래의 var는 그동안 undefined다
@@ -213,12 +267,14 @@ try {
                 {key: "heights", label: "층수", text: true, value: "1 2 1 / 2 3 1 / 1 1 0"},
                 {key: "figure", label: "그림", items: CUBE_FIGURES, value: 0},
                 {key: "cell", label: "한 칸", unit: "mm", min: 3, max: 15, step: 0.5, value: 6},
+                {key: "showDirections", check: "방향 표시 (위·앞·옆 화살표)", value: true},
                 {panel: "쌓은 모양"},
                 {key: "projection", label: "그리는 방식", items: CUBE_PROJECTIONS, value: 0},
                 {key: "side", label: "보는 방향", items: CUBE_SIDES, value: 0},
                 {key: "shade", label: "면 음영", items: CUBE_SHADES, value: 1},
                 {panel: "본 모양"},
-                {key: "viewFill", check: "칸 칠하기", value: false},
+                {key: "viewFill", check: "칸 칠하기", value: true},
+                {key: "viewFrame", check: "점선 틀", value: true},
                 {key: "showTitles", check: "이름 (위·앞·옆·1층)", value: true},
                 {key: "gap", label: "그림 사이", unit: "mm", min: 2, max: 20, step: 0.5, value: 6},
                 {key: "font", label: "글자 크기", unit: "pt", min: 5, max: 14, step: 0.5, value: 8}
@@ -354,6 +410,8 @@ try {
         var controls = spec.controls.concat([
             {panel: "선 두께", fold: true},
             {key: "wBody", label: "모서리", unit: "pt", min: 0.1, max: 3, step: 0.1, value: 0.5},
+            {key: "wRope", label: "점선 틀", unit: "pt", min: 0.1, max: 2, step: 0.1, value: 0.3},
+            {key: "wArrow", label: "방향 화살표", unit: "pt", min: 0.1, max: 2, step: 0.1, value: 0.4},
             {panel: "위치"},
             {key: "offsetX", label: "가로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 0},
             {key: "offsetY", label: "세로", unit: "mm", min: -100, max: 100, step: 0.1, value: 0, move: 1}
@@ -580,11 +638,13 @@ try {
     function makeFormTools(g, o) {
         var t = {mm: FORM_MM, group: g};
         var frames = [];   // 그린 글자 글상자(축 범례가 눈금 숫자·다른 글자를 피하는 데 쓴다)
-        t.path = function(points, closed, fill, stroke, width, dash) {
+        // join이 "bevel"이면 모서리를 경사 연결로(기본은 각진 연결)
+        t.path = function(points, closed, fill, stroke, width, dash, join) {
             var p = g.pathItems.add();
             p.setEntirePath(points);
             p.closed = !!closed;
             formPaint(p, fill, stroke, width);
+            if (join === "bevel" && p.stroked) p.strokeJoin = StrokeJoin.BEVELENDJOIN;
             if (dash) p.strokeDashes = dash;
             return p;
         };
