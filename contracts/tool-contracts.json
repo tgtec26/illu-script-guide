@@ -5106,6 +5106,10 @@
           "type": "string",
           "default": ""
         },
+        "areaText": {
+          "type": "string",
+          "default": ""
+        },
         "arrowText": {
           "type": "string",
           "default": ""

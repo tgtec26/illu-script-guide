@@ -29,7 +29,7 @@ function extractFunction(name) {
 
 const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readChains", "readPairTexts", "circumcircle", "readCircles", "readEllipses", "readAngles", "trimText", "curvePoints", "ccwSweep", "readArcs", "readFills",
   "readChainPaths", "dimensionCurve", "display", "straight", "circleLine", "unitVector", "offsetPoint", "arcPoints", "rightAnglePoints", "buildGeometry", "clamp", "parseNumber",
-  "ConstructFail", "readConstructions", "constructPoint", "touchingCircle"];
+  "ConstructFail", "readConstructions", "constructPoint", "touchingCircle", "readAreas", "measureLength", "measureAngle", "measureArea"];
 const make = new Function("state", `
 var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, SYMBOL_MM = 0.6, TRACE_MM = 3, KAPPA = 0.5522847498;
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
@@ -38,7 +38,7 @@ var text = state.text, showNames = state.showNames, showAxes = state.showAxes, s
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
 const api = (text = {}, extra = {}) => make(Object.assign({
-  text: Object.assign({ pointsText: "", constructText: "", segmentText: "", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "" }, text),
+  text: Object.assign({ pointsText: "", constructText: "", segmentText: "", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", areaText: "" }, text),
   showNames: true, showAxes: false, sizeMm: 50,
 }, extra));
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
@@ -289,14 +289,14 @@ function lineWidthStore(constNames, raw) {
   assert.deepStrictEqual(d.texts.map((t) => t.text), ["A", "B", "C", "M"]);
   assert.strictEqual(d.lines.filter((l) => l.kind === "main").length, 2);
 }
-// 설정 저장: 작도 글까지 v4(26칸)로 쓰고, 작도 글이 없는 옛 v3(25칸)도 읽는다. 다른 태그·칸 수는 무시한다
+// 설정 저장: 넓이 글까지 v5(27칸)로 쓰고, 넓이 글이 없는 v4(26칸)·작도 글도 없는 옛 v3(25칸)도 읽는다. 다른 태그·칸 수는 무시한다
 {
   const decl = (name) => { const at = source.indexOf(`var ${name} = `); assert.ok(at >= 0, name); return source.slice(at, source.indexOf("\n", at)); };
   const store = (raw) => {
     const writes = [];
     const app = { preferences: { getStringPreference: () => raw, setStringPreference: (key, value) => writes.push(value) } };
     const text = new Function("app", ['var PREF_KEY = "T", POSITION_LIMIT_MM = 100;', decl("TEXT_KEYS"),
-      'var text = {pointsText: "P0", segmentText: "", dashedText: "", circleText: "", ellipseText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", arrowText: "", arcText: "", fillText: "", constructText: ""};',
+      'var text = {pointsText: "P0", segmentText: "", dashedText: "", circleText: "", ellipseText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", arrowText: "", arcText: "", fillText: "", constructText: "", areaText: ""};',
       "var showNames = true, showAxes = false, sizeMm = 50, fontPt = 8, labelGapMm = 1.2, arcRadiusMm = 3, tickMm = 1.6, strokePt = 0.8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true;",
       "function saveLineWidths() {}"].concat(["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction),
       ["applySettings(); saveSettings(); return text;"]).join("\n"))(app);
@@ -307,13 +307,18 @@ function lineWidthStore(constNames, raw) {
   assert.strictEqual(old.text.pointsText, "A(0,0) B(1,0)");
   assert.strictEqual(old.text.constructText, "");
   const saved = old.saved.split("|");
-  assert.strictEqual(saved.length, 26);
-  assert.deepStrictEqual([saved[0], saved[14], saved[15], saved[16], saved[17]], ["v4", "", "0", "1", "60"]);
+  assert.strictEqual(saved.length, 27);
+  assert.deepStrictEqual([saved[0], saved[14], saved[15], saved[16], saved[17], saved[18]], ["v5", "", "", "0", "1", "60"]);
   saved[14] = encodeURIComponent("M=mid(A,B)");
-  const v4 = store(saved.join("|"));
-  assert.strictEqual(v4.text.constructText, "M=mid(A,B)");
-  assert.strictEqual(v4.saved, saved.join("|"));
-  assert.strictEqual(store(saved.slice(0, 25).join("|")).text.pointsText, "P0", "칸 수가 틀리면 무시");
+  saved[15] = encodeURIComponent("ABC");
+  const v5 = store(saved.join("|"));
+  assert.strictEqual(v5.text.constructText, "M=mid(A,B)");
+  assert.strictEqual(v5.text.areaText, "ABC");
+  assert.strictEqual(v5.saved, saved.join("|"));
+  const v4 = store(["v4"].concat(saved.slice(1, 15), saved.slice(16)).join("|"));
+  assert.strictEqual(v4.text.constructText, "M=mid(A,B)", "v4도 읽는다");
+  assert.strictEqual(v4.text.areaText, "");
+  assert.strictEqual(store(saved.slice(0, 26).join("|")).text.pointsText, "P0", "칸 수가 틀리면 무시");
 }
 require("./es3-lint")(["readChainPaths", "dimensionCurve", "ConstructFail", "readConstructions", "constructPoint"].map(extractFunction).join("\n"), "기하 새 도형 함수");
 new Function(bundle);
@@ -385,3 +390,29 @@ console.log("geometry new marks ok");
   assert.ok(api({ pointsText: "O(0,0) A(1,0)", arcText: "O:~X" }).buildGeometry().notes.length === 1);
 }
 console.log("geometry arc marks ok");
+
+// 측정: 길이·각 글자의 ?, 넓이 칸 (웹 math-geometry.test.js와 같은 경우)
+{
+  const g = api();
+  assert.deepStrictEqual([g.measureLength(5), g.measureLength(Math.sqrt(13)), g.measureLength(Math.sqrt(8)), g.measureLength(2.5), g.measureLength(Math.PI)], ["5", "√13", "2√2", "2.5", "3.14"]);
+  assert.deepStrictEqual([g.measureAngle(Math.PI / 3), g.measureAngle(Math.atan2(3, 4))], ["60°", "36.9°"]);
+  assert.deepStrictEqual([g.measureArea(6), g.measureArea(7.5), g.measureArea(Math.sqrt(3))], ["6", "7.5", "1.73"]);
+  const d = api({ pointsText: "A(0,3) B(0,0) C(2,0)", segmentText: "A-B-C-A", angleText: "ACB:?", lengthText: "AC:?, AB:?", areaText: "ABC" }).buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  const texts = d.texts.map((t) => t.text);
+  for (const want of ["√13", "3", "56.3°"]) assert.ok(texts.includes(want), want);
+  const area = d.texts.filter((t) => t.text === "3" && t.dir[0] === 0 && t.dir[1] === 0);
+  assert.strictEqual(area.length, 1, "넓이 글자는 가운데 맞춤");
+  assert.ok(api({ pointsText: "A(0,3) B(0,0) C(2,0)", areaText: "ABC:S" }).buildGeometry().texts.some((t) => t.text === "S"));
+  assert.strictEqual(api({ pointsText: "A(0,3) B(0,0) C(2,0)", areaText: "AB" }).buildGeometry().notes.length, 1);
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-geometry.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8");
+    for (const name of ["measureLength", "measureAngle", "measureArea"]) {
+      const start = web.indexOf(`export function ${name}(`), end = web.indexOf("\n}\n", start) + 2;
+      const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+      assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
+    }
+  }
+}
+console.log("geometry measure ok");

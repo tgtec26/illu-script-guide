@@ -2178,7 +2178,7 @@ var SCRIPT_KEY = "HighGeometry";
             var DIMENSION_LABEL_GAP_MM = 0.7;
             var KAPPA = 0.5522847498;
             var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
-            var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText", "constructText"];
+            var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText", "constructText", "areaText"];
 
             var doc = app.activeDocument;
             var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
@@ -2190,7 +2190,7 @@ var SCRIPT_KEY = "HighGeometry";
 
             // 옵션
             var text = {pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "",
-                angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: "", constructText: ""};
+                angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: "", constructText: "", areaText: ""};
             var showNames = true;
             var showAxes = false;
             var sizeMm = 50;
@@ -2228,11 +2228,12 @@ var SCRIPT_KEY = "HighGeometry";
             addTextRow(pointPanel, "타원", "ellipseText", "O:6x4 중심 O·가로 반지름 6·세로 반지름 4, (1,2):6x4 좌표 중심, 6x4 중심 원점 (쉼표로 여러 개, x 대신 ×도 된다)");
             addTextRow(pointPanel, "호", "arcText", "O:A>B 중심 O, 점 A에서 B 쪽으로 반시계로 도는 호(O:A<B는 시계), AC:u AC를 지름으로 하는 반원(바깥쪽 u 위·d 아래·l 왼쪽·r 오른쪽), O:~A O를 중심으로 A를 지나는 짧은 작도 흔적 호(가는 선). 뒤에 :4π는 호 가운데 바깥 글자, :| :|| :|||는 같은 호 눈금(O:A>B:|:4π처럼 함께). 쉼표로 여러 개");
             addTextRow(pointPanel, "색칠", "fillText", "경로를 >로 이어 칠한다(저절로 닫힘). 점 이름은 직선, arc+(O,B)·arc-(O,B)는 지금 점에서 B 방향까지 O를 중심으로 반시계·시계로 도는 호, circle(O,3)·circle(O,A)는 원판. 뒤의 :30은 농도(K, 안 쓰면 20)");
-            addTextRow(pointPanel, "각", "angleText", "BAC:60° (꼭짓점 A에서 AB와 AC 사이의 각), ABC:R 직각 표시, BAC 글자 없이 호, BAC:60°:2 호 2겹, ABD:• 같은 각 기호(• ∘ ×), ABD:•:0 호 없이 기호만");
+            addTextRow(pointPanel, "각", "angleText", "BAC:60° (꼭짓점 A에서 AB와 AC 사이의 각), ABC:R 직각 표시, BAC 글자 없이 호, BAC:60°:2 호 2겹, ABD:• 같은 각 기호(• ∘ ×), ABD:•:0 호 없이 기호만, BAC:? 좌표로 잰 각도(60°)");
 
             var markPanel = addPanel(win, "표시");
             addTextRow(markPanel, "같은 길이", "tickText", "AB:1, CD:2 — 변 가운데에 눈금 1~3개, AB:> · AB:>> 평행 표시");
-            addTextRow(markPanel, "변 길이", "lengthText", "AB:5, BC:2√3 — 변 가운데에서 바깥쪽에 글자");
+            addTextRow(markPanel, "변 길이", "lengthText", "AB:5, BC:2√3 — 변 가운데에서 바깥쪽에 글자. AB:?는 좌표로 잰 길이(√13, 2√2, 2.5)");
+            addTextRow(markPanel, "넓이", "areaText", "ABC — 다각형 꼭짓점들의 가운데에 좌표로 잰 넓이(6, 7.5), ABCD:S는 글자 S. 꼭짓점 셋 이상, 쉼표로 여러 개");
             addTextRow(markPanel, "점 찍기", "dotText", "점으로 찍을 점 이름: P Q");
             addTextRow(markPanel, "글자 방향", "labelDirText", "점 이름 글자 방향: A:ul, P:r (u 위, d 아래, l 왼쪽, r 오른쪽, ul·ur·dl·dr 대각선). 안 쓰면 그림 가운데에서 바깥쪽. I:x는 그 점의 이름을 쓰지 않는다(작도용 보조점)");
             var nameCheck = markPanel.add("checkbox", undefined, "점 이름 쓰기");
@@ -2691,6 +2692,46 @@ var SCRIPT_KEY = "HighGeometry";
                     out.push({names: t, text: colon >= 0 ? items[i].substring(colon + 1).replace(/^\s+|\s+$/g, "") : ""});
                 }
                 return out;
+            }
+
+            // 넓이: "ABC"(잰 넓이), "ABCD:S"(글자 S). 꼭짓점 셋 이상 (웹 math-geometry.js와 같다)
+            function readAreas(source, names, notes) {
+                var out = [];
+                var items = splitItems(source);
+                for (var i = 0; i < items.length; i++) {
+                    var colon = items[i].indexOf(":");
+                    var t = tokenizeNames(colon >= 0 ? items[i].substring(0, colon) : items[i], names);
+                    if (t === null || t.length < 3) { notes.push("넓이 " + items[i]); continue; }
+                    var label = colon >= 0 ? items[i].substring(colon + 1).replace(/^\s+|\s+$/g, "") : "";
+                    out.push({names: t, text: label === "" ? "?" : label});
+                }
+                return out;
+            }
+
+            // 잰 길이 글자: 제곱이 정수에 가까우면 근호로(5, √13, 2√2), 아니면 소수 둘째 자리까지
+            function measureLength(d) {
+                var square = d * d, n = Math.round(square), k = 1;
+                if (n > 0 && Math.abs(square - n) < 1e-6 * Math.max(1, square)) {
+                    for (var f = 2; f * f <= n; f++) {
+                        while (n % (f * f) === 0) {
+                            n /= f * f;
+                            k *= f;
+                        }
+                    }
+                    return n === 1 ? String(k) : (k === 1 ? "" : String(k)) + "√" + n;
+                }
+                return String(Math.round(d * 100) / 100);
+            }
+
+            // 잰 각 글자(라디안 → 도): 정수에 가까우면 60°, 아니면 소수 첫째 자리까지 36.9°
+            function measureAngle(radians) {
+                var degrees = radians * 180 / Math.PI, whole = Math.round(degrees);
+                return (Math.abs(degrees - whole) < 1e-6 ? String(whole) : String(Math.round(degrees * 10) / 10)) + "°";
+            }
+
+            // 잰 넓이 글자: 소수 둘째 자리까지 (6, 7.5, 1.73)
+            function measureArea(area) {
+                return String(Math.round(area * 100) / 100);
             }
 
             // 세 점을 지나는 원. 한 직선 위의 점이면 null
@@ -3229,7 +3270,20 @@ var SCRIPT_KEY = "HighGeometry";
                 var angles = readAngles(text.angleText, names, notes);
                 var ticks = readPairTexts(text.tickText, names, "눈금", notes);
                 var lengths = readPairTexts(text.lengthText, names, "길이", notes);
+                var areas = readAreas(text.areaText, names, notes);
                 var dotNames = [], i, k, t;
+                // 측정: 길이·각 글자에 ?를 쓰면 좌표로 잰 값을 쓴다 (AB:? → √13, BAC:? → 60°. 웹 math-geometry.js와 같다)
+                for (i = 0; i < lengths.length; i++) {
+                    if (lengths[i].text !== "?") continue;
+                    var ma = table[lengths[i].names[0]], mb = table[lengths[i].names[1]];
+                    lengths[i].text = measureLength(Math.sqrt((ma[0] - mb[0]) * (ma[0] - mb[0]) + (ma[1] - mb[1]) * (ma[1] - mb[1])));
+                }
+                for (i = 0; i < angles.length; i++) {
+                    if (angles[i].text !== "?") continue;
+                    var mv = table[angles[i].names[1]], mp = table[angles[i].names[0]], mq = table[angles[i].names[2]];
+                    var w1 = [mp[0] - mv[0], mp[1] - mv[1]], w2 = [mq[0] - mv[0], mq[1] - mv[1]];
+                    angles[i].text = measureAngle(Math.abs(Math.atan2(w1[0] * w2[1] - w1[1] * w2[0], w1[0] * w2[0] + w1[1] * w2[1])));
+                }
                 var dotItems = splitItems(text.dotText);
                 for (i = 0; i < dotItems.length; i++) {
                     t = tokenizeNames(dotItems[i], names);
@@ -3453,6 +3507,20 @@ var SCRIPT_KEY = "HighGeometry";
                         arcLabel.clear = arcs[i].ticks ? tick / 2 : 0;
                         out.texts.push(arcLabel);
                     }
+                }
+
+                // 넓이: 다각형 꼭짓점들의 가운데에 잰 넓이(신발끈 공식) 또는 직접 쓴 글자
+                for (i = 0; i < areas.length; i++) {
+                    var twice = 0, sx = 0, sy = 0, poly = areas[i].names;
+                    for (k = 0; k < poly.length; k++) {
+                        var pa = table[poly[k]], pn = table[poly[(k + 1) % poly.length]];
+                        twice += pa[0] * pn[1] - pn[0] * pa[1];
+                        sx += pa[0];
+                        sy += pa[1];
+                    }
+                    var areaLabel = display(areas[i].text === "?" ? measureArea(Math.abs(twice) / 2) : areas[i].text);
+                    areaLabel.at = T([sx / poly.length, sy / poly.length]); areaLabel.dir = [0, 0]; areaLabel.clear = 0;
+                    out.texts.push(areaLabel);
                 }
 
                 for (i = 0; i < dotNames.length; i++) out.dots.push(P(dotNames[i]));
@@ -3700,7 +3768,7 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v4"];
+                var parts = ["v5"];
                 for (var i = 0; i < TEXT_KEYS.length; i++) parts.push(encodeURIComponent(text[TEXT_KEYS[i]]));
                 parts.push(showNames ? "1" : "0", showAxes ? "1" : "0", sizeMm, fontPt, labelGapMm, arcRadiusMm, tickMm, strokePt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0");
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
@@ -3711,8 +3779,8 @@ var SCRIPT_KEY = "HighGeometry";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v4는 글 14칸(작도 글 constructText까지), 옛 v3는 작도 글이 없는 13칸이다
-                var textCount = p[0] === "v4" ? TEXT_KEYS.length : (p[0] === "v3" ? TEXT_KEYS.length - 1 : -1);
+                // v5는 글 15칸(넓이 글 areaText까지), v4는 넓이 글이 없는 14칸, 옛 v3는 작도 글도 없는 13칸이다
+                var textCount = p[0] === "v5" ? TEXT_KEYS.length : (p[0] === "v4" ? TEXT_KEYS.length - 1 : (p[0] === "v3" ? TEXT_KEYS.length - 2 : -1));
                 if (textCount < 0 || p.length !== textCount + 12) return;
                 try {
                     var restored = {};
