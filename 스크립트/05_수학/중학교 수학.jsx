@@ -1839,6 +1839,7 @@ var SCRIPT_KEY = "MiddleMath";
             var showNumbers = true;
             var functionTexts = ["y=2x+1", "", "", "", ""];
             var parameterA = 1, parameterB = 0, parameterC = 0;
+            var parametricX = "", parametricY = "", parametricMin = "0", parametricMax = "2π";   // 매개변수곡선 x(t)·y(t)와 t 범위
             var pointsText = "";
             var showCoords = true;
             var showGuides = true;
@@ -1907,6 +1908,26 @@ var SCRIPT_KEY = "MiddleMath";
             var paramAControls = addValueRow(paramPanel, "a", "", parameterA, -10, 10, 0.1, 1);
             var paramBControls = addValueRow(paramPanel, "b", "", parameterB, -10, 10, 0.1, 1);
             var paramCControls = addValueRow(paramPanel, "c", "", parameterC, -10, 10, 0.1, 1);
+            var curvePanel = addPanel(win, "매개변수곡선", "foldParametric");
+            var curveXRow = curvePanel.add("group");
+            curveXRow.add("statictext", undefined, "x(t):").preferredSize.width = 34;
+            var curveXInput = curveXRow.add("edittext", undefined, parametricX);
+            curveXInput.preferredSize.width = 300;
+            curveXInput.helpTip = "t로 나타낸 x 좌표 (매개변수로 나타낸 곡선): 3cos(t). a·b·c 계수도 쓸 수 있다. x(t)·y(t)를 둘 다 써야 그린다";
+            var curveYRow = curvePanel.add("group");
+            curveYRow.add("statictext", undefined, "y(t):").preferredSize.width = 34;
+            var curveYInput = curveYRow.add("edittext", undefined, parametricY);
+            curveYInput.preferredSize.width = 300;
+            curveYInput.helpTip = "t로 나타낸 y 좌표: 2sin(t)";
+            var curveRangeRow = curvePanel.add("group");
+            curveRangeRow.add("statictext", undefined, "t:").preferredSize.width = 34;
+            var curveMinInput = curveRangeRow.add("edittext", undefined, parametricMin);
+            curveMinInput.characters = 6;
+            curveMinInput.helpTip = "t 시작값. π와 분수를 쓸 수 있다";
+            curveRangeRow.add("statictext", undefined, "~");
+            var curveMaxInput = curveRangeRow.add("edittext", undefined, parametricMax);
+            curveMaxInput.characters = 6;
+            curveMaxInput.helpTip = "t 끝값. 시작값보다 커야 한다";
             var functionChecks = functionPanel.add("group");
             functionChecks.add("statictext", undefined, "이름:");
             var nameList = functionChecks.add("dropdownlist", undefined, NAME_STYLES);
@@ -2036,6 +2057,10 @@ var SCRIPT_KEY = "MiddleMath";
             bindValueRow(regionK2Controls, function(value) { regionK2 = value; }, initial.regionK2);
             segmentInput.onChanging = function() { segmentText = segmentInput.text; updatePreview(); };
             labelInput.onChanging = function() { labelText = labelInput.text; updatePreview(); };
+            curveXInput.onChanging = function() { parametricX = curveXInput.text; updatePreview(); };
+            curveYInput.onChanging = function() { parametricY = curveYInput.text; updatePreview(); };
+            curveMinInput.onChanging = function() { parametricMin = curveMinInput.text; updatePreview(); };
+            curveMaxInput.onChanging = function() { parametricMax = curveMaxInput.text; updatePreview(); };
             for (var ni = 0; ni < FUNCTION_COUNT; ni++) bindNameRow(ni);
             for (var fi = 0; fi < FUNCTION_COUNT; fi++) bindFunctionInput(fi);
             pointsInput.onChanging = function() { pointsText = pointsInput.text; updatePreview(); };
@@ -2120,12 +2145,22 @@ var SCRIPT_KEY = "MiddleMath";
                 if (asymptotes === null) problems.push("점근선");
                 var region = parseRegion(regionText);
                 if (region === null) problems.push("칠하기");
+                // 매개변수곡선: x(t)·y(t)가 둘 다 있어야 그린다 (웹 math-coord-plane.js readCoordPlaneInputs와 같다)
+                var parametric = null;
+                var px = String(parametricX).replace(/^\s+|\s+$/g, ""), py = String(parametricY).replace(/^\s+|\s+$/g, "");
+                if (px !== "" || py !== "") {
+                    var curveX = px === "" ? null : compileFunction(px, variables, true), curveY = py === "" ? null : compileFunction(py, variables, true);
+                    var curveT0 = evaluateNumber(String(parametricMin).replace(/\s/g, "")), curveT1 = evaluateNumber(String(parametricMax).replace(/\s/g, ""));
+                    if (curveX === null || curveY === null) problems.push("매개변수 식");
+                    else if (curveT0 === null || curveT1 === null || !(curveT1 > curveT0)) problems.push("매개변수 범위");
+                    else parametric = {fx: curveX, fy: curveY, t0: curveT0, t1: curveT1};
+                }
                 messageText.text = problems.length > 0 ? "읽지 못함: " + problems.join(" / ") : " ";
 
                 var drawing = buildPlane({
                     xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unit: unitMm * MM_TO_PT,
                     tick: TICK_MM * MM_TO_PT, grid: showGrid, numbers: showNumbers,
-                    functions: functions, nameStyle: nameStyle, hideAxes: hideAxes, region: region || [],
+                    functions: functions, parametric: parametric, nameStyle: nameStyle, hideAxes: hideAxes, region: region || [],
                     points: points.list, coords: showCoords, guides: showGuides,
                     piAxis: piAxis, intersections: showIntersections, identity: showIdentity, asymptotes: asymptotes || [], fontSize: fontPt,
                     ticks: showTicks, solidLines: solidLines || [], lineNames: showLineNames, notes: notesWithNames(notes.list),
@@ -2395,6 +2430,12 @@ var SCRIPT_KEY = "MiddleMath";
                 if (opt.identity) {
                     var lo = Math.max(xLo, opt.yMin), hi = Math.min(xHi, opt.yMax);
                     if (hi > lo) lines.push(straight([[lo * u, lo * u], [hi * u, hi * u]], "guide"));
+                }
+
+                // 매개변수곡선: 함수 그래프와 같은 굵기·상자(가로는 화살촉 뒤끝까지)
+                if (opt.parametric) {
+                    var curves = plotParametric(opt.parametric.fx, opt.parametric.fy, opt.parametric.t0, opt.parametric.t1, xLo, plotHi, opt.yMin, opt.yMax);
+                    for (var pc = 0; pc < curves.length; pc++) lines.push({ points: toBezierCurve(curves[pc], u), kind: "graph" });
                 }
 
                 var formulaLabels = [];
@@ -2841,6 +2882,140 @@ var SCRIPT_KEY = "MiddleMath";
                 }
             }
 
+            // 매개변수곡선 (x(t), y(t)), t0 ≤ t ≤ t1을 [x0,x1]×[y0,y1] 안에서 그린다. plotFunction과 같은 방식이다(적응 분할 →
+            // 에르미트로 빼도 되는 점 지우기, 그림 제작 규칙 3.10). 점마다 접선 (dx/dt, dy/dt)을 두고, 상자 밖·정의되지 않는 곳·
+            // 상자 안에서 건너뛰는 곳(불연속)에서 끊는다. 점: {t, x, y, dx, dy}
+            function plotParametric(fx, fy, t0, t1, x0, x1, y0, y1) {
+                var TOLERANCE = 0.004, MAX_DEPTH = 12, PIECES = 64, LIMIT = 4000;
+                var mx = (x1 - x0) * 1e-9, my = (y1 - y0) * 1e-9;
+                var jump = Math.sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)) / 50;
+                var segments = [], current = null, count = 0;
+
+                function value(t) {
+                    var x, y;
+                    try { x = fx(t); y = fy(t); } catch (e) { return null; }
+                    return (typeof x === "number" && isFinite(x) && typeof y === "number" && isFinite(y)) ? [x, y] : null;
+                }
+                function inside(t) {
+                    var p = value(t);
+                    return p !== null && p[0] >= x0 - mx && p[0] <= x1 + mx && p[1] >= y0 - my && p[1] <= y1 + my;
+                }
+                function slope(t) {
+                    var h = 1e-5 * (1 + Math.abs(t)), a = value(t - h), b = value(t + h), c = value(t);
+                    if (a !== null && b !== null) return [(b[0] - a[0]) / (2 * h), (b[1] - a[1]) / (2 * h)];
+                    if (b !== null && c !== null) return [(b[0] - c[0]) / h, (b[1] - c[1]) / h];
+                    if (a !== null && c !== null) return [(c[0] - a[0]) / h, (c[1] - a[1]) / h];
+                    return [0, 0];
+                }
+                function emit(t) {
+                    if (current === null) {
+                        current = [];
+                        segments.push(current);
+                    }
+                    if (count++ > LIMIT) return;
+                    var p = value(t), d = slope(t);
+                    current.push({ t: t, x: Math.min(x1, Math.max(x0, p[0])), y: Math.min(y1, Math.max(y0, p[1])), dx: d[0], dy: d[1] });
+                }
+                function finish() { current = null; }
+                function edge(inT, outT) {
+                    for (var i = 0; i < 40; i++) {
+                        var mid = (inT + outT) / 2;
+                        if (inside(mid)) inT = mid;
+                        else outT = mid;
+                    }
+                    return inT;
+                }
+                function refine(a, b, depth) {
+                    var mid = (a + b) / 2;
+                    if (!inside(mid)) {
+                        var cut = edge(a, mid);
+                        if (cut > a) refine(a, cut, depth + 1);
+                        finish();
+                        var resume = edge(b, mid);
+                        emit(resume);
+                        if (b > resume) refine(resume, b, depth + 1);
+                        return;
+                    }
+                    var h = b - a, pa = value(a), pb = value(b), pm = value(mid), da = slope(a), db = slope(b);
+                    var gx = (pa[0] + pb[0]) / 2 + h * (da[0] - db[0]) / 8 - pm[0], gy = (pa[1] + pb[1]) / 2 + h * (da[1] - db[1]) / 8 - pm[1];
+                    if (depth < MAX_DEPTH && Math.sqrt(gx * gx + gy * gy) > TOLERANCE) {
+                        refine(a, mid, depth + 1);
+                        refine(mid, b, depth + 1);
+                    } else if (depth >= MAX_DEPTH && Math.sqrt((pb[0] - pa[0]) * (pb[0] - pa[0]) + (pb[1] - pa[1]) * (pb[1] - pa[1])) > jump) {
+                        finish();   // 아주 짧은 t 사이에서 크게 건너뛴다: 상자 안의 불연속
+                        emit(b);
+                    } else {
+                        emit(b);
+                    }
+                }
+
+                for (var i = 0; i < PIECES; i++) {
+                    var a = t0 + (t1 - t0) * i / PIECES, b = t0 + (t1 - t0) * (i + 1) / PIECES;
+                    var inA = inside(a), inB = inside(b);
+                    if (inA && current === null) emit(a);
+                    if (inA && inB) {
+                        refine(a, b, 0);
+                    } else if (inA) {
+                        var last = edge(a, b);
+                        if (last > a) refine(a, last, 0);
+                        finish();
+                    } else if (inB) {
+                        var first = edge(b, a);
+                        emit(first);
+                        refine(first, b, 0);
+                    } else {
+                        finish();
+                    }
+                }
+                var out = [];
+                for (var k = 0; k < segments.length; k++) if (segments[k].length > 1) out.push(simplify(segments[k]));
+                return out;
+
+                // 빼도 앞뒤 점의 에르미트 곡선이 곡선에서 벗어나지 않는 점은 지운다 (직선은 두 점만 남는다)
+                function simplify(points) {
+                    if (points.length < 3) return points;
+                    var kept = [points[0]];
+                    for (var i = 1; i < points.length - 1; i++) {
+                        if (!fits(kept[kept.length - 1], points[i + 1])) kept.push(points[i]);
+                    }
+                    kept.push(points[points.length - 1]);
+                    return kept;
+                }
+                function fits(p, q) {
+                    var h = q.t - p.t;
+                    for (var j = 1; j < 8; j++) {
+                        var s = j / 8, actual = value(p.t + h * s);
+                        if (actual === null || !inside(p.t + h * s)) return false;
+                        var s2 = s * s, s3 = s2 * s;
+                        var h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
+                        var ex = h00 * p.x + h10 * h * p.dx + h01 * q.x + h11 * h * q.dx - actual[0];
+                        var ey = h00 * p.y + h10 * h * p.dy + h01 * q.y + h11 * h * q.dy - actual[1];
+                        if (Math.sqrt(ex * ex + ey * ey) > TOLERANCE) return false;
+                    }
+                    return true;
+                }
+            }
+
+            // 매개변수곡선 점 → 베지어: 핸들 = 이웃까지 t 간격의 1/3만큼 접선 (dx/dt, dy/dt) 방향
+            function toBezierCurve(points, unit) {
+                var out = [];
+                for (var i = 0; i < points.length; i++) {
+                    var p = points[i];
+                    var anchor = [p.x * unit, p.y * unit];
+                    var left = anchor, right = anchor;
+                    if (i > 0) {
+                        var hl = (p.t - points[i - 1].t) / 3;
+                        left = [(p.x - p.dx * hl) * unit, (p.y - p.dy * hl) * unit];
+                    }
+                    if (i < points.length - 1) {
+                        var hr = (points[i + 1].t - p.t) / 3;
+                        right = [(p.x + p.dx * hr) * unit, (p.y + p.dy * hr) * unit];
+                    }
+                    out.push({ anchor: anchor, left: left, right: right });
+                }
+                return out;
+            }
+
             // 에르미트 → 베지어: 핸들 = 이웃까지 x 간격의 1/3만큼 접선 방향
             function toBezier(points, unit) {
                 var out = [];
@@ -2911,7 +3086,8 @@ var SCRIPT_KEY = "MiddleMath";
 
             // "y=…", "f(x)=…" 또는 식만. x의 함수(function)로 만들고, 못 읽으면 null.
             // 2x, 1/2x(=½x), x^2, √x, |x-1|, 2^x, e^x, π(pi), sin 2x, cos(x+1), tan x, log_2 x, log x(밑 10), ln x
-            function compileFunction(text, variables) {
+            // parameter가 참이면 t를 변수로 읽는다(매개변수곡선 x(t)·y(t)). 함수의 인자 자리에 t가 들어간다
+            function compileFunction(text, variables, parameter) {
                 var s = String(text).split("−").join("-").split("×").join("*").split("÷").join("/")
                     .split("²").join("^2").split("³").join("^3").split("π").join("pi");
                 // log_2 x처럼 밑 뒤의 빈칸은 밑의 끝이다 (빈칸을 지운 log_23x와 구별)
@@ -2921,6 +3097,12 @@ var SCRIPT_KEY = "MiddleMath";
                 if (s === "") return null;
                 var NAMES = ["arcsin", "arccos", "arctan", "sqrt", "sin", "cos", "tan", "sec", "log", "ln", "pi", "e", "x"];
                 if (variables) NAMES = NAMES.concat(["a", "b", "c"]);
+                if (parameter) {
+                    // x 대신 t. tan·sqrt가 먼저 맞도록 맨 뒤에 (웹 math-function.js와 같은 ES3 코드)
+                    var named = [];
+                    for (var n = 0; n < NAMES.length; n++) if (NAMES[n] !== "x") named.push(NAMES[n]);
+                    NAMES = named.concat(["t"]);
+                }
                 var FUNCS = { sin: Math.sin, cos: Math.cos, tan: Math.tan, sqrt: Math.sqrt, arcsin: Math.asin, arccos: Math.acos, arctan: Math.atan, sec: function(v) { return 1 / Math.cos(v); } };
                 var pos = 0, absDepth = 0;
                 function peek() { return s.charAt(pos); }
@@ -2987,7 +3169,7 @@ var SCRIPT_KEY = "MiddleMath";
                     var name = nameAt();
                     if (name !== null) {
                         pos += name.length;
-                        if (name === "x") return function(x) { return x; };
+                        if (name === (parameter ? "t" : "x")) return function(x) { return x; };
                         if (variables && (name === "a" || name === "b" || name === "c")) { var value = variables[name]; return function() { return value; }; }
                         if (name === "pi") return function() { return Math.PI; };
                         if (name === "e") return function() { return Math.E; };
@@ -3211,7 +3393,7 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v5", xMin, xMax, yMin, yMax, unitMm, fontPt,
+                    "v6", xMin, xMax, yMin, yMax, unitMm, fontPt,
                     showGrid ? "1" : "0", showNumbers ? "1" : "0", nameStyle,
                     encodeList(functionTexts),
                     encodeURIComponent(pointsText), showCoords ? "1" : "0", showGuides ? "1" : "0",
@@ -3219,7 +3401,8 @@ var SCRIPT_KEY = "MiddleMath";
                     piAxis ? "1" : "0", showIntersections ? "1" : "0", showIdentity ? "1" : "0", encodeURIComponent(asymptoteText),
                     hideAxes ? "1" : "0", encodeURIComponent(regionText), regionK,
                     encodeList(nameTexts), nameAts.join(","), encodeURIComponent(lineText), showLineNames ? "1" : "0",
-                    encodeURIComponent(labelText), encodeURIComponent(segmentText), encodeURIComponent(regionText2), regionK2, showTicks ? "1" : "0", parameterA, parameterB, parameterC
+                    encodeURIComponent(labelText), encodeURIComponent(segmentText), encodeURIComponent(regionText2), regionK2, showTicks ? "1" : "0", parameterA, parameterB, parameterC,
+                    encodeURIComponent(parametricX), encodeURIComponent(parametricY), encodeURIComponent(parametricMin), encodeURIComponent(parametricMax)
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -3235,8 +3418,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다
-                if (!((p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
+                // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다. v6 = v5 + 매개변수곡선 4칸
+                if (!((p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
                 try {
                     xMin = Math.round(restoreNumber(p[1], xMin, -20, 0));
                     xMax = Math.round(restoreNumber(p[2], xMax, 1, 20));
@@ -3264,7 +3447,7 @@ var SCRIPT_KEY = "MiddleMath";
                     hideAxes = p[21] === "1";
                     regionText = decodeURIComponent(p[22]);
                     regionK = restoreNumber(p[23], regionK, 5, 60);
-                    if (p[0] === "v4" || p[0] === "v5") {
+                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6") {
                         var savedNames = p[24].split(",");
                         if (savedNames.length === FUNCTION_COUNT) {
                             for (var sn = 0; sn < FUNCTION_COUNT; sn++) nameTexts[sn] = decodeURIComponent(savedNames[sn]);
@@ -3280,10 +3463,16 @@ var SCRIPT_KEY = "MiddleMath";
                         regionText2 = decodeURIComponent(p[30]);
                         regionK2 = restoreNumber(p[31], regionK2, 5, 60);
                         showTicks = p[32] === "1";
-                        if (p[0] === "v5") {
+                        if (p[0] === "v5" || p[0] === "v6") {
                             parameterA = restoreNumber(p[33], parameterA, -10, 10);
                             parameterB = restoreNumber(p[34], parameterB, -10, 10);
                             parameterC = restoreNumber(p[35], parameterC, -10, 10);
+                        }
+                        if (p[0] === "v6") {
+                            parametricX = decodeURIComponent(p[36]);
+                            parametricY = decodeURIComponent(p[37]);
+                            parametricMin = decodeURIComponent(p[38]);
+                            parametricMax = decodeURIComponent(p[39]);
                         }
                     }
                 } catch (restoreError) {}
