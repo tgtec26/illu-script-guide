@@ -32,7 +32,7 @@ function extractFunction(name) {
 
 const names = ["buildHistogram", "buildBoxPlot", "buildScatter", "emptyDrawing", "addAxes", "addYTicks", "niceAxis",
   "formatValue", "padAxis", "quartiles", "median", "parseNumberList", "parsePairs", "strictNumber", "roundTo",
-  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups", "buildStemLeaf", "buildCategoryChart", "wavePath", "parseCategories", "buildRatioChart", "percentages", "circleCurve"];
+  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups", "buildStemLeaf", "buildCategoryChart", "wavePath", "parseCategories", "buildRatioChart", "percentages", "circleCurve", "frequencyTable", "buildFrequencyTable"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, MM_TO_PT = 2.834645669, WAVE_ROOM_MM = 5, WAVE_HALF_MM = 1.6, WAVE_AMP_MM = 0.5, WAVE_GAP_MM = 1, BAND_MM = 10, SCALE_GAP_MM = 3;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const size = { width: 70, height: 40, tick: 2, xName: "(cm)", yName: "(명)" };
 const texts = (d, dir) => d.texts.filter((t) => t.dir[0] === dir[0] && t.dir[1] === dir[1]).map((t) => t.text);
@@ -209,7 +209,7 @@ assert.ok(/function addBar\([^)]*\) \{[^}]*strokeWidth = EDGE_PT;/.test(source),
   const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-stat-chart.js");
   if (fs.existsSync(webPath)) {
     const web = fs.readFileSync(webPath, "utf8");
-    for (const name of ["buildCategoryChart", "wavePath", "parseCategories", "buildRatioChart", "percentages", "circleCurve"]) {
+    for (const name of ["buildCategoryChart", "wavePath", "parseCategories", "buildRatioChart", "percentages", "circleCurve", "frequencyTable", "buildFrequencyTable"]) {
       const start = web.indexOf("export function " + name + "("), end = web.indexOf("\n}\n", start) + 2;
       const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
       assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
@@ -229,6 +229,15 @@ assert.ok(/function addBar\([^)]*\) \{[^}]*strokeWidth = EDGE_PT;/.test(source),
   assert.ok(pie.lines.some((l) => l.closed && l.curve), "원은 베지어");
   assert.deepStrictEqual(pie.texts.filter((t) => /^\d+$/.test(t.text)).map((t) => t.text), ["0", "25", "50", "75"]);
   assert.ok(source.includes('"띠그래프 · 원그래프"'), "종류 목록");
+}
+
+// 도수분포표 (웹과 같은 경우)
+{
+  assert.deepStrictEqual(g.frequencyTable([141, 144, 145, 149, 150, 158], 140, 5), { bounds: [140, 145, 150, 155, 160], counts: [2, 2, 1, 1] });
+  assert.strictEqual(g.frequencyTable([139, 141], 140, 5), null);
+  const t = g.buildFrequencyTable([141, 144, 146, 152], 140, 5, true, 8, "(cm)", "(명)").texts.map((x) => x.text);
+  for (const want of ["계급(cm)", "도수(명)", "상대도수", "140 이상 ~ 145 미만", "합계", "0.5", "0.25", "1"]) assert.ok(t.includes(want), want);
+  assert.ok(source.includes('"도수분포표"') && source.includes("이 도수로 히스토그램"), "종류 목록과 히스토그램 버튼");
 }
 
 console.log("stat chart checks passed");

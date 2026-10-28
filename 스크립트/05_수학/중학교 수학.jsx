@@ -3668,7 +3668,7 @@ var SCRIPT_KEY = "MiddleMath";
             var SLIDER_WIDTH = 196;
             var RESET_BUTTON_WIDTH = 34;
             var TEXT_WIDTH = 300;
-            var KINDS = ["히스토그램 · 도수분포다각형", "상자그림", "산점도", "줄기와 잎 그림", "막대 · 꺾은선 그래프", "띠그래프 · 원그래프"];
+            var KINDS = ["히스토그램 · 도수분포다각형", "상자그림", "산점도", "줄기와 잎 그림", "막대 · 꺾은선 그래프", "띠그래프 · 원그래프", "도수분포표"];
             var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
             var ENG_FONT_NAME = "GSMediumB1";
             var ITALIC_FONT_NAME = "GSMediItaC1";
@@ -3768,6 +3768,8 @@ var SCRIPT_KEY = "MiddleMath";
             scatterGridCheck.helpTip = "산점도 눈금마다 회색(K30) 모눈";
             var scatterIdentityCheck = scatterChecks.add("checkbox", undefined, "y=x 점선");
             scatterIdentityCheck.helpTip = "두 값을 비교하는 기준선 y=x (보조 점선)";
+            var tableButton = dataPanel.add("button", undefined, "이 도수로 히스토그램 그리기");
+            tableButton.helpTip = "도수분포표: 상자그림 칸의 자료를 도수분포 칸의 첫 계급 시작·계급 크기로 세어 도수 칸에 넣고 히스토그램으로 바꾼다";
             var stemUnitInput = addTextRow(dataPanel, "단위:", stemUnit, "줄기와 잎 그림 범례 (1|2는 12점)의 단위. 자료는 상자그림 칸(0 이상의 정수)을 쓴다");
 
             var categoryPanel = addPanel(win, "항목 · 값");
@@ -3834,6 +3836,16 @@ var SCRIPT_KEY = "MiddleMath";
             scatterGridCheck.onClick = function() { scatterGrid = scatterGridCheck.value; updatePreview(); };
             scatterIdentityCheck.onClick = function() { scatterIdentity = scatterIdentityCheck.value; updatePreview(); };
             stemUnitInput.onChanging = function() { stemUnit = stemUnitInput.text; updatePreview(); };
+            tableButton.onClick = function() {
+                var counted = parseNumberList(boxText), table = counted !== null && counted.length > 0 ? frequencyTable(counted, classStart, classWidth) : null;
+                if (table === null || table.counts.length > 30) return;
+                frequencyText = table.counts.join(", ");
+                frequencyInput.text = frequencyText;
+                kind = 0;
+                kindList.selection = 0;
+                refreshEnabled();
+                updatePreview();
+            };
             categoryInput.onChanging = function() { categoryText = categoryInput.text; updatePreview(); };
             valueInput.onChanging = function() { valueText = valueInput.text; updatePreview(); };
             categoryStartInput.onChanging = function() { categoryStart = categoryStartInput.text; updatePreview(); };
@@ -3865,8 +3877,13 @@ var SCRIPT_KEY = "MiddleMath";
             return null;
 
             function refreshEnabled() {
-                histogramPanel.enabled = kind === 0;
-                boxInput.parent.enabled = kind === 1 || kind === 3;
+                histogramPanel.enabled = kind === 0 || kind === 6;
+                frequencyInput.parent.enabled = kind === 0;
+                histogramChecks.enabled = kind === 0 || kind === 6;
+                barsCheck.enabled = kind === 0;
+                polygonCheck.enabled = kind === 0;
+                tableButton.enabled = kind === 6;
+                boxInput.parent.enabled = kind === 1 || kind === 3 || kind === 6;
                 stemUnitInput.parent.enabled = kind === 3;
                 scatterInput.parent.enabled = kind === 2;
                 scatterChecks.enabled = kind === 2;
@@ -3925,6 +3942,12 @@ var SCRIPT_KEY = "MiddleMath";
                     else if (start === null || start < 0) problem = "세로축 시작을 읽지 못함";
                     else if (!above) problem = "세로축 시작은 가장 작은 값 이하로";
                     else drawing = buildCategoryChart(size, categories, series, categoryLine, start, categoryGrid);
+                } else if (kind === 6) {
+                    var counted = parseNumberList(boxText), table = counted !== null && counted.length > 0 ? frequencyTable(counted, classStart, classWidth) : null;
+                    if (counted === null || counted.length === 0) problem = "자료를 읽지 못함";
+                    else if (table === null) problem = "자료는 첫 계급 시작 이상으로";
+                    else if (table.counts.length > 30) problem = "계급이 30개 이하가 되게 계급 크기를 키워 주세요";
+                    else drawing = buildFrequencyTable(counted, classStart, classWidth, relative, fontPt, xName, yName);
                 } else if (kind === 5) {
                     var parts5 = parseCategories(categoryText), shares = parseGroups(valueText), sum5 = 0, negative = false;
                     var fits5 = shares !== null && shares[0].values.length === parts5.length;
@@ -4493,6 +4516,48 @@ var SCRIPT_KEY = "MiddleMath";
                     { anchor: [cx - r, cy], left: [cx - r, cy + k], right: [cx - r, cy - k] },
                     { anchor: [cx, cy - r], left: [cx - k, cy - r], right: [cx + k, cy - r] }
                 ];
+            }
+
+            // 자료를 계급으로 센다. 계급은 start부터 width씩 [a, b) (a 이상 b 미만)이고 가장 큰 자료를 담을 때까지 이어진다.
+            // bounds는 계급의 경계(계급 수 + 1개). start보다 작은 자료가 있으면 null
+            function frequencyTable(values, start, width) {
+                var high = Math.max.apply(null, values), low = Math.min.apply(null, values);
+                if (low < start - width * 1e-9) return null;
+                var n = Math.floor((high - start) / width + 1e-9) + 1, bounds = [], counts = [];
+                for (var i = 0; i <= n; i++) bounds.push(roundTo(start + i * width, width / 1000));
+                for (var j = 0; j < n; j++) counts.push(0);
+                for (var k = 0; k < values.length; k++) counts[Math.min(n - 1, Math.floor((values[k] - start) / width + 1e-9))]++;
+                return { bounds: bounds, counts: counts };
+            }
+
+            // 도수분포표(중1): 머리 [계급(단위) | 도수(단위) | 상대도수], 계급마다 "a 이상 ~ b 미만", 맨 아래 합계. 칸은 모두 가운데 맞춤, 선은 축 굵기.
+            // 머리 이름은 가로·세로축 이름 칸을 쓴다: "(cm)"처럼 단위뿐이면 앞에 "계급"·"도수"를 붙이고, "키(cm)"처럼 쓰면 그대로.
+            // 상대도수는 소수 둘째 자리까지. 왼쪽 위가 (0,0), 아래로 내려간다
+            function buildFrequencyTable(values, start, width, relative, fontPt, xName, yName) {
+                var out = emptyDrawing(), table = frequencyTable(values, start, width), total = values.length;
+                var heads = [xName === "" || xName.charAt(0) === "(" ? "계급" + xName : xName, yName === "" || yName.charAt(0) === "(" ? "도수" + yName : yName];
+                var widths = [fontPt * 12, fontPt * 6.5], rowH = fontPt * 2.2, rows = [heads];
+                if (relative) {
+                    heads.push("상대도수");
+                    widths.push(fontPt * 6.5);
+                }
+                for (var i = 0; i < table.counts.length; i++) {
+                    var row = [formatValue(table.bounds[i], width) + " 이상 ~ " + formatValue(table.bounds[i + 1], width) + " 미만", String(table.counts[i])];
+                    if (relative) row.push(String(Math.round(table.counts[i] / total * 100) / 100));
+                    rows.push(row);
+                }
+                rows.push(relative ? ["합계", String(total), "1"] : ["합계", String(total)]);
+                var right = 0;
+                for (var w = 0; w < widths.length; w++) right += widths[w];
+                for (var r = 0; r <= rows.length; r++) out.lines.push({ points: [[0, -r * rowH], [right, -r * rowH]] });
+                var x = 0;
+                for (var c = 0; c <= widths.length; c++) {
+                    out.lines.push({ points: [[x, 0], [x, -rows.length * rowH]] });
+                    if (c === widths.length) break;
+                    for (var t = 0; t < rows.length; t++) out.texts.push({ text: rows[t][c], at: [x + widths[c] / 2, -(t + 0.5) * rowH], dir: [0, 0], clear: 0 });
+                    x += widths[c];
+                }
+                return out;
             }
 
             // 산점도: 가장 작은 자료가 축 위에 얹히지 않게 한 칸 넓힌다
