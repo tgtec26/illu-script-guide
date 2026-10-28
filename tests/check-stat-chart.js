@@ -32,8 +32,8 @@ function extractFunction(name) {
 
 const names = ["buildHistogram", "buildBoxPlot", "buildScatter", "emptyDrawing", "addAxes", "addYTicks", "niceAxis",
   "formatValue", "padAxis", "quartiles", "median", "parseNumberList", "parsePairs", "strictNumber", "roundTo",
-  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups", "buildStemLeaf", "buildCategoryChart", "wavePath", "parseCategories"];
-const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, MM_TO_PT = 2.834645669, WAVE_ROOM_MM = 5, WAVE_HALF_MM = 1.6, WAVE_AMP_MM = 0.5, WAVE_GAP_MM = 1;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups", "buildStemLeaf", "buildCategoryChart", "wavePath", "parseCategories", "buildRatioChart", "percentages", "circleCurve"];
+const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, MM_TO_PT = 2.834645669, WAVE_ROOM_MM = 5, WAVE_HALF_MM = 1.6, WAVE_AMP_MM = 0.5, WAVE_GAP_MM = 1, BAND_MM = 10, SCALE_GAP_MM = 3;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const size = { width: 70, height: 40, tick: 2, xName: "(cm)", yName: "(명)" };
 const texts = (d, dir) => d.texts.filter((t) => t.dir[0] === dir[0] && t.dir[1] === dir[1]).map((t) => t.text);
 
@@ -203,18 +203,32 @@ assert.ok(/function addBar\([^)]*\) \{[^}]*strokeWidth = EDGE_PT;/.test(source),
   const polys = two.lines.filter((l) => l.main);
   assert.ok(polys.length === 2 && !polys[0].dashed && polys[1].dashed);
   assert.strictEqual(g.wavePath(0, 10, 4, 1).length, 3);
-  assert.ok(source.includes('p[0] === "v4" && p.length === 26') && source.includes('p[0] === "v3" && p.length === 21'), "settings v4 reads v3");
+  assert.ok(source.includes('p[0] === "v5" && p.length === 27') && source.includes('p[0] === "v4" && p.length === 26') && source.includes('p[0] === "v3" && p.length === 21'), "settings v5 reads v4·v3");
   assert.ok(source.includes('"막대 · 꺾은선 그래프"'), "종류 목록");
   // 웹 math-stat-chart.js와 글자 그대로 같다 (들여쓰기만 다름)
   const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-stat-chart.js");
   if (fs.existsSync(webPath)) {
     const web = fs.readFileSync(webPath, "utf8");
-    for (const name of ["buildCategoryChart", "wavePath", "parseCategories"]) {
+    for (const name of ["buildCategoryChart", "wavePath", "parseCategories", "buildRatioChart", "percentages", "circleCurve"]) {
       const start = web.indexOf("export function " + name + "("), end = web.indexOf("\n}\n", start) + 2;
       const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
       assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
     }
   }
+}
+
+// 띠그래프·원그래프 (웹과 같은 경우)
+{
+  assert.deepStrictEqual(g.percentages([1, 1, 1]), [34, 33, 33]);
+  assert.deepStrictEqual(g.percentages([12, 8, 6, 4]), [40, 27, 20, 13]);
+  const band = g.buildRatioChart(size, ["국어", "수학", "영어", "과학"], [10, 8, 4, 3], false, 8);
+  assert.ok(band.texts.some((t) => t.text === "(40 %)") && band.texts.some((t) => t.text === "(%)"));
+  assert.deepStrictEqual(band.texts.filter((t) => /^\d+$/.test(t.text)).map((t) => t.text), ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]);
+  const pie = g.buildRatioChart(size, ["가", "나"], [3, 1], true, 8);
+  assert.strictEqual(pie.lines.filter((l) => l.tick).length, 20);
+  assert.ok(pie.lines.some((l) => l.closed && l.curve), "원은 베지어");
+  assert.deepStrictEqual(pie.texts.filter((t) => /^\d+$/.test(t.text)).map((t) => t.text), ["0", "25", "50", "75"]);
+  assert.ok(source.includes('"띠그래프 · 원그래프"'), "종류 목록");
 }
 
 console.log("stat chart checks passed");

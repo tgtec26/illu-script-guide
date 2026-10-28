@@ -6586,6 +6586,10 @@
           "type": "number",
           "default": 0
         },
+        "ratioPie": {
+          "type": "boolean",
+          "default": false
+        },
         "relative": {
           "type": "boolean",
           "default": false

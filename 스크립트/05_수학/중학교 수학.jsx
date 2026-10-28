@@ -3668,7 +3668,7 @@ var SCRIPT_KEY = "MiddleMath";
             var SLIDER_WIDTH = 196;
             var RESET_BUTTON_WIDTH = 34;
             var TEXT_WIDTH = 300;
-            var KINDS = ["히스토그램 · 도수분포다각형", "상자그림", "산점도", "줄기와 잎 그림", "막대 · 꺾은선 그래프"];
+            var KINDS = ["히스토그램 · 도수분포다각형", "상자그림", "산점도", "줄기와 잎 그림", "막대 · 꺾은선 그래프", "띠그래프 · 원그래프"];
             var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
             var ENG_FONT_NAME = "GSMediumB1";
             var ITALIC_FONT_NAME = "GSMediItaC1";
@@ -3685,6 +3685,8 @@ var SCRIPT_KEY = "MiddleMath";
             var WAVE_HALF_MM = 1.6;   // 물결선 반 너비 (세로축 양쪽으로)
             var WAVE_AMP_MM = 0.5;    // 물결 높이
             var WAVE_GAP_MM = 1;      // 두 물결선 사이
+            var BAND_MM = 10;         // 띠그래프의 띠 높이
+            var SCALE_GAP_MM = 3;     // 띠와 위 0~100 (%) 눈금줄 사이
             var GUIDE_PT = 0.3;                 // 산점도 모눈·y=x 점선 (보조선)
             var GRID_K = 30;
             var GUIDE_DASH = [2, 1.5];
@@ -3718,6 +3720,7 @@ var SCRIPT_KEY = "MiddleMath";
             var stemUnit = "";   // 줄기와 잎 그림 범례의 단위: (1|2는 12점)
             // 막대·꺾은선 그래프: 항목, 값(| 로 집단, 꺾은선만), 꺾은선(끄면 막대), 세로축 시작(0보다 크면 물결선), 가로 모눈
             var categoryText = "월, 화, 수, 목, 금", valueText = "12, 15, 9, 18, 14", categoryLine = false, categoryStart = "", categoryGrid = true;
+            var ratioPie = false;   // 띠그래프·원그래프: 항목·값 칸을 같이 쓴다. 켜면 원그래프
             var xName = "(cm)";
             var yName = "(명)";
             var offsetXmm = 0;
@@ -3775,6 +3778,8 @@ var SCRIPT_KEY = "MiddleMath";
             var categoryLineCheck = categoryChecks.add("checkbox", undefined, "꺾은선 (끄면 막대)");
             var categoryGridCheck = categoryChecks.add("checkbox", undefined, "가로 모눈");
             categoryGridCheck.helpTip = "세로축 눈금마다 회색(K30) 가로선";
+            var ratioPieCheck = categoryPanel.add("checkbox", undefined, "원그래프 (끄면 띠그래프)");
+            ratioPieCheck.helpTip = "띠그래프·원그래프: 값을 백분율로 바꿔 쓰고, 반올림한 백분율의 합이 100이 되게 맞춘다. 띠그래프 칸에 글자가 넘치면 너비를 늘린다";
 
             var axisPanel = addPanel(win, "축 이름", "fold6");
             var xNameInput = addTextRow(axisPanel, "가로:", xName, "가로축 끝에 붙는 글자 (cm), 키 (cm)");
@@ -3805,6 +3810,7 @@ var SCRIPT_KEY = "MiddleMath";
             scatterIdentityCheck.value = scatterIdentity;
             categoryLineCheck.value = categoryLine;
             categoryGridCheck.value = categoryGrid;
+            ratioPieCheck.value = ratioPie;
             refreshEnabled();
 
             kindList.onChange = function() {
@@ -3833,6 +3839,7 @@ var SCRIPT_KEY = "MiddleMath";
             categoryStartInput.onChanging = function() { categoryStart = categoryStartInput.text; updatePreview(); };
             categoryLineCheck.onClick = function() { categoryLine = categoryLineCheck.value; updatePreview(); };
             categoryGridCheck.onClick = function() { categoryGrid = categoryGridCheck.value; updatePreview(); };
+            ratioPieCheck.onClick = function() { ratioPie = ratioPieCheck.value; updatePreview(); };
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, initial.offsetXmm);
             bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, initial.offsetYmm);
@@ -3863,7 +3870,10 @@ var SCRIPT_KEY = "MiddleMath";
                 stemUnitInput.parent.enabled = kind === 3;
                 scatterInput.parent.enabled = kind === 2;
                 scatterChecks.enabled = kind === 2;
-                categoryPanel.enabled = kind === 4;
+                categoryPanel.enabled = kind === 4 || kind === 5;
+                categoryStartInput.parent.enabled = kind === 4;
+                categoryChecks.enabled = kind === 4;
+                ratioPieCheck.enabled = kind === 5;
                 heightControls.input.parent.enabled = kind !== 1;
             }
 
@@ -3915,6 +3925,19 @@ var SCRIPT_KEY = "MiddleMath";
                     else if (start === null || start < 0) problem = "세로축 시작을 읽지 못함";
                     else if (!above) problem = "세로축 시작은 가장 작은 값 이하로";
                     else drawing = buildCategoryChart(size, categories, series, categoryLine, start, categoryGrid);
+                } else if (kind === 5) {
+                    var parts5 = parseCategories(categoryText), shares = parseGroups(valueText), sum5 = 0, negative = false;
+                    var fits5 = shares !== null && shares[0].values.length === parts5.length;
+                    for (var ri = 1; fits5 && ri < shares.length; ri++) if (shares[ri].values.length !== parts5.length) fits5 = false;
+                    for (ri = 0; fits5 && ri < shares[0].values.length; ri++) {
+                        if (shares[0].values[ri] < 0) negative = true;
+                        sum5 += shares[0].values[ri];
+                    }
+                    if (parts5.length === 0) problem = "항목을 넣어주세요";
+                    else if (!fits5) problem = "값을 항목 수와 같게 넣어주세요";
+                    else if (shares.length > 1) problem = "한 집단만 그립니다";
+                    else if (negative || sum5 <= 0) problem = "값은 0 이상, 합은 0보다 크게";
+                    else drawing = buildRatioChart(size, parts5, shares[0].values, ratioPie, fontPt);
                 } else {
                     var pairs = parsePairs(scatterText);
                     if (pairs === null || pairs.length === 0) problem = "순서쌍을 읽지 못함";
@@ -4401,6 +4424,77 @@ var SCRIPT_KEY = "MiddleMath";
                 return list;
             }
 
+            // 띠그래프·원그래프(비율그래프). 값을 정수 백분율(합 100)로 바꿔, 띠는 왼쪽부터 칸을 나누고 위에 0~100 (%) 눈금줄,
+            // 원은 12시 방향에서 시계 방향으로 나누고 둘레 5 %마다 바깥 눈금과 0·25·50·75. 칸마다 가운데에 이름, 그 아래에 (25 %).
+            // 띠는 왼쪽 아래가 (0,0), 원은 중심이 (r, r)
+            function buildRatioChart(size, categories, values, pie, fontPt) {
+                var out = emptyDrawing();
+                var pct = percentages(values), n = categories.length, at = 0, shift = fontPt * 0.55;
+                if (!pie) {
+                    var w = size.width, h = BAND_MM * MM_TO_PT, scaleY = h + SCALE_GAP_MM * MM_TO_PT;
+                    out.lines.push({ points: [[0, 0], [w, 0], [w, h], [0, h]], closed: true });
+                    out.lines.push({ points: [[0, scaleY], [w, scaleY]] });
+                    for (var t = 0; t <= 10; t++) {
+                        out.lines.push({ points: [[w * t / 10, scaleY], [w * t / 10, scaleY - size.tick]], tick: true });
+                        out.texts.push({ text: String(t * 10), at: [w * t / 10, scaleY], dir: [0, 1], clear: 0 });
+                    }
+                    out.texts.push({ text: "(%)", at: [w + fontPt * 1.8, scaleY], dir: [0, 1], clear: 0 });   // 100 오른쪽, 같은 줄
+                    for (var i = 0; i < n; i++) {
+                        if (pct[i] <= 0) continue;
+                        var x0 = w * at / 100, x1 = w * (at + pct[i]) / 100;
+                        if (at > 0) out.lines.push({ points: [[x0, 0], [x0, h]] });
+                        out.texts.push({ text: categories[i], at: [(x0 + x1) / 2, h / 2 + shift], dir: [0, 0], clear: 0 });
+                        out.texts.push({ text: "(" + pct[i] + " %)", at: [(x0 + x1) / 2, h / 2 - shift], dir: [0, 0], clear: 0 });
+                        at += pct[i];
+                    }
+                    return out;
+                }
+                var r = Math.min(size.width, size.height) / 2, c = [r, r], count = 0;
+                function clockDir(percent) { return [Math.sin(percent * Math.PI / 50), Math.cos(percent * Math.PI / 50)]; }
+                for (var k = 0; k < n; k++) if (pct[k] > 0) count++;
+                out.lines.push({ points: circleCurve(c[0], c[1], r), closed: true, curve: true });
+                for (var m = 0; m < 20; m++) {
+                    var d = clockDir(m * 5), edge = [c[0] + d[0] * r, c[1] + d[1] * r], tip = [c[0] + d[0] * (r + size.tick), c[1] + d[1] * (r + size.tick)];
+                    out.lines.push({ points: [edge, tip], tick: true });
+                    if (m % 5 === 0) out.texts.push({ text: String(m * 5), at: tip, dir: d, clear: 0 });
+                }
+                for (var j = 0; j < n; j++) {
+                    if (pct[j] <= 0) continue;
+                    var s0 = clockDir(at), mid = clockDir(at + pct[j] / 2), center = [c[0] + mid[0] * r * 0.6, c[1] + mid[1] * r * 0.6];
+                    if (count > 1) out.lines.push({ points: [c, [c[0] + s0[0] * r, c[1] + s0[1] * r]] });
+                    out.texts.push({ text: categories[j], at: [center[0], center[1] + shift], dir: [0, 0], clear: 0 });
+                    out.texts.push({ text: "(" + pct[j] + " %)", at: [center[0], center[1] - shift], dir: [0, 0], clear: 0 });
+                    at += pct[j];
+                }
+                return out;
+            }
+
+            // 값 → 정수 백분율. 내림한 뒤 모자란 만큼 나머지가 큰 항목부터(같으면 앞 항목부터) 1씩 더해 합을 100으로
+            function percentages(values) {
+                var total = 0, out = [], rest = [], sum = 0;
+                for (var i = 0; i < values.length; i++) total += values[i];
+                for (var j = 0; j < values.length; j++) {
+                    var exact = values[j] * 100 / total;
+                    out.push(Math.floor(exact + 1e-9));
+                    rest.push({ index: j, remainder: exact - out[j] });
+                    sum += out[j];
+                }
+                rest.sort(function(a, b) { return b.remainder - a.remainder || a.index - b.index; });
+                for (var k = 0; k < 100 - sum; k++) out[rest[k].index]++;
+                return out;
+            }
+
+            // 원 하나: 오른쪽·위·왼쪽·아래 앵커 넷을 반시계로 잇는 베지어
+            function circleCurve(cx, cy, r) {
+                var k = r * 0.5522847498;
+                return [
+                    { anchor: [cx + r, cy], left: [cx + r, cy - k], right: [cx + r, cy + k] },
+                    { anchor: [cx, cy + r], left: [cx + k, cy + r], right: [cx - k, cy + r] },
+                    { anchor: [cx - r, cy], left: [cx - r, cy + k], right: [cx - r, cy - k] },
+                    { anchor: [cx, cy - r], left: [cx - k, cy - r], right: [cx + k, cy - r] }
+                ];
+            }
+
             // 산점도: 가장 작은 자료가 축 위에 얹히지 않게 한 칸 넓힌다
             function padAxis(axis, values) {
                 if (Math.min.apply(null, values) - axis.min < axis.step * 0.25) axis.min = roundTo(axis.min - axis.step, axis.step / 1000);
@@ -4683,11 +4777,12 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v4", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
+                    "v5", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
                     showBars ? "1" : "0", showPolygon ? "1" : "0", relative ? "1" : "0",
                     encodeURIComponent(boxText), encodeURIComponent(scatterText), encodeURIComponent(xName), encodeURIComponent(yName),
                     offsetXmm, offsetYmm, previewEnabled ? "1" : "0", scatterGrid ? "1" : "0", scatterIdentity ? "1" : "0", encodeURIComponent(stemUnit),
-                    encodeURIComponent(categoryText), encodeURIComponent(valueText), categoryLine ? "1" : "0", encodeURIComponent(categoryStart), categoryGrid ? "1" : "0"
+                    encodeURIComponent(categoryText), encodeURIComponent(valueText), categoryLine ? "1" : "0", encodeURIComponent(categoryStart), categoryGrid ? "1" : "0",
+                    ratioPie ? "1" : "0"
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -4697,8 +4792,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v2 = v1 + 산점도 모눈·y=x, v3 = v2 + 줄기와 잎 단위, v4 = v3 + 막대·꺾은선. v3·v2·v1도 읽는다
-                if (!((p[0] === "v4" && p.length === 26) || (p[0] === "v3" && p.length === 21) || (p[0] === "v2" && p.length === 20) || (p[0] === "v1" && p.length === 18))) return;
+                // v2 = v1 + 산점도 모눈·y=x, v3 = v2 + 줄기와 잎 단위, v4 = v3 + 막대·꺾은선, v5 = v4 + 원그래프. 앞 판도 읽는다
+                if (!((p[0] === "v5" && p.length === 27) || (p[0] === "v4" && p.length === 26) || (p[0] === "v3" && p.length === 21) || (p[0] === "v2" && p.length === 20) || (p[0] === "v1" && p.length === 18))) return;
                 try {
                     kind = Math.round(restoreNumber(p[1], kind, 0, KINDS.length - 1));
                     widthMm = restoreNumber(p[2], widthMm, 20, 150);
@@ -4717,18 +4812,19 @@ var SCRIPT_KEY = "MiddleMath";
                     offsetXmm = restoreNumber(p[15], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[16], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[17] === "1";
-                    if (p[0] === "v2" || p[0] === "v3" || p[0] === "v4") {
+                    if (p[0] === "v2" || p[0] === "v3" || p[0] === "v4" || p[0] === "v5") {
                         scatterGrid = p[18] === "1";
                         scatterIdentity = p[19] === "1";
                     }
-                    if (p[0] === "v3" || p[0] === "v4") stemUnit = decodeURIComponent(p[20]);
-                    if (p[0] === "v4") {
+                    if (p[0] === "v3" || p[0] === "v4" || p[0] === "v5") stemUnit = decodeURIComponent(p[20]);
+                    if (p[0] === "v4" || p[0] === "v5") {
                         categoryText = decodeURIComponent(p[21]);
                         valueText = decodeURIComponent(p[22]);
                         categoryLine = p[23] === "1";
                         categoryStart = decodeURIComponent(p[24]);
                         categoryGrid = p[25] === "1";
                     }
+                    if (p[0] === "v5") ratioPie = p[26] === "1";
                 } catch (restoreError) {}
             }
 
