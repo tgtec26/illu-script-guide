@@ -6594,6 +6594,10 @@
           "type": "boolean",
           "default": false
         },
+        "stemUnit": {
+          "type": "string",
+          "default": ""
+        },
         "widthMm": {
           "type": "number",
           "default": 60,

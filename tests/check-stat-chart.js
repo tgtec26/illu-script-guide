@@ -32,7 +32,7 @@ function extractFunction(name) {
 
 const names = ["buildHistogram", "buildBoxPlot", "buildScatter", "emptyDrawing", "addAxes", "addYTicks", "niceAxis",
   "formatValue", "padAxis", "quartiles", "median", "parseNumberList", "parsePairs", "strictNumber", "roundTo",
-  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups"];
+  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups", "buildStemLeaf"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const size = { width: 70, height: 40, tick: 2, xName: "(cm)", yName: "(명)" };
 const texts = (d, dir) => d.texts.filter((t) => t.dir[0] === dir[0] && t.dir[1] === dir[1]).map((t) => t.text);
@@ -171,7 +171,20 @@ assert.ok(/function addBar\([^)]*\) \{[^}]*strokeWidth = EDGE_PT;/.test(source),
   assert.strictEqual(plain.lines.filter((l) => l.grid || l.guide).length, 0);
   assert.ok(extra.lines.filter((l) => l.grid).length >= 6);
   assert.strictEqual(extra.lines.filter((l) => l.guide).length, 1);
-  assert.ok(source.includes('p[0] === "v2" && p.length === 20') && source.includes('p[0] === "v1" && p.length === 18'), "settings v2 reads v1");
+  assert.ok(source.includes('p[0] === "v3" && p.length === 21') && source.includes('p[0] === "v2" && p.length === 20') && source.includes('p[0] === "v1" && p.length === 18'), "settings v3 reads v2·v1");
+  // 줄기와 잎 그림 (웹과 같은 경우)
+  const stem = g.buildStemLeaf([12, 25, 9, 31, 22, 28, 22], 8, "점");
+  assert.deepStrictEqual(stem.texts.slice(0, 2).map((x) => x.text), ["줄기", "잎"]);
+  assert.ok(stem.texts.some((x) => x.text === "(0|9는 9점)"));
+  assert.strictEqual(stem.lines.length, 2);
+  assert.ok(g.buildStemLeaf([152, 147, 161, 158], 8, "cm").texts.some((x) => x.text === "(14|7은 147cm)"));
+  // 웹 math-stat-chart.js의 buildStemLeaf와 글자 그대로 같다 (들여쓰기만 다름)
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-stat-chart.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8"), start = web.indexOf("export function buildStemLeaf("), end = web.indexOf("\n}\n", start) + 2;
+    const scriptText = extractFunction("buildStemLeaf").split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+    assert.strictEqual(scriptText, web.slice(start + "export ".length, end), "buildStemLeaf differs from the web");
+  }
 }
 
 console.log("stat chart checks passed");

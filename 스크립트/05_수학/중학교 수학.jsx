@@ -3515,7 +3515,7 @@ var SCRIPT_KEY = "MiddleMath";
             var SLIDER_WIDTH = 196;
             var RESET_BUTTON_WIDTH = 34;
             var TEXT_WIDTH = 300;
-            var KINDS = ["히스토그램 · 도수분포다각형", "상자그림", "산점도"];
+            var KINDS = ["히스토그램 · 도수분포다각형", "상자그림", "산점도", "줄기와 잎 그림"];
             var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
             var ENG_FONT_NAME = "GSMediumB1";
             var ITALIC_FONT_NAME = "GSMediItaC1";
@@ -3558,6 +3558,7 @@ var SCRIPT_KEY = "MiddleMath";
             var boxText = "3, 5, 6, 7, 8, 9, 10, 12, 15";
             var scatterText = "(160,50) (165,55) (170,58) (155,48) (175,65)";
             var scatterGrid = false, scatterIdentity = false;   // 산점도 모눈(K30)·y=x 점선
+            var stemUnit = "";   // 줄기와 잎 그림 범례의 단위: (1|2는 12점)
             var xName = "(cm)";
             var yName = "(명)";
             var offsetXmm = 0;
@@ -3605,6 +3606,7 @@ var SCRIPT_KEY = "MiddleMath";
             scatterGridCheck.helpTip = "산점도 눈금마다 회색(K30) 모눈";
             var scatterIdentityCheck = scatterChecks.add("checkbox", undefined, "y=x 점선");
             scatterIdentityCheck.helpTip = "두 값을 비교하는 기준선 y=x (보조 점선)";
+            var stemUnitInput = addTextRow(dataPanel, "단위:", stemUnit, "줄기와 잎 그림 범례 (1|2는 12점)의 단위. 자료는 상자그림 칸(0 이상의 정수)을 쓴다");
 
             var axisPanel = addPanel(win, "축 이름", "fold6");
             var xNameInput = addTextRow(axisPanel, "가로:", xName, "가로축 끝에 붙는 글자 (cm), 키 (cm)");
@@ -3655,6 +3657,7 @@ var SCRIPT_KEY = "MiddleMath";
             relativeCheck.onClick = function() { relative = relativeCheck.value; updatePreview(); };
             scatterGridCheck.onClick = function() { scatterGrid = scatterGridCheck.value; updatePreview(); };
             scatterIdentityCheck.onClick = function() { scatterIdentity = scatterIdentityCheck.value; updatePreview(); };
+            stemUnitInput.onChanging = function() { stemUnit = stemUnitInput.text; updatePreview(); };
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, initial.offsetXmm);
             bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, initial.offsetYmm);
@@ -3681,7 +3684,8 @@ var SCRIPT_KEY = "MiddleMath";
 
             function refreshEnabled() {
                 histogramPanel.enabled = kind === 0;
-                boxInput.parent.enabled = kind === 1;
+                boxInput.parent.enabled = kind === 1 || kind === 3;
+                stemUnitInput.parent.enabled = kind === 3;
                 scatterInput.parent.enabled = kind === 2;
                 scatterChecks.enabled = kind === 2;
                 heightControls.input.parent.enabled = kind !== 1;
@@ -3717,6 +3721,11 @@ var SCRIPT_KEY = "MiddleMath";
                     for (var bi = 0; enough && bi < boxes.length; bi++) if (boxes[bi].values.length < 2) enough = false;
                     if (!enough) problem = "자료를 2개 이상 넣어주세요";
                     else drawing = buildBoxPlotGroups(size, boxes, BOX_HEIGHT_MM * MM_TO_PT);
+                } else if (kind === 3) {
+                    var stems = parseNumberList(boxText), whole = stems !== null && stems.length > 0;
+                    for (var si = 0; whole && si < stems.length; si++) if (stems[si] < 0 || stems[si] !== Math.floor(stems[si])) whole = false;
+                    if (!whole) problem = "자료는 0 이상의 정수로 넣어주세요";
+                    else drawing = buildStemLeaf(stems, fontPt, stemUnit);
                 } else {
                     var pairs = parsePairs(scatterText);
                     if (pairs === null || pairs.length === 0) problem = "순서쌍을 읽지 못함";
@@ -4101,6 +4110,35 @@ var SCRIPT_KEY = "MiddleMath";
                 return out;
             }
 
+            // 줄기와 잎 그림(한쪽형). 줄기 = 십의 자리 이상, 잎 = 일의 자리(작은 수부터). 가장 작은 줄기부터 큰 줄기까지 빈 줄기도 쓴다.
+            // 머리 "줄기 | 잎" 아래 가로선, 줄기와 잎 사이 세로선. 범례 "(1|2는 12점)"은 가장 작은 자료로, 표 오른쪽 아래에.
+            // 글자 크기 fontPt로 칸을 정한다. 왼쪽 위가 (0,0), 아래로 내려간다 (pt, y 위쪽 양수)
+            function buildStemLeaf(values, fontPt, unit) {
+                var out = emptyDrawing();
+                var sorted = values.slice().sort(function(a, b) { return a - b; });
+                var lowStem = Math.floor(sorted[0] / 10), highStem = Math.floor(sorted[sorted.length - 1] / 10);
+                var rows = [], widest = 0;
+                for (var stem = lowStem; stem <= highStem; stem++) rows.push({ stem: stem, leaves: [] });
+                for (var i = 0; i < sorted.length; i++) rows[Math.floor(sorted[i] / 10) - lowStem].leaves.push(sorted[i] % 10);
+                for (var r = 0; r < rows.length; r++) widest = Math.max(widest, rows[r].leaves.length);
+                var rowH = fontPt * 1.7, leafGap = fontPt * 1.1;
+                var stemW = fontPt * (1.6 + 0.6 * String(highStem).length);
+                var leafW = leafGap * (Math.max(widest, 3) + 1), width = stemW + leafW, bottom = -rowH * (rows.length + 1) - rowH * 0.2;
+                out.texts.push({ text: "줄기", at: [stemW / 2, -rowH / 2], dir: [0, 0], clear: 0 });
+                out.texts.push({ text: "잎", at: [stemW + leafW / 2, -rowH / 2], dir: [0, 0], clear: 0 });
+                out.lines.push({ points: [[0, -rowH], [width, -rowH]] });
+                out.lines.push({ points: [[stemW, 0], [stemW, bottom]] });
+                for (var k = 0; k < rows.length; k++) {
+                    var y = -rowH * (k + 1.5);
+                    out.texts.push({ text: String(rows[k].stem), at: [stemW / 2, y], dir: [0, 0], clear: 0 });
+                    for (var j = 0; j < rows[k].leaves.length; j++) out.texts.push({ text: String(rows[k].leaves[j]), at: [stemW + leafGap * (j + 1), y], dir: [0, 0], clear: 0 });
+                }
+                // 잎 숫자를 읽은 소리의 받침에 맞춘 조사: 0 영·1 일·3 삼·6 육·7 칠·8 팔은 "은", 2 이·4 사·5 오·9 구는 "는"
+                var leaf = sorted[0] % 10, particle = "013678".indexOf(String(leaf)) >= 0 ? "은" : "는";
+                out.texts.push({ text: "(" + Math.floor(sorted[0] / 10) + "|" + leaf + particle + " " + sorted[0] + unit + ")", at: [width, bottom - rowH * 0.6], dir: [-1, 0], clear: 0 });
+                return out;
+            }
+
             // 산점도: 가장 작은 자료가 축 위에 얹히지 않게 한 칸 넓힌다
             function padAxis(axis, values) {
                 if (Math.min.apply(null, values) - axis.min < axis.step * 0.25) axis.min = roundTo(axis.min - axis.step, axis.step / 1000);
@@ -4383,10 +4421,10 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v2", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
+                    "v3", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
                     showBars ? "1" : "0", showPolygon ? "1" : "0", relative ? "1" : "0",
                     encodeURIComponent(boxText), encodeURIComponent(scatterText), encodeURIComponent(xName), encodeURIComponent(yName),
-                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", scatterGrid ? "1" : "0", scatterIdentity ? "1" : "0"
+                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", scatterGrid ? "1" : "0", scatterIdentity ? "1" : "0", encodeURIComponent(stemUnit)
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -4396,8 +4434,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v2 = v1 + 산점도 모눈·y=x. v1도 읽는다
-                if (!((p[0] === "v2" && p.length === 20) || (p[0] === "v1" && p.length === 18))) return;
+                // v2 = v1 + 산점도 모눈·y=x, v3 = v2 + 줄기와 잎 단위. v2·v1도 읽는다
+                if (!((p[0] === "v3" && p.length === 21) || (p[0] === "v2" && p.length === 20) || (p[0] === "v1" && p.length === 18))) return;
                 try {
                     kind = Math.round(restoreNumber(p[1], kind, 0, KINDS.length - 1));
                     widthMm = restoreNumber(p[2], widthMm, 20, 150);
@@ -4416,10 +4454,11 @@ var SCRIPT_KEY = "MiddleMath";
                     offsetXmm = restoreNumber(p[15], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[16], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[17] === "1";
-                    if (p[0] === "v2") {
+                    if (p[0] === "v2" || p[0] === "v3") {
                         scatterGrid = p[18] === "1";
                         scatterIdentity = p[19] === "1";
                     }
+                    if (p[0] === "v3") stemUnit = decodeURIComponent(p[20]);
                 } catch (restoreError) {}
             }
 
