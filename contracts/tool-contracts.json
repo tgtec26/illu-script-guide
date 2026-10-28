@@ -5176,6 +5176,10 @@
           "type": "string",
           "default": "AB:3, BC:4"
         },
+        "locusText": {
+          "type": "string",
+          "default": ""
+        },
         "pointsText": {
           "type": "string",
           "default": "A(0,3) B(0,0) C(4,0)"

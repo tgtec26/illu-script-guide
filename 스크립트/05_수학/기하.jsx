@@ -2178,7 +2178,7 @@ var SCRIPT_KEY = "HighGeometry";
             var DIMENSION_LABEL_GAP_MM = 0.7;
             var KAPPA = 0.5522847498;
             var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
-            var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText", "constructText", "areaText"];
+            var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText", "constructText", "areaText", "locusText"];
 
             var doc = app.activeDocument;
             var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
@@ -2190,7 +2190,7 @@ var SCRIPT_KEY = "HighGeometry";
 
             // 옵션
             var text = {pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "",
-                angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: "", constructText: "", areaText: ""};
+                angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: "", constructText: "", areaText: "", locusText: ""};
             var showNames = true;
             var showAxes = false;
             var sizeMm = 50;
@@ -2221,6 +2221,7 @@ var SCRIPT_KEY = "HighGeometry";
             var inputs = {};
             addTextRow(pointPanel, "점", "pointsText", "점 이름과 좌표: A(0,3) B(0,0) C(4,0). 같은 길이 단위로 쓴다 (√13, 1/2, π도 된다). 이름은 O_1처럼 아래첨자도 된다");
             addTextRow(pointPanel, "작도", "constructText", "이름=명령(…)으로 점을 계산해 만든다(앞에서부터 차례로, 만든 점은 다른 칸에서 쓴다). mid(A,B) 중점, div(A,B,2:1) 내분점(2:-1은 외분점), along(A,B,3) A에서 B 쪽으로 3, foot(P,A,B) 수선의 발, cross(AB,CD) 교점(직선 AB, P//AB 평행선, P⊥AB 수선, 원 ABC·O:3·O~A; 둘째 교점은 cross(…,2), 안 쓰면 이미 있는 점이 아닌 쪽), rot(P,O,60) 반시계 60° 회전, ref(P,A,B)·ref(P,O) 대칭점, centroid·circum·incenter·ortho(A,B,C) 무게중심·외심·내심·수심, bisect(A,B,C) ∠B의 이등분선과 AC의 교점(bisect(A,B,C,out)은 바깥각), excenter(A,B,C) A의 맞은편 방심, tan(P,O~A) P에서 원에 그은 접선의 접점(tan(P,O~A,2)는 다른 접점)");
+            addTextRow(pointPanel, "자취", "locusText", "작도 칸에 t를 쓰고(P=rot(A,O,t), P=along(A,B,t)) 여기에 P:0~360처럼 쓰면 t를 0부터 360까지 바꿔 가며 점 P가 지나는 길을 그린다. P:0~360:90은 그림 속 점 P를 t=90 자리에 둔다(없으면 시작값)");
             addTextRow(pointPanel, "선분", "segmentText", "이어 그릴 점 이름: A-B-C-A, A-D (쉼표로 나눈다)");
             addTextRow(pointPanel, "점선", "dashedText", "점선으로 이을 점 이름: A-D");
             addTextRow(pointPanel, "화살표", "arrowText", "끝에 화살촉이 있는 선분(벡터). O-A는 O에서 A로, O-A-B는 O→A, A→B (쉼표로 여러 개)");
@@ -2732,6 +2733,188 @@ var SCRIPT_KEY = "HighGeometry";
             // 잰 넓이 글자: 소수 둘째 자리까지 (6, 7.5, 1.73)
             function measureArea(area) {
                 return String(Math.round(area * 100) / 100);
+            }
+
+            // 자취: "P:0~360"(t를 0부터 360까지), "P:0~360:90"(그림 속 t는 90). 점 이름은 작도한 뒤에 확인한다 (웹 math-geometry.js와 같다)
+            function readLoci(source, notes) {
+                var out = [];
+                var items = splitItems(source);
+                for (var i = 0; i < items.length; i++) {
+                    var parts = items[i].split(":");
+                    for (var q = 0; q < parts.length; q++) parts[q] = trimText(parts[q]);
+                    var range = (parts[1] || "").split("~");
+                    var t0 = range.length === 2 ? evalNumber(range[0]) : null, t1 = range.length === 2 ? evalNumber(range[1]) : null;
+                    var t = parts.length > 2 ? evalNumber(parts[2]) : t0;
+                    if (!parts[0] || parts.length > 3 || t0 === null || t1 === null || !(t1 > t0) || t === null) { notes.push("자취 " + items[i]); continue; }
+                    out.push({name: parts[0].replace(/\s/g, ""), t0: t0, t1: t1, t: t, item: items[i]});
+                }
+                return out;
+            }
+
+            // 자취 하나: 처음 점들(baseTable)에서 작도 글의 t만 바꿔 다시 계산한 점이 지나는 곡선 조각들. 한 번도 못 구하면 null
+            function traceLocus(locus, baseTable, baseNames) {
+                var lastT = NaN, lastP = null;
+                function at(t) {
+                    if (t !== lastT) {
+                        var copy = {}, copyNames = baseNames.slice();
+                        for (var i = 0; i < baseNames.length; i++) copy[baseNames[i]] = baseTable[baseNames[i]];
+                        readConstructions(withT(text.constructText, t), copy, copyNames, []);
+                        lastT = t;
+                        lastP = copy.hasOwnProperty(locus.name) ? copy[locus.name] : null;
+                    }
+                    return lastP;
+                }
+                function fx(t) { var p = at(t); return p ? p[0] : NaN; }
+                function fy(t) { var p = at(t); return p ? p[1] : NaN; }
+                // 그릴 상자: 64번 거칠게 재어 잡고 10% 넓힌다 (plotParametric의 허용 오차가 상자 크기에 맞춰진다)
+                var bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+                for (var s = 0; s <= 64; s++) {
+                    var tt = locus.t0 + (locus.t1 - locus.t0) * s / 64, x = fx(tt), y = fy(tt);
+                    if (!isFinite(x) || !isFinite(y)) continue;
+                    bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y);
+                }
+                if (!isFinite(bx0)) return null;
+                var pad = 0.1 * Math.max(bx1 - bx0, by1 - by0, 1e-9);
+                return plotParametric(fx, fy, locus.t0, locus.t1, bx0 - pad, bx1 + pad, by0 - pad, by1 + pad);
+            }
+
+            // 작도 글의 t(따로 떨어진 소문자 t, 2t도 된다)를 수로 바꾼다. tan(…)처럼 낱말 안의 t는 그대로
+            function withT(text, value) {
+                return String(text).replace(/(^|[^A-Za-z_'])t(?![A-Za-z0-9_'])/g, "$1(" + value.toFixed(12) + ")");
+            }
+
+            // 매개변수곡선 (x(t), y(t)), t0 ≤ t ≤ t1을 [x0,x1]×[y0,y1] 안에서 그린다. plotFunction과 같은 방식이다(적응 분할 →
+            // 에르미트로 빼도 되는 점 지우기, 그림 제작 규칙 3.10). 점마다 접선 (dx/dt, dy/dt)을 두고, 상자 밖·정의되지 않는 곳·
+            // 상자 안에서 건너뛰는 곳(불연속)에서 끊는다. 점: {t, x, y, dx, dy}
+            function plotParametric(fx, fy, t0, t1, x0, x1, y0, y1) {
+                var TOLERANCE = 0.004, MAX_DEPTH = 12, PIECES = 64, LIMIT = 4000;
+                var mx = (x1 - x0) * 1e-9, my = (y1 - y0) * 1e-9;
+                var jump = Math.sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)) / 50;
+                var segments = [], current = null, count = 0;
+
+                function value(t) {
+                    var x, y;
+                    try { x = fx(t); y = fy(t); } catch (e) { return null; }
+                    return (typeof x === "number" && isFinite(x) && typeof y === "number" && isFinite(y)) ? [x, y] : null;
+                }
+                function inside(t) {
+                    var p = value(t);
+                    return p !== null && p[0] >= x0 - mx && p[0] <= x1 + mx && p[1] >= y0 - my && p[1] <= y1 + my;
+                }
+                function slope(t) {
+                    var h = 1e-5 * (1 + Math.abs(t)), a = value(t - h), b = value(t + h), c = value(t);
+                    if (a !== null && b !== null) return [(b[0] - a[0]) / (2 * h), (b[1] - a[1]) / (2 * h)];
+                    if (b !== null && c !== null) return [(b[0] - c[0]) / h, (b[1] - c[1]) / h];
+                    if (a !== null && c !== null) return [(c[0] - a[0]) / h, (c[1] - a[1]) / h];
+                    return [0, 0];
+                }
+                function emit(t) {
+                    if (current === null) {
+                        current = [];
+                        segments.push(current);
+                    }
+                    if (count++ > LIMIT) return;
+                    var p = value(t), d = slope(t);
+                    current.push({ t: t, x: Math.min(x1, Math.max(x0, p[0])), y: Math.min(y1, Math.max(y0, p[1])), dx: d[0], dy: d[1] });
+                }
+                function finish() { current = null; }
+                function edge(inT, outT) {
+                    for (var i = 0; i < 40; i++) {
+                        var mid = (inT + outT) / 2;
+                        if (inside(mid)) inT = mid;
+                        else outT = mid;
+                    }
+                    return inT;
+                }
+                function refine(a, b, depth) {
+                    var mid = (a + b) / 2;
+                    if (!inside(mid)) {
+                        var cut = edge(a, mid);
+                        if (cut > a) refine(a, cut, depth + 1);
+                        finish();
+                        var resume = edge(b, mid);
+                        emit(resume);
+                        if (b > resume) refine(resume, b, depth + 1);
+                        return;
+                    }
+                    var h = b - a, pa = value(a), pb = value(b), pm = value(mid), da = slope(a), db = slope(b);
+                    var gx = (pa[0] + pb[0]) / 2 + h * (da[0] - db[0]) / 8 - pm[0], gy = (pa[1] + pb[1]) / 2 + h * (da[1] - db[1]) / 8 - pm[1];
+                    if (depth < MAX_DEPTH && Math.sqrt(gx * gx + gy * gy) > TOLERANCE) {
+                        refine(a, mid, depth + 1);
+                        refine(mid, b, depth + 1);
+                    } else if (depth >= MAX_DEPTH && Math.sqrt((pb[0] - pa[0]) * (pb[0] - pa[0]) + (pb[1] - pa[1]) * (pb[1] - pa[1])) > jump) {
+                        finish();   // 아주 짧은 t 사이에서 크게 건너뛴다: 상자 안의 불연속
+                        emit(b);
+                    } else {
+                        emit(b);
+                    }
+                }
+
+                for (var i = 0; i < PIECES; i++) {
+                    var a = t0 + (t1 - t0) * i / PIECES, b = t0 + (t1 - t0) * (i + 1) / PIECES;
+                    var inA = inside(a), inB = inside(b);
+                    if (inA && current === null) emit(a);
+                    if (inA && inB) {
+                        refine(a, b, 0);
+                    } else if (inA) {
+                        var last = edge(a, b);
+                        if (last > a) refine(a, last, 0);
+                        finish();
+                    } else if (inB) {
+                        var first = edge(b, a);
+                        emit(first);
+                        refine(first, b, 0);
+                    } else {
+                        finish();
+                    }
+                }
+                var out = [];
+                for (var k = 0; k < segments.length; k++) if (segments[k].length > 1) out.push(simplify(segments[k]));
+                return out;
+
+                // 빼도 앞뒤 점의 에르미트 곡선이 곡선에서 벗어나지 않는 점은 지운다 (직선은 두 점만 남는다)
+                function simplify(points) {
+                    if (points.length < 3) return points;
+                    var kept = [points[0]];
+                    for (var i = 1; i < points.length - 1; i++) {
+                        if (!fits(kept[kept.length - 1], points[i + 1])) kept.push(points[i]);
+                    }
+                    kept.push(points[points.length - 1]);
+                    return kept;
+                }
+                function fits(p, q) {
+                    var h = q.t - p.t;
+                    for (var j = 1; j < 8; j++) {
+                        var s = j / 8, actual = value(p.t + h * s);
+                        if (actual === null || !inside(p.t + h * s)) return false;
+                        var s2 = s * s, s3 = s2 * s;
+                        var h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
+                        var ex = h00 * p.x + h10 * h * p.dx + h01 * q.x + h11 * h * q.dx - actual[0];
+                        var ey = h00 * p.y + h10 * h * p.dy + h01 * q.y + h11 * h * q.dy - actual[1];
+                        if (Math.sqrt(ex * ex + ey * ey) > TOLERANCE) return false;
+                    }
+                    return true;
+                }
+            }
+
+            // 매개변수곡선 점 → 베지어: 핸들 = 이웃까지 t 간격의 1/3만큼 접선 (dx/dt, dy/dt) 방향
+            function toBezierCurve(points, unit) {
+                var out = [];
+                for (var i = 0; i < points.length; i++) {
+                    var p = points[i];
+                    var anchor = [p.x * unit, p.y * unit];
+                    var left = anchor, right = anchor;
+                    if (i > 0) {
+                        var hl = (p.t - points[i - 1].t) / 3;
+                        left = [(p.x - p.dx * hl) * unit, (p.y - p.dy * hl) * unit];
+                    }
+                    if (i < points.length - 1) {
+                        var hr = (points[i + 1].t - p.t) / 3;
+                        right = [(p.x + p.dx * hr) * unit, (p.y + p.dy * hr) * unit];
+                    }
+                    out.push({ anchor: anchor, left: left, right: right });
+                }
+                return out;
             }
 
             // 세 점을 지나는 원. 한 직선 위의 점이면 null
@@ -3259,7 +3442,17 @@ var SCRIPT_KEY = "HighGeometry";
                     if (notes.length === 0) notes.push("점을 적어 주세요 (예: A(0,3) B(0,0) C(4,0))");
                     return out;
                 }
-                readConstructions(text.constructText, table, names, notes);
+                // 자취: 작도 칸의 t를 바꿔 가며 다시 계산한다. 그림 속 t는 첫 자취의 셋째 값(없으면 시작값), 자취 칸을 못 읽으면 t = 0 (웹 math-geometry.js와 같다)
+                var loci = readLoci(text.locusText, notes), baseNames = names.slice(), baseTable = {};
+                for (var bn = 0; bn < names.length; bn++) baseTable[names[bn]] = table[names[bn]];
+                var tNow = loci.length ? loci[0].t : (text.locusText.replace(/\s/g, "") !== "" ? 0 : null);
+                readConstructions(tNow === null ? text.constructText : withT(text.constructText, tNow), table, names, notes);
+                var locusCurves = [];
+                for (var li = 0; li < loci.length; li++) {
+                    var traced = table.hasOwnProperty(loci[li].name) ? traceLocus(loci[li], baseTable, baseNames) : null;
+                    if (traced === null) { notes.push("자취 " + loci[li].item); continue; }
+                    for (var lc = 0; lc < traced.length; lc++) if (traced[lc].length >= 2) locusCurves.push(traced[lc]);
+                }
                 var segments = readChainPaths(text.segmentText, names, "선분", notes);
                 var dashed = readChainPaths(text.dashedText, names, "점선", notes);
                 var circles = readCircles(text.circleText, table, names, notes);
@@ -3321,6 +3514,9 @@ var SCRIPT_KEY = "HighGeometry";
                 for (i = 0; i < fills.length; i++) for (k = 0; k < fills[i].pts.length; k++) {
                     x0 = Math.min(x0, fills[i].pts[k][0]); x1 = Math.max(x1, fills[i].pts[k][0]); y0 = Math.min(y0, fills[i].pts[k][1]); y1 = Math.max(y1, fills[i].pts[k][1]);
                 }
+                for (i = 0; i < locusCurves.length; i++) for (k = 0; k < locusCurves[i].length; k++) {
+                    x0 = Math.min(x0, locusCurves[i][k].x); x1 = Math.max(x1, locusCurves[i][k].x); y0 = Math.min(y0, locusCurves[i][k].y); y1 = Math.max(y1, locusCurves[i][k].y);
+                }
                 // 좌표축: 원점과 화살촉·글자 자리까지 그림 범위에 넣는다
                 var axes = null;
                 if (showAxes) {
@@ -3341,6 +3537,15 @@ var SCRIPT_KEY = "HighGeometry";
                     out.lines.push(fillLine);
                 }
                 for (i = 0; i < fills.length; i++) out.lines.push(straight(mapped(fills[i].pts), "main", true));
+                // 자취: 도형 선 굵기의 매끈한 베지어 (매개변수곡선과 같은 적응 분할)
+                for (i = 0; i < locusCurves.length; i++) {
+                    var shifted = [];
+                    for (k = 0; k < locusCurves[i].length; k++) {
+                        var lp = locusCurves[i][k];
+                        shifted.push({t: lp.t, x: lp.x - mx, y: lp.y - my, dx: lp.dx, dy: lp.dy});
+                    }
+                    out.lines.push({kind: "main", closed: false, points: toBezierCurve(shifted, scale), locus: true});
+                }
                 for (i = 0; i < arcs.length; i++) {
                     if (arcs[i].trace) {
                         // 작도 흔적 호: 지나는 점 양쪽으로 TRACE_MM씩, 표시 선 두께
@@ -3768,7 +3973,7 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v5"];
+                var parts = ["v6"];
                 for (var i = 0; i < TEXT_KEYS.length; i++) parts.push(encodeURIComponent(text[TEXT_KEYS[i]]));
                 parts.push(showNames ? "1" : "0", showAxes ? "1" : "0", sizeMm, fontPt, labelGapMm, arcRadiusMm, tickMm, strokePt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0");
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
@@ -3779,8 +3984,8 @@ var SCRIPT_KEY = "HighGeometry";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v5는 글 15칸(넓이 글 areaText까지), v4는 넓이 글이 없는 14칸, 옛 v3는 작도 글도 없는 13칸이다
-                var textCount = p[0] === "v5" ? TEXT_KEYS.length : (p[0] === "v4" ? TEXT_KEYS.length - 1 : (p[0] === "v3" ? TEXT_KEYS.length - 2 : -1));
+                // v6는 글 16칸(자취 글 locusText까지), v5는 자취 글이 없는 15칸, v4는 넓이 글도 없는 14칸, 옛 v3는 작도 글도 없는 13칸이다
+                var textCount = p[0] === "v6" ? TEXT_KEYS.length : (p[0] === "v5" ? TEXT_KEYS.length - 1 : (p[0] === "v4" ? TEXT_KEYS.length - 2 : (p[0] === "v3" ? TEXT_KEYS.length - 3 : -1)));
                 if (textCount < 0 || p.length !== textCount + 12) return;
                 try {
                     var restored = {};
