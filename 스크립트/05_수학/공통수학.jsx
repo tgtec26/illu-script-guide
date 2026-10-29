@@ -124,7 +124,7 @@ var SCRIPT_KEY = "HighMathCommon";
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
-    var engines = [makeQuadraticEngine(), makeMoveEngine(), makeCircleLineEngine(), makeInequalityEngine(), makeVennEngine(), makeRationalEngine(), makeMappingEngine()];
+    var engines = [makeQuadraticEngine(), makeMoveEngine(), makeCircleLineEngine(), makeInequalityEngine(), makeVennEngine(), makeRationalEngine(), makeMappingEngine(), makeDivisionEngine()];
 
     var win = new Window("dialog", "공통수학");
     win.orientation = "column";
@@ -4438,6 +4438,841 @@ var SCRIPT_KEY = "HighMathCommon";
                     offsetXmm = restoreNumber(p[14], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[15], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[16] === "1";
+                } catch (restoreError) {}
+            }
+
+            function restoreNumber(text, fallback, minimum, maximum) {
+                var value = parseNumber(text);
+                return value === null ? fallback : clamp(value, minimum, maximum);
+            }
+        }
+        return api;
+    }
+
+    // ==== 세로셈 ====
+    // 세로셈: 조립제법(제수·계수 줄·곱 줄·합 줄, ㄴ자 선, ×a 화살표), 거꾸로 나눗셈(연속 나눗셈, 최대공약수·최소공배수),
+    // 다항식 나눗셈 세로셈(몫 줄, 곱과 나머지 줄). 식을 넣으면 계산해 채우고, 끄면 빈칸 상자가 된다.
+    // 계산 함수(buildDivision 등)는 웹 sci-illu-web generators/math-division.js와 글자 그대로 같다 (tests/check-division.js).
+    // 선 두께: 칸 선·화살표 0.4pt. 선택은 필요 없다.
+    function makeDivisionEngine() {
+        var api = {label: "세로셈", error: null, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        function addRows(page) {
+            var PREF_KEY = "HighMathDivision/settings";
+            var MM_TO_PT = 2.834645669;
+            var POSITION_LIMIT_MM = 100;
+            var LABEL_WIDTH = 100;
+            var INPUT_WIDTH = 50;
+            var SLIDER_WIDTH = 196;
+            var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
+            var ENG_FONT_NAME = "GSMediumB1";
+            var ITALIC_FONT_NAME = "GSMediItaC1";
+            var EQN_FONT_NAME = "HancomEQN";
+            var ENG_BASELINE_PT = 0.5;
+            var AXIS_PT = 0.4;
+            var LABEL_GAP_MM = 0.8;
+            var CELL_ARROW = registerHead({ length: 3.63, halfWidth: 1.18, notch: 0.93 });   // ×a 화살표 촉: 축 화살촉의 0.75배
+            var KIND_NAMES = ["조립제법", "거꾸로 나눗셈 (연속 나눗셈)", "다항식 나눗셈 세로셈"];
+            // 방법을 바꿀 때 식 칸이 아직 예시 그대로면 새 방법의 예시로 바꾼다
+            var SAMPLES = [["x^3-3x^2+4x-2", "x-2"], ["12, 18", "2, 3"], ["2x^3-x^2+3x+1", "x^2+1"]];
+            var ROW_LABELS = [["나뉠 식:", "제수 x−a:"], ["나뉠 수:", "나누는 수:"], ["나뉠 식:", "제수:"]];
+            var ROW_TIPS = [
+                ["조립제법으로 나눌 다항식 (x^3-3x^2+4x-2). 계수만 쉼표로 써도 된다 (1, -3, 4, -2). 빠진 차수는 0", "x-2처럼 최고차 계수가 1인 일차식, 또는 a만 (2). 계수가 1이 아니면 알림에서 알려 준다"],
+                ["나눌 수들을 쉼표로 (12, 18). 둘이면 최대공약수·최소공배수를 알려 준다", "위에서부터 차례로 나눌 수를 쉼표로 (2, 3). 줄마다 모든 수를 이 수로 나눈다"],
+                ["나뉠 다항식 (x^2+x-3). 변수는 x 하나, 계수는 분수·소수도 된다", "나누는 다항식 (x-1, 2x+1)"]
+            ];
+
+            var doc = app.activeDocument;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
+            var layer = findEditableLayer();
+            var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
+            var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+            var italicFont = findTextFont([ITALIC_FONT_NAME, ENG_FONT_NAME]);
+            var eqnFont = findTextFont([EQN_FONT_NAME, ENG_FONT_NAME]);
+
+            // 옵션
+            var kind = 0;
+            var dividendText = SAMPLES[0][0];
+            var divisorText = SAMPLES[0][1];
+            var showAnswer = true;
+            var showArrows = true;
+            var cellWmm = 10;
+            var cellHmm = 8;
+            var fontPt = 8;
+            var offsetXmm = 0;
+            var offsetYmm = 0;
+            var previewEnabled = true;
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {cellWmm: cellWmm, cellHmm: cellHmm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+            applySettings();
+            var LINE_DEFAULTS = {axis: AXIS_PT};
+            loadLineWidths();
+
+            var previewGroup = null;
+
+            var win = page;   // 탭 페이지에 그대로 쌓는다
+
+            var formPanel = addPanel(win, "방법 · 식");
+            var kindRow = formPanel.add("group");
+            kindRow.add("statictext", undefined, "방법:").preferredSize.width = 80;
+            var kindList = kindRow.add("dropdownlist", undefined, KIND_NAMES);
+            kindList.selection = kind;
+            kindList.preferredSize.width = 260;
+            var dividendInput = addTextRow(formPanel, ROW_LABELS[kind][0], dividendText, ROW_TIPS[kind][0]);
+            var divisorInput = addTextRow(formPanel, ROW_LABELS[kind][1], divisorText, ROW_TIPS[kind][1]);
+            var answerCheck = formPanel.add("checkbox", undefined, "답 채우기 (끄면 빈칸 상자)");
+            answerCheck.value = showAnswer;
+            var arrowsCheck = formPanel.add("checkbox", undefined, "×a 화살표");
+            arrowsCheck.value = showArrows;
+            arrowsCheck.enabled = kind === 0;
+            var messageText = formPanel.add("statictext", undefined, " ", {multiline: true});
+            messageText.preferredSize = [360, 34];
+
+            var sizePanel = addPanel(win, "크기");
+            var cellWControls = addValueRow(sizePanel, "칸 너비", "mm", cellWmm, 6, 30, 1, 0);
+            var cellHControls = addValueRow(sizePanel, "칸 높이", "mm", cellHmm, 5, 20, 0.5, 1);
+            var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var axisWidthControls = addValueRow(lineWidthPanel, "칸 선·화살표", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+
+            var positionPanel = addPanel(win, "위치");
+            var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+            var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+
+            kindList.onChange = function() {
+                var next = kindList.selection === null ? kind : kindList.selection.index;
+                if (next === kind) return;
+                if (dividendText === SAMPLES[kind][0] && divisorText === SAMPLES[kind][1]) {
+                    dividendText = SAMPLES[next][0];
+                    divisorText = SAMPLES[next][1];
+                    dividendInput.text = dividendText;
+                    divisorInput.text = divisorText;
+                }
+                kind = next;
+                dividendInput.parent.children[0].text = ROW_LABELS[kind][0];
+                divisorInput.parent.children[0].text = ROW_LABELS[kind][1];
+                dividendInput.helpTip = ROW_TIPS[kind][0];
+                divisorInput.helpTip = ROW_TIPS[kind][1];
+                arrowsCheck.enabled = kind === 0;
+                updatePreview();
+            };
+            dividendInput.onChanging = function() { dividendText = dividendInput.text; updatePreview(); };
+            divisorInput.onChanging = function() { divisorText = divisorInput.text; updatePreview(); };
+            answerCheck.onClick = function() { showAnswer = answerCheck.value; updatePreview(); };
+            arrowsCheck.onClick = function() { showArrows = arrowsCheck.value; updatePreview(); };
+            bindValueRow(cellWControls, function(value) { cellWmm = value; }, defaults.cellWmm);
+            bindValueRow(cellHControls, function(value) { cellHmm = value; }, defaults.cellHmm);
+            bindValueRow(fontControls, function(value) { fontPt = value; }, defaults.fontPt);
+            // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, defaults.offsetXmm);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, defaults.offsetYmm);
+
+            // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다
+            api.commit = function() {
+                if (previewGroup === null) buildPreview();
+                saveSettings();
+                doc.selection = null;
+                previewGroup.selected = true;
+                return true;
+            };
+            api.setPreview = function(on) {
+                previewEnabled = on;
+                updatePreview();
+            };
+            api.updatePreview = updatePreview;
+            api.clearPreview = function() {
+                clearPreview();
+                app.redraw();
+            };
+            return null;
+
+            // -------------------------------------------------------
+            // 미리보기
+            // -------------------------------------------------------
+            function updatePreview() {
+                clearPreview();
+                if (previewEnabled) buildPreview();
+                app.redraw();
+            }
+
+            function clearPreview() {
+                if (previewGroup !== null) {
+                    try { previewGroup.remove(); } catch (e) {}
+                }
+                previewGroup = null;
+            }
+
+            function buildPreview() {
+                var d = buildDivision({
+                    kind: kind, dividend: dividendText, divisor: divisorText, answer: showAnswer, arrows: showArrows,
+                    fontPt: fontPt, cellW: cellWmm * MM_TO_PT, cellH: cellHmm * MM_TO_PT, pad: 3 * MM_TO_PT, arrowCut: CELL_ARROW.length - CELL_ARROW.notch
+                });
+                var message = [];
+                if (d.problems.length > 0) message.push("읽지 못함: " + d.problems.join(", "));
+                for (var n = 0; n < d.notes.length; n++) message.push(d.notes[n]);
+                messageText.text = message.length > 0 ? message.join("\n") : " ";
+                previewGroup = layer.groupItems.add();
+                previewGroup.name = "세로셈";
+                for (var l = 0; l < d.lines.length; l++) addLine(d.lines[l].points);
+                for (var a = 0; a < d.arrows.length; a++) addArrow(d.arrows[a]);
+                for (var t = 0; t < d.texts.length; t++) {
+                    var shown = display(d.texts[t].text);
+                    addLabel({ text: shown.text, sup: shown.sup, at: d.texts[t].at, dir: [0, 0] });
+                }
+                previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
+            }
+
+            function addLine(points) {
+                var path = previewGroup.pathItems.add();
+                path.setEntirePath(points);
+                path.closed = false;
+                path.filled = false;
+                path.stroked = true;
+                path.strokeColor = makeGray(100);
+                path.strokeWidth = AXIS_PT;
+                path.strokeCap = StrokeCap.BUTTENDCAP;
+            }
+
+            function addArrow(arrow) {
+                var head = headShapeFor(arrow.tip, arrow.dir, CELL_ARROW);
+                var path = previewGroup.pathItems.add();
+                path.setEntirePath(head.points);
+                path.closed = head.closed;
+                paintHead(path, head.closed, makeGray(100));
+            }
+
+            // 쌓은 분수 라벨(frac(1,2))의 글상자와 막대 (05_수학/math_label_helper.jsxinc의 buildStackedLabel이 부른다)
+            function stackFrame(group, str, size, upright) {
+                var frame = group.textFrames.add();
+                frame.contents = str.replace(/°/g, "˘");
+                var attributes = frame.textRange.characterAttributes;
+                attributes.size = size;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, upright);
+                return frame;
+            }
+
+            function stackBar(group, x0, x1, y) {
+                var bar = group.pathItems.add();
+                bar.setEntirePath([[x0, y], [x1, y]]);
+                bar.filled = false;
+                bar.stroked = true;
+                bar.strokeColor = makeGray(100);
+                bar.strokeWidth = 0.4;
+                return bar;
+            }
+
+            // 칸 가운데(at)에 글자 가운데를 맞춘다. sup: 위첨자로 올릴 글자 번호
+            function addLabel(label) {
+                if (label.text === "") return;
+                if (typeof buildStackedLabel === "function" && hasFractionText(label.text)) {
+                    buildStackedLabel(previewGroup, label, fontPt, LABEL_GAP_MM * MM_TO_PT, stackFrame, stackBar);
+                    return;
+                }
+                var frame = previewGroup.textFrames.add();
+                frame.contents = label.text;
+                var attributes = frame.textRange.characterAttributes;
+                attributes.size = fontPt;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame, false);
+                for (var s = 0; s < label.sup.length; s++) frame.textRange.characters[label.sup[s]].characterAttributes.baselinePosition = FontBaselineOption.SUPERSCRIPT;
+                var b = frame.geometricBounds;
+                frame.translate(label.at[0] + negativeNumberShift(frame, label.dir) - (b[0] + b[2]) / 2, label.at[1] - (b[1] + b[3]) / 2);
+            }
+
+            // 글자 서체 (07_문자/한글·영문 서체 적용.jsx 규칙): 한글·공백 Spoqa, 영문·숫자 GSMediumB1(기준선 +0.5pt), 소문자 변수 GSMediItaC1,
+            // GSMediumB1에 없는 기호(×, −)는 HancomEQN
+            function applyTextFonts(frame, upright) {
+                var text = frame.contents;
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    var attributes = frame.textRange.characters[i].characterAttributes;
+                    if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
+                        attributes.textFont = korFont;
+                        attributes.baselineShift = 0;
+                    } else if (code > 126) {
+                        attributes.textFont = eqnFont;
+                        attributes.baselineShift = 0;
+                    } else if (!upright && code >= 97 && code <= 122) {
+                        attributes.textFont = italicFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    } else {
+                        attributes.textFont = engFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    }
+                }
+            }
+
+            function findTextFont(names) {
+                for (var i = 0; i < names.length; i++) {
+                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
+                }
+                return app.textFonts[0];
+            }
+
+            // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
+            function findEditableLayer() {
+                var active = doc.activeLayer;
+                if (!active.locked && active.visible) return active;
+                for (var i = 0; i < doc.layers.length; i++) {
+                    if (!doc.layers[i].locked && doc.layers[i].visible) return doc.layers[i];
+                }
+                return doc.layers.add();
+            }
+
+            // K값(0~100)만 있는 회색. RGB 문서면 같은 밝기의 회색으로
+            function makeGray(k) {
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    cmyk.cyan = 0;
+                    cmyk.magenta = 0;
+                    cmyk.yellow = 0;
+                    cmyk.black = k;
+                    return cmyk;
+                }
+                var value = Math.round(255 * (1 - k / 100));
+                var rgb = new RGBColor();
+                rgb.red = value;
+                rgb.green = value;
+                rgb.blue = value;
+                return rgb;
+            }
+
+            // -------------------------------------------------------
+            // 계산 (일러 DOM을 쓰지 않는다 → tests/check-division.js). 웹 generators/math-division.js와 글자 그대로 같다
+            // -------------------------------------------------------
+            // opt: kind(0 조립제법·1 거꾸로 나눗셈·2 다항식 나눗셈), dividend·divisor(입력 글), answer(답 채우기), arrows(×a 화살표),
+            //   fontPt, cellW·cellH(기본 칸 크기 pt), pad(글자 양옆 여백 pt), arrowCut(화살촉 길이−홈 pt)
+            // 글자의 ^ 다음 숫자는 위첨자로 나눈다 (x^2 → x², 위치는 sup). 항 앞 부호 "+ "·"- "와 공백은 그대로 둔다
+            function display(text) {
+                var out = "", sup = [];
+                for (var i = 0; i < text.length; i++) {
+                    if (text.charAt(i) !== "^") { out += text.charAt(i); continue; }
+                    while (i + 1 < text.length && text.charAt(i + 1) >= "0" && text.charAt(i + 1) <= "9") { sup.push(out.length); out += text.charAt(++i); }
+                }
+                return { text: out, sup: sup };
+            }
+
+            // -------------------------------------------------------
+            // 계산 (일러 DOM을 쓰지 않는다 → illu-script-guide tests/check-division.js). 유리수는 {n, d}(d > 0, 기약)
+            // -------------------------------------------------------
+            function buildDivision(opt) {
+                var out = { lines: [], arrows: [], texts: [], notes: [], problems: [] };
+                var kind = opt.kind, plan;   // plan: {cells: [{text, row, col}], boxes: [{row, col}], rows, cols, ...}
+                if (kind === 1) plan = planLadder(opt, out);
+                else {
+                    var dividend = parsePoly(opt.dividend);
+                    if (dividend === null) dividend = kind === 0 ? parseCoefficients(opt.dividend) : null;
+                    var divisor = kind === 0 ? parseRoot(opt.divisor) : parsePoly(opt.divisor);
+                    if (dividend === null) out.problems.push("나뉠 식");
+                    if (divisor === null) out.problems.push("제수");
+                    if (out.problems.length > 0) return out;
+                    if (kind === 0 && divisor.leading !== undefined) { out.notes.push("조립제법의 제수는 x−a 꼴(최고차 계수 1)이어야 합니다"); return out; }
+                    plan = kind === 0 ? planSynthetic(opt, out, dividend, divisor) : planLong(opt, out, dividend, divisor);
+                }
+                if (plan === null || plan.cells.length === 0) return out;
+
+                // 열 너비·줄 높이: 기본 칸 크기와 글자 너비+여백 중 큰 쪽
+                var pad = opt.pad, i, j, colW = [], rowH = [];
+                for (j = 0; j < plan.cols; j++) colW.push(opt.cellW);
+                for (i = 0; i < plan.rows; i++) rowH.push(opt.cellH);
+                for (i = 0; i < plan.cells.length; i++) {
+                    var c = plan.cells[i];
+                    colW[c.col] = Math.max(colW[c.col], textWidth(c.text, opt.fontPt) + pad);
+                }
+                var X = [0], Y = [0];
+                for (j = 0; j < plan.cols; j++) X.push(X[X.length - 1] + colW[j]);
+                for (i = 0; i < plan.rows; i++) Y.push(Y[Y.length - 1] + rowH[i]);
+                var totalW = X[plan.cols], totalH = Y[plan.rows];
+                function P(x, y) { return [x - totalW / 2, totalH / 2 - y]; }   // 왼쪽 위가 원점(y 아래쪽) → 가운데·y 위쪽
+                function cx(col) { return (X[col] + X[col + 1]) / 2; }
+                function cy(row) { return (Y[row] + Y[row + 1]) / 2; }
+                for (i = 0; i < plan.cells.length; i++) out.texts.push({ text: plan.cells[i].text, at: P(cx(plan.cells[i].col), cy(plan.cells[i].row)) });
+                for (i = 0; i < plan.boxes.length; i++) {
+                    var b = plan.boxes[i], hw = Math.min(colW[b.col], opt.cellW) * 0.3, hh = rowH[b.row] * 0.3;
+                    var x0 = cx(b.col) - hw, x1 = cx(b.col) + hw, y0 = cy(b.row) - hh, y1 = cy(b.row) + hh;
+                    out.lines.push({ points: [P(x0, y0), P(x1, y0), P(x1, y1), P(x0, y1), P(x0, y0)] });
+                }
+                for (i = 0; i < plan.segments.length; i++) {
+                    var s = plan.segments[i];   // {x0, y0, x1, y1}: 칸 경계 좌표(열·줄 번호의 경계, 소수는 칸 안 위치)
+                    out.lines.push({ points: [P(edgeX(s.x0), edgeY(s.y0)), P(edgeX(s.x1), edgeY(s.y1))] });
+                }
+                var cut = opt.arrowCut;
+                for (i = 0; i < plan.arrows.length; i++) {
+                    var a = plan.arrows[i], from = P(edgeX(a.x0), edgeY(a.y0)), tip = P(edgeX(a.x1), edgeY(a.y1));
+                    var dv = [tip[0] - from[0], tip[1] - from[1]], dl = Math.sqrt(dv[0] * dv[0] + dv[1] * dv[1]);
+                    out.lines.push({ points: [from, [tip[0] - dv[0] / dl * cut, tip[1] - dv[1] / dl * cut]] });
+                    out.arrows.push({ tip: tip, dir: [dv[0] / dl, dv[1] / dl] });
+                }
+                // 경계 좌표: 정수 k는 k번째 경계, k + t(0<t<1)는 그 칸 안의 위치
+                function edgeX(v) { var k = Math.floor(v + 1e-9), t = v - k; return k >= plan.cols ? X[plan.cols] : X[k] + (X[k + 1] - X[k]) * t; }
+                function edgeY(v) { var k = Math.floor(v + 1e-9), t = v - k; return k >= plan.rows ? Y[plan.rows] : Y[k] + (Y[k + 1] - Y[k]) * t; }
+                return out;
+            }
+
+            // 글자 너비(pt) 어림: 숫자·영문 0.55em, 공백 0.3em, 위첨자 한 글자 0.4em, frac(a,b)는 분자·분모 중 긴 쪽
+            function textWidth(text, fontPt) {
+                var s = String(text), w = 0, i = 0;
+                while (i < s.length) {
+                    if (s.substring(i, i + 5) === "frac(") {
+                        var close = s.indexOf(")", i), body = s.substring(i + 5, close).split(",");
+                        w += Math.max(body[0].length, (body[1] || "").length) * 0.55;
+                        i = close + 1;
+                    } else if (s.charAt(i) === "^") {
+                        i++;
+                        while (i < s.length && s.charAt(i) >= "0" && s.charAt(i) <= "9") { w += 0.4; i++; }
+                    } else { w += s.charAt(i) === " " ? 0.3 : (s.charCodeAt(i) < 128 ? 0.55 : 1); i++; }
+                }
+                return w * fontPt;
+            }
+
+            // ── 조립제법 ────────────────────────────────────────────
+            // 칸 배치: 0열 제수, 1~n+1열 계수. 0줄 계수, 1줄 곱(계수 i의 곱은 i+1열에), 2줄 합
+            function planSynthetic(opt, out, dividend, root) {
+                var s = syntheticDivision(dividend, root), n = dividend.length;
+                var plan = { cells: [], boxes: [], segments: [], arrows: [], rows: 3, cols: n + 1 }, i;
+                plan.cells.push({ text: ratText(root), row: 0, col: 0 });
+                for (i = 0; i < n; i++) plan.cells.push({ text: ratText(dividend[i]), row: 0, col: i + 1 });
+                for (i = 0; i < n - 1; i++) {
+                    if (opt.answer) plan.cells.push({ text: ratText(s.middle[i]), row: 1, col: i + 2 }); else plan.boxes.push({ row: 1, col: i + 2 });
+                }
+                for (i = 0; i < n; i++) {
+                    if (opt.answer) plan.cells.push({ text: ratText(s.bottom[i]), row: 2, col: i + 1 }); else plan.boxes.push({ row: 2, col: i + 1 });
+                }
+                plan.segments.push({ x0: 1, y0: 0, x1: 1, y1: 2 });   // 제수 오른쪽 세로선 (계수 줄·곱 줄)
+                plan.segments.push({ x0: 1, y0: 2, x1: n + 1, y1: 2 });   // 곱 줄 아래 가로선
+                if (opt.arrows) {
+                    for (i = 0; i < n - 1; i++) plan.arrows.push({ x0: i + 1.85, y0: 2.25, x1: i + 2.15, y1: 1.85 });   // 합 칸 → 다음 곱 칸 (×a). 빈칸 상자(칸 가운데 ±0.3) 바깥에서 시작해 바깥에서 끝난다
+                }
+                var q = s.bottom.slice(0, n - 1), rem = s.bottom[n - 1];
+                out.notes.push(opt.dividend.indexOf("x") >= 0 ? "몫 " + polyText(q) + ", 나머지 " + ratFlat(rem) : "몫 계수 " + ratList(q) + ", 나머지 " + ratFlat(rem));
+                return plan;
+            }
+
+            // 조립제법 계산: coefficients 높은 차수부터, root = a (x−a로 나눔). middle[i] = bottom[i]·a (i = 0…n−2), bottom[0] = c0, bottom[i] = c[i] + middle[i−1]
+            function syntheticDivision(coefficients, root) {
+                var middle = [], bottom = [coefficients[0]], i;
+                for (i = 1; i < coefficients.length; i++) {
+                    middle.push(ratMul(bottom[i - 1], root));
+                    bottom.push(ratAdd(coefficients[i], middle[i - 1]));
+                }
+                return { middle: middle, bottom: bottom };
+            }
+
+            // 제수 "x-2" 또는 숫자 "2"(= x−2로 나눔) → 근 a. 최고차 계수가 1이 아니면 {leading}을 붙여 돌려준다. 못 읽으면 null
+            function parseRoot(text) {
+                var t = String(text).replace(/\s/g, "");
+                if (t === "") return null;
+                if (t.indexOf("x") < 0) return parseRational(t);
+                var p = parsePoly(t);
+                if (p === null || p.length !== 2 || p[0].d !== 1 || p[0].n === 0) return null;
+                if (p[0].n !== 1) { var odd = ratNeg(ratDiv(p[1], p[0])); odd.leading = p[0]; return odd; }
+                return ratNeg(p[1]);
+            }
+
+            // "1, -3, 4, -2" → 계수 목록(높은 차수부터). 못 읽으면 null
+            function parseCoefficients(text) {
+                var parts = String(text).split(/[,，]/), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var v = parseRational(parts[i]);
+                    if (v === null) return null;
+                    out.push(v);
+                }
+                return out.length > 0 ? out : null;
+            }
+
+            // ── 거꾸로 나눗셈 ───────────────────────────────────────
+            // 칸 배치: 0열 나누는 수, 1~k열 수. 0줄 처음 수, 그 아래 줄마다 나눈 값. 마지막 줄은 나누는 수가 없다
+            function planLadder(opt, out) {
+                var numbers = parseIntegers(opt.dividend), divisors = parseIntegers(opt.divisor);
+                if (numbers === null || numbers.length === 0) out.problems.push("수");
+                if (divisors === null || divisors.length === 0) out.problems.push("나누는 수");
+                if (out.problems.length > 0) return null;
+                var rows = [numbers], i, j;
+                for (i = 0; i < divisors.length; i++) {
+                    var next = [];
+                    for (j = 0; j < numbers.length; j++) {
+                        if (rows[i][j] % divisors[i] !== 0) { out.notes.push(rows[i][j] + "은(는) " + divisors[i] + "로 나누어떨어지지 않습니다"); return null; }
+                        next.push(rows[i][j] / divisors[i]);
+                    }
+                    rows.push(next);
+                }
+                var m = divisors.length, k = numbers.length;
+                var plan = { cells: [], boxes: [], segments: [], arrows: [], rows: m + 1, cols: k + 1 };
+                for (i = 0; i < m; i++) plan.cells.push({ text: String(divisors[i]), row: i, col: 0 });
+                for (i = 0; i <= m; i++) for (j = 0; j < k; j++) {
+                    if (i === 0 || opt.answer) plan.cells.push({ text: String(rows[i][j]), row: i, col: j + 1 }); else plan.boxes.push({ row: i, col: j + 1 });
+                }
+                plan.segments.push({ x0: 1, y0: 0, x1: 1, y1: m });   // 나누는 수 오른쪽 세로선(ㄴ의 세로)
+                for (i = 0; i < m; i++) plan.segments.push({ x0: 1, y0: i + 1, x1: k + 1, y1: i + 1 });   // 줄마다 아래 가로선(ㄴ의 가로)
+                var last = rows[m], g = last[0];
+                for (j = 1; j < k; j++) g = gcd(g, last[j]);
+                var product = 1;
+                for (i = 0; i < m; i++) product *= divisors[i];
+                if (k > 1 && g > 1) out.notes.push("마지막 줄 " + last.join(", ") + "에 공약수 " + g + "이(가) 남아 더 나눌 수 있습니다");
+                else if (k === 2) {
+                    var lcm = product;
+                    for (j = 0; j < k; j++) lcm *= last[j];
+                    out.notes.push("최대공약수 " + divisors.join("×") + " = " + product + ", 최소공배수 " + product + "×" + last.join("×") + " = " + lcm);
+                }
+                return plan;
+            }
+
+            function parseIntegers(text) {
+                var parts = String(text).split(/[,，\s]+/), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    if (parts[i] === "") continue;
+                    var v = Number(parts[i]);
+                    if (!(v >= 1) || v !== Math.floor(v) || v > 1e9) return null;
+                    out.push(v);
+                }
+                return out;
+            }
+
+            function gcd(a, b) {
+                while (b) { var t = a % b; a = b; b = t; }
+                return a;
+            }
+
+            // ── 다항식 나눗셈 세로셈 ─────────────────────────────────
+            // 칸 배치: 0열 제수, 1~(차수+1)열 차수별(높은 차수가 왼쪽). 0줄 몫, 1줄 나뉠 식, 그 아래 단계마다 곱 줄·나머지 줄.
+            // 빈칸 모드(answer false)는 몫·곱·나머지 칸을 상자로 둔다
+            function planLong(opt, out, dividend, divisor) {
+                var r = polyDivide(dividend, divisor);
+                if (r === null) { out.problems.push("제수"); return null; }
+                var nCols = trimPoly(dividend).length, plan = { cells: [], boxes: [], segments: [], arrows: [], rows: 2, cols: nCols + 1 }, i, step;
+                plan.cells.push({ text: polyText(divisor), row: 1, col: 0 });
+                addPolyRow(plan, trimPoly(dividend), 1, nCols, true, true);
+                addPolyRow(plan, r.quotient, 0, nCols, opt.answer, true);
+                var row = 2;
+                plan.segments.push({ x0: 1, y0: 1, x1: nCols + 1, y1: 1 });   // 나뉠 식 위 가로선
+                for (i = 0; i < r.steps.length; i++) {
+                    step = r.steps[i];
+                    addPolyRow(plan, step.product, row, nCols, opt.answer, false);
+                    plan.segments.push({ x0: nCols - step.product.length + 1, y0: row + 1, x1: nCols + 1, y1: row + 1 });   // 곱 줄 아래 가로선
+                    addPolyRow(plan, step.remainder, row + 1, nCols, opt.answer, false);
+                    row += 2;
+                }
+                plan.rows = row;
+                plan.segments.push({ x0: 1, y0: 1, x1: 1, y1: row });   // 제수와 나뉠 식 사이 세로선
+                out.notes.push("몫 " + polyText(r.quotient) + ", 나머지 " + polyText(r.remainder));
+                return plan;
+            }
+
+            // 계수 줄(높은 차수부터)을 차수 칸에 놓는다. 오른쪽 끝이 상수항 칸. 0 계수는 건너뛴다.
+            // filled false면 글자 대신 상자. compact는 맨 앞 항의 음수를 "-x"로 붙여 쓴다 (몫·나뉠 식 같은 식 줄), 아니면 "- 1"처럼 부호를 띄운다
+            function addPolyRow(plan, coefficients, row, nCols, filled, compact) {
+                var shift = nCols - coefficients.length, first = true;
+                for (var i = 0; i < coefficients.length; i++) {
+                    if (coefficients[i].n === 0) continue;
+                    if (filled) plan.cells.push({ text: termText(coefficients[i], coefficients.length - 1 - i, first, !compact), row: row, col: shift + i + 1 });
+                    else plan.boxes.push({ row: row, col: shift + i + 1 });
+                    first = false;
+                }
+            }
+
+            // 나눗셈 한 번: 몫, 나머지와 단계(곱, 그 뺀 나머지). 계수는 높은 차수부터 앞의 0 없이. 제수가 0이면 null
+            function polyDivide(dividend, divisor) {
+                var b = trimPoly(divisor), remainder = trimPoly(dividend), steps = [];
+                if (b.length === 0) return null;
+                while (remainder.length >= b.length) {
+                    var q = ratDiv(remainder[0], b[0]), product = [], next = [], i;
+                    for (i = 0; i < remainder.length; i++) product.push(i < b.length ? ratMul(b[i], q) : ratZero());
+                    for (i = 1; i < remainder.length; i++) next.push(ratSub(remainder[i], product[i]));
+                    steps.push({ quotientCoefficient: q, degree: remainder.length - b.length, product: product, remainder: trimPoly(next) });
+                    remainder = trimPoly(next);
+                }
+                // 몫: 단계마다 차수가 내려가므로 건너뛴 차수는 0으로 채워 높은 차수부터 차례로 맞춘다
+                var quotient = [], k, s;
+                for (k = steps.length > 0 ? steps[0].degree : -1; k >= 0; k--) {
+                    var found = ratZero();
+                    for (s = 0; s < steps.length; s++) if (steps[s].degree === k) found = steps[s].quotientCoefficient;
+                    quotient.push(found);
+                }
+                return { quotient: quotient, remainder: remainder, steps: steps };
+            }
+
+            function trimPoly(p) {
+                var i = 0;
+                while (i < p.length && p[i].n === 0) i++;
+                return p.slice(i);
+            }
+
+            // ── 다항식 ──────────────────────────────────────────────
+            // "x^3-3x^2+4x-2" → 계수(높은 차수부터, 빠진 차수는 0). 변수는 x 하나. 못 읽으면 null
+            function parsePoly(text) {
+                var s = String(text).replace(/\s/g, "").replace(/−/g, "-");
+                if (s === "") return null;
+                var terms = [], cur = "", i;
+                for (i = 0; i < s.length; i++) {
+                    var ch = s.charAt(i);
+                    if ((ch === "+" || ch === "-") && cur !== "" && cur.charAt(cur.length - 1) !== "^") { terms.push(cur); cur = ch; } else cur += ch;
+                }
+                if (cur !== "") terms.push(cur);
+                var byDegree = {}, top = 0;
+                for (i = 0; i < terms.length; i++) {
+                    var t = terms[i], sign = 1;
+                    if (t.charAt(0) === "+") t = t.substring(1); else if (t.charAt(0) === "-") { sign = -1; t = t.substring(1); }
+                    if (t === "") return null;
+                    var x = t.indexOf("x"), coef, degree;
+                    if (x < 0) { coef = parseRational(t); degree = 0; }
+                    else {
+                        var before = t.substring(0, x), after = t.substring(x + 1);
+                        coef = before === "" ? rat(1, 1) : parseRational(before);
+                        if (after === "") degree = 1;
+                        else if (after.charAt(0) === "^" && /^[0-9]+$/.test(after.substring(1))) degree = parseInt(after.substring(1), 10);
+                        else return null;
+                    }
+                    if (coef === null || degree > 30) return null;
+                    if (sign < 0) coef = ratNeg(coef);
+                    byDegree[degree] = byDegree.hasOwnProperty(degree) ? ratAdd(byDegree[degree], coef) : coef;
+                    top = Math.max(top, degree);
+                }
+                var out = [];
+                for (i = top; i >= 0; i--) out.push(byDegree.hasOwnProperty(i) ? byDegree[i] : ratZero());
+                return out;
+            }
+
+            // 한 항의 글자: 첫 항은 음수일 때만 - (spaced면 "- 1"처럼 한 칸 띄움), 그 밖은 "+ 2x", "- 3" (부호 뒤 한 칸). 계수 1은 상수항이 아니면 생략.
+            // 분수 계수는 x가 있으면 (1/2)x, 상수항이면 frac(1,2)(쌓은 분수). flat이면 상수항도 1/2 (알림 글)
+            function termText(coef, degree, first, spaced, flat) {
+                var negative = coef.n < 0, magnitude = ratAbs(coef), body;
+                if (degree === 0) body = flat ? ratFlat(magnitude) : ratText(magnitude);
+                else {
+                    var c = magnitude.n === 1 && magnitude.d === 1 ? "" : (magnitude.d === 1 ? String(magnitude.n) : "(" + ratFlat(magnitude) + ")");
+                    body = c + "x" + (degree > 1 ? "^" + degree : "");
+                }
+                if (first) return (negative ? (spaced ? "- " : "-") : "") + body;
+                return (negative ? "- " : "+ ") + body;
+            }
+
+            // 계수 줄 → "x^2-x+2" (알림에 쓰는 한 줄 식)
+            function polyText(coefficients) {
+                var p = trimPoly(coefficients), text = "";
+                if (p.length === 0) return "0";
+                for (var i = 0; i < p.length; i++) {
+                    if (p[i].n === 0) continue;
+                    var t = termText(p[i], p.length - 1 - i, text === "", false, true);
+                    text += text === "" ? t : t.charAt(0) + t.substring(2);
+                }
+                return text;
+            }
+
+            // ── 유리수 ──────────────────────────────────────────────
+            function rat(n, d) {
+                if (d < 0) { n = -n; d = -d; }
+                var g = gcd(Math.abs(n), d) || 1;
+                return { n: n / g, d: d / g };
+            }
+
+            function ratZero() { return { n: 0, d: 1 }; }
+
+            function ratAdd(a, b) { return rat(a.n * b.d + b.n * a.d, a.d * b.d); }
+
+            function ratSub(a, b) { return rat(a.n * b.d - b.n * a.d, a.d * b.d); }
+
+            function ratMul(a, b) { return rat(a.n * b.n, a.d * b.d); }
+
+            function ratDiv(a, b) { return rat(a.n * b.d, a.d * b.n); }
+
+            function ratNeg(a) { return { n: -a.n, d: a.d }; }
+
+            function ratAbs(a) { return { n: Math.abs(a.n), d: a.d }; }
+
+            // "3", "-1/2", "0.25" → {n, d}. 못 읽으면 null
+            function parseRational(text) {
+                var s = String(text).replace(/\s/g, "").replace(/−/g, "-");
+                if (s === "") return null;
+                var slash = s.indexOf("/");
+                if (slash >= 0) {
+                    var a = parseDecimal(s.substring(0, slash)), b = parseDecimal(s.substring(slash + 1));
+                    if (a === null || b === null || b.n === 0) return null;
+                    return ratDiv(a, b);
+                }
+                return parseDecimal(s);
+            }
+
+            function parseDecimal(s) {
+                if (!/^[+-]?[0-9]+(\.[0-9]{1,4})?$/.test(s)) return null;
+                var dot = s.indexOf("."), digits = dot < 0 ? 0 : s.length - dot - 1, scale = Math.pow(10, digits);
+                return rat(Math.round(parseFloat(s) * scale), scale);
+            }
+
+            // 칸 글자: 정수는 그대로, 분수는 frac(n,d) (음수는 앞에 -)
+            function ratText(v) {
+                if (v.d === 1) return String(v.n);
+                return (v.n < 0 ? "-" : "") + "frac(" + Math.abs(v.n) + "," + v.d + ")";
+            }
+
+            // 한 줄 글자(알림·다항식 항): 분수는 1/2
+            function ratFlat(v) { return v.d === 1 ? String(v.n) : v.n + "/" + v.d; }
+
+            function ratList(list) {
+                var parts = [];
+                for (var i = 0; i < list.length; i++) parts.push(ratFlat(list[i]));
+                return parts.join(", ");
+            }
+
+            // -------------------------------------------------------
+            // 다이얼로그 부품
+            // -------------------------------------------------------
+            // 선 두께(칸 선·화살표): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "axis") { AXIS_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "axis") return AXIS_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
+            function addTextRow(parent, label, value, tip) {
+                var row = parent.add("group");
+                row.add("statictext", undefined, label).preferredSize.width = 80;
+                var input = row.add("edittext", undefined, value);
+                input.preferredSize.width = 260;
+                input.helpTip = tip;
+                return input;
+            }
+
+            function addPanel(parent, title, foldKey) {
+                // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
+                if (foldKey && typeof makeCollapsiblePanel === "function") {
+                    var body = makeCollapsiblePanel(parent, title, true, SCRIPT_KEY + "/" + foldKey);
+                    body.alignChildren = ["left", "top"];
+                    body.spacing = 6;
+                    return body;
+                }
+                var panel = parent.add("panel", undefined, title);
+                panel.alignChildren = ["left", "top"];
+                panel.margins = [12, 16, 12, 12];
+                panel.spacing = 6;
+                return panel;
+            }
+
+            function addValueRow(parent, label, unitText, value, minimum, maximum, step, decimals) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.add("statictext", undefined, label + " (" + unitText + "):").preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, formatNumber(value, decimals));
+                input.preferredSize.width = INPUT_WIDTH;
+                var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+                slider.stepdelta = step;
+                slider.jumpdelta = step * 10;
+                slider.preferredSize.width = SLIDER_WIDTH;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
+                return { input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals };
+            }
+
+            function setRowValue(controls, value) {
+                controls.input.text = formatNumber(value, controls.decimals);
+                try { controls.slider.value = value; } catch (e) {}
+            }
+
+            function bindValueRow(controls, setter, initial) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    setRowValue(controls, value);
+                    setter(value);
+                    updatePreview();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(initial); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? controls.slider.value : value);
+                };
+            }
+
+            function bindPositionRow(controls, getter, setter, isX, initial) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    var delta = (value - getter()) * MM_TO_PT;
+                    setter(value);
+                    setRowValue(controls, value);
+                    if (delta === 0 || previewGroup === null) return;
+                    previewGroup.translate(isX ? delta : 0, isX ? 0 : delta);
+                    app.redraw();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(initial); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? getter() : value);
+                };
+            }
+
+            function parseNumber(text) {
+                var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+                return isNaN(value) ? null : value;
+            }
+
+            function clamp(value, minimum, maximum) {
+                if (value < minimum) return minimum;
+                if (value > maximum) return maximum;
+                return value;
+            }
+
+            function roundTo(value, step) {
+                return Math.round(value / step) * step;
+            }
+
+            function formatNumber(value, decimals) {
+                return (Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
+            }
+
+            // -------------------------------------------------------
+            // 설정 저장 · 복원
+            // -------------------------------------------------------
+            function saveSettings() {
+                saveLineWidths();
+                var parts = ["v1", kind, encodeURIComponent(dividendText), encodeURIComponent(divisorText), showAnswer ? "1" : "0", showArrows ? "1" : "0",
+                    cellWmm, cellHmm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+            }
+
+            function applySettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+                if (!raw) return;
+                var p = raw.split("|");
+                if (p[0] !== "v1" || p.length !== 12) return;
+                try {
+                    kind = restoreNumber(p[1], kind, 0, 2);
+                    dividendText = decodeURIComponent(p[2]);
+                    divisorText = decodeURIComponent(p[3]);
+                    showAnswer = p[4] === "1";
+                    showArrows = p[5] === "1";
+                    cellWmm = restoreNumber(p[6], cellWmm, 6, 30);
+                    cellHmm = restoreNumber(p[7], cellHmm, 5, 20);
+                    fontPt = restoreNumber(p[8], fontPt, 5, 14);
+                    offsetXmm = restoreNumber(p[9], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[10], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[11] === "1";
                 } catch (restoreError) {}
             }
 

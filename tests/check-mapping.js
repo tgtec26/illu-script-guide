@@ -32,7 +32,7 @@ function extractFunction(name) {
 }
 
 es3Lint(source, "공통수학.jsx 대응 탭");
-assert.ok(bundle.includes("makeRationalEngine(), makeMappingEngine()]"), "탭 목록 끝에 대응 그림 (저장된 탭 번호가 그대로)");
+assert.ok(bundle.includes("makeRationalEngine(), makeMappingEngine()"), "탭 목록 끝에 대응 그림 (저장된 탭 번호가 그대로)");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
 
 const names = ["buildMapping", "textWidth", "parseElements", "parsePairs"];

@@ -4865,6 +4865,77 @@
         }
       }
     },
+    "math-division": {
+      "schemaVersion": 1,
+      "toolId": "math-division",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "axisPt": {
+          "type": "number",
+          "default": 0.4
+        },
+        "cellHmm": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 20
+        },
+        "cellWmm": {
+          "type": "number",
+          "default": 10,
+          "minimum": 6,
+          "maximum": 30
+        },
+        "dividendText": {
+          "type": "string",
+          "default": "x^3-3x^2+4x-2"
+        },
+        "divisorText": {
+          "type": "string",
+          "default": "x-2"
+        },
+        "fontPt": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 14
+        },
+        "graphPt": {
+          "type": "number",
+          "default": 0.8
+        },
+        "guidePt": {
+          "type": "number",
+          "default": 0.3
+        },
+        "headShape": {
+          "type": "number",
+          "default": 3
+        },
+        "headSize": {
+          "type": "number",
+          "default": 100,
+          "minimum": 30,
+          "maximum": 300
+        },
+        "kind": {
+          "type": "number",
+          "default": 0
+        },
+        "showAnswer": {
+          "type": "boolean",
+          "default": true
+        },
+        "showArrows": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
     "math-exp-log": {
       "schemaVersion": 1,
       "toolId": "math-exp-log",
