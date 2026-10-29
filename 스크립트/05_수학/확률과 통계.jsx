@@ -307,6 +307,7 @@ var SCRIPT_KEY = "HighStatistics";
             var ENG_FONT_NAME = "GSMediumB1";
             var ENG_BASELINE_PT = 0.5;
             var MAIN_PT = 0.8;
+            var ROUTE_PT = 1.6;   // 강조한 경로 (선 0.8pt의 두 배)
             var DOT_RADIUS_MM = 0.8;
             var LABEL_GAP_MM = 1;
             var MODES = ["도로망", "색칠 지도", "격자 최단 경로", "원순열 (둘러앉기)"];
@@ -330,6 +331,7 @@ var SCRIPT_KEY = "HighStatistics";
             var passText = "";
             var blockedText = "";
             var gridNumbers = true;
+            var erasedText = "", routeText = "", edgeLabelText = "";   // 격자: 지운 길, 강조할 경로(RRUUR), 변 글자(0,0-1,0:3)
             var tableShape = 0, seatCount = 5, sideA = 2, sideB = 1, tableMm = 30;
             var seatNames = "";
             var rotationArrow = false;
@@ -375,10 +377,10 @@ var SCRIPT_KEY = "HighStatistics";
             var rowsControls = addValueRow(gridPanel, "세로", "칸", gridRows, 1, 10, 1, 0);
             var cellControls = addValueRow(gridPanel, "칸 크기", "mm", gridCellMm, 4, 20, 0.5, 1);
             var passRow = gridPanel.add("group");
-            passRow.add("statictext", undefined, "지나는 점 P:");
+            passRow.add("statictext", undefined, "지나는 점:");
             var passInput = passRow.add("edittext", undefined, passText);
-            passInput.preferredSize.width = 60;
-            passInput.helpTip = "A에서 가로로 2칸, 세로로 1칸이면 2,1. 비우면 없음";
+            passInput.preferredSize.width = 130;
+            passInput.helpTip = "A에서 가로로 2칸, 세로로 1칸이면 2,1(이름 P). 이름=x,y를 ;로 이으면 여러 점을 차례로 지나는 경로 수를 낸다 (C=1,1; D=3,2). 이름 없는 점은 P, Q, R… 비우면 없음";
             var gridNumbersCheck = passRow.add("checkbox", undefined, "교차점에 경로 수");
             gridNumbersCheck.value = gridNumbers;
             var blockedRow = gridPanel.add("group");
@@ -386,6 +388,21 @@ var SCRIPT_KEY = "HighStatistics";
             var blockedInput = blockedRow.add("edittext", undefined, blockedText);
             blockedInput.preferredSize.width = 280;
             blockedInput.helpTip = "이웃한 두 교차점을 잇는 길. 1,0-2,0; 3,2-3,3처럼 세미콜론으로. 길 위에 ×를 그린다";
+            var erasedRow = gridPanel.add("group");
+            erasedRow.add("statictext", undefined, "지운 길:");
+            var erasedInput = erasedRow.add("edittext", undefined, erasedText);
+            erasedInput.preferredSize.width = 280;
+            erasedInput.helpTip = "이웃한 두 교차점 사이의 길을 지운다(선을 안 긋고 지나갈 수 없다, × 없음). 칸을 지우려면 네 변을 지운다 (불규칙한 모양)";
+            var routeRow = gridPanel.add("group");
+            routeRow.add("statictext", undefined, "경로 강조:");
+            var routeInput = routeRow.add("edittext", undefined, routeText);
+            routeInput.preferredSize.width = 280;
+            routeInput.helpTip = "A에서 출발해 R(→)는 오른쪽, U(↑)는 위쪽으로 가는 경로를 굵게 그린다 (RRUUR)";
+            var edgeLabelRow = gridPanel.add("group");
+            edgeLabelRow.add("statictext", undefined, "변 글자:");
+            var edgeLabelInput = edgeLabelRow.add("edittext", undefined, edgeLabelText);
+            edgeLabelInput.preferredSize.width = 280;
+            edgeLabelInput.helpTip = "이웃한 두 교차점 사이 길 가운데에 쓸 글자(가로 길은 위, 세로 길은 왼쪽). 길 하나를 '두 점:글자'로 쓰고 ;로 이어 쓴다 (0,0-1,0:3; 1,0-1,1:a)";
             var gridMessage = gridPanel.add("statictext", undefined, " ");
             gridMessage.preferredSize.width = 360;
 
@@ -434,6 +451,9 @@ var SCRIPT_KEY = "HighStatistics";
             bindValueRow(cellControls, function(value) { gridCellMm = value; }, defaults.gridCellMm);
             passInput.onChanging = function() { passText = passInput.text; updatePreview(); };
             blockedInput.onChanging = function() { blockedText = blockedInput.text; updatePreview(); };
+            erasedInput.onChanging = function() { erasedText = erasedInput.text; updatePreview(); };
+            routeInput.onChanging = function() { routeText = routeInput.text; updatePreview(); };
+            edgeLabelInput.onChanging = function() { edgeLabelText = edgeLabelInput.text; updatePreview(); };
             gridNumbersCheck.onClick = function() { gridNumbers = gridNumbersCheck.value; updatePreview(); };
             tableList.onChange = function() { tableShape = tableList.selection ? tableList.selection.index : 0; refreshEnabled(); updatePreview(); };
             arrowCheck.onClick = function() { rotationArrow = arrowCheck.value; updatePreview(); };
@@ -509,13 +529,20 @@ var SCRIPT_KEY = "HighStatistics";
                 } else if (mode === 1) {
                     drawing = buildMap(mapIndex, mapMm * MM_TO_PT);
                 } else if (mode === 2) {
-                    var pass = String(passText).replace(/\s/g, "") === "" ? null : parseLatticePoint(passText);
-                    var blocked = parseBlocked(blockedText);
-                    if ((pass === null && String(passText).replace(/\s/g, "") !== "") || blocked === null) {
-                        gridMessage.text = pass === null && String(passText).replace(/\s/g, "") !== "" ? "P를 읽지 못함 (예: 2,1)" : "막힌 길을 읽지 못함 (예: 1,0-2,0; 3,2-3,3)";
+                    var passes = parsePassPoints(passText), blocked = parseBlocked(blockedText), erased = parseBlocked(erasedText);
+                    var gridCountCols = Math.round(gridCols), gridCountRows = Math.round(gridRows);
+                    var route = parseRoute(routeText, gridCountCols, gridCountRows), edgeLabels = parseEdgeLabels(edgeLabelText);
+                    var gridProblem = "";
+                    if (passes === null) gridProblem = "지나는 점을 읽지 못함 (예: 2,1 또는 C=2,1; D=4,2)";
+                    else if (blocked === null) gridProblem = "막힌 길을 읽지 못함 (예: 1,0-2,0; 3,2-3,3)";
+                    else if (erased === null) gridProblem = "지운 길을 읽지 못함 (예: 1,0-2,0; 3,2-3,3)";
+                    else if (route === null) gridProblem = "경로를 읽지 못함 (예: RRUUR 또는 →→↑↑→, 격자 안에서)";
+                    else if (edgeLabels === null) gridProblem = "변 글자를 읽지 못함 (예: 0,0-1,0:3; 1,0-1,1:a)";
+                    if (gridProblem !== "") {
+                        gridMessage.text = gridProblem;
                         return;
                     }
-                    drawing = buildGrid(Math.round(gridCols), Math.round(gridRows), gridCellMm * MM_TO_PT, pass, blocked, gridNumbers);
+                    drawing = buildGrid(gridCountCols, gridCountRows, gridCellMm * MM_TO_PT, null, blocked, gridNumbers, { passes: passes, erased: erased, route: route, labels: edgeLabels });
                     gridMessage.text = drawing.note;
                 } else {
                     drawing = buildSeats(tableShape, Math.round(seatCount), Math.round(sideA), Math.round(sideB), tableMm * MM_TO_PT, seatNames, rotationArrow, fontPt);
@@ -548,7 +575,7 @@ var SCRIPT_KEY = "HighStatistics";
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(100);
-                path.strokeWidth = MAIN_PT;
+                path.strokeWidth = line.heavy ? ROUTE_PT : MAIN_PT;
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.MITERENDJOIN;
             }
@@ -840,6 +867,59 @@ var SCRIPT_KEY = "HighStatistics";
                 return list;
             }
 
+            // 지나는 점 "2,1" (이름 P) 또는 "C=2,1; D=4,2" (이름 없는 점은 P, Q, R… 차례) → [{name, x, y}]. 빈 칸은 [], 못 읽으면 null
+            function parsePassPoints(text) {
+                var parts = String(text).split(/[;；]/), list = [], unnamed = 0;
+                for (var i = 0; i < parts.length; i++) {
+                    var part = parts[i].replace(/\s/g, "");
+                    if (part === "") continue;
+                    var eq = part.indexOf("="), name = "", pointText = part;
+                    if (eq >= 0) {
+                        name = part.substring(0, eq);
+                        pointText = part.substring(eq + 1);
+                        if (name === "" || name.indexOf("=") >= 0 || pointText.indexOf("=") >= 0) return null;
+                    }
+                    var point = parseLatticePoint(pointText);
+                    if (point === null) return null;
+                    if (name === "") name = "PQRSTUVW".charAt(unnamed++);
+                    if (name === "") return null;
+                    list.push({ name: name, x: point[0], y: point[1] });
+                }
+                return list;
+            }
+
+            // 경로 "RRUUR" 또는 "→→↑↑→" (R·→ 오른쪽, U·↑ 위쪽, 빈칸·쉼표 무시) → A(0,0)에서 시작하는 교차점 목록. 격자 밖이거나 못 읽으면 null, 빈 칸은 []
+            function parseRoute(text, cols, rows) {
+                var moves = String(text).replace(/[\s,]/g, "").toUpperCase(), points = [], x = 0, y = 0;
+                if (moves === "") return points;
+                points.push([0, 0]);
+                for (var i = 0; i < moves.length; i++) {
+                    var move = moves.charAt(i);
+                    if (move === "R" || move === "→") x++;
+                    else if (move === "U" || move === "↑") y++;
+                    else return null;
+                    if (x > cols || y > rows) return null;
+                    points.push([x, y]);
+                }
+                return points;
+            }
+
+            // 변 글자 "0,0-1,0:3; 1,0-1,1:a" → [{a, b, text}]. 이웃한 두 교차점과 글자가 없으면 null, 빈 칸은 []
+            function parseEdgeLabels(text) {
+                var parts = String(text).split(/[;；]/), list = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var part = parts[i].replace(/^\s+|\s+$/g, "");
+                    if (part === "") continue;
+                    var colon = part.indexOf(":"), dash = part.indexOf("-");
+                    if (colon < 0 || dash < 0 || dash > colon) return null;
+                    var label = part.substring(colon + 1).replace(/^\s+|\s+$/g, "");
+                    var p = parseLatticePoint(part.substring(0, dash)), q = parseLatticePoint(part.substring(dash + 1, colon));
+                    if (label === "" || p === null || q === null || Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) !== 1) return null;
+                    list.push({ a: p, b: q, text: label });
+                }
+                return list;
+            }
+
             function edgeKey(p, q) {
                 var first = p[0] + p[1] < q[0] + q[1] ? p : q, second = first === p ? q : p;
                 return first[0] + "," + first[1] + "-" + second[0] + "," + second[1];
@@ -862,12 +942,30 @@ var SCRIPT_KEY = "HighStatistics";
                 return { total: ways[key(x1, y1)], ways: ways };
             }
 
-            // 격자: 가로 cols칸, 세로 rows칸 (칸 크기 cell). 막힌 길에 ×, A·B(·P) 점과 이름, 교차점마다 A에서 오는 경로 수
-            function buildGrid(cols, rows, cell, pass, blocked, numbers) {
+            // 격자: 가로 cols칸, 세로 rows칸 (칸 크기 cell). 막힌 길에 ×, A·B(·지나는 점) 점과 이름, 교차점마다 A에서 오는 경로 수.
+            // extra(웹에서 더함): passes [{name, x, y}] 지나는 점 여러 개(있으면 pass 대신), erased 지운 길(선 없음·× 없음), route 강조할 경로 점 목록, labels 변 글자
+            function buildGrid(cols, rows, cell, pass, blocked, numbers, extra) {
                 var out = { lines: [], circles: [], dots: [], texts: [], note: "" };
-                for (var gx = 0; gx <= cols; gx++) out.lines.push({ points: [plain([gx * cell, 0]), plain([gx * cell, rows * cell])], closed: false });
-                for (var gy = 0; gy <= rows; gy++) out.lines.push({ points: [plain([0, gy * cell]), plain([cols * cell, gy * cell])], closed: false });
+                var more = extra || {}, erased = more.erased || [], gone = {}, g;
+                for (g = 0; g < erased.length; g++) gone[erased[g]] = true;
+                if (erased.length === 0) {
+                    for (var gx = 0; gx <= cols; gx++) out.lines.push({ points: [plain([gx * cell, 0]), plain([gx * cell, rows * cell])], closed: false });
+                    for (var gy = 0; gy <= rows; gy++) out.lines.push({ points: [plain([0, gy * cell]), plain([cols * cell, gy * cell])], closed: false });
+                } else {
+                    // 지운 길이 있으면 칸마다 따로 긋는다 (세로 줄 먼저, 가로 줄 다음)
+                    for (var vx = 0; vx <= cols; vx++) for (var vy = 0; vy < rows; vy++) {
+                        if (!gone[edgeKey([vx, vy], [vx, vy + 1])]) out.lines.push({ points: [plain([vx * cell, vy * cell]), plain([vx * cell, (vy + 1) * cell])], closed: false });
+                    }
+                    for (var hy = 0; hy <= rows; hy++) for (var hx = 0; hx < cols; hx++) {
+                        if (!gone[edgeKey([hx, hy], [hx + 1, hy])]) out.lines.push({ points: [plain([hx * cell, hy * cell]), plain([(hx + 1) * cell, hy * cell])], closed: false });
+                    }
+                }
                 var inside = [];
+                for (g = 0; g < erased.length; g++) {
+                    var eEnds = erased[g].split("-"), ep = eEnds[0].split(","), eq = eEnds[1].split(",");
+                    if (Math.max(parseInt(ep[0], 10), parseInt(eq[0], 10)) > cols || Math.max(parseInt(ep[1], 10), parseInt(eq[1], 10)) > rows) continue;
+                    inside.push(erased[g]);
+                }
                 for (var b = 0; b < blocked.length; b++) {
                     var ends = blocked[b].split("-"), p = ends[0].split(","), q = ends[1].split(",");
                     var px = parseInt(p[0], 10), py = parseInt(p[1], 10), qx = parseInt(q[0], 10), qy = parseInt(q[1], 10);
@@ -888,15 +986,40 @@ var SCRIPT_KEY = "HighStatistics";
                         }
                     }
                 }
+                // 지나는 점: 옛 방식(점 하나 pass, 이름 P)도 같은 목록으로 본다
+                var passes = more.passes || (pass === null ? [] : [{ name: "P", x: pass[0], y: pass[1] }]);
                 var note = "A → B 최단 경로 " + all.total + "가지";
-                if (pass !== null) {
-                    if (pass[0] > cols || pass[1] > rows) note += " (P가 격자 밖)";
-                    else {
-                        var first = countPaths(0, 0, pass[0], pass[1], inside), second = countPaths(pass[0], pass[1], cols, rows, inside);
-                        out.dots.push([pass[0] * cell, pass[1] * cell]);
-                        out.texts.push({ text: "P", at: [pass[0] * cell, pass[1] * cell], dir: [0.7071, -0.7071] });
-                        note += ", P를 지나는 경로 " + first.total + " × " + second.total + " = " + first.total * second.total + "가지";
+                var chain = [], names = [], outside = "";
+                for (var ps = 0; ps < passes.length; ps++) {
+                    if (passes[ps].x > cols || passes[ps].y > rows) { if (outside === "") outside = passes[ps].name; continue; }
+                    out.dots.push([passes[ps].x * cell, passes[ps].y * cell]);
+                    out.texts.push({ text: passes[ps].name, at: [passes[ps].x * cell, passes[ps].y * cell], dir: [0.7071, -0.7071] });
+                    chain.push(passes[ps]);
+                }
+                if (outside !== "") note += " (" + outside + "가 격자 밖)";
+                else if (chain.length > 0) {
+                    chain.sort(function(u, v) { return (u.x + u.y) - (v.x + v.y) || u.x - v.x; });
+                    var from = [0, 0], counts = [], product = 1;
+                    for (var cs = 0; cs <= chain.length; cs++) {
+                        var to = cs < chain.length ? [chain[cs].x, chain[cs].y] : [cols, rows];
+                        var part = countPaths(from[0], from[1], to[0], to[1], inside);
+                        counts.push(part.total);
+                        product *= part.total;
+                        from = to;
+                        if (cs < chain.length) names.push(chain[cs].name);
                     }
+                    note += ", " + names.join(", ") + "를 지나는 경로 " + counts.join(" × ") + " = " + product + "가지";
+                }
+                // 강조한 경로(굵은 선)와 변 글자
+                if (more.route && more.route.length > 1) {
+                    var heavy = [];
+                    for (var rt = 0; rt < more.route.length; rt++) heavy.push(plain([more.route[rt][0] * cell, more.route[rt][1] * cell]));
+                    out.lines.push({ points: heavy, closed: false, heavy: true });
+                }
+                var labels = more.labels || [];
+                for (var lb = 0; lb < labels.length; lb++) {
+                    var horizontal = labels[lb].a[1] === labels[lb].b[1];
+                    out.texts.push({ text: labels[lb].text, at: [(labels[lb].a[0] + labels[lb].b[0]) / 2 * cell, (labels[lb].a[1] + labels[lb].b[1]) / 2 * cell], dir: horizontal ? [0, 1] : [-1, 0] });
                 }
                 out.note = note;
                 return out;
@@ -1028,9 +1151,10 @@ var SCRIPT_KEY = "HighStatistics";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v3", mode, encodeURIComponent(roadsText), townGapMm, roadGapMm, mapIndex, mapMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
+                var parts = ["v4", mode, encodeURIComponent(roadsText), townGapMm, roadGapMm, mapIndex, mapMm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
                     gridCols, gridRows, gridCellMm, encodeURIComponent(passText), encodeURIComponent(blockedText), gridNumbers ? "1" : "0",
-                    tableShape, seatCount, sideA, sideB, tableMm, encodeURIComponent(seatNames), rotationArrow ? "1" : "0"];
+                    tableShape, seatCount, sideA, sideB, tableMm, encodeURIComponent(seatNames), rotationArrow ? "1" : "0",
+                    encodeURIComponent(erasedText), encodeURIComponent(routeText), encodeURIComponent(edgeLabelText)];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -1039,7 +1163,7 @@ var SCRIPT_KEY = "HighStatistics";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v3" || p.length !== 24) return;
+                if (!((p[0] === "v4" && p.length === 27) || (p[0] === "v3" && p.length === 24))) return;
                 try {
                     mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
                     roadsText = decodeURIComponent(p[2]);
@@ -1064,6 +1188,11 @@ var SCRIPT_KEY = "HighStatistics";
                     tableMm = restoreNumber(p[21], tableMm, 10, 80);
                     seatNames = decodeURIComponent(p[22]);
                     rotationArrow = p[23] === "1";
+                    if (p[0] === "v4") {
+                        erasedText = decodeURIComponent(p[24]);
+                        routeText = decodeURIComponent(p[25]);
+                        edgeLabelText = decodeURIComponent(p[26]);
+                    }
                 } catch (restoreError) {}
             }
 

@@ -30,7 +30,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["parseRoads", "indexOf", "buildRoads", "bentRoad", "buildMap", "plain", "parseLatticePoint", "wholeNumber", "parseBlocked", "edgeKey", "countPaths", "buildGrid", "buildSeats", "factorial"];
+const names = ["parseRoads", "indexOf", "buildRoads", "bentRoad", "buildMap", "plain", "parseLatticePoint", "wholeNumber", "parseBlocked", "parsePassPoints", "parseRoute", "parseEdgeLabels", "edgeKey", "countPaths", "buildGrid", "buildSeats", "factorial"];
 const g = new Function(`var TABLES = ["원탁", "정사각형 탁자", "직사각형 탁자"];\nvar DOT_RADIUS_MM = 0.8;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
@@ -91,7 +91,50 @@ assert.ok(g.buildGrid(2, 2, 10, [3, 1], [], false).note.includes("격자 밖"));
   assert.strictEqual(rect.lines.length, 1 + 2, "table outline + arrow arc + head");
   assert.strictEqual(g.buildSeats(2, 0, 3, 3, 100, "", false, 8).note, "직사각형 탁자 12명: 12!/2 = 239500800가지");
 }
-assert.ok(source.includes('p[0] !== "v3" || p.length !== 24'), "settings layout bumped to v3");
+// 격자 확장 (웹 math-count.test.js와 같은 경우)
+{
+  assert.deepStrictEqual(g.parsePassPoints("2,1"), [{ name: "P", x: 2, y: 1 }]);
+  assert.deepStrictEqual(g.parsePassPoints("C=2,1; D=4,2"), [{ name: "C", x: 2, y: 1 }, { name: "D", x: 4, y: 2 }]);
+  assert.deepStrictEqual(g.parsePassPoints("2,1; 3,2").map((q) => q.name), ["P", "Q"]);
+  assert.deepStrictEqual(g.parsePassPoints("  "), []);
+  for (const bad of ["x", "C=2", "=2,1", "2,1;;a", "C=D=2,1"]) assert.strictEqual(g.parsePassPoints(bad), null, bad);
+  const two = g.buildGrid(5, 3, 10, null, [], false, { passes: [{ name: "D", x: 3, y: 2 }, { name: "C", x: 1, y: 1 }] });
+  assert.strictEqual(two.note, "A → B 최단 경로 56가지, C, D를 지나는 경로 2 × 3 × 3 = 18가지");
+  assert.ok(g.buildGrid(2, 2, 10, null, [], false, { passes: [{ name: "C", x: 1, y: 1 }, { name: "D", x: 5, y: 0 }] }).note.includes("D가 격자 밖"));
+  const erased = g.buildGrid(5, 3, 10, null, [], false, { erased: g.parseBlocked("0,0-1,0") });
+  assert.strictEqual(erased.note, "A → B 최단 경로 21가지");
+  assert.strictEqual(erased.lines.filter((l) => l.points.length === 2 && l.points[0].anchor[0] !== l.points[1].anchor[0] && l.points[0].anchor[1] !== l.points[1].anchor[1]).length, 0, "× 없음");
+  assert.deepStrictEqual(g.parseRoute("RRUUR", 5, 3), [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2], [3, 2]]);
+  assert.deepStrictEqual(g.parseRoute("→→↑ u", 5, 3).length, 5);
+  for (const bad of ["RRRRRR", "UUUU", "RX", "L"]) assert.strictEqual(g.parseRoute(bad, 5, 3), null, bad);
+  assert.deepStrictEqual(g.parseEdgeLabels("0,0-1,0:3; 1,0-1,1:a"), [{ a: [0, 0], b: [1, 0], text: "3" }, { a: [1, 0], b: [1, 1], text: "a" }]);
+  for (const bad of ["0,0-2,0:3", "0,0-1,0", "0,0-1,0:"]) assert.strictEqual(g.parseEdgeLabels(bad), null, bad);
+  const routed = g.buildGrid(5, 3, 10, null, [], false, { route: g.parseRoute("RRU", 5, 3), labels: g.parseEdgeLabels("0,0-1,0:3; 1,0-1,1:a") });
+  assert.strictEqual(routed.lines.filter((l) => l.heavy).length, 1);
+  assert.deepStrictEqual([routed.texts.find((t) => t.text === "3").at, routed.texts.find((t) => t.text === "3").dir], [[5, 0], [0, 1]]);
+  assert.deepStrictEqual([routed.texts.find((t) => t.text === "a").at, routed.texts.find((t) => t.text === "a").dir], [[10, 5], [-1, 0]]);
+  // 웹과 글자 그대로 같다 (들여쓰기만 다르다)
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-count.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8").replace(/^export function /gm, "function ");
+    const cutWeb = (name) => {
+      const start = web.indexOf(`function ${name}(`);
+      assert.ok(start >= 0, "web missing " + name);
+      let depth = 0;
+      for (let i = web.indexOf("{", start); i < web.length; i++) {
+        if (web[i] === "{") depth++;
+        if (web[i] === "}" && --depth === 0) return web.slice(start, i + 1);
+      }
+      throw new Error("unbalanced " + name);
+    };
+    for (const name of ["buildGrid", "parsePassPoints", "parseRoute", "parseEdgeLabels", "countPaths", "parseBlocked", "edgeKey"]) {
+      const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+      assert.strictEqual(scriptText, cutWeb(name), name + " differs from the web");
+    }
+  }
+}
+assert.ok(source.includes('(p[0] === "v4" && p.length === 27) || (p[0] === "v3" && p.length === 24)'), "settings layout bumped to v4 (v3도 읽는다)");
+assert.ok(source.includes("line.heavy ? ROUTE_PT : MAIN_PT"), "강조한 경로는 굵게");
 
 assert.ok(source.includes('var PREF_KEY = "HighMathCount/settings";'));
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");

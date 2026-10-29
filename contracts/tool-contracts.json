@@ -4604,6 +4604,14 @@
           "type": "string",
           "default": ""
         },
+        "edgeLabelText": {
+          "type": "string",
+          "default": ""
+        },
+        "erasedText": {
+          "type": "string",
+          "default": ""
+        },
         "fontPt": {
           "type": "number",
           "default": 8,
@@ -4671,6 +4679,10 @@
         "rotationArrow": {
           "type": "boolean",
           "default": false
+        },
+        "routeText": {
+          "type": "string",
+          "default": ""
         },
         "seatCount": {
           "type": "number",
