@@ -324,7 +324,7 @@ function generateCircuit(o) {
       var nx = target.uy, ny = -target.ux;
       var pa = [target.x - target.ux * lead, target.y - target.uy * lead], pb = [target.x + target.ux * lead, target.y + target.uy * lead];
       // 분기 접점은 대상과 같은 직선 도선 위, 모서리 바깥으로 넘어가지 않게 제한한다.
-      var rt = target.branch === 'upper' ? upper : target.branch === 'lower' ? lower : common;
+      var rt = target.branch === 'upper' ? upper : (target.branch === 'lower' ? lower : common);
       var ep = rt.points[target.edge], eq = rt.points[target.edge + 1], el = Math.sqrt(Math.pow(eq[0] - ep[0], 2) + Math.pow(eq[1] - ep[1], 2));
       var roomA = target.u, roomB = el - target.u;
       for (var ns = 0; ns < rt.slots.length; ns++) {
@@ -467,9 +467,9 @@ function generateCircuit(o) {
         var i,j;
         function path(points,width,fill,closed){var p=group.pathItems.add(),ps=[];for(var z=0;z<points.length;z+=2)ps.push([points[z]*UNIT,-points[z+1]*UNIT]);p.setEntirePath(ps);p.closed=!!closed;p.stroked=width>0;if(p.stroked){p.strokeColor=gray(100);p.strokeWidth=width*UNIT;}p.filled=!!fill;if(p.filled)p.fillColor=gray(fill==="#ffffff"?0:100);return p;}
         function circle(x,y,r,width,fill){var p=group.pathItems.ellipse((-y+r)*UNIT,(x-r)*UNIT,2*r*UNIT,2*r*UNIT);p.stroked=width>0;if(p.stroked){p.strokeColor=gray(100);p.strokeWidth=width*UNIT;}p.filled=!!fill;if(p.filled)p.fillColor=gray(fill==="#ffffff"?0:100);}
-        function text(s,x,y,size,align){var t=group.textFrames.add();t.contents=s;t.textRange.characterAttributes.size=size*UNIT;t.textRange.characterAttributes.fillColor=gray(100);var fontNames=/[㉠-㉿]/.test(s)?["Batang","AppleMyungjo","GSMediumB1"]:/[가-힣]/.test(s)?["SpoqaHanSansNeo-Regular","AppleSDGothicNeo-Regular","GSMediumB1"]:["GSMediumB1","TimesNewRomanPSMT"];
+        function text(s,x,y,size,align){var t=group.textFrames.add();t.contents=s;t.textRange.characterAttributes.size=size*UNIT;t.textRange.characterAttributes.fillColor=gray(100);var fontNames=/[㉠-㉿]/.test(s)?["Batang","AppleMyungjo","GSMediumB1"]:(/[가-힣]/.test(s)?["SpoqaHanSansNeo-Regular","AppleSDGothicNeo-Regular","GSMediumB1"]:["GSMediumB1","TimesNewRomanPSMT"]);
             for(var f=0;f<fontNames.length;f++){try{t.textRange.characterAttributes.textFont=app.textFonts.getByName(fontNames[f]);break;}catch(e){}}
-            var b=t.visibleBounds;t.translate(x*UNIT-(align==="left"?b[0]:align==="right"?b[2]:(b[0]+b[2])/2),-y*UNIT-(b[1]+b[3])/2);
+            var b=t.visibleBounds;t.translate(x*UNIT-(align==="left"?b[0]:(align==="right"?b[2]:(b[0]+b[2])/2)),-y*UNIT-(b[1]+b[3])/2);
         }
         for(i=0;i<g.wires.length;i++)path(g.wires[i],1,null,false);
         for(i=0;i<g.dots.length;i++)circle(g.dots[i][0],g.dots[i][1],2,0,"#000000");

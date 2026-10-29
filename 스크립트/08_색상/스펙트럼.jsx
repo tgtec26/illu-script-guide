@@ -625,8 +625,8 @@ try {
     // 글리프 경계를 (x, y)에 맞춘다. hAlign: left·center·right, vAlign: top·center·bottom
     function placeGlyph(tf, x, y, hAlign, vAlign) {
         var gb = glyphBounds(tf);
-        var dx = (hAlign === "left") ? x - gb[0] : (hAlign === "right") ? x - gb[2] : x - (gb[0] + gb[2]) / 2;
-        var dy = (vAlign === "top") ? y - gb[1] : (vAlign === "bottom") ? y - gb[3] : y - (gb[1] + gb[3]) / 2;
+        var dx = (hAlign === "left") ? x - gb[0] : ((hAlign === "right") ? x - gb[2] : x - (gb[0] + gb[2]) / 2);
+        var dy = (vAlign === "top") ? y - gb[1] : ((vAlign === "bottom") ? y - gb[3] : y - (gb[1] + gb[3]) / 2);
         tf.translate(dx, dy);
     }
 

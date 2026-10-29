@@ -1,14 +1,11 @@
 // ExtendScript는 이어진 삼항식 a ? b : c ? d : e 를 (a ? b : c) ? d : e 로 읽는다 (2026-10-29 일러 2026에서 확인: "r" → u=[0,1]).
-// 괄호 없이 else 쪽에 다시 ?가 오는 곳을 모든 스크립트에서 찾는다. KNOWN은 이 검사를 만들 때 이미 있던 곳이다(고쳐서 줄여 간다)
+// 괄호 없이 else 쪽에 다시 ?가 오는 곳을 모든 스크립트에서 찾는다
 const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
 const root = path.resolve(__dirname, "..", "스크립트");
-const KNOWN = {
-  "06_도형/3D.jsx": 1, "00_세팅/option_contract.jsxinc": 4, "02_화학/용해도 곡선.jsx": 1, "01_물리학/열기관 순환.jsx": 6,
-  "01_물리학/피스톤 실린더.jsx": 6, "01_물리학/전기 회로도.jsx": 3, "08_색상/스펙트럼.jsx": 2,
-};
+const KNOWN = {};   // 이미 있던 곳은 모두 괄호로 고쳤다(2026-10-29). 새로 생기면 바로 실패한다
 
 // 주석·글자·정규식을 빈칸으로 바꾼다 (줄 번호는 지킨다)
 function strip(src) {

@@ -764,7 +764,7 @@ function foldPanel(parent, title, collapsed, key) {
         var p = String(raw).split("|");
         // v4까지는 색상·채도가 없다(회색). v3은 미리보기 항목도 없다. 입체 도형 엔진은 v5까지 치수 글자가 없고(legacyFieldCount),
         // v6까지 회전축·단면이 없다(v6FieldCount)
-        var sharedCount = p[0] === "v3" ? 18 : p[0] === "v4" ? 19 : 21;
+        var sharedCount = p[0] === "v3" ? 18 : (p[0] === "v4" ? 19 : 21);
         function countOf(e) {
             if (p[0] === "v7") return e.fieldCount;
             if (p[0] === "v6") return e.v6FieldCount !== undefined ? e.v6FieldCount : e.fieldCount;

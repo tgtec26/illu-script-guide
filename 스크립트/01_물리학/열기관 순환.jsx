@@ -669,14 +669,14 @@ try {
                 return {params: merged, notes: []};
             }
             for (key in optionSchema.properties) if (optionSchema.properties.hasOwnProperty(key)) {
-                var alias = key === "lengthMm" ? "length" : key === "widthMm" ? "width" : key === "heightMm" ? "height" : key === "fontPt" ? "font" : key;
+                var alias = key === "lengthMm" ? "length" : (key === "widthMm" ? "width" : (key === "heightMm" ? "height" : (key === "fontPt" ? "font" : key)));
                 if (webInput && input.hasOwnProperty(key)) source[key] = input[key];
                 else if (input.hasOwnProperty(alias)) source[key] = input[alias];
                 else if (merged.hasOwnProperty(alias)) source[key] = merged[alias];
             }
             result = normalizeOptions(optionSchema, source);
             for (key in result.params) if (result.params.hasOwnProperty(key)) {
-                var target = key === "lengthMm" ? "length" : key === "widthMm" ? "width" : key === "heightMm" ? "height" : key === "fontPt" ? "font" : key;
+                var target = key === "lengthMm" ? "length" : (key === "widthMm" ? "width" : (key === "heightMm" ? "height" : (key === "fontPt" ? "font" : key)));
                 merged[target] = key === "axes" || /^p[1-4]$/.test(key) ? Number(result.params[key]) : result.params[key];
             }
             return {params: merged, notes: result.notes};

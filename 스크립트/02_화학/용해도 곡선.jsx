@@ -1153,7 +1153,7 @@ function foldPanel(parent, title, collapsed, key) {
         gridFine = (p[4] === "1");
         simpleCurve = (p[5] === "1");
         tickOutside = (p[6] === "1");
-        nameMode = (p[7] === "1") ? NAME_FORMULA : (p[7] === "2") ? NAME_NONE : NAME_KOREAN;
+        nameMode = (p[7] === "1") ? NAME_FORMULA : ((p[7] === "2") ? NAME_NONE : NAME_KOREAN);
         offsetXmm = restoreNumber(p[8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
         offsetYmm = restoreNumber(p[9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
         previewEnabled = (p[10] === "1");

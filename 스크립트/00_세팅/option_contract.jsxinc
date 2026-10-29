@@ -73,13 +73,13 @@ function normalizeOptions(schema, input) {
 function normalizeHeatCycleOptions(schema, options) {
     var input = {}, key;
     for (key in schema.properties) if (Object.prototype.hasOwnProperty.call(schema.properties, key)) {
-        var sourceKey = key === 'widthMm' ? 'width' : key === 'heightMm' ? 'height' : key === 'fontPt' ? 'font' : key;
+        var sourceKey = key === 'widthMm' ? 'width' : (key === 'heightMm' ? 'height' : (key === 'fontPt' ? 'font' : key));
         if (Object.prototype.hasOwnProperty.call(options, sourceKey)) input[key] = options[sourceKey];
     }
     var result = normalizeOptions(schema, input), out = {};
     for (key in options) if (Object.prototype.hasOwnProperty.call(options, key)) out[key] = options[key];
     for (key in result.params) if (Object.prototype.hasOwnProperty.call(result.params, key)) {
-        var targetKey = key === 'widthMm' ? 'width' : key === 'heightMm' ? 'height' : key === 'fontPt' ? 'font' : key;
+        var targetKey = key === 'widthMm' ? 'width' : (key === 'heightMm' ? 'height' : (key === 'fontPt' ? 'font' : key));
         out[targetKey] = key === 'axes' || /^p[1-4]$/.test(key) ? Number(result.params[key]) : result.params[key];
     }
     return {params: out, notes: result.notes};
