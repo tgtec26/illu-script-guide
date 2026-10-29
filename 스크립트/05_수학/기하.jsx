@@ -2171,7 +2171,7 @@ var SCRIPT_KEY = "HighGeometry";
             var GUIDE_PT = 0.3;
             var MARK_PT = 0.3;
             var MARK_GAP_MM = 0.7;
-            var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "arcText", "fillText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "areaText"];
+            var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "parabolaText", "hyperbolaText", "arcText", "fillText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "areaText"];
             var TRACE_MM = 3;      // 작도 흔적 호가 지나는 점 양쪽으로 뻗는 길이
             var SYMBOL_MM = 0.6;   // 같은 각 기호(•·∘·×)의 반지름·반 너비 (• 지름 약 1 mm)
             var DOT_RADIUS_MM = 0.6;
@@ -2179,7 +2179,7 @@ var SCRIPT_KEY = "HighGeometry";
             var DIMENSION_LABEL_GAP_MM = 0.7;
             var KAPPA = 0.5522847498;
             var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
-            var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText", "constructText", "areaText", "locusText"];
+            var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText", "constructText", "areaText", "locusText", "parabolaText", "hyperbolaText"];
 
             var doc = app.activeDocument;
             var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
@@ -2191,10 +2191,11 @@ var SCRIPT_KEY = "HighGeometry";
 
             // 옵션
             var text = {pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "",
-                angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: "", constructText: "", areaText: "", locusText: ""};
+                angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: "", constructText: "", areaText: "", locusText: "", parabolaText: "", hyperbolaText: ""};
             var showNames = true;
             var stepCount = 0;   // 작도 단계: 0이면 모두, k면 작도 칸의 앞 k개만 (보기용이라 저장하지 않는다)
             var showAxes = false;
+            var showAsymptotes = false;   // 쌍곡선 점근선 (점선)
             var sizeMm = 50;
             var fontPt = 8;
             var labelGapMm = 1.2;
@@ -2231,6 +2232,8 @@ var SCRIPT_KEY = "HighGeometry";
             addTextRow(pointPanel, "화살표", "arrowText", "끝에 화살촉이 있는 선분(벡터). O-A는 O에서 A로, O-A-B는 O→A, A→B (쉼표로 여러 개)");
             addTextRow(pointPanel, "원", "circleText", "ABC 세 점을 지나는 원, AB 지름이 AB인 원, O:3 중심 O·반지름 3, (1,2):3 좌표 중심, O~A 중심 O에 A를 지나는 원, in(ABC) 내접원, ex(ABC,A) A의 맞은편 방접원");
             addTextRow(pointPanel, "타원", "ellipseText", "O:6x4 중심 O·가로 반지름 6·세로 반지름 4, (1,2):6x4 좌표 중심, 6x4 중심 원점 (쉼표로 여러 개, x 대신 ×도 된다)");
+            addTextRow(pointPanel, "포물선", "parabolaText", "V:2:r 꼭짓점 V, 초점까지 2, 오른쪽으로 열림(y²=8x 꼴). 방향은 r 오른쪽·l 왼쪽·u 위·d 아래, 뒤에 :6은 축을 따라 6까지(안 쓰면 4p). (1,0):1:u 좌표 꼭짓점, 1:r 꼭짓점 원점 (쉼표로 여러 개)");
+            addTextRow(pointPanel, "쌍곡선", "hyperbolaText", "O:3x2 중심 O, x²/3²-y²/2²=1(꼭짓점이 가로), O:3x2:y는 =-1(꼭짓점이 세로), 뒤에 :5는 가지가 |y|≤5(:y면 |x|≤5)까지(안 쓰면 1.5·큰 반지름). 3x2 중심 원점 (쉼표로 여러 개)");
             addTextRow(pointPanel, "호", "arcText", "O:A>B 중심 O, 점 A에서 B 쪽으로 반시계로 도는 호(O:A<B는 시계), AC:u AC를 지름으로 하는 반원(바깥쪽 u 위·d 아래·l 왼쪽·r 오른쪽), O:~A O를 중심으로 A를 지나는 짧은 작도 흔적 호(가는 선). 뒤에 :4π는 호 가운데 바깥 글자, :| :|| :|||는 같은 호 눈금(O:A>B:|:4π처럼 함께). 쉼표로 여러 개");
             addTextRow(pointPanel, "색칠", "fillText", "경로를 >로 이어 칠한다(저절로 닫힘). 점 이름은 직선, arc+(O,B)·arc-(O,B)는 지금 점에서 B 방향까지 O를 중심으로 반시계·시계로 도는 호, circle(O,3)·circle(O,A)는 원판. 뒤의 :30은 농도(K, 안 쓰면 20)");
             addTextRow(pointPanel, "각", "angleText", "BAC:60° (꼭짓점 A에서 AB와 AC 사이의 각), ABC:R 직각 표시, BAC 글자 없이 호, BAC:60°:2 호 2겹, ABD:• 같은 각 기호(• ∘ ×), ABD:•:0 호 없이 기호만, BAC:? 좌표로 잰 각도(60°)");
@@ -2246,6 +2249,8 @@ var SCRIPT_KEY = "HighGeometry";
             var axesCheck = markPanel.add("checkbox", undefined, "좌표축 (원점 O)");
             axesCheck.value = showAxes;
             axesCheck.helpTip = "원점을 지나는 x축·y축과 화살촉, 글자 x·y·O. 점 좌표의 원점이 기준";
+            var asymptoteCheck = markPanel.add("checkbox", undefined, "쌍곡선 점근선 (점선)");
+            asymptoteCheck.value = showAsymptotes;
 
             var sizePanel = addPanel(win, "크기");
             var sizeControls = addValueRow(sizePanel, "그림 크기", "mm", sizeMm, 20, 140, 1, 0);
@@ -2275,6 +2280,7 @@ var SCRIPT_KEY = "HighGeometry";
 
             nameCheck.onClick = function() { showNames = nameCheck.value; updatePreview(); };
             axesCheck.onClick = function() { showAxes = axesCheck.value; updatePreview(); };
+            asymptoteCheck.onClick = function() { showAsymptotes = asymptoteCheck.value; updatePreview(); };
             bindValueRow(sizeControls, function(value) { sizeMm = value; }, DEFAULTS.sizeMm);
             bindValueRow(stepControls, function(value) { stepCount = Math.round(value); }, 0);
             bindValueRow(fontControls, function(value) { fontPt = value; }, DEFAULTS.fontPt);
@@ -3250,6 +3256,87 @@ var SCRIPT_KEY = "HighGeometry";
                 return out;
             }
 
+            // 점 이름·(x,y) 좌표 → 점. 못 읽으면 null
+            function readPlace(head, table, names) {
+                head = trimText(head);
+                if (head.charAt(0) === "(" && head.charAt(head.length - 1) === ")") {
+                    var inside = head.substring(1, head.length - 1), comma = inside.indexOf(",");
+                    var x = comma >= 0 ? evalNumber(inside.substring(0, comma)) : null, y = comma >= 0 ? evalNumber(inside.substring(comma + 1)) : null;
+                    return x !== null && y !== null ? [x, y] : null;
+                }
+                var t = tokenizeNames(head, names);
+                return t && t.length === 1 ? table[t[0]] : null;
+            }
+
+            // 포물선 목록: "V:2:r"(꼭짓점 V, 초점까지 2, 오른쪽으로 열림), "(1,0):1:u:6"(축을 따라 6까지), "2:r"(꼭짓점 원점). 웹 math-geometry.js와 같은 뜻
+            function readParabolas(source, table, names, notes) {
+                var out = [], items = splitItems(source);
+                for (var i = 0; i < items.length; i++) {
+                    var parts = items[i].split(":");
+                    for (var k = 0; k < parts.length; k++) parts[k] = trimText(parts[k]);
+                    var origin = parts.length >= 2 && /^[rlud]$/.test(parts[1]);
+                    var v = origin ? [0, 0] : readPlace(parts.shift(), table, names);
+                    var p = evalNumber(parts[0] || ""), dir = parts[1];
+                    var reach = parts.length > 2 ? evalNumber(parts[2]) : (p === null ? null : 4 * p);
+                    if (v && p !== null && p > 0 && /^[rlud]$/.test(dir || "") && reach !== null && reach > 0 && parts.length <= 3) out.push({v: v, p: p, dir: dir, reach: reach});
+                    else notes.push("포물선 " + items[i]);
+                }
+                return out;
+            }
+
+            // 쌍곡선 목록: "O:3x2"(x²/a²-y²/b²=1), "O:3x2:y"(=-1), "(1,0):3x2:x:5"(가지가 |y|≤5까지), "3x2"(중심 원점). 뻗는 거리를 안 쓰면 1.5·max(a, b)
+            function readHyperbolas(source, table, names, notes) {
+                var out = [], items = splitItems(source);
+                for (var i = 0; i < items.length; i++) {
+                    var parts = items[i].split(":");
+                    for (var k = 0; k < parts.length; k++) parts[k] = trimText(parts[k]);
+                    var first = parts[0].split(/[x\u00D7]/);
+                    var origin = parts[0].charAt(0) !== "(" && first.length === 2 && evalNumber(first[0]) !== null;
+                    var c = origin ? [0, 0] : readPlace(parts.shift(), table, names);
+                    var radii = (parts[0] || "").replace(/\s/g, "").split(/[x\u00D7]/);
+                    var a = radii.length === 2 ? evalNumber(radii[0]) : null, b = radii.length === 2 ? evalNumber(radii[1]) : null;
+                    var axis = parts[1] || "x";
+                    var reach = parts.length > 2 ? evalNumber(parts[2]) : (a !== null && b !== null ? 1.5 * Math.max(a, b) : null);
+                    if (c && a !== null && b !== null && a > 0 && b > 0 && (axis === "x" || axis === "y") && reach !== null && reach > 0 && parts.length <= 3) out.push({c: c, a: a, b: b, axis: axis, reach: reach});
+                    else notes.push("쌍곡선 " + items[i]);
+                }
+                return out;
+            }
+
+            // 포물선 (축 방향 dir: r·l·u·d): 꼭짓점 v, 초점까지 p, 꼭짓점에서 축을 따라 reach까지. 2차 곡선이라 3차 베지어 하나로 정확하다
+            // 이어지는 삼항식은 괄호로 묶는다: 일러(ExtendScript)는 a ? b : c ? d : e를 (a ? b : c) ? d : e로 읽는다 (웹 math-geometry.js와 글자 그대로 같다)
+            function parabolaCurve(v, p, dir, reach) {
+                var u = dir === "r" ? [1, 0] : (dir === "l" ? [-1, 0] : (dir === "u" ? [0, 1] : [0, -1])), n = [-u[1], u[0]], w = 2 * Math.sqrt(p * reach);
+                var p0 = [v[0] + u[0] * reach - n[0] * w, v[1] + u[1] * reach - n[1] * w], p3 = [v[0] + u[0] * reach + n[0] * w, v[1] + u[1] * reach + n[1] * w];
+                var q = [2 * v[0] - (p0[0] + p3[0]) / 2, 2 * v[1] - (p0[1] + p3[1]) / 2];   // 2차 베지어의 조절점 (가운데 매개변수 점이 꼭짓점)
+                return [{ anchor: p0, left: p0, right: [p0[0] + (q[0] - p0[0]) * 2 / 3, p0[1] + (q[1] - p0[1]) * 2 / 3] },
+                    { anchor: p3, left: [p3[0] + (q[0] - p3[0]) * 2 / 3, p3[1] + (q[1] - p3[1]) * 2 / 3], right: p3 }];
+            }
+
+            // 쌍곡선 x²/a²-y²/b²=1 (axis "x") 또는 =-1 (axis "y")을 중심 c로 옮긴 두 가지. 가지마다 매개변수(cosh·sinh)를 8조각으로 나눈 에르미트 베지어.
+            // reach: 가지가 뻗는 거리 (axis x면 |y|, y면 |x|까지)
+            function hyperbolaCurves(c, a, b, axis, reach) {
+                var out = [], N = 8, r = axis === "x" ? reach / b : reach / a, T = Math.log(r + Math.sqrt(r * r + 1)), h = 2 * T / N / 3;
+                for (var s = -1; s <= 1; s += 2) {
+                    var pts = [];
+                    for (var i = 0; i <= N; i++) {
+                        var t = -T + 2 * T * i / N, ch = (Math.exp(t) + Math.exp(-t)) / 2, sh = (Math.exp(t) - Math.exp(-t)) / 2;
+                        var x = axis === "x" ? s * a * ch : a * sh, y = axis === "x" ? b * sh : s * b * ch;
+                        var dx = axis === "x" ? s * a * sh : a * ch, dy = axis === "x" ? b * ch : s * b * sh;
+                        var at = [c[0] + x, c[1] + y];
+                        pts.push({ anchor: at, left: i === 0 ? at : [at[0] - dx * h, at[1] - dy * h], right: i === N ? at : [at[0] + dx * h, at[1] + dy * h] });
+                    }
+                    out.push(pts);
+                }
+                return out;
+            }
+
+            // 점근선 두 개: 중심을 지나는 기울기 ±b/a, 가지가 뻗은 곳보다 조금 더
+            function asymptoteSegments(c, a, b, axis, reach) {
+                var X = (axis === "x" ? reach * a / b : reach) * 1.1, Y = X * b / a;
+                return [[[c[0] - X, c[1] - Y], [c[0] + X, c[1] + Y]], [[c[0] - X, c[1] + Y], [c[0] + X, c[1] - Y]]];
+            }
+
             function trimText(s) { return String(s).replace(/^\s+|\s+$/g, ""); }
 
             // 호 위의 점들. 중심 c, 반지름 r, 시작 각 a0(라디안), 돌 각 sweep(반시계가 +)
@@ -3496,6 +3583,16 @@ var SCRIPT_KEY = "HighGeometry";
                 var dashed = readChainPaths(src.dashedText, names, "점선", notes);
                 var circles = readCircles(src.circleText, table, names, notes);
                 var ellipses = readEllipses(src.ellipseText, table, names, notes);
+                var conics = [], parabolas = readParabolas(src.parabolaText || "", table, names, notes), hyperbolas = readHyperbolas(src.hyperbolaText || "", table, names, notes);
+                for (var pi = 0; pi < parabolas.length; pi++) conics.push({curve: parabolaCurve(parabolas[pi].v, parabolas[pi].p, parabolas[pi].dir, parabolas[pi].reach)});
+                for (var hi = 0; hi < hyperbolas.length; hi++) {
+                    var hb = hyperbolas[hi], branches = hyperbolaCurves(hb.c, hb.a, hb.b, hb.axis, hb.reach);
+                    conics.push({curve: branches[0]}, {curve: branches[1]});
+                    if (showAsymptotes) {
+                        var asym = asymptoteSegments(hb.c, hb.a, hb.b, hb.axis, hb.reach);
+                        conics.push({dashed: asym[0]}, {dashed: asym[1]});
+                    }
+                }
                 var arrows = readChains(src.arrowText, names, "화살표", notes);
                 var arcs = readArcs(src.arcText, table, names, notes);
                 var fills = readFills(src.fillText, table, names, notes);
@@ -3545,6 +3642,13 @@ var SCRIPT_KEY = "HighGeometry";
                 for (i = 0; i < ellipses.length; i++) {
                     x0 = Math.min(x0, ellipses[i].c[0] - ellipses[i].rx); x1 = Math.max(x1, ellipses[i].c[0] + ellipses[i].rx);
                     y0 = Math.min(y0, ellipses[i].c[1] - ellipses[i].ry); y1 = Math.max(y1, ellipses[i].c[1] + ellipses[i].ry);
+                }
+                for (i = 0; i < conics.length; i++) {
+                    var conicPts = conics[i].curve || conics[i].dashed;
+                    for (k = 0; k < conicPts.length; k++) {
+                        var cq = conicPts[k].anchor || conicPts[k];
+                        x0 = Math.min(x0, cq[0]); x1 = Math.max(x1, cq[0]); y0 = Math.min(y0, cq[1]); y1 = Math.max(y1, cq[1]);
+                    }
                 }
                 for (i = 0; i < arcs.length; i++) {
                     var growPts = curvePoints(arcs[i].c, arcs[i].r, arcs[i].a0, arcs[i].sweep);
@@ -3606,6 +3710,13 @@ var SCRIPT_KEY = "HighGeometry";
                         {anchor: [ec[0], ec[1] + ryp], left: [ec[0] + ek * rxp, ec[1] + ryp], right: [ec[0] - ek * rxp, ec[1] + ryp]},
                         {anchor: [ec[0] - rxp, ec[1]], left: [ec[0] - rxp, ec[1] + ek * ryp], right: [ec[0] - rxp, ec[1] - ek * ryp]},
                         {anchor: [ec[0], ec[1] - ryp], left: [ec[0] - ek * rxp, ec[1] - ryp], right: [ec[0] + ek * rxp, ec[1] - ryp]}]});
+                }
+                // 포물선·쌍곡선: 도형 선 굵기 베지어, 점근선은 점선
+                for (i = 0; i < conics.length; i++) {
+                    if (conics[i].dashed) { out.lines.push(straight(mapped(conics[i].dashed), "dashed", false)); continue; }
+                    var bez = [];
+                    for (k = 0; k < conics[i].curve.length; k++) bez.push({anchor: T(conics[i].curve[k].anchor), left: T(conics[i].curve[k].left), right: T(conics[i].curve[k].right)});
+                    out.lines.push({kind: "main", closed: false, points: bez});
                 }
                 if (axes) {
                     var cut = ARROW.length - ARROW.notch;
@@ -4014,9 +4125,9 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v6"];
+                var parts = ["v7"];
                 for (var i = 0; i < TEXT_KEYS.length; i++) parts.push(encodeURIComponent(text[TEXT_KEYS[i]]));
-                parts.push(showNames ? "1" : "0", showAxes ? "1" : "0", sizeMm, fontPt, labelGapMm, arcRadiusMm, tickMm, strokePt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0");
+                parts.push(showNames ? "1" : "0", showAxes ? "1" : "0", sizeMm, fontPt, labelGapMm, arcRadiusMm, tickMm, strokePt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", showAsymptotes ? "1" : "0");
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -4025,9 +4136,9 @@ var SCRIPT_KEY = "HighGeometry";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v6는 글 16칸(자취 글 locusText까지), v5는 자취 글이 없는 15칸, v4는 넓이 글도 없는 14칸, 옛 v3는 작도 글도 없는 13칸이다
-                var textCount = p[0] === "v6" ? TEXT_KEYS.length : (p[0] === "v5" ? TEXT_KEYS.length - 1 : (p[0] === "v4" ? TEXT_KEYS.length - 2 : (p[0] === "v3" ? TEXT_KEYS.length - 3 : -1)));
-                if (textCount < 0 || p.length !== textCount + 12) return;
+                // v7은 글 18칸(포물선·쌍곡선까지)과 끝에 점근선, v6는 글 16칸(자취 글 locusText까지), v5는 자취 글이 없는 15칸, v4는 넓이 글도 없는 14칸, 옛 v3는 작도 글도 없는 13칸이다
+                var textCount = p[0] === "v7" ? TEXT_KEYS.length : (p[0] === "v6" ? TEXT_KEYS.length - 2 : (p[0] === "v5" ? TEXT_KEYS.length - 3 : (p[0] === "v4" ? TEXT_KEYS.length - 4 : (p[0] === "v3" ? TEXT_KEYS.length - 5 : -1))));
+                if (textCount < 0 || p.length !== textCount + (p[0] === "v7" ? 13 : 12)) return;
                 try {
                     var restored = {};
                     for (var i = 0; i < textCount; i++) restored[TEXT_KEYS[i]] = decodeURIComponent(p[1 + i]);
@@ -4044,6 +4155,7 @@ var SCRIPT_KEY = "HighGeometry";
                     offsetXmm = restoreNumber(p[n + 8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[n + 9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[n + 10] === "1";
+                    if (p[0] === "v7") showAsymptotes = p[n + 11] === "1";
                 } catch (restoreError) {}
             }
 

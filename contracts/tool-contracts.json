@@ -5162,6 +5162,10 @@
           "type": "number",
           "default": 0.3
         },
+        "hyperbolaText": {
+          "type": "string",
+          "default": ""
+        },
         "labelDirText": {
           "type": "string",
           "default": ""
@@ -5180,6 +5184,10 @@
           "type": "string",
           "default": ""
         },
+        "parabolaText": {
+          "type": "string",
+          "default": ""
+        },
         "pointsText": {
           "type": "string",
           "default": "A(0,3) B(0,0) C(4,0)"
@@ -5187,6 +5195,10 @@
         "segmentText": {
           "type": "string",
           "default": "A-B-C-A"
+        },
+        "showAsymptotes": {
+          "type": "boolean",
+          "default": false
         },
         "showAxes": {
           "type": "boolean",

@@ -29,17 +29,18 @@ function extractFunction(name) {
 
 const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readChains", "readPairTexts", "circumcircle", "readCircles", "readEllipses", "readAngles", "trimText", "curvePoints", "ccwSweep", "readArcs", "readFills",
   "readChainPaths", "dimensionCurve", "display", "straight", "circleLine", "unitVector", "offsetPoint", "arcPoints", "rightAnglePoints", "buildGeometry", "clamp", "parseNumber",
-  "ConstructFail", "readConstructions", "constructPoint", "touchingCircle", "readAreas", "measureLength", "measureAngle", "measureArea", "readLoci", "withT", "traceLocus", "plotParametric", "toBezierCurve", "usesLater"];
+  "ConstructFail", "readConstructions", "constructPoint", "touchingCircle", "readAreas", "measureLength", "measureAngle", "measureArea", "readLoci", "withT", "traceLocus", "plotParametric", "toBezierCurve", "usesLater",
+  "readPlace", "readParabolas", "readHyperbolas", "parabolaCurve", "hyperbolaCurves", "asymptoteSegments"];
 const make = new Function("state", `
-var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "arcText", "fillText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "areaText"];
+var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "parabolaText", "hyperbolaText", "arcText", "fillText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "areaText"];
 var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, SYMBOL_MM = 0.6, TRACE_MM = 3, KAPPA = 0.5522847498;
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
 var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
-var text = state.text, stepCount = state.stepCount || 0, showNames = state.showNames, showAxes = state.showAxes, showDimensions = !!state.showDimensions, dimensionRiseMm = 3, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
+var text = state.text, stepCount = state.stepCount || 0, showNames = state.showNames, showAxes = state.showAxes, showAsymptotes = !!state.showAsymptotes, showDimensions = !!state.showDimensions, dimensionRiseMm = 3, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
 const api = (text = {}, extra = {}) => make(Object.assign({
-  text: Object.assign({ pointsText: "", constructText: "", segmentText: "", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", areaText: "", locusText: "" }, text),
+  text: Object.assign({ pointsText: "", constructText: "", segmentText: "", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", areaText: "", locusText: "", parabolaText: "", hyperbolaText: "" }, text),
   showNames: true, showAxes: false, sizeMm: 50,
 }, extra));
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
@@ -290,44 +291,74 @@ function lineWidthStore(constNames, raw) {
   assert.deepStrictEqual(d.texts.map((t) => t.text), ["A", "B", "C", "M"]);
   assert.strictEqual(d.lines.filter((l) => l.kind === "main").length, 2);
 }
-// 설정 저장: 자취 글까지 v6(28칸)로 쓰고, 자취 글이 없는 v5(27칸)·넓이 글도 없는 v4(26칸)·작도 글도 없는 옛 v3(25칸)도 읽는다. 다른 태그·칸 수는 무시한다
+// 설정 저장: 포물선·쌍곡선 글과 점근선까지 v7(31칸)로 쓰고, 자취 글까지의 v6(28칸), 자취 글이 없는 v5(27칸)·넓이 글도 없는 v4(26칸)·작도 글도 없는 옛 v3(25칸)도 읽는다. 다른 태그·칸 수는 무시한다
 {
   const decl = (name) => { const at = source.indexOf(`var ${name} = `); assert.ok(at >= 0, name); return source.slice(at, source.indexOf("\n", at)); };
   const store = (raw) => {
     const writes = [];
     const app = { preferences: { getStringPreference: () => raw, setStringPreference: (key, value) => writes.push(value) } };
-    const text = new Function("app", ['var PREF_KEY = "T", POSITION_LIMIT_MM = 100;', decl("TEXT_KEYS"),
-      'var text = {pointsText: "P0", segmentText: "", dashedText: "", circleText: "", ellipseText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", arrowText: "", arcText: "", fillText: "", constructText: "", areaText: "", locusText: ""};',
-      "var showNames = true, showAxes = false, sizeMm = 50, fontPt = 8, labelGapMm = 1.2, arcRadiusMm = 3, tickMm = 1.6, strokePt = 0.8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true;",
+    const out = new Function("app", ['var PREF_KEY = "T", POSITION_LIMIT_MM = 100;', decl("TEXT_KEYS"),
+      'var text = {pointsText: "P0", segmentText: "", dashedText: "", circleText: "", ellipseText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", arrowText: "", arcText: "", fillText: "", constructText: "", areaText: "", locusText: "", parabolaText: "", hyperbolaText: ""};',
+      "var showNames = true, showAxes = false, showAsymptotes = false, sizeMm = 50, fontPt = 8, labelGapMm = 1.2, arcRadiusMm = 3, tickMm = 1.6, strokePt = 0.8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true;",
       "function saveLineWidths() {}"].concat(["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction),
-      ["applySettings(); saveSettings(); return text;"]).join("\n"))(app);
-    return { text, saved: writes[0] };
+      ["applySettings(); saveSettings(); return {text: text, asym: showAsymptotes};"]).join("\n"))(app);
+    return { text: out.text, asym: out.asym, saved: writes[0] };
   };
   const v3 = ["v3", encodeURIComponent("A(0,0) B(1,0)")].concat(Array(12).fill(""), ["0", "1", "60", "8", "1.2", "3", "1.6", "0.8", "0", "0", "1"]).join("|");
   const old = store(v3);
   assert.strictEqual(old.text.pointsText, "A(0,0) B(1,0)");
   assert.strictEqual(old.text.constructText, "");
   const saved = old.saved.split("|");
-  assert.strictEqual(saved.length, 28);
-  assert.deepStrictEqual([saved[0], saved[14], saved[15], saved[16], saved[17], saved[18], saved[19]], ["v6", "", "", "", "0", "1", "60"]);
+  assert.strictEqual(saved.length, 31);
+  assert.deepStrictEqual([saved[0], saved[14], saved[15], saved[16], saved[17], saved[18], saved[19], saved[20], saved[21], saved[30]], ["v7", "", "", "", "", "", "0", "1", "60", "0"]);
   saved[14] = encodeURIComponent("M=mid(A,B)");
   saved[15] = encodeURIComponent("ABC");
   saved[16] = encodeURIComponent("P:0~360");
-  const v6 = store(saved.join("|"));
+  saved[17] = encodeURIComponent("1:r");
+  saved[18] = encodeURIComponent("3x2");
+  saved[30] = "1";
+  const v7 = store(saved.join("|"));
+  assert.deepStrictEqual([v7.text.locusText, v7.text.parabolaText, v7.text.hyperbolaText, v7.asym], ["P:0~360", "1:r", "3x2", true]);
+  assert.strictEqual(v7.saved, saved.join("|"));
+  const v6list = ["v6"].concat(saved.slice(1, 17), saved.slice(19, 30));
+  const v6 = store(v6list.join("|"));
   assert.strictEqual(v6.text.constructText, "M=mid(A,B)");
   assert.strictEqual(v6.text.areaText, "ABC");
   assert.strictEqual(v6.text.locusText, "P:0~360");
-  assert.strictEqual(v6.saved, saved.join("|"));
-  const v5 = store(["v5"].concat(saved.slice(1, 16), saved.slice(17)).join("|"));
+  assert.deepStrictEqual([v6.text.parabolaText, v6.asym], ["", false], "v6는 새 항목을 처음 값으로");
+  const v5 = store(["v5"].concat(v6list.slice(1, 16), v6list.slice(17)).join("|"));
   assert.strictEqual(v5.text.areaText, "ABC", "v5도 읽는다");
   assert.strictEqual(v5.text.locusText, "");
-  const v4 = store(["v4"].concat(saved.slice(1, 15), saved.slice(17)).join("|"));
+  const v4 = store(["v4"].concat(v6list.slice(1, 15), v6list.slice(17)).join("|"));
   assert.strictEqual(v4.text.constructText, "M=mid(A,B)", "v4도 읽는다");
   assert.strictEqual(v4.text.areaText, "");
-  assert.strictEqual(store(saved.slice(0, 27).join("|")).text.pointsText, "P0", "칸 수가 틀리면 무시");
+  assert.strictEqual(store(saved.slice(0, 30).join("|")).text.pointsText, "P0", "칸 수가 틀리면 무시");
+}
+
+// 포물선·쌍곡선 (웹 math-geometry.test.js와 같은 경우)
+{
+  const g = api({ pointsText: "F(1,0) P(4,4)", segmentText: "F-P", parabolaText: "(0,0):1:r:4", hyperbolaText: "3x2" }, { showAsymptotes: true });
+  const d = g.buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  const curves = d.lines.filter((l) => l.kind === "main" && !l.closed && l.points.length > 0 && l.points[0].right && l.points[0].right[0] !== l.points[0].anchor[0]);
+  assert.strictEqual(curves.length, 3, "포물선 하나 + 쌍곡선 두 가지");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "dashed").length, 2, "점근선");
+  const c = g.parabolaCurve([0, 0], 1, "r", 4);
+  near(c[1].anchor[1], 4, "포물선 끝");
+  assert.strictEqual(g.hyperbolaCurves([0, 0], 3, 2, "x", 4)[0].length, 9);
+  assert.deepStrictEqual(api({ pointsText: "O(0,0) V(1,1)", parabolaText: "V:0:r, (1,2):1:q", hyperbolaText: "3x-2, O:3x2:z" }).buildGeometry().notes.filter((n) => /포물선|쌍곡선/.test(n)).length, 4);
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-geometry.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8");
+    for (const name of ["parabolaCurve", "hyperbolaCurves", "asymptoteSegments"]) {
+      const start = web.indexOf(`export function ${name}(`), end = web.indexOf("\n}\n", start) + 2;
+      const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+      assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
+    }
+  }
 }
 require("./es3-lint")(["readChainPaths", "dimensionCurve", "ConstructFail", "readConstructions", "constructPoint", "readAreas", "measureLength", "measureAngle", "measureArea",
-  "readLoci", "traceLocus", "withT", "plotParametric", "toBezierCurve", "usesLater"].map(extractFunction).join("\n"), "기하 새 도형 함수");
+  "readLoci", "traceLocus", "withT", "plotParametric", "toBezierCurve", "usesLater", "readPlace", "readParabolas", "readHyperbolas", "parabolaCurve", "hyperbolaCurves", "asymptoteSegments"].map(extractFunction).join("\n"), "기하 새 도형 함수");
 new Function(bundle);
 console.log("geometry checks passed");
 
