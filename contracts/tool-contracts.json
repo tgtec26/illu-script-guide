@@ -4745,6 +4745,10 @@
           "minimum": -500,
           "maximum": 500
         },
+        "binomStyle": {
+          "type": "number",
+          "default": 0
+        },
         "chance": {
           "type": "number",
           "default": 0.5,
@@ -4812,6 +4816,10 @@
         "mode": {
           "type": "number",
           "default": 0
+        },
+        "moreBinomials": {
+          "type": "string",
+          "default": ""
         },
         "moreCurves": {
           "type": "string",

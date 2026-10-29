@@ -1108,6 +1108,8 @@ var SCRIPT_KEY = "HighStatistics";
             var AXIS_MARGIN_RATIO = 0.04;   // 축이 그림 가장자리 밖으로 나가는 길이 / 가로 길이
             var TAIL_SIGMAS = 3.5;   // 곡선은 평균에서 ±3.5σ까지 (끝 높이가 꼭대기의 0.2%라 축에 닿아 보인다)
             var BAR_RATIO = 0.6;     // 막대 폭 / 막대 간격
+            var DOT_RADIUS_MM = 0.6;   // 점·꺾은선 모양의 점 반지름
+            var BINOM_STYLES = ["막대", "점", "점과 꺾은선", "가는 막대"];
             var MODES = ["정규분포", "이항분포"];
             var AXIS_NAMES = ["x", "z", "없음"];
             var SHADES = ["칠하지 않음", "a ≤ X ≤ b", "X ≥ a", "X ≤ b"];
@@ -1136,6 +1138,7 @@ var SCRIPT_KEY = "HighStatistics";
             var shadeK = 20;
             var fontPt = 8;
             var opt = { second: false, meanLine: true, sigmaTicks: false, approx: false };
+            var binomStyle = 0, moreBinomials = "";   // 이항분포: 모양, 분포 더하기 (25,0.5; 50,0.5)
             var moreCurves = "", curveNames = "", shadeNote = "", markText = "";   // 정규분포: 곡선 더하기(최대 4개), 곡선 이름, 칠한 영역 글자(지시선), 축 아래 글자
             var offsetXmm = 0;
             var offsetYmm = 0;
@@ -1167,11 +1170,18 @@ var SCRIPT_KEY = "HighStatistics";
             var mean2Controls = addValueRow(distPanel, "평균 m₂", "", mean2, -500, 500, 0.5, 1);
             var sigma2Controls = addValueRow(distPanel, "표준편차 σ₂", "", sigma2, 0.1, 100, 0.1, 1);
             var moreInput = addTextRow(distPanel, "곡선 더하기:", moreCurves, "평균:표준편차를 쉼표로 (70:8, 40:3). 위 두 곡선과 합쳐 모두 4개까지 겹친다");
-            var namesInput = addTextRow(distPanel, "곡선 이름:", curveNames, "곡선 순서대로 쉼표로 (σ₁, σ₂ 또는 ㉠, ㉡). 평균에서 오른쪽 1.2σ 곡선 위 점 옆에 쓴다. 건너뛰려면 비워 둔다(㉠, , ㉢)");
+            var namesInput = addTextRow(distPanel, "곡선 이름:", curveNames, "곡선 순서대로 쉼표로 (σ₁, σ₂ 또는 ㉠, ㉡). 평균에서 오른쪽 1.2σ 곡선 위 점 옆에 쓴다. 건너뛰려면 비워 둔다(㉠, , ㉢). 이항분포는 분포 이름: 각 분포의 가장 높은 점 위에 쓴다");
             moreInput.onChanging = function() { moreCurves = moreInput.text; updatePreview(); };
             namesInput.onChanging = function() { curveNames = namesInput.text; updatePreview(); };
             var trialsControls = addValueRow(distPanel, "시행 횟수 n", "", trials, 1, 40, 1, 0);
             var chanceControls = addValueRow(distPanel, "확률 p", "", chance, 0.01, 0.99, 0.01, 2);
+            var styleRow = distPanel.add("group");
+            styleRow.add("statictext", undefined, "모양:");
+            var styleList = styleRow.add("dropdownlist", undefined, BINOM_STYLES);
+            styleList.selection = binomStyle;
+            var moreBinomInput = addTextRow(distPanel, "분포 더하기:", moreBinomials, "n,p를 ;로 나눠 쓴다(p는 소수·분수, 25,0.5; 50,1/2). 위 분포와 합쳐 모두 3개까지 같은 가로 칸에 겹친다. 점·점과 꺾은선·가는 막대 모양으로 보면 좋다 (이항분포)");
+            styleList.onChange = function() { binomStyle = styleList.selection ? styleList.selection.index : 0; updatePreview(); };
+            moreBinomInput.onChanging = function() { moreBinomials = moreBinomInput.text; updatePreview(); };
 
             var probPanel = addPanel(win, "확률");
             var shadeRow = probPanel.add("group");
@@ -1277,6 +1287,8 @@ var SCRIPT_KEY = "HighStatistics";
                 sigma2Controls.input.parent.enabled = normal;
                 trialsControls.input.parent.enabled = !normal;
                 chanceControls.input.parent.enabled = !normal;
+                styleRow.enabled = !normal;
+                moreBinomInput.parent.enabled = !normal;
                 sigmaCheck.enabled = normal;
                 approxCheck.enabled = !normal;
                 aControls.input.parent.enabled = shade === 1 || shade === 2;
@@ -1330,7 +1342,15 @@ var SCRIPT_KEY = "HighStatistics";
                     o.n = Math.round(trials);
                     o.p = chance;
                     o.approx = opt.approx;
+                    o.style = binomStyle;
+                    o.dot = DOT_RADIUS_MM * MM_TO_PT;
+                    var extraSeries = parseSeries(moreBinomials);
+                    o.series = [{ n: o.n, p: o.p }];
+                    if (extraSeries !== null) for (var es = 0; es < extraSeries.length && o.series.length < 3; es++) o.series.push(extraSeries[es]);
+                    o.names = curveNames.split(/[,，]/);
+                    for (var bn = 0; bn < o.names.length; bn++) o.names[bn] = o.names[bn].replace(/^\s+|\s+$/g, "");
                     drawing = buildBinomial(o);
+                    if (extraSeries === null) drawing.notes.push("읽지 못함: 분포 더하기");
                 }
                 messageText.text = drawing.notes.length > 0 ? drawing.notes.join(" · ") : " ";
 
@@ -1626,26 +1646,52 @@ var SCRIPT_KEY = "HighStatistics";
                 return out;
             }
 
-            // 이항분포 B(n, p): k = 0 … n 막대, 가장 높은 막대가 height. 칠하는 범위의 막대는 K로
+            // 이항분포 B(n, p): k = 0 … n. 모양 o.style: 0 막대, 1 점, 2 점과 꺾은선, 3 가는 막대. 가장 높은 것이 height, 칠하는 범위의 막대는 K로.
+            // o.series [{n, p}]가 있으면 여러 분포를 같은 가로 칸(가장 큰 n 기준)에 겹친다 — 첫째 분포가 주인공이라 칠하기·평균 점선·근사 곡선·알림은 첫째만.
+            // o.names는 분포마다 꼭대기 위 이름, o.dot은 점 반지름(pt)
             function buildBinomial(o) {
                 var out = { fills: [], lines: [], arrows: [], texts: [], notes: [] };
-                var n = o.n, p = o.p, probs = [], top = 0;
-                for (var k = 0; k <= n; k++) {
-                    probs.push(binomialProbability(n, k, p));
-                    top = Math.max(top, probs[k]);
+                var series = o.series && o.series.length > 0 ? o.series : [{ n: o.n, p: o.p }];
+                var style = o.style || 0, widest = 0, top = 0, all = [], i, k;
+                for (i = 0; i < series.length; i++) {
+                    var list = [];
+                    for (k = 0; k <= series[i].n; k++) {
+                        list.push(binomialProbability(series[i].n, k, series[i].p));
+                        top = Math.max(top, list[k]);
+                    }
+                    all.push(list);
+                    widest = Math.max(widest, series[i].n);
                 }
+                var n = series[0].n, p = series[0].p, probs = all[0];
                 var mu = n * p, variance = n * p * (1 - p), sd = Math.sqrt(variance);
                 if (o.approx) top = Math.max(top, normalDensity(mu, mu, sd));
-                var step = o.width / (n + 2), sy = o.height / top;
+                var step = o.width / (widest + 2), sy = o.height / top;
                 function X(v) { return (v + 1) * step; }
-                var range = shadeRange(o, -0.5, n + 0.5);
-                var sum = 0;
-                for (var b = 0; b <= n; b++) {
-                    var shaded = range !== null && b >= range[0] - 1e-9 && b <= range[1] + 1e-9;
-                    if (shaded) sum += probs[b];
-                    var h = probs[b] * sy, half = step * BAR_RATIO / 2;
-                    if (h < 0.05) continue;
-                    out.fills.push({ points: straight([[X(b) - half, 0], [X(b) + half, 0], [X(b) + half, h], [X(b) - half, h]]), k: shaded ? o.shadeK : 0, stroked: true });
+                var range = style === 1 || style === 2 ? null : shadeRange(o, -0.5, n + 0.5);
+                var sum = 0, ratio = style === 3 ? BAR_RATIO / 4 : BAR_RATIO;
+                for (i = 0; i < series.length; i++) {
+                    var pointList = [];
+                    for (var b = 0; b <= series[i].n; b++) {
+                        var h = all[i][b] * sy;
+                        if (style === 1 || style === 2) {
+                            var ring = [];
+                            for (var t = 0; t < 12; t++) ring.push([X(b) + o.dot * Math.cos(t * Math.PI / 6), h + o.dot * Math.sin(t * Math.PI / 6)]);
+                            out.fills.push({ points: straight(ring), k: 100, stroked: false });
+                            pointList.push([X(b), h]);
+                            continue;
+                        }
+                        var shaded = i === 0 && range !== null && b >= range[0] - 1e-9 && b <= range[1] + 1e-9;
+                        if (shaded) sum += probs[b];
+                        var half = step * ratio / 2;
+                        if (h < 0.05) continue;
+                        out.fills.push({ points: straight([[X(b) - half, 0], [X(b) + half, 0], [X(b) + half, h], [X(b) - half, h]]), k: shaded ? o.shadeK : 0, stroked: true });
+                    }
+                    if (style === 2) out.lines.push({ points: straight(pointList), kind: "curve" });
+                    if (o.names && o.names[i]) {
+                        var peak = 0;
+                        for (k = 1; k < all[i].length; k++) if (all[i][k] > all[i][peak]) peak = k;
+                        out.texts.push({ text: o.names[i], at: [X(peak), all[i][peak] * sy], dir: [0, 1], clear: 2 });
+                    }
                 }
                 out.notes.push("E(X) = " + formatValue(mu, 2) + ", V(X) = " + formatValue(variance, 2) + ", σ(X) = " + formatValue(sd, 2));
                 if (range !== null) out.notes.push(probabilityText(o, range, null) + " = " + formatValue(sum, 4));
@@ -1658,10 +1704,26 @@ var SCRIPT_KEY = "HighStatistics";
                 if (o.meanLine) out.lines.push({ points: straight([[X(mu), 0], [X(mu), o.height]]), kind: "guide" });
 
                 // 막대 아래 k (많으면 5칸마다)
-                var every = n <= 15 ? 1 : 5, marks = [];
-                for (var t = 0; t <= n; t += every) marks.push({ v: t, text: String(t), tickless: true });
+                var every = widest <= 15 ? 1 : 5, marks = [];
+                for (var tk = 0; tk <= widest; tk += every) marks.push({ v: tk, text: String(tk), tickless: true });
                 addRangeMarks(marks, o, range);
                 placeMarks(out, marks, X, o.tick);
+                return out;
+            }
+
+            // 분포 더하기 "25,0.5; 50,1/2" → [{n, p}]. n은 1~100의 정수, p는 0과 1 사이의 소수·분수. 비면 [], 못 읽으면 null
+            function parseSeries(text) {
+                var parts = String(text).split(/[;；]/), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var item = parts[i].replace(/^\s+|\s+$/g, "");
+                    if (item === "") continue;
+                    var two = item.split(/[,，]/);
+                    if (two.length !== 2) return null;
+                    var n = Number(two[0].replace(/\s/g, "")), ratio = two[1].replace(/\s/g, "").split("/"), p = Number(ratio[0]);
+                    if (ratio.length === 2) p = p / Number(ratio[1]);
+                    if (ratio.length > 2 || !(n >= 1 && n <= 100) || n !== Math.floor(n) || isNaN(p) || !(p > 0 && p < 1)) return null;
+                    out.push({ n: n, p: p });
+                }
                 return out;
             }
 
@@ -1923,9 +1985,9 @@ var SCRIPT_KEY = "HighStatistics";
                 saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
-                var parts = ["v2", mode, axisName, mean, sigma, mean2, sigma2, trials, chance, shade, labelKind, aValue, bValue, shadeK,
+                var parts = ["v3", mode, axisName, mean, sigma, mean2, sigma2, trials, chance, shade, labelKind, aValue, bValue, shadeK,
                     widthMm, heightMm, fontPt, flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
-                    encodeURIComponent(moreCurves), encodeURIComponent(curveNames), encodeURIComponent(shadeNote), encodeURIComponent(markText)];
+                    encodeURIComponent(moreCurves), encodeURIComponent(curveNames), encodeURIComponent(shadeNote), encodeURIComponent(markText), binomStyle, encodeURIComponent(moreBinomials)];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -1934,7 +1996,7 @@ var SCRIPT_KEY = "HighStatistics";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (!((p[0] === "v1" && p.length === 21) || (p[0] === "v2" && p.length === 25)) || p[17].length !== FLAG_KEYS.length) return;
+                if (!((p[0] === "v1" && p.length === 21) || (p[0] === "v2" && p.length === 25) || (p[0] === "v3" && p.length === 27)) || p[17].length !== FLAG_KEYS.length) return;
                 try {
                     mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
                     axisName = Math.round(restoreNumber(p[2], axisName, 0, AXIS_NAMES.length - 1));
@@ -1956,11 +2018,15 @@ var SCRIPT_KEY = "HighStatistics";
                     offsetXmm = restoreNumber(p[18], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[19], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[20] === "1";
-                    if (p[0] === "v2") {
+                    if (p[0] === "v2" || p[0] === "v3") {
                         moreCurves = decodeURIComponent(p[21]);
                         curveNames = decodeURIComponent(p[22]);
                         shadeNote = decodeURIComponent(p[23]);
                         markText = decodeURIComponent(p[24]);
+                    }
+                    if (p[0] === "v3") {
+                        binomStyle = Math.round(restoreNumber(p[25], binomStyle, 0, BINOM_STYLES.length - 1));
+                        moreBinomials = decodeURIComponent(p[26]);
                     }
                 } catch (restoreError) {}
             }

@@ -31,7 +31,7 @@ function extractFunction(name) {
 }
 
 const names = ["buildNormal", "buildBinomial", "shadeRange", "addRangeMarks", "placeMarks", "addAxis", "probabilityText", "normalPoints",
-  "normalDensity", "normalCdf", "binomialProbability", "straight", "formatValue", "parseCurves", "parseMarks"];
+  "normalDensity", "normalCdf", "binomialProbability", "straight", "formatValue", "parseCurves", "parseMarks", "parseSeries"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, TAIL_SIGMAS = 3.5, BAR_RATIO = 0.6, AXIS_MARGIN_RATIO = 0.04;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 const base = { width: 200, height: 50, tick: 2, shadeK: 20, axisName: "x", shade: 1, a: 40, b: 70, letters: false, meanLine: true, sigmaTicks: false };
@@ -167,29 +167,51 @@ return { set: setLineWidth, get: currentLineWidth, save: saveLineWidths };`)(app
   const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-distribution.js");
   if (fs.existsSync(webPath)) {
     const web = fs.readFileSync(webPath, "utf8");
-    for (const name of ["parseCurves", "parseMarks"]) {
+    for (const name of ["parseCurves", "parseMarks", "parseSeries", "buildBinomial"]) {
       const start = web.indexOf(`export function ${name}(`), end = web.indexOf("\n}\n", start) + 2;
       const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
       assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
     }
   }
-  // 설정 v2: 글 4칸을 더해 25칸으로 저장하고 v1(21칸)도 읽는다
+  // 여러 이항분포 겹치기 (웹 math-distribution.test.js와 같은 경우)
+  {
+    const base2 = { width: 160, height: 60, tick: 3, shadeK: 20, axisName: "x", shade: 0, a: 0, b: 0, letters: false, meanLine: false, approx: false, dot: 1.7 };
+    const dots = (series, style) => g.buildBinomial(Object.assign({}, base2, { n: series[0].n, p: series[0].p, series, style }));
+    const one = dots([{ n: 10, p: 0.5 }], 2);
+    assert.strictEqual(one.fills.length, 11);
+    assert.strictEqual(one.lines.filter((l) => l.kind === "curve").length, 1);
+    const three = dots([{ n: 10, p: 0.5 }, { n: 25, p: 0.5 }, { n: 50, p: 0.5 }], 2);
+    assert.strictEqual(three.fills.length, 11 + 26 + 51);
+    assert.strictEqual(three.lines.filter((l) => l.kind === "curve").length, 3);
+    const width = (d) => Math.max(...d.fills[5].points.map((q) => q.anchor[0])) - Math.min(...d.fills[5].points.map((q) => q.anchor[0]));
+    assert.ok(width(dots([{ n: 10, p: 0.5 }], 3)) < width(dots([{ n: 10, p: 0.5 }], 0)) / 2, "가는 막대");
+    const named = g.buildBinomial(Object.assign({}, base2, { n: 10, p: 0.5, series: [{ n: 10, p: 0.5 }, { n: 25, p: 0.5 }], style: 2, names: ["n=10", "n=25"] }));
+    assert.deepStrictEqual(named.texts.filter((t) => /^n=/.test(t.text)).map((t) => t.text), ["n=10", "n=25"]);
+    assert.deepStrictEqual(g.parseSeries("25,0.5; 50, 1/2"), [{ n: 25, p: 0.5 }, { n: 50, p: 0.5 }]);
+    for (const bad of ["25", "0,0.5", "10,1.5", "10,0", "x,0.5", "10.5,0.5"]) assert.strictEqual(g.parseSeries(bad), null, bad);
+  }
+  // 설정 v3: 모양·분포 더하기를 더해 27칸으로 저장하고 v2(25칸)·v1(21칸)도 읽는다
   const store = {};
   const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
   const flagKeys = '["second", "meanLine", "sigmaTicks", "approx"]';
-  const body = `var PREF_KEY = "T", POSITION_LIMIT_MM = 100, FLAG_KEYS = ${flagKeys}, MODES = [1, 2], AXIS_NAMES = [1, 2, 3], SHADES = [1, 2, 3, 4], LABELS = [1, 2];
+  const body = `var PREF_KEY = "T", POSITION_LIMIT_MM = 100, FLAG_KEYS = ${flagKeys}, MODES = [1, 2], AXIS_NAMES = [1, 2, 3], SHADES = [1, 2, 3, 4], LABELS = [1, 2], BINOM_STYLES = [1, 2, 3, 4];
     var mode = 0, axisName = 0, mean = 50, sigma = 10, mean2 = 60, sigma2 = 5, trials = 10, chance = 0.5, shade = 1, labelKind = 0, aValue = 40, bValue = 70, shadeK = 20,
     widthMm = 80, heightMm = 25, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true, opt = { second: false, meanLine: true, sigmaTicks: false, approx: false },
-    moreCurves = "", curveNames = "", shadeNote = "", markText = ""; function saveLineWidths() {}` +
+    moreCurves = "", curveNames = "", shadeNote = "", markText = "", binomStyle = 0, moreBinomials = ""; function saveLineWidths() {}` +
     ["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction).join("\n") +
-    `return { saveSettings, applySettings, set: function() { moreCurves = "70:8"; curveNames = "σ₁, σ₂"; shadeNote = "0.95"; markText = "50:m"; }, get: function() { return [moreCurves, curveNames, shadeNote, markText]; } };`;
+    `return { saveSettings, applySettings, set: function() { moreCurves = "70:8"; curveNames = "σ₁, σ₂"; shadeNote = "0.95"; markText = "50:m"; binomStyle = 2; moreBinomials = "25,0.5"; }, get: function() { return [moreCurves, curveNames, shadeNote, markText, binomStyle, moreBinomials]; } };`;
   const make = () => new Function("app", body)(app);
   const first = make(); first.set(); first.saveSettings();
-  assert.strictEqual(store.T.split("|").length, 25);
+  assert.strictEqual(store.T.split("|").length, 27);
+  assert.strictEqual(store.T.split("|")[0], "v3");
   const again = make(); again.applySettings();
-  assert.deepStrictEqual(again.get(), ["70:8", "σ₁, σ₂", "0.95", "50:m"]);
-  store.T = store.T.split("|").slice(0, 21).join("|").replace(/^v2/, "v1");
+  assert.deepStrictEqual(again.get(), ["70:8", "σ₁, σ₂", "0.95", "50:m", 2, "25,0.5"]);
+  const v2 = store.T.split("|").slice(0, 25).join("|").replace(/^v3/, "v2");
+  store.T = v2;
+  const fromV2 = make(); fromV2.applySettings();
+  assert.deepStrictEqual(fromV2.get(), ["70:8", "σ₁, σ₂", "0.95", "50:m", 0, ""], "v2는 새 항목을 처음 값으로");
+  store.T = v2.split("|").slice(0, 21).join("|").replace(/^v2/, "v1");
   const old = make(); old.applySettings();
-  assert.deepStrictEqual(old.get(), ["", "", "", ""], "v1은 새 글을 비운 채로");
+  assert.deepStrictEqual(old.get(), ["", "", "", "", 0, ""], "v1은 새 글을 비운 채로");
 }
 console.log("distribution checks passed");
