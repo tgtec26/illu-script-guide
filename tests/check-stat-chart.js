@@ -32,7 +32,7 @@ function extractFunction(name) {
 
 const names = ["buildHistogram", "buildBoxPlot", "buildScatter", "emptyDrawing", "addAxes", "addYTicks", "niceAxis",
   "formatValue", "padAxis", "quartiles", "median", "parseNumberList", "parsePairs", "strictNumber", "roundTo",
-  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups", "buildStemLeaf", "buildCategoryChart", "wavePath", "parseCategories", "buildRatioChart", "percentages", "circleCurve", "frequencyTable", "buildFrequencyTable"];
+  "buildHistogramGroups", "buildBoxPlotGroups", "parseGroups", "buildStemLeaf", "buildCategoryChart", "wavePath", "parseCategories", "buildRatioChart", "percentages", "circleCurve", "frequencyTable", "buildFrequencyTable", "waveAcross"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, MM_TO_PT = 2.834645669, WAVE_ROOM_MM = 5, WAVE_HALF_MM = 1.6, WAVE_AMP_MM = 0.5, WAVE_GAP_MM = 1, BAND_MM = 10, SCALE_GAP_MM = 3;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const size = { width: 70, height: 40, tick: 2, xName: "(cm)", yName: "(명)" };
 const texts = (d, dir) => d.texts.filter((t) => t.dir[0] === dir[0] && t.dir[1] === dir[1]).map((t) => t.text);
@@ -240,4 +240,31 @@ assert.ok(/function addBar\([^)]*\) \{[^}]*strokeWidth = EDGE_PT;/.test(source),
   assert.ok(source.includes('"도수분포표"') && source.includes("이 도수로 히스토그램"), "종류 목록과 히스토그램 버튼");
 }
 
+
+// 히스토그램 옵션: 가로 모눈·가로축 물결선·범례 (웹 math-stat-chart.test.js와 같은 경우)
+{
+  const size = { width: 100, height: 50, tick: 2, xName: "(점)", yName: "(명)" };
+  const groups = [{ name: "1반", values: [2, 5, 8, 4, 1] }, { name: "2반", values: [1, 4, 6, 7, 3] }];
+  const d = g.buildHistogramGroups(size, 50, 10, groups, true, true, false, { grid: true, wave: true, legend: true });
+  assert.strictEqual(d.lines.filter((l) => l.grid).length, 4, "가로 모눈");
+  assert.ok(d.lines.slice(0, 4).every((l) => l.grid), "모눈은 맨 뒤");
+  assert.strictEqual(d.lines.filter((l) => l.curve).length, 2, "물결선 둘");
+  assert.ok(d.texts.some((t) => t.text === "0" && t.at[0] === 0 && t.at[1] === 0), "원점 0");
+  const names = d.texts.filter((t) => t.text === "1반" || t.text === "2반");
+  assert.ok(names.length === 2 && names.every((t) => t.dir[0] === 1 && t.at[0] > 60), "범례 글자");
+  const samples = d.lines.filter((l) => l.legend);
+  assert.ok(samples.length === 2 && !samples[0].dashed && samples[1].dashed);
+  const plain = g.buildHistogramGroups(size, 50, 10, groups, true, true, false);
+  assert.deepStrictEqual(plain.lines.filter((l) => l.grid || l.curve || l.legend), []);
+  assert.ok(source.includes("{grid: histGrid, wave: histWave, legend: histLegend}"), "탭 옵션이 그리기에 간다");
+  assert.ok(source.includes('p[0] === "v6" && p.length === 30'), "설정 v6");
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-stat-chart.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8");
+    const start = web.indexOf("export function waveAcross("), end = web.indexOf("\n}\n", start) + 2;
+    const scriptText = extractFunction("waveAcross").split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+    assert.strictEqual(scriptText, web.slice(start + "export ".length, end), "waveAcross differs from the web");
+  }
+}
+console.log("stat chart histogram options ok");
 console.log("stat chart checks passed");

@@ -6767,6 +6767,18 @@
           "minimum": 15,
           "maximum": 120
         },
+        "histGrid": {
+          "type": "boolean",
+          "default": false
+        },
+        "histLegend": {
+          "type": "boolean",
+          "default": false
+        },
+        "histWave": {
+          "type": "boolean",
+          "default": false
+        },
         "kind": {
           "type": "number",
           "default": 0

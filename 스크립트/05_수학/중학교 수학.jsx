@@ -4284,6 +4284,7 @@ var SCRIPT_KEY = "MiddleMath";
             var boxText = "3, 5, 6, 7, 8, 9, 10, 12, 15";
             var scatterText = "(160,50) (165,55) (170,58) (155,48) (175,65)";
             var scatterGrid = false, scatterIdentity = false;   // 산점도 모눈(K30)·y=x 점선
+            var histGrid = false, histWave = false, histLegend = false;   // 히스토그램: 가로 모눈, 가로축 물결선(≈)과 0, 두 집단일 때 범례
             var stemUnit = "";   // 줄기와 잎 그림 범례의 단위: (1|2는 12점)
             // 막대·꺾은선 그래프: 항목, 값(| 로 집단, 꺾은선만), 꺾은선(끄면 막대), 세로축 시작(0보다 크면 물결선), 가로 모눈
             var categoryText = "월, 화, 수, 목, 금", valueText = "12, 15, 9, 18, 14", categoryLine = false, categoryStart = "", categoryGrid = true;
@@ -4326,6 +4327,12 @@ var SCRIPT_KEY = "MiddleMath";
             var barsCheck = histogramChecks.add("checkbox", undefined, "히스토그램");
             var polygonCheck = histogramChecks.add("checkbox", undefined, "도수분포다각형");
             var relativeCheck = histogramChecks.add("checkbox", undefined, "상대도수");
+            var histogramChecks2 = histogramPanel.add("group");
+            var histGridCheck = histogramChecks2.add("checkbox", undefined, "가로 모눈");
+            var histWaveCheck = histogramChecks2.add("checkbox", undefined, "가로축 물결선");
+            histWaveCheck.helpTip = "가로축을 원점과 첫 눈금 사이에서 ≈로 끊고 0을 쓴다";
+            var histLegendCheck = histogramChecks2.add("checkbox", undefined, "범례");
+            histLegendCheck.helpTip = "집단이 둘 이상일 때 이름을 꼭대기 위 대신 오른쪽 위 범례(선 모양과 이름)로";
 
             var dataPanel = addPanel(win, "자료");
             var boxInput = addTextRow(dataPanel, "상자그림:", boxText, "자료 값을 쉼표로 (3, 5, 6, 7, …). 여러 집단 비교: 1반: 3, 5, 7 | 2반: 4, 6, 8 (같은 수직선 위에 위에서부터 쌓는다)");
@@ -4375,6 +4382,9 @@ var SCRIPT_KEY = "MiddleMath";
             barsCheck.value = showBars;
             polygonCheck.value = showPolygon;
             relativeCheck.value = relative;
+            histGridCheck.value = histGrid;
+            histWaveCheck.value = histWave;
+            histLegendCheck.value = histLegend;
             scatterGridCheck.value = scatterGrid;
             scatterIdentityCheck.value = scatterIdentity;
             categoryLineCheck.value = categoryLine;
@@ -4400,6 +4410,9 @@ var SCRIPT_KEY = "MiddleMath";
             barsCheck.onClick = function() { showBars = barsCheck.value; updatePreview(); };
             polygonCheck.onClick = function() { showPolygon = polygonCheck.value; updatePreview(); };
             relativeCheck.onClick = function() { relative = relativeCheck.value; updatePreview(); };
+            histGridCheck.onClick = function() { histGrid = histGridCheck.value; updatePreview(); };
+            histWaveCheck.onClick = function() { histWave = histWaveCheck.value; updatePreview(); };
+            histLegendCheck.onClick = function() { histLegend = histLegendCheck.value; updatePreview(); };
             scatterGridCheck.onClick = function() { scatterGrid = scatterGridCheck.value; updatePreview(); };
             scatterIdentityCheck.onClick = function() { scatterIdentity = scatterIdentityCheck.value; updatePreview(); };
             stemUnitInput.onChanging = function() { stemUnit = stemUnitInput.text; updatePreview(); };
@@ -4485,7 +4498,7 @@ var SCRIPT_KEY = "MiddleMath";
                     for (var gi = 1; sameCount && gi < groups.length; gi++) if (groups[gi].values.length !== groups[0].values.length) sameCount = false;
                     if (groups === null) problem = "도수를 읽지 못함";
                     else if (!sameCount) problem = "집단마다 계급 수가 같아야 합니다";
-                    else drawing = buildHistogramGroups(size, classStart, classWidth, groups, showBars, showPolygon, relative);
+                    else drawing = buildHistogramGroups(size, classStart, classWidth, groups, showBars, showPolygon, relative, {grid: histGrid, wave: histWave, legend: histLegend});
                 } else if (kind === 1) {
                     var boxes = parseGroups(boxText), enough = boxes !== null;
                     for (var bi = 0; enough && bi < boxes.length; bi++) if (boxes[bi].values.length < 2) enough = false;
@@ -4799,7 +4812,9 @@ var SCRIPT_KEY = "MiddleMath";
             }
 
             // 집단이 둘 이상이면 막대 없이 도수분포다각형을 겹친다(둘째 집단은 점선). 집단 이름은 다각형 꼭대기 위에 (웹 math-stat-chart.js와 같다)
-            function buildHistogramGroups(size, start, width, groups, bars, polygon, isRelative) {
+            // opts(없어도 된다): grid 가로 모눈선, wave 가로축을 원점과 첫 눈금 사이에서 물결선 둘로 끊고 0을 쓴다, legend 집단이 여럿이면 이름을 꼭대기 위 대신 오른쪽 위 범례(선 모양+이름)로
+            function buildHistogramGroups(size, start, width, groups, bars, polygon, isRelative, opts) {
+                opts = opts || {};
                 var out = emptyDrawing();
                 var n = groups[0].values.length, many = groups.length > 1;
                 var top = 0, series = [];
@@ -4815,7 +4830,20 @@ var SCRIPT_KEY = "MiddleMath";
                 var yAxis = niceAxis(0, top > 0 ? top : 1);
                 var sx = size.width / (n + 2), sy = size.height / yAxis.max;
 
+                // 모눈은 축보다 먼저(뒤에) 그린다
+                if (opts.grid) {
+                    for (var gv = yAxis.min + yAxis.step; gv <= yAxis.max + yAxis.step / 2; gv += yAxis.step) out.lines.push({ points: [[0, (gv - yAxis.min) * sy], [size.width, (gv - yAxis.min) * sy]], grid: true });
+                }
                 addAxes(out, size, size.xName, size.yName);
+                if (opts.wave) {
+                    // 가로축을 두 물결선 사이에서 끊는다 (원점과 첫 눈금 사이). 물결선은 축 굵기
+                    var xAxis = out.lines[out.lines.length - 2], mid = sx / 4, gap = WAVE_GAP_MM * MM_TO_PT / 2;   // 다각형이 시작하는 0.5칸보다 왼쪽
+                    xAxis.points = [[mid + gap, 0], xAxis.points[1]];
+                    out.lines.push({ points: [[0, 0], [mid - gap, 0]] });
+                    out.lines.push({ points: waveAcross(mid - gap, 0, WAVE_HALF_MM * MM_TO_PT, WAVE_AMP_MM * MM_TO_PT), curve: true });
+                    out.lines.push({ points: waveAcross(mid + gap, 0, WAVE_HALF_MM * MM_TO_PT, WAVE_AMP_MM * MM_TO_PT), curve: true });
+                    out.texts.push({ text: "0", at: [0, 0], dir: [0, -1], clear: size.tick / 2 });
+                }
                 addYTicks(out, yAxis, sy, size.tick);
                 for (var b = 0; b <= n; b++) {
                     var x = (b + 1) * sx;
@@ -4835,7 +4863,16 @@ var SCRIPT_KEY = "MiddleMath";
                         points.push([(n + 1.5) * sx, 0]);
                         out.lines.push(s > 0 ? { points: points, main: true, dashed: true } : { points: points, main: true });
                         for (var q = 0; q < points.length; q++) out.dots.push(points[q]);
-                        if (groups[s].name) out.texts.push({ text: groups[s].name, at: points[peak], dir: [0, 1], clear: 0 });
+                        if (groups[s].name && !(opts.legend && many)) out.texts.push({ text: groups[s].name, at: points[peak], dir: [0, 1], clear: 0 });
+                    }
+                    // 범례: 오른쪽 위에 선 모양(첫째 실선, 나머지 점선)과 이름
+                    if (opts.legend && many) {
+                        var legendX = size.width * 0.65, legendLen = 7 * MM_TO_PT, pitch = 4.5 * MM_TO_PT;
+                        for (var lg = 0; lg < groups.length; lg++) {
+                            var ly = size.height - pitch * lg;
+                            out.lines.push(lg > 0 ? { points: [[legendX, ly], [legendX + legendLen, ly]], main: true, dashed: true, legend: true } : { points: [[legendX, ly], [legendX + legendLen, ly]], main: true, legend: true });
+                            if (groups[lg].name) out.texts.push({ text: groups[lg].name, at: [legendX + legendLen + MM_TO_PT, ly], dir: [1, 0], clear: 0 });
+                        }
                     }
                 }
                 return out;
@@ -4991,6 +5028,13 @@ var SCRIPT_KEY = "MiddleMath";
                     for (var q = 0; q < points.length; q++) out.dots.push(points[q]);
                     if (groups[s].name) out.texts.push({ text: groups[s].name, at: points[n - 1], dir: [1, 0], clear: 0 });
                 }
+                return out;
+            }
+
+            // 세로 물결선(가로축을 끊는 ≈): (cx, cy)를 가운데로 세로 [cy-half, cy+half]에서 오른쪽으로 한 번, 왼쪽으로 한 번 (너비 amp). wavePath의 x·y를 맞바꾼 것
+            function waveAcross(cx, cy, half, amp) {
+                var w = wavePath(0, 0, half, amp), out = [];
+                for (var i = 0; i < w.length; i++) out.push({ anchor: [cx + w[i].anchor[1], cy + w[i].anchor[0]], left: [cx + w[i].left[1], cy + w[i].left[0]], right: [cx + w[i].right[1], cy + w[i].right[0]] });
                 return out;
             }
 
@@ -5409,12 +5453,12 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v5", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
+                    "v6", kind, widthMm, heightMm, fontPt, classStart, classWidth, encodeURIComponent(frequencyText),
                     showBars ? "1" : "0", showPolygon ? "1" : "0", relative ? "1" : "0",
                     encodeURIComponent(boxText), encodeURIComponent(scatterText), encodeURIComponent(xName), encodeURIComponent(yName),
                     offsetXmm, offsetYmm, previewEnabled ? "1" : "0", scatterGrid ? "1" : "0", scatterIdentity ? "1" : "0", encodeURIComponent(stemUnit),
                     encodeURIComponent(categoryText), encodeURIComponent(valueText), categoryLine ? "1" : "0", encodeURIComponent(categoryStart), categoryGrid ? "1" : "0",
-                    ratioPie ? "1" : "0"
+                    ratioPie ? "1" : "0", histGrid ? "1" : "0", histWave ? "1" : "0", histLegend ? "1" : "0"
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -5425,7 +5469,7 @@ var SCRIPT_KEY = "MiddleMath";
                 if (!raw) return;
                 var p = raw.split("|");
                 // v2 = v1 + 산점도 모눈·y=x, v3 = v2 + 줄기와 잎 단위, v4 = v3 + 막대·꺾은선, v5 = v4 + 원그래프. 앞 판도 읽는다
-                if (!((p[0] === "v5" && p.length === 27) || (p[0] === "v4" && p.length === 26) || (p[0] === "v3" && p.length === 21) || (p[0] === "v2" && p.length === 20) || (p[0] === "v1" && p.length === 18))) return;
+                if (!((p[0] === "v6" && p.length === 30) || (p[0] === "v5" && p.length === 27) || (p[0] === "v4" && p.length === 26) || (p[0] === "v3" && p.length === 21) || (p[0] === "v2" && p.length === 20) || (p[0] === "v1" && p.length === 18))) return;
                 try {
                     kind = Math.round(restoreNumber(p[1], kind, 0, KINDS.length - 1));
                     widthMm = restoreNumber(p[2], widthMm, 20, 150);
@@ -5444,19 +5488,20 @@ var SCRIPT_KEY = "MiddleMath";
                     offsetXmm = restoreNumber(p[15], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[16], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[17] === "1";
-                    if (p[0] === "v2" || p[0] === "v3" || p[0] === "v4" || p[0] === "v5") {
+                    if (p[0] === "v2" || p[0] === "v3" || p[0] === "v4" || p[0] === "v5" || p[0] === "v6") {
                         scatterGrid = p[18] === "1";
                         scatterIdentity = p[19] === "1";
                     }
-                    if (p[0] === "v3" || p[0] === "v4" || p[0] === "v5") stemUnit = decodeURIComponent(p[20]);
-                    if (p[0] === "v4" || p[0] === "v5") {
+                    if (p[0] === "v3" || p[0] === "v4" || p[0] === "v5" || p[0] === "v6") stemUnit = decodeURIComponent(p[20]);
+                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6") {
                         categoryText = decodeURIComponent(p[21]);
                         valueText = decodeURIComponent(p[22]);
                         categoryLine = p[23] === "1";
                         categoryStart = decodeURIComponent(p[24]);
                         categoryGrid = p[25] === "1";
                     }
-                    if (p[0] === "v5") ratioPie = p[26] === "1";
+                    if (p[0] === "v5" || p[0] === "v6") ratioPie = p[26] === "1";
+                    if (p[0] === "v6") { histGrid = p[27] === "1"; histWave = p[28] === "1"; histLegend = p[29] === "1"; }
                 } catch (restoreError) {}
             }
 
