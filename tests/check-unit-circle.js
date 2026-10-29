@@ -30,7 +30,7 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["buildUnitCircle", "spiralPoints", "angleLabel", "gcd", "straight", "dist", "unit"];
+const names = ["buildUnitCircle", "spiralPoints", "angleLabel", "gcd", "straight", "dist", "unit", "parseExtraRadii"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 const base = { theta: 120, radius: 50, arcRadius: 10, angleStyle: 0, pointStyle: 0, circle: true, showRadius: true, arc: true,
@@ -140,4 +140,44 @@ function checkLineWidths(expectedKeys) {
   expectedKeys.forEach((k) => assert.strictEqual(lw.get(k), 2, `clamped ${k}`));
 }
 checkLineWidths(["axis", "graph", "guide", "mark", "thin"]);
+// 삼각함수 정의 그림: r·변 글자·수선의 발·축 위 글자·동경 더하기·시초선만 (웹 math-unit-circle.test.js와 같은 경우)
+{
+  const d = build({ theta: 60, radiusName: "r", sideLabels: true, footName: "H", markX: "1/2", markY: "√3/2", extra: [{ deg: 150, name: "A" }, { deg: 210, name: "" }] });
+  assert.ok(d.texts.some((t) => t.text === "-r") && !d.texts.some((t) => t.text === "1"));
+  const P = [50 * Math.cos(Math.PI / 3), 50 * Math.sin(Math.PI / 3)];
+  const x = d.texts.find((t) => t.text === "x" && t.at[1] === 0 && Math.abs(t.at[0] - P[0] / 2) < 1e-9);
+  assert.ok(x && x.dir[1] < 0, "x는 가로 변 아래");
+  const y = d.texts.find((t) => t.text === "y" && Math.abs(t.at[0] - P[0]) < 1e-9);
+  assert.ok(y && y.dir[0] > 0, "y는 세로 변 오른쪽");
+  assert.deepStrictEqual(d.texts.find((t) => t.text === "H").at, [P[0], 0]);
+  assert.ok(d.texts.some((t) => t.text === "√3/2" && t.at[0] === 0));
+  assert.strictEqual(d.lines.filter((l) => l.kind === "main" && l.points.length === 2).length, 3, "동경 OP + 둘");
+  assert.strictEqual(d.dots.length, 3);
+  const only = build({ theta: 750, initialOnly: true, circle: false, perpendiculars: false, units: false, endName: "X" });
+  assert.strictEqual(only.lines.filter((l) => l.kind === "axis").length, 1);
+  assert.ok(only.texts.some((t) => t.text === "X") && !only.texts.some((t) => t.text === "y"));
+  assert.ok(only.lines.some((l) => l.kind === "mark"), "일러 탭은 회전 호를 mark로");
+  assert.deepStrictEqual(g.parseExtraRadii("30:A, 200, -45:B"), [{ deg: 30, name: "A" }, { deg: 200, name: "" }, { deg: -45, name: "B" }]);
+  assert.strictEqual(g.parseExtraRadii("a:b"), null);
+  assert.ok(source.includes('p[0] === "v2" && p.length === 17') && source.includes('p[0] === "v1" && p.length === 11'), "설정 v2, v1도 읽는다");
+  assert.ok(source.includes('"각 θ", "°", thetaDeg, -1440, 1440'), "범위 ±1440");
+  // 설정 v2 저장·복원
+  const store = {};
+  const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const body = `var PREF_KEY = "T", POSITION_LIMIT_MM = 100, ANGLE_STYLES = [1, 2, 3, 4], POINT_STYLES = [1, 2, 3, 4], FLAG_KEYS = ["circle", "radius", "arc", "perpendiculars", "units", "tangent", "sideLabels", "initialOnly"];
+    var opt = { circle: true, radius: true, arc: true, perpendiculars: true, units: true, tangent: false, sideLabels: false, initialOnly: false };
+    var thetaDeg = 120, radiusMm = 20, arcMm = 4, angleStyle = 0, pointStyle = 1, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true;
+    var radiusName = "", footName = "", markXText = "", markYText = "", extraText = "", endName = "X"; function saveLineWidths() {}` +
+    ["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction).join("\n") +
+    `return { saveSettings, applySettings, set: function() { thetaDeg = 750; opt.sideLabels = true; opt.initialOnly = true; radiusName = "r"; footName = "H"; markXText = "1/2"; markYText = "√3/2"; extraText = "30:A"; endName = "Y"; },
+      get: function() { return [thetaDeg, opt.sideLabels, opt.initialOnly, radiusName, footName, markXText, markYText, extraText, endName]; } };`;
+  const make = () => new Function("app", body)(app);
+  const first = make(); first.set(); first.saveSettings();
+  assert.strictEqual(store.T.split("|").length, 17);
+  const again = make(); again.applySettings();
+  assert.deepStrictEqual(again.get(), [750, true, true, "r", "H", "1/2", "√3/2", "30:A", "Y"]);
+  store.T = ["v1", "111111".replace(/1/g, "1"), 100, 20, 4, 0, 1, 8, 0, 0, "1"].join("|");
+  const old = make(); old.applySettings();
+  assert.deepStrictEqual(old.get(), [100, false, false, "", "", "", "", "", "X"], "v1은 새 항목을 처음 값으로");
+}
 console.log("unit circle checks passed");

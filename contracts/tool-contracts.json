@@ -7065,11 +7065,23 @@
           "type": "number",
           "default": 0.4
         },
+        "endName": {
+          "type": "string",
+          "default": "X"
+        },
+        "extraText": {
+          "type": "string",
+          "default": ""
+        },
         "fontPt": {
           "type": "number",
           "default": 8,
           "minimum": 5,
           "maximum": 14
+        },
+        "footName": {
+          "type": "string",
+          "default": ""
         },
         "graphPt": {
           "type": "number",
@@ -7089,6 +7101,18 @@
           "minimum": 30,
           "maximum": 300
         },
+        "initialOnly": {
+          "type": "boolean",
+          "default": false
+        },
+        "markXText": {
+          "type": "string",
+          "default": ""
+        },
+        "markYText": {
+          "type": "string",
+          "default": ""
+        },
         "pointStyle": {
           "type": "number",
           "default": 1
@@ -7098,6 +7122,10 @@
           "default": 20,
           "minimum": 10,
           "maximum": 60
+        },
+        "radiusName": {
+          "type": "string",
+          "default": ""
         },
         "showArc": {
           "type": "boolean",
@@ -7123,11 +7151,15 @@
           "type": "boolean",
           "default": true
         },
+        "sideLabels": {
+          "type": "boolean",
+          "default": false
+        },
         "thetaDeg": {
           "type": "number",
           "default": 120,
-          "minimum": -720,
-          "maximum": 720
+          "minimum": -1440,
+          "maximum": 1440
         }
       }
     },

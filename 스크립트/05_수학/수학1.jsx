@@ -2542,7 +2542,7 @@ var SCRIPT_KEY = "HighMath1";
             var ANGLE_STYLES = ["θ", "도 (120°)", "호도법 (2π/3)", "없음"];
             var POINT_STYLES = ["P", "P(cos θ, sin θ)", "P(x, y)", "없음"];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
-            var FLAG_KEYS = ["circle", "radius", "arc", "perpendiculars", "units", "tangent"];
+            var FLAG_KEYS = ["circle", "radius", "arc", "perpendiculars", "units", "tangent", "sideLabels", "initialOnly"];
 
             var doc = app.activeDocument;
             var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
@@ -2553,7 +2553,8 @@ var SCRIPT_KEY = "HighMath1";
             var eqnFont = findTextFont([EQN_FONT_NAME, ENG_FONT_NAME]);
 
             // 옵션
-            var opt = { circle: true, radius: true, arc: true, perpendiculars: true, units: true, tangent: false };
+            var opt = { circle: true, radius: true, arc: true, perpendiculars: true, units: true, tangent: false, sideLabels: false, initialOnly: false };
+            var radiusName = "", footName = "", markXText = "", markYText = "", extraText = "", endName = "X";   // 삼각함수 정의 그림 (웹 math-unit-circle.js와 같은 뜻)
             var thetaDeg = 120;
             var radiusMm = 20;
             var arcMm = 4;
@@ -2575,7 +2576,7 @@ var SCRIPT_KEY = "HighMath1";
             var win = page;   // 탭 페이지에 그대로 쌓는다
 
             var anglePanel = addPanel(win, "각");
-            var thetaControls = addValueRow(anglePanel, "각 θ", "°", thetaDeg, -720, 720, 1, 0);
+            var thetaControls = addValueRow(anglePanel, "각 θ", "°", thetaDeg, -1440, 1440, 1, 0);
             thetaControls.input.helpTip = "x축의 양의 방향에서 반시계가 +. 360°를 넘으면 회전 호가 나선이 된다";
             var styleRow = anglePanel.add("group");
             styleRow.add("statictext", undefined, "각 글자:");
@@ -2590,6 +2591,19 @@ var SCRIPT_KEY = "HighMath1";
             addCheckRow(elementPanel, [["circle", "원"], ["radius", "동경 OP"], ["arc", "회전 호"]]);
             addCheckRow(elementPanel, [["perpendiculars", "축까지 수선"], ["units", "1, -1 표시"], ["tangent", "tan 선 (x=1)"]]);
             checks.tangent.helpTip = "x=1 직선과 동경(또는 그 연장선)이 만나는 점 T(1, tan θ)";
+
+            var defPanel = addPanel(win, "삼각함수 정의 그림");
+            var radiusNameInput = addTextRow(defPanel, "반지름 글자:", radiusName, "비우면 축 위에 1, -1. r을 쓰면 r, -r (반지름 r인 원)");
+            addCheckRow(defPanel, [["sideLabels", "변 글자 x·y·r (직각삼각형)"], ["initialOnly", "시초선만 (일반각)"]]);
+            checks.initialOnly.helpTip = "좌표축 대신 x축의 양의 반직선 하나와 끝 이름 (일반각 그림)";
+            var footNameInput = addTextRow(defPanel, "수선의 발 이름:", footName, "P에서 x축에 내린 수선의 발 글자 (H)");
+            var markXInput = addTextRow(defPanel, "x축 위 글자:", markXText, "수선의 발 자리에 쓰는 글자 (cos θ 값, √3/2)");
+            var markYInput = addTextRow(defPanel, "y축 위 글자:", markYText, "P에서 y축에 내린 수선의 발 자리 글자 (sin θ 값, 1/2)");
+            var extraInput = addTextRow(defPanel, "동경 더하기:", extraText, "각도:이름을 쉼표로 (30:A, 200). 원점에서 원 위 점까지 선과 점, 이름 (이름 없이 각도만도 된다)");
+            var endNameInput = addTextRow(defPanel, "시초선 끝 이름:", endName, "시초선만을 켰을 때 반직선 끝의 글자 (X)");
+
+            var messageText = defPanel.add("statictext", undefined, " ");
+            messageText.preferredSize.width = 300;
 
             var sizePanel = addPanel(win, "크기");
             var radiusControls = addValueRow(sizePanel, "반지름", "mm", radiusMm, 10, 60, 0.5, 1);
@@ -2616,6 +2630,12 @@ var SCRIPT_KEY = "HighMath1";
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
             var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
 
+            radiusNameInput.onChanging = function() { radiusName = radiusNameInput.text; updatePreview(); };
+            footNameInput.onChanging = function() { footName = footNameInput.text; updatePreview(); };
+            markXInput.onChanging = function() { markXText = markXInput.text; updatePreview(); };
+            markYInput.onChanging = function() { markYText = markYInput.text; updatePreview(); };
+            extraInput.onChanging = function() { extraText = extraInput.text; updatePreview(); };
+            endNameInput.onChanging = function() { endName = endNameInput.text; updatePreview(); };
             angleList.onChange = function() { angleStyle = angleList.selection ? angleList.selection.index : 0; updatePreview(); };
             pointList.onChange = function() { pointStyle = pointList.selection ? pointList.selection.index : 0; updatePreview(); };
             bindValueRow(thetaControls, function(value) { thetaDeg = value; }, DEFAULTS.thetaDeg);
@@ -2680,7 +2700,12 @@ var SCRIPT_KEY = "HighMath1";
             }
 
             function buildPreview() {
+                var extra = parseExtraRadii(extraText);
+                messageText.text = extra === null ? "동경 목록을 읽지 못함" : " ";
                 var drawing = buildUnitCircle({
+                    radiusName: radiusName.replace(/^\s+|\s+$/g, ""), sideLabels: opt.sideLabels, footName: footName.replace(/^\s+|\s+$/g, ""),
+                    markX: markXText.replace(/^\s+|\s+$/g, ""), markY: markYText.replace(/^\s+|\s+$/g, ""), extra: extra || [],
+                    initialOnly: opt.initialOnly, endName: endName.replace(/^\s+|\s+$/g, "") || "X",
                     theta: thetaDeg, radius: radiusMm * MM_TO_PT, arcRadius: arcMm * MM_TO_PT,
                     angleStyle: angleStyle, pointStyle: pointStyle, circle: opt.circle, showRadius: opt.radius, arc: opt.arc,
                     perpendiculars: opt.perpendiculars, units: opt.units, tangent: opt.tangent
@@ -2866,22 +2891,29 @@ var SCRIPT_KEY = "HighMath1";
                 if (o.tangent) reach = Math.max(reach, r * 1.15);
                 var tangentOn = o.tangent && Math.abs(Math.cos(rad)) > 1e-6 && Math.abs(Math.tan(rad)) <= 3;
 
-                // 축
+                // 축 (시초선만이면 x축의 양의 반직선 하나와 끝 이름)
                 var top = tangentOn ? Math.max(reach, Math.abs(r * Math.tan(rad)) + r * 0.3) : reach;
-                out.lines.push(straight([[-reach, 0], [reach - ARROW.length + ARROW.notch, 0]], "axis"));
-                out.lines.push(straight([[0, -top], [0, top - ARROW.length + ARROW.notch]], "axis"));
-                out.arrows.push({ tip: [reach, 0], dir: [1, 0] });
-                out.arrows.push({ tip: [0, top], dir: [0, 1] });
-                out.texts.push({ text: "x", at: [reach, 0], dir: [0, -1] });
-                out.texts.push({ text: "y", at: [0, top], dir: [-1, 0] });
+                if (o.initialOnly) {
+                    out.lines.push(straight([[0, 0], [reach - ARROW.length + ARROW.notch, 0]], "axis"));
+                    out.arrows.push({ tip: [reach, 0], dir: [1, 0] });
+                    out.texts.push({ text: o.endName || "X", at: [reach, 0], dir: [0, -1], upright: true });
+                } else {
+                    out.lines.push(straight([[-reach, 0], [reach - ARROW.length + ARROW.notch, 0]], "axis"));
+                    out.lines.push(straight([[0, -top], [0, top - ARROW.length + ARROW.notch]], "axis"));
+                    out.arrows.push({ tip: [reach, 0], dir: [1, 0] });
+                    out.arrows.push({ tip: [0, top], dir: [0, 1] });
+                    out.texts.push({ text: "x", at: [reach, 0], dir: [0, -1] });
+                    out.texts.push({ text: "y", at: [0, top], dir: [-1, 0] });
+                }
                 out.texts.push({ text: "O", at: [0, 0], dir: [-0.7071, -0.7071], upright: true });
 
                 if (o.circle) out.circles.push({ center: [0, 0], radius: r });
                 if (o.units) {
-                    out.texts.push({ text: "1", at: [r, 0], dir: [0.7071, -0.7071], upright: true });
-                    out.texts.push({ text: "-1", at: [-r, 0], dir: [-0.7071, -0.7071], upright: true });
-                    out.texts.push({ text: "1", at: [0, r], dir: [-0.7071, 0.7071], upright: true });
-                    out.texts.push({ text: "-1", at: [0, -r], dir: [-0.7071, -0.7071], upright: true });
+                    var unitText = o.radiusName || "1";
+                    out.texts.push({ text: unitText, at: [r, 0], dir: [0.7071, -0.7071], upright: true });
+                    out.texts.push({ text: "-" + unitText, at: [-r, 0], dir: [-0.7071, -0.7071], upright: true });
+                    out.texts.push({ text: unitText, at: [0, r], dir: [-0.7071, 0.7071], upright: true });
+                    out.texts.push({ text: "-" + unitText, at: [0, -r], dir: [-0.7071, -0.7071], upright: true });
                 }
                 if (o.perpendiculars) {
                     if (Math.abs(P[1]) > r * 1e-6) out.lines.push(straight([P, [P[0], 0]], "guide"));
@@ -2917,8 +2949,91 @@ var SCRIPT_KEY = "HighMath1";
                     out.texts.push({ text: text, at: P, dir: unit(P), upright: o.pointStyle !== 2, roman: roman });
                     if (o.pointStyle === 2) out.texts[out.texts.length - 1].roman = [0];
                 }
+                // 변 글자: 가로 변 x(아래), 세로 변 y(점 쪽 바깥), 동경 r(삼각형 바깥쪽). 수선의 발 이름, 축 위 글자
+                var footBelow = P[1] >= 0;
+                if (o.sideLabels && Math.abs(P[0]) > r * 1e-6 && Math.abs(P[1]) > r * 1e-6) {
+                    out.texts.push({ text: "x", at: [P[0] / 2, 0], dir: [0, footBelow ? -1 : 1] });
+                    out.texts.push({ text: "y", at: [P[0], P[1] / 2], dir: [P[0] >= 0 ? 1 : -1, 0] });
+                    var normal = unit([-P[1], P[0]]), toFoot = [P[0] / 2 - 0, -P[1] / 2];
+                    if (normal[0] * toFoot[0] + normal[1] * toFoot[1] > 0) normal = [-normal[0], -normal[1]];
+                    out.texts.push({ text: o.radiusName || "r", at: [P[0] / 2, P[1] / 2], dir: normal });
+                }
+                if (o.footName) out.texts.push({ text: o.footName, at: [P[0], 0], dir: [0, footBelow ? -1 : 1], upright: true });
+                if (o.markX) out.texts.push({ text: o.markX, at: [P[0], 0], dir: [0, footBelow ? -1 : 1], upright: true });
+                if (o.markY) out.texts.push({ text: o.markY, at: [0, P[1]], dir: [P[0] >= 0 ? -1 : 1, 0], upright: true });
+                // 동경 더하기: 원점에서 원 위 점까지 선, 점, 이름
+                var extras = o.extra || [];
+                for (var e = 0; e < extras.length; e++) {
+                    var er = extras[e].deg * Math.PI / 180, Q = [r * Math.cos(er), r * Math.sin(er)];
+                    out.lines.push(straight([[0, 0], Q], "main"));
+                    out.dots.push(Q);
+                    if (extras[e].name) out.texts.push({ text: extras[e].name, at: Q, dir: unit(Q), upright: true });
+                }
                 out.dots.push(P);
                 return out;
+            }
+
+            // 동경 목록 "30:A, 200, -45:B" → [{deg, name}]. 빈 글이면 [], 각을 못 읽으면 null
+            function parseExtraRadii(text) {
+                var parts = String(text).split(/[,，]/), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var item = parts[i].replace(/^\s+|\s+$/g, "");
+                    if (item === "") continue;
+                    var colon = item.indexOf(":"), deg = parseFloat(colon < 0 ? item : item.substring(0, colon));
+                    if (isNaN(deg) || String(deg) !== (colon < 0 ? item : item.substring(0, colon)).replace(/^\+/, "")) return null;
+                    out.push({ deg: deg, name: colon < 0 ? "" : item.substring(colon + 1).replace(/^\s+|\s+$/g, "") });
+                }
+                return out;
+            }
+
+            // 반지름이 한 바퀴마다 gap씩 커지는 나선 (start에서 end까지, 라디안). 15°마다 앵커, 접선 핸들
+            function spiralPoints(r0, gap, start, end) {
+                var sweep = end - start;
+                var pieces = Math.max(2, Math.ceil(Math.abs(sweep) / (Math.PI / 12)));
+                var step = sweep / pieces, k = gap / (2 * Math.PI) * (sweep < 0 ? -1 : 1);
+                var points = [];
+                for (var i = 0; i <= pieces; i++) {
+                    var t = start + step * i;
+                    var radius = r0 + k * (t - start);
+                    var p = [radius * Math.cos(t), radius * Math.sin(t)];
+                    var d = [k * Math.cos(t) - radius * Math.sin(t), k * Math.sin(t) + radius * Math.cos(t)];
+                    var h = step / 3;
+                    points.push({
+                        anchor: p,
+                        left: i === 0 ? p : [p[0] - d[0] * h, p[1] - d[1] * h],
+                        right: i === pieces ? p : [p[0] + d[0] * h, p[1] + d[1] * h]
+                    });
+                }
+                return points;
+            }
+
+            // 각 글자: θ / 120° / 2π/3 (도를 π의 기약분수로)
+            function angleLabel(deg, style) {
+                if (style === 0) return "θ";
+                if (style === 1) return deg + "°";
+                if (style === 3) return "";
+                if (deg === 0) return "0";
+                var sign = deg < 0 ? "-" : "", n = Math.abs(Math.round(deg)), d = 180;
+                var g = gcd(n, d);
+                n /= g;
+                d /= g;
+                return sign + (n === 1 ? "" : String(n)) + "π" + (d === 1 ? "" : "/" + d);
+            }
+
+            function gcd(a, b) {
+                while (b) {
+                    var t = a % b;
+                    a = b;
+                    b = t;
+                }
+                return a;
+            }
+
+            function dist(a, b) { return Math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1])); }
+
+            function unit(v) {
+                var length = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
+                return length > 0 ? [v[0] / length, v[1] / length] : [1, 0];
             }
 
             // 반지름이 한 바퀴마다 gap씩 커지는 나선 (start에서 end까지, 라디안). 15°마다 앵커, 접선 핸들
@@ -3018,6 +3133,15 @@ var SCRIPT_KEY = "HighMath1";
                 try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
             }
 
+            function addTextRow(parent, label, value, tip) {
+                var row = parent.add("group");
+                row.add("statictext", undefined, label).preferredSize.width = 100;
+                var input = row.add("edittext", undefined, value);
+                input.preferredSize.width = 220;
+                input.helpTip = tip;
+                return input;
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -3115,7 +3239,8 @@ var SCRIPT_KEY = "HighMath1";
                 saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
-                var parts = ["v1", flags, thetaDeg, radiusMm, arcMm, angleStyle, pointStyle, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v2", flags, thetaDeg, radiusMm, arcMm, angleStyle, pointStyle, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
+                    encodeURIComponent(radiusName), encodeURIComponent(footName), encodeURIComponent(markXText), encodeURIComponent(markYText), encodeURIComponent(extraText), encodeURIComponent(endName)];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -3124,9 +3249,9 @@ var SCRIPT_KEY = "HighMath1";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 11 || p[1].length !== FLAG_KEYS.length) return;
-                for (var i = 0; i < FLAG_KEYS.length; i++) opt[FLAG_KEYS[i]] = p[1].charAt(i) === "1";
-                thetaDeg = Math.round(restoreNumber(p[2], thetaDeg, -720, 720));
+                if (!((p[0] === "v1" && p.length === 11 && p[1].length === 6) || (p[0] === "v2" && p.length === 17 && p[1].length === FLAG_KEYS.length))) return;
+                for (var i = 0; i < p[1].length; i++) opt[FLAG_KEYS[i]] = p[1].charAt(i) === "1";
+                thetaDeg = Math.round(restoreNumber(p[2], thetaDeg, -1440, 1440));
                 radiusMm = restoreNumber(p[3], radiusMm, 10, 60);
                 arcMm = restoreNumber(p[4], arcMm, 1.5, 15);
                 angleStyle = Math.round(restoreNumber(p[5], angleStyle, 0, ANGLE_STYLES.length - 1));
@@ -3135,6 +3260,16 @@ var SCRIPT_KEY = "HighMath1";
                 offsetXmm = restoreNumber(p[8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 offsetYmm = restoreNumber(p[9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 previewEnabled = p[10] === "1";
+                if (p[0] === "v2") {
+                    try {
+                        radiusName = decodeURIComponent(p[11]);
+                        footName = decodeURIComponent(p[12]);
+                        markXText = decodeURIComponent(p[13]);
+                        markYText = decodeURIComponent(p[14]);
+                        extraText = decodeURIComponent(p[15]);
+                        endName = decodeURIComponent(p[16]);
+                    } catch (restoreError) {}
+                }
             }
 
             function restoreNumber(text, fallback, minimum, maximum) {
