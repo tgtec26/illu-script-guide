@@ -2578,6 +2578,9 @@ var SCRIPT_KEY = "HighStatistics";
             var EQN_FONT_NAME = "HancomEQN";
             var GS_SYMBOLS = "˘°±·";
             var ENG_BASELINE_PT = 0.5;
+            var CELL_ARROW = { length: 3.63, halfWidth: 1.18, notch: 0.93 };   // 칸 안 화살표(증감표 ↗ ↘): 축 화살촉보다 작다
+            registerHead(CELL_ARROW);
+            var CELL_ARROW_DIRS = { "↗": [1, 1], "↘": [1, -1], "↑": [0, 1], "↓": [0, -1], "→": [1, 0], "←": [-1, 0] };
             var GUIDE_DASH = [2, 1.5];
             var AXIS_PT = 0.4;
             var MARK_PT = 0.3;
@@ -2698,6 +2701,7 @@ var SCRIPT_KEY = "HighStatistics";
                 previewGroup = layer.groupItems.add();
                 previewGroup.name = "표";
                 for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
+                for (var ar = 0; ar < drawing.arrows.length; ar++) addArrow(drawing.arrows[ar]);
                 for (var t = 0; t < drawing.texts.length; t++) addTableLabel(drawing.texts[t]);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
@@ -2725,6 +2729,15 @@ var SCRIPT_KEY = "HighStatistics";
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
                 if (line.kind === "dashed") path.strokeDashes = GUIDE_DASH;
+            }
+
+            // 끝이 tip, 방향 dir인 채운 화살촉 (칸 안 화살표)
+            function addArrow(arrow) {
+                var head = headShapeFor(arrow.tip, arrow.dir, CELL_ARROW);
+                var path = previewGroup.pathItems.add();
+                path.setEntirePath(head.points);
+                path.closed = head.closed;
+                paintHead(path, head.closed, makeGray(100));
             }
 
             // 칸 글자: 가운데에 놓는다. corner가 [sx, sy]이면 글자 상자의 모서리가 at에 오게(sx=-1이면 오른쪽 가장자리가 at, sy=-1이면 윗변이 at)
@@ -2941,6 +2954,16 @@ var SCRIPT_KEY = "HighStatistics";
 
                 function cellLabel(source, x0, x1, y0, y1) {
                     if (source === "") return;
+                    if (CELL_ARROW_DIRS.hasOwnProperty(source)) {
+                        // 칸 안쪽 길이의 0.55배 화살표를 가운데에: 화살대는 촉 속에서 끝난다 (웹 math-table.js와 같다)
+                        var dir = CELL_ARROW_DIRS[source], len = Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1]), u = [dir[0] / len, dir[1] / len];
+                        var half = Math.min(x1 - x0, y1 - y0) * 0.275 * (len > 1.01 ? 1.2 : 1), c = T((x0 + x1) / 2, (y0 + y1) / 2);
+                        var tip = [c[0] + u[0] * half, c[1] + u[1] * half], tail = [c[0] - u[0] * half, c[1] - u[1] * half];
+                        var dv = [tip[0] - tail[0], tip[1] - tail[1]], dl = Math.sqrt(dv[0] * dv[0] + dv[1] * dv[1]), cut = CELL_ARROW.length - CELL_ARROW.notch;
+                        out.lines.push(straight([tail, [tip[0] - dv[0] / dl * cut, tip[1] - dv[1] / dl * cut]], "axis", false));
+                        out.arrows.push({ tip: tip, dir: [dv[0] / dl, dv[1] / dl] });
+                        return;
+                    }
                     var d = display(source);
                     d.at = T((x0 + x1) / 2, (y0 + y1) / 2);
                     out.texts.push(d);

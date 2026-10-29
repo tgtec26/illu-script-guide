@@ -29,6 +29,8 @@ const names = ["trimText", "splitCells", "splitRows", "display", "textWidth", "h
 const make = new Function("s", `
 var MM_TO_PT = 2.834645669;
 var text = s.text, cellWmm = 16, cellHmm = 7, sideWmm = 24, fontPt = 8;
+var CELL_ARROW = { length: 3.63, halfWidth: 1.18, notch: 0.93 };
+var CELL_ARROW_DIRS = { "↗": [1, 1], "↘": [1, -1], "↑": [0, 1], "↓": [0, -1], "→": [1, 0], "←": [-1, 0] };
 function hasFractionText() { return false; }
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
@@ -56,5 +58,16 @@ assert.ok(api({ headText: "", sideText: "", cellsText: "" }).buildTable().lines.
 {
   const sub = api({ headText: "x_1", sideText: "", cornerText: "", cellsText: "3" }).buildTable();
   assert.ok(sub.texts.some((t) => t.sub && t.sub.length === 1), "아래첨자");
+}
+// 화살표 칸(증감표) — 웹 math-table.test.js와 같은 경우
+{
+  const d = api({ headText: "-3 | α | β | 3", sideText: "f′(x) | f(x)", cornerText: "", cellsText: "+ | 0 | - | 0 ; ↗ | 극대 | ↘ | ↑" }).buildTable();
+  assert.deepStrictEqual(d.notes, []);
+  assert.strictEqual(d.arrows.length, 3, "화살촉 셋");
+  assert.ok(!d.texts.some((t) => ["↗", "↘", "↑"].includes(t.text)), "화살표 글자는 글자로 쓰지 않는다");
+  assert.ok(d.texts.some((t) => t.text === "극대"));
+  assert.ok(d.arrows[0].dir[1] > 0 && d.arrows[1].dir[1] < 0 && d.arrows[2].dir[0] === 0, "↗ ↘ ↑");
+  assert.strictEqual(api({ headText: "", sideText: "", cornerText: "", cellsText: "↗ ↘" }).buildTable().texts.length, 1, "공백으로 이은 글은 글자");
+  assert.ok(source.includes("for (var ar = 0; ar < drawing.arrows.length; ar++) addArrow(drawing.arrows[ar]);"), "화살촉을 그린다");
 }
 console.log("table checks passed");
