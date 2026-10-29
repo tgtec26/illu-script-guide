@@ -5333,6 +5333,87 @@
         }
       }
     },
+    "math-mapping": {
+      "schemaVersion": 1,
+      "toolId": "math-mapping",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "axisPt": {
+          "type": "number",
+          "default": 0.4
+        },
+        "composite": {
+          "type": "string",
+          "default": ""
+        },
+        "elements1": {
+          "type": "string",
+          "default": "1, 2, 3"
+        },
+        "elements2": {
+          "type": "string",
+          "default": "a, b, c"
+        },
+        "elements3": {
+          "type": "string",
+          "default": ""
+        },
+        "fontPt": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 14
+        },
+        "functionNames": {
+          "type": "string",
+          "default": ""
+        },
+        "gapMm": {
+          "type": "number",
+          "default": 22,
+          "minimum": 8,
+          "maximum": 60
+        },
+        "graphPt": {
+          "type": "number",
+          "default": 0.8
+        },
+        "guidePt": {
+          "type": "number",
+          "default": 0.3
+        },
+        "pairs1": {
+          "type": "string",
+          "default": "1>a, 2>b, 3>c"
+        },
+        "pairs2": {
+          "type": "string",
+          "default": ""
+        },
+        "setNames": {
+          "type": "string",
+          "default": "X, Y"
+        },
+        "showRange": {
+          "type": "boolean",
+          "default": false
+        },
+        "spacingMm": {
+          "type": "number",
+          "default": 6,
+          "minimum": 3,
+          "maximum": 15
+        },
+        "underText": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
     "math-motion": {
       "schemaVersion": 1,
       "toolId": "math-motion",

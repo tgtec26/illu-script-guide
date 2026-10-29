@@ -5,7 +5,7 @@ const assert = require("assert");
 // 고등학교 수학은 과목별 다섯 스크립트로 나뉜다. 탭(엔진)은 정확히 한 곳에 있고, 창마다 마지막 탭 저장 키가 다르다
 const dir = path.resolve(__dirname, "..", "스크립트", "05_수학");
 const bundles = {
-  "공통수학.jsx": ["공통수학", ["Quadratic", "Move", "CircleLine", "Inequality", "Venn", "Rational"]],
+  "공통수학.jsx": ["공통수학", ["Quadratic", "Move", "CircleLine", "Inequality", "Venn", "Rational", "Mapping"]],
   "수학1.jsx": ["수학Ⅰ", ["ExpLog", "Trig", "UnitCircle", "CircleGraph", "Triangle", "Sequence"]],
   "수학2.jsx": ["수학Ⅱ", ["Piecewise", "Extrema", "Calculus", "SolidSection", "Motion"]],
   "확률과 통계.jsx": ["확률과 통계", ["Count", "ProbTree", "Distribution", "Table"]],
@@ -25,6 +25,7 @@ for (const [file, [title, engines]] of Object.entries(bundles)) {
   assert.ok(!tabKeys.has(key), file + ": unique tab key");
   tabKeys.add(key);
   assert.ok(source.includes(`new Window("dialog", "${title}")`), file + ": window title");
+  assert.doesNotThrow(() => new Function(source), file + ": 파일 전체가 문법 오류 없이 읽힌다 (이식할 때 남은 export 등)");
   assert.ok(source.indexOf("illu_last_script.txt") < source.indexOf("(function() {"), file + ": last-script memo at the top");
   assert.ok(source.includes("ui_tab_helper.jsxinc") && source.includes("bindTabOrder(win)"), file + ": tab order helper");
   // addRows는 컨트롤을 만든 뒤 return null로 끝난다. 그 뒤에 선언한 var 상수는 값이 들어가지 않아(호이스팅만 된다) 실행 중 undefined가 된다
@@ -34,5 +35,5 @@ for (const [file, [title, engines]] of Object.entries(bundles)) {
     assert.ok(engine.includes("            return null;") && !late, file + ": constant declared after return null: " + late);
   }
 }
-assert.strictEqual(seen.size, 27);
+assert.strictEqual(seen.size, 28);
 console.log("high-school bundle checks passed");

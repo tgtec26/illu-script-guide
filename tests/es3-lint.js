@@ -2,7 +2,7 @@
 module.exports = function es3Lint(source, label) {
   const code = source.split("\n").map((line) => line.replace(/^\s*\/\/.*$/, "").replace(/\s\/\/ .*$/, "")).join("\n");
   const banned = [[/=>/, "화살표 함수"], [/\blet\s/, "let"], [/\bconst\s/, "const"], [/`/, "템플릿 문자열"], [/\.(map|forEach|filter|reduce|some|every)\(/, "배열 고차 함수"],
-    [/Object\.keys|Array\.isArray|\.trim\(\)|JSON\./, "ES5 내장"], [/\.\.\./, "펼침 연산자"], [/(?<!\\s),\s*[\]}]/, "끝 쉼표"]];
+    [/Object\.keys|Array\.isArray|\.trim\(\)|JSON\./, "ES5 내장"], [/\.\.\./, "펼침 연산자"], [/(?<!\\s),\s*[\]}]/, "끝 쉼표"], [/^\s*(export|import)\s/m, "모듈 문법(export·import)"]];
   for (const [re, name] of banned) {
     const hit = re.exec(code);
     if (hit) throw new Error(`${label}: ES3에서 못 읽는 문법(${name}): ...${code.slice(Math.max(0, hit.index - 30), hit.index + 30).replace(/\n/g, " ")}...`);
