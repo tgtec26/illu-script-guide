@@ -4818,7 +4818,7 @@ var SCRIPT_KEY = "HighMath1";
             var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };
             registerHead(ARROW);
             var MODES = ["수열 그래프", "규칙 도형", "계차 도식"];
-            var PATTERNS = ["정사각형 이어 붙이기", "정삼각형 이어 붙이기", "계단", "점 삼각형", "점 정사각형"];
+            var PATTERNS = ["정사각형 이어 붙이기", "정삼각형 이어 붙이기", "계단", "점 삼각형", "점 정사각형", "n×n 성냥개비 격자", "성냥개비 삼각형 격자", "바둑돌 ㄱ자 층 (흑·백)"];
             var STAGE_NAMES = ["[1단계]", "〈그림 1〉", "없음"];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
             var FLAG_KEYS = ["guides", "values", "curve", "numbers", "second", "plus", "ellipsis"];
@@ -5070,9 +5070,13 @@ var SCRIPT_KEY = "HighMath1";
             function addDot(dot) {
                 var r = dot.r || DOT_RADIUS_MM * MM_TO_PT;
                 var circle = previewGroup.pathItems.ellipse(dot.at[1] + r, dot.at[0] - r, r * 2, r * 2);
-                circle.stroked = false;
                 circle.filled = true;
-                circle.fillColor = makeGray(100);
+                circle.fillColor = makeGray(dot.open ? 0 : 100);
+                circle.stroked = !!dot.open;
+                if (dot.open) {
+                    circle.strokeColor = makeGray(100);
+                    circle.strokeWidth = THIN_PT;
+                }
             }
 
             // at에서 dir 쪽으로 간격(+clear)을 두고 글자의 가까운 가장자리가 오게 둔다 (dir이 [0,0]이면 가운데).
@@ -5328,7 +5332,7 @@ var SCRIPT_KEY = "HighMath1";
                     }
                     x += width + cell * 2;
                 }
-                var what = kind <= 1 ? "성냥개비" : (kind === 2 ? "정사각형" : "점");
+                var what = kind <= 1 || kind === 5 || kind === 6 ? "성냥개비" : (kind === 2 ? "정사각형" : (kind === 7 ? "바둑돌" : "점"));
                 out.notes.push(what + ": " + listText(counts) + " → " + patternRule(kind));
                 return out;
             }
@@ -5364,7 +5368,32 @@ var SCRIPT_KEY = "HighMath1";
                     for (j = 1; j < k; j++) out.lines.push(straightLine([[x + (j - 1) * c + c, j * c], [x + k * c, j * c]], "main"));
                     return k * c;
                 }
+                if (kind === 5) {
+                    // n×n 성냥개비 격자: 바깥 테두리와 안쪽 가로·세로 줄
+                    out.lines.push(straightLine([[x, 0], [x + k * c, 0], [x + k * c, k * c], [x, k * c]], "main", true));
+                    for (i = 1; i < k; i++) {
+                        out.lines.push(straightLine([[x + i * c, 0], [x + i * c, k * c]], "main"));
+                        out.lines.push(straightLine([[x, i * c], [x + k * c, i * c]], "main"));
+                    }
+                    return k * c;
+                }
+                if (kind === 6) {
+                    // 한 변이 k칸인 큰 정삼각형을 작은 정삼각형으로 나눈 성냥개비 격자: 테두리 + 세 방향의 안쪽 줄
+                    var th = c * Math.sqrt(3) / 2;
+                    out.lines.push(straightLine([[x, 0], [x + k * c, 0], [x + k * c / 2, k * th]], "main", true));
+                    for (i = 1; i < k; i++) {
+                        out.lines.push(straightLine([[x + i * c / 2, i * th], [x + k * c - i * c / 2, i * th]], "main"));
+                        out.lines.push(straightLine([[x + i * c, 0], [x + i * c + (k - i) * c / 2, (k - i) * th]], "main"));
+                        out.lines.push(straightLine([[x + i * c, 0], [x + i * c / 2, i * th]], "main"));
+                    }
+                    return k * c;
+                }
                 var r = c * 0.14;
+                if (kind === 7) {
+                    // n×n 바둑돌: ㄱ자 층(max(행, 열))마다 검은 돌·흰 돌이 번갈아
+                    for (j = 0; j < k; j++) for (i = 0; i < k; i++) out.dots.push({ at: [x + r + i * c * 0.6, r + j * c * 0.6], r: r, open: Math.max(i, j) % 2 === 1 });
+                    return 2 * r + (k - 1) * c * 0.6;
+                }
                 if (kind === 3) {
                     // 아래 줄 k개, 위로 한 개씩 줄어드는 점 삼각형
                     for (j = 0; j < k; j++) for (i = 0; i < k - j; i++) out.dots.push({ at: [x + r + (i + j / 2) * c * 0.6, r + j * c * 0.52], r: r });
@@ -5378,11 +5407,13 @@ var SCRIPT_KEY = "HighMath1";
                 if (kind === 0) return 3 * k + 1;
                 if (kind === 1) return 2 * k + 1;
                 if (kind === 2 || kind === 3) return k * (k + 1) / 2;
+                if (kind === 5) return 2 * k * (k + 1);
+                if (kind === 6) return 3 * k * (k + 1) / 2;
                 return k * k;
             }
 
             function patternRule(kind) {
-                return ["3n+1", "2n+1", "n(n+1)/2", "n(n+1)/2", "n²"][kind];
+                return ["3n+1", "2n+1", "n(n+1)/2", "n(n+1)/2", "n²", "2n(n+1)", "3n(n+1)/2", "n²"][kind];
             }
 
             // 1·2·5 × 10^k 중 raw 이상인 가장 작은 값

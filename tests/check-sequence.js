@@ -157,6 +157,38 @@ checkLineWidths(["axis", "tick", "graph", "guide", "thin"]);
 assert.ok(source.includes('var PREF_KEY = "HighMathSequence/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+
+// 규칙 도형 더하기 (웹 math-sequence.test.js와 같은 경우): n×n 성냥개비 격자, 성냥개비 삼각형 격자, 바둑돌 ㄱ자 층
+{
+  assert.deepStrictEqual([5, 6, 7].map((k) => g.patternCount(k, 3)), [24, 18, 9]);
+  assert.deepStrictEqual([5, 6, 7].map((k) => g.patternRule(k)), ["2n(n+1)", "3n(n+1)/2", "n²"]);
+  const grid = g.buildPattern(5, 3, 10, 0);
+  assert.strictEqual(grid.lines.length, 1 + 3 + 5);
+  assert.strictEqual(grid.notes[0], "성냥개비: 4, 12, 24 → 2n(n+1)");
+  const tri = g.buildPattern(6, 2, 10, 0);
+  assert.strictEqual(tri.lines.length, 1 + 4);
+  assert.strictEqual(tri.notes[0], "성냥개비: 3, 9 → 3n(n+1)/2");
+  assert.strictEqual(tri.lines[0].points.length, 3);
+  const stones = g.buildPattern(7, 3, 10, 0);
+  assert.strictEqual(stones.dots.length, 1 + 4 + 9);
+  assert.strictEqual(stones.dots.filter((q) => q.open).length, 6);
+  assert.strictEqual(stones.notes[0], "바둑돌: 1, 4, 9 → n²");
+  assert.ok(source.includes('"n×n 성냥개비 격자", "성냥개비 삼각형 격자", "바둑돌 ㄱ자 층 (흑·백)"'), "패턴 목록");
+  assert.ok(source.includes("circle.fillColor = makeGray(dot.open ? 0 : 100);"), "흰 돌은 흰색으로 채운 원");
+  // 웹과 글자 그대로 같다 (들여쓰기만 다르다)
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-sequence.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8").replace(/^export function /gm, "function ");
+    for (const name of ["buildPattern", "patternStage", "patternCount", "patternRule"]) {
+      const start = web.indexOf(`function ${name}(`);
+      let depth = 0, end = -1;
+      for (let i = web.indexOf("{", start); i < web.length; i++) { if (web[i] === "{") depth++; if (web[i] === "}" && --depth === 0) { end = i + 1; break; } }
+      const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+      assert.strictEqual(scriptText, web.slice(start, end), name + " differs from the web");
+    }
+  }
+}
+
 console.log("sequence checks passed");
 
 for(let k=1;k<=6;k++) {
