@@ -223,7 +223,7 @@ assert.ok(source.includes('line.kind === "main" ? MAIN_PT : (line.kind === "thin
   const tip = n.pips[0].reduce((best, p) => (p.anchor[0] > best[0] ? p.anchor : best), [-Infinity, 0]);
   assert.ok(tip[0] > 0 && Math.abs(tip[1]) < 1e-6 && tip[0] < Math.hypot(...n.texts[0].at) - 2, "바늘은 3시 방향, 칸 글자보다 안쪽");
 }
-// 저장: v3(14칸, 회전판 칸 글자)로 쓰고, 회전판이 생기기 전 v2(13칸, 종류 12개)도 수치까지 읽는다
+// 저장: v4(15칸, 음영 색)로 쓰고, 회전판 칸 글자까지의 v3(14칸)·회전판이 생기기 전 v2(13칸, 종류 12개)도 수치까지 읽는다
 {
   const kindsDecl = source.slice(source.indexOf("var KINDS = ["), source.indexOf("];", source.indexOf("var KINDS = [")) + 2);
   const store = {};
@@ -232,10 +232,10 @@ assert.ok(source.includes('line.kind === "main" ? MAIN_PT : (line.kind === "thin
     'var PREF_KEY = "T", PARAM_COUNT = 4, POSITION_LIMIT_MM = 100;', kindsDecl,
     'var FLAG_KEYS = ["names", "guides", "lengths", "extra"], opt = {names: true, guides: true, lengths: true, extra: false};',
     "var params = []; for (var k = 0; k < KINDS.length; k++) { params.push([]); for (var i = 0; i < PARAM_COUNT; i++) params[k].push(KINDS[k].params[i] ? KINDS[k].params[i][4] : 0); }",
-    'var kind = 0, piecesAcross = "a,b", piecesDown = "a,b", cardText = "1,2,3,4,5,6,7", spinnerText = "1,2,3,4,5,6", unitMm = 6, shadeK = 20, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true;',
-    "function saveLineWidths() {}",
+    'var kind = 0, piecesAcross = "a,b", piecesDown = "a,b", cardText = "1,2,3,4,5,6,7", spinnerText = "1,2,3,4,5,6", unitMm = 6, shadeK = 20, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true, shadeTone = 0;',
+    "function saveLineWidths() {} function shadeTones() { return [0, 1, 2, 3, 4, 5, 6]; }",
     ...["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].filter((n) => source.includes(`function ${n}(`)).map(extractFunction),
-    "return { load: applySettings, save: saveSettings, state: function() { return { kind: kind, params: params, spinnerText: spinnerText, cardText: cardText }; } };",
+    "return { load: applySettings, save: saveSettings, state: function() { return { kind: kind, params: params, spinnerText: spinnerText, cardText: cardText, shadeTone: shadeTone }; } };",
   ].join("\n"))(app);
   const v2groups = Array.from({ length: 12 }, (_, k) => (k === 11 ? "3,0,0,0" : "")).map((v, k) => v || "0,0,0,0");
   store.T = ["v2", 11, v2groups.join(";"), "a,b", "a,b", 6, 20, 8, "1100", 0, 0, "1", encodeURIComponent("1,2,3")].join("|");
@@ -247,11 +247,17 @@ assert.ok(source.includes('line.kind === "main" ? MAIN_PT : (line.kind === "thin
   assert.strictEqual(old.state().spinnerText, "1,2,3,4,5,6", "v2에는 회전판 글자가 없어 기본값");
   old.save();
   const saved = store.T.split("|");
-  assert.deepStrictEqual([saved[0], saved.length, saved[2].split(";").length], ["v3", 14, 13]);
-  store.T = saved.slice(0, 13).concat([encodeURIComponent("A,B*")]).join("|");
+  assert.deepStrictEqual([saved[0], saved.length, saved[2].split(";").length], ["v4", 15, 13]);
+  store.T = saved.slice(0, 13).concat([encodeURIComponent("A,B*"), "4"]).join("|");
   const again = make();
   again.load();
   assert.strictEqual(again.state().spinnerText, "A,B*");
+  assert.strictEqual(again.state().shadeTone, 4, "음영 색 복원");
+  store.T = saved.slice(0, 13).concat([encodeURIComponent("A,B*")]).join("|").replace(/^v4/, "v3");
+  const fromV3 = make();
+  fromV3.load();
+  assert.strictEqual(fromV3.state().spinnerText, "A,B*");
+  assert.strictEqual(fromV3.state().shadeTone, 0, "v3는 음영 색만 처음 값으로");
 }
 require("./es3-lint")(extractFunction("buildFigure") + extractFunction("spinnerPoint"), "도형 문제 회전판");
 console.log("figure problem checks passed");

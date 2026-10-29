@@ -2459,6 +2459,7 @@ var SCRIPT_KEY = "HighMath2";
             var bValue = 4;
             var countValue = 8;
             var shadeK = 20;
+            var shadeTone = 0;
             var areaName = "S";
             var ends = 0;
             var tangentName = "P";
@@ -2513,6 +2514,10 @@ var SCRIPT_KEY = "HighMath2";
             var bControls = addValueRow(areaPanel, "b", "", bValue, -20, 20, 0.1, 1);
             var countControls = addValueRow(areaPanel, "직사각형 수", "", countValue, 1, 50, 1, 0);
             var shadeControls = addValueRow(areaPanel, "음영", "K", shadeK, 5, 60, 5, 0);
+            var toneRow = areaPanel.add("group");
+            toneRow.add("statictext", undefined, "음영 색:");
+            var toneList = toneRow.add("dropdownlist", undefined, shadeToneNames());
+            toneList.selection = shadeTone;
             var endRow = areaPanel.add("group");
             endRow.add("statictext", undefined, "끝 글자:");
             var endList = addRadioChoice(endRow, ENDS);
@@ -2575,6 +2580,7 @@ var SCRIPT_KEY = "HighMath2";
             bindValueRow(bControls, function(value) { bValue = value; }, defaults.bValue);
             bindValueRow(countControls, function(value) { countValue = value; }, defaults.countValue);
             bindValueRow(shadeControls, function(value) { shadeK = value; }, defaults.shadeK);
+            toneList.onChange = function() { shadeTone = toneList.selection.index; updatePreview(); };
             endList.onChange = function() { ends = endList.index; updatePreview(); };
             tangentNameInput.onChanging = function() { tangentName = tangentNameInput.text; updatePreview(); };
             bindValueRow(tControls, function(value) { tValue = value; }, defaults.tValue);
@@ -2680,7 +2686,7 @@ var SCRIPT_KEY = "HighMath2";
                 setBezier(path, fill.points);
                 path.closed = true;
                 path.filled = true;
-                path.fillColor = makeGray(fill.k);
+                path.fillColor = makeTone(fill.k, shadeTone);
                 path.stroked = !!fill.stroked;
                 if (fill.stroked) {
                     path.strokeColor = makeGray(100);
@@ -2851,6 +2857,52 @@ var SCRIPT_KEY = "HighMath2";
                 rgb.red = value;
                 rgb.green = value;
                 rgb.blue = value;
+                return rgb;
+            }
+
+            // 영역 음영 색 (웹 math-shared.js의 SHADE_TONES·toneColor와 같다): 회색 말고 교과서에서 많이 쓰는 밝은 파스텔.
+            // 밝기는 회색과 같은 K(L = 1 − K/100)이고 색상(°)·채도(%)만 더한다. 0번(회색)이거나 K가 0·100이면 회색
+            // (addRows가 return null로 끝나므로 var 상수가 아니라 함수로 둔다 — 그 뒤의 var는 값이 들어가지 않는다)
+            function shadeTones() {
+                return [
+                    {name: "회색", hue: 0, sat: 0}, {name: "파랑", hue: 208, sat: 75}, {name: "분홍", hue: 338, sat: 70}, {name: "연두", hue: 100, sat: 50},
+                    {name: "노랑", hue: 48, sat: 90}, {name: "주황", hue: 28, sat: 85}, {name: "보라", hue: 265, sat: 45}
+                ];
+            }
+            function shadeToneNames() {
+                var tones = shadeTones(), names = [];
+                for (var i = 0; i < tones.length; i++) names.push(tones[i].name);
+                return names;
+            }
+            function makeTone(k, tone) {
+                var t = shadeTones()[tone];
+                if (!t || !t.sat) return makeGray(k);
+                var l = Math.max(0, Math.min(1, 1 - k / 100)), s = Math.min(100, t.sat) / 100;
+                var c = (1 - Math.abs(2 * l - 1)) * s;
+                var h = (((t.hue % 360) + 360) % 360) / 60;
+                var x = c * (1 - Math.abs((h % 2) - 1));
+                var r1 = 0, g1 = 0, b1 = 0;
+                if (h < 1) { r1 = c; g1 = x; }
+                else if (h < 2) { r1 = x; g1 = c; }
+                else if (h < 3) { g1 = c; b1 = x; }
+                else if (h < 4) { g1 = x; b1 = c; }
+                else if (h < 5) { r1 = x; b1 = c; }
+                else { r1 = c; b1 = x; }
+                var m = l - c / 2;
+                var red = Math.round(255 * (r1 + m)), green = Math.round(255 * (g1 + m)), blue = Math.round(255 * (b1 + m));
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    var maxChannel = Math.max(red, green, blue) / 255;
+                    cmyk.black = Math.round((1 - maxChannel) * 100);
+                    cmyk.cyan = maxChannel > 0 ? Math.round((maxChannel - red / 255) / maxChannel * 100) : 0;
+                    cmyk.magenta = maxChannel > 0 ? Math.round((maxChannel - green / 255) / maxChannel * 100) : 0;
+                    cmyk.yellow = maxChannel > 0 ? Math.round((maxChannel - blue / 255) / maxChannel * 100) : 0;
+                    return cmyk;
+                }
+                var rgb = new RGBColor();
+                rgb.red = red;
+                rgb.green = green;
+                rgb.blue = blue;
                 return rgb;
             }
 
@@ -3557,9 +3609,9 @@ var SCRIPT_KEY = "HighMath2";
                 saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
-                var parts = ["v1", xMin, xMax, yMin, yMax, unitMm, fontPt, encodeURIComponent(fText), encodeURIComponent(gText),
+                var parts = ["v2", xMin, xMax, yMin, yMax, unitMm, fontPt, encodeURIComponent(fText), encodeURIComponent(gText),
                     shade, aValue, bValue, countValue, shadeK, encodeURIComponent(areaName), ends, encodeURIComponent(tangentName), tValue,
-                    flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                    flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", shadeTone];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -3568,7 +3620,7 @@ var SCRIPT_KEY = "HighMath2";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 22 || p[18].length !== FLAG_KEYS.length) return;
+                if (!((p[0] === "v1" && p.length === 22) || (p[0] === "v2" && p.length === 23)) || p[18].length !== FLAG_KEYS.length) return;
                 try {
                     xMin = Math.round(restoreNumber(p[1], xMin, -20, 0));
                     xMax = Math.round(restoreNumber(p[2], xMax, 1, 20));
@@ -3591,6 +3643,7 @@ var SCRIPT_KEY = "HighMath2";
                     offsetXmm = restoreNumber(p[19], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[20], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[21] === "1";
+                    if (p[0] === "v2") shadeTone = Math.round(restoreNumber(p[22], shadeTone, 0, shadeTones().length - 1));
                 } catch (restoreError) {}
             }
 

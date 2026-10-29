@@ -58,19 +58,23 @@ if (fs.existsSync(webPath)) {
   }
 }
 
-// 설정 v1 저장·복원
+// 설정 v2 저장·복원 (음영 색을 더해 13칸, v1 12칸도 읽는다)
 {
   const store = {};
   const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
   const prelude = `var PREF_KEY = "T", POSITION_LIMIT_MM = 100, CONTENT_NAMES = ["a", "b"];
-    var rows = 6, content = 0, shadeText = "", blankText = "", shadeK = 15, cellWmm = 10, cellHmm = 8, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true; function saveLineWidths() {}`;
+    var shadeTone = 0, rows = 6, content = 0, shadeText = "", blankText = "", shadeK = 15, cellWmm = 10, cellHmm = 8, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true; function saveLineWidths() {} function shadeTones() { return [0, 1, 2, 3, 4, 5, 6]; }`;
   const body = prelude + ["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction).join("\n") +
-    `return { saveSettings, applySettings, set: function() { rows = 9; content = 1; shadeText = "r=2, 3:1"; blankText = "4:2"; shadeK = 30; },
-      get: function() { return [rows, content, shadeText, blankText, shadeK]; } };`;
+    `return { saveSettings, applySettings, set: function() { rows = 9; content = 1; shadeText = "r=2, 3:1"; blankText = "4:2"; shadeK = 30; shadeTone = 5; },
+      get: function() { return [rows, content, shadeText, blankText, shadeK, shadeTone]; } };`;
   const make = () => new Function("app", body)(app);
   const first = make(); first.set(); first.saveSettings();
-  assert.strictEqual(store.T.split("|").length, 12);
+  assert.strictEqual(store.T.split("|").length, 13);
+  assert.strictEqual(store.T.split("|")[0], "v2");
   const again = make(); again.applySettings();
-  assert.deepStrictEqual(again.get(), [9, 1, "r=2, 3:1", "4:2", 30]);
+  assert.deepStrictEqual(again.get(), [9, 1, "r=2, 3:1", "4:2", 30, 5]);
+  store.T = store.T.split("|").slice(0, 12).join("|").replace(/^v2/, "v1");
+  const old = make(); old.applySettings();
+  assert.deepStrictEqual(old.get(), [9, 1, "r=2, 3:1", "4:2", 30, 0], "v1은 음영 색만 처음 값으로");
 }
 console.log("pascal checks passed");

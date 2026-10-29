@@ -3797,6 +3797,12 @@
           "minimum": 5,
           "maximum": 60
         },
+        "shadeTone": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 6
+        },
         "showBounds": {
           "type": "boolean",
           "default": false
@@ -4851,6 +4857,12 @@
           "minimum": 5,
           "maximum": 60
         },
+        "shadeTone": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 6
+        },
         "shadeNote": {
           "type": "string",
           "default": ""
@@ -5846,6 +5858,12 @@
           "minimum": 5,
           "maximum": 60
         },
+        "shadeTone": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 6
+        },
         "side": {
           "type": "number",
           "default": 15,
@@ -6035,6 +6053,12 @@
           "default": 15,
           "minimum": 5,
           "maximum": 60
+        },
+        "shadeTone": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 6
         },
         "shadeText": {
           "type": "string",
@@ -6528,6 +6552,12 @@
           "default": 20,
           "minimum": 5,
           "maximum": 60
+        },
+        "shadeTone": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 6
         },
         "shape": {
           "type": "number",
@@ -7548,6 +7578,12 @@
           "default": 25,
           "minimum": 5,
           "maximum": 60
+        },
+        "shadeTone": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 6
         },
         "shadeText": {
           "type": "string",

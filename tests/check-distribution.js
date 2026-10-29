@@ -190,23 +190,29 @@ return { set: setLineWidth, get: currentLineWidth, save: saveLineWidths };`)(app
     assert.deepStrictEqual(g.parseSeries("25,0.5; 50, 1/2"), [{ n: 25, p: 0.5 }, { n: 50, p: 0.5 }]);
     for (const bad of ["25", "0,0.5", "10,1.5", "10,0", "x,0.5", "10.5,0.5"]) assert.strictEqual(g.parseSeries(bad), null, bad);
   }
-  // 설정 v3: 모양·분포 더하기를 더해 27칸으로 저장하고 v2(25칸)·v1(21칸)도 읽는다
+  // 설정 v4: 음영 색을 더해 28칸으로 저장하고 v3(27칸)·v2(25칸)·v1(21칸)도 읽는다
   const store = {};
   const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
   const flagKeys = '["second", "meanLine", "sigmaTicks", "approx"]';
   const body = `var PREF_KEY = "T", POSITION_LIMIT_MM = 100, FLAG_KEYS = ${flagKeys}, MODES = [1, 2], AXIS_NAMES = [1, 2, 3], SHADES = [1, 2, 3, 4], LABELS = [1, 2], BINOM_STYLES = [1, 2, 3, 4];
-    var mode = 0, axisName = 0, mean = 50, sigma = 10, mean2 = 60, sigma2 = 5, trials = 10, chance = 0.5, shade = 1, labelKind = 0, aValue = 40, bValue = 70, shadeK = 20,
+    var mode = 0, axisName = 0, mean = 50, sigma = 10, mean2 = 60, sigma2 = 5, trials = 10, chance = 0.5, shade = 1, labelKind = 0, aValue = 40, bValue = 70, shadeK = 20, shadeTone = 0,
     widthMm = 80, heightMm = 25, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true, opt = { second: false, meanLine: true, sigmaTicks: false, approx: false },
-    moreCurves = "", curveNames = "", shadeNote = "", markText = "", binomStyle = 0, moreBinomials = ""; function saveLineWidths() {}` +
+    moreCurves = "", curveNames = "", shadeNote = "", markText = "", binomStyle = 0, moreBinomials = ""; function saveLineWidths() {} function shadeTones() { return [0, 1, 2, 3, 4, 5, 6]; }` +
     ["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction).join("\n") +
-    `return { saveSettings, applySettings, set: function() { moreCurves = "70:8"; curveNames = "σ₁, σ₂"; shadeNote = "0.95"; markText = "50:m"; binomStyle = 2; moreBinomials = "25,0.5"; }, get: function() { return [moreCurves, curveNames, shadeNote, markText, binomStyle, moreBinomials]; } };`;
+    `return { saveSettings, applySettings, tone: function() { return shadeTone; }, set: function() { moreCurves = "70:8"; curveNames = "σ₁, σ₂"; shadeNote = "0.95"; markText = "50:m"; binomStyle = 2; moreBinomials = "25,0.5"; shadeTone = 3; }, get: function() { return [moreCurves, curveNames, shadeNote, markText, binomStyle, moreBinomials]; } };`;
   const make = () => new Function("app", body)(app);
   const first = make(); first.set(); first.saveSettings();
-  assert.strictEqual(store.T.split("|").length, 27);
-  assert.strictEqual(store.T.split("|")[0], "v3");
+  assert.strictEqual(store.T.split("|").length, 28);
+  assert.strictEqual(store.T.split("|")[0], "v4");
   const again = make(); again.applySettings();
   assert.deepStrictEqual(again.get(), ["70:8", "σ₁, σ₂", "0.95", "50:m", 2, "25,0.5"]);
-  const v2 = store.T.split("|").slice(0, 25).join("|").replace(/^v3/, "v2");
+  assert.strictEqual(again.tone(), 3, "음영 색 복원");
+  const v4 = store.T;
+  store.T = v4.split("|").slice(0, 27).join("|").replace(/^v4/, "v3");
+  const fromV3 = make(); fromV3.applySettings();
+  assert.deepStrictEqual(fromV3.get(), ["70:8", "σ₁, σ₂", "0.95", "50:m", 2, "25,0.5"], "v3는 음영 색만 처음 값으로");
+  assert.strictEqual(fromV3.tone(), 0);
+  const v2 = v4.split("|").slice(0, 25).join("|").replace(/^v4/, "v2");
   store.T = v2;
   const fromV2 = make(); fromV2.applySettings();
   assert.deepStrictEqual(fromV2.get(), ["70:8", "σ₁, σ₂", "0.95", "50:m", 0, ""], "v2는 새 항목을 처음 값으로");

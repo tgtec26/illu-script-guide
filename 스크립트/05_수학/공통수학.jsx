@@ -2046,6 +2046,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var xMin = -3, xMax = 3, yMin = -3, yMax = 5;
             var unitMm = 6;
             var shadeK = 20;
+            var shadeTone = 0;
             var fontPt = 8;
             var opt = { shade: true, formulas: true, grid: false, numbers: true };
             var offsetXmm = 0;
@@ -2075,6 +2076,10 @@ var SCRIPT_KEY = "HighMathCommon";
             }
             addCheckRow(inequalityPanel, [["shade", "영역 칠하기"], ["formulas", "식 글자"]]);
             var shadeControls = addValueRow(inequalityPanel, "음영", "K", shadeK, 5, 60, 5, 0);
+            var toneRow = inequalityPanel.add("group");
+            toneRow.add("statictext", undefined, "음영 색:");
+            var toneList = toneRow.add("dropdownlist", undefined, shadeToneNames());
+            toneList.selection = shadeTone;
 
             var rangePanel = addPanel(win, "범위 · 눈금");
             var xMinControls = addValueRow(rangePanel, "x 최솟값", "", xMin, -20, 0, 1, 0);
@@ -2105,6 +2110,7 @@ var SCRIPT_KEY = "HighMathCommon";
 
             for (var bi = 0; bi < INEQUALITY_COUNT; bi++) bindInput(bi);
             bindValueRow(shadeControls, function(value) { shadeK = value; }, defaults.shadeK);
+            toneList.onChange = function() { shadeTone = toneList.selection.index; updatePreview(); };
             bindValueRow(xMinControls, function(value) { xMin = value; }, defaults.xMin);
             bindValueRow(xMaxControls, function(value) { xMax = value; }, defaults.xMax);
             bindValueRow(yMinControls, function(value) { yMin = value; }, defaults.yMin);
@@ -2203,7 +2209,7 @@ var SCRIPT_KEY = "HighMathCommon";
                 path.closed = true;
                 path.stroked = false;
                 path.filled = true;
-                path.fillColor = makeGray(fill.k);
+                path.fillColor = makeTone(fill.k, shadeTone);
             }
 
             // line: {points:[{anchor,left,right}], closed, kind:"axis"|"tick"|"boundary"|"grid", dashed}
@@ -2351,6 +2357,52 @@ var SCRIPT_KEY = "HighMathCommon";
                 rgb.red = value;
                 rgb.green = value;
                 rgb.blue = value;
+                return rgb;
+            }
+
+            // 영역 음영 색 (웹 math-shared.js의 SHADE_TONES·toneColor와 같다): 회색 말고 교과서에서 많이 쓰는 밝은 파스텔.
+            // 밝기는 회색과 같은 K(L = 1 − K/100)이고 색상(°)·채도(%)만 더한다. 0번(회색)이거나 K가 0·100이면 회색
+            // (addRows가 return null로 끝나므로 var 상수가 아니라 함수로 둔다 — 그 뒤의 var는 값이 들어가지 않는다)
+            function shadeTones() {
+                return [
+                    {name: "회색", hue: 0, sat: 0}, {name: "파랑", hue: 208, sat: 75}, {name: "분홍", hue: 338, sat: 70}, {name: "연두", hue: 100, sat: 50},
+                    {name: "노랑", hue: 48, sat: 90}, {name: "주황", hue: 28, sat: 85}, {name: "보라", hue: 265, sat: 45}
+                ];
+            }
+            function shadeToneNames() {
+                var tones = shadeTones(), names = [];
+                for (var i = 0; i < tones.length; i++) names.push(tones[i].name);
+                return names;
+            }
+            function makeTone(k, tone) {
+                var t = shadeTones()[tone];
+                if (!t || !t.sat) return makeGray(k);
+                var l = Math.max(0, Math.min(1, 1 - k / 100)), s = Math.min(100, t.sat) / 100;
+                var c = (1 - Math.abs(2 * l - 1)) * s;
+                var h = (((t.hue % 360) + 360) % 360) / 60;
+                var x = c * (1 - Math.abs((h % 2) - 1));
+                var r1 = 0, g1 = 0, b1 = 0;
+                if (h < 1) { r1 = c; g1 = x; }
+                else if (h < 2) { r1 = x; g1 = c; }
+                else if (h < 3) { g1 = c; b1 = x; }
+                else if (h < 4) { g1 = x; b1 = c; }
+                else if (h < 5) { r1 = x; b1 = c; }
+                else { r1 = c; b1 = x; }
+                var m = l - c / 2;
+                var red = Math.round(255 * (r1 + m)), green = Math.round(255 * (g1 + m)), blue = Math.round(255 * (b1 + m));
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    var maxChannel = Math.max(red, green, blue) / 255;
+                    cmyk.black = Math.round((1 - maxChannel) * 100);
+                    cmyk.cyan = maxChannel > 0 ? Math.round((maxChannel - red / 255) / maxChannel * 100) : 0;
+                    cmyk.magenta = maxChannel > 0 ? Math.round((maxChannel - green / 255) / maxChannel * 100) : 0;
+                    cmyk.yellow = maxChannel > 0 ? Math.round((maxChannel - blue / 255) / maxChannel * 100) : 0;
+                    return cmyk;
+                }
+                var rgb = new RGBColor();
+                rgb.red = red;
+                rgb.green = green;
+                rgb.blue = blue;
                 return rgb;
             }
 
@@ -3045,8 +3097,8 @@ var SCRIPT_KEY = "HighMathCommon";
                 saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
-                var parts = ["v1", encodeURIComponent(texts[0]), encodeURIComponent(texts[1]), encodeURIComponent(texts[2]),
-                    xMin, xMax, yMin, yMax, unitMm, shadeK, fontPt, flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v2", encodeURIComponent(texts[0]), encodeURIComponent(texts[1]), encodeURIComponent(texts[2]),
+                    xMin, xMax, yMin, yMax, unitMm, shadeK, fontPt, flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", shadeTone];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -3055,7 +3107,7 @@ var SCRIPT_KEY = "HighMathCommon";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 15 || p[11].length !== FLAG_KEYS.length) return;
+                if (!((p[0] === "v1" && p.length === 15) || (p[0] === "v2" && p.length === 16)) || p[11].length !== FLAG_KEYS.length) return;
                 try {
                     texts = [decodeURIComponent(p[1]), decodeURIComponent(p[2]), decodeURIComponent(p[3])];
                     xMin = Math.round(restoreNumber(p[4], xMin, -20, 0));
@@ -3069,6 +3121,7 @@ var SCRIPT_KEY = "HighMathCommon";
                     offsetXmm = restoreNumber(p[12], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[13], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[14] === "1";
+                    if (p[0] === "v2") shadeTone = Math.round(restoreNumber(p[15], shadeTone, 0, shadeTones().length - 1));
                 } catch (restoreError) {}
             }
 
@@ -3115,6 +3168,7 @@ var SCRIPT_KEY = "HighMathCommon";
             var setCount = 0;
             var shadeText = "A∩B";
             var shadeK = 25;
+            var shadeTone = 0;
             var radiusMm = 12;
             var overlapPct = 45;
             var fontPt = 8;
@@ -3173,6 +3227,10 @@ var SCRIPT_KEY = "HighMathCommon";
             var overlapControls = addValueRow(sizePanel, "겹침", "%", overlapPct, 10, 80, 1, 0);
             overlapControls.input.helpTip = "두 원이 겹치는 정도 (지름에 대한 비율)";
             var shadeControls = addValueRow(sizePanel, "음영 농도", "K", shadeK, 5, 60, 1, 0);
+            var toneRow = sizePanel.add("group");
+            toneRow.add("statictext", undefined, "음영 색:");
+            var toneList = toneRow.add("dropdownlist", undefined, shadeToneNames());
+            toneList.selection = shadeTone;
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
 
             var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
@@ -3195,6 +3253,7 @@ var SCRIPT_KEY = "HighMathCommon";
             bindValueRow(radiusControls, function(value) { radiusMm = value; }, defaults.radiusMm);
             bindValueRow(overlapControls, function(value) { overlapPct = value; }, defaults.overlapPct);
             bindValueRow(shadeControls, function(value) { shadeK = value; }, defaults.shadeK);
+            toneList.onChange = function() { shadeTone = toneList.selection.index; updatePreview(); };
             bindValueRow(fontControls, function(value) { fontPt = value; }, defaults.fontPt);
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, defaults.offsetXmm);
@@ -3275,7 +3334,7 @@ var SCRIPT_KEY = "HighMathCommon";
                     path.closed = true;
                     path.stroked = false;
                     path.filled = true;
-                    path.fillColor = makeGray(shadeK);
+                    path.fillColor = makeTone(shadeK, shadeTone);
                 }
             }
 
@@ -3393,6 +3452,52 @@ var SCRIPT_KEY = "HighMathCommon";
                 rgb.red = value;
                 rgb.green = value;
                 rgb.blue = value;
+                return rgb;
+            }
+
+            // 영역 음영 색 (웹 math-shared.js의 SHADE_TONES·toneColor와 같다): 회색 말고 교과서에서 많이 쓰는 밝은 파스텔.
+            // 밝기는 회색과 같은 K(L = 1 − K/100)이고 색상(°)·채도(%)만 더한다. 0번(회색)이거나 K가 0·100이면 회색
+            // (addRows가 return null로 끝나므로 var 상수가 아니라 함수로 둔다 — 그 뒤의 var는 값이 들어가지 않는다)
+            function shadeTones() {
+                return [
+                    {name: "회색", hue: 0, sat: 0}, {name: "파랑", hue: 208, sat: 75}, {name: "분홍", hue: 338, sat: 70}, {name: "연두", hue: 100, sat: 50},
+                    {name: "노랑", hue: 48, sat: 90}, {name: "주황", hue: 28, sat: 85}, {name: "보라", hue: 265, sat: 45}
+                ];
+            }
+            function shadeToneNames() {
+                var tones = shadeTones(), names = [];
+                for (var i = 0; i < tones.length; i++) names.push(tones[i].name);
+                return names;
+            }
+            function makeTone(k, tone) {
+                var t = shadeTones()[tone];
+                if (!t || !t.sat) return makeGray(k);
+                var l = Math.max(0, Math.min(1, 1 - k / 100)), s = Math.min(100, t.sat) / 100;
+                var c = (1 - Math.abs(2 * l - 1)) * s;
+                var h = (((t.hue % 360) + 360) % 360) / 60;
+                var x = c * (1 - Math.abs((h % 2) - 1));
+                var r1 = 0, g1 = 0, b1 = 0;
+                if (h < 1) { r1 = c; g1 = x; }
+                else if (h < 2) { r1 = x; g1 = c; }
+                else if (h < 3) { g1 = c; b1 = x; }
+                else if (h < 4) { g1 = x; b1 = c; }
+                else if (h < 5) { r1 = x; b1 = c; }
+                else { r1 = c; b1 = x; }
+                var m = l - c / 2;
+                var red = Math.round(255 * (r1 + m)), green = Math.round(255 * (g1 + m)), blue = Math.round(255 * (b1 + m));
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    var maxChannel = Math.max(red, green, blue) / 255;
+                    cmyk.black = Math.round((1 - maxChannel) * 100);
+                    cmyk.cyan = maxChannel > 0 ? Math.round((maxChannel - red / 255) / maxChannel * 100) : 0;
+                    cmyk.magenta = maxChannel > 0 ? Math.round((maxChannel - green / 255) / maxChannel * 100) : 0;
+                    cmyk.yellow = maxChannel > 0 ? Math.round((maxChannel - blue / 255) / maxChannel * 100) : 0;
+                    return cmyk;
+                }
+                var rgb = new RGBColor();
+                rgb.red = red;
+                rgb.green = green;
+                rgb.blue = blue;
                 return rgb;
             }
 
@@ -3809,8 +3914,8 @@ var SCRIPT_KEY = "HighMathCommon";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v2", setCount, encodeURIComponent(shadeText), shadeK, radiusMm, overlapPct, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
-                    arrangement, showUniverse ? "1" : "0", encodeURIComponent(universeName), encodeURIComponent(setNames), encodeURIComponent(regionText)];
+                var parts = ["v3", setCount, encodeURIComponent(shadeText), shadeK, radiusMm, overlapPct, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
+                    arrangement, showUniverse ? "1" : "0", encodeURIComponent(universeName), encodeURIComponent(setNames), encodeURIComponent(regionText), shadeTone];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -3819,7 +3924,7 @@ var SCRIPT_KEY = "HighMathCommon";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (!((p[0] === "v1" && p.length === 10) || (p[0] === "v2" && p.length === 15))) return;
+                if (!((p[0] === "v1" && p.length === 10) || (p[0] === "v2" && p.length === 15) || (p[0] === "v3" && p.length === 16))) return;
                 try {
                     setCount = Math.round(restoreNumber(p[1], setCount, 0, COUNTS.length - 1));
                     shadeText = decodeURIComponent(p[2]);
@@ -3830,13 +3935,14 @@ var SCRIPT_KEY = "HighMathCommon";
                     offsetXmm = restoreNumber(p[7], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[8], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[9] === "1";
-                    if (p[0] === "v2") {
+                    if (p[0] === "v2" || p[0] === "v3") {
                         arrangement = Math.round(restoreNumber(p[10], arrangement, 0, ARRANGEMENTS.length - 1));
                         showUniverse = p[11] === "1";
                         universeName = decodeURIComponent(p[12]);
                         setNames = decodeURIComponent(p[13]);
                         regionText = decodeURIComponent(p[14]);
                     }
+                    if (p[0] === "v3") shadeTone = Math.round(restoreNumber(p[15], shadeTone, 0, shadeTones().length - 1));
                 } catch (restoreError) {}
             }
 

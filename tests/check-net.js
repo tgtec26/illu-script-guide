@@ -175,30 +175,34 @@ assert.ok(source.includes('var PREF_KEY = "Net/settings";'));
     }
   }
 }
-// 저장: v2(19칸, 표시 포함)로 쓰고 옛 v1(14칸)도 읽는다
+// 저장: v3(20칸, 음영 색 포함)로 쓰고 옛 v2(19칸)·v1(14칸)도 읽는다
 {
   const store = {};
   const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
   const make = () => new Function("app", [
     'var PREF_KEY = "T", POSITION_LIMIT_MM = 100, KINDS = ["a", "b", "c", "d", "e", "f", "g", "h", "i"];',
     "var kind = 0, values = { net: 1, count: 4, side: 15, depth: 10, height: 20, lateral: 20, radius: 8, slant: 20 }, dashedFolds = true;",
-    'var faceText = "", lengthText = "", dicePips = false, shadeK = 20, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true;',
-    "function saveLineWidths() {}",
+    'var faceText = "", lengthText = "", dicePips = false, shadeK = 20, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true, shadeTone = 0;',
+    "function saveLineWidths() {} function shadeTones() { return [0, 1, 2, 3, 4, 5, 6]; }",
     ...["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction),
-    "return { load: applySettings, save: saveSettings, state: function() { return { kind: kind, side: values.side, faceText: faceText, lengthText: lengthText, dicePips: dicePips, shadeK: shadeK, fontPt: fontPt }; } };",
+    "return { load: applySettings, save: saveSettings, state: function() { return { kind: kind, side: values.side, faceText: faceText, lengthText: lengthText, dicePips: dicePips, shadeK: shadeK, fontPt: fontPt, shadeTone: shadeTone }; } };",
   ].join("\n"))(app);
   store.T = ["v1", 1, 1, 4, 22, 10, 20, 20, 8, 20, "1", 0, 0, "1"].join("|");
   const old = make();
   old.load();
-  assert.deepStrictEqual(old.state(), { kind: 1, side: 22, faceText: "", lengthText: "", dicePips: false, shadeK: 20, fontPt: 8 });
+  assert.deepStrictEqual(old.state(), { kind: 1, side: 22, faceText: "", lengthText: "", dicePips: false, shadeK: 20, fontPt: 8, shadeTone: 0 });
   old.save();
   const saved = store.T.split("|");
-  assert.deepStrictEqual([saved[0], saved.length], ["v2", 19]);
-  saved.splice(14, 5, encodeURIComponent("가,나*"), encodeURIComponent("5 cm"), "1", "30", "9");
+  assert.deepStrictEqual([saved[0], saved.length], ["v3", 20]);
+  saved.splice(14, 6, encodeURIComponent("가,나*"), encodeURIComponent("5 cm"), "1", "30", "9", "3");
   store.T = saved.join("|");
   const again = make();
   again.load();
-  assert.deepStrictEqual(again.state(), { kind: 1, side: 22, faceText: "가,나*", lengthText: "5 cm", dicePips: true, shadeK: 30, fontPt: 9 });
+  assert.deepStrictEqual(again.state(), { kind: 1, side: 22, faceText: "가,나*", lengthText: "5 cm", dicePips: true, shadeK: 30, fontPt: 9, shadeTone: 3 });
+  store.T = saved.slice(0, 19).join("|").replace(/^v3/, "v2");
+  const fromV2 = make();
+  fromV2.load();
+  assert.deepStrictEqual(fromV2.state(), { kind: 1, side: 22, faceText: "가,나*", lengthText: "5 cm", dicePips: true, shadeK: 30, fontPt: 9, shadeTone: 0 }, "v2는 음영 색만 처음 값으로");
 }
 require("./es3-lint")(["netRegions", "netOuterEdges", "netLabelStyle", "netPipSpots", "netMarks", "addRegionFill", "addPip", "addLabel", "applyTextFonts", "addTextInputRow", "lengthKeys"].map(extractFunction).join("\n"), "전개도 표시");
 console.log("net checks passed");

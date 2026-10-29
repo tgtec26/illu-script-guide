@@ -127,23 +127,28 @@ assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript
   }
 }
 
-// 설정 v2: 새 항목 5개를 저장하고 v1(10칸)도 읽는다
+// 설정 v3: 음영 색을 더해 16칸으로 저장하고 v2(15칸)·v1(10칸)도 읽는다
 {
   const store = {};
   const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
   const prelude = `var PREF_KEY = "T", POSITION_LIMIT_MM = 100, COUNTS = [1, 2, 3], ARRANGEMENTS = [1, 2, 3];
-    var setCount = 0, shadeText = "A∩B", shadeK = 25, radiusMm = 12, overlapPct = 45, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true,
-    arrangement = 0, showUniverse = true, universeName = "U", setNames = "", regionText = ""; function saveLineWidths() {}`;
+    var shadeTone = 0, setCount = 0, shadeText = "A∩B", shadeK = 25, radiusMm = 12, overlapPct = 45, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true,
+    arrangement = 0, showUniverse = true, universeName = "U", setNames = "", regionText = ""; function saveLineWidths() {} function shadeTones() { return [0, 1, 2, 3, 4, 5, 6]; }`;
   const body = prelude + ["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction).join("\n") +
-    `return { saveSettings, applySettings, set: function() { setCount = 2; arrangement = 2; showUniverse = false; universeName = "S"; setNames = "P, Q"; regionText = "A-B: 1"; },
-      get: function() { return [setCount, arrangement, showUniverse, universeName, setNames, regionText]; } };`;
+    `return { saveSettings, applySettings, set: function() { setCount = 2; arrangement = 2; showUniverse = false; universeName = "S"; setNames = "P, Q"; regionText = "A-B: 1"; shadeTone = 2; },
+      get: function() { return [setCount, arrangement, showUniverse, universeName, setNames, regionText, shadeTone]; } };`;
   const make = () => new Function("app", body)(app);
   const first = make(); first.set(); first.saveSettings();
-  assert.strictEqual(store.T.split("|").length, 15);
+  assert.strictEqual(store.T.split("|").length, 16);
+  assert.strictEqual(store.T.split("|")[0], "v3");
   const again = make(); again.applySettings();
-  assert.deepStrictEqual(again.get(), [2, 2, false, "S", "P, Q", "A-B: 1"]);
-  store.T = store.T.split("|").slice(0, 10).join("|").replace(/^v2/, "v1");
+  assert.deepStrictEqual(again.get(), [2, 2, false, "S", "P, Q", "A-B: 1", 2]);
+  const v3 = store.T;
+  store.T = v3.split("|").slice(0, 15).join("|").replace(/^v3/, "v2");
+  const fromV2 = make(); fromV2.applySettings();
+  assert.deepStrictEqual(fromV2.get(), [2, 2, false, "S", "P, Q", "A-B: 1", 0], "v2는 음영 색만 처음 값으로");
+  store.T = v3.split("|").slice(0, 10).join("|").replace(/^v3/, "v1");
   const old = make(); old.applySettings();
-  assert.deepStrictEqual(old.get(), [2, 0, true, "U", "", ""]);
+  assert.deepStrictEqual(old.get(), [2, 0, true, "U", "", "", 0]);
 }
 console.log("venn checks passed");

@@ -6276,6 +6276,7 @@ var SCRIPT_KEY = "MiddleMath";
             var dashedFolds = true;
             // 표시: 면 글자(위에서 아래·왼쪽에서 오른쪽, 끝의 *는 칠하기), 길이 글자(크기 항목 순서), 주사위 눈, 칠하기 농도, 글자 크기
             var faceText = "", lengthText = "", dicePips = false, shadeK = 20, fontPt = 8;
+            var shadeTone = 0;
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
@@ -6316,6 +6317,10 @@ var SCRIPT_KEY = "MiddleMath";
             var lengthInput = addTextInputRow(markPanel, "길이 글자", lengthText, "");
             var pipCheck = markPanel.add("checkbox", undefined, "주사위 눈 (정육면체 1~6)");
             var shadeControls = addValueRow(markPanel, "칠하기 농도", "K", shadeK, 5, 60, 5, 0);
+            var toneRow = markPanel.add("group");
+            toneRow.add("statictext", undefined, "음영 색:");
+            var toneList = toneRow.add("dropdownlist", undefined, shadeToneNames());
+            toneList.selection = shadeTone;
             var fontControls = addValueRow(markPanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var messageText = win.add("statictext", undefined, " ");
             messageText.preferredSize.width = 360;
@@ -6346,6 +6351,7 @@ var SCRIPT_KEY = "MiddleMath";
             faceInput.onChange = function() { faceText = faceInput.text; updatePreview(); };
             lengthInput.onChange = function() { lengthText = lengthInput.text; updatePreview(); };
             bindValueRow(shadeControls, function(value) { shadeK = value; }, initial.shadeK);
+            toneList.onChange = function() { shadeTone = toneList.selection.index; updatePreview(); };
             bindValueRow(fontControls, function(value) { fontPt = value; }, initial.fontPt);
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, initial.offsetXmm);
@@ -6486,7 +6492,7 @@ var SCRIPT_KEY = "MiddleMath";
                 }
                 path.stroked = false;
                 path.filled = true;
-                path.fillColor = makeGray(shadeK);
+                path.fillColor = makeTone(shadeK, shadeTone);
             }
 
             function addPip(pip) {
@@ -6581,6 +6587,52 @@ var SCRIPT_KEY = "MiddleMath";
                 rgb.red = value;
                 rgb.green = value;
                 rgb.blue = value;
+                return rgb;
+            }
+
+            // 영역 음영 색 (웹 math-shared.js의 SHADE_TONES·toneColor와 같다): 회색 말고 교과서에서 많이 쓰는 밝은 파스텔.
+            // 밝기는 회색과 같은 K(L = 1 − K/100)이고 색상(°)·채도(%)만 더한다. 0번(회색)이거나 K가 0·100이면 회색
+            // (addRows가 return null로 끝나므로 var 상수가 아니라 함수로 둔다 — 그 뒤의 var는 값이 들어가지 않는다)
+            function shadeTones() {
+                return [
+                    {name: "회색", hue: 0, sat: 0}, {name: "파랑", hue: 208, sat: 75}, {name: "분홍", hue: 338, sat: 70}, {name: "연두", hue: 100, sat: 50},
+                    {name: "노랑", hue: 48, sat: 90}, {name: "주황", hue: 28, sat: 85}, {name: "보라", hue: 265, sat: 45}
+                ];
+            }
+            function shadeToneNames() {
+                var tones = shadeTones(), names = [];
+                for (var i = 0; i < tones.length; i++) names.push(tones[i].name);
+                return names;
+            }
+            function makeTone(k, tone) {
+                var t = shadeTones()[tone];
+                if (!t || !t.sat) return makeGray(k);
+                var l = Math.max(0, Math.min(1, 1 - k / 100)), s = Math.min(100, t.sat) / 100;
+                var c = (1 - Math.abs(2 * l - 1)) * s;
+                var h = (((t.hue % 360) + 360) % 360) / 60;
+                var x = c * (1 - Math.abs((h % 2) - 1));
+                var r1 = 0, g1 = 0, b1 = 0;
+                if (h < 1) { r1 = c; g1 = x; }
+                else if (h < 2) { r1 = x; g1 = c; }
+                else if (h < 3) { g1 = c; b1 = x; }
+                else if (h < 4) { g1 = x; b1 = c; }
+                else if (h < 5) { r1 = x; b1 = c; }
+                else { r1 = c; b1 = x; }
+                var m = l - c / 2;
+                var red = Math.round(255 * (r1 + m)), green = Math.round(255 * (g1 + m)), blue = Math.round(255 * (b1 + m));
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    var maxChannel = Math.max(red, green, blue) / 255;
+                    cmyk.black = Math.round((1 - maxChannel) * 100);
+                    cmyk.cyan = maxChannel > 0 ? Math.round((maxChannel - red / 255) / maxChannel * 100) : 0;
+                    cmyk.magenta = maxChannel > 0 ? Math.round((maxChannel - green / 255) / maxChannel * 100) : 0;
+                    cmyk.yellow = maxChannel > 0 ? Math.round((maxChannel - blue / 255) / maxChannel * 100) : 0;
+                    return cmyk;
+                }
+                var rgb = new RGBColor();
+                rgb.red = red;
+                rgb.green = green;
+                rgb.blue = blue;
                 return rgb;
             }
 
@@ -7086,9 +7138,9 @@ var SCRIPT_KEY = "MiddleMath";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v2", kind, values.net, values.count, values.side, values.depth, values.height, values.lateral,
+                var parts = ["v3", kind, values.net, values.count, values.side, values.depth, values.height, values.lateral,
                     values.radius, values.slant, dashedFolds ? "1" : "0", offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
-                    encodeURIComponent(faceText), encodeURIComponent(lengthText), dicePips ? "1" : "0", shadeK, fontPt];
+                    encodeURIComponent(faceText), encodeURIComponent(lengthText), dicePips ? "1" : "0", shadeK, fontPt, shadeTone];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -7097,8 +7149,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v2는 표시(면 글자·길이 글자·주사위 눈·칠하기 농도·글자 크기)까지 19칸, 옛 v1은 14칸
-                if (!((p[0] === "v2" && p.length === 19) || (p[0] === "v1" && p.length === 14))) return;
+                // v3는 음영 색까지 20칸, v2는 표시(면 글자·길이 글자·주사위 눈·칠하기 농도·글자 크기)까지 19칸, 옛 v1은 14칸
+                if (!((p[0] === "v3" && p.length === 20) || (p[0] === "v2" && p.length === 19) || (p[0] === "v1" && p.length === 14))) return;
                 kind = Math.round(restoreNumber(p[1], kind, 0, KINDS.length - 1));
                 values.net = Math.round(restoreNumber(p[2], values.net, 1, 11));
                 values.count = Math.round(restoreNumber(p[3], values.count, 3, 8));
@@ -7112,7 +7164,7 @@ var SCRIPT_KEY = "MiddleMath";
                 offsetXmm = restoreNumber(p[11], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 offsetYmm = restoreNumber(p[12], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                 previewEnabled = p[13] === "1";
-                if (p[0] === "v2") {
+                if (p[0] === "v2" || p[0] === "v3") {
                     try {
                         faceText = decodeURIComponent(p[14]);
                         lengthText = decodeURIComponent(p[15]);
@@ -7121,6 +7173,7 @@ var SCRIPT_KEY = "MiddleMath";
                     shadeK = restoreNumber(p[17], shadeK, 5, 60);
                     fontPt = restoreNumber(p[18], fontPt, 5, 14);
                 }
+                if (p[0] === "v3") shadeTone = Math.round(restoreNumber(p[19], shadeTone, 0, shadeTones().length - 1));
             }
 
             function restoreNumber(text, fallback, minimum, maximum) {
@@ -7925,6 +7978,7 @@ var SCRIPT_KEY = "MiddleMath";
             var ratioPercent = 50;
             var angleDeg = 120;
             var shadeK = 20;
+            var shadeTone = 0;
             var fontPt = 8;
             var unitText = "cm";
             var opt = { names: true, center: true, lengthText: true };
@@ -7960,6 +8014,10 @@ var SCRIPT_KEY = "MiddleMath";
             var sizeControls = addValueRow(drawPanel, "크기", "mm", sizeMm, 10, 80, 1, 0);
             sizeControls.input.helpTip = "그림에서 L의 길이";
             var shadeControls = addValueRow(drawPanel, "칠하기 농도", "K", shadeK, 5, 60, 5, 0);
+            var toneRow = drawPanel.add("group");
+            toneRow.add("statictext", undefined, "음영 색:");
+            var toneList = toneRow.add("dropdownlist", undefined, shadeToneNames());
+            toneList.selection = shadeTone;
             var fontControls = addValueRow(drawPanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var checkRow = drawPanel.add("group");
             var namesCheck = checkRow.add("checkbox", undefined, "꼭짓점 이름");
@@ -8000,6 +8058,7 @@ var SCRIPT_KEY = "MiddleMath";
             bindValueRow(angleControls, function(value) { angleDeg = value; }, initial.angleDeg);
             bindValueRow(sizeControls, function(value) { sizeMm = value; }, initial.sizeMm);
             bindValueRow(shadeControls, function(value) { shadeK = value; }, initial.shadeK);
+            toneList.onChange = function() { shadeTone = toneList.selection.index; updatePreview(); };
             bindValueRow(fontControls, function(value) { fontPt = value; }, initial.fontPt);
             namesCheck.onClick = function() { opt.names = namesCheck.value; updatePreview(); };
             centerCheck.onClick = function() { opt.center = centerCheck.value; updatePreview(); };
@@ -8077,7 +8136,7 @@ var SCRIPT_KEY = "MiddleMath";
                     path.closed = true;
                     path.stroked = false;
                     path.filled = true;
-                    path.fillColor = makeGray(shadeK);
+                    path.fillColor = makeTone(shadeK, shadeTone);
                 }
             }
 
@@ -8210,6 +8269,52 @@ var SCRIPT_KEY = "MiddleMath";
                 rgb.red = value;
                 rgb.green = value;
                 rgb.blue = value;
+                return rgb;
+            }
+
+            // 영역 음영 색 (웹 math-shared.js의 SHADE_TONES·toneColor와 같다): 회색 말고 교과서에서 많이 쓰는 밝은 파스텔.
+            // 밝기는 회색과 같은 K(L = 1 − K/100)이고 색상(°)·채도(%)만 더한다. 0번(회색)이거나 K가 0·100이면 회색
+            // (addRows가 return null로 끝나므로 var 상수가 아니라 함수로 둔다 — 그 뒤의 var는 값이 들어가지 않는다)
+            function shadeTones() {
+                return [
+                    {name: "회색", hue: 0, sat: 0}, {name: "파랑", hue: 208, sat: 75}, {name: "분홍", hue: 338, sat: 70}, {name: "연두", hue: 100, sat: 50},
+                    {name: "노랑", hue: 48, sat: 90}, {name: "주황", hue: 28, sat: 85}, {name: "보라", hue: 265, sat: 45}
+                ];
+            }
+            function shadeToneNames() {
+                var tones = shadeTones(), names = [];
+                for (var i = 0; i < tones.length; i++) names.push(tones[i].name);
+                return names;
+            }
+            function makeTone(k, tone) {
+                var t = shadeTones()[tone];
+                if (!t || !t.sat) return makeGray(k);
+                var l = Math.max(0, Math.min(1, 1 - k / 100)), s = Math.min(100, t.sat) / 100;
+                var c = (1 - Math.abs(2 * l - 1)) * s;
+                var h = (((t.hue % 360) + 360) % 360) / 60;
+                var x = c * (1 - Math.abs((h % 2) - 1));
+                var r1 = 0, g1 = 0, b1 = 0;
+                if (h < 1) { r1 = c; g1 = x; }
+                else if (h < 2) { r1 = x; g1 = c; }
+                else if (h < 3) { g1 = c; b1 = x; }
+                else if (h < 4) { g1 = x; b1 = c; }
+                else if (h < 5) { r1 = x; b1 = c; }
+                else { r1 = c; b1 = x; }
+                var m = l - c / 2;
+                var red = Math.round(255 * (r1 + m)), green = Math.round(255 * (g1 + m)), blue = Math.round(255 * (b1 + m));
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    var maxChannel = Math.max(red, green, blue) / 255;
+                    cmyk.black = Math.round((1 - maxChannel) * 100);
+                    cmyk.cyan = maxChannel > 0 ? Math.round((maxChannel - red / 255) / maxChannel * 100) : 0;
+                    cmyk.magenta = maxChannel > 0 ? Math.round((maxChannel - green / 255) / maxChannel * 100) : 0;
+                    cmyk.yellow = maxChannel > 0 ? Math.round((maxChannel - blue / 255) / maxChannel * 100) : 0;
+                    return cmyk;
+                }
+                var rgb = new RGBColor();
+                rgb.red = red;
+                rgb.green = green;
+                rgb.blue = blue;
                 return rgb;
             }
 
@@ -8612,8 +8717,8 @@ var SCRIPT_KEY = "MiddleMath";
                 saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
-                var parts = ["v1", shape, lengthValue, ratioPercent, angleDeg, sizeMm, shadeK, fontPt, flags, encodeURIComponent(unitText),
-                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v2", shape, lengthValue, ratioPercent, angleDeg, sizeMm, shadeK, fontPt, flags, encodeURIComponent(unitText),
+                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", shadeTone];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -8622,7 +8727,7 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 13 || p[8].length !== FLAG_KEYS.length) return;
+                if (!((p[0] === "v1" && p.length === 13) || (p[0] === "v2" && p.length === 14)) || p[8].length !== FLAG_KEYS.length) return;
                 try {
                     shape = Math.round(restoreNumber(p[1], shape, 0, SHAPES.length - 1));
                     lengthValue = restoreNumber(p[2], lengthValue, 1, 30);
@@ -8636,6 +8741,7 @@ var SCRIPT_KEY = "MiddleMath";
                     offsetXmm = restoreNumber(p[10], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[11], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[12] === "1";
+                    if (p[0] === "v2") shadeTone = Math.round(restoreNumber(p[13], shadeTone, 0, shadeTones().length - 1));
                 } catch (restoreError) {}
             }
 
@@ -8720,6 +8826,7 @@ var SCRIPT_KEY = "MiddleMath";
             var spinnerText = "1,2,3,4,5,6";   // 회전판 칸 글자 (끝의 *는 그 칸을 칠한다)
             var unitMm = 6;
             var shadeK = 20;
+            var shadeTone = 0;
             var fontPt = 8;
             var opt = { names: true, guides: true, lengths: true, extra: false };
             var offsetXmm = 0;
@@ -8757,6 +8864,10 @@ var SCRIPT_KEY = "MiddleMath";
             var drawPanel = addPanel(win, "그리기");
             var unitControls = addValueRow(drawPanel, "단위 길이", "mm", unitMm, 2, 20, 0.5, 1);
             var shadeControls = addValueRow(drawPanel, "칠하기 농도", "K", shadeK, 5, 60, 5, 0);
+            var toneRow = drawPanel.add("group");
+            toneRow.add("statictext", undefined, "음영 색:");
+            var toneList = toneRow.add("dropdownlist", undefined, shadeToneNames());
+            toneList.selection = shadeTone;
             var fontControls = addValueRow(drawPanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var checkRow = drawPanel.add("group");
             var namesCheck = checkRow.add("checkbox", undefined, "점 이름");
@@ -8801,6 +8912,7 @@ var SCRIPT_KEY = "MiddleMath";
             downInput.onChanging = function() { piecesDown = downInput.text; updatePreview(); };
             bindValueRow(unitControls, function(value) { unitMm = value; }, initial.unitMm);
             bindValueRow(shadeControls, function(value) { shadeK = value; }, initial.shadeK);
+            toneList.onChange = function() { shadeTone = toneList.selection.index; updatePreview(); };
             bindValueRow(fontControls, function(value) { fontPt = value; }, initial.fontPt);
             namesCheck.onClick = function() { opt.names = namesCheck.value; updatePreview(); };
             guidesCheck.onClick = function() { opt.guides = guidesCheck.value; updatePreview(); };
@@ -8917,7 +9029,7 @@ var SCRIPT_KEY = "MiddleMath";
                 path.closed = true;
                 path.stroked = false;
                 path.filled = true;
-                path.fillColor = makeGray(shadeK);
+                path.fillColor = makeTone(shadeK, shadeTone);
             }
 
             // line: {points:[{anchor,left,right}], closed, kind:"main"|"guide"|"thin"}
@@ -9079,6 +9191,52 @@ var SCRIPT_KEY = "MiddleMath";
                 rgb.red = value;
                 rgb.green = value;
                 rgb.blue = value;
+                return rgb;
+            }
+
+            // 영역 음영 색 (웹 math-shared.js의 SHADE_TONES·toneColor와 같다): 회색 말고 교과서에서 많이 쓰는 밝은 파스텔.
+            // 밝기는 회색과 같은 K(L = 1 − K/100)이고 색상(°)·채도(%)만 더한다. 0번(회색)이거나 K가 0·100이면 회색
+            // (addRows가 return null로 끝나므로 var 상수가 아니라 함수로 둔다 — 그 뒤의 var는 값이 들어가지 않는다)
+            function shadeTones() {
+                return [
+                    {name: "회색", hue: 0, sat: 0}, {name: "파랑", hue: 208, sat: 75}, {name: "분홍", hue: 338, sat: 70}, {name: "연두", hue: 100, sat: 50},
+                    {name: "노랑", hue: 48, sat: 90}, {name: "주황", hue: 28, sat: 85}, {name: "보라", hue: 265, sat: 45}
+                ];
+            }
+            function shadeToneNames() {
+                var tones = shadeTones(), names = [];
+                for (var i = 0; i < tones.length; i++) names.push(tones[i].name);
+                return names;
+            }
+            function makeTone(k, tone) {
+                var t = shadeTones()[tone];
+                if (!t || !t.sat) return makeGray(k);
+                var l = Math.max(0, Math.min(1, 1 - k / 100)), s = Math.min(100, t.sat) / 100;
+                var c = (1 - Math.abs(2 * l - 1)) * s;
+                var h = (((t.hue % 360) + 360) % 360) / 60;
+                var x = c * (1 - Math.abs((h % 2) - 1));
+                var r1 = 0, g1 = 0, b1 = 0;
+                if (h < 1) { r1 = c; g1 = x; }
+                else if (h < 2) { r1 = x; g1 = c; }
+                else if (h < 3) { g1 = c; b1 = x; }
+                else if (h < 4) { g1 = x; b1 = c; }
+                else if (h < 5) { r1 = x; b1 = c; }
+                else { r1 = c; b1 = x; }
+                var m = l - c / 2;
+                var red = Math.round(255 * (r1 + m)), green = Math.round(255 * (g1 + m)), blue = Math.round(255 * (b1 + m));
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    var maxChannel = Math.max(red, green, blue) / 255;
+                    cmyk.black = Math.round((1 - maxChannel) * 100);
+                    cmyk.cyan = maxChannel > 0 ? Math.round((maxChannel - red / 255) / maxChannel * 100) : 0;
+                    cmyk.magenta = maxChannel > 0 ? Math.round((maxChannel - green / 255) / maxChannel * 100) : 0;
+                    cmyk.yellow = maxChannel > 0 ? Math.round((maxChannel - blue / 255) / maxChannel * 100) : 0;
+                    return cmyk;
+                }
+                var rgb = new RGBColor();
+                rgb.red = red;
+                rgb.green = green;
+                rgb.blue = blue;
                 return rgb;
             }
 
@@ -9762,8 +9920,8 @@ var SCRIPT_KEY = "MiddleMath";
                 var flags = "", values = [];
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
                 for (var k = 0; k < KINDS.length; k++) values.push(params[k].join(","));
-                var parts = ["v3", kind, values.join(";"), encodeURIComponent(piecesAcross), encodeURIComponent(piecesDown), unitMm, shadeK, fontPt, flags,
-                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", encodeURIComponent(cardText), encodeURIComponent(spinnerText)];
+                var parts = ["v4", kind, values.join(";"), encodeURIComponent(piecesAcross), encodeURIComponent(piecesDown), unitMm, shadeK, fontPt, flags,
+                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", encodeURIComponent(cardText), encodeURIComponent(spinnerText), shadeTone];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -9772,8 +9930,8 @@ var SCRIPT_KEY = "MiddleMath";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v3는 회전판 칸 글자까지 14칸, 옛 v2는 회전판이 생기기 전(13칸, 종류 12개)이다
-                var fieldCount = p[0] === "v3" ? 14 : (p[0] === "v2" ? 13 : -1);
+                // v4는 음영 색까지 15칸, v3는 회전판 칸 글자까지 14칸, 옛 v2는 회전판이 생기기 전(13칸, 종류 12개)이다
+                var fieldCount = p[0] === "v4" ? 15 : (p[0] === "v3" ? 14 : (p[0] === "v2" ? 13 : -1));
                 if (p.length !== fieldCount || p[8].length !== FLAG_KEYS.length) return;
                 try {
                     kind = Math.round(restoreNumber(p[1], kind, 0, KINDS.length - 1));
@@ -9798,7 +9956,8 @@ var SCRIPT_KEY = "MiddleMath";
                     offsetYmm = restoreNumber(p[10], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[11] === "1";
                     cardText = decodeURIComponent(p[12]);
-                    if (fieldCount === 14) spinnerText = decodeURIComponent(p[13]);
+                    if (fieldCount >= 14) spinnerText = decodeURIComponent(p[13]);
+                    if (fieldCount === 15) shadeTone = Math.round(restoreNumber(p[14], shadeTone, 0, shadeTones().length - 1));
                 } catch (restoreError) {}
             }
 
