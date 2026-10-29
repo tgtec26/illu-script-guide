@@ -174,6 +174,17 @@ const lineWidthLabels = () => source.split('addValueRow(lineWidthPanel, "').slic
   assert.deepStrictEqual(lineWidthLabels(), ["축", "그래프", "보조선", "표시"]);
   assert.deepStrictEqual(paintWidths("var MAIN_PT=0.8,PLANE_PT=0.41,GUIDE_PT=0.31,MARK_PT=0.33;", ["main", "plane", "guide", "mark"], true), [0.8, 0.41, 0.31, 0.33]);
 }
+// 겹침 풀기는 pt 좌표로 계산하니 mm 도면을 pt로 바꿔 넘겨야 한다 (안 바꾸면 점 이름이 엉뚱한 곳으로 밀린다)
+{
+  assert.ok(source.includes("untangleLabels(previewGroup, drawingInPoints(drawing))"), "untangle 호출은 pt로 바꾼 도면을 쓴다");
+  const inPoints = new Function(`var MM_TO_PT = 2;\n${extractFunction("drawingInPoints")}\nreturn drawingInPoints;`)();
+  const out = inPoints({ texts: [{ text: "H", at: [3, 4], dir: [-1, 0], upright: true }], lines: [{ points: [[1, 2], [3, 4]], closed: false, kind: "guide" }] });
+  assert.deepStrictEqual(out.texts[0].at, [6, 8]);
+  assert.strictEqual(out.texts[0].text, "H");
+  assert.deepStrictEqual(out.texts[0].dir, [-1, 0]);
+  assert.deepStrictEqual(out.lines[0].points, [[2, 4], [6, 8]]);
+  assert.strictEqual(out.lines[0].kind, "guide");
+}
 console.log("space checks passed");
 
 const tri=build({mode:1}).lines.filter(l=>l.closed&&l.kind==='main');

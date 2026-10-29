@@ -6349,7 +6349,7 @@ var SCRIPT_KEY = "HighGeometry";
                 for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
-                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
+                if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawingInPoints(drawing));
                 var b = previewGroup.geometricBounds;
                 previewGroup.translate(viewCenter[0] - (b[0] + b[2]) / 2 + offsetXmm * MM_TO_PT, viewCenter[1] - (b[1] + b[3]) / 2 + offsetYmm * MM_TO_PT);
             }
@@ -6376,6 +6376,23 @@ var SCRIPT_KEY = "HighGeometry";
                 circle.stroked = false;
                 circle.filled = true;
                 circle.fillColor = makeGray(100);
+            }
+
+            // 겹침 풀기(untangleLabels)는 글상자와 같은 pt로 계산한다. mm로 된 라벨 자리와 선을 pt로 바꿔 넘긴다
+            function drawingInPoints(drawing) {
+                var texts = [], lines = [];
+                for (var i = 0; i < drawing.texts.length; i++) {
+                    var label = {};
+                    for (var key in drawing.texts[i]) if (drawing.texts[i].hasOwnProperty(key)) label[key] = drawing.texts[i][key];
+                    label.at = [drawing.texts[i].at[0] * MM_TO_PT, drawing.texts[i].at[1] * MM_TO_PT];
+                    texts.push(label);
+                }
+                for (var j = 0; j < drawing.lines.length; j++) {
+                    var points = [];
+                    for (var k = 0; k < drawing.lines[j].points.length; k++) points.push([drawing.lines[j].points[k][0] * MM_TO_PT, drawing.lines[j].points[k][1] * MM_TO_PT]);
+                    lines.push({points: points, closed: drawing.lines[j].closed, kind: drawing.lines[j].kind});
+                }
+                return {texts: texts, lines: lines};
             }
 
             // at(mm)에서 dir 쪽으로 간격을 두고 글자의 가까운 가장자리가 오게 둔다
