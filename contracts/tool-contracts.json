@@ -6687,6 +6687,10 @@
         "yAxis": "up"
       },
       "properties": {
+        "anglesText": {
+          "type": "string",
+          "default": ""
+        },
         "axisPt": {
           "type": "number",
           "default": 0.4
@@ -6717,6 +6721,10 @@
           "type": "number",
           "default": 0.3
         },
+        "guidesText": {
+          "type": "string",
+          "default": ""
+        },
         "heightMm": {
           "type": "number",
           "default": 10,
@@ -6728,6 +6736,10 @@
           "default": 40,
           "minimum": 10,
           "maximum": 100
+        },
+        "linesText": {
+          "type": "string",
+          "default": "l: A B"
         },
         "marks": {
           "type": "boolean",
@@ -6747,15 +6759,33 @@
           "minimum": 30,
           "maximum": 120
         },
+        "planesText": {
+          "type": "string",
+          "default": "α: A B C D; β: A B F G"
+        },
+        "pointsText": {
+          "type": "string",
+          "default": "_A(0,0,0) _B(8,0,0) _C(8,6,0) _D(0,6,0) _F(8,0,5) _G(0,0,5)"
+        },
         "projection": {
           "type": "boolean",
           "default": true
+        },
+        "rightsText": {
+          "type": "string",
+          "default": ""
         },
         "thetaDeg": {
           "type": "number",
           "default": 35,
           "minimum": 5,
           "maximum": 85
+        },
+        "unitMm": {
+          "type": "number",
+          "default": 10,
+          "minimum": 2,
+          "maximum": 30
         }
       }
     },

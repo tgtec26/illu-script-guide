@@ -6111,7 +6111,8 @@ var SCRIPT_KEY = "HighGeometry";
             var MARK_MM = 2;
             var LABEL_GAP_MM = 0.8;
             var DEPTH = { scale: 0.5, angle: 30 };   // 사투상: 깊이(y)를 0.5배, 30° 방향으로
-            var MODES = ["정사영", "삼수선 정리", "두 평면이 이루는 각"];
+            var HIDE_EPS = 0.01;   // 평면이 선보다 이만큼(mm) 앞이어야 가려진 것으로 본다
+            var MODES = ["정사영", "삼수선 정리", "두 평면이 이루는 각", "자유 배치"];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
             var FLAG_KEYS = ["marks", "names", "projection"];
 
@@ -6132,13 +6133,21 @@ var SCRIPT_KEY = "HighGeometry";
             var distanceMm = 15;
             var directionDeg = 15;
             var fontPt = 9;
+            // 자유 배치: 평면 α(수평)와 그 앞 모서리 l 위에 세운 평면 β. 좌표 한 칸은 unitMm
+            var unitMm = 10;
+            var pointsText = "_A(0,0,0) _B(8,0,0) _C(8,6,0) _D(0,6,0) _F(8,0,5) _G(0,0,5)";
+            var planesText = "α: A B C D; β: A B F G";
+            var linesText = "l: A B";
+            var guidesText = "";
+            var rightsText = "";
+            var anglesText = "";
             var opt = { marks: true, names: true, projection: true };
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
             var DEFAULTS = {planeMm: planeMm, thetaDeg: thetaDeg, lengthMm: lengthMm, heightMm: heightMm, distanceMm: distanceMm,
-                directionDeg: directionDeg, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+                directionDeg: directionDeg, fontPt: fontPt, unitMm: unitMm, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
             var LINE_DEFAULTS = {axis: PLANE_PT, graph: MAIN_PT, guide: GUIDE_PT, mark: MARK_PT};
             var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
@@ -6169,6 +6178,15 @@ var SCRIPT_KEY = "HighGeometry";
             var projectionCheck = checkRow.add("checkbox", undefined, "β 위 점의 정사영");
             bindOption(projectionCheck, "projection");
             var fontControls = addValueRow(shapePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+
+            var scenePanel = addPanel(win, "점 · 평면 · 선 (자유 배치)");
+            var pointsInput = addTextRow(scenePanel, "점:", pointsText, "이름(x,y,z)를 빈칸·쉼표로 이어 쓴다. x는 오른쪽, y는 안쪽(깊이), z는 위. 한 칸은 아래 '한 칸' mm. 이름 앞에 _를 붙이면 점·이름을 그리지 않는 숨은 점(평면 꼭짓점용)");
+            var planesInput = addTextRow(scenePanel, "평면:", planesText, "이름: 꼭짓점들 (3~8개, 차례로). 점이 3개면 이어진 세 꼭짓점으로 보고 평행사변형을 채운다. 여러 평면은 ;로 나눈다. 다른 평면에 가린 모서리는 점선이 된다");
+            var linesInput = addTextRow(scenePanel, "선:", linesText, "점 두 개를 이은 선분 (AB, A′B′). 앞에 이름: 을 붙이면 오른쪽 끝에 이름 (l: AB). 평면 뒤로 가려진 구간은 점선");
+            var guidesInput = addTextRow(scenePanel, "점선:", guidesText, "가려지는 것과 상관없이 늘 점선인 보조선 (수선 AA′)");
+            var rightsInput = addTextRow(scenePanel, "직각:", rightsText, "직각 표시: 가운데 점이 꼭짓점 (PHB는 H에서 직각). 위의 '직각 표시'를 끄면 그리지 않는다");
+            var anglesInput = addTextRow(scenePanel, "각:", anglesText, "각의 호와 글자: 이름: 점 세 개 (가운데가 꼭짓점). 이름을 비우면 θ");
+            var unitControls = addValueRow(scenePanel, "한 칸", "mm", unitMm, 2, 30, 1, 0);
 
             var messageText = win.add("statictext", undefined, " ", {multiline: true});
             messageText.preferredSize = [380, 32];
@@ -6202,6 +6220,13 @@ var SCRIPT_KEY = "HighGeometry";
             bindValueRow(distanceControls, function(value) { distanceMm = value; }, DEFAULTS.distanceMm);
             bindValueRow(directionControls, function(value) { directionDeg = value; }, DEFAULTS.directionDeg);
             bindValueRow(fontControls, function(value) { fontPt = value; }, DEFAULTS.fontPt);
+            bindValueRow(unitControls, function(value) { unitMm = value; }, DEFAULTS.unitMm);
+            pointsInput.onChanging = function() { pointsText = pointsInput.text; updatePreview(); };
+            planesInput.onChanging = function() { planesText = planesInput.text; updatePreview(); };
+            linesInput.onChanging = function() { linesText = linesInput.text; updatePreview(); };
+            guidesInput.onChanging = function() { guidesText = guidesInput.text; updatePreview(); };
+            rightsInput.onChanging = function() { rightsText = rightsInput.text; updatePreview(); };
+            anglesInput.onChanging = function() { anglesText = anglesInput.text; updatePreview(); };
             // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
             bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, DEFAULTS.offsetXmm);
             bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, DEFAULTS.offsetYmm);
@@ -6226,12 +6251,14 @@ var SCRIPT_KEY = "HighGeometry";
             return null;
 
             function refreshEnabled() {
-                thetaControls.input.parent.enabled = mode !== 1;
+                planeControls.input.parent.enabled = mode !== 3;
+                thetaControls.input.parent.enabled = mode !== 1 && mode !== 3;
                 lengthControls.input.parent.enabled = mode === 0;
-                heightControls.input.parent.enabled = mode !== 2;
+                heightControls.input.parent.enabled = mode !== 2 && mode !== 3;
                 distanceControls.input.parent.enabled = mode === 1;
-                directionControls.input.parent.enabled = mode !== 2;
+                directionControls.input.parent.enabled = mode !== 2 && mode !== 3;
                 projectionCheck.enabled = mode === 2;
+                scenePanel.enabled = mode === 3;
             }
 
             function bindOption(check, key) {
@@ -6261,9 +6288,13 @@ var SCRIPT_KEY = "HighGeometry";
             function buildPreview() {
                 var drawing = buildSpace({
                     mode: mode, plane: planeMm, theta: thetaDeg, length: lengthMm, height: heightMm, distance: distanceMm,
-                    direction: directionDeg, marks: opt.marks, names: opt.names, projection: opt.projection, mark: MARK_MM
+                    direction: directionDeg, marks: opt.marks, names: opt.names, projection: opt.projection, mark: MARK_MM,
+                    points: pointsText, planes: planesText, lines: linesText, guides: guidesText, rights: rightsText, angles: anglesText, unit: unitMm
                 });
-                messageText.text = drawing.notes.length > 0 ? drawing.notes.join("\n") : " ";
+                var message = [];
+                if (drawing.problems.length > 0) message.push("읽지 못함: " + drawing.problems.join(", "));
+                for (var n = 0; n < drawing.notes.length; n++) message.push(drawing.notes[n]);
+                messageText.text = message.length > 0 ? message.join("\n") : " ";
 
                 previewGroup = layer.groupItems.add();
                 previewGroup.name = "공간도형";
@@ -6407,7 +6438,7 @@ var SCRIPT_KEY = "HighGeometry";
             }
 
             function buildSpace(o) {
-                var out = { lines: [], dots: [], texts: [], notes: [] };
+                var out = { lines: [], dots: [], texts: [], notes: [], problems: [] };
                 var W = o.plane, D = o.plane * 0.75, rad = Math.PI / 180;
                 function line(points, kind, closed) {
                     var list = [];
@@ -6483,6 +6514,8 @@ var SCRIPT_KEY = "HighGeometry";
                     var pm = Math.sqrt(o.height * o.height + o.distance * o.distance);
                     out.notes.push("PH ⊥ α, HM ⊥ l 이면 PM ⊥ l (삼수선 정리)");
                     out.notes.push("PM = √(PH² + HM²) = " + fmt(pm) + " (mm)");
+                } else if (o.mode === 3) {
+                    drawScene(o, out, line, name, dot, mark, arc);
                 } else {
                     // 두 평면: 교선 l은 앞쪽 가로선. α는 수평, β는 l을 축으로 θ만큼 세운 면
                     var theta2 = o.theta * rad, up = [0, Math.cos(theta2), Math.sin(theta2)];
@@ -6514,6 +6547,253 @@ var SCRIPT_KEY = "HighGeometry";
                 }
                 return out;
             }
+
+            function drawScene(o, out, line, name, dot, mark, arc) {
+                var sc = parseScene(o), pts = sc.points, infos = [], i, j, q;
+                out.problems = sc.problems;
+                var all = [], cx = 0, cy = 0;
+                for (i = 0; i < pts.length; i++) {
+                    all.push(project(pts[i].p));
+                    cx += all[i][0];
+                    cy += all[i][1];
+                }
+                if (pts.length > 0) { cx /= pts.length; cy /= pts.length; }
+                for (i = 0; i < sc.planes.length; i++) {
+                    var corners = [];
+                    for (j = 0; j < sc.planes[i].idx.length; j++) corners.push(pts[sc.planes[i].idx[j]].p);
+                    infos.push(planeInfo(corners));
+                }
+                // 평면 테두리: 다른 평면에 가려진 모서리가 있으면 모서리마다 나눠 가려진 구간만 점선
+                for (i = 0; i < sc.planes.length; i++) {
+                    if (infos[i] === null) continue;
+                    var poly = infos[i].poly, edges = [], edgeHidden = false;
+                    for (j = 0; j < poly.length; j++) {
+                        var pieces = splitHidden(poly[j], poly[(j + 1) % poly.length], infos, i);
+                        edges.push(pieces);
+                        for (q = 0; q < pieces.length; q++) if (pieces[q].hidden) edgeHidden = true;
+                    }
+                    if (!edgeHidden) line(poly, "plane", true);
+                    else for (j = 0; j < edges.length; j++) for (q = 0; q < edges[j].length; q++) line(edges[j][q].p, edges[j][q].hidden ? "guide" : "plane", false);
+                    if (o.names && sc.planes[i].name !== "") {
+                        // 이름은 화면에서 가장 오른쪽(같으면 위쪽) 꼭짓점 바깥에
+                        var p2 = [], mx = 0, my = 0, best = 0;
+                        for (j = 0; j < poly.length; j++) {
+                            p2.push(project(poly[j]));
+                            mx += p2[j][0];
+                            my += p2[j][1];
+                        }
+                        mx /= poly.length;
+                        my /= poly.length;
+                        for (j = 1; j < poly.length; j++) if (p2[j][0] > p2[best][0] + 1e-9 || (Math.abs(p2[j][0] - p2[best][0]) < 1e-9 && p2[j][1] > p2[best][1])) best = j;
+                        name(sc.planes[i].name, poly[best], unit2([p2[best][0] - mx, p2[best][1] - my]), false);
+                    }
+                }
+                for (i = 0; i < sc.lines.length; i++) {
+                    var a = pts[sc.lines[i].a].p, b = pts[sc.lines[i].b].p, parts = splitHidden(a, b, infos, -1);
+                    for (j = 0; j < parts.length; j++) line(parts[j].p, parts[j].hidden ? "guide" : "main", false);
+                    if (o.names && sc.lines[i].name !== "") {
+                        var a2 = project(a), b2 = project(b), right = a2[0] >= b2[0];
+                        name(sc.lines[i].name, right ? a : b, unit2(right ? [a2[0] - b2[0], a2[1] - b2[1]] : [b2[0] - a2[0], b2[1] - a2[1]]), false);
+                    }
+                }
+                for (i = 0; i < sc.guides.length; i++) line([pts[sc.guides[i].a].p, pts[sc.guides[i].b].p], "guide", false);
+                for (i = 0; i < sc.rights.length; i++) {
+                    var rb = pts[sc.rights[i].b].p, ru = sub3(pts[sc.rights[i].a].p, rb), rv = sub3(pts[sc.rights[i].c].p, rb);
+                    if (dot3(ru, ru) > 1e-12 && dot3(rv, rv) > 1e-12) mark(rb, ru, rv);
+                }
+                for (i = 0; i < sc.angles.length; i++) {
+                    var ab = pts[sc.angles[i].b].p, au = sub3(pts[sc.angles[i].a].p, ab), av = sub3(pts[sc.angles[i].c].p, ab);
+                    var lu = Math.sqrt(dot3(au, au)), lv = Math.sqrt(dot3(av, av));
+                    if (lu < 1e-9 || lv < 1e-9) continue;
+                    var cosine = dot3(au, av) / (lu * lv);
+                    if (Math.abs(cosine) < 1 - 1e-9) arc(ab, au, av, Math.min(8, 0.3 * Math.min(lu, lv)), sc.angles[i].label);
+                }
+                for (i = 0; i < pts.length; i++) {
+                    if (pts[i].hidden) continue;
+                    dot(pts[i].p);
+                    var first = pts[i].name.charCodeAt(0);
+                    if (o.names) name(pts[i].name, pts[i].p, unit2([all[i][0] - cx, all[i][1] - cy]), !((first >= 97 && first <= 122) || (first >= 945 && first <= 969)));
+                }
+            }
+
+            // 글 → {points, planes, lines, guides, rights, angles, problems}. 점은 {name, p(mm), hidden}, 나머지는 점 번호.
+            // 항목은 ; 또는 , 로 나누고, 평면·선·각은 "이름: 점들" 꼴로 이름표를 앞에 붙일 수 있다. 점 이름은 붙여 써도 된다(AB, A′B′)
+            function parseScene(o) {
+                var out = { points: [], planes: [], lines: [], guides: [], rights: [], angles: [], problems: [] };
+                var text = String(o.points), unit = o.unit, pos = 0, bad = false, i, j;
+                while (pos < text.length && !bad) {
+                    var ch = text.charAt(pos);
+                    if (ch === " " || ch === "," || ch === ";" || ch === "\n" || ch === "\t") { pos++; continue; }
+                    var open = text.indexOf("(", pos), close = text.indexOf(")", pos);
+                    if (open < 0 || close < open) { bad = true; break; }
+                    var label = trimText(text.substring(pos, open)), hidden = label.charAt(0) === "_";
+                    if (hidden) label = label.substring(1);
+                    var nums = text.substring(open + 1, close).split(","), p = [];
+                    if (label === "" || nums.length !== 3 || /[\s:;()]/.test(label)) bad = true;
+                    for (i = 0; i < nums.length && !bad; i++) {
+                        var piece = trimText(nums[i]);
+                        if (piece === "" || isNaN(Number(piece))) bad = true; else p.push(Number(piece) * unit);
+                    }
+                    for (j = 0; j < out.points.length && !bad; j++) if (out.points[j].name === label) bad = true;
+                    if (!bad) out.points.push({ name: label, p: p, hidden: hidden });
+                    pos = close + 1;
+                }
+                if (bad) { out.problems.push("점"); out.points = []; }
+                var names = [];
+                for (i = 0; i < out.points.length; i++) names.push(out.points[i].name);
+
+                var items = splitItems(o.planes);
+                for (i = 0; i < items.length; i++) {
+                    var plane = splitLabel(items[i]), idx = nameList(plane.rest, names);
+                    if (idx === null || idx.length < 3 || idx.length > 8) { addProblem(out.problems, "평면"); continue; }
+                    var corners = [];
+                    for (j = 0; j < idx.length; j++) corners.push(out.points[idx[j]].p);
+                    if (planeInfo(corners) === null) { addProblem(out.problems, "평면"); continue; }
+                    out.planes.push({ name: plane.label, idx: idx });
+                }
+                items = splitItems(o.lines);
+                for (i = 0; i < items.length; i++) {
+                    var ln = splitLabel(items[i]), two = nameList(ln.rest, names);
+                    if (two === null || two.length !== 2 || two[0] === two[1]) addProblem(out.problems, "선"); else out.lines.push({ a: two[0], b: two[1], name: ln.label });
+                }
+                items = splitItems(o.guides);
+                for (i = 0; i < items.length; i++) {
+                    var gd = nameList(items[i], names);
+                    if (gd === null || gd.length !== 2 || gd[0] === gd[1]) addProblem(out.problems, "점선"); else out.guides.push({ a: gd[0], b: gd[1] });
+                }
+                items = splitItems(o.rights);
+                for (i = 0; i < items.length; i++) {
+                    var rt = nameList(items[i], names);
+                    if (rt === null || rt.length !== 3) addProblem(out.problems, "직각"); else out.rights.push({ a: rt[0], b: rt[1], c: rt[2] });
+                }
+                items = splitItems(o.angles);
+                for (i = 0; i < items.length; i++) {
+                    var an = splitLabel(items[i]), three = nameList(an.rest, names);
+                    if (three === null || three.length !== 3) addProblem(out.problems, "각"); else out.angles.push({ a: three[0], b: three[1], c: three[2], label: an.label === "" ? "θ" : an.label });
+                }
+                return out;
+            }
+
+            function addProblem(list, name) {
+                for (var i = 0; i < list.length; i++) if (list[i] === name) return;
+                list.push(name);
+            }
+
+            function trimText(text) {
+                return String(text).replace(/^\s+|\s+$/g, "");
+            }
+
+            // ; 또는 , 로 나눈 빈 칸 없는 항목들
+            function splitItems(text) {
+                var parts = String(text).split(/[;,，]/), out = [];
+                for (var i = 0; i < parts.length; i++) if (trimText(parts[i]) !== "") out.push(trimText(parts[i]));
+                return out;
+            }
+
+            // "α: A B C" → {label: "α", rest: "A B C"}. 콜론이 없으면 이름표가 없다
+            function splitLabel(item) {
+                var colon = item.indexOf(":");
+                if (colon < 0) colon = item.indexOf("：");
+                if (colon < 0) return { label: "", rest: item };
+                return { label: trimText(item.substring(0, colon)), rest: trimText(item.substring(colon + 1)) };
+            }
+
+            // "A B C" 또는 "ABC"·"A′B′" → 점 번호 목록. 모르는 이름이 있으면 null. 이름이 긴 것부터 맞춘다
+            function nameList(text, names) {
+                var tokens = trimText(text).split(/\s+/), out = [], i, k;
+                if (trimText(text) === "") return null;
+                for (i = 0; i < tokens.length; i++) {
+                    var token = tokens[i], at = 0;
+                    while (at < token.length) {
+                        var found = -1;
+                        for (k = 0; k < names.length; k++) {
+                            if (token.substr(at, names[k].length) === names[k] && (found < 0 || names[k].length > names[found].length)) found = k;
+                        }
+                        if (found < 0) return null;
+                        out.push(found);
+                        at += names[found].length;
+                    }
+                }
+                return out;
+            }
+
+            // 평면 꼭짓점(점 3개면 이어진 세 꼭짓점이라 넷째를 채운다) → {poly, poly2, n(단위 법선), c(n·점)}. 한 직선 위면 null
+            function planeInfo(points) {
+                var poly = points.slice(), n = null, k;
+                if (poly.length === 3) poly.push(add3(poly[0], sub3(poly[2], poly[1])));
+                for (k = 2; k < poly.length && n === null; k++) {
+                    var c = cross3(sub3(poly[1], poly[0]), sub3(poly[k], poly[0]));
+                    if (dot3(c, c) > 1e-9) n = unit3(c);
+                }
+                if (n === null) return null;
+                var poly2 = [];
+                for (k = 0; k < poly.length; k++) poly2.push(project(poly[k]));
+                return { poly: poly, poly2: poly2, n: n, c: dot3(n, poly[0]) };
+            }
+
+            // 화면에서 같은 자리에 겹치는 점은 깊이(y)만 다르다. 시선 방향: 이 방향으로 옮겨도 투상이 같다 (y가 커질수록 멀다)
+            function viewDirection() {
+                var a = DEPTH.angle * Math.PI / 180;
+                return [-DEPTH.scale * Math.cos(a), 1, -DEPTH.scale * Math.sin(a)];
+            }
+
+            // 선분 ab를 평면들에 가려진 구간과 보이는 구간으로 나눈다 → [{p: [끝, 끝], hidden}]. skip은 건너뛸 평면 번호(자기 자신)
+            function splitHidden(a, b, planes, skip) {
+                var d = viewDirection(), cuts = [], i;
+                var a2 = project(a), b2 = project(b);
+                for (i = 0; i < planes.length; i++) {
+                    var plane = planes[i];
+                    if (plane === null || i === skip) continue;
+                    var clip = clipConvex(a2, b2, plane.poly2);
+                    var nd = dot3(plane.n, d);
+                    if (clip === null || Math.abs(nd) < 1e-9) continue;
+                    // 같은 화면 자리의 평면 점은 선의 점에서 k·d만큼 떨어져 있다. k < 0이면 평면이 더 앞(가림)
+                    var k0 = (plane.c - dot3(plane.n, a)) / nd, k1 = (plane.c - dot3(plane.n, b)) / nd;
+                    var lo = clip[0], hi = clip[1];
+                    if (k0 >= -HIDE_EPS && k1 >= -HIDE_EPS) continue;
+                    if (k0 < -HIDE_EPS && k1 >= -HIDE_EPS) hi = Math.min(hi, (-HIDE_EPS - k0) / (k1 - k0));
+                    else if (k1 < -HIDE_EPS && k0 >= -HIDE_EPS) lo = Math.max(lo, (-HIDE_EPS - k0) / (k1 - k0));
+                    if (hi - lo > 1e-9) cuts.push([lo, hi]);
+                }
+                cuts.sort(function(x, y) { return x[0] - y[0]; });
+                var merged = [];
+                for (i = 0; i < cuts.length; i++) {
+                    if (merged.length > 0 && cuts[i][0] <= merged[merged.length - 1][1] + 1e-9) merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], cuts[i][1]);
+                    else merged.push([cuts[i][0], cuts[i][1]]);
+                }
+                var out = [], t = 0;
+                function at(u) { return add3(a, scale3(sub3(b, a), u)); }
+                for (i = 0; i < merged.length; i++) {
+                    if (merged[i][0] - t > 1e-9) out.push({ p: [at(t), at(merged[i][0])], hidden: false });
+                    out.push({ p: [at(merged[i][0]), at(merged[i][1])], hidden: true });
+                    t = merged[i][1];
+                }
+                if (1 - t > 1e-9) out.push({ p: [at(t), at(1)], hidden: false });
+                return out;
+            }
+
+            // 볼록다각형(꼭짓점 poly) 안에 드는 선분 ab의 구간 [t0, t1] (Cyrus–Beck). 안 지나면 null
+            function clipConvex(a, b, poly) {
+                var area = 0, t0 = 0, t1 = 1, i;
+                for (i = 0; i < poly.length; i++) {
+                    var next = poly[(i + 1) % poly.length];
+                    area += poly[i][0] * next[1] - next[0] * poly[i][1];
+                }
+                var sign = area >= 0 ? 1 : -1;
+                for (i = 0; i < poly.length; i++) {
+                    var v = poly[i], w = poly[(i + 1) % poly.length], e = [(w[0] - v[0]) * sign, (w[1] - v[1]) * sign];
+                    var f0 = e[0] * (a[1] - v[1]) - e[1] * (a[0] - v[0]), df = e[0] * (b[1] - a[1]) - e[1] * (b[0] - a[0]);
+                    if (Math.abs(df) < 1e-12) {
+                        if (f0 < 0) return null;
+                        continue;
+                    }
+                    var t = -f0 / df;
+                    if (df > 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t);
+                }
+                return t1 - t0 > 1e-9 ? [t0, t1] : null;
+            }
+
+            function cross3(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
 
             // 점 p를 지나고 방향 d인 직선을 평면 사각형 [0,W]×[0,D] (z=0) 안으로 자른 두 끝. 안 지나면 null
             function clipToPlane(p, d, W, D) {
@@ -6589,6 +6869,15 @@ var SCRIPT_KEY = "HighGeometry";
                 var parts = ["v2"];
                 for (var i = 0; i < LINE_KEYS.length; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(LINE_KEYS[i]) ? String(currentLineWidth(LINE_KEYS[i])) : "");
                 try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
+            function addTextRow(parent, label, value, tip) {
+                var row = parent.add("group");
+                row.add("statictext", undefined, label).preferredSize.width = 60;
+                var input = row.add("edittext", undefined, value);
+                input.preferredSize.width = 300;
+                input.helpTip = tip;
+                return input;
             }
 
             function addPanel(parent, title, foldKey) {
@@ -6689,7 +6978,9 @@ var SCRIPT_KEY = "HighGeometry";
                 saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
-                var parts = ["v1", mode, planeMm, thetaDeg, lengthMm, heightMm, distanceMm, directionDeg, fontPt, flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v2", mode, planeMm, thetaDeg, lengthMm, heightMm, distanceMm, directionDeg, fontPt, flags, unitMm,
+                    encodeURIComponent(pointsText), encodeURIComponent(planesText), encodeURIComponent(linesText), encodeURIComponent(guidesText),
+                    encodeURIComponent(rightsText), encodeURIComponent(anglesText), offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -6698,7 +6989,7 @@ var SCRIPT_KEY = "HighGeometry";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 13 || p[9].length !== FLAG_KEYS.length) return;
+                if (p[0] !== "v2" || p.length !== 20 || p[9].length !== FLAG_KEYS.length) return;
                 try {
                     mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
                     planeMm = restoreNumber(p[2], planeMm, 30, 120);
@@ -6709,9 +7000,16 @@ var SCRIPT_KEY = "HighGeometry";
                     directionDeg = restoreNumber(p[7], directionDeg, -80, 80);
                     fontPt = restoreNumber(p[8], fontPt, 5, 14);
                     for (var i = 0; i < FLAG_KEYS.length; i++) opt[FLAG_KEYS[i]] = p[9].charAt(i) === "1";
-                    offsetXmm = restoreNumber(p[10], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-                    offsetYmm = restoreNumber(p[11], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
-                    previewEnabled = p[12] === "1";
+                    unitMm = restoreNumber(p[10], unitMm, 2, 30);
+                    pointsText = decodeURIComponent(p[11]);
+                    planesText = decodeURIComponent(p[12]);
+                    linesText = decodeURIComponent(p[13]);
+                    guidesText = decodeURIComponent(p[14]);
+                    rightsText = decodeURIComponent(p[15]);
+                    anglesText = decodeURIComponent(p[16]);
+                    offsetXmm = restoreNumber(p[17], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[18], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[19] === "1";
                 } catch (restoreError) {}
             }
 
