@@ -5651,6 +5651,14 @@
         "yAxis": "up"
       },
       "properties": {
+        "arrowEnds": {
+          "type": "boolean",
+          "default": false
+        },
+        "axisName": {
+          "type": "string",
+          "default": ""
+        },
         "axisPt": {
           "type": "number",
           "default": 0.4
@@ -5685,9 +5693,31 @@
           "minimum": -20,
           "maximum": 19
         },
+        "moveText": {
+          "type": "string",
+          "default": ""
+        },
+        "numberStep": {
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 10
+        },
+        "pairText": {
+          "type": "string",
+          "default": ""
+        },
+        "plusSign": {
+          "type": "boolean",
+          "default": false
+        },
         "pointsText": {
           "type": "string",
           "default": ""
+        },
+        "shadeMode": {
+          "type": "number",
+          "default": 0
         },
         "showNumbers": {
           "type": "boolean",
@@ -5696,7 +5726,7 @@
         "solutionMm": {
           "type": "number",
           "default": 4,
-          "minimum": 1,
+          "minimum": 0,
           "maximum": 15
         },
         "subdivisions": {
@@ -5704,6 +5734,10 @@
           "default": 1,
           "minimum": 1,
           "maximum": 10
+        },
+        "tickLabelText": {
+          "type": "string",
+          "default": ""
         },
         "tickMm": {
           "type": "number",
