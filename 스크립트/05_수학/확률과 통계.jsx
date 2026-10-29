@@ -3487,7 +3487,7 @@ var SCRIPT_KEY = "HighStatistics";
                 applyTextFonts(frame);
                 if (label.sub) for (var s = 0; s < label.sub.length; s++) frame.textRange.characters[label.sub[s]].characterAttributes.baselinePosition = FontBaselineOption.SUBSCRIPT;
                 var b = frame.geometricBounds;
-                frame.translate(label.at[0] - (b[0] + b[2]) / 2, label.at[1] - (b[1] + b[3]) / 2);
+                frame.translate(label.at[0] + negativeNumberShift(frame, [0, 0]) - (b[0] + b[2]) / 2, label.at[1] - (b[1] + b[3]) / 2);
             }
 
             // 글자 서체 (07_문자/한글·영문 서체 적용.jsx 규칙): 영문·숫자 GSMediumB1(기준선 +0.5pt), 조합 기호 C는 똑바로
@@ -3773,4 +3773,5 @@ var SCRIPT_KEY = "HighStatistics";
         }
         return api;
     }
+
 })();

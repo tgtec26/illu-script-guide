@@ -36,7 +36,7 @@ var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "elli
 var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, SYMBOL_MM = 0.6, TRACE_MM = 3, KAPPA = 0.5522847498;
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
 var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
-var text = state.text, stepCount = state.stepCount || 0, showNames = state.showNames, showAxes = state.showAxes, showAsymptotes = !!state.showAsymptotes, showDimensions = !!state.showDimensions, dimensionRiseMm = 3, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
+var text = state.text, stepCount = state.stepCount || 0, showNames = state.showNames, showAxes = state.showAxes, showGrid = !!state.showGrid, axisNumbers = !!state.axisNumbers, gridStep = state.gridStep || 1, showAsymptotes = !!state.showAsymptotes, showDimensions = !!state.showDimensions, dimensionRiseMm = 3, sizeMm = state.sizeMm, arcRadiusMm = 3, tickMm = 1.6;
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
 const api = (text = {}, extra = {}) => make(Object.assign({
@@ -299,18 +299,19 @@ function lineWidthStore(constNames, raw) {
     const app = { preferences: { getStringPreference: () => raw, setStringPreference: (key, value) => writes.push(value) } };
     const out = new Function("app", ['var PREF_KEY = "T", POSITION_LIMIT_MM = 100;', decl("TEXT_KEYS"),
       'var text = {pointsText: "P0", segmentText: "", dashedText: "", circleText: "", ellipseText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", arrowText: "", arcText: "", fillText: "", constructText: "", areaText: "", locusText: "", parabolaText: "", hyperbolaText: "", vectorText: ""};',
-      "var showNames = true, showAxes = false, showAsymptotes = false, sizeMm = 50, fontPt = 8, labelGapMm = 1.2, arcRadiusMm = 3, tickMm = 1.6, strokePt = 0.8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true;",
+      "var showNames = true, showAxes = false, showGrid = false, axisNumbers = false, gridStep = 1, showAsymptotes = false, sizeMm = 50, fontPt = 8, labelGapMm = 1.2, arcRadiusMm = 3, tickMm = 1.6, strokePt = 0.8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true;",
       "function saveLineWidths() {}"].concat(["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction),
-      ["applySettings(); saveSettings(); return {text: text, asym: showAsymptotes};"]).join("\n"))(app);
-    return { text: out.text, asym: out.asym, saved: writes[0] };
+      ["applySettings(); saveSettings(); return {text: text, asym: showAsymptotes, grid: [showGrid, axisNumbers, gridStep]};"]).join("\n"))(app);
+    return { text: out.text, asym: out.asym, grid: out.grid, saved: writes[0] };
   };
   const v3 = ["v3", encodeURIComponent("A(0,0) B(1,0)")].concat(Array(12).fill(""), ["0", "1", "60", "8", "1.2", "3", "1.6", "0.8", "0", "0", "1"]).join("|");
   const old = store(v3);
   assert.strictEqual(old.text.pointsText, "A(0,0) B(1,0)");
   assert.strictEqual(old.text.constructText, "");
   const saved = old.saved.split("|");
-  assert.strictEqual(saved.length, 32);
-  assert.deepStrictEqual([saved[0], saved[14], saved[15], saved[16], saved[17], saved[18], saved[19], saved[20], saved[21], saved[22], saved[31]], ["v8", "", "", "", "", "", "", "0", "1", "60", "0"]);
+  assert.strictEqual(saved.length, 35);
+  assert.deepStrictEqual([saved[0], saved[14], saved[15], saved[16], saved[17], saved[18], saved[19], saved[20], saved[21], saved[22], saved[31]], ["v9", "", "", "", "", "", "", "0", "1", "60", "0"]);
+  assert.deepStrictEqual(saved.slice(32), ["0", "0", "1"], "v9 끝: 모눈·축 눈금 숫자·간격");
   saved[14] = encodeURIComponent("M=mid(A,B)");
   saved[15] = encodeURIComponent("ABC");
   saved[16] = encodeURIComponent("P:0~360");
@@ -318,10 +319,14 @@ function lineWidthStore(constNames, raw) {
   saved[18] = encodeURIComponent("3x2");
   saved[19] = encodeURIComponent("OA:a");
   saved[31] = "1";
-  const v8 = store(saved.join("|"));
-  assert.deepStrictEqual([v8.text.locusText, v8.text.parabolaText, v8.text.hyperbolaText, v8.text.vectorText, v8.asym], ["P:0~360", "1:r", "3x2", "OA:a", true]);
-  assert.strictEqual(v8.saved, saved.join("|"));
-  const v7list = ["v7"].concat(saved.slice(1, 19), saved.slice(20));
+  saved[32] = "1"; saved[33] = "1"; saved[34] = "0.5";
+  const v9 = store(saved.join("|"));
+  assert.deepStrictEqual([v9.text.locusText, v9.text.parabolaText, v9.text.hyperbolaText, v9.text.vectorText, v9.asym], ["P:0~360", "1:r", "3x2", "OA:a", true]);
+  assert.deepStrictEqual(v9.grid, [true, true, 0.5], "모눈·축 눈금 숫자·간격도 저장한다");
+  assert.strictEqual(v9.saved, saved.join("|"));
+  const v8 = store(["v8"].concat(saved.slice(1, 32)).join("|"));
+  assert.deepStrictEqual([v8.text.vectorText, v8.asym, v8.grid], ["OA:a", true, [false, false, 1]], "v8은 모눈을 처음 값으로");
+  const v7list = ["v7"].concat(saved.slice(1, 19), saved.slice(20, 32));
   const v7 = store(v7list.join("|"));
   assert.deepStrictEqual([v7.text.hyperbolaText, v7.text.vectorText, v7.asym], ["3x2", "", true], "v7은 벡터 이름을 처음 값으로");
   const v6list = ["v6"].concat(v7list.slice(1, 17), v7list.slice(19, 30));
@@ -336,9 +341,23 @@ function lineWidthStore(constNames, raw) {
   const v4 = store(["v4"].concat(v6list.slice(1, 15), v6list.slice(17)).join("|"));
   assert.strictEqual(v4.text.constructText, "M=mid(A,B)", "v4도 읽는다");
   assert.strictEqual(v4.text.areaText, "");
-  assert.strictEqual(store(saved.slice(0, 31).join("|")).text.pointsText, "P0", "칸 수가 틀리면 무시");
+  assert.strictEqual(store(saved.slice(0, 34).join("|")).text.pointsText, "P0", "칸 수가 틀리면 무시");
 }
 
+
+// 모눈과 축 눈금 숫자 (웹 math-geometry.test.js와 같은 경우)
+{
+  const d1 = api({ pointsText: "A(0,0) B(4,3)", segmentText: "A-B" }, { showGrid: true }).buildGeometry();
+  assert.strictEqual(d1.lines.filter((l) => l.kind === "grid").length, 5 + 4, "x=0..4, y=0..3");
+  assert.ok(d1.lines.slice(0, 9).every((l) => l.kind === "grid"), "모눈이 맨 뒤");
+  const d2 = api({ pointsText: "A(0,0) B(4,3)", segmentText: "A-B" }, { showGrid: true, showAxes: true }).buildGeometry();
+  assert.strictEqual(d2.lines.filter((l) => l.kind === "grid").length, 4 + 3, "축 자리는 건너뛴다");
+  const d3 = api({ pointsText: "A(0,0) B(4,3)", segmentText: "A-B" }, { showAxes: true, axisNumbers: true }).buildGeometry();
+  assert.deepStrictEqual(d3.texts.map((t) => t.text).filter((t) => /^-?\d+$/.test(t)).sort(), ["1", "1", "2", "2", "3", "3", "4"]);
+  const half = api({ pointsText: "A(0,0) B(4,3)", segmentText: "A-B" }, { showAxes: true, axisNumbers: true, gridStep: 0.5 }).buildGeometry();
+  assert.ok(half.texts.some((t) => t.text === "0.5") && half.texts.some((t) => t.text === "3.5"));
+  assert.strictEqual(api({ pointsText: "A(0,0) B(4,3)", segmentText: "A-B" }, { axisNumbers: true }).buildGeometry().texts.filter((t) => /^-?\d+$/.test(t.text)).length, 0, "축이 없으면 숫자도 없다");
+}
 // 포물선·쌍곡선 (웹 math-geometry.test.js와 같은 경우)
 {
   const g = api({ pointsText: "F(1,0) P(4,4)", segmentText: "F-P", parabolaText: "(0,0):1:r:4", hyperbolaText: "3x2" }, { showAsymptotes: true });

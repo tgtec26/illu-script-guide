@@ -2169,6 +2169,7 @@ var SCRIPT_KEY = "HighGeometry";
             var ARROW = {length: 4.84, halfWidth: 1.573, notch: 1.24};
             registerHead(ARROW);
             var GUIDE_PT = 0.3;
+            var GRID_K = 30;   // 모눈 선 색(K값)
             var MARK_PT = 0.3;
             var MARK_GAP_MM = 0.7;
             var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "parabolaText", "hyperbolaText", "arcText", "fillText", "angleText", "tickText", "lengthText", "vectorText", "dotText", "labelDirText", "areaText"];
@@ -2196,6 +2197,9 @@ var SCRIPT_KEY = "HighGeometry";
             var showNames = true;
             var stepCount = 0;   // 작도 단계: 0이면 모두, k면 작도 칸의 앞 k개만 (보기용이라 저장하지 않는다)
             var showAxes = false;
+            var showGrid = false;   // 모눈(격자): gridStep 배수마다 가는 선
+            var axisNumbers = false;   // 좌표축 눈금 숫자
+            var gridStep = 1;
             var showAsymptotes = false;   // 쌍곡선 점근선 (점선)
             var sizeMm = 50;
             var fontPt = 8;
@@ -2209,7 +2213,7 @@ var SCRIPT_KEY = "HighGeometry";
             var showDimensions = true;
             var dimensionRiseMm = 3;
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-            var DEFAULTS = {sizeMm: sizeMm, fontPt: fontPt, labelGapMm: labelGapMm, arcRadiusMm: arcRadiusMm, tickMm: tickMm, strokePt: strokePt,
+            var DEFAULTS = {gridStep: gridStep, sizeMm: sizeMm, fontPt: fontPt, labelGapMm: labelGapMm, arcRadiusMm: arcRadiusMm, tickMm: tickMm, strokePt: strokePt,
                 offsetXmm: offsetXmm, offsetYmm: offsetYmm, dimensionRiseMm: dimensionRiseMm};
             applySettings();
             loadDimensionSettings();
@@ -2251,12 +2255,20 @@ var SCRIPT_KEY = "HighGeometry";
             var axesCheck = markPanel.add("checkbox", undefined, "좌표축 (원점 O)");
             axesCheck.value = showAxes;
             axesCheck.helpTip = "원점을 지나는 x축·y축과 화살촉, 글자 x·y·O. 점 좌표의 원점이 기준";
+            var gridCheck = markPanel.add("checkbox", undefined, "모눈 (격자)");
+            gridCheck.value = showGrid;
+            gridCheck.helpTip = "점 좌표의 간격(아래 모눈·눈금 간격)마다 가는 회색 선. 좌표축이 있으면 축 자리는 건너뛴다";
+            var axisNumbersCheck = markPanel.add("checkbox", undefined, "축 눈금 숫자 (좌표축 필요)");
+            axisNumbersCheck.value = axisNumbers;
+            axisNumbersCheck.helpTip = "좌표축 위에 모눈·눈금 간격마다 눈금선과 숫자";
             var asymptoteCheck = markPanel.add("checkbox", undefined, "쌍곡선 점근선 (점선)");
             asymptoteCheck.value = showAsymptotes;
 
             var sizePanel = addPanel(win, "크기");
             var sizeControls = addValueRow(sizePanel, "그림 크기", "mm", sizeMm, 20, 140, 1, 0);
             sizeControls.input.helpTip = "그림에서 가장 긴 쪽의 길이";
+            var gridControls = addValueRow(sizePanel, "모눈·눈금 간격", "좌표", gridStep, 0.1, 100, 0.1, 1);
+            gridControls.input.helpTip = "모눈 선과 축 눈금 숫자의 간격 (점 좌표 단위)";
             var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var gapControls = addValueRow(sizePanel, "글자 간격", "mm", labelGapMm, 0, 5, 0.1, 1);
             var arcControls = addValueRow(sizePanel, "각 호 반지름", "mm", arcRadiusMm, 1, 10, 0.5, 1);
@@ -2282,6 +2294,9 @@ var SCRIPT_KEY = "HighGeometry";
 
             nameCheck.onClick = function() { showNames = nameCheck.value; updatePreview(); };
             axesCheck.onClick = function() { showAxes = axesCheck.value; updatePreview(); };
+            gridCheck.onClick = function() { showGrid = gridCheck.value; updatePreview(); };
+            axisNumbersCheck.onClick = function() { axisNumbers = axisNumbersCheck.value; updatePreview(); };
+            bindValueRow(gridControls, function(value) { gridStep = value; }, DEFAULTS.gridStep);
             asymptoteCheck.onClick = function() { showAsymptotes = asymptoteCheck.value; updatePreview(); };
             bindValueRow(sizeControls, function(value) { sizeMm = value; }, DEFAULTS.sizeMm);
             bindValueRow(stepControls, function(value) { stepCount = Math.round(value); }, 0);
@@ -2397,8 +2412,8 @@ var SCRIPT_KEY = "HighGeometry";
                 }
                 path.filled = false;
                 path.stroked = true;
-                path.strokeColor = makeGray(100);
-                path.strokeWidth = line.kind === "mark" ? MARK_PT : ((line.kind === "dimension" || line.kind === "dashed") ? GUIDE_PT : (line.kind === "axis" ? AXIS_PT : strokePt));
+                path.strokeColor = makeGray(line.kind === "grid" ? GRID_K : 100);
+                path.strokeWidth = line.kind === "grid" ? GUIDE_PT : (line.kind === "mark" ? MARK_PT : ((line.kind === "dimension" || line.kind === "dashed") ? GUIDE_PT : (line.kind === "axis" ? AXIS_PT : strokePt)));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.BEVELENDJOIN;
                 if (line.kind === "dashed" || line.kind === "dimension") path.strokeDashes = GUIDE_DASH;
@@ -3736,6 +3751,18 @@ var SCRIPT_KEY = "HighGeometry";
 
                 // 색칠은 맨 아래, 그 가장자리는 도형 선으로
                 function mapped(list) { var m = []; for (var u = 0; u < list.length; u++) m.push(T(list[u])); return m; }
+                // 모눈: 그림 범위 안의 gridStep 배수마다 가는 선(K30, 맨 뒤). 좌표축이 있으면 축 자리(0)는 건너뛴다
+                var gridUnit = gridStep > 0 ? gridStep : 1;
+                function multiples(lo, hi) {
+                    var list = [];
+                    for (var gk = Math.ceil(lo / gridUnit - 1e-9); gk * gridUnit <= hi + 1e-9; gk++) list.push(Number((gk * gridUnit).toFixed(10)));
+                    return list;
+                }
+                if (showGrid) {
+                    var gridXs = multiples(x0, x1), gridYs = multiples(y0, y1);
+                    for (i = 0; i < gridXs.length; i++) if (!(axes && gridXs[i] === 0)) out.lines.push(straight([T([gridXs[i], y0]), T([gridXs[i], y1])], "grid", false));
+                    for (i = 0; i < gridYs.length; i++) if (!(axes && gridYs[i] === 0)) out.lines.push(straight([T([x0, gridYs[i]]), T([x1, gridYs[i]])], "grid", false));
+                }
                 for (i = 0; i < fills.length; i++) {
                     var fillLine = straight(mapped(fills[i].pts), "fill", true);
                     fillLine.fillK = fills[i].fillK;
@@ -3786,6 +3813,22 @@ var SCRIPT_KEY = "HighGeometry";
                     out.arrows.push({tip: axR, dir: [1, 0]}, {tip: axT, dir: [0, 1]});
                     out.texts.push({text: "x", at: axR, dir: [0, -1], clear: 0}, {text: "y", at: axT, dir: [-1, 0], clear: 0});
                     if (!table.hasOwnProperty("O")) out.texts.push({text: "O", at: axO, dir: [-0.7071, -0.7071], clear: 0, upright: true});
+                    // 축 눈금 숫자: gridStep마다 눈금선과 숫자 (x축은 아래, y축은 왼쪽)
+                    if (axisNumbers) {
+                        var numHalf = 1.2 * MM_TO_PT / 2, numXs = multiples(axes.l, axes.r), numYs = multiples(axes.b, axes.t);
+                        for (i = 0; i < numXs.length; i++) {
+                            if (numXs[i] === 0) continue;
+                            var numAtX = T([numXs[i], 0]);
+                            out.lines.push(straight([[numAtX[0], numAtX[1] - numHalf], [numAtX[0], numAtX[1] + numHalf]], "axis", false));
+                            out.texts.push({text: String(numXs[i]), at: numAtX, dir: [0, -1], clear: numHalf});
+                        }
+                        for (i = 0; i < numYs.length; i++) {
+                            if (numYs[i] === 0) continue;
+                            var numAtY = T([0, numYs[i]]);
+                            out.lines.push(straight([[numAtY[0] - numHalf, numAtY[1]], [numAtY[0] + numHalf, numAtY[1]]], "axis", false));
+                            out.texts.push({text: String(numYs[i]), at: numAtY, dir: [-1, 0], clear: numHalf});
+                        }
+                    }
                 }
                 for (i = 0; i < segments.length; i++) addChain(segments[i], "main");
                 for (i = 0; i < dashed.length; i++) addChain(dashed[i], "dashed");
@@ -4200,9 +4243,9 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v8"];
+                var parts = ["v9"];
                 for (var i = 0; i < TEXT_KEYS.length; i++) parts.push(encodeURIComponent(text[TEXT_KEYS[i]]));
-                parts.push(showNames ? "1" : "0", showAxes ? "1" : "0", sizeMm, fontPt, labelGapMm, arcRadiusMm, tickMm, strokePt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", showAsymptotes ? "1" : "0");
+                parts.push(showNames ? "1" : "0", showAxes ? "1" : "0", sizeMm, fontPt, labelGapMm, arcRadiusMm, tickMm, strokePt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", showAsymptotes ? "1" : "0", showGrid ? "1" : "0", axisNumbers ? "1" : "0", gridStep);
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -4212,8 +4255,8 @@ var SCRIPT_KEY = "HighGeometry";
                 if (!raw) return;
                 var p = raw.split("|");
                 // v8은 글 19칸(벡터 이름까지)과 끝에 점근선, v7은 글 18칸(포물선·쌍곡선까지), v6는 글 16칸(자취 글 locusText까지), v5는 자취 글이 없는 15칸, v4는 넓이 글도 없는 14칸, 옛 v3는 작도 글도 없는 13칸이다
-                var textCount = p[0] === "v8" ? TEXT_KEYS.length : (p[0] === "v7" ? TEXT_KEYS.length - 1 : (p[0] === "v6" ? TEXT_KEYS.length - 3 : (p[0] === "v5" ? TEXT_KEYS.length - 4 : (p[0] === "v4" ? TEXT_KEYS.length - 5 : (p[0] === "v3" ? TEXT_KEYS.length - 6 : -1)))));
-                if (textCount < 0 || p.length !== textCount + (p[0] === "v8" || p[0] === "v7" ? 13 : 12)) return;
+                var textCount = p[0] === "v9" || p[0] === "v8" ? TEXT_KEYS.length : (p[0] === "v7" ? TEXT_KEYS.length - 1 : (p[0] === "v6" ? TEXT_KEYS.length - 3 : (p[0] === "v5" ? TEXT_KEYS.length - 4 : (p[0] === "v4" ? TEXT_KEYS.length - 5 : (p[0] === "v3" ? TEXT_KEYS.length - 6 : -1)))));
+                if (textCount < 0 || p.length !== textCount + (p[0] === "v9" ? 16 : (p[0] === "v8" || p[0] === "v7" ? 13 : 12))) return;
                 try {
                     var restored = {};
                     for (var i = 0; i < textCount; i++) restored[TEXT_KEYS[i]] = decodeURIComponent(p[1 + i]);
@@ -4230,7 +4273,12 @@ var SCRIPT_KEY = "HighGeometry";
                     offsetXmm = restoreNumber(p[n + 8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[n + 9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[n + 10] === "1";
-                    if (p[0] === "v8" || p[0] === "v7") showAsymptotes = p[n + 11] === "1";
+                    if (p[0] === "v9" || p[0] === "v8" || p[0] === "v7") showAsymptotes = p[n + 11] === "1";
+                    if (p[0] === "v9") {
+                        showGrid = p[n + 12] === "1";
+                        axisNumbers = p[n + 13] === "1";
+                        gridStep = restoreNumber(p[n + 14], gridStep, 0.1, 100);
+                    }
                 } catch (restoreError) {}
             }
 

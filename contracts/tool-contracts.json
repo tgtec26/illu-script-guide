@@ -5221,6 +5221,10 @@
           "type": "string",
           "default": ""
         },
+        "axisNumbers": {
+          "type": "boolean",
+          "default": false
+        },
         "axisPt": {
           "type": "number",
           "default": 0.4
@@ -5264,6 +5268,12 @@
         "graphPt": {
           "type": "number",
           "default": 0.8
+        },
+        "gridStep": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0.1,
+          "maximum": 100
         },
         "guidePt": {
           "type": "number",
@@ -5314,6 +5324,10 @@
         "showDimensions": {
           "type": "boolean",
           "default": true
+        },
+        "showGrid": {
+          "type": "boolean",
+          "default": false
         },
         "showNames": {
           "type": "boolean",
