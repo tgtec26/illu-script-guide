@@ -32,7 +32,7 @@ const names = ["evalNumber", "splitItems", "tokenizeNames", "readPoints", "readC
   "ConstructFail", "readConstructions", "constructPoint", "touchingCircle", "readAreas", "measureLength", "measureAngle", "measureArea", "readLoci", "withT", "traceLocus", "plotParametric", "toBezierCurve", "usesLater",
   "readPlace", "readParabolas", "readHyperbolas", "parabolaCurve", "hyperbolaCurves", "asymptoteSegments"];
 const make = new Function("state", `
-var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "parabolaText", "hyperbolaText", "arcText", "fillText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "areaText"];
+var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "parabolaText", "hyperbolaText", "arcText", "fillText", "angleText", "tickText", "lengthText", "vectorText", "dotText", "labelDirText", "areaText"];
 var MM_TO_PT = 2.834645669, MARK_GAP_MM = 0.7, SYMBOL_MM = 0.6, TRACE_MM = 3, KAPPA = 0.5522847498;
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
 var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
@@ -40,7 +40,7 @@ var text = state.text, stepCount = state.stepCount || 0, showNames = state.showN
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
 const api = (text = {}, extra = {}) => make(Object.assign({
-  text: Object.assign({ pointsText: "", constructText: "", segmentText: "", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", areaText: "", locusText: "", parabolaText: "", hyperbolaText: "" }, text),
+  text: Object.assign({ pointsText: "", constructText: "", segmentText: "", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", areaText: "", locusText: "", parabolaText: "", hyperbolaText: "", vectorText: "" }, text),
   showNames: true, showAxes: false, sizeMm: 50,
 }, extra));
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
@@ -291,14 +291,14 @@ function lineWidthStore(constNames, raw) {
   assert.deepStrictEqual(d.texts.map((t) => t.text), ["A", "B", "C", "M"]);
   assert.strictEqual(d.lines.filter((l) => l.kind === "main").length, 2);
 }
-// 설정 저장: 포물선·쌍곡선 글과 점근선까지 v7(31칸)로 쓰고, 자취 글까지의 v6(28칸), 자취 글이 없는 v5(27칸)·넓이 글도 없는 v4(26칸)·작도 글도 없는 옛 v3(25칸)도 읽는다. 다른 태그·칸 수는 무시한다
+// 설정 저장: 벡터 이름 글까지 v8(32칸)로 쓰고, 포물선·쌍곡선 글과 점근선까지의 v7(31칸), 자취 글까지의 v6(28칸), 자취 글이 없는 v5(27칸)·넓이 글도 없는 v4(26칸)·작도 글도 없는 옛 v3(25칸)도 읽는다. 다른 태그·칸 수는 무시한다
 {
   const decl = (name) => { const at = source.indexOf(`var ${name} = `); assert.ok(at >= 0, name); return source.slice(at, source.indexOf("\n", at)); };
   const store = (raw) => {
     const writes = [];
     const app = { preferences: { getStringPreference: () => raw, setStringPreference: (key, value) => writes.push(value) } };
     const out = new Function("app", ['var PREF_KEY = "T", POSITION_LIMIT_MM = 100;', decl("TEXT_KEYS"),
-      'var text = {pointsText: "P0", segmentText: "", dashedText: "", circleText: "", ellipseText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", arrowText: "", arcText: "", fillText: "", constructText: "", areaText: "", locusText: "", parabolaText: "", hyperbolaText: ""};',
+      'var text = {pointsText: "P0", segmentText: "", dashedText: "", circleText: "", ellipseText: "", angleText: "", tickText: "", lengthText: "", dotText: "", labelDirText: "", arrowText: "", arcText: "", fillText: "", constructText: "", areaText: "", locusText: "", parabolaText: "", hyperbolaText: "", vectorText: ""};',
       "var showNames = true, showAxes = false, showAsymptotes = false, sizeMm = 50, fontPt = 8, labelGapMm = 1.2, arcRadiusMm = 3, tickMm = 1.6, strokePt = 0.8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true;",
       "function saveLineWidths() {}"].concat(["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction),
       ["applySettings(); saveSettings(); return {text: text, asym: showAsymptotes};"]).join("\n"))(app);
@@ -309,18 +309,22 @@ function lineWidthStore(constNames, raw) {
   assert.strictEqual(old.text.pointsText, "A(0,0) B(1,0)");
   assert.strictEqual(old.text.constructText, "");
   const saved = old.saved.split("|");
-  assert.strictEqual(saved.length, 31);
-  assert.deepStrictEqual([saved[0], saved[14], saved[15], saved[16], saved[17], saved[18], saved[19], saved[20], saved[21], saved[30]], ["v7", "", "", "", "", "", "0", "1", "60", "0"]);
+  assert.strictEqual(saved.length, 32);
+  assert.deepStrictEqual([saved[0], saved[14], saved[15], saved[16], saved[17], saved[18], saved[19], saved[20], saved[21], saved[22], saved[31]], ["v8", "", "", "", "", "", "", "0", "1", "60", "0"]);
   saved[14] = encodeURIComponent("M=mid(A,B)");
   saved[15] = encodeURIComponent("ABC");
   saved[16] = encodeURIComponent("P:0~360");
   saved[17] = encodeURIComponent("1:r");
   saved[18] = encodeURIComponent("3x2");
-  saved[30] = "1";
-  const v7 = store(saved.join("|"));
-  assert.deepStrictEqual([v7.text.locusText, v7.text.parabolaText, v7.text.hyperbolaText, v7.asym], ["P:0~360", "1:r", "3x2", true]);
-  assert.strictEqual(v7.saved, saved.join("|"));
-  const v6list = ["v6"].concat(saved.slice(1, 17), saved.slice(19, 30));
+  saved[19] = encodeURIComponent("OA:a");
+  saved[31] = "1";
+  const v8 = store(saved.join("|"));
+  assert.deepStrictEqual([v8.text.locusText, v8.text.parabolaText, v8.text.hyperbolaText, v8.text.vectorText, v8.asym], ["P:0~360", "1:r", "3x2", "OA:a", true]);
+  assert.strictEqual(v8.saved, saved.join("|"));
+  const v7list = ["v7"].concat(saved.slice(1, 19), saved.slice(20));
+  const v7 = store(v7list.join("|"));
+  assert.deepStrictEqual([v7.text.hyperbolaText, v7.text.vectorText, v7.asym], ["3x2", "", true], "v7은 벡터 이름을 처음 값으로");
+  const v6list = ["v6"].concat(v7list.slice(1, 17), v7list.slice(19, 30));
   const v6 = store(v6list.join("|"));
   assert.strictEqual(v6.text.constructText, "M=mid(A,B)");
   assert.strictEqual(v6.text.areaText, "ABC");
@@ -332,7 +336,7 @@ function lineWidthStore(constNames, raw) {
   const v4 = store(["v4"].concat(v6list.slice(1, 15), v6list.slice(17)).join("|"));
   assert.strictEqual(v4.text.constructText, "M=mid(A,B)", "v4도 읽는다");
   assert.strictEqual(v4.text.areaText, "");
-  assert.strictEqual(store(saved.slice(0, 30).join("|")).text.pointsText, "P0", "칸 수가 틀리면 무시");
+  assert.strictEqual(store(saved.slice(0, 31).join("|")).text.pointsText, "P0", "칸 수가 틀리면 무시");
 }
 
 // 포물선·쌍곡선 (웹 math-geometry.test.js와 같은 경우)
@@ -497,3 +501,17 @@ console.log("geometry locus ok");
   assert.ok(source.includes("작도 단계"), "대화상자");
 }
 console.log("geometry steps ok");
+
+// 벡터 이름 (웹 math-geometry.test.js와 같은 경우)
+{
+  const g = api({ pointsText: "O(0,0) A(4,0) B(1,3)", segmentText: "", angleText: "", lengthText: "", arrowText: "O-A, O-B", vectorText: "OA:a, OB:b, AB:2a-b" });
+  const d = g.buildGeometry();
+  assert.deepStrictEqual(d.notes, []);
+  const a = d.texts.find((t) => t.text === "a"), mixed = d.texts.find((t) => t.text === "2a-b");
+  assert.deepStrictEqual(a.over, [0]);
+  assert.deepStrictEqual(mixed.over, [1, 3], "소문자마다");
+  assert.ok(a.dir[1] < 0, "OA는 아래가 바깥");
+  assert.deepStrictEqual(api({ pointsText: "A(0,0) B(1,0)", vectorText: "AZ:a" }).buildGeometry().notes.filter((n) => /벡터/.test(n)), ["벡터 AZ:a"]);
+  assert.ok(source.includes("if (label.over && label.over.length > 0) { addOverLabel(label); return; }"), "글자 위 화살표 라벨");
+}
+console.log("geometry vector names ok");

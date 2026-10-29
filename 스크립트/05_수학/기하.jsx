@@ -2171,7 +2171,7 @@ var SCRIPT_KEY = "HighGeometry";
             var GUIDE_PT = 0.3;
             var MARK_PT = 0.3;
             var MARK_GAP_MM = 0.7;
-            var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "parabolaText", "hyperbolaText", "arcText", "fillText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "areaText"];
+            var STEP_FIELDS = ["segmentText", "dashedText", "arrowText", "circleText", "ellipseText", "parabolaText", "hyperbolaText", "arcText", "fillText", "angleText", "tickText", "lengthText", "vectorText", "dotText", "labelDirText", "areaText"];
             var TRACE_MM = 3;      // 작도 흔적 호가 지나는 점 양쪽으로 뻗는 길이
             var SYMBOL_MM = 0.6;   // 같은 각 기호(•·∘·×)의 반지름·반 너비 (• 지름 약 1 mm)
             var DOT_RADIUS_MM = 0.6;
@@ -2179,7 +2179,8 @@ var SCRIPT_KEY = "HighGeometry";
             var DIMENSION_LABEL_GAP_MM = 0.7;
             var KAPPA = 0.5522847498;
             var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
-            var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText", "constructText", "areaText", "locusText", "parabolaText", "hyperbolaText"];
+            var OVER_ARROW = { length: 1.4, halfWidth: 0.55, notch: 0.3 };   // 글자 위 화살표 (9pt 기준, 벡터 이름)
+            var TEXT_KEYS = ["pointsText", "segmentText", "dashedText", "circleText", "ellipseText", "angleText", "tickText", "lengthText", "dotText", "labelDirText", "arrowText", "arcText", "fillText", "constructText", "areaText", "locusText", "parabolaText", "hyperbolaText", "vectorText"];
 
             var doc = app.activeDocument;
             var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
@@ -2191,7 +2192,7 @@ var SCRIPT_KEY = "HighGeometry";
 
             // 옵션
             var text = {pointsText: "A(0,3) B(0,0) C(4,0)", segmentText: "A-B-C-A", dashedText: "", circleText: "", ellipseText: "", arrowText: "", arcText: "", fillText: "",
-                angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: "", constructText: "", areaText: "", locusText: "", parabolaText: "", hyperbolaText: ""};
+                angleText: "ABC:R", tickText: "", lengthText: "AB:3, BC:4", dotText: "", labelDirText: "", constructText: "", areaText: "", locusText: "", parabolaText: "", hyperbolaText: "", vectorText: ""};
             var showNames = true;
             var stepCount = 0;   // 작도 단계: 0이면 모두, k면 작도 칸의 앞 k개만 (보기용이라 저장하지 않는다)
             var showAxes = false;
@@ -2241,6 +2242,7 @@ var SCRIPT_KEY = "HighGeometry";
             var markPanel = addPanel(win, "표시");
             addTextRow(markPanel, "같은 길이", "tickText", "AB:1, CD:2 — 변 가운데에 눈금 1~3개, AB:> · AB:>> 평행 표시");
             addTextRow(markPanel, "변 길이", "lengthText", "AB:5, BC:2√3 — 변 가운데에서 바깥쪽에 글자. AB:?는 좌표로 잰 길이(√13, 2√2, 2.5)");
+            addTextRow(markPanel, "벡터 이름", "vectorText", "OA:a 변(화살표) OA 가운데 바깥쪽에 a⃗. 소문자마다 글자 위 화살표를 얹는다(AB:2a-b → 2a⃗-b⃗). 쉼표로 여러 개");
             addTextRow(markPanel, "넓이", "areaText", "ABC — 다각형 꼭짓점들의 가운데에 좌표로 잰 넓이(6, 7.5), ABCD:S는 글자 S. 꼭짓점 셋 이상, 쉼표로 여러 개");
             addTextRow(markPanel, "점 찍기", "dotText", "점으로 찍을 점 이름: P Q");
             addTextRow(markPanel, "글자 방향", "labelDirText", "점 이름 글자 방향: A:ul, P:r (u 위, d 아래, l 왼쪽, r 오른쪽, ul·ur·dl·dr 대각선). 안 쓰면 그림 가운데에서 바깥쪽. I:x는 그 점의 이름을 쓰지 않는다(작도용 보조점)");
@@ -2442,7 +2444,63 @@ var SCRIPT_KEY = "HighGeometry";
                 return bar;
             }
 
+            // 글자 위 화살표가 있는 라벨(벡터 a⃗): over 자리의 글자를 따로 놓고 그 글자 윗변 위에 작은 화살표를 긋는다 (웹 overArrowPaths와 같은 뜻)
+            function addOverLabel(label) {
+                var itemsBefore = previewGroup.pageItems.length, overAt = {}, parts = [], run = "", k;
+                for (k = 0; k < label.over.length; k++) overAt[label.over[k]] = true;
+                for (k = 0; k < label.text.length; k++) {
+                    if (overAt[k]) {
+                        if (run !== "") parts.push({text: run, vector: false});
+                        run = "";
+                        parts.push({text: label.text.charAt(k), vector: true});
+                    } else run += label.text.charAt(k);
+                }
+                if (run !== "") parts.push({text: run, vector: false});
+                var frames = [], x = 0;
+                for (k = 0; k < parts.length; k++) {
+                    var piece = previewGroup.textFrames.add();
+                    piece.contents = parts[k].text;
+                    var pieceAttributes = piece.textRange.characterAttributes;
+                    pieceAttributes.size = fontPt;
+                    pieceAttributes.fillColor = makeGray(100);
+                    applyTextFonts(piece, label.upright);
+                    var pb = piece.geometricBounds;
+                    piece.translate(x - pb[0], 0);
+                    x += pb[2] - pb[0] + fontPt * 0.05;
+                    frames.push(piece);
+                }
+                var left = Infinity, top = -Infinity, right = -Infinity, bottom = Infinity;
+                for (k = 0; k < frames.length; k++) {
+                    var fb = frames[k].geometricBounds;
+                    left = Math.min(left, fb[0]); top = Math.max(top, fb[1]); right = Math.max(right, fb[2]); bottom = Math.min(bottom, fb[3]);
+                }
+                var rise = fontPt * 0.28, halfW = (right - left) / 2, halfH = (top + rise - bottom) / 2, dir = label.dir;
+                var reach = (label.clear || 0) + labelGapMm * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
+                var dx = label.at[0] + dir[0] * reach - (left + right) / 2, dy = label.at[1] + dir[1] * reach - (bottom + top + rise) / 2;
+                var scale = fontPt / 9;
+                for (k = 0; k < frames.length; k++) {
+                    frames[k].translate(dx, dy);
+                    if (!parts[k].vector) continue;
+                    var ob = frames[k].geometricBounds, w = ob[2] - ob[0];
+                    var y = ob[1] + fontPt * 0.12, x0 = ob[0] + w * 0.1, x1 = ob[2] - w * 0.02 + fontPt * 0.1;
+                    addPath({points: [plain([x0, y]), plain([x1 - OVER_ARROW.length * scale + OVER_ARROW.notch * scale, y])], kind: "mark"});
+                    var overHead = headShapeFor([x1, y], [1, 0], OVER_ARROW, scale);
+                    var overPath = previewGroup.pathItems.add();
+                    overPath.setEntirePath(overHead.points);
+                    overPath.closed = overHead.closed;
+                    paintHead(overPath, overHead.closed, makeGray(100));
+                }
+                // 글자 여러 개·화살표로 된 라벨은 한 그룹으로 묶어 겹침 풀기가 한 덩어리로 옮기게 한다
+                var made = previewGroup.pageItems.length - itemsBefore;
+                if (made > 1) {
+                    var holder = previewGroup.groupItems.add();
+                    for (k = made; k >= 1; k--) previewGroup.pageItems[k].move(holder, ElementPlacement.PLACEATEND);
+                    label.item = holder;
+                }
+            }
+
             function addLabel(label) {
+                if (label.over && label.over.length > 0) { addOverLabel(label); return; }
                 if (typeof buildStackedLabel === "function" && hasFractionText(label.text)) {
                     label.item = buildStackedLabel(previewGroup, label, fontPt, labelGapMm * MM_TO_PT, stackFrame, stackBar);
                     return;
@@ -3599,6 +3657,7 @@ var SCRIPT_KEY = "HighGeometry";
                 var angles = readAngles(src.angleText, names, notes);
                 var ticks = readPairTexts(src.tickText, names, "눈금", notes);
                 var lengths = readPairTexts(src.lengthText, names, "길이", notes);
+                var vectorItems = readPairTexts(src.vectorText || "", names, "벡터", notes);
                 var areas = readAreas(src.areaText, names, notes);
                 var dotNames = [], i, k, t;
                 // 측정: 길이·각 글자에 ?를 쓰면 좌표로 잰 값을 쓴다 (AB:? → √13, BAC:? → 60°. 웹 math-geometry.js와 같다)
@@ -3848,6 +3907,21 @@ var SCRIPT_KEY = "HighGeometry";
                         lengthLabel.clear = 0;
                     }
                     out.texts.push(lengthLabel);
+                }
+
+                // 벡터 이름: 변 가운데에서 그림 바깥쪽으로, 소문자(a, b)마다 글자 위 화살표 (2a-b → a⃗, b⃗. 웹 math-geometry.js와 같다)
+                for (i = 0; i < vectorItems.length; i++) {
+                    if (!vectorItems[i].text) continue;
+                    var va = P(vectorItems[i].names[0]), vb = P(vectorItems[i].names[1]);
+                    var valong = unitVector([vb[0] - va[0], vb[1] - va[1]]);
+                    var vnormal = [-valong[1], valong[0]];
+                    var vmid = [(va[0] + vb[0]) / 2, (va[1] + vb[1]) / 2];
+                    if (vnormal[0] * (vmid[0] - centroid[0]) + vnormal[1] * (vmid[1] - centroid[1]) < 0) vnormal = [-vnormal[0], -vnormal[1]];
+                    var vectorLabel = display(vectorItems[i].text);
+                    vectorLabel.over = [];
+                    for (k = 0; k < vectorLabel.text.length; k++) if (/[a-z]/.test(vectorLabel.text.charAt(k))) vectorLabel.over.push(k);
+                    vectorLabel.at = vmid; vectorLabel.dir = vnormal; vectorLabel.clear = 0;
+                    out.texts.push(vectorLabel);
                 }
 
                 // 호 눈금(같은 호)·호 글자: 호 가운데에서 중심 바깥쪽으로
@@ -4125,7 +4199,7 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v7"];
+                var parts = ["v8"];
                 for (var i = 0; i < TEXT_KEYS.length; i++) parts.push(encodeURIComponent(text[TEXT_KEYS[i]]));
                 parts.push(showNames ? "1" : "0", showAxes ? "1" : "0", sizeMm, fontPt, labelGapMm, arcRadiusMm, tickMm, strokePt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", showAsymptotes ? "1" : "0");
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
@@ -4136,9 +4210,9 @@ var SCRIPT_KEY = "HighGeometry";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v7은 글 18칸(포물선·쌍곡선까지)과 끝에 점근선, v6는 글 16칸(자취 글 locusText까지), v5는 자취 글이 없는 15칸, v4는 넓이 글도 없는 14칸, 옛 v3는 작도 글도 없는 13칸이다
-                var textCount = p[0] === "v7" ? TEXT_KEYS.length : (p[0] === "v6" ? TEXT_KEYS.length - 2 : (p[0] === "v5" ? TEXT_KEYS.length - 3 : (p[0] === "v4" ? TEXT_KEYS.length - 4 : (p[0] === "v3" ? TEXT_KEYS.length - 5 : -1))));
-                if (textCount < 0 || p.length !== textCount + (p[0] === "v7" ? 13 : 12)) return;
+                // v8은 글 19칸(벡터 이름까지)과 끝에 점근선, v7은 글 18칸(포물선·쌍곡선까지), v6는 글 16칸(자취 글 locusText까지), v5는 자취 글이 없는 15칸, v4는 넓이 글도 없는 14칸, 옛 v3는 작도 글도 없는 13칸이다
+                var textCount = p[0] === "v8" ? TEXT_KEYS.length : (p[0] === "v7" ? TEXT_KEYS.length - 1 : (p[0] === "v6" ? TEXT_KEYS.length - 3 : (p[0] === "v5" ? TEXT_KEYS.length - 4 : (p[0] === "v4" ? TEXT_KEYS.length - 5 : (p[0] === "v3" ? TEXT_KEYS.length - 6 : -1)))));
+                if (textCount < 0 || p.length !== textCount + (p[0] === "v8" || p[0] === "v7" ? 13 : 12)) return;
                 try {
                     var restored = {};
                     for (var i = 0; i < textCount; i++) restored[TEXT_KEYS[i]] = decodeURIComponent(p[1 + i]);
@@ -4155,7 +4229,7 @@ var SCRIPT_KEY = "HighGeometry";
                     offsetXmm = restoreNumber(p[n + 8], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[n + 9], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[n + 10] === "1";
-                    if (p[0] === "v7") showAsymptotes = p[n + 11] === "1";
+                    if (p[0] === "v8" || p[0] === "v7") showAsymptotes = p[n + 11] === "1";
                 } catch (restoreError) {}
             }
 

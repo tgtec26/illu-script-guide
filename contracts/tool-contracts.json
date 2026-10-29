@@ -5239,6 +5239,10 @@
         "tickText": {
           "type": "string",
           "default": ""
+        },
+        "vectorText": {
+          "type": "string",
+          "default": ""
         }
       }
     },
