@@ -7128,6 +7128,10 @@
         "yAxis": "up"
       },
       "properties": {
+        "arrangement": {
+          "type": "number",
+          "default": 0
+        },
         "axisPt": {
           "type": "number",
           "default": 0.4
@@ -7158,9 +7162,17 @@
           "minimum": 5,
           "maximum": 40
         },
+        "regionText": {
+          "type": "string",
+          "default": ""
+        },
         "setCount": {
           "type": "number",
           "default": 0
+        },
+        "setNames": {
+          "type": "string",
+          "default": ""
         },
         "shadeK": {
           "type": "number",
@@ -7171,6 +7183,14 @@
         "shadeText": {
           "type": "string",
           "default": "A∩B"
+        },
+        "showUniverse": {
+          "type": "boolean",
+          "default": true
+        },
+        "universeName": {
+          "type": "string",
+          "default": "U"
         }
       }
     },

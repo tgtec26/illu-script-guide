@@ -3101,7 +3101,8 @@ var SCRIPT_KEY = "HighMathCommon";
             var ENG_BASELINE_PT = 0.5;
             var MAIN_PT = 0.8;
             var LABEL_GAP_MM = 0.8;
-            var COUNTS = ["2개 (A, B)", "3개 (A, B, C)"];
+            var COUNTS = ["2개 (A, B)", "3개 (A, B, C)", "1개 (A)"];
+            var ARRANGEMENTS = ["겹침", "서로소 (떨어진 두 원)", "포함 (B가 A 안에)"];
 
             var doc = app.activeDocument;
             var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
@@ -3117,6 +3118,11 @@ var SCRIPT_KEY = "HighMathCommon";
             var radiusMm = 12;
             var overlapPct = 45;
             var fontPt = 8;
+            var arrangement = 0;          // 2개일 때 0 겹침, 1 서로소, 2 포함(B⊂A)
+            var showUniverse = true;      // 전체집합 틀
+            var universeName = "U";
+            var setNames = "";            // "P, Q" (비우면 A, B, C)
+            var regionText = "";          // 영역 글자 "A-B: 1, 3; A∩B: 2"
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
@@ -3141,6 +3147,24 @@ var SCRIPT_KEY = "HighMathCommon";
             var shadeInput = shadeRow.add("edittext", undefined, shadeText);
             shadeInput.preferredSize.width = 300;
             shadeInput.helpTip = "A∩B, A∪B, A-B, (A∪B)ᶜ, A∩Bᶜ∩C, U, ∅. ∩ 대신 n 또는 &, ∪ 대신 u 또는 +, ᶜ 대신 ' 또는 ^c. 비우면 칠하지 않는다";
+            var arrangeRow = setPanel.add("group");
+            arrangeRow.add("statictext", undefined, "배치:");
+            var arrangeList = arrangeRow.add("dropdownlist", undefined, ARRANGEMENTS);
+            arrangeList.helpTip = "집합이 2개일 때만 (3개는 늘 겹침)";
+            var regionRow = setPanel.add("group");
+            regionRow.add("statictext", undefined, "영역 글자:");
+            var regionInput = regionRow.add("edittext", undefined, regionText);
+            regionInput.preferredSize.width = 270;
+            regionInput.helpTip = "영역 식: 글자를 ;로 나눠 쓴다 (A-B: 1, 3; A∩B: 2; (A∪B)ᶜ: 5). 식은 영역 하나여야 하고, 글자는 그 영역 안에서 경계와 가장 먼 곳에 놓는다";
+            var namesRow = setPanel.add("group");
+            namesRow.add("statictext", undefined, "집합 이름:");
+            var namesInput = namesRow.add("edittext", undefined, setNames);
+            namesInput.preferredSize.width = 80;
+            namesInput.helpTip = "쉼표로 한 글자씩 (P, Q). 색칠·영역 식도 이 이름으로 쓴다. 비우면 A, B, C";
+            var universeCheck = namesRow.add("checkbox", undefined, "전체집합 틀");
+            var universeInput = namesRow.add("edittext", undefined, universeName);
+            universeInput.preferredSize.width = 40;
+            universeInput.helpTip = "틀 왼쪽 위 글자 (U, S)";
             var messageText = setPanel.add("statictext", undefined, " ");
             messageText.preferredSize.width = 360;
 
@@ -3159,7 +3183,14 @@ var SCRIPT_KEY = "HighMathCommon";
             var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
             var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
 
+            arrangeList.selection = arrangement;
+            universeCheck.value = showUniverse;
             countList.onChange = function() { setCount = countList.index; updatePreview(); };
+            arrangeList.onChange = function() { if (arrangeList.selection) { arrangement = arrangeList.selection.index; updatePreview(); } };
+            regionInput.onChanging = function() { regionText = regionInput.text; updatePreview(); };
+            namesInput.onChanging = function() { setNames = namesInput.text; updatePreview(); };
+            universeCheck.onClick = function() { showUniverse = universeCheck.value; updatePreview(); };
+            universeInput.onChanging = function() { universeName = universeInput.text; updatePreview(); };
             shadeInput.onChanging = function() { shadeText = shadeInput.text; updatePreview(); };
             bindValueRow(radiusControls, function(value) { radiusMm = value; }, defaults.radiusMm);
             bindValueRow(overlapControls, function(value) { overlapPct = value; }, defaults.overlapPct);
@@ -3205,18 +3236,25 @@ var SCRIPT_KEY = "HighMathCommon";
             }
 
             function buildPreview() {
-                var n = setCount + 2;
-                var layout = vennLayout(n, radiusMm * MM_TO_PT, overlapPct / 100);
-                var masks = parseSetExpression(shadeText, n);
-                messageText.text = masks === null ? "색칠 식을 읽지 못함" : " ";
+                var n = vennSetCount(setCount), problems = [];
+                var universe = universeName.replace(/\s/g, "") || "U";
+                var names = parseSetNames(setNames, n, universe);
+                if (names === null) { problems.push("집합 이름을 쓸 수 없음"); names = parseSetNames("", n); }
+                var layout = vennLayout(n, radiusMm * MM_TO_PT, overlapPct / 100, {arrangement: arrangement, names: names, universeName: universe, universe: showUniverse});
+                var masks = parseSetExpression(shadeText, n, names, universe);
+                if (masks === null) problems.unshift("색칠 식을 읽지 못함");
+                var regions = parseRegionTexts(regionText, n, names, universe, presentMasks(layout));
+                if (regions === null) problems.push("영역 글자를 읽지 못함");
+                messageText.text = problems.length > 0 ? problems.join(" / ") : " ";
 
                 previewGroup = layer.groupItems.add();
                 previewGroup.name = "벤다이어그램";
                 if (masks !== null && masks.length > 0) addFill(regionLoops(layout, masks));
                 var rect = layout.rect;
-                addOutline([[rect[0], rect[1]], [rect[2], rect[1]], [rect[2], rect[3]], [rect[0], rect[3]]]);
+                if (layout.universe) addOutline([[rect[0], rect[1]], [rect[2], rect[1]], [rect[2], rect[3]], [rect[0], rect[3]]]);
                 for (var c = 0; c < layout.circles.length; c++) addCircle(layout.circles[c]);
                 for (var t = 0; t < layout.labels.length; t++) addLabel(layout.labels[t]);
+                for (var g = 0; regions && g < regions.length; g++) addLabel({text: regions[g].text, at: regionPoint(layout, regions[g].mask), dir: [0, 0]});
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
             }
 
@@ -3361,12 +3399,25 @@ var SCRIPT_KEY = "HighMathCommon";
             // -------------------------------------------------------
             // 계산 (일러 DOM을 쓰지 않는다 → tests/check-venn.js). 영역은 비트 마스크: A=1, B=2, C=4, 어느 집합에도 없음=0
             // -------------------------------------------------------
+            // 집합 수 칸(0: 2개, 1: 3개, 2: 1개) → 원 개수
+            export function vennSetCount(setCount) {
+                return setCount === 2 ? 1 : setCount + 2;
+            }
+
             // 원 배치: 2개는 좌우, 3개는 A 왼쪽 위·B 오른쪽 위·C 아래. overlap은 지름에 대한 겹침 비율
-            function vennLayout(n, r, overlap) {
+            // opt(없어도 된다): arrangement(2개일 때 0 겹침, 1 서로소, 2 포함 B⊂A), names(집합 이름), universeName, universe(false면 U 틀·이름 없음)
+            function vennLayout(n, r, overlap, opt) {
+                opt = opt || {};
                 var circles = [], labels = [];
                 var d = r * (1 - overlap);   // 중심에서 원점까지 (2개일 때 두 중심 거리 = 2d)
-                var names = ["A", "B", "C"];
-                if (n === 2) {
+                var names = opt.names || ["A", "B", "C"], arrangement = n === 2 ? opt.arrangement || 0 : 0;
+                if (n === 1) {
+                    circles = [{ center: [0, 0], radius: r }];
+                } else if (arrangement === 1) {
+                    circles = [{ center: [-r * 1.25, 0], radius: r }, { center: [r * 1.25, 0], radius: r }];   // 서로소: 두 원 사이 0.5r
+                } else if (arrangement === 2) {
+                    circles = [{ center: [0, 0], radius: r }, { center: [r * 0.3, -r * 0.15], radius: r * 0.45 }];   // 포함: 작은 B가 A 안
+                } else if (n === 2) {
                     circles = [{ center: [-d, 0], radius: r }, { center: [d, 0], radius: r }];
                 } else {
                     var k = 2 * d / Math.sqrt(3);   // 세 중심이 한 변 2d인 정삼각형
@@ -3378,18 +3429,19 @@ var SCRIPT_KEY = "HighMathCommon";
                 }
                 var left = Infinity, right = -Infinity, top = -Infinity, bottom = Infinity;
                 for (var i = 0; i < circles.length; i++) {
-                    var c = circles[i];
-                    left = Math.min(left, c.center[0] - r); right = Math.max(right, c.center[0] + r);
-                    top = Math.max(top, c.center[1] + r); bottom = Math.min(bottom, c.center[1] - r);
-                    // 이름은 원 바깥, 그림 가운데에서 멀어지는 쪽 위로
+                    var c = circles[i], cr = c.radius;
+                    left = Math.min(left, c.center[0] - cr); right = Math.max(right, c.center[0] + cr);
+                    top = Math.max(top, c.center[1] + cr); bottom = Math.min(bottom, c.center[1] - cr);
+                    // 이름은 원 바깥, 그림 가운데에서 멀어지는 쪽 위로 (원 하나·포함의 A는 왼쪽 위)
                     var away = c.center[0] === 0 ? [0.7071, -0.7071] : [c.center[0] < 0 ? -0.7071 : 0.7071, 0.7071];
                     if (n === 3 && i === 2) away = [0.7071, -0.7071];
-                    labels.push({ text: names[i], at: [c.center[0] + away[0] * r, c.center[1] + away[1] * r], dir: away });
+                    if (i === 0 && (n === 1 || arrangement === 2)) away = [-0.7071, 0.7071];
+                    labels.push({ text: names[i], at: [c.center[0] + away[0] * cr, c.center[1] + away[1] * cr], dir: away });
                 }
-                var margin = r * 0.35;
-                var rect = [left - margin, top + margin + r * 0.15, right + margin, bottom - margin];   // left, top, right, bottom
-                labels.push({ text: "U", at: [rect[0], rect[1]], dir: [0.7071, -0.7071] });
-                return { circles: circles, rect: rect, labels: labels, n: n };
+                var margin = r * 0.35, wide = n === 1 ? r * 0.5 : 0;
+                var rect = [left - margin - wide, top + margin + r * 0.15, right + margin + wide, bottom - margin];   // left, top, right, bottom
+                if (opt.universe !== false) labels.push({ text: opt.universeName || "U", at: [rect[0], rect[1]], dir: [0.7071, -0.7071] });
+                return { circles: circles, rect: rect, labels: labels, n: n, universe: opt.universe !== false };
             }
 
             function membership(layout, p) {
@@ -3405,6 +3457,7 @@ var SCRIPT_KEY = "HighMathCommon";
             function regionLoops(layout, masks) {
                 var inSet = {};
                 for (var m = 0; m < masks.length; m++) inSet[masks[m]] = true;
+                if (layout.universe === false) inSet[0] = false;   // U 틀이 없으면 바깥은 칠하지 않는다
                 var arcs = [];
                 for (var i = 0; i < layout.circles.length; i++) {
                     var c = layout.circles[i], angles = [];
@@ -3473,7 +3526,8 @@ var SCRIPT_KEY = "HighMathCommon";
 
             // 집합 식 → 칠할 영역 마스크 목록 (마스크 0~2ⁿ-1). 빈 칸은 [], 못 읽으면 null
             // 우선순위: ᶜ(뒤에 붙음) > ∩ > ∪·- (왼쪽부터)
-            function parseSetExpression(text, n) {
+            // names: 집합 이름(없으면 A, B, C), universeName: 전체집합 이름(U는 늘 된다)
+            function parseSetExpression(text, n, names, universeName) {
                 var s = String(text).replace(/\s/g, "").split("^c").join("ᶜ").split("'").join("ᶜ").split("′").join("ᶜ");
                 if (s === "") return [];
                 var all = [];
@@ -3517,9 +3571,9 @@ var SCRIPT_KEY = "HighMathCommon";
                         return inner;
                     }
                     pos++;
-                    if (ch === "U") return all.slice();
+                    if (ch === "U" || (universeName && ch === universeName)) return all.slice();
                     if (ch === "∅" || ch === "Ø") return [];
-                    var index = "ABC".indexOf(ch);
+                    var index = ch === "" ? -1 : (names ? names.join("") : "ABC").indexOf(ch);
                     if (index < 0 || index >= n) throw new Error("name");
                     return filter(all, function(x) { return (x & (1 << index)) !== 0; });
                 }
@@ -3534,6 +3588,77 @@ var SCRIPT_KEY = "HighMathCommon";
                 } catch (e) {
                     return null;
                 }
+            }
+
+            // 집합 이름 "P, Q" → ["P", "Q"]. 비운 자리는 A, B, C. 이름은 한 글자이고 서로 달라야 하며 식 기호(n u U ∩ ∪ …)는 안 된다. 못 쓰면 null
+            function parseSetNames(text, n, universeName) {
+                var parts = String(text).split(/[,，]/), out = [], defaults = ["A", "B", "C"];
+                for (var i = 0; i < n; i++) {
+                    var name = i < parts.length ? parts[i].replace(/\s/g, "") : "";
+                    if (name === "") name = defaults[i];
+                    if (name.length !== 1 || "nuU&+-−()∩∪ᶜ'′^∅Ø".indexOf(name) >= 0 || name === universeName) return null;
+                    for (var j = 0; j < out.length; j++) if (out[j] === name) return null;
+                    out.push(name);
+                }
+                return out;
+            }
+
+            // 영역 글자 "A-B: 1, 3; A∩B: 2; (A∪B)ᶜ: 5" → [{mask, text}]. 식은 그림에 있는 영역(present, 없으면 모두) 하나를 가리켜야 한다.
+            // 빈 글이면 [], 못 읽으면 null
+            function parseRegionTexts(text, n, names, universeName, present) {
+                var items = String(text).split(";"), out = [];
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].replace(/\s/g, "") === "") continue;
+                    var colon = items[i].indexOf(":");
+                    if (colon < 0) return null;
+                    var masks = parseSetExpression(items[i].substring(0, colon), n, names, universeName);
+                    var label = items[i].substring(colon + 1).replace(/^\s+|\s+$/g, "");
+                    if (masks !== null && present) {
+                        var kept = [];
+                        for (var m = 0; m < masks.length; m++) for (var q = 0; q < present.length; q++) if (present[q] === masks[m]) kept.push(masks[m]);
+                        masks = kept;
+                    }
+                    if (masks === null || masks.length !== 1 || label === "") return null;
+                    out.push({ mask: masks[0], text: label });
+                }
+                return out;
+            }
+
+            // 그림에 실제로 있는 영역들 (포함 배치에는 'B만' 영역이 없다)
+            function presentMasks(layout) {
+                var seen = [], r = layout.rect, N = 60;
+                for (var i = 0; i <= N; i++) {
+                    for (var j = 0; j <= N; j++) {
+                        var mask = membership(layout, [r[0] + (r[2] - r[0]) * i / N, r[3] + (r[1] - r[3]) * j / N]);
+                        if (!seen[mask]) seen[mask] = true;
+                    }
+                }
+                var out = [];
+                for (var k = 0; k < seen.length; k++) if (seen[k]) out.push(k);
+                return out;
+            }
+
+            // 영역 안에서 경계(원·U 틀)와 집합 이름 자리에서 가장 먼 점: U 틀 안을 격자로 훑는다. 이름 자리는 at에서 dir 쪽으로 반지름의 0.2만큼
+            function regionPoint(layout, mask) {
+                var r = layout.rect, best = null, bestGap = -1, N = 60, size = layout.circles[0].radius * 0.2, spots = [];
+                for (var l = 0; l < layout.labels.length; l++) {
+                    var lb = layout.labels[l];
+                    spots.push([lb.at[0] + lb.dir[0] * size, lb.at[1] + lb.dir[1] * size]);
+                }
+                for (var i = 0; i <= N; i++) {
+                    for (var j = 0; j <= N; j++) {
+                        var p = [r[0] + (r[2] - r[0]) * i / N, r[3] + (r[1] - r[3]) * j / N];
+                        if (membership(layout, p) !== mask) continue;
+                        var gap = Math.min(p[0] - r[0], r[2] - p[0], p[1] - r[3], r[1] - p[1]);
+                        for (var k = 0; k < layout.circles.length; k++) {
+                            var c = layout.circles[k];
+                            gap = Math.min(gap, Math.abs(Math.sqrt((p[0] - c.center[0]) * (p[0] - c.center[0]) + (p[1] - c.center[1]) * (p[1] - c.center[1])) - c.radius));
+                        }
+                        for (var t = 0; t < spots.length; t++) gap = Math.min(gap, Math.sqrt((p[0] - spots[t][0]) * (p[0] - spots[t][0]) + (p[1] - spots[t][1]) * (p[1] - spots[t][1])) - size);
+                        if (gap > bestGap + 1e-9) { bestGap = gap; best = p; }
+                    }
+                }
+                return best || [0, 0];
             }
 
             // 3차 베지어 원호 (90°씩 나눈다, sweep이 음수면 시계 방향)
@@ -3684,7 +3809,8 @@ var SCRIPT_KEY = "HighMathCommon";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v1", setCount, encodeURIComponent(shadeText), shadeK, radiusMm, overlapPct, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v2", setCount, encodeURIComponent(shadeText), shadeK, radiusMm, overlapPct, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
+                    arrangement, showUniverse ? "1" : "0", encodeURIComponent(universeName), encodeURIComponent(setNames), encodeURIComponent(regionText)];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -3693,7 +3819,7 @@ var SCRIPT_KEY = "HighMathCommon";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 10) return;
+                if (!((p[0] === "v1" && p.length === 10) || (p[0] === "v2" && p.length === 15))) return;
                 try {
                     setCount = Math.round(restoreNumber(p[1], setCount, 0, COUNTS.length - 1));
                     shadeText = decodeURIComponent(p[2]);
@@ -3704,6 +3830,13 @@ var SCRIPT_KEY = "HighMathCommon";
                     offsetXmm = restoreNumber(p[7], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[8], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[9] === "1";
+                    if (p[0] === "v2") {
+                        arrangement = Math.round(restoreNumber(p[10], arrangement, 0, ARRANGEMENTS.length - 1));
+                        showUniverse = p[11] === "1";
+                        universeName = decodeURIComponent(p[12]);
+                        setNames = decodeURIComponent(p[13]);
+                        regionText = decodeURIComponent(p[14]);
+                    }
                 } catch (restoreError) {}
             }
 

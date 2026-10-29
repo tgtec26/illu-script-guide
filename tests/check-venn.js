@@ -30,7 +30,8 @@ function extractFunction(name) {
   throw new Error(`unbalanced helper: ${name}`);
 }
 
-const names = ["vennLayout", "membership", "regionLoops", "chainArcs", "circleIntersections", "parseSetExpression", "arcPoints", "plain"];
+const names = ["vennLayout", "membership", "regionLoops", "chainArcs", "circleIntersections", "parseSetExpression", "arcPoints", "plain",
+  "vennSetCount", "parseSetNames", "parseRegionTexts", "presentMasks", "regionPoint"];
 const g = new Function(`${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 
 // 집합 식 → 영역 마스크 (A=1, B=2, C=4)
@@ -92,4 +93,57 @@ for (const [n, expr] of [[2, "A∩B"], [2, "A-B"], [2, "(A∪B)'"], [2, "A∪B"]
 
 assert.ok(source.includes('var PREF_KEY = "HighMathVenn/settings";'));
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+// 집합 1개·서로소·포함, U 끄기, 이름, 영역 글자 (웹 math-venn.test.js와 같은 경우)
+{
+  assert.strictEqual(g.vennSetCount(2), 1);
+  const apart = g.vennLayout(2, 10, 0.45, { arrangement: 1 });
+  assert.deepStrictEqual(g.circleIntersections(apart.circles[0], apart.circles[1]), []);
+  const inside = g.vennLayout(2, 10, 0.45, { arrangement: 2 });
+  assert.strictEqual(g.membership(inside, inside.circles[1].center), 3, "B는 A 안");
+  assert.strictEqual(g.regionLoops(inside, g.parseSetExpression("A-B", 2)).length, 2, "구멍 뚫린 고리 둘");
+  const off = g.vennLayout(2, 10, 0.45, { universe: false });
+  assert.strictEqual(g.regionLoops(off, g.parseSetExpression("(A∪B)ᶜ", 2)).length, 0, "U 틀이 없으면 바깥은 칠하지 않는다");
+  assert.ok(!off.labels.some((l) => l.text === "U"));
+  assert.deepStrictEqual(g.parseSetExpression("Pᶜ∩Q", 2, ["P", "Q"], "S"), [2]);
+  assert.deepStrictEqual(g.parseSetNames("P, Q", 2, "U"), ["P", "Q"]);
+  assert.strictEqual(g.parseSetNames("S, Q", 2, "S"), null);
+  const layout = g.vennLayout(2, 10, 0.45);
+  const list = g.parseRegionTexts("A-B: 1, 3; A∩B: 2; (A∪B)ᶜ: 5", 2, null, null, g.presentMasks(layout));
+  assert.deepStrictEqual(list.map((x) => x.mask), [1, 3, 0]);
+  for (const item of list) assert.strictEqual(g.membership(layout, g.regionPoint(layout, item.mask)), item.mask);
+  assert.strictEqual(g.parseRegionTexts("A: 1", 2), null);
+  assert.deepStrictEqual(g.parseRegionTexts("B: b", 2, null, null, g.presentMasks(inside)).map((x) => x.mask), [3], "포함 배치의 B는 한 영역");
+  assert.ok(source.includes("if (layout.universe) addOutline("), "U 틀 끄기");
+  assert.ok(source.includes('"1개 (A)"'));
+  // 웹과 글자 그대로 같다 (들여쓰기만 다르다)
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-venn.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8");
+    for (const name of ["vennSetCount", "vennLayout", "regionLoops", "parseSetExpression", "parseSetNames", "parseRegionTexts", "presentMasks", "regionPoint"]) {
+      const start = web.indexOf(`export function ${name}(`), end = web.indexOf("\n}\n", start) + 2;
+      const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+      assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
+    }
+  }
+}
+
+// 설정 v2: 새 항목 5개를 저장하고 v1(10칸)도 읽는다
+{
+  const store = {};
+  const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const prelude = `var PREF_KEY = "T", POSITION_LIMIT_MM = 100, COUNTS = [1, 2, 3], ARRANGEMENTS = [1, 2, 3];
+    var setCount = 0, shadeText = "A∩B", shadeK = 25, radiusMm = 12, overlapPct = 45, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true,
+    arrangement = 0, showUniverse = true, universeName = "U", setNames = "", regionText = ""; function saveLineWidths() {}`;
+  const body = prelude + ["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction).join("\n") +
+    `return { saveSettings, applySettings, set: function() { setCount = 2; arrangement = 2; showUniverse = false; universeName = "S"; setNames = "P, Q"; regionText = "A-B: 1"; },
+      get: function() { return [setCount, arrangement, showUniverse, universeName, setNames, regionText]; } };`;
+  const make = () => new Function("app", body)(app);
+  const first = make(); first.set(); first.saveSettings();
+  assert.strictEqual(store.T.split("|").length, 15);
+  const again = make(); again.applySettings();
+  assert.deepStrictEqual(again.get(), [2, 2, false, "S", "P, Q", "A-B: 1"]);
+  store.T = store.T.split("|").slice(0, 10).join("|").replace(/^v2/, "v1");
+  const old = make(); old.applySettings();
+  assert.deepStrictEqual(old.get(), [2, 0, true, "U", "", ""]);
+}
 console.log("venn checks passed");
