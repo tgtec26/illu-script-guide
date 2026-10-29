@@ -536,3 +536,14 @@ console.log("coord plane arrows ok");
   assert.ok(source.includes("domainDots: showDomainDots, domainDrops: domainDrops"), "탭 옵션이 그리기에 간다");
 }
 console.log("coord plane domain dots ok");
+
+// 짧은 접선 1:2:1.5 (웹 math-coord-plane.test.js와 같은 경우)
+{
+  assert.deepStrictEqual(g.parseTangents("1:2:1.5, 2:-1/2"), [{ index: 0, x: 2, xText: "2", half: 1.5 }, { index: 1, x: -0.5, xText: "-1/2" }]);
+  for (const bad of ["1:2:0", "1:2:a", "1:2:1:3", "1:2:-1"]) assert.strictEqual(g.parseTangents(bad), null, bad);
+  const seg = g.tangentSegment((x) => x * x, 1, -5, 5, -5, 5, 1.5);
+  assert.deepStrictEqual(seg.map((p) => Math.round(p[0] * 1e6) / 1e6), [-0.5, 2.5]);
+  assert.deepStrictEqual(g.tangentSegment((x) => x * x, 1, -5, 5, -5, 5, 99).map((p) => p[0]), g.tangentSegment((x) => x * x, 1, -5, 5, -5, 5).map((p) => p[0]));
+  assert.ok(source.includes("tangentSegment(tangents[tg].fn, tangents[tg].x, xLo, plotHi, opt.yMin, opt.yMax, tangents[tg].half)"));
+}
+console.log("coord plane short tangents ok");

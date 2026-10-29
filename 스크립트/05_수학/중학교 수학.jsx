@@ -2240,7 +2240,7 @@ var SCRIPT_KEY = "MiddleMath";
             tangentRow.add("statictext", undefined, "접선:");
             var tangentInput = tangentRow.add("edittext", undefined, tangentText);
             tangentInput.preferredSize.width = 290;
-            tangentInput.helpTip = "식 번호:x. 1:2는 1번 식의 x=2에서의 접선(그래프 굵기 직선, 접점에 점). 쉼표로 여러 개: 1:2, 2:-1/2";
+            tangentInput.helpTip = "식 번호:x. 1:2는 1번 식의 x=2에서의 접선(그래프 굵기 직선, 접점에 점). 뒤에 :1.5를 더 붙이면 접점에서 x로 ±1.5만 긋는 짧은 접선(1:2:1.5). 쉼표로 여러 개: 1:2, 2:-1/2";
             var arrowRow = functionPanel.add("group");
             arrowRow.add("statictext", undefined, "화살표:");
             var arrowInput = arrowRow.add("edittext", undefined, arrowText);
@@ -2473,7 +2473,7 @@ var SCRIPT_KEY = "MiddleMath";
                     for (var ti = 0; ti < tangentItems.length; ti++) {
                         var tfn = byIndex[tangentItems[ti].index];
                         if (!tfn || tangentSegment(tfn, tangentItems[ti].x, -1e9, 1e9, -1e9, 1e9) === null) problems.push("접선 " + (tangentItems[ti].index + 1) + ":" + tangentItems[ti].xText);
-                        else tangents.push({fn: tfn, x: tangentItems[ti].x});
+                        else tangents.push({fn: tfn, x: tangentItems[ti].x, half: tangentItems[ti].half});
                     }
                 }
                 // 화살표: 점 이름은 점 칸의 점(이름이 _로 시작하는 숨은 점도), 그래프는 식 번호 (웹 math-coord-plane.js와 같다)
@@ -2923,7 +2923,7 @@ var SCRIPT_KEY = "MiddleMath";
                 // 접선: 그래프 굵기 직선(상자로 자름)과 접점
                 var tangents = opt.tangents || [];
                 for (var tg = 0; tg < tangents.length; tg++) {
-                    var touch = tangentSegment(tangents[tg].fn, tangents[tg].x, xLo, plotHi, opt.yMin, opt.yMax);
+                    var touch = tangentSegment(tangents[tg].fn, tangents[tg].x, xLo, plotHi, opt.yMin, opt.yMax, tangents[tg].half);
                     if (touch === null) continue;
                     lines.push(straight([[touch[0][0] * u, touch[0][1] * u], [touch[1][0] * u, touch[1][1] * u]], "graph"));
                     var ty0 = tangents[tg].fn(tangents[tg].x);
@@ -3771,25 +3771,29 @@ var SCRIPT_KEY = "MiddleMath";
                 };
             }
 
-            // 접선 "1:2, 2:-1/2" → [{index(0부터), x, xText}]. 비면 []. 식 번호(1~5)나 x를 못 읽으면 null
+            // 접선 "1:2, 2:-1/2, 1:3:1.5" → [{index(0부터), x, xText, half(있으면)}]. 비면 []. 식 번호(1~5)나 x를 못 읽으면 null.
+            // 셋째 값 half는 접점에서 x로 ±half만 긋는 짧은 접선
             function parseTangents(text) {
                 var parts = String(text).split(";").join(",").split(","), out = [];
                 for (var i = 0; i < parts.length; i++) {
                     var item = parts[i].replace(/\s/g, "");
                     if (item === "") continue;
-                    var colon = item.indexOf(":");
-                    if (colon < 0) return null;
-                    var index = parseInt(item.substring(0, colon), 10), xText = item.substring(colon + 1);
-                    var x = xText === "" ? null : evaluateNumber(xText);
-                    if (!(index >= 1 && index <= 5) || String(index) !== item.substring(0, colon) || x === null) return null;
-                    out.push({ index: index - 1, x: x, xText: xText });
+                    var fields = item.split(":");
+                    if (fields.length < 2 || fields.length > 3) return null;
+                    var index = parseInt(fields[0], 10), xText = fields[1];
+                    var x = xText === "" ? null : evaluateNumber(xText), half = fields.length === 3 ? evaluateNumber(fields[2]) : null;
+                    if (!(index >= 1 && index <= 5) || String(index) !== fields[0] || x === null) return null;
+                    if (fields.length === 3 && !(half > 0)) return null;
+                    var entry = { index: index - 1, x: x, xText: xText };
+                    if (fields.length === 3) entry.half = half;
+                    out.push(entry);
                 }
                 return out;
             }
 
             // 함수 fn의 x=a에서의 접선을 상자 [x0,x1]×[y0,y1]로 자른 선분 [[x,y],[x,y]]. 정의되지 않거나 꺾인 점(|x|의 꼭짓점)이거나
-            // 상자를 지나지 않으면 null
-            function tangentSegment(fn, a, x0, x1, y0, y1) {
+            // 상자를 지나지 않으면 null. half가 있으면 접점에서 x로 ±half 안만 (짧은 접선)
+            function tangentSegment(fn, a, x0, x1, y0, y1, half) {
                 var h = 1e-5 * (1 + Math.abs(a)), ya = fn(a), yl = fn(a - h), yr = fn(a + h);
                 if (!isFinite(ya) || !isFinite(yl) || !isFinite(yr)) return null;
                 var m = (yr - yl) / (2 * h), left = (ya - yl) / h, right = (yr - ya) / h;
@@ -3805,6 +3809,7 @@ var SCRIPT_KEY = "MiddleMath";
                     var t = r / q;
                     if (q < 0) lo = Math.max(lo, t); else hi = Math.min(hi, t);
                 }
+                if (half > 0) { lo = Math.max(lo, -half); hi = Math.min(hi, half); }
                 if (!(lo < hi)) return null;
                 return [[p[0] + lo * d[0], p[1] + lo * d[1]], [p[0] + hi * d[0], p[1] + hi * d[1]]];
             }
