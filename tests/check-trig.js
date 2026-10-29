@@ -31,9 +31,9 @@ function extractFunction(name) {
 }
 
 const names = ["trigFunction", "buildTrig", "addCurve", "addPeriod", "piText", "trigFormula", "formatValue", "straight", "plotFunction", "toBezier",
-  "tanAsymptotes", "solveEquation", "snapPi", "exactPi", "solveInequality", "kText", "parseSurd"];
+  "tanAsymptotes", "solveEquation", "snapPi", "exactPi", "solveInequality", "solveBetween", "constantFn", "kText", "parseSurd"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, SMALL_ARROW = { length: 2.4, halfWidth: 0.9, notch: 0.6 }, KINDS = ["sin", "cos", "tan"];
-var INEQUALITIES = ["없음", "f(x) > g(x)", "f(x) ≥ g(x)", "f(x) < g(x)", "f(x) ≤ g(x)"], ROOT_NAMES = ["α", "β", "γ", "δ", "ε", "ζ", "η"];\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
+var INEQUALITIES = ["없음", "f(x) > g(x)", "f(x) ≥ g(x)", "f(x) < g(x)", "f(x) ≤ g(x)", "k₁ ≤ f(x) ≤ k₂ (직선 둘 사이)", "k₁ < f(x) < k₂ (직선 둘 사이)"], ROOT_NAMES = ["α", "β", "γ", "δ", "ε", "ζ", "η"];\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 const bez = (p, q, t) => { const s = 1 - t; return [0, 1].map((i) => s * s * s * p.anchor[i] + 3 * s * s * t * p.right[i] + 3 * s * t * t * q.left[i] + t * t * t * q.anchor[i]); };
 const base = { kind: 0, a: 2, b: 2, c: 0, d: 0, xMinHalf: -2, xMaxHalf: 6, sx: 10, sy: 10, tick: 2, extremes: true, period: true, asymptotes: true,
@@ -231,4 +231,30 @@ checkLineWidths(["axis", "tick", "graph", "guide", "grid", "mark"]);
 assert.ok(source.includes('var PREF_KEY = "HighMathTrig/settings";'));
 assert.ok(source.indexOf("var FLAG_KEYS") < source.indexOf("applySettings();"), "FLAG_KEYS must exist before applySettings runs");
 assert.ok(!/\.match\(/.test(source), "no whole-pattern regex match (ExtendScript can hang)");
+// 직선 y=k 둘과 그 사이의 해 (-√2/2 ≤ sin x ≤ √2/2)
+{
+  const k1 = -Math.sqrt(2) / 2, k2 = Math.sqrt(2) / 2;
+  const sinBase = { kind: 0, a: 1, b: 1, c: 0, d: 0, xMinHalf: 0, xMaxHalf: 4, period: false, extremes: false };
+  const d = build(Object.assign({}, sinBase, { kLine: true, k: k1, k2, inequality: 5 }));
+  assert.ok(d.notes.includes("교점 (y=-√2/2): x = 5π/4, 7π/4"), d.notes.join(" / "));
+  assert.ok(d.notes.includes("교점 (y=√2/2): x = π/4, 3π/4"), d.notes.join(" / "));
+  assert.ok(d.notes.includes("-√2/2 ≤ f(x) ≤ √2/2의 해: 0 ≤ x ≤ π/4, 3π/4 ≤ x ≤ 5π/4, 7π/4 ≤ x ≤ 2π"), d.notes.join(" / "));
+  assert.strictEqual(d.lines.filter((l) => l.kind === "graph" && l.points.length === 2).length, 2, "y=k 직선 둘");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "solution").length, 3, "해 구간 셋");
+  assert.strictEqual(d.dots.filter((p) => p.at[1] === 0 && !p.open).length, 4, "닫힌 끝점 4개");
+  const open = build(Object.assign({}, sinBase, { kLine: true, k: k1, k2, inequality: 6 }));
+  assert.ok(open.notes.includes("-√2/2 < f(x) < √2/2의 해: 0 ≤ x < π/4, 3π/4 < x < 5π/4, 7π/4 < x ≤ 2π"), open.notes.join(" / "));
+  assert.ok(open.dots.filter((p) => p.at[1] === 0).every((p) => p.open), "열린 끝점");
+  assert.ok(build(Object.assign({}, sinBase, { kLine: true, k: k2, k2: k1, inequality: 5 })).notes.includes("-√2/2 ≤ f(x) ≤ √2/2의 해: 0 ≤ x ≤ π/4, 3π/4 ≤ x ≤ 5π/4, 7π/4 ≤ x ≤ 2π"), "거꾸로 써도 같다");
+  assert.ok(build(Object.assign({}, sinBase, { kLine: true, k: 0.5, inequality: 5 })).notes.includes("부등식: 직선 y=k 둘(k 값에 -√2/2; √2/2처럼)이 필요함"));
+  assert.ok(build(Object.assign({}, sinBase, { kLine: true, k: 0.5, k2: 1, inequality: 2 })).notes.includes("f(x) ≥ 1/2의 해: π/6 ≤ x ≤ 5π/6"), "1~4번은 첫째 k");
+  const sol = g.solveBetween(Math.sin, () => -1, () => -1, 0, 2 * Math.PI, false);
+  assert.strictEqual(sol.intervals.length, 0);
+  assert.strictEqual(sol.points.length, 1);
+  // 설정: v3은 둘째 k와 직선 둘째 켜기를 더 저장하고, 이전 v2(23칸)도 읽는다
+  assert.ok(source.includes('var parts = ["v3"'));
+  assert.ok(source.includes('(p[0] === "v2" && p.length === 23) || (p[0] === "v3" && p.length === 25)'));
+  assert.ok(source.includes('kValue2, opt.kLine2 ? "1" : "0"];'));
+  assert.ok(!/export function/.test(source), "엔진에는 export가 없다");
+}
 console.log("trig checks passed");

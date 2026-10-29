@@ -1348,7 +1348,7 @@ var SCRIPT_KEY = "HighMath1";
             var SMALL_ARROW = { length: 2.4, halfWidth: 0.9, notch: 0.6 };
             registerHead(SMALL_ARROW);
             var KINDS = ["sin", "cos", "tan"];
-            var INEQUALITIES = ["없음", "f(x) > g(x)", "f(x) ≥ g(x)", "f(x) < g(x)", "f(x) ≤ g(x)"];
+            var INEQUALITIES = ["없음", "f(x) > g(x)", "f(x) ≥ g(x)", "f(x) < g(x)", "f(x) ≤ g(x)", "k₁ ≤ f(x) ≤ k₂ (직선 둘 사이)", "k₁ < f(x) < k₂ (직선 둘 사이)"];
             var TARGETS = ["y=k", "두 번째 그래프"];
             var ROOT_NAMES = ["α", "β", "γ", "δ", "ε", "ζ", "η"];
             // 저장 순서. applySettings()가 위에서 불리므로 여기서 선언한다
@@ -1365,18 +1365,18 @@ var SCRIPT_KEY = "HighMath1";
             // 옵션. graphs[0]이 f(x), graphs[1]이 겹쳐 그리는 두 번째 그래프
             var graphs = [{ kind: 0, a: 2, b: 2, c: 0, d: 0 }, { kind: 1, a: 1, b: 1, c: 0, d: 0 }];
             var editing = 0;   // 함수 행이 고치는 그래프
-            var kValue = 0.5;
+            var kValue = 0.5, kValue2 = -0.5;   // 둘째 k는 "직선 y=k₂ 더하기"를 켰을 때만 쓴다
             var inequality = 0, target = 0;
             var xMinHalf = -2, xMaxHalf = 6;   // π/2의 몇 배
             var piMm = 20, yUnitMm = 6;
             var fontPt = 8;
             var opt = { extremes: true, period: true, asymptotes: true, reference: false, formula: true, grid: false, numbers: true,
-                second: false, kLine: false, meets: true };
+                second: false, kLine: false, meets: true, kLine2: false };
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-            var DEFAULTS = { xMinHalf: xMinHalf, xMaxHalf: xMaxHalf, piMm: piMm, yUnitMm: yUnitMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm, kValue: kValue,
+            var DEFAULTS = { xMinHalf: xMinHalf, xMaxHalf: xMaxHalf, piMm: piMm, yUnitMm: yUnitMm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm, kValue: kValue, kValue2: kValue2,
                 graphs: [{ a: graphs[0].a, b: graphs[0].b, c: graphs[0].c, d: graphs[0].d }, { a: graphs[1].a, b: graphs[1].b, c: graphs[1].c, d: graphs[1].d }] };
             applySettings();
             var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
@@ -1413,6 +1413,11 @@ var SCRIPT_KEY = "HighMath1";
             var kControls = addValueRow(solvePanel, "k", "", kValue, -5, 5, 0.05, 2);
             kControls.input.text = kText(kValue);
             kControls.input.helpTip = "1/2, √3/2, -√2/2처럼 써도 된다 (√ 대신 r: r3/2)";
+            addCheckRow(solvePanel, [["kLine2", "직선 y=k₂ 더하기"]]);
+            checks.kLine2.helpTip = "직선 y=k를 하나 더 긋는다 (-√2/2 ≤ sin x ≤ √2/2). 부등식 '직선 둘 사이'는 둘을 그린 때만 그린다";
+            var k2Controls = addValueRow(solvePanel, "k₂", "", kValue2, -5, 5, 0.05, 2);
+            k2Controls.input.text = kText(kValue2);
+            k2Controls.input.helpTip = "둘째 직선의 k. 1/2, √3/2, -√2/2처럼 써도 된다 (√ 대신 r: r3/2)";
             var inequalityRow = solvePanel.add("group");
             inequalityRow.add("statictext", undefined, "부등식:");
             var inequalityList = inequalityRow.add("dropdownlist", undefined, INEQUALITIES);
@@ -1464,7 +1469,8 @@ var SCRIPT_KEY = "HighMath1";
             bindValueRow(bControls, function(value) { graphs[editing].b = value; }, function() { return DEFAULTS.graphs[editing].b; });
             bindValueRow(cControls, function(value) { graphs[editing].c = value; }, function() { return DEFAULTS.graphs[editing].c; });
             bindValueRow(dControls, function(value) { graphs[editing].d = value; }, function() { return DEFAULTS.graphs[editing].d; });
-            bindKRow(kControls);
+            bindKRow(kControls, false);
+            bindKRow(k2Controls, true);
             inequalityList.onChange = function() { inequality = inequalityList.selection ? inequalityList.selection.index : 0; updatePreview(); };
             targetList.onChange = function() { target = targetList.index; updatePreview(); };
             bindValueRow(xMinControls, function(value) { xMinHalf = value; }, DEFAULTS.xMinHalf);
@@ -1538,19 +1544,20 @@ var SCRIPT_KEY = "HighMath1";
             }
 
             // k 행: 스크롤바는 0.05 단위, 입력창은 1/2·√3/2 같은 값을 그대로 받는다
-            function bindKRow(controls) {
+            function bindKRow(controls, second) {
                 function commit(value) {
-                    kValue = clamp(value, controls.min, controls.max);
-                    controls.input.text = kText(kValue);
-                    try { controls.slider.value = kValue; } catch (e) {}
+                    var clamped = clamp(value, controls.min, controls.max);
+                    if (second) kValue2 = clamped; else kValue = clamped;
+                    controls.input.text = kText(clamped);
+                    try { controls.slider.value = clamped; } catch (e) {}
                     updatePreview();
                 }
                 controls.slider.onChanging = function() { commit(roundTo(controls.slider.value, controls.step)); };
                 controls.slider.onChange = function() { commit(roundTo(controls.slider.value, controls.step)); };
-                controls.reset.onClick = function() { commit(DEFAULTS.kValue); };
+                controls.reset.onClick = function() { commit(second ? DEFAULTS.kValue2 : DEFAULTS.kValue); };
                 controls.input.onChange = function() {
                     var value = parseSurd(controls.input.text);
-                    commit(value === null ? kValue : value);
+                    commit(value === null ? (second ? kValue2 : kValue) : value);
                 };
             }
 
@@ -1582,7 +1589,7 @@ var SCRIPT_KEY = "HighMath1";
                     extremes: opt.extremes, period: opt.period, asymptotes: opt.asymptotes, reference: opt.reference,
                     formula: opt.formula, grid: opt.grid, numbers: opt.numbers,
                     second: opt.second ? { kind: g.kind, a: g.a, b: g.b, c: g.c, d: g.d } : null,
-                    kLine: opt.kLine, k: kValue, meets: opt.meets, inequality: inequality, target: target
+                    kLine: opt.kLine, k: kValue, k2: opt.kLine && opt.kLine2 ? kValue2 : null, meets: opt.meets, inequality: inequality, target: target
                 });
                 messageText.text = drawing.notes.length > 0 ? drawing.notes.join("\n") : " ";
 
@@ -1779,7 +1786,12 @@ var SCRIPT_KEY = "HighMath1";
                     lo = Math.min(lo, drawn[gi].d - reach);
                     hi = Math.max(hi, drawn[gi].d + reach);
                 }
-                if (o.kLine) { lo = Math.min(lo, o.k); hi = Math.max(hi, o.k); }
+                var kList = [];
+                if (o.kLine) {
+                    kList.push(o.k);
+                    if (o.k2 !== undefined && o.k2 !== null) kList.push(o.k2);
+                }
+                for (var kr = 0; kr < kList.length; kr++) { lo = Math.min(lo, kList[kr]); hi = Math.max(hi, kList[kr]); }
                 var yMin, yMax;
                 if (o.kind === 2) { yMin = Math.floor(lo + 1e-9); yMax = Math.ceil(hi - 1e-9); }
                 else { yMin = Math.floor(lo + 1e-9) - 1; yMax = Math.ceil(hi - 1e-9) + (o.period ? 2 : 1); }
@@ -1868,15 +1880,16 @@ var SCRIPT_KEY = "HighMath1";
                     }
                 }
 
-                // 직선 y=k. 정수가 아니면 세로축에 값 (최댓값·최솟값 글자와 겹치면 뺀다)
-                var kFn = null;
-                if (o.kLine) {
-                    kFn = function() { return o.k; };
-                    out.lines.push(straight([P(xLo, o.k), P(xHi, o.k)], "graph"));
-                    out.texts.push({ text: "y=" + kText(o.k), at: P(xHi, o.k), dir: [1, 0] });
-                    var onExtreme = o.extremes && o.kind !== 2 && (Math.abs(o.k - top) < 1e-9 || Math.abs(o.k - bottom) < 1e-9);
-                    if (o.numbers && !onExtreme && Math.abs(o.k - Math.round(o.k)) > 1e-9) {
-                        out.texts.push({ text: kText(o.k), at: [0, o.k * sy], dir: [-1, 0], clear: o.tick / 2, upright: true });
+                // 직선 y=k (둘까지). 정수가 아니면 세로축에 값 (최댓값·최솟값 글자와 겹치면 뺀다)
+                var kFns = [];
+                for (var kn = 0; kn < kList.length; kn++) {
+                    var kv = kList[kn];
+                    kFns.push(constantFn(kv));
+                    out.lines.push(straight([P(xLo, kv), P(xHi, kv)], "graph"));
+                    out.texts.push({ text: "y=" + kText(kv), at: P(xHi, kv), dir: [1, 0] });
+                    var onExtreme = o.extremes && o.kind !== 2 && (Math.abs(kv - top) < 1e-9 || Math.abs(kv - bottom) < 1e-9);
+                    if (o.numbers && !onExtreme && Math.abs(kv - Math.round(kv)) > 1e-9) {
+                        out.texts.push({ text: kText(kv), at: [0, kv * sy], dir: [-1, 0], clear: o.tick / 2, upright: true });
                     }
                 }
 
@@ -1890,7 +1903,7 @@ var SCRIPT_KEY = "HighMath1";
                     return ROOT_NAMES[named.length - 1] || formatValue(x);
                 }
                 var pairs = [];
-                if (kFn) pairs.push({ fn: kFn, name: "y=" + kText(o.k) });
+                for (var kp = 0; kp < kList.length; kp++) pairs.push({ fn: kFns[kp], name: "y=" + kText(kList[kp]) });
                 if (secondFn) pairs.push({ fn: secondFn, name: "두 번째 그래프" });
                 if (o.meets) {
                     var marked = [];
@@ -1921,12 +1934,26 @@ var SCRIPT_KEY = "HighMath1";
                     }
                 }
                 if (o.inequality > 0) {
-                    var other = o.target === 0 ? kFn : secondFn;
-                    var relation = INEQUALITIES[o.inequality].replace("g(x)", o.target === 0 ? kText(o.k) : "g(x)");
-                    if (!other) {
-                        out.notes.push("부등식: " + (o.target === 0 ? "직선 y=k" : "두 번째 그래프") + "를 켜야 함");
+                    var solution = null, relation = "";
+                    if (o.inequality >= 5) {
+                        // 직선 둘 사이: 작은 값부터 읽는다
+                        if (kList.length === 2) {
+                            var between = o.inequality === 6 ? " < " : " ≤ ", kLow = Math.min(kList[0], kList[1]), kHigh = Math.max(kList[0], kList[1]);
+                            solution = solveBetween(fn, constantFn(kLow), constantFn(kHigh), xLo, xHi, o.inequality === 6);
+                            relation = kText(kLow) + between + "f(x)" + between + kText(kHigh);
+                        } else {
+                            out.notes.push("부등식: 직선 y=k 둘(k 값에 -√2/2; √2/2처럼)이 필요함");
+                        }
                     } else {
-                        var solution = solveInequality(fn, other, xLo, xHi, o.inequality);
+                        var other = o.target === 0 ? kFns[0] : secondFn;
+                        if (!other) {
+                            out.notes.push("부등식: " + (o.target === 0 ? "직선 y=k" : "두 번째 그래프") + "를 켜야 함");
+                        } else {
+                            solution = solveInequality(fn, other, xLo, xHi, o.inequality);
+                            relation = INEQUALITIES[o.inequality].replace("g(x)", o.target === 0 ? kText(o.k) : "g(x)");
+                        }
+                    }
+                    if (solution !== null) {
                         var parts = [];
                         for (var iv = 0; iv < solution.intervals.length; iv++) {
                             var seg = solution.intervals[iv];
@@ -2076,6 +2103,47 @@ var SCRIPT_KEY = "HighMath1";
                     }
                 }
                 return { intervals: intervals, points: points, strict: strict };
+            }
+
+            // 값이 늘 v인 함수 (직선 y=v)
+            function constantFn(v) {
+                return function() { return v; };
+            }
+
+            // g1(x) ≤ f(x) ≤ g2(x) (strict면 <)의 해: f ≥ g1의 해와 f ≤ g2의 해의 교집합. solveInequality와 같은 모양으로 돌려준다.
+            // 등호일 때만 해가 되는 외딴 근은 점 하나짜리 구간으로 보고 교집합을 낸다
+            function solveBetween(f, g1, g2, x0, x1, strict) {
+                var below = solveInequality(f, g1, x0, x1, strict ? 1 : 2), above = solveInequality(f, g2, x0, x1, strict ? 3 : 4);
+                function pieces(solution) {
+                    var list = solution.intervals.slice(), i;
+                    for (i = 0; i < solution.points.length; i++) list.push({ lo: solution.points[i], hi: solution.points[i], loType: "root", hiType: "root" });
+                    return list;
+                }
+                var left = pieces(below), right = pieces(above), intervals = [], points = [], i, j;
+                for (i = 0; i < left.length; i++) {
+                    for (j = 0; j < right.length; j++) {
+                        var a = left[i], b = right[j];
+                        var lo = Math.max(a.lo, b.lo), hi = Math.min(a.hi, b.hi);
+                        if (hi < lo - 1e-9) continue;
+                        // 끝이 같으면 범위 끝(edge)보다 근·점근선을 따른다
+                        var loType = a.lo > b.lo + 1e-9 ? a.loType : (b.lo > a.lo + 1e-9 ? b.loType : (a.loType === "edge" ? b.loType : a.loType));
+                        var hiType = a.hi < b.hi - 1e-9 ? a.hiType : (b.hi < a.hi - 1e-9 ? b.hiType : (a.hiType === "edge" ? b.hiType : a.hiType));
+                        if (hi - lo <= 1e-9) {
+                            if (!strict && loType !== "pole" && hiType !== "pole") points.push(lo);
+                            continue;
+                        }
+                        intervals.push({ lo: lo, hi: hi, loType: loType, hiType: hiType });
+                    }
+                }
+                intervals.sort(function(u, v) { return u.lo - v.lo; });
+                points.sort(function(u, v) { return u - v; });
+                var outside = [];
+                for (i = 0; i < points.length; i++) {
+                    var inside = false;
+                    for (j = 0; j < intervals.length; j++) if (points[i] >= intervals[j].lo - 1e-9 && points[i] <= intervals[j].hi + 1e-9) inside = true;
+                    if (!inside && (outside.length === 0 || points[i] - outside[outside.length - 1] > 1e-9)) outside.push(points[i]);
+                }
+                return { intervals: intervals, points: outside, strict: strict };
             }
 
             // k 글자: 1/2, √3/2, -√2/2, 정수, 아니면 소수 둘째 자리 (3/10 같은 분수는 0.3)
@@ -2462,8 +2530,8 @@ var SCRIPT_KEY = "HighMath1";
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
                 var f = graphs[0], g = graphs[1];
-                var parts = ["v2", f.kind, f.a, f.b, f.c, f.d, g.kind, g.a, g.b, g.c, g.d, xMinHalf, xMaxHalf, piMm, yUnitMm, fontPt, flags,
-                    kValue, inequality, target, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v3", f.kind, f.a, f.b, f.c, f.d, g.kind, g.a, g.b, g.c, g.d, xMinHalf, xMaxHalf, piMm, yUnitMm, fontPt, flags,
+                    kValue, inequality, target, offsetXmm, offsetYmm, previewEnabled ? "1" : "0", kValue2, opt.kLine2 ? "1" : "0"];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -2472,7 +2540,7 @@ var SCRIPT_KEY = "HighMath1";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v2" || p.length !== 23 || p[16].length !== FLAG_KEYS.length) return;
+                if (!((p[0] === "v2" && p.length === 23) || (p[0] === "v3" && p.length === 25)) || p[16].length !== FLAG_KEYS.length) return;
                 try {
                     for (var gi = 0; gi < 2; gi++) {
                         var g = graphs[gi], base = 1 + gi * 5;
@@ -2494,6 +2562,10 @@ var SCRIPT_KEY = "HighMath1";
                     offsetXmm = restoreNumber(p[20], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[21], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[22] === "1";
+                    if (p[0] === "v3") {
+                        kValue2 = restoreNumber(p[23], kValue2, -5, 5);
+                        opt.kLine2 = p[24] === "1";
+                    }
                 } catch (restoreError) {}
             }
 
