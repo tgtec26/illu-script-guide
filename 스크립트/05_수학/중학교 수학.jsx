@@ -2097,6 +2097,7 @@ var SCRIPT_KEY = "MiddleMath";
             // 옵션
             var xMin = -5, xMax = 5, yMin = -5, yMax = 5;
             var unitMm = 6;
+            var yUnitMm = 0;   // 0이면 가로와 같다
             var fontPt = 8;
             var showGrid = false;
             var showNumbers = true;
@@ -2137,7 +2138,7 @@ var SCRIPT_KEY = "MiddleMath";
             var offsetYmm = 0;
             var previewEnabled = true;
             // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-            var initial = {xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unitMm: unitMm, fontPt: fontPt, regionK: regionK, regionK2: regionK2, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+            var initial = {xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unitMm: unitMm, yUnitMm: yUnitMm, fontPt: fontPt, regionK: regionK, regionK2: regionK2, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
             applySettings();
             var LINE_KEYS = ["axis", "graph", "guide", "tick", "grid", "mark", "thin", "table", "edge"];
             var LINE_DEFAULTS = {axis: AXIS_PT, tick: TICK_PT, graph: GRAPH_PT, guide: GUIDE_PT, grid: GRID_PT};
@@ -2158,6 +2159,8 @@ var SCRIPT_KEY = "MiddleMath";
             var xTickControls = addValueRow(rangePanel, "x 눈금 간격", "", xTick, 0.1, 50, 0.1, 1);
             var yTickControls = addValueRow(rangePanel, "y 눈금 간격", "", yTick, 0.1, 50, 0.1, 1);
             var unitControls = addValueRow(rangePanel, "단위 길이", "mm", unitMm, 0.2, 20, 0.1, 1);
+            var yUnitControls = addValueRow(rangePanel, "세로 단위 길이", "mm", yUnitMm, 0, 40, 0.1, 1);
+            yUnitControls.input.helpTip = "0이면 가로 단위 길이와 같다 (세로 값이 작은 확률 그래프처럼 가로·세로 눈금 크기가 다를 때)";
             var fontControls = addValueRow(rangePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
             var axisChecks = rangePanel.add("group");
             var gridCheck = axisChecks.add("checkbox", undefined, "격자");
@@ -2349,6 +2352,7 @@ var SCRIPT_KEY = "MiddleMath";
             bindValueRow(yMinControls, function(value) { yMin = value; }, initial.yMin);
             bindValueRow(yMaxControls, function(value) { yMax = value; }, initial.yMax);
             bindValueRow(unitControls, function(value) { unitMm = value; }, initial.unitMm);
+            bindValueRow(yUnitControls, function(value) { yUnitMm = value; }, initial.yUnitMm);
             bindValueRow(fontControls, function(value) { fontPt = value; }, initial.fontPt);
             bindValueRow(paramAControls, function(value) { parameterA = value; }, 1);
             bindValueRow(paramBControls, function(value) { parameterB = value; }, 0);
@@ -2530,7 +2534,7 @@ var SCRIPT_KEY = "MiddleMath";
                 messageText.text = problems.length > 0 ? "읽지 못함: " + problems.join(" / ") : " ";
 
                 var drawing = buildPlane({
-                    xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unit: unitMm * MM_TO_PT,
+                    xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unit: unitMm * MM_TO_PT, yUnit: yUnitMm * MM_TO_PT,
                     xName: xAxisName, yName: yAxisName, axisMode: axisMode, xTick: xTick, yTick: yTick, vectors: vectors,
                     domainDots: showDomainDots, domainDrops: domainDrops,
                     tick: TICK_MM * MM_TO_PT, grid: showGrid, numbers: showNumbers,
@@ -2770,11 +2774,21 @@ var SCRIPT_KEY = "MiddleMath";
                 return rgb;
             }
 
+            // 단위 1로 만든 베지어(앵커·핸들)를 가로 u, 세로 uy 칸으로 늘인다. 아핀 변환이라 곡선 모양이 그대로 늘어난다
+            function scaleBezier(points, u, uy) {
+                var out = [];
+                for (var i = 0; i < points.length; i++) {
+                    var p = points[i];
+                    out.push({ anchor: [p.anchor[0] * u, p.anchor[1] * uy], left: [p.left[0] * u, p.left[1] * uy], right: [p.right[0] * u, p.right[1] * uy] });
+                }
+                return out;
+            }
+
             // -------------------------------------------------------
             // 계산 (일러 DOM을 쓰지 않는다 → tests/check-coord-plane.js). 원점 (0,0), 1 = unit pt
             // -------------------------------------------------------
             function buildPlane(opt) {
-                var u = opt.unit;
+                var u = opt.unit, uy = opt.yUnit > 0 ? opt.yUnit : u;   // 가로 한 칸 u, 세로 한 칸 uy (pt)
                 var lines = [], arrows = [], dots = [], texts = [];
                 // 가로축 π 단위면 최솟값·최댓값은 π/2의 몇 배
                 var xStep = opt.piAxis ? Math.PI / 2 : 1;
@@ -2797,11 +2811,11 @@ var SCRIPT_KEY = "MiddleMath";
                 var axisMode = opt.axisMode || 0;
                 // 축 없이 모눈: 격자(0 줄 포함)만
                 if (opt.hideAxes) {
-                    for (var hx = 0; hx < xs.length; hx++) lines.push(straight([[xs[hx] * xStep * u, opt.yMin * u], [xs[hx] * xStep * u, opt.yMax * u]], "grid"));
-                    for (var hy = 0; hy < ys.length; hy++) lines.push(straight([[xLo * u, ys[hy] * u], [xHi * u, ys[hy] * u]], "grid"));
+                    for (var hx = 0; hx < xs.length; hx++) lines.push(straight([[xs[hx] * xStep * u, opt.yMin * uy], [xs[hx] * xStep * u, opt.yMax * uy]], "grid"));
+                    for (var hy = 0; hy < ys.length; hy++) lines.push(straight([[xLo * u, ys[hy] * uy], [xHi * u, ys[hy] * uy]], "grid"));
                 } else if (opt.grid) {
-                    for (var gx = 0; gx < xs.length; gx++) if (xs[gx] !== 0) lines.push(straight([[xs[gx] * xStep * u, opt.yMin * u], [xs[gx] * xStep * u, opt.yMax * u]], "grid"));
-                    for (var gy = 0; gy < ys.length; gy++) if (ys[gy] !== 0) lines.push(straight([[xLo * u, ys[gy] * u], [xHi * u, ys[gy] * u]], "grid"));
+                    for (var gx = 0; gx < xs.length; gx++) if (xs[gx] !== 0) lines.push(straight([[xs[gx] * xStep * u, opt.yMin * uy], [xs[gx] * xStep * u, opt.yMax * uy]], "grid"));
+                    for (var gy = 0; gy < ys.length; gy++) if (ys[gy] !== 0) lines.push(straight([[xLo * u, ys[gy] * uy], [xHi * u, ys[gy] * uy]], "grid"));
                 }
 
                 // 축은 화살촉 뒤에서 끝낸다 (선 끝이 뾰족한 촉 밖으로 나오지 않게). 축 모양 1은 x축만, 2는 축 없음
@@ -2814,9 +2828,9 @@ var SCRIPT_KEY = "MiddleMath";
                     arrows.push({ tip: [right * u, 0], dir: [1, 0] });
                     if (opt.xName !== "") axisName(opt.xName === undefined ? "x" : opt.xName, [right * u, 0], [0, -1]);
                     if (axisMode !== 1) {
-                        lines.push(straight([[0, bottom * u], [0, top * u - ARROW.length + ARROW.notch]], "axis"));
-                        arrows.push({ tip: [0, top * u], dir: [0, 1] });
-                        if (opt.yName !== "") axisName(opt.yName === undefined ? "y" : opt.yName, [0, top * u], [-1, 0]);
+                        lines.push(straight([[0, bottom * uy], [0, top * uy - ARROW.length + ARROW.notch]], "axis"));
+                        arrows.push({ tip: [0, top * uy], dir: [0, 1] });
+                        if (opt.yName !== "") axisName(opt.yName === undefined ? "y" : opt.yName, [0, top * uy], [-1, 0]);
                         texts.push({ text: "O", at: [0, 0], dir: [-0.7071, -0.7071], clear: 0, upright: true });
                     }
 
@@ -2828,45 +2842,45 @@ var SCRIPT_KEY = "MiddleMath";
                     }
                     for (var ty = 0; axisMode !== 1 && ty < ys.length; ty++) {
                         if (ys[ty] === 0) continue;
-                        if (opt.ticks !== false) lines.push(straight([[-opt.tick / 2, ys[ty] * u], [opt.tick / 2, ys[ty] * u]], "tick"));
-                        if (opt.numbers) texts.push({ text: String(ys[ty]), at: [0, ys[ty] * u], dir: [-1, 0], clear: opt.tick / 2 });
+                        if (opt.ticks !== false) lines.push(straight([[-opt.tick / 2, ys[ty] * uy], [opt.tick / 2, ys[ty] * uy]], "tick"));
+                        if (opt.numbers) texts.push({ text: String(ys[ty]), at: [0, ys[ty] * uy], dir: [-1, 0], clear: opt.tick / 2 });
                     }
                 }
                 // 축 위 글자: 그 값에 눈금, x축은 아래·y축은 왼쪽에 글자 (변수 a, α 등. 웹 math-coord-plane.js와 같다)
                 var marks = opt.axisMarks || [];
                 for (var am = 0; am < marks.length; am++) {
-                    var onX = marks[am].axis === "x", markAt = onX ? [marks[am].value * u, 0] : [0, marks[am].value * u], markDisplay = formulaDisplay(marks[am].text);
+                    var onX = marks[am].axis === "x", markAt = onX ? [marks[am].value * u, 0] : [0, marks[am].value * uy], markDisplay = formulaDisplay(marks[am].text);
                     lines.push(straight(onX ? [[markAt[0], -opt.tick / 2], [markAt[0], opt.tick / 2]] : [[-opt.tick / 2, markAt[1]], [opt.tick / 2, markAt[1]]], "tick"));
                     texts.push({ text: markDisplay.text, sup: markDisplay.sup, sub: markDisplay.sub, roman: markDisplay.roman, at: markAt, dir: onX ? [0, -1] : [-1, 0], clear: opt.tick / 2 });
                 }
 
                 for (var a = 0; a < opt.asymptotes.length; a++) {
                     var line = opt.asymptotes[a];
-                    if (line.axis === "x") lines.push(straight([[line.value * u, opt.yMin * u], [line.value * u, opt.yMax * u]], "guide"));
-                    else lines.push(straight([[xLo * u, line.value * u], [plotHi * u, line.value * u]], "guide"));
+                    if (line.axis === "x") lines.push(straight([[line.value * u, opt.yMin * uy], [line.value * u, opt.yMax * uy]], "guide"));
+                    else lines.push(straight([[xLo * u, line.value * uy], [plotHi * u, line.value * uy]], "guide"));
                 }
                 // 실선 수직·수평선: 그래프와 같은 굵기. 식 글자는 수직선은 위쪽 끝 오른쪽에, 수평선은 오른쪽 끝 위에
                 var solid = opt.solidLines || [];
                 for (var sl = 0; sl < solid.length; sl++) {
                     var solidLine = solid[sl];
                     var vertical = solidLine.axis === "x";
-                    if (vertical) lines.push(straight([[solidLine.value * u, opt.yMin * u], [solidLine.value * u, opt.yMax * u]], "graph"));
-                    else lines.push(straight([[xLo * u, solidLine.value * u], [plotHi * u, solidLine.value * u]], "graph"));
+                    if (vertical) lines.push(straight([[solidLine.value * u, opt.yMin * uy], [solidLine.value * u, opt.yMax * uy]], "graph"));
+                    else lines.push(straight([[xLo * u, solidLine.value * uy], [plotHi * u, solidLine.value * uy]], "graph"));
                     if (opt.lineNames) {
                         var lineDisplay = formulaDisplay(solidLine.text);
                         texts.push({ text: lineDisplay.text, sup: lineDisplay.sup, sub: lineDisplay.sub, roman: lineDisplay.roman,
-                            at: vertical ? [solidLine.value * u, opt.yMax * u] : [plotHi * u, solidLine.value * u], dir: vertical ? [1, 0] : [0, 1], clear: 0 });
+                            at: vertical ? [solidLine.value * u, opt.yMax * uy] : [plotHi * u, solidLine.value * uy], dir: vertical ? [1, 0] : [0, 1], clear: 0 });
                     }
                 }
                 if (opt.identity) {
                     var lo = Math.max(xLo, opt.yMin), hi = Math.min(xHi, opt.yMax);
-                    if (hi > lo) lines.push(straight([[lo * u, lo * u], [hi * u, hi * u]], "guide"));
+                    if (hi > lo) lines.push(straight([[lo * u, lo * uy], [hi * u, hi * uy]], "guide"));
                 }
 
                 // 매개변수곡선: 함수 그래프와 같은 굵기·상자(가로는 화살촉 뒤끝까지)
                 if (opt.parametric) {
                     var curves = plotParametric(opt.parametric.fx, opt.parametric.fy, opt.parametric.t0, opt.parametric.t1, xLo, plotHi, opt.yMin, opt.yMax);
-                    for (var pc = 0; pc < curves.length; pc++) lines.push({ points: toBezierCurve(curves[pc], u), kind: "graph" });
+                    for (var pc = 0; pc < curves.length; pc++) lines.push({ points: scaleBezier(toBezierCurve(curves[pc], 1), u, uy), kind: "graph" });
                 }
 
                 var formulaLabels = [];
@@ -2874,7 +2888,7 @@ var SCRIPT_KEY = "MiddleMath";
                     var segments = plotFunction(opt.functions[f].fn, xLo, plotHi, opt.yMin, opt.yMax);
                     for (var s = 0; s < segments.length; s++) {
                         if (segments[s].length < 2) continue;
-                        var graphLine = { points: toBezier(segments[s], u), kind: "graph" };
+                        var graphLine = { points: scaleBezier(toBezier(segments[s], 1), u, uy), kind: "graph" };
                         if (opt.functions[f].dashed) graphLine.dashed = true;   // 식마다 고른 점선
                         lines.push(graphLine);
                     }
@@ -2889,12 +2903,12 @@ var SCRIPT_KEY = "MiddleMath";
                             // 직접 쓴 이름은 '이름' 설정과 상관없이 붙인다. 한글이 들면 곧게(이탤릭 없이) 쓴다
                             var own = formulaDisplay(custom), uprightAll = [];
                             if (hasHangul(custom)) for (var ri = 0; ri < own.text.length; ri++) uprightAll.push(ri);
-                            formulaLabels.push({ text: own.text, sup: own.sup, sub: own.sub, roman: uprightAll.length ? uprightAll : own.roman, at: [anchor.x * u, anchor.y * u], dir: nameDir, clear: 0 });
+                            formulaLabels.push({ text: own.text, sup: own.sup, sub: own.sub, roman: uprightAll.length ? uprightAll : own.roman, at: [anchor.x * u, anchor.y * uy], dir: nameDir, clear: 0 });
                         } else if (opt.nameStyle === 1) {
                             var display = formulaDisplay(opt.functions[f].label);
-                            formulaLabels.push({ text: display.text, sup: display.sup, sub: display.sub, roman: display.roman, at: [anchor.x * u, anchor.y * u], dir: nameDir, clear: 0 });
+                            formulaLabels.push({ text: display.text, sup: display.sup, sub: display.sub, roman: display.roman, at: [anchor.x * u, anchor.y * uy], dir: nameDir, clear: 0 });
                         } else {
-                            formulaLabels.push({ text: graphSymbol(opt.nameStyle, f), symbol: true, at: [anchor.x * u, anchor.y * u], dir: nameDir, clear: 0 });
+                            formulaLabels.push({ text: graphSymbol(opt.nameStyle, f), symbol: true, at: [anchor.x * u, anchor.y * uy], dir: nameDir, clear: 0 });
                         }
                     }
                 }
@@ -2914,7 +2928,7 @@ var SCRIPT_KEY = "MiddleMath";
                 if (opt.intersections) {
                     var crossings = findIntersections(opt.functions, xLo, xHi, opt.yMin, opt.yMax);
                     for (var c = 0; c < crossings.length; c++) {
-                        var cross = [crossings[c].x * u, crossings[c].y * u];
+                        var cross = [crossings[c].x * u, crossings[c].y * uy];
                         dots.push(cross);
                         texts.push({ text: String.fromCharCode(65 + c), at: cross, dir: [0.7071, 0.7071], clear: 0, upright: true });
                     }
@@ -2925,9 +2939,9 @@ var SCRIPT_KEY = "MiddleMath";
                 for (var tg = 0; tg < tangents.length; tg++) {
                     var touch = tangentSegment(tangents[tg].fn, tangents[tg].x, xLo, plotHi, opt.yMin, opt.yMax, tangents[tg].half);
                     if (touch === null) continue;
-                    lines.push(straight([[touch[0][0] * u, touch[0][1] * u], [touch[1][0] * u, touch[1][1] * u]], "graph"));
+                    lines.push(straight([[touch[0][0] * u, touch[0][1] * uy], [touch[1][0] * u, touch[1][1] * uy]], "graph"));
                     var ty0 = tangents[tg].fn(tangents[tg].x);
-                    if (tangents[tg].x >= xLo && tangents[tg].x <= plotHi && ty0 >= opt.yMin && ty0 <= opt.yMax) dots.push([tangents[tg].x * u, ty0 * u]);
+                    if (tangents[tg].x >= xLo && tangents[tg].x <= plotHi && ty0 >= opt.yMin && ty0 <= opt.yMax) dots.push([tangents[tg].x * u, ty0 * uy]);
                 }
 
 // 화살표: 축 굵기 선과 화살촉(선은 촉 속에서 끝난다). 직선은 가운데 옆(진행 방향의 위쪽)에 글자,
@@ -2942,11 +2956,11 @@ var SCRIPT_KEY = "MiddleMath";
                             var vx = vec.x0 + (vec.x1 - vec.x0) * vs / n, h = Math.abs(vec.x1 - vec.x0) * 1e-4 + 1e-9;
                             var vy = vec.fn(vx), slope = (vec.fn(vx + h) - vec.fn(vx - h)) / (2 * h);
                             if (typeof vy !== "number" || !isFinite(vy) || !isFinite(slope)) continue;
-                            var nl = Math.sqrt(1 + slope * slope);
-                            vpts.push([vx * u - slope / nl * off, vy * u + 1 / nl * off]);
+                            var screenSlope = slope * uy / u, nl = Math.sqrt(1 + screenSlope * screenSlope);
+                            vpts.push([vx * u - screenSlope / nl * off, vy * uy + 1 / nl * off]);
                         }
                         if (vpts.length < 2) continue;
-                    } else vpts = [[vec.from.x * u, vec.from.y * u], [vec.to.x * u, vec.to.y * u]];
+                    } else vpts = [[vec.from.x * u, vec.from.y * uy], [vec.to.x * u, vec.to.y * uy]];
                     var tip = vpts[vpts.length - 1], prev = vpts[vpts.length - 2];
                     var dl = Math.sqrt((tip[0] - prev[0]) * (tip[0] - prev[0]) + (tip[1] - prev[1]) * (tip[1] - prev[1])) || 1;
                     var vd = [(tip[0] - prev[0]) / dl, (tip[1] - prev[1]) / dl];
@@ -2974,14 +2988,14 @@ var SCRIPT_KEY = "MiddleMath";
                         if (!isFinite(ex) || ex < xLo || ex > plotHi) continue;
                         var ey = opt.functions[df].raw(ex);
                         if (typeof ey !== "number" || !isFinite(ey) || ey < opt.yMin || ey > opt.yMax) continue;
-                        if (opt.domainDots !== false) (ends[de][1] ? dots : openDots).push([ex * u, ey * u]);
-                        if (opt.domainDrops && ey !== 0) lines.push(straight([[ex * u, ey * u], [ex * u, 0]], "axis"));
+                        if (opt.domainDots !== false) (ends[de][1] ? dots : openDots).push([ex * u, ey * uy]);
+                        if (opt.domainDrops && ey !== 0) lines.push(straight([[ex * u, ey * uy], [ex * u, 0]], "axis"));
                     }
                 }
 
                 for (var p = 0; p < opt.points.length; p++) {
                     var point = opt.points[p];
-                    var at = [point.x * u, point.y * u];
+                    var at = [point.x * u, point.y * uy];
                     if (opt.guides) {
                         if (point.y !== 0) lines.push(straight([at, [at[0], 0]], "guide"));
                         if (point.x !== 0) lines.push(straight([at, [0, at[1]]], "guide"));
@@ -2995,17 +3009,17 @@ var SCRIPT_KEY = "MiddleMath";
                 }
                 // 선분: 점 이름으로 이은 그래프 굵기 선
                 var segs = opt.segments || [];
-                for (var sg = 0; sg < segs.length; sg++) lines.push(straight([[segs[sg][0][0] * u, segs[sg][0][1] * u], [segs[sg][1][0] * u, segs[sg][1][1] * u]], "graph"));
+                for (var sg = 0; sg < segs.length; sg++) lines.push(straight([[segs[sg][0][0] * u, segs[sg][0][1] * uy], [segs[sg][1][0] * u, segs[sg][1][1] * uy]], "graph"));
                 // 자유 글자: 그 자리 가운데에 글자만 (점·점선 없음)
                 var notes = opt.notes || [];
-                for (var nt = 0; nt < notes.length; nt++) texts.push({ text: notes[nt].name, at: [notes[nt].x * u, notes[nt].y * u], dir: [0, 0], clear: 0 });
+                for (var nt = 0; nt < notes.length; nt++) texts.push({ text: notes[nt].name, at: [notes[nt].x * u, notes[nt].y * uy], dir: [0, 0], clear: 0 });
                 function regionFills(conditions) {
                     var out = [];
                     if (!conditions || conditions.length === 0) return out;
                     var polygons = regionPolygons(conditions, xLo, plotHi, opt.yMin, opt.yMax);
                     for (var rp = 0; rp < polygons.length; rp++) {
                         var scaled = [];
-                        for (var rq = 0; rq < polygons[rp].length; rq++) scaled.push([polygons[rp][rq][0] * u, polygons[rp][rq][1] * u]);
+                        for (var rq = 0; rq < polygons[rp].length; rq++) scaled.push([polygons[rp][rq][0] * u, polygons[rp][rq][1] * uy]);
                         out.push(scaled);
                     }
                     return out;
@@ -4090,7 +4104,7 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v11", xMin, xMax, yMin, yMax, unitMm, fontPt,
+                    "v12", xMin, xMax, yMin, yMax, unitMm, fontPt,
                     showGrid ? "1" : "0", showNumbers ? "1" : "0", nameStyle,
                     encodeList(functionTexts),
                     encodeURIComponent(pointsText), showCoords ? "1" : "0", showGuides ? "1" : "0",
@@ -4103,7 +4117,7 @@ var SCRIPT_KEY = "MiddleMath";
                     encodeURIComponent(tangentText),
                     regionHatch ? "1" : "0", regionHatch2 ? "1" : "0", encodeURIComponent(axisMarkText), lineDashes.join(","),
                     encodeURIComponent(xAxisName), encodeURIComponent(yAxisName), axisMode, xTick, yTick, encodeURIComponent(arrowText),
-                    showDomainDots ? "1" : "0", domainDrops ? "1" : "0"
+                    showDomainDots ? "1" : "0", domainDrops ? "1" : "0", yUnitMm
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -4120,7 +4134,7 @@ var SCRIPT_KEY = "MiddleMath";
                 if (!raw) return;
                 var p = raw.split("|");
                 // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다. v6 = v5 + 매개변수곡선 4칸, v7 = v6 + 접선, v8 = v7 + 빗금 둘·축 위 글자·점선
-                if (!((p[0] === "v11" && p.length === 53) || (p[0] === "v10" && p.length === 51) || (p[0] === "v9" && p.length === 50) || (p[0] === "v8" && p.length === 45) || (p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
+                if (!((p[0] === "v12" && p.length === 54) || (p[0] === "v11" && p.length === 53) || (p[0] === "v10" && p.length === 51) || (p[0] === "v9" && p.length === 50) || (p[0] === "v8" && p.length === 45) || (p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
                 try {
                     xMin = Math.round(restoreNumber(p[1], xMin, -200, 0));
                     xMax = Math.round(restoreNumber(p[2], xMax, 1, 200));
@@ -4148,7 +4162,7 @@ var SCRIPT_KEY = "MiddleMath";
                     hideAxes = p[21] === "1";
                     regionText = decodeURIComponent(p[22]);
                     regionK = restoreNumber(p[23], regionK, 5, 60);
-                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11") {
+                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11" || p[0] === "v12") {
                         var savedNames = p[24].split(",");
                         if (savedNames.length === FUNCTION_COUNT) {
                             for (var sn = 0; sn < FUNCTION_COUNT; sn++) nameTexts[sn] = decodeURIComponent(savedNames[sn]);
@@ -4164,13 +4178,13 @@ var SCRIPT_KEY = "MiddleMath";
                         regionText2 = decodeURIComponent(p[30]);
                         regionK2 = restoreNumber(p[31], regionK2, 5, 60);
                         showTicks = p[32] === "1";
-                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11") {
+                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11" || p[0] === "v12") {
                             parameterA = restoreNumber(p[33], parameterA, -10, 10);
                             parameterB = restoreNumber(p[34], parameterB, -10, 10);
                             parameterC = restoreNumber(p[35], parameterC, -10, 10);
                         }
-                        if (p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11") tangentText = decodeURIComponent(p[40]);
-                        if (p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11") {
+                        if (p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11" || p[0] === "v12") tangentText = decodeURIComponent(p[40]);
+                        if (p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11" || p[0] === "v12") {
                             regionHatch = p[41] === "1";
                             regionHatch2 = p[42] === "1";
                             axisMarkText = decodeURIComponent(p[43]);
@@ -4179,16 +4193,17 @@ var SCRIPT_KEY = "MiddleMath";
                                 for (var sd = 0; sd < FUNCTION_COUNT; sd++) lineDashes[sd] = savedDashes[sd] === "true";
                             }
                         }
-                        if (p[0] === "v9" || p[0] === "v10" || p[0] === "v11") {
+                        if (p[0] === "v9" || p[0] === "v10" || p[0] === "v11" || p[0] === "v12") {
                             xAxisName = decodeURIComponent(p[45]);
                             yAxisName = decodeURIComponent(p[46]);
                             axisMode = Math.round(restoreNumber(p[47], axisMode, 0, 2));
                             xTick = restoreNumber(p[48], xTick, 0.1, 50);
                             yTick = restoreNumber(p[49], yTick, 0.1, 50);
                         }
-                        if (p[0] === "v10" || p[0] === "v11") arrowText = decodeURIComponent(p[50]);
-                        if (p[0] === "v11") { showDomainDots = p[51] === "1"; domainDrops = p[52] === "1"; }
-                        if (p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11") {
+                        if (p[0] === "v10" || p[0] === "v11" || p[0] === "v12") arrowText = decodeURIComponent(p[50]);
+                        if (p[0] === "v11" || p[0] === "v12") { showDomainDots = p[51] === "1"; domainDrops = p[52] === "1"; }
+                        if (p[0] === "v12") yUnitMm = restoreNumber(p[53], yUnitMm, 0, 40);
+                        if (p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11" || p[0] === "v12") {
                             parametricX = decodeURIComponent(p[36]);
                             parametricY = decodeURIComponent(p[37]);
                             parametricMin = decodeURIComponent(p[38]);

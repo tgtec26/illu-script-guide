@@ -32,7 +32,7 @@ function extractFunction(name) {
 
 const names = ["compileFunction", "evaluateNumber", "parsePointList", "plotFunction", "toBezier", "formulaDisplay", "buildPlane", "straight",
   "piLabel", "findIntersections", "parseAsymptotes", "graphSymbol", "parseRegion", "regionPolygons", "dropCollinear",
-  "functionValueTable", "substituteFunctionValues", "parseSolidLines", "parseSegments", "hasHangul", "notesWithNames", "plotParametric", "toBezierCurve", "parseDomain", "restrict", "splitDomain", "parseTangents", "tangentSegment", "hatchSegments", "parseAxisMarks", "parseArrows", "arrowEnd", "smoothBezier"];
+  "functionValueTable", "substituteFunctionValues", "parseSolidLines", "parseSegments", "hasHangul", "notesWithNames", "plotParametric", "toBezierCurve", "parseDomain", "restrict", "splitDomain", "parseTangents", "tangentSegment", "hatchSegments", "parseAxisMarks", "parseArrows", "arrowEnd", "smoothBezier", "scaleBezier"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
@@ -279,7 +279,7 @@ assert.ok(source.includes("var FUNCTION_COUNT = 5;"));
   assert.strictEqual(withTicks.lines.length - noTicks.lines.length, 20);
   assert.strictEqual(g.buildPlane(base).lines.length, withTicks.lines.length, "옛 호출은 눈금선이 있다");
   // 설정 저장 형식: v6(= v5 + 매개변수곡선 4칸)으로 쓰고, v5·v4와 옛 v3를 모두 읽는다
-  assert.ok(source.includes('"v11", xMin, xMax,') && source.includes('p[0] === "v8" && p.length === 45') && source.includes('p[0] === "v7" && p.length === 41') && source.includes('p[0] === "v6" && p.length === 40') && source.includes('p[0] === "v5" && p.length === 36') && source.includes('p[0] === "v3" && p.length === 24'));
+  assert.ok(source.includes('"v12", xMin, xMax,') && source.includes('p[0] === "v8" && p.length === 45') && source.includes('p[0] === "v7" && p.length === 41') && source.includes('p[0] === "v6" && p.length === 40') && source.includes('p[0] === "v5" && p.length === 36') && source.includes('p[0] === "v3" && p.length === 24'));
 }
 
 // 선 두께: "/lines"는 v2 + LINE_KEYS 9칸(10필드). v1(축·그래프·보조선)도 읽고, 필드 수가 다르면 무시한다
@@ -424,7 +424,7 @@ for (const [expr, value] of [["sqrt(9)", 3], ["arcsin(1)", Math.PI/2], ["sec(0)"
   const store = {};
   const app = { preferences: { getStringPreference: k => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
   const prelude = `var PREF_KEY="T", FUNCTION_COUNT=5, NAME_STYLES=[0,1,2,3], POSITION_LIMIT_MM=1000;
-  var xMin=-5,xMax=5,yMin=-5,yMax=5,unitMm=6,fontPt=8,showGrid=false,showNumbers=true,nameStyle=1;
+  var xMin=-5,xMax=5,yMin=-5,yMax=5,unitMm=6,yUnitMm=0,fontPt=8,showGrid=false,showNumbers=true,nameStyle=1;
   var functionTexts=["y=2x+1","","","",""],pointsText="",showCoords=true,showGuides=true,offsetXmm=0,offsetYmm=0,previewEnabled=true;
   var piAxis=false,showIntersections=false,showIdentity=false,asymptoteText="",hideAxes=false,regionText="",regionK=15;
   var nameTexts=["","","","",""],nameAts=[0,0,0,0,0],lineText="",showLineNames=true,labelText="",segmentText="",regionText2="",regionK2=35,showTicks=true;
@@ -436,11 +436,12 @@ for (const [expr, value] of [["sqrt(9)", 3], ["arcsin(1)", Math.PI/2], ["sec(0)"
     marks:function(v){if(v){regionHatch=true;regionHatch2=true;axisMarkText="x=1:a";lineDashes=[false,true,false,false,true];}return [regionHatch,regionHatch2,axisMarkText,lineDashes.join(",")];}};`;
   const make = () => new Function("app",body)(app);
   const first = make(); first.set(2,-3,0.5); first.marks(true); first.saveSettings();
-  assert.equal(store.T.split("|").length,53);
+  assert.equal(store.T.split("|").length,54);
+  assert.equal(store.T.split("|")[0],"v12");
   const restored = make(); restored.applySettings(); assert.deepEqual(restored.get(),[2,-3,0.5]);
   assert.deepEqual(restored.marks(),[true,true,"x=1:a","false,true,false,false,true"], "빗금·축 위 글자·점선도 저장한다");
   assert.deepEqual(restored.curve(),["3cos(t)","2sin(t)","0","π"], "매개변수곡선도 저장한다");
-  const v7 = store.T.split("|").slice(0,41).join("|").replace(/^v11/,"v7");
+  const v7 = store.T.split("|").slice(0,41).join("|").replace(/^v12/,"v7");
   store.T = v7;
   const fromV7 = make(); fromV7.applySettings(); assert.deepEqual(fromV7.marks(),[false,false,"","false,false,false,false,false"], "v7은 새 항목을 처음 값으로");
   const v5 = store.T.split("|").slice(0,36).join("|").replace(/^v7/,"v5");
@@ -471,7 +472,7 @@ for (const [expr, value] of [["sqrt(9)", 3], ["arcsin(1)", Math.PI/2], ["sec(0)"
   const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-coord-plane.js");
   if (fs.existsSync(webPath)) {
     const web = fs.readFileSync(webPath, "utf8");
-    for (const name of ["hatchSegments", "parseAxisMarks"]) {
+    for (const name of ["hatchSegments", "parseAxisMarks", "scaleBezier"]) {
       const start = web.indexOf(`export function ${name}(`), end = web.indexOf("\n}\n", start) + 2;
       const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
       assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
@@ -546,4 +547,22 @@ console.log("coord plane domain dots ok");
   assert.deepStrictEqual(g.tangentSegment((x) => x * x, 1, -5, 5, -5, 5, 99).map((p) => p[0]), g.tangentSegment((x) => x * x, 1, -5, 5, -5, 5).map((p) => p[0]));
   assert.ok(source.includes("tangentSegment(tangents[tg].fn, tangents[tg].x, xLo, plotHi, opt.yMin, opt.yMax, tangents[tg].half)"));
 }
+
+// x·y 단위 따로 (웹 math-coord-plane.test.js와 같은 경우)
+{
+  const common = { xMin: -3, xMax: 3, yMin: -2, yMax: 2, tick: 2, grid: false, numbers: true, nameStyle: 0, hideAxes: false, region: [], coords: false, guides: false,
+    piAxis: false, intersections: false, identity: false, asymptotes: [], fontSize: 8, points: [{ name: "A", x: 1, y: 1, xText: "1", yText: "1", open: false }],
+    functions: [{ fn: g.compileFunction("y=x"), label: "y=x" }] };
+  assert.deepStrictEqual(g.buildPlane(Object.assign({}, common, { unit: 10, yUnit: 0 })), g.buildPlane(Object.assign({}, common, { unit: 10 })), "yUnit 0은 가로 칸과 같다");
+  const d = g.buildPlane(Object.assign({}, common, { unit: 10, yUnit: 20 }));
+  assert.ok(d.dots.some((p) => p[0] === 10 && p[1] === 20), "점 (1,1)은 (10, 20)");
+  const graph = d.lines.find((l) => l.kind === "graph");
+  for (const p of graph.points) for (const k of ["anchor", "left", "right"]) assert.ok(Math.abs(p[k][1] - 2 * p[k][0]) < 1e-6, "y=x는 기울기 2로 보인다");
+  const v = g.buildPlane({ xMin: -3, xMax: 3, yMin: -2, yMax: 2, unit: 10, yUnit: 30, tick: 2, grid: false, numbers: false, nameStyle: 0, hideAxes: false, region: [], points: [], coords: false,
+    guides: false, piAxis: false, intersections: false, identity: false, asymptotes: [], fontSize: 8, functions: [], vectors: [{ kind: "graph", fn: g.compileFunction("y=x"), x0: 0, x1: 1, label: "" }] });
+  const first = v.lines.find((l) => l.curved).points[0].anchor;
+  assert.ok(Math.abs(first[0] * 10 + first[1] * 30) < 1e-6, "띄움 방향은 화면 접선에 수직");
+  assert.ok(source.includes('"세로 단위 길이"') && source.includes("yUnit: yUnitMm * MM_TO_PT"), "대화상자");
+}
+
 console.log("coord plane short tangents ok");
