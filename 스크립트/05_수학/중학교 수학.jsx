@@ -2131,6 +2131,8 @@ var SCRIPT_KEY = "MiddleMath";
             var regionText2 = "";
             var regionK2 = 35;
             var showTicks = true;
+            var showDomainDots = true;   // 정의역 끝점 ●·○ 쓰기
+            var domainDrops = false;     // 끝점에서 x축까지 가는 수직선 (확률밀도함수 그림)
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
@@ -2165,6 +2167,10 @@ var SCRIPT_KEY = "MiddleMath";
             var hideAxesCheck = axisChecks.add("checkbox", undefined, "축 없이 모눈");
             hideAxesCheck.helpTip = "축·화살촉·눈금 숫자를 빼고 격자만 그린다 (모눈종이 위 도형, 격자점 위 꼭짓점)";
             var tickCheck = axisChecks.add("checkbox", undefined, "눈금선");
+            var dotsCheck = axisChecks.add("checkbox", undefined, "정의역 끝점 ●·○");
+            dotsCheck.helpTip = "식 뒤 {a<=x<b}의 끝점에 ●(포함)·○(빠짐)을 찍는다. 끄면 점 없이 곡선만";
+            var dropsCheck = axisChecks.add("checkbox", undefined, "끝 수직선");
+            dropsCheck.helpTip = "정의역 끝점에서 x축까지 가는 선(확률밀도함수 그림)";
             tickCheck.helpTip = "축의 짧은 눈금선(눈금 숫자와 따로). 끄면 눈금선 없이 축만 그린다";
             var axisNameRow = rangePanel.add("group");
             axisNameRow.add("statictext", undefined, "축 모양:");
@@ -2334,6 +2340,8 @@ var SCRIPT_KEY = "MiddleMath";
             intersectCheck.value = showIntersections;
             identityCheck.value = showIdentity;
             tickCheck.value = showTicks;
+            dotsCheck.value = showDomainDots;
+            dropsCheck.value = domainDrops;
             lineNamesCheck.value = showLineNames;
 
             bindValueRow(xMinControls, function(value) { xMin = value; }, initial.xMin);
@@ -2365,6 +2373,8 @@ var SCRIPT_KEY = "MiddleMath";
             tangentInput.onChanging = function() { tangentText = tangentInput.text; updatePreview(); };
             arrowInput.onChanging = function() { arrowText = arrowInput.text; updatePreview(); };
             tickCheck.onClick = function() { showTicks = tickCheck.value; updatePreview(); };
+            dotsCheck.onClick = function() { showDomainDots = dotsCheck.value; updatePreview(); };
+            dropsCheck.onClick = function() { domainDrops = dropsCheck.value; updatePreview(); };
             lineInput.onChanging = function() { lineText = lineInput.text; updatePreview(); };
             lineNamesCheck.onClick = function() { showLineNames = lineNamesCheck.value; updatePreview(); };
             region2Input.onChanging = function() { regionText2 = region2Input.text; updatePreview(); };
@@ -2522,6 +2532,7 @@ var SCRIPT_KEY = "MiddleMath";
                 var drawing = buildPlane({
                     xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unit: unitMm * MM_TO_PT,
                     xName: xAxisName, yName: yAxisName, axisMode: axisMode, xTick: xTick, yTick: yTick, vectors: vectors,
+                    domainDots: showDomainDots, domainDrops: domainDrops,
                     tick: TICK_MM * MM_TO_PT, grid: showGrid, numbers: showNumbers,
                     functions: functions, parametric: parametric, tangents: tangents, nameStyle: nameStyle, hideAxes: hideAxes, region: region || [],
                     points: points.list, coords: showCoords, guides: showGuides,
@@ -2963,7 +2974,8 @@ var SCRIPT_KEY = "MiddleMath";
                         if (!isFinite(ex) || ex < xLo || ex > plotHi) continue;
                         var ey = opt.functions[df].raw(ex);
                         if (typeof ey !== "number" || !isFinite(ey) || ey < opt.yMin || ey > opt.yMax) continue;
-                        (ends[de][1] ? dots : openDots).push([ex * u, ey * u]);
+                        if (opt.domainDots !== false) (ends[de][1] ? dots : openDots).push([ex * u, ey * u]);
+                        if (opt.domainDrops && ey !== 0) lines.push(straight([[ex * u, ey * u], [ex * u, 0]], "axis"));
                     }
                 }
 
@@ -4073,7 +4085,7 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v10", xMin, xMax, yMin, yMax, unitMm, fontPt,
+                    "v11", xMin, xMax, yMin, yMax, unitMm, fontPt,
                     showGrid ? "1" : "0", showNumbers ? "1" : "0", nameStyle,
                     encodeList(functionTexts),
                     encodeURIComponent(pointsText), showCoords ? "1" : "0", showGuides ? "1" : "0",
@@ -4085,7 +4097,8 @@ var SCRIPT_KEY = "MiddleMath";
                     encodeURIComponent(parametricX), encodeURIComponent(parametricY), encodeURIComponent(parametricMin), encodeURIComponent(parametricMax),
                     encodeURIComponent(tangentText),
                     regionHatch ? "1" : "0", regionHatch2 ? "1" : "0", encodeURIComponent(axisMarkText), lineDashes.join(","),
-                    encodeURIComponent(xAxisName), encodeURIComponent(yAxisName), axisMode, xTick, yTick, encodeURIComponent(arrowText)
+                    encodeURIComponent(xAxisName), encodeURIComponent(yAxisName), axisMode, xTick, yTick, encodeURIComponent(arrowText),
+                    showDomainDots ? "1" : "0", domainDrops ? "1" : "0"
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -4102,7 +4115,7 @@ var SCRIPT_KEY = "MiddleMath";
                 if (!raw) return;
                 var p = raw.split("|");
                 // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다. v6 = v5 + 매개변수곡선 4칸, v7 = v6 + 접선, v8 = v7 + 빗금 둘·축 위 글자·점선
-                if (!((p[0] === "v10" && p.length === 51) || (p[0] === "v9" && p.length === 50) || (p[0] === "v8" && p.length === 45) || (p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
+                if (!((p[0] === "v11" && p.length === 53) || (p[0] === "v10" && p.length === 51) || (p[0] === "v9" && p.length === 50) || (p[0] === "v8" && p.length === 45) || (p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
                 try {
                     xMin = Math.round(restoreNumber(p[1], xMin, -200, 0));
                     xMax = Math.round(restoreNumber(p[2], xMax, 1, 200));
@@ -4130,7 +4143,7 @@ var SCRIPT_KEY = "MiddleMath";
                     hideAxes = p[21] === "1";
                     regionText = decodeURIComponent(p[22]);
                     regionK = restoreNumber(p[23], regionK, 5, 60);
-                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10") {
+                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11") {
                         var savedNames = p[24].split(",");
                         if (savedNames.length === FUNCTION_COUNT) {
                             for (var sn = 0; sn < FUNCTION_COUNT; sn++) nameTexts[sn] = decodeURIComponent(savedNames[sn]);
@@ -4146,13 +4159,13 @@ var SCRIPT_KEY = "MiddleMath";
                         regionText2 = decodeURIComponent(p[30]);
                         regionK2 = restoreNumber(p[31], regionK2, 5, 60);
                         showTicks = p[32] === "1";
-                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10") {
+                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11") {
                             parameterA = restoreNumber(p[33], parameterA, -10, 10);
                             parameterB = restoreNumber(p[34], parameterB, -10, 10);
                             parameterC = restoreNumber(p[35], parameterC, -10, 10);
                         }
-                        if (p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10") tangentText = decodeURIComponent(p[40]);
-                        if (p[0] === "v8" || p[0] === "v9" || p[0] === "v10") {
+                        if (p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11") tangentText = decodeURIComponent(p[40]);
+                        if (p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11") {
                             regionHatch = p[41] === "1";
                             regionHatch2 = p[42] === "1";
                             axisMarkText = decodeURIComponent(p[43]);
@@ -4161,15 +4174,16 @@ var SCRIPT_KEY = "MiddleMath";
                                 for (var sd = 0; sd < FUNCTION_COUNT; sd++) lineDashes[sd] = savedDashes[sd] === "true";
                             }
                         }
-                        if (p[0] === "v9" || p[0] === "v10") {
+                        if (p[0] === "v9" || p[0] === "v10" || p[0] === "v11") {
                             xAxisName = decodeURIComponent(p[45]);
                             yAxisName = decodeURIComponent(p[46]);
                             axisMode = Math.round(restoreNumber(p[47], axisMode, 0, 2));
                             xTick = restoreNumber(p[48], xTick, 0.1, 50);
                             yTick = restoreNumber(p[49], yTick, 0.1, 50);
                         }
-                        if (p[0] === "v10") arrowText = decodeURIComponent(p[50]);
-                        if (p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10") {
+                        if (p[0] === "v10" || p[0] === "v11") arrowText = decodeURIComponent(p[50]);
+                        if (p[0] === "v11") { showDomainDots = p[51] === "1"; domainDrops = p[52] === "1"; }
+                        if (p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10" || p[0] === "v11") {
                             parametricX = decodeURIComponent(p[36]);
                             parametricY = decodeURIComponent(p[37]);
                             parametricMin = decodeURIComponent(p[38]);

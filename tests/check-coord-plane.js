@@ -279,7 +279,7 @@ assert.ok(source.includes("var FUNCTION_COUNT = 5;"));
   assert.strictEqual(withTicks.lines.length - noTicks.lines.length, 20);
   assert.strictEqual(g.buildPlane(base).lines.length, withTicks.lines.length, "옛 호출은 눈금선이 있다");
   // 설정 저장 형식: v6(= v5 + 매개변수곡선 4칸)으로 쓰고, v5·v4와 옛 v3를 모두 읽는다
-  assert.ok(source.includes('"v10", xMin, xMax,') && source.includes('p[0] === "v8" && p.length === 45') && source.includes('p[0] === "v7" && p.length === 41') && source.includes('p[0] === "v6" && p.length === 40') && source.includes('p[0] === "v5" && p.length === 36') && source.includes('p[0] === "v3" && p.length === 24'));
+  assert.ok(source.includes('"v11", xMin, xMax,') && source.includes('p[0] === "v8" && p.length === 45') && source.includes('p[0] === "v7" && p.length === 41') && source.includes('p[0] === "v6" && p.length === 40') && source.includes('p[0] === "v5" && p.length === 36') && source.includes('p[0] === "v3" && p.length === 24'));
 }
 
 // 선 두께: "/lines"는 v2 + LINE_KEYS 9칸(10필드). v1(축·그래프·보조선)도 읽고, 필드 수가 다르면 무시한다
@@ -430,17 +430,17 @@ for (const [expr, value] of [["sqrt(9)", 3], ["arcsin(1)", Math.PI/2], ["sec(0)"
   var nameTexts=["","","","",""],nameAts=[0,0,0,0,0],lineText="",showLineNames=true,labelText="",segmentText="",regionText2="",regionK2=35,showTicks=true;
   var parameterA=1,parameterB=0,parameterC=0,parametricX="",parametricY="",parametricMin="0",parametricMax="2π",tangentText="";
   var regionHatch=false,regionHatch2=false,axisMarkText="",lineDashes=[false,false,false,false,false];
-  var xAxisName="x",yAxisName="y",axisMode=0,xTick=1,yTick=1,arrowText=""; function saveLineWidths() {}`;
+  var xAxisName="x",yAxisName="y",axisMode=0,xTick=1,yTick=1,arrowText="",showDomainDots=true,domainDrops=false; function saveLineWidths() {}`;
   const body = prelude + ["saveSettings","encodeList","applySettings","restoreNumber","parseNumber","clamp"].map(extractFunction).join("\n") +
     `return {saveSettings,applySettings,set:function(a,b,c){parameterA=a;parameterB=b;parameterC=c;parametricX="3cos(t)";parametricY="2sin(t)";parametricMax="π";},get:function(){return [parameterA,parameterB,parameterC];},curve:function(){return [parametricX,parametricY,parametricMin,parametricMax];},
     marks:function(v){if(v){regionHatch=true;regionHatch2=true;axisMarkText="x=1:a";lineDashes=[false,true,false,false,true];}return [regionHatch,regionHatch2,axisMarkText,lineDashes.join(",")];}};`;
   const make = () => new Function("app",body)(app);
   const first = make(); first.set(2,-3,0.5); first.marks(true); first.saveSettings();
-  assert.equal(store.T.split("|").length,51);
+  assert.equal(store.T.split("|").length,53);
   const restored = make(); restored.applySettings(); assert.deepEqual(restored.get(),[2,-3,0.5]);
   assert.deepEqual(restored.marks(),[true,true,"x=1:a","false,true,false,false,true"], "빗금·축 위 글자·점선도 저장한다");
   assert.deepEqual(restored.curve(),["3cos(t)","2sin(t)","0","π"], "매개변수곡선도 저장한다");
-  const v7 = store.T.split("|").slice(0,41).join("|").replace(/^v10/,"v7");
+  const v7 = store.T.split("|").slice(0,41).join("|").replace(/^v11/,"v7");
   store.T = v7;
   const fromV7 = make(); fromV7.applySettings(); assert.deepEqual(fromV7.marks(),[false,false,"","false,false,false,false,false"], "v7은 새 항목을 처음 값으로");
   const v5 = store.T.split("|").slice(0,36).join("|").replace(/^v7/,"v5");
@@ -493,7 +493,7 @@ console.log("coord plane hatch·axis marks ok");
   assert.strictEqual(plane.arrows.length, 1);
   plane = g.buildPlane(Object.assign({}, base, { axisMode: 2 }));
   assert.strictEqual(plane.arrows.length, 0);
-  assert.ok(source.includes('p[0] === "v9" && p.length === 50'), "설정 v9");
+  assert.ok(source.includes('p[0] === "v9" && p.length === 50') && source.includes('p[0] === "v10" && p.length === 51'), "설정 v9·v10도 읽는다");
 }
 console.log("coord plane axis names ok");
 
@@ -520,3 +520,19 @@ console.log("coord plane axis names ok");
   }
 }
 console.log("coord plane arrows ok");
+
+// 정의역 끝점 끄기·끝 수직선 (웹 math-coord-plane.test.js와 같은 경우)
+{
+  const plane = (extra) => g.buildPlane(Object.assign({ xMin: -3, xMax: 3, yMin: -1, yMax: 6, unit: 10, tick: 3, grid: false, numbers: false, ticks: true,
+    nameStyle: 0, asymptotes: [], points: [], region: [], region2: [], fontSize: 8,
+    functions: [{ fn: (x) => x * x + 1, raw: (x) => x * x + 1, domain: { lo: 0, loIn: true, hi: 2, hiIn: false }, name: "" }] }, extra));
+  assert.strictEqual(plane({}).dots.length + plane({}).openDots.length, 2, "기본은 끝점 둘");
+  const off = plane({ domainDots: false });
+  assert.strictEqual(off.dots.length + off.openDots.length, 0, "끄면 없음");
+  const drops = plane({ domainDots: false, domainDrops: true });
+  const drop = (l) => l.kind === "axis" && l.points.length === 2 && l.points[0].anchor[0] === l.points[1].anchor[0] && Math.min(l.points[0].anchor[1], l.points[1].anchor[1]) === 0 && Math.abs(l.points[0].anchor[1] - l.points[1].anchor[1]) > 9;
+  assert.deepStrictEqual(drops.lines.filter(drop).map((l) => [l.points[0].anchor[0], Math.max(l.points[0].anchor[1], l.points[1].anchor[1])]).sort((a, b) => a[0] - b[0]), [[0, 10], [20, 50]]);
+  assert.strictEqual(plane({}).lines.filter(drop).length, 0);
+  assert.ok(source.includes("domainDots: showDomainDots, domainDrops: domainDrops"), "탭 옵션이 그리기에 간다");
+}
+console.log("coord plane domain dots ok");
