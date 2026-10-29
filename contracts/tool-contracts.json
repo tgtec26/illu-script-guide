@@ -6501,6 +6501,10 @@
           "minimum": -80,
           "maximum": 80
         },
+        "boxText": {
+          "type": "string",
+          "default": ""
+        },
         "dashedText": {
           "type": "string",
           "default": ""
@@ -6551,6 +6555,10 @@
           "type": "string",
           "default": ""
         },
+        "planeText": {
+          "type": "string",
+          "default": ""
+        },
         "pointsText": {
           "type": "string",
           "default": ""
@@ -6566,6 +6574,10 @@
         "segmentText": {
           "type": "string",
           "default": ""
+        },
+        "showAxes": {
+          "type": "boolean",
+          "default": false
         },
         "showHidden": {
           "type": "boolean",

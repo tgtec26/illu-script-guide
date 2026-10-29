@@ -4270,7 +4270,11 @@ var SCRIPT_KEY = "HighGeometry";
             var CURVE_STEPS = 96;
             var PRESETS = ["직접 좌표", "n각기둥", "n각뿔", "원기둥", "원뿔", "구"];
             var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
-            var TEXT_KEYS = ["radiusText", "heightText", "pointsText", "segmentText", "dashedText", "dotText", "labelDirText", "lengthText", "angleText", "fillText"];
+            var TEXT_KEYS = ["radiusText", "heightText", "pointsText", "segmentText", "dashedText", "dotText", "labelDirText", "lengthText", "angleText", "fillText", "boxText", "planeText"];
+            var AXIS_PT = 0.4;   // 좌표축 두께
+            var BOX_PT = 0.3;    // 점 상자 점선 두께
+            var ARROW = { length: 4.84, halfWidth: 1.573, notch: 1.24 };   // 좌표축 화살촉 (좌표평면 탭과 같은 모양)
+            registerHead(ARROW);
             var MARK_MM = 1.8;   // 직각 표시 한 변 (화면에서)
             var ARC_MM = 3;      // 각 호 반지름 (화면에서)
 
@@ -4283,11 +4287,12 @@ var SCRIPT_KEY = "HighGeometry";
             var eqnFont = findTextFont([EQN_FONT_NAME, ENG_FONT_NAME]);
 
             // 옵션
-            var text = {radiusText: "2", heightText: "3", pointsText: "", segmentText: "", dashedText: "", dotText: "", labelDirText: "", lengthText: "", angleText: "", fillText: ""};
+            var text = {radiusText: "2", heightText: "3", pointsText: "", segmentText: "", dashedText: "", dotText: "", labelDirText: "", lengthText: "", angleText: "", fillText: "", boxText: "", planeText: ""};
             var preset = 1;
             var sides = 4;
             var showNames = true;
             var showHidden = true;
+            var showAxes = false;   // 좌표공간: x·y·z축
             var azimuthDeg = 20;
             var elevationDeg = 25;
             var sizeMm = 50;
@@ -4335,6 +4340,10 @@ var SCRIPT_KEY = "HighGeometry";
             addTextRow(extraPanel, "길이 글자", "lengthText", "모서리 옆에 길이 글자(그림 바깥쪽): A1B1:3, PA1:√13 (쉼표로 여러 개)");
             addTextRow(extraPanel, "각 표시", "angleText", "꼭짓점이 가운데인 점 이름 셋: PHA1:R 직각 표시, PA1H:60° 호와 글자(글자 없으면 호만). 두 선분이 이루는 평면 위에 그린다");
             addTextRow(extraPanel, "단면 칠하기", "fillText", "점 이름(셋 이상)을 이은 다각형을 칠한다(단면·삼각형): PA1A3:30 (뒤의 수는 농도 K, 안 쓰면 20)");
+            var axesCheck = extraPanel.add("checkbox", undefined, "좌표축 (x·y·z, 원점 O)");
+            axesCheck.value = showAxes;
+            addTextRow(extraPanel, "점 상자", "boxText", "점 이름. 그 점에서 좌표평면과 축까지 점선 아홉 개(P(a,b,c)의 직육면체)를 긋는다. 좌표축을 켜고 쓴다");
+            addTextRow(extraPanel, "좌표평면 칠하기", "planeText", "xy, yz, zx를 쉼표로. 축 길이만큼의 평행사변형을 연하게(K15) 칠한다");
             addTextRow(extraPanel, "이름 방향", "labelDirText", "A1:ul, P:r (u 위, d 아래, l 왼쪽, r 오른쪽, ul·ur·dl·dr 대각선). 안 쓰면 그림 가운데에서 바깥쪽");
 
             var viewPanel = addPanel(win, "시점 · 크기");
@@ -4362,6 +4371,7 @@ var SCRIPT_KEY = "HighGeometry";
             presetList.onChange = function() { preset = presetList.selection ? presetList.selection.index : 0; refreshEnabled(); updatePreview(); };
             nameCheck.onClick = function() { showNames = nameCheck.value; updatePreview(); };
             hiddenCheck.onClick = function() { showHidden = hiddenCheck.value; updatePreview(); };
+            axesCheck.onClick = function() { showAxes = axesCheck.value; updatePreview(); };
             bindValueRow(sidesControls, function(value) { sides = value; }, DEFAULTS.sides);
             bindValueRow(azimuthControls, function(value) { azimuthDeg = value; }, DEFAULTS.azimuthDeg);
             bindValueRow(elevationControls, function(value) { elevationDeg = value; }, DEFAULTS.elevationDeg);
@@ -4429,10 +4439,20 @@ var SCRIPT_KEY = "HighGeometry";
                 previewGroup = layer.groupItems.add();
                 previewGroup.name = "3D 입체";
                 for (var i = 0; i < drawing.lines.length; i++) addPath(drawing.lines[i]);
+                for (var ar = 0; ar < drawing.arrows.length; ar++) addArrow(drawing.arrows[ar]);
                 for (var d = 0; d < drawing.dots.length; d++) addDot(drawing.dots[d]);
                 for (var t = 0; t < drawing.texts.length; t++) addLabel(drawing.texts[t]);
                 if (typeof untangleLabels === "function") untangleLabels(previewGroup, drawing);
                 previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
+            }
+
+            // 끝이 tip, 방향 dir인 채운 화살촉 (좌표축 끝)
+            function addArrow(arrow) {
+                var head = headShapeFor(arrow.tip, arrow.dir, ARROW);
+                var path = previewGroup.pathItems.add();
+                path.setEntirePath(head.points);
+                path.closed = head.closed;
+                paintHead(path, head.closed, makeGray(100));
             }
 
             function addPath(line) {
@@ -4461,10 +4481,10 @@ var SCRIPT_KEY = "HighGeometry";
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = makeGray(100);
-                path.strokeWidth = line.kind === "dashed" || line.kind === "mark" ? GUIDE_PT : strokePt;
+                path.strokeWidth = line.kind === "axis" ? AXIS_PT : (line.kind === "boxdash" ? BOX_PT : (line.kind === "dashed" || line.kind === "mark" ? GUIDE_PT : strokePt));
                 path.strokeCap = StrokeCap.BUTTENDCAP;
                 path.strokeJoin = StrokeJoin.ROUNDENDJOIN;
-                if (line.kind === "dashed") path.strokeDashes = GUIDE_DASH;
+                if (line.kind === "dashed" || line.kind === "boxdash") path.strokeDashes = GUIDE_DASH;
             }
             function addDot(at) {
                 var r = DOT_RADIUS_MM * MM_TO_PT;
@@ -4895,6 +4915,25 @@ var SCRIPT_KEY = "HighGeometry";
                 }
                 var lengths = pairTexts(text.lengthText, "길이", 2), angleMarks = pairTexts(text.angleText, "각", 3), fillItems = pairTexts(text.fillText, "칠하기", 0);
 
+                // 좌표공간: 축 길이는 점 좌표에 맞춘다(양쪽 모두 좌표의 1.25배, 음의 쪽은 점이 없으면 양의 쪽의 절반). 점 상자·평면 읽기 (웹 math-solid3d.js와 같은 뜻)
+                var axisSpan = [];
+                for (k = 0; k < 3; k++) {
+                    var kmin = 0, kmax = 1;
+                    for (i = 0; i < names.length; i++) { kmin = Math.min(kmin, table[names[i]][k]); kmax = Math.max(kmax, table[names[i]][k]); }
+                    axisSpan.push([kmin < 0 ? kmin * 1.25 : -kmax * 1.25 * 0.5, kmax * 1.25]);
+                }
+                var boxes = [], boxItems = splitItems(text.boxText);
+                for (i = 0; i < boxItems.length; i++) {
+                    var boxTokens = tokenizeNames(boxItems[i], names);
+                    if (boxTokens === null) notes.push("점 상자 " + boxItems[i]); else for (k = 0; k < boxTokens.length; k++) boxes.push(boxTokens[k]);
+                }
+                var planeIndex = {xy: [0, 1], yz: [1, 2], zx: [2, 0], yx: [0, 1], zy: [1, 2], xz: [2, 0]}, planes = [];
+                var planeWords = String(text.planeText || "").split(/[,\s]+/);
+                for (i = 0; i < planeWords.length; i++) {
+                    if (planeWords[i] === "") continue;
+                    if (planeIndex.hasOwnProperty(planeWords[i])) planes.push(planeIndex[planeWords[i]]); else notes.push("평면 " + planeWords[i]);
+                }
+
                 // 그릴 선들을 화면 좌표로 모은다: {pts, hidden, user}
                 var lines = [];
                 function nearSide(p, c) { return dot3(sub3(p, c), view.d) > 1e-9; }
@@ -4953,17 +4992,53 @@ var SCRIPT_KEY = "HighGeometry";
                 }
                 for (i = 0; i < solid.length; i++) lines.push({pts: [S(table[solid[i][0]]), S(table[solid[i][1]])], hidden: false, user: true});
                 for (i = 0; i < dashed.length; i++) lines.push({pts: [S(table[dashed[i][0]]), S(table[dashed[i][1]])], hidden: true, user: true});
+                // 좌표축: 음의 끝에서 양의 끝까지. 화살촉은 양의 끝
+                var axisNames = ["x", "y", "z"];
+                if (showAxes) {
+                    for (k = 0; k < 3; k++) {
+                        var negEnd = [0, 0, 0], posEnd = [0, 0, 0];
+                        negEnd[k] = axisSpan[k][0]; posEnd[k] = axisSpan[k][1];
+                        lines.push({pts: [S(negEnd), S(posEnd)], hidden: false, axis: true});
+                    }
+                }
+                // 점 상자: 점 P(a,b,c)에서 좌표평면 위의 세 점과 축 위의 세 점으로 가는 점선 아홉 개
+                for (i = 0; i < boxes.length; i++) {
+                    var bp = table[boxes[i]], ba = bp[0], bb = bp[1], bc = bp[2];
+                    var corners = {ab: [ba, bb, 0], ac: [ba, 0, bc], bc: [0, bb, bc], a: [ba, 0, 0], b: [0, bb, 0], c: [0, 0, bc]};
+                    var edges9 = [[bp, "ab"], [bp, "ac"], [bp, "bc"], [corners.ab, "a"], [corners.ab, "b"], [corners.ac, "a"], [corners.ac, "c"], [corners.bc, "b"], [corners.bc, "c"]];
+                    for (k = 0; k < edges9.length; k++) lines.push({pts: [S(edges9[k][0]), S(corners[edges9[k][1]])], hidden: true, guide: true});
+                }
 
                 // 화면 크기에 맞추기
                 var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
                 function grow(p) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
                 for (i = 0; i < lines.length; i++) for (k = 0; k < lines[i].pts.length; k++) grow(lines[i].pts[k]);
                 for (i = 0; i < names.length; i++) grow(S(table[names[i]]));
+                var planeRings = [];
+                for (i = 0; i < planes.length; i++) {
+                    var ring4 = [], signs = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+                    for (k = 0; k < 4; k++) {
+                        var corner3 = [0, 0, 0];
+                        corner3[planes[i][0]] = signs[k][0] > 0 ? axisSpan[planes[i][0]][1] : axisSpan[planes[i][0]][0];
+                        corner3[planes[i][1]] = signs[k][1] > 0 ? axisSpan[planes[i][1]][1] : axisSpan[planes[i][1]][0];
+                        ring4.push(S(corner3));
+                        grow(ring4[k]);
+                    }
+                    planeRings.push(ring4);
+                }
                 if (sphereRadius > 0) { var sc = S([0, 0, 0]); grow([sc[0] - sphereRadius, sc[1] - sphereRadius]); grow([sc[0] + sphereRadius, sc[1] + sphereRadius]); }
                 var extent = Math.max(x1 - x0, y1 - y0) || 1;
                 var scale = sizeMm * MM_TO_PT / extent, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
                 function T(p) { return [(p[0] - mx) * scale, (p[1] - my) * scale]; }
 
+                // 좌표평면 칠하기: 가장 아래 (K15)
+                for (i = 0; i < planeRings.length; i++) {
+                    var planePts = [];
+                    for (k = 0; k < planeRings[i].length; k++) planePts.push(T(planeRings[i][k]));
+                    var planeLine = straight(planePts, "fill", true);
+                    planeLine.fillK = 15;
+                    out.lines.push(planeLine);
+                }
                 // 단면 칠하기는 맨 아래 (농도 K, 안 쓰면 20)
                 for (i = 0; i < fillItems.length; i++) {
                     var fillPts = [];
@@ -4977,11 +5052,18 @@ var SCRIPT_KEY = "HighGeometry";
                     for (i = 0; i < CURVE_STEPS; i++) outline.push([c[0] + rr * Math.cos(2 * Math.PI * i / CURVE_STEPS), c[1] + rr * Math.sin(2 * Math.PI * i / CURVE_STEPS)]);
                     out.lines.push(straight(outline, "main", true));
                 }
+                var cut = ARROW.length - ARROW.notch, axisTips = [];
                 for (i = 0; i < lines.length; i++) {
                     if (lines[i].hidden && !showHidden && !lines[i].user) continue;
                     var pts = [];
                     for (k = 0; k < lines[i].pts.length; k++) pts.push(T(lines[i].pts[k]));
-                    out.lines.push(straight(pts, lines[i].hidden ? "dashed" : "main", false));
+                    if (lines[i].axis) {
+                        // 선은 양의 끝 화살촉 속에서 끝난다
+                        var ad = unitVector([pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]]);
+                        out.lines.push(straight([pts[0], [pts[1][0] - ad[0] * cut, pts[1][1] - ad[1] * cut]], "axis", false));
+                        out.arrows.push({tip: pts[1], dir: ad});
+                        axisTips.push({tip: pts[1], dir: ad});
+                    } else out.lines.push(straight(pts, lines[i].guide ? "boxdash" : (lines[i].hidden ? "dashed" : "main"), false));
                 }
 
                 // 점 이름: 그림 가운데에서 바깥쪽으로. 프리셋의 중심 점은 이름을 쓰지 않는다(점 찍기에 적으면 쓴다)
@@ -5005,6 +5087,9 @@ var SCRIPT_KEY = "HighGeometry";
                         out.texts.push(label);
                     }
                 }
+                // 축 글자 x·y·z는 양의 끝 밖에, 원점 O는 입체에 O가 없을 때만 왼쪽 아래에
+                for (i = 0; i < axisTips.length; i++) out.texts.push({text: axisNames[i], at: axisTips[i].tip, dir: axisTips[i].dir});
+                if (showAxes && !table.hasOwnProperty("O")) out.texts.push({text: "O", at: T(S([0, 0, 0])), dir: [-0.7071, -0.7071], upright: true});
                 // 길이 글자: 선분 가운데에서 그림 가운데의 반대쪽 법선 방향으로
                 for (i = 0; i < lengths.length; i++) {
                     if (!lengths[i].text) continue;
@@ -5166,10 +5251,10 @@ var SCRIPT_KEY = "HighGeometry";
             // -------------------------------------------------------
             function saveSettings() {
                 saveLineWidths();
-                var parts = ["v2"];
+                var parts = ["v3"];
                 for (var i = 0; i < TEXT_KEYS.length; i++) parts.push(encodeURIComponent(text[TEXT_KEYS[i]]));
                 parts.push(preset, sides, showNames ? "1" : "0", showHidden ? "1" : "0", azimuthDeg, elevationDeg, sizeMm, fontPt, labelGapMm, strokePt,
-                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0");
+                    offsetXmm, offsetYmm, previewEnabled ? "1" : "0", showAxes ? "1" : "0");
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -5178,9 +5263,9 @@ var SCRIPT_KEY = "HighGeometry";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                // v2는 글 10칸(길이 글자·각 표시·단면 칠하기까지), v1은 앞의 7칸이다. 숫자 항목은 글 뒤에 이어진다
-                if (!((p[0] === "v2" && p.length === 24) || (p[0] === "v1" && p.length === 21))) return;
-                var textCount = p[0] === "v2" ? TEXT_KEYS.length : 7, o = textCount - 7;
+                // v3는 글 12칸(점 상자·좌표평면까지)과 끝에 좌표축, v2는 글 10칸(길이 글자·각 표시·단면 칠하기까지), v1은 앞의 7칸이다. 숫자 항목은 글 뒤에 이어진다
+                if (!((p[0] === "v3" && p.length === 27) || (p[0] === "v2" && p.length === 24) || (p[0] === "v1" && p.length === 21))) return;
+                var textCount = p[0] === "v3" ? TEXT_KEYS.length : (p[0] === "v2" ? TEXT_KEYS.length - 2 : 7), o = textCount - 7;
                 try {
                     var restored = {};
                     for (var i = 0; i < textCount; i++) restored[TEXT_KEYS[i]] = decodeURIComponent(p[1 + i]);
@@ -5198,6 +5283,7 @@ var SCRIPT_KEY = "HighGeometry";
                     offsetXmm = restoreNumber(p[18 + o], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[19 + o], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[20 + o] === "1";
+                    if (p[0] === "v3") showAxes = p[21 + o] === "1";
                 } catch (restoreError) {}
             }
 

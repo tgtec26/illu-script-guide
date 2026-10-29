@@ -28,13 +28,13 @@ function extractFunction(name) {
 const names = ["dot3", "sub3", "cross3", "makeView", "parsePoints3D", "ringPoint", "polyhedron", "buildPreset", "ringRuns", "buildSolid3D",
   "evalNumber", "splitItems", "tokenizeNames", "display", "straight", "unitVector"];
 const make = new Function("s", `
-var MM_TO_PT = 2.834645669, CURVE_STEPS = 96, MARK_MM = 1.8, ARC_MM = 3;
+var MM_TO_PT = 2.834645669, CURVE_STEPS = 96, MARK_MM = 1.8, ARC_MM = 3, ARROW = { length: 4, halfWidth: 1.3, notch: 1 };
 var DIRS = {u: [0, 1], d: [0, -1], l: [-1, 0], r: [1, 0], ul: [-1, 1], ur: [1, 1], dl: [-1, -1], dr: [1, -1]};
-var text = s.text, preset = s.preset, sides = s.sides, showNames = s.showNames, showHidden = s.showHidden;
+var text = s.text, preset = s.preset, sides = s.sides, showNames = s.showNames, showHidden = s.showHidden, showAxes = !!s.showAxes;
 var azimuthDeg = 20, elevationDeg = 25, sizeMm = 50;
 ${names.map(extractFunction).join("\n")}
 return {${names.join(",")}};`);
-const TEXT0 = { radiusText: "2", heightText: "3", pointsText: "", segmentText: "", dashedText: "", dotText: "", labelDirText: "", lengthText: "", angleText: "", fillText: "" };
+const TEXT0 = { radiusText: "2", heightText: "3", pointsText: "", segmentText: "", dashedText: "", dotText: "", labelDirText: "", lengthText: "", angleText: "", fillText: "", boxText: "", planeText: "" };
 const api = ({ text = {}, ...rest } = {}) => make(Object.assign({ preset: 1, sides: 4, showNames: true, showHidden: true }, rest, { text: Object.assign({}, TEXT0, text) }));
 const dashed = (d) => d.lines.filter((l) => l.kind === "dashed").length;
 
@@ -135,3 +135,21 @@ console.log("solid3d checks passed");
   assert.ok(source.includes('p[0] === "v2" && p.length === 24') && source.includes('p[0] === "v1" && p.length === 21'), "설정 v2, v1도 읽는다");
 }
 console.log("solid3d marks ok");
+
+// 좌표공간: 축 세 개·화살촉·글자, 점 상자, 평면 칠하기 (웹 math-solid3d.test.js와 같은 경우)
+{
+  const d = api({ preset: 0, showAxes: true, text: { pointsText: "P(2,3,4)", boxText: "P", planeText: "xy" } }).buildSolid3D();
+  assert.deepStrictEqual(d.notes, []);
+  for (const t of ["x", "y", "z", "O"]) assert.ok(d.texts.some((x) => x.text === t), t);
+  assert.strictEqual(d.arrows.length, 3, "화살촉 셋");
+  assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 3);
+  assert.strictEqual(d.lines.filter((l) => l.kind === "boxdash").length, 9, "점 상자");
+  assert.deepStrictEqual([d.lines[0].kind, d.lines[0].fillK, d.lines[0].points.length], ["fill", 15, 4], "평면은 맨 아래");
+  assert.deepStrictEqual(api({ preset: 0, showAxes: true, text: { pointsText: "P(1,1,1)", planeText: "xy, qq", boxText: "Z" } }).buildSolid3D().notes, ["점 상자 Z", "평면 qq"].sort(), "읽지 못한 칸");
+  assert.strictEqual(api({ preset: 0, showAxes: true, text: { pointsText: "O(0,0,0) A(5,0,0)", segmentText: "O-A" } }).buildSolid3D().texts.filter((t) => t.text === "O").length, 1, "O는 한 번");
+  assert.strictEqual(api({ preset: 0, text: { pointsText: "P(2,3,4)" } }).buildSolid3D().arrows.length, 0, "축을 끄면 화살촉 없음");
+  assert.ok(source.includes('p[0] === "v3" && p.length === 27'), "설정 v3");
+  assert.ok(source.includes('if (line.kind === "axis")') || source.includes('line.kind === "axis" ? AXIS_PT'), "축 두께");
+  assert.ok(source.includes("addArrow(drawing.arrows[ar])"), "화살촉을 그린다");
+}
+console.log("solid3d coordinate space ok");
