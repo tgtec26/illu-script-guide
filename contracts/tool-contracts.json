@@ -5951,6 +5951,71 @@
         }
       }
     },
+    "math-pascal": {
+      "schemaVersion": 1,
+      "toolId": "math-pascal",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "axisPt": {
+          "type": "number",
+          "default": 0.4
+        },
+        "blankText": {
+          "type": "string",
+          "default": ""
+        },
+        "cellHmm": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 20
+        },
+        "cellWmm": {
+          "type": "number",
+          "default": 10,
+          "minimum": 6,
+          "maximum": 30
+        },
+        "content": {
+          "type": "number",
+          "default": 0
+        },
+        "fontPt": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 14
+        },
+        "graphPt": {
+          "type": "number",
+          "default": 0.8
+        },
+        "guidePt": {
+          "type": "number",
+          "default": 0.3
+        },
+        "rows": {
+          "type": "number",
+          "default": 6,
+          "minimum": 2,
+          "maximum": 12
+        },
+        "shadeK": {
+          "type": "number",
+          "default": 15,
+          "minimum": 5,
+          "maximum": 60
+        },
+        "shadeText": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
     "math-prob-tree": {
       "schemaVersion": 1,
       "toolId": "math-prob-tree",

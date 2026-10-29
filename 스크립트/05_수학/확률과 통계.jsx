@@ -123,7 +123,7 @@ var SCRIPT_KEY = "HighStatistics";
 
     // 엔진 인터페이스: label / addRows(page)→오류문 또는 null (탭의 컨트롤을 만들고 미리보기 훅을 api에 단다) /
     // setPreview(on) / updatePreview() / clearPreview() / commit()→확정했으면 true
-    var engines = [makeCountEngine(), makeProbTreeEngine(), makeDistributionEngine(), makeTableEngine()];
+    var engines = [makeCountEngine(), makeProbTreeEngine(), makeDistributionEngine(), makeTableEngine(), makePascalEngine()];
 
     var win = new Window("dialog", "확률과 통계");
     win.orientation = "column";
@@ -3189,6 +3189,456 @@ var SCRIPT_KEY = "HighStatistics";
 
             function restoreNumber(source, fallback, minimum, maximum) {
                 var value = parseNumber(source);
+                return value === null ? fallback : clamp(value, minimum, maximum);
+            }
+        }
+        return api;
+    }
+    // ==== 파스칼 삼각형 ====
+    // 파스칼의 삼각형: 행 n의 r번째 칸은 조합 nCr. 칸 글자는 수(1, 4, 6, 4, 1) 또는 조합(₄C₂), 칠할 칸(하키스틱·띠)과 빈칸(상자)을 고른다.
+    // 칸 목록 "3:1, r=2, n=4": n:r 한 칸, r=k 대각선, n=k 한 줄. 계산 함수(buildPascal·parseCells)는 웹 sci-illu-web generators/math-pascal.js와 글자 그대로 같다 (tests/check-pascal.js).
+    // 선 두께: 빈칸 상자 0.4pt. 선택은 필요 없다.
+    function makePascalEngine() {
+        var api = {label: "파스칼 삼각형", error: null, addRows: addRows,
+            setPreview: function() {}, updatePreview: function() {}, clearPreview: function() {}, commit: function() { return false; }};
+        function addRows(page) {
+            var PREF_KEY = "HighStatPascal/settings";
+            var MM_TO_PT = 2.834645669;
+            var POSITION_LIMIT_MM = 100;
+            var LABEL_WIDTH = 100;
+            var INPUT_WIDTH = 50;
+            var SLIDER_WIDTH = 196;
+            var RESET_BUTTON_WIDTH = 34;
+            var KOR_FONT_NAME = "SpoqaHanSansNeo-Regular";
+            var ENG_FONT_NAME = "GSMediumB1";
+            var ITALIC_FONT_NAME = "GSMediItaC1";
+            var EQN_FONT_NAME = "HancomEQN";
+            var ENG_BASELINE_PT = 0.5;
+            var AXIS_PT = 0.4;
+            var CONTENT_NAMES = ["수", "조합 ₙCᵣ"];
+
+            var doc = app.activeDocument;
+            var viewCenter = (typeof getScriptStartCenter === "function" ? getScriptStartCenter(doc) : doc.activeView.centerPoint);
+            var layer = findEditableLayer();
+            var korFont = findTextFont([KOR_FONT_NAME, ENG_FONT_NAME]);
+            var engFont = findTextFont([ENG_FONT_NAME, KOR_FONT_NAME]);
+            var italicFont = findTextFont([ITALIC_FONT_NAME, ENG_FONT_NAME]);
+            var eqnFont = findTextFont([EQN_FONT_NAME, ENG_FONT_NAME]);
+
+            // 옵션
+            var rows = 6;
+            var content = 0;
+            var shadeText = "";
+            var blankText = "";
+            var shadeK = 15;
+            var cellWmm = 10;
+            var cellHmm = 8;
+            var fontPt = 8;
+            var offsetXmm = 0;
+            var offsetYmm = 0;
+            var previewEnabled = true;
+            // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
+            var defaults = {rows: rows, shadeK: shadeK, cellWmm: cellWmm, cellHmm: cellHmm, fontPt: fontPt, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+            applySettings();
+            var LINE_DEFAULTS = {axis: AXIS_PT};
+            loadLineWidths();
+
+            var previewGroup = null;
+
+            var win = page;   // 탭 페이지에 그대로 쌓는다
+
+            var formPanel = addPanel(win, "삼각형");
+            var rowsControls = addValueRow(formPanel, "행 수", "행", rows, 2, 12, 1, 0);
+            var contentRow = formPanel.add("group");
+            contentRow.add("statictext", undefined, "칸 글자:").preferredSize.width = 80;
+            var contentList = contentRow.add("dropdownlist", undefined, CONTENT_NAMES);
+            contentList.selection = content;
+            var shadeInput = addTextRow(formPanel, "칠하기:", shadeText, "칠할 칸: n:r 한 칸(위에서 n행의 r번째, 둘 다 0부터), r=k는 그 r의 대각선(하키스틱·띠), n=k는 한 줄. 쉼표로 이어 쓴다 (3:1, r=2, n=4)");
+            var blankInput = addTextRow(formPanel, "빈칸:", blankText, "글자 대신 빈 상자를 둘 칸(학생이 채울 칸). 칠하기와 같은 쓰기 (2:1, 4:2)");
+            var shadeKControls = addValueRow(formPanel, "칠하기 음영", "K", shadeK, 5, 60, 5, 0);
+            var messageText = formPanel.add("statictext", undefined, " ", {multiline: true});
+            messageText.preferredSize = [360, 20];
+
+            var sizePanel = addPanel(win, "크기");
+            var cellWControls = addValueRow(sizePanel, "칸 너비", "mm", cellWmm, 6, 30, 1, 0);
+            var cellHControls = addValueRow(sizePanel, "칸 높이", "mm", cellHmm, 5, 20, 0.5, 1);
+            var fontControls = addValueRow(sizePanel, "글자 크기", "pt", fontPt, 5, 14, 0.5, 1);
+
+            var lineWidthPanel = addPanel(win, "선 두께", "lineWidths");
+            var axisWidthControls = addValueRow(lineWidthPanel, "빈칸 상자", "pt", currentLineWidth("axis"), 0.1, 2, 0.1, 1);
+            bindValueRow(axisWidthControls, function(value) { setLineWidth("axis", value); }, LINE_DEFAULTS.axis);
+
+            var positionPanel = addPanel(win, "위치");
+            var offsetXControls = addValueRow(positionPanel, "가로", "mm", offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+            var offsetYControls = addValueRow(positionPanel, "세로", "mm", offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM, 0.5, 1);
+
+            contentList.onChange = function() { content = contentList.selection ? contentList.selection.index : 0; updatePreview(); };
+            shadeInput.onChanging = function() { shadeText = shadeInput.text; updatePreview(); };
+            blankInput.onChanging = function() { blankText = blankInput.text; updatePreview(); };
+            bindValueRow(rowsControls, function(value) { rows = value; }, defaults.rows);
+            bindValueRow(shadeKControls, function(value) { shadeK = value; }, defaults.shadeK);
+            bindValueRow(cellWControls, function(value) { cellWmm = value; }, defaults.cellWmm);
+            bindValueRow(cellHControls, function(value) { cellHmm = value; }, defaults.cellHmm);
+            bindValueRow(fontControls, function(value) { fontPt = value; }, defaults.fontPt);
+            // 위치는 다시 만들지 않고 미리보기 그룹만 옮긴다
+            bindPositionRow(offsetXControls, function() { return offsetXmm; }, function(value) { offsetXmm = value; }, true, defaults.offsetXmm);
+            bindPositionRow(offsetYControls, function() { return offsetYmm; }, function(value) { offsetYmm = value; }, false, defaults.offsetYmm);
+
+            // 탭 호스트가 부르는 훅. 확인: 저장하고 미리보기를 결과로 남긴다
+            api.commit = function() {
+                if (previewGroup === null) buildPreview();
+                saveSettings();
+                doc.selection = null;
+                previewGroup.selected = true;
+                return true;
+            };
+            api.setPreview = function(on) {
+                previewEnabled = on;
+                updatePreview();
+            };
+            api.updatePreview = updatePreview;
+            api.clearPreview = function() {
+                clearPreview();
+                app.redraw();
+            };
+            return null;
+
+            // -------------------------------------------------------
+            // 미리보기
+            // -------------------------------------------------------
+            function updatePreview() {
+                clearPreview();
+                if (previewEnabled) buildPreview();
+                app.redraw();
+            }
+
+            function clearPreview() {
+                if (previewGroup !== null) {
+                    try { previewGroup.remove(); } catch (e) {}
+                }
+                previewGroup = null;
+            }
+
+            function buildPreview() {
+                var shade = parseCells(shadeText, rows), blank = parseCells(blankText, rows), problems = [];
+                if (shade === null) problems.push("칠하기");
+                if (blank === null) problems.push("빈칸");
+                var d = buildPascal({ rows: rows, content: content, shade: shade === null ? [] : shade, blank: blank === null ? [] : blank, cellW: cellWmm * MM_TO_PT, cellH: cellHmm * MM_TO_PT });
+                messageText.text = problems.length > 0 ? "읽지 못함: " + problems.join(", ") : " ";
+                previewGroup = layer.groupItems.add();
+                previewGroup.name = "파스칼의 삼각형";
+                for (var f = 0; f < d.fills.length; f++) addPolygon(d.fills[f], true);
+                for (var b = 0; b < d.boxes.length; b++) addPolygon(d.boxes[b], false);
+                for (var t = 0; t < d.texts.length; t++) addLabel(d.texts[t]);
+                previewGroup.translate(viewCenter[0] + offsetXmm * MM_TO_PT, viewCenter[1] + offsetYmm * MM_TO_PT);
+            }
+
+            // 칠한 칸(채움 K, 선 없음) 또는 빈칸 상자(선만)
+            function addPolygon(points, filled) {
+                var path = previewGroup.pathItems.add();
+                path.setEntirePath(points);
+                path.closed = true;
+                path.filled = filled;
+                if (filled) path.fillColor = makeGray(shadeK);
+                path.stroked = !filled;
+                if (!filled) {
+                    path.strokeColor = makeGray(100);
+                    path.strokeWidth = AXIS_PT;
+                    path.strokeJoin = StrokeJoin.MITERENDJOIN;
+                }
+            }
+
+            // 칸 가운데(at)에 글자 가운데를 맞춘다. sub: 아래첨자로 내릴 글자 번호 (조합 ₄C₂)
+            function addLabel(label) {
+                var frame = previewGroup.textFrames.add();
+                frame.contents = label.text;
+                var attributes = frame.textRange.characterAttributes;
+                attributes.size = fontPt;
+                attributes.fillColor = makeGray(100);
+                applyTextFonts(frame);
+                if (label.sub) for (var s = 0; s < label.sub.length; s++) frame.textRange.characters[label.sub[s]].characterAttributes.baselinePosition = FontBaselineOption.SUBSCRIPT;
+                var b = frame.geometricBounds;
+                frame.translate(label.at[0] - (b[0] + b[2]) / 2, label.at[1] - (b[1] + b[3]) / 2);
+            }
+
+            // 글자 서체 (07_문자/한글·영문 서체 적용.jsx 규칙): 영문·숫자 GSMediumB1(기준선 +0.5pt), 조합 기호 C는 똑바로
+            function applyTextFonts(frame) {
+                var text = frame.contents;
+                for (var i = 0; i < text.length; i++) {
+                    var code = text.charCodeAt(i);
+                    var attributes = frame.textRange.characters[i].characterAttributes;
+                    if ((code >= 0xAC00 && code <= 0xD7A3) || (code >= 0x3131 && code <= 0x318E) || code === 32 || code === 160) {
+                        attributes.textFont = korFont;
+                        attributes.baselineShift = 0;
+                    } else if (code > 126) {
+                        attributes.textFont = eqnFont;
+                        attributes.baselineShift = 0;
+                    } else {
+                        attributes.textFont = engFont;
+                        attributes.baselineShift = ENG_BASELINE_PT;
+                    }
+                }
+            }
+
+            function findTextFont(names) {
+                for (var i = 0; i < names.length; i++) {
+                    try { return app.textFonts.getByName(names[i]); } catch (e) {}
+                }
+                return app.textFonts[0];
+            }
+
+            // 잠기거나 숨긴 레이어에 넣으면 MRAP 오류가 난다. 편집할 수 있는 레이어를 고른다
+            function findEditableLayer() {
+                var active = doc.activeLayer;
+                if (!active.locked && active.visible) return active;
+                for (var i = 0; i < doc.layers.length; i++) {
+                    if (!doc.layers[i].locked && doc.layers[i].visible) return doc.layers[i];
+                }
+                return doc.layers.add();
+            }
+
+            // K값(0~100)만 있는 회색. RGB 문서면 같은 밝기의 회색으로
+            function makeGray(k) {
+                if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+                    var cmyk = new CMYKColor();
+                    cmyk.cyan = 0;
+                    cmyk.magenta = 0;
+                    cmyk.yellow = 0;
+                    cmyk.black = k;
+                    return cmyk;
+                }
+                var value = Math.round(255 * (1 - k / 100));
+                var rgb = new RGBColor();
+                rgb.red = value;
+                rgb.green = value;
+                rgb.blue = value;
+                return rgb;
+            }
+
+            // -------------------------------------------------------
+            // 계산 (일러 DOM을 쓰지 않는다 → tests/check-pascal.js). 웹 generators/math-pascal.js와 글자 그대로 같다
+            // -------------------------------------------------------
+            // opt: rows, content(0 수·1 조합), shade·blank([{n, r}]), cellW·cellH(pt)
+            // -------------------------------------------------------
+            // 계산 (일러 DOM을 쓰지 않는다 → illu-script-guide tests/check-pascal.js)
+            // -------------------------------------------------------
+            // opt: rows, content(0 수·1 조합), shade·blank([{n, r}]), cellW·cellH(pt) → {fills, boxes: [[점 4개]], texts: [{text, at, sub?}]}
+            function buildPascal(opt) {
+                var out = { fills: [], boxes: [], texts: [] };
+                var values = [], n, r, i;
+                for (n = 0; n < opt.rows; n++) {
+                    var row = [];
+                    for (r = 0; r <= n; r++) row.push(r === 0 || r === n ? 1 : values[n - 1][r - 1] + values[n - 1][r]);
+                    values.push(row);
+                }
+                function at(cellN, cellR) { return [(cellR - cellN / 2) * opt.cellW, 0 - cellN * opt.cellH]; }
+                function rect(center, scale) {
+                    var hw = opt.cellW * scale, hh = opt.cellH * scale;
+                    return [[center[0] - hw, center[1] - hh], [center[0] + hw, center[1] - hh], [center[0] + hw, center[1] + hh], [center[0] - hw, center[1] + hh]];
+                }
+                function has(list, cellN, cellR) {
+                    for (var k = 0; k < list.length; k++) if (list[k].n === cellN && list[k].r === cellR) return true;
+                    return false;
+                }
+                for (i = 0; i < opt.shade.length; i++) out.fills.push(rect(at(opt.shade[i].n, opt.shade[i].r), 0.45));
+                for (n = 0; n < opt.rows; n++) {
+                    for (r = 0; r <= n; r++) {
+                        var center = at(n, r);
+                        if (has(opt.blank, n, r)) { out.boxes.push(rect(center, 0.3)); continue; }
+                        if (opt.content === 1) out.texts.push({ text: n + "C" + r, at: center, sub: [0, String(n).length + 1] });
+                        else out.texts.push({ text: String(values[n][r]), at: center });
+                    }
+                }
+                return out;
+            }
+
+            // 칸 목록 "3:1, r=2, n=4" → [{n, r}] (겹치면 앞의 것만). 비면 [], 행 수 밖이거나 못 읽으면 null
+            function parseCells(text, rows) {
+                var parts = String(text).split(/[;,，]/), out = [], seen = {};
+                function add(n, r) {
+                    var key = n + ":" + r;
+                    if (!seen[key]) { seen[key] = true; out.push({ n: n, r: r }); }
+                }
+                for (var i = 0; i < parts.length; i++) {
+                    var item = parts[i].replace(/\s/g, "").toLowerCase();
+                    if (item === "") continue;
+                    var pair = /^(\d+):(\d+)$/.exec(item), line = /^([nr])=(\d+)$/.exec(item);
+                    if (pair) {
+                        var n = parseInt(pair[1], 10), r = parseInt(pair[2], 10);
+                        if (n >= rows || r > n) return null;
+                        add(n, r);
+                    } else if (line) {
+                        var k = parseInt(line[2], 10);
+                        if (k >= rows) return null;
+                        if (line[1] === "n") for (var rr = 0; rr <= k; rr++) add(k, rr);
+                        else for (var nn = k; nn < rows; nn++) add(nn, k);
+                    } else return null;
+                }
+                return out;
+            }
+
+            // -------------------------------------------------------
+            // 다이얼로그 부품
+            // -------------------------------------------------------
+            // 선 두께(칸 선·화살표): 기본값은 위 상수. 바꾼 값은 PREF_KEY + "/lines"에 따로 저장하고 다음에 불러온다
+            function setLineWidth(group, value) {
+                if (group === "axis") { AXIS_PT = value; }
+            }
+
+            function currentLineWidth(group) {
+                if (group === "axis") return AXIS_PT;
+                return 0;
+            }
+
+            function loadLineWidths() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY + "/lines"); } catch (e) { return; }
+                var p = raw ? raw.split("|") : [];
+                if (p.length !== 4 || p[0] !== "v1") return;
+                var groups = ["axis", "graph", "guide"];
+                for (var i = 0; i < 3; i++) {
+                    var value = parseFloat(p[i + 1]);
+                    if (!isNaN(value) && LINE_DEFAULTS.hasOwnProperty(groups[i])) setLineWidth(groups[i], Math.min(2, Math.max(0.1, value)));
+                }
+            }
+
+            function saveLineWidths() {
+                var groups = ["axis", "graph", "guide"], parts = ["v1"];
+                for (var i = 0; i < 3; i++) parts.push(LINE_DEFAULTS.hasOwnProperty(groups[i]) ? String(currentLineWidth(groups[i])) : "");
+                try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
+            }
+
+            function addTextRow(parent, label, value, tip) {
+                var row = parent.add("group");
+                row.add("statictext", undefined, label).preferredSize.width = 80;
+                var input = row.add("edittext", undefined, value);
+                input.preferredSize.width = 260;
+                input.helpTip = tip;
+                return input;
+            }
+
+            function addPanel(parent, title, foldKey) {
+                // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
+                if (foldKey && typeof makeCollapsiblePanel === "function") {
+                    var body = makeCollapsiblePanel(parent, title, true, SCRIPT_KEY + "/" + foldKey);
+                    body.alignChildren = ["left", "top"];
+                    body.spacing = 6;
+                    return body;
+                }
+                var panel = parent.add("panel", undefined, title);
+                panel.alignChildren = ["left", "top"];
+                panel.margins = [12, 16, 12, 12];
+                panel.spacing = 6;
+                return panel;
+            }
+
+            function addValueRow(parent, label, unitText, value, minimum, maximum, step, decimals) {
+                var row = parent.add("group");
+                row.alignChildren = ["left", "center"];
+                row.add("statictext", undefined, label + " (" + unitText + "):").preferredSize.width = LABEL_WIDTH;
+                var input = row.add("edittext", undefined, formatNumber(value, decimals));
+                input.preferredSize.width = INPUT_WIDTH;
+                var slider = row.add("scrollbar", undefined, value, minimum, maximum);
+                slider.stepdelta = step;
+                slider.jumpdelta = step * 10;
+                slider.preferredSize.width = SLIDER_WIDTH;
+                var reset = row.add("button", undefined, "R");
+                reset.preferredSize.width = RESET_BUTTON_WIDTH;
+                reset.helpTip = "처음 값으로 되돌리기";
+                return { input: input, slider: slider, reset: reset, min: minimum, max: maximum, step: step, decimals: decimals };
+            }
+
+            function setRowValue(controls, value) {
+                controls.input.text = formatNumber(value, controls.decimals);
+                try { controls.slider.value = value; } catch (e) {}
+            }
+
+            function bindValueRow(controls, setter, initial) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    setRowValue(controls, value);
+                    setter(value);
+                    updatePreview();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(initial); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? controls.slider.value : value);
+                };
+            }
+
+            function bindPositionRow(controls, getter, setter, isX, initial) {
+                function commit(value) {
+                    value = clamp(roundTo(value, controls.step), controls.min, controls.max);
+                    var delta = (value - getter()) * MM_TO_PT;
+                    setter(value);
+                    setRowValue(controls, value);
+                    if (delta === 0 || previewGroup === null) return;
+                    previewGroup.translate(isX ? delta : 0, isX ? 0 : delta);
+                    app.redraw();
+                }
+                controls.slider.onChanging = function() { commit(controls.slider.value); };
+                controls.slider.onChange = function() { commit(controls.slider.value); };
+                controls.reset.onClick = function() { commit(initial); };
+                controls.input.onChange = function() {
+                    var value = parseNumber(controls.input.text);
+                    commit(value === null ? getter() : value);
+                };
+            }
+
+            function parseNumber(text) {
+                var value = parseFloat(String(text).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+                return isNaN(value) ? null : value;
+            }
+
+            function clamp(value, minimum, maximum) {
+                if (value < minimum) return minimum;
+                if (value > maximum) return maximum;
+                return value;
+            }
+
+            function roundTo(value, step) {
+                return Math.round(value / step) * step;
+            }
+
+            function formatNumber(value, decimals) {
+                return (Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
+            }
+
+            // -------------------------------------------------------
+            // 설정 저장 · 복원
+            // -------------------------------------------------------
+            function saveSettings() {
+                saveLineWidths();
+                var parts = ["v1", rows, content, encodeURIComponent(shadeText), encodeURIComponent(blankText), shadeK, cellWmm, cellHmm, fontPt, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
+            }
+
+            function applySettings() {
+                var raw = "";
+                try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
+                if (!raw) return;
+                var p = raw.split("|");
+                if (p[0] !== "v1" || p.length !== 12) return;
+                try {
+                    rows = Math.round(restoreNumber(p[1], rows, 2, 12));
+                    content = Math.round(restoreNumber(p[2], content, 0, CONTENT_NAMES.length - 1));
+                    shadeText = decodeURIComponent(p[3]);
+                    blankText = decodeURIComponent(p[4]);
+                    shadeK = restoreNumber(p[5], shadeK, 5, 60);
+                    cellWmm = restoreNumber(p[6], cellWmm, 6, 30);
+                    cellHmm = restoreNumber(p[7], cellHmm, 5, 20);
+                    fontPt = restoreNumber(p[8], fontPt, 5, 14);
+                    offsetXmm = restoreNumber(p[9], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    offsetYmm = restoreNumber(p[10], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
+                    previewEnabled = p[11] === "1";
+                } catch (restoreError) {}
+            }
+
+            function restoreNumber(text, fallback, minimum, maximum) {
+                var value = parseNumber(text);
                 return value === null ? fallback : clamp(value, minimum, maximum);
             }
         }
