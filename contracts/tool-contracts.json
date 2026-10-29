@@ -10535,6 +10535,10 @@
           "type": "number",
           "default": 131
         },
+        "axisName": {
+          "type": "string",
+          "default": "l"
+        },
         "baseRotation": {
           "type": "number",
           "default": 0
@@ -10627,9 +10631,25 @@
           "type": "number",
           "default": 0
         },
+        "sectionHeight": {
+          "type": "number",
+          "default": 50
+        },
+        "sectionK": {
+          "type": "number",
+          "default": 30
+        },
+        "sectionMode": {
+          "type": "string",
+          "default": "none"
+        },
         "shape": {
           "type": "string",
           "default": "box"
+        },
+        "showAxis": {
+          "type": "boolean",
+          "default": false
         },
         "showNames": {
           "type": "boolean",

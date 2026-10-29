@@ -32,7 +32,7 @@ function extractFunction(name) {
 
 const names = ["compileFunction", "evaluateNumber", "parsePointList", "plotFunction", "toBezier", "formulaDisplay", "buildPlane", "straight",
   "piLabel", "findIntersections", "parseAsymptotes", "graphSymbol", "parseRegion", "regionPolygons", "dropCollinear",
-  "functionValueTable", "substituteFunctionValues", "parseSolidLines", "parseSegments", "hasHangul", "notesWithNames", "plotParametric", "toBezierCurve", "parseDomain", "restrict", "splitDomain", "parseTangents", "tangentSegment", "hatchSegments", "parseAxisMarks"];
+  "functionValueTable", "substituteFunctionValues", "parseSolidLines", "parseSegments", "hasHangul", "notesWithNames", "plotParametric", "toBezierCurve", "parseDomain", "restrict", "splitDomain", "parseTangents", "tangentSegment", "hatchSegments", "parseAxisMarks", "parseArrows", "arrowEnd", "smoothBezier"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 };\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 
@@ -279,7 +279,7 @@ assert.ok(source.includes("var FUNCTION_COUNT = 5;"));
   assert.strictEqual(withTicks.lines.length - noTicks.lines.length, 20);
   assert.strictEqual(g.buildPlane(base).lines.length, withTicks.lines.length, "옛 호출은 눈금선이 있다");
   // 설정 저장 형식: v6(= v5 + 매개변수곡선 4칸)으로 쓰고, v5·v4와 옛 v3를 모두 읽는다
-  assert.ok(source.includes('"v9", xMin, xMax,') && source.includes('p[0] === "v8" && p.length === 45') && source.includes('p[0] === "v7" && p.length === 41') && source.includes('p[0] === "v6" && p.length === 40') && source.includes('p[0] === "v5" && p.length === 36') && source.includes('p[0] === "v3" && p.length === 24'));
+  assert.ok(source.includes('"v10", xMin, xMax,') && source.includes('p[0] === "v8" && p.length === 45') && source.includes('p[0] === "v7" && p.length === 41') && source.includes('p[0] === "v6" && p.length === 40') && source.includes('p[0] === "v5" && p.length === 36') && source.includes('p[0] === "v3" && p.length === 24'));
 }
 
 // 선 두께: "/lines"는 v2 + LINE_KEYS 9칸(10필드). v1(축·그래프·보조선)도 읽고, 필드 수가 다르면 무시한다
@@ -430,17 +430,17 @@ for (const [expr, value] of [["sqrt(9)", 3], ["arcsin(1)", Math.PI/2], ["sec(0)"
   var nameTexts=["","","","",""],nameAts=[0,0,0,0,0],lineText="",showLineNames=true,labelText="",segmentText="",regionText2="",regionK2=35,showTicks=true;
   var parameterA=1,parameterB=0,parameterC=0,parametricX="",parametricY="",parametricMin="0",parametricMax="2π",tangentText="";
   var regionHatch=false,regionHatch2=false,axisMarkText="",lineDashes=[false,false,false,false,false];
-  var xAxisName="x",yAxisName="y",axisMode=0,xTick=1,yTick=1; function saveLineWidths() {}`;
+  var xAxisName="x",yAxisName="y",axisMode=0,xTick=1,yTick=1,arrowText=""; function saveLineWidths() {}`;
   const body = prelude + ["saveSettings","encodeList","applySettings","restoreNumber","parseNumber","clamp"].map(extractFunction).join("\n") +
     `return {saveSettings,applySettings,set:function(a,b,c){parameterA=a;parameterB=b;parameterC=c;parametricX="3cos(t)";parametricY="2sin(t)";parametricMax="π";},get:function(){return [parameterA,parameterB,parameterC];},curve:function(){return [parametricX,parametricY,parametricMin,parametricMax];},
     marks:function(v){if(v){regionHatch=true;regionHatch2=true;axisMarkText="x=1:a";lineDashes=[false,true,false,false,true];}return [regionHatch,regionHatch2,axisMarkText,lineDashes.join(",")];}};`;
   const make = () => new Function("app",body)(app);
   const first = make(); first.set(2,-3,0.5); first.marks(true); first.saveSettings();
-  assert.equal(store.T.split("|").length,50);
+  assert.equal(store.T.split("|").length,51);
   const restored = make(); restored.applySettings(); assert.deepEqual(restored.get(),[2,-3,0.5]);
   assert.deepEqual(restored.marks(),[true,true,"x=1:a","false,true,false,false,true"], "빗금·축 위 글자·점선도 저장한다");
   assert.deepEqual(restored.curve(),["3cos(t)","2sin(t)","0","π"], "매개변수곡선도 저장한다");
-  const v7 = store.T.split("|").slice(0,41).join("|").replace(/^v9/,"v7");
+  const v7 = store.T.split("|").slice(0,41).join("|").replace(/^v10/,"v7");
   store.T = v7;
   const fromV7 = make(); fromV7.applySettings(); assert.deepEqual(fromV7.marks(),[false,false,"","false,false,false,false,false"], "v7은 새 항목을 처음 값으로");
   const v5 = store.T.split("|").slice(0,36).join("|").replace(/^v7/,"v5");
@@ -493,6 +493,30 @@ console.log("coord plane hatch·axis marks ok");
   assert.strictEqual(plane.arrows.length, 1);
   plane = g.buildPlane(Object.assign({}, base, { axisMode: 2 }));
   assert.strictEqual(plane.arrows.length, 0);
-  assert.ok(source.includes('"v9", xMin, xMax,') && source.includes('p[0] === "v9" && p.length === 50'), "설정 v9");
+  assert.ok(source.includes('p[0] === "v9" && p.length === 50'), "설정 v9");
 }
 console.log("coord plane axis names ok");
+
+// 화살표 (웹 math-coord-plane.test.js와 같은 경우)
+{
+  const a = g.parseArrows("(0,1)>(1,1):1, A>B, f1:3>1:x→1");
+  assert.deepStrictEqual(a.map((x) => x.kind), ["line", "line", "graph"]);
+  assert.strictEqual(g.parseArrows("f9:1>2"), null);
+  const plane = g.buildPlane({ xMin: -3, xMax: 3, yMin: -1, yMax: 6, unit: 10, tick: 3, grid: false, numbers: false, ticks: true,
+    functions: [], nameStyle: 0, asymptotes: [], points: [], region: [], region2: [], fontSize: 8,
+    vectors: [{ kind: "line", from: { x: 0, y: 1 }, to: { x: 1, y: 1 }, label: "+1" }, { kind: "graph", fn: (x) => x * x, x0: 2, x1: 1, label: "" }] });
+  assert.strictEqual(plane.arrows.length, 2 + 2, "축 화살촉 둘 + 화살표 둘");
+  assert.ok(plane.texts.some((t) => t.text === "+1"));
+  assert.ok(plane.lines.some((l) => l.curved), "그래프 화살표는 베지어");
+  assert.ok(source.includes("arrowText"), "대화상자 칸");
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-coord-plane.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8");
+    for (const name of ["parseArrows", "arrowEnd", "smoothBezier"]) {
+      const start = web.indexOf(`${name === "parseArrows" ? "export " : ""}function ${name}(`), end = web.indexOf("\n}\n", start) + 2;
+      const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+      assert.strictEqual(scriptText, web.slice(start + (name === "parseArrows" ? "export ".length : 0), end), name + " differs from the web");
+    }
+  }
+}
+console.log("coord plane arrows ok");

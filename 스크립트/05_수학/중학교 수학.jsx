@@ -1848,6 +1848,7 @@ var SCRIPT_KEY = "MiddleMath";
             var nameStyle = 1;   // 그래프 끝 이름: 없음 · 식 · ㉠ · (가)
             var hideAxes = false;
             var xAxisName = "x", yAxisName = "y";   // 축 이름 (t, v(t), x(cm) 등)
+            var arrowText = "";                     // 화살표 (0,1)>(1,1):+1, A>B, f1:3>1:x→1
             var axisMode = 0;                       // 축 모양: 0 두 축, 1 x축만(부등식 개형 그림), 2 축 없이 그래프만
             var xTick = 1, yTick = 1;               // 눈금 간격 (10이면 10, 20, 30 …). 격자도 같은 간격
             var regionText = "";
@@ -1973,6 +1974,11 @@ var SCRIPT_KEY = "MiddleMath";
             var tangentInput = tangentRow.add("edittext", undefined, tangentText);
             tangentInput.preferredSize.width = 290;
             tangentInput.helpTip = "식 번호:x. 1:2는 1번 식의 x=2에서의 접선(그래프 굵기 직선, 접점에 점). 쉼표로 여러 개: 1:2, 2:-1/2";
+            var arrowRow = functionPanel.add("group");
+            arrowRow.add("statictext", undefined, "화살표:");
+            var arrowInput = arrowRow.add("edittext", undefined, arrowText);
+            arrowInput.preferredSize.width = 280;
+            arrowInput.helpTip = "끝점>끝점(뒤에 :글자). 끝점은 (x,y)나 점 칸의 이름: 평행이동·증가량(+1, +2)·벡터. f1:3>1은 1번 그래프를 따라 x=3에서 x=1 쪽으로 다가가는 화살표. 쉼표로 여러 개";
             var lineRow = functionPanel.add("group");
             lineRow.add("statictext", undefined, "실선:");
             var lineInput = lineRow.add("edittext", undefined, lineText);
@@ -2096,6 +2102,7 @@ var SCRIPT_KEY = "MiddleMath";
             identityCheck.onClick = function() { showIdentity = identityCheck.value; updatePreview(); };
             asymptoteInput.onChanging = function() { asymptoteText = asymptoteInput.text; updatePreview(); };
             tangentInput.onChanging = function() { tangentText = tangentInput.text; updatePreview(); };
+            arrowInput.onChanging = function() { arrowText = arrowInput.text; updatePreview(); };
             tickCheck.onClick = function() { showTicks = tickCheck.value; updatePreview(); };
             lineInput.onChanging = function() { lineText = lineInput.text; updatePreview(); };
             lineNamesCheck.onClick = function() { showLineNames = lineNamesCheck.value; updatePreview(); };
@@ -2198,10 +2205,33 @@ var SCRIPT_KEY = "MiddleMath";
                         else tangents.push({fn: tfn, x: tangentItems[ti].x});
                     }
                 }
+                // 화살표: 점 이름은 점 칸의 점(이름이 _로 시작하는 숨은 점도), 그래프는 식 번호 (웹 math-coord-plane.js와 같다)
+                var vectors = [], arrowItems = parseArrows(arrowText);
+                // 점 이름 해석은 아래에서 점을 읽은 뒤에 한다
                 // 점·글자 좌표 안의 f(3), g(1/2) 같은 함수값을 식의 값으로 바꾼다
                 var values = functionValueTable(functionTexts, variables);
                 var points = parsePointList(substituteFunctionValues(pointsText, values));
                 if (points.bad.length > 0) problems.push("점 " + points.bad.join(", "));
+                if (arrowItems === null) problems.push("화살표");
+                else {
+                    for (var ai = 0; ai < arrowItems.length; ai++) {
+                        var ar = arrowItems[ai];
+                        if (ar.kind === "graph") {
+                            if (!byIndex[ar.index]) problems.push("화살표 " + ar.text);
+                            else vectors.push({kind: "graph", fn: byIndex[ar.index], x0: ar.x0, x1: ar.x1, label: ar.label});
+                            continue;
+                        }
+                        var ends = [ar.from, ar.to], found = [];
+                        for (var ae = 0; ae < 2; ae++) {
+                            if (ends[ae].name === undefined) { found.push(ends[ae]); continue; }
+                            var hit = null;
+                            for (var ap = 0; ap < points.list.length; ap++) if (points.list[ap].name === ends[ae].name) hit = {x: points.list[ap].x, y: points.list[ap].y};
+                            found.push(hit);
+                        }
+                        if (found[0] === null || found[1] === null) problems.push("화살표 " + ar.text);
+                        else vectors.push({kind: "line", from: found[0], to: found[1], label: ar.label});
+                    }
+                }
                 var notes = parsePointList(substituteFunctionValues(labelText, values));
                 if (notes.bad.length > 0) problems.push("글자 " + notes.bad.join(", "));
                 var segments = parseSegments(segmentText, points.list);
@@ -2230,7 +2260,7 @@ var SCRIPT_KEY = "MiddleMath";
 
                 var drawing = buildPlane({
                     xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, unit: unitMm * MM_TO_PT,
-                    xName: xAxisName, yName: yAxisName, axisMode: axisMode, xTick: xTick, yTick: yTick,
+                    xName: xAxisName, yName: yAxisName, axisMode: axisMode, xTick: xTick, yTick: yTick, vectors: vectors,
                     tick: TICK_MM * MM_TO_PT, grid: showGrid, numbers: showNumbers,
                     functions: functions, parametric: parametric, tangents: tangents, nameStyle: nameStyle, hideAxes: hideAxes, region: region || [],
                     points: points.list, coords: showCoords, guides: showGuides,
@@ -2264,7 +2294,7 @@ var SCRIPT_KEY = "MiddleMath";
                 var anchors = [];
                 for (var i = 0; i < line.points.length; i++) anchors.push(line.points[i].anchor);
                 path.setEntirePath(anchors);
-                if (line.kind === "graph") {
+                if (line.kind === "graph" || line.curved) {
                     for (var j = 0; j < line.points.length; j++) {
                         var point = path.pathPoints[j];
                         point.leftDirection = line.points[j].left;
@@ -2626,6 +2656,39 @@ var SCRIPT_KEY = "MiddleMath";
                     lines.push(straight([[touch[0][0] * u, touch[0][1] * u], [touch[1][0] * u, touch[1][1] * u]], "graph"));
                     var ty0 = tangents[tg].fn(tangents[tg].x);
                     if (tangents[tg].x >= xLo && tangents[tg].x <= plotHi && ty0 >= opt.yMin && ty0 <= opt.yMax) dots.push([tangents[tg].x * u, ty0 * u]);
+                }
+
+// 화살표: 축 굵기 선과 화살촉(선은 촉 속에서 끝난다). 직선은 가운데 옆(진행 방향의 위쪽)에 글자,
+                // 그래프 화살표는 곡선에서 1.2 mm 위쪽으로 띄워 x0에서 x1 쪽으로 따라간다
+                var vectors = opt.vectors || [], cut = ARROW.length - ARROW.notch;
+                for (var vi = 0; vi < vectors.length; vi++) {
+                    var vec = vectors[vi], vpts;
+                    if (vec.kind === "graph") {
+                        vpts = [];
+                        var off = 1.2 * 2.834645669, n = 8;   // 짧은 호라 9개 앵커면 매끈하다 (그림 제작 규칙 3.10)
+                        for (var vs = 0; vs <= n; vs++) {
+                            var vx = vec.x0 + (vec.x1 - vec.x0) * vs / n, h = Math.abs(vec.x1 - vec.x0) * 1e-4 + 1e-9;
+                            var vy = vec.fn(vx), slope = (vec.fn(vx + h) - vec.fn(vx - h)) / (2 * h);
+                            if (typeof vy !== "number" || !isFinite(vy) || !isFinite(slope)) continue;
+                            var nl = Math.sqrt(1 + slope * slope);
+                            vpts.push([vx * u - slope / nl * off, vy * u + 1 / nl * off]);
+                        }
+                        if (vpts.length < 2) continue;
+                    } else vpts = [[vec.from.x * u, vec.from.y * u], [vec.to.x * u, vec.to.y * u]];
+                    var tip = vpts[vpts.length - 1], prev = vpts[vpts.length - 2];
+                    var dl = Math.sqrt((tip[0] - prev[0]) * (tip[0] - prev[0]) + (tip[1] - prev[1]) * (tip[1] - prev[1])) || 1;
+                    var vd = [(tip[0] - prev[0]) / dl, (tip[1] - prev[1]) / dl];
+                    var shaft = vpts.slice(0, -1).concat([[tip[0] - vd[0] * cut, tip[1] - vd[1] * cut]]);
+                    lines.push(vec.kind === "graph" ? { points: smoothBezier(shaft), kind: "axis", curved: true } : straight(shaft, "axis"));
+                    arrows.push({ tip: tip, dir: vd });
+                    if (vec.label) {
+                        var a0 = vpts[0], mid = vpts[Math.floor(vpts.length / 2)];
+                        if (vec.kind !== "graph") mid = [(a0[0] + tip[0]) / 2, (a0[1] + tip[1]) / 2];
+                        var nd = [-vd[1], vd[0]];
+                        if (nd[1] < 0 || (Math.abs(nd[1]) < 1e-9 && nd[0] < 0)) nd = [-nd[0], -nd[1]];
+                        var vdisp = formulaDisplay(vec.label);
+                        texts.push({ text: vdisp.text, sup: vdisp.sup, sub: vdisp.sub, roman: vdisp.roman, at: mid, dir: nd, clear: 0 });
+                    }
                 }
 
                 // 정의역 끝점: 포함은 ●, 빠짐은 ○ (끝점이 그림 상자 안에 있을 때만)
@@ -3473,6 +3536,71 @@ var SCRIPT_KEY = "MiddleMath";
                 return [[p[0] + lo * d[0], p[1] + lo * d[1]], [p[0] + hi * d[0], p[1] + hi * d[1]]];
             }
 
+            // 화살표 "(0,1)>(1,1):+1, A>B, f1:3>1:x→1" → [{kind: "line", from, to, label, text} | {kind: "graph", index, x0, x1, label, text}].
+            // 끝점은 점 이름 {name} 또는 좌표 {x, y}. 괄호 밖 쉼표로 나눈다. 빈 글이면 [], 하나라도 못 읽으면 null
+            function parseArrows(text) {
+                var items = [], depth = 0, cur = "", s = String(text), i, k;
+                for (i = 0; i < s.length; i++) {
+                    var ch = s.charAt(i);
+                    if (ch === "(") depth++;
+                    if (ch === ")") depth--;
+                    if (ch === "," && depth === 0) { items.push(cur); cur = ""; } else cur += ch;
+                }
+                items.push(cur);
+                var out = [];
+                for (k = 0; k < items.length; k++) {
+                    var item = items[k].replace(/^\s+|\s+$/g, "");
+                    if (item === "") continue;
+                    // 그래프: f번호:x0>x1(:글자)
+                    if (/^f[1-5]:/.test(item)) {
+                        var parts = item.split(":"), ends = (parts[1] || "").split(">");
+                        var x0 = ends.length === 2 ? evaluateNumber(ends[0].replace(/\s/g, "")) : null, x1 = ends.length === 2 ? evaluateNumber(ends[1].replace(/\s/g, "")) : null;
+                        if (x0 === null || x1 === null || parts.length > 3) return null;
+                        out.push({ kind: "graph", index: Number(item.charAt(1)) - 1, x0: x0, x1: x1, label: (parts[2] || "").replace(/^\s+|\s+$/g, ""), text: item });
+                        continue;
+                    }
+                    // 직선: 끝점>끝점(:글자). 괄호 밖의 첫 >와 그 뒤 첫 :
+                    var gt = -1, colon = -1;
+                    depth = 0;
+                    for (i = 0; i < item.length; i++) {
+                        var c = item.charAt(i);
+                        if (c === "(") depth++;
+                        else if (c === ")") depth--;
+                        else if (depth === 0 && c === ">" && gt < 0) gt = i;
+                        else if (depth === 0 && c === ":" && gt >= 0 && colon < 0) colon = i;
+                    }
+                    if (gt < 0) return null;
+                    var from = arrowEnd(item.substring(0, gt)), to = arrowEnd(colon >= 0 ? item.substring(gt + 1, colon) : item.substring(gt + 1));
+                    if (from === null || to === null) return null;
+                    out.push({ kind: "line", from: from, to: to, label: colon >= 0 ? item.substring(colon + 1).replace(/^\s+|\s+$/g, "") : "", text: item });
+                }
+                return out;
+            }
+
+            // 화살표 끝점: "(x,y)" → {x, y}, 점 이름 → {name}. 못 읽으면 null
+            function arrowEnd(text) {
+                var t = String(text).replace(/\s/g, "");
+                if (t === "") return null;
+                if (t.charAt(0) === "(" && t.charAt(t.length - 1) === ")") {
+                    var comma = t.indexOf(",");
+                    if (comma < 0) return null;
+                    var x = evaluateNumber(t.substring(1, comma)), y = evaluateNumber(t.substring(comma + 1, t.length - 1));
+                    return x === null || y === null ? null : { x: x, y: y };
+                }
+                return /^[A-Za-z_][A-Za-z0-9_']*$/.test(t) ? { name: t } : null;
+            }
+
+            // 점 목록 → 매끈한 베지어 점 (이웃 점을 잇는 방향의 1/3 길이 핸들)
+            function smoothBezier(pts) {
+                var out = [];
+                for (var i = 0; i < pts.length; i++) {
+                    var a = pts[i > 0 ? i - 1 : i], b = pts[i < pts.length - 1 ? i + 1 : i], scale = (i > 0 && i < pts.length - 1) ? 6 : 3;
+                    var t = [(b[0] - a[0]) / scale, (b[1] - a[1]) / scale];
+                    out.push({ anchor: pts[i], left: i > 0 ? [pts[i][0] - t[0], pts[i][1] - t[1]] : pts[i], right: i < pts.length - 1 ? [pts[i][0] + t[0], pts[i][1] + t[1]] : pts[i] });
+                }
+                return out;
+            }
+
             // 빗금: 다각형(점 목록) 안을 angle(라디안) 방향의 평행선으로 채운다. 선은 원점을 지나는 선에서 gap 간격마다 놓여 두 영역의 빗금이 줄을 맞춘다.
             // 한 줄이 다각형 변과 만나는 점을 정렬해 두 개씩 이어 안쪽 조각만 남긴다(오목해도 된다). 경계와 겹치는 줄과 길이 0인 조각은 뺀다. [[p, q], …]
             function hatchSegments(polygon, gap, angle) {
@@ -3684,7 +3812,7 @@ var SCRIPT_KEY = "MiddleMath";
             function saveSettings() {
                 saveLineWidths();
                 var parts = [
-                    "v9", xMin, xMax, yMin, yMax, unitMm, fontPt,
+                    "v10", xMin, xMax, yMin, yMax, unitMm, fontPt,
                     showGrid ? "1" : "0", showNumbers ? "1" : "0", nameStyle,
                     encodeList(functionTexts),
                     encodeURIComponent(pointsText), showCoords ? "1" : "0", showGuides ? "1" : "0",
@@ -3696,7 +3824,7 @@ var SCRIPT_KEY = "MiddleMath";
                     encodeURIComponent(parametricX), encodeURIComponent(parametricY), encodeURIComponent(parametricMin), encodeURIComponent(parametricMax),
                     encodeURIComponent(tangentText),
                     regionHatch ? "1" : "0", regionHatch2 ? "1" : "0", encodeURIComponent(axisMarkText), lineDashes.join(","),
-                    encodeURIComponent(xAxisName), encodeURIComponent(yAxisName), axisMode, xTick, yTick
+                    encodeURIComponent(xAxisName), encodeURIComponent(yAxisName), axisMode, xTick, yTick, encodeURIComponent(arrowText)
                 ];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
@@ -3713,7 +3841,7 @@ var SCRIPT_KEY = "MiddleMath";
                 if (!raw) return;
                 var p = raw.split("|");
                 // v3(옛 저장본)도 읽는다: 새 항목은 처음 값으로 둔다. v6 = v5 + 매개변수곡선 4칸, v7 = v6 + 접선, v8 = v7 + 빗금 둘·축 위 글자·점선
-                if (!((p[0] === "v9" && p.length === 50) || (p[0] === "v8" && p.length === 45) || (p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
+                if (!((p[0] === "v10" && p.length === 51) || (p[0] === "v9" && p.length === 50) || (p[0] === "v8" && p.length === 45) || (p[0] === "v7" && p.length === 41) || (p[0] === "v6" && p.length === 40) || (p[0] === "v5" && p.length === 36) || (p[0] === "v4" && p.length === 33) || (p[0] === "v3" && p.length === 24))) return;
                 try {
                     xMin = Math.round(restoreNumber(p[1], xMin, -200, 0));
                     xMax = Math.round(restoreNumber(p[2], xMax, 1, 200));
@@ -3741,7 +3869,7 @@ var SCRIPT_KEY = "MiddleMath";
                     hideAxes = p[21] === "1";
                     regionText = decodeURIComponent(p[22]);
                     regionK = restoreNumber(p[23], regionK, 5, 60);
-                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9") {
+                    if (p[0] === "v4" || p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10") {
                         var savedNames = p[24].split(",");
                         if (savedNames.length === FUNCTION_COUNT) {
                             for (var sn = 0; sn < FUNCTION_COUNT; sn++) nameTexts[sn] = decodeURIComponent(savedNames[sn]);
@@ -3757,13 +3885,13 @@ var SCRIPT_KEY = "MiddleMath";
                         regionText2 = decodeURIComponent(p[30]);
                         regionK2 = restoreNumber(p[31], regionK2, 5, 60);
                         showTicks = p[32] === "1";
-                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9") {
+                        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10") {
                             parameterA = restoreNumber(p[33], parameterA, -10, 10);
                             parameterB = restoreNumber(p[34], parameterB, -10, 10);
                             parameterC = restoreNumber(p[35], parameterC, -10, 10);
                         }
-                        if (p[0] === "v7" || p[0] === "v8" || p[0] === "v9") tangentText = decodeURIComponent(p[40]);
-                        if (p[0] === "v8" || p[0] === "v9") {
+                        if (p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10") tangentText = decodeURIComponent(p[40]);
+                        if (p[0] === "v8" || p[0] === "v9" || p[0] === "v10") {
                             regionHatch = p[41] === "1";
                             regionHatch2 = p[42] === "1";
                             axisMarkText = decodeURIComponent(p[43]);
@@ -3772,14 +3900,15 @@ var SCRIPT_KEY = "MiddleMath";
                                 for (var sd = 0; sd < FUNCTION_COUNT; sd++) lineDashes[sd] = savedDashes[sd] === "true";
                             }
                         }
-                        if (p[0] === "v9") {
+                        if (p[0] === "v9" || p[0] === "v10") {
                             xAxisName = decodeURIComponent(p[45]);
                             yAxisName = decodeURIComponent(p[46]);
                             axisMode = Math.round(restoreNumber(p[47], axisMode, 0, 2));
                             xTick = restoreNumber(p[48], xTick, 0.1, 50);
                             yTick = restoreNumber(p[49], yTick, 0.1, 50);
                         }
-                        if (p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9") {
+                        if (p[0] === "v10") arrowText = decodeURIComponent(p[50]);
+                        if (p[0] === "v6" || p[0] === "v7" || p[0] === "v8" || p[0] === "v9" || p[0] === "v10") {
                             parametricX = decodeURIComponent(p[36]);
                             parametricY = decodeURIComponent(p[37]);
                             parametricMin = decodeURIComponent(p[38]);
