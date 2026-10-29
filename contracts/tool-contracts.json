@@ -4721,15 +4721,15 @@
         "yAxis": "up"
       },
       "properties": {
-        "approx": {
-          "type": "boolean",
-          "default": false
-        },
         "aValue": {
           "type": "number",
           "default": 40,
           "minimum": -500,
           "maximum": 500
+        },
+        "approx": {
+          "type": "boolean",
+          "default": false
         },
         "axisName": {
           "type": "number",
@@ -4750,6 +4750,10 @@
           "default": 0.5,
           "minimum": 0.01,
           "maximum": 0.99
+        },
+        "curveNames": {
+          "type": "string",
+          "default": ""
         },
         "fontPt": {
           "type": "number",
@@ -4785,6 +4789,10 @@
           "type": "number",
           "default": 0
         },
+        "markText": {
+          "type": "string",
+          "default": ""
+        },
         "mean": {
           "type": "number",
           "default": 50,
@@ -4805,6 +4813,10 @@
           "type": "number",
           "default": 0
         },
+        "moreCurves": {
+          "type": "string",
+          "default": ""
+        },
         "second": {
           "type": "boolean",
           "default": false
@@ -4818,6 +4830,10 @@
           "default": 20,
           "minimum": 5,
           "maximum": 60
+        },
+        "shadeNote": {
+          "type": "string",
+          "default": ""
         },
         "sigma": {
           "type": "number",

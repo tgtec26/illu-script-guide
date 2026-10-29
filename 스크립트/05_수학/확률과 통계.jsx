@@ -1136,6 +1136,7 @@ var SCRIPT_KEY = "HighStatistics";
             var shadeK = 20;
             var fontPt = 8;
             var opt = { second: false, meanLine: true, sigmaTicks: false, approx: false };
+            var moreCurves = "", curveNames = "", shadeNote = "", markText = "";   // 정규분포: 곡선 더하기(최대 4개), 곡선 이름, 칠한 영역 글자(지시선), 축 아래 글자
             var offsetXmm = 0;
             var offsetYmm = 0;
             var previewEnabled = true;
@@ -1165,6 +1166,10 @@ var SCRIPT_KEY = "HighStatistics";
             bindOption(secondCheck, "second");
             var mean2Controls = addValueRow(distPanel, "평균 m₂", "", mean2, -500, 500, 0.5, 1);
             var sigma2Controls = addValueRow(distPanel, "표준편차 σ₂", "", sigma2, 0.1, 100, 0.1, 1);
+            var moreInput = addTextRow(distPanel, "곡선 더하기:", moreCurves, "평균:표준편차를 쉼표로 (70:8, 40:3). 위 두 곡선과 합쳐 모두 4개까지 겹친다");
+            var namesInput = addTextRow(distPanel, "곡선 이름:", curveNames, "곡선 순서대로 쉼표로 (σ₁, σ₂ 또는 ㉠, ㉡). 평균에서 오른쪽 1.2σ 곡선 위 점 옆에 쓴다. 건너뛰려면 비워 둔다(㉠, , ㉢)");
+            moreInput.onChanging = function() { moreCurves = moreInput.text; updatePreview(); };
+            namesInput.onChanging = function() { curveNames = namesInput.text; updatePreview(); };
             var trialsControls = addValueRow(distPanel, "시행 횟수 n", "", trials, 1, 40, 1, 0);
             var chanceControls = addValueRow(distPanel, "확률 p", "", chance, 0.01, 0.99, 0.01, 2);
 
@@ -1179,6 +1184,10 @@ var SCRIPT_KEY = "HighStatistics";
             var aControls = addValueRow(probPanel, "a", "", aValue, -500, 500, 0.5, 1);
             var bControls = addValueRow(probPanel, "b", "", bValue, -500, 500, 0.5, 1);
             var shadeControls = addValueRow(probPanel, "음영", "K", shadeK, 5, 60, 5, 0);
+            var noteInput = addTextRow(probPanel, "영역 글자:", shadeNote, "칠한 영역에 쓸 글자(0.95, P(0≤Z≤z)). 그림 위에 쓰고 지시선을 칠한 구간 가운데로 내린다 (정규분포)");
+            var marksInput = addTextRow(probPanel, "축 글자:", markText, "값:글자를 쉼표로 (50:m, 60:m+σ). 그 값에 눈금을 긋고 축 아래에 글자를 쓴다(같은 자리 글자는 먼저 온 것만, 정규분포)");
+            noteInput.onChanging = function() { shadeNote = noteInput.text; updatePreview(); };
+            marksInput.onChanging = function() { markText = marksInput.text; updatePreview(); };
 
             var stylePanel = addPanel(win, "표시", "fold4");
             var widthControls = addValueRow(stylePanel, "너비", "mm", widthMm, 30, 200, 1, 0);
@@ -1308,8 +1317,15 @@ var SCRIPT_KEY = "HighStatistics";
                 if (mode === 0) {
                     o.curves = [{ m: mean, s: sigma }];
                     if (opt.second) o.curves.push({ m: mean2, s: sigma2 });
+                    var more = parseCurves(moreCurves), extraMarks = parseMarks(markText), problems = [];
+                    if (more === null) problems.push("곡선 목록"); else for (var mc = 0; mc < more.length && o.curves.length < 4; mc++) o.curves.push(more[mc]);
+                    if (extraMarks === null) problems.push("축 글자"); else o.extraMarks = extraMarks;
+                    o.names = curveNames.split(/[,，]/);
+                    for (var nm = 0; nm < o.names.length; nm++) o.names[nm] = o.names[nm].replace(/^\s+|\s+$/g, "");
+                    o.shadeNote = shadeNote.replace(/^\s+|\s+$/g, "");
                     o.sigmaTicks = opt.sigmaTicks;
                     drawing = buildNormal(o);
+                    if (problems.length > 0) drawing.notes.push("읽지 못함: " + problems.join(", "));
                 } else {
                     o.n = Math.round(trials);
                     o.p = chance;
@@ -1492,7 +1508,8 @@ var SCRIPT_KEY = "HighStatistics";
             // -------------------------------------------------------
             // 계산 (일러 DOM을 쓰지 않는다 → tests/check-distribution.js). 그림은 (0,0)~(width, height)
             // -------------------------------------------------------
-            // 정규분포: o.curves [{m, s}], 가장 높은 꼭대기가 height, 모든 곡선의 ±3.5σ가 가로 길이에 들어간다
+            // 정규분포: o.curves [{m, s}], 가장 높은 꼭대기가 height, 모든 곡선의 ±3.5σ가 가로 길이에 들어간다.
+            // 오른쪽 꼬리는 X축 화살촉 가장 왼쪽(뒤끝)까지 이어 그린다 (그림 제작 규칙 7.7)
             function buildNormal(o) {
                 var out = { fills: [], lines: [], arrows: [], texts: [], notes: [] };
                 var lo = Infinity, hi = -Infinity, peak = 0;
@@ -1504,8 +1521,7 @@ var SCRIPT_KEY = "HighStatistics";
                 }
                 var sx = o.width / (hi - lo), sy = o.height / peak;
                 function X(v) { return (v - lo) * sx; }
-                // 오른쪽 꼬리는 X축 화살촉 가장 왼쪽(뒤끝)까지 이어 그린다 (그림 제작 규칙 7.7)
-                var tailEnd = lo + Math.max(o.width, o.width * (1 + AXIS_MARGIN_RATIO) + ARROW.length - (ARROW.rear || ARROW.length)) / sx;
+                var tailEnd = lo + Math.max(o.width, o.width * (1 + AXIS_MARGIN_RATIO) + ARROW.length - (ARROW.rear || ARROW.length)) / sx;   // 화살촉 뒤끝(웹 arrowHeadLength와 같은 값)
                 var first = o.curves[0];
                 var range = shadeRange(o, lo, hi);
 
@@ -1526,6 +1542,17 @@ var SCRIPT_KEY = "HighStatistics";
                     var curve = o.curves[k];
                     out.lines.push({ points: normalPoints(curve.m, curve.s, curve.m - TAIL_SIGMAS * curve.s, Math.max(curve.m + TAIL_SIGMAS * curve.s, tailEnd), lo, sx, sy), kind: "curve" });
                     if (o.meanLine) out.lines.push({ points: straight([[X(curve.m), 0], [X(curve.m), normalDensity(curve.m, curve.m, curve.s) * sy]]), kind: "guide" });
+                    // 곡선 이름: 평균에서 오른쪽 1.2σ 곡선 위 점에서 오른쪽 위로
+                    if (o.names && o.names[k]) {
+                        var nx = curve.m + 1.2 * curve.s;
+                        out.texts.push({ text: o.names[k], at: [X(nx), normalDensity(nx, curve.m, curve.s) * sy], dir: [0.7071, 0.7071], clear: 0 });
+                    }
+                }
+                // 칠한 영역 글자: 그림 위(가장 높은 꼭대기 위)에 쓰고 지시선을 칠한 구간 가운데 안쪽으로 내린다
+                if (o.shadeNote && range !== null) {
+                    var cx = (range[0] + range[1]) / 2, target = normalDensity(cx, first.m, first.s) * sy * 0.45, top = o.height * 1.1;
+                    out.lines.push({ points: straight([[X(cx), top], [X(cx), target]]), kind: "leader" });
+                    out.texts.push({ text: o.shadeNote, at: [X(cx), top], dir: [0, 1], clear: 0 });
                 }
 
                 // 축 아래 글자: 평균, (m±σ, m±2σ), a·b. 같은 자리의 글자는 하나만
@@ -1542,7 +1569,60 @@ var SCRIPT_KEY = "HighStatistics";
                     }
                 }
                 addRangeMarks(marks, o, range);
+                for (var e = 0; o.extraMarks && e < o.extraMarks.length; e++) marks.push({ v: o.extraMarks[e].v, text: o.extraMarks[e].text });
                 placeMarks(out, marks, X, o.tick);
+                return out;
+            }
+
+            // 곡선 목록 "60:5, 70:8" → [{m, s}] (평균:표준편차). 빈 글이면 [], 못 읽거나 표준편차가 0 이하면 null
+            function parseCurves(text) {
+                var parts = String(text).split(/[,，]/), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var item = parts[i].replace(/^\s+|\s+$/g, "");
+                    if (item === "") continue;
+                    var colon = item.indexOf(":"), m = colon < 0 ? NaN : parseFloat(item.substring(0, colon)), s = colon < 0 ? NaN : parseFloat(item.substring(colon + 1));
+                    if (isNaN(m) || isNaN(s) || !(s > 0)) return null;
+                    out.push({ m: m, s: s });
+                }
+                return out;
+            }
+
+            // 축 아래 글자 "50:m, 60:m+σ" → [{v, text}] (값:글자). 빈 글이면 [], 못 읽으면 null
+            function parseMarks(text) {
+                var parts = String(text).split(/[,，]/), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var item = parts[i].replace(/^\s+|\s+$/g, "");
+                    if (item === "") continue;
+                    var colon = item.indexOf(":"), v = colon < 0 ? NaN : parseFloat(item.substring(0, colon)), label = colon < 0 ? "" : item.substring(colon + 1).replace(/^\s+|\s+$/g, "");
+                    if (isNaN(v) || label === "") return null;
+                    out.push({ v: v, text: label });
+                }
+                return out;
+            }
+
+            // 곡선 목록 "60:5, 70:8" → [{m, s}] (평균:표준편차). 빈 글이면 [], 못 읽거나 표준편차가 0 이하면 null
+            function parseCurves(text) {
+                var parts = String(text).split(/[,，]/), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var item = parts[i].replace(/^\s+|\s+$/g, "");
+                    if (item === "") continue;
+                    var colon = item.indexOf(":"), m = colon < 0 ? NaN : parseFloat(item.substring(0, colon)), s = colon < 0 ? NaN : parseFloat(item.substring(colon + 1));
+                    if (isNaN(m) || isNaN(s) || !(s > 0)) return null;
+                    out.push({ m: m, s: s });
+                }
+                return out;
+            }
+
+            // 축 아래 글자 "50:m, 60:m+σ" → [{v, text}] (값:글자). 빈 글이면 [], 못 읽으면 null
+            function parseMarks(text) {
+                var parts = String(text).split(/[,，]/), out = [];
+                for (var i = 0; i < parts.length; i++) {
+                    var item = parts[i].replace(/^\s+|\s+$/g, "");
+                    if (item === "") continue;
+                    var colon = item.indexOf(":"), v = colon < 0 ? NaN : parseFloat(item.substring(0, colon)), label = colon < 0 ? "" : item.substring(colon + 1).replace(/^\s+|\s+$/g, "");
+                    if (isNaN(v) || label === "") return null;
+                    out.push({ v: v, text: label });
+                }
                 return out;
             }
 
@@ -1736,6 +1816,15 @@ var SCRIPT_KEY = "HighStatistics";
                 try { app.preferences.setStringPreference(PREF_KEY + "/lines", parts.join("|")); } catch (e) {}
             }
 
+            function addTextRow(parent, label, value, tip) {
+                var row = parent.add("group");
+                row.add("statictext", undefined, label).preferredSize.width = 80;
+                var input = row.add("edittext", undefined, value);
+                input.preferredSize.width = 260;
+                input.helpTip = tip;
+                return input;
+            }
+
             function addPanel(parent, title, foldKey) {
                 // foldKey를 주면 접는 패널(기본 접힘)이다. body에 행을 넣는다 (헬퍼가 없으면 일반 패널)
                 if (foldKey && typeof makeCollapsiblePanel === "function") {
@@ -1834,8 +1923,9 @@ var SCRIPT_KEY = "HighStatistics";
                 saveLineWidths();
                 var flags = "";
                 for (var i = 0; i < FLAG_KEYS.length; i++) flags += opt[FLAG_KEYS[i]] ? "1" : "0";
-                var parts = ["v1", mode, axisName, mean, sigma, mean2, sigma2, trials, chance, shade, labelKind, aValue, bValue, shadeK,
-                    widthMm, heightMm, fontPt, flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0"];
+                var parts = ["v2", mode, axisName, mean, sigma, mean2, sigma2, trials, chance, shade, labelKind, aValue, bValue, shadeK,
+                    widthMm, heightMm, fontPt, flags, offsetXmm, offsetYmm, previewEnabled ? "1" : "0",
+                    encodeURIComponent(moreCurves), encodeURIComponent(curveNames), encodeURIComponent(shadeNote), encodeURIComponent(markText)];
                 try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
             }
 
@@ -1844,7 +1934,7 @@ var SCRIPT_KEY = "HighStatistics";
                 try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
                 if (!raw) return;
                 var p = raw.split("|");
-                if (p[0] !== "v1" || p.length !== 21 || p[17].length !== FLAG_KEYS.length) return;
+                if (!((p[0] === "v1" && p.length === 21) || (p[0] === "v2" && p.length === 25)) || p[17].length !== FLAG_KEYS.length) return;
                 try {
                     mode = Math.round(restoreNumber(p[1], mode, 0, MODES.length - 1));
                     axisName = Math.round(restoreNumber(p[2], axisName, 0, AXIS_NAMES.length - 1));
@@ -1866,6 +1956,12 @@ var SCRIPT_KEY = "HighStatistics";
                     offsetXmm = restoreNumber(p[18], offsetXmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     offsetYmm = restoreNumber(p[19], offsetYmm, -POSITION_LIMIT_MM, POSITION_LIMIT_MM);
                     previewEnabled = p[20] === "1";
+                    if (p[0] === "v2") {
+                        moreCurves = decodeURIComponent(p[21]);
+                        curveNames = decodeURIComponent(p[22]);
+                        shadeNote = decodeURIComponent(p[23]);
+                        markText = decodeURIComponent(p[24]);
+                    }
                 } catch (restoreError) {}
             }
 

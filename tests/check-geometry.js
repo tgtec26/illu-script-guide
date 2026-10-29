@@ -513,5 +513,11 @@ console.log("geometry steps ok");
   assert.ok(a.dir[1] < 0, "OA는 아래가 바깥");
   assert.deepStrictEqual(api({ pointsText: "A(0,0) B(1,0)", vectorText: "AZ:a" }).buildGeometry().notes.filter((n) => /벡터/.test(n)), ["벡터 AZ:a"]);
   assert.ok(source.includes("if (label.over && label.over.length > 0) { addOverLabel(label); return; }"), "글자 위 화살표 라벨");
+  // 일러 쪽에서만 실행되는 그리기 함수는 Node에서 돌지 않으므로, 부르는 함수가 모두 이 묶음 안에 있는지 본다 (plain이 없어 일러에서 멈춘 적이 있다)
+  const called = new Set([...extractFunction("addOverLabel").matchAll(/(?<![.\w])([A-Za-z_]\w*)\(/g)].map((m) => m[1]));
+  for (const name of called) {
+    if (["function", "if", "for", "while", "addOverLabel"].includes(name)) continue;
+    assert.ok(source.includes(`function ${name}(`) || bundle.includes(`\n    function ${name}(`), `addOverLabel이 부르는 ${name}()가 도형 탭이나 묶음 공통 부분에 없다`);
+  }
 }
 console.log("geometry vector names ok");

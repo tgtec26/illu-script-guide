@@ -31,7 +31,7 @@ function extractFunction(name) {
 }
 
 const names = ["buildNormal", "buildBinomial", "shadeRange", "addRangeMarks", "placeMarks", "addAxis", "probabilityText", "normalPoints",
-  "normalDensity", "normalCdf", "binomialProbability", "straight", "formatValue"];
+  "normalDensity", "normalCdf", "binomialProbability", "straight", "formatValue", "parseCurves", "parseMarks"];
 const g = new Function(`var ARROW = { length: 4, halfWidth: 1.3, notch: 1 }, TAIL_SIGMAS = 3.5, BAR_RATIO = 0.6, AXIS_MARGIN_RATIO = 0.04;\n${names.map(extractFunction).join("\n")}\nreturn {${names.join(",")}};`)();
 const near = (a, b, msg, tol = 1e-6) => assert.ok(Math.abs(a - b) < tol, `${msg}: ${a} vs ${b}`);
 const base = { width: 200, height: 50, tick: 2, shadeK: 20, axisName: "x", shade: 1, a: 40, b: 70, letters: false, meanLine: true, sigmaTicks: false };
@@ -148,5 +148,48 @@ return { set: setLineWidth, get: currentLineWidth, save: saveLineWidths };`)(app
   assert.strictEqual(d.lines.filter((l) => l.kind === "axis").length, 1);
   assert.ok(extractFunction("addPath").includes('"tick" ? TICK_PT'));
   assert.ok(extractFunction("addFill").includes("path.strokeWidth = EDGE_PT;"));
+}
+// 정규분포 확장: 곡선 이름·영역 글자 지시선·축 글자·곡선 더하기 (웹 math-distribution.test.js와 같은 경우)
+{
+  const base = { width: 200, height: 50, tick: 2, shadeK: 20, axisName: "x", shade: 1, a: 40, b: 70, letters: false, meanLine: true, sigmaTicks: false };
+  const d = g.buildNormal(Object.assign({}, base, { curves: [{ m: 50, s: 10 }, { m: 50, s: 5 }, { m: 50, s: 20 }],
+    names: ["σ₁", "σ₂", ""], shadeNote: "0.95", extraMarks: [{ v: 60, text: "m+σ" }, { v: 50, text: "dup" }] }));
+  assert.strictEqual(d.lines.filter((l) => l.kind === "curve").length, 3);
+  assert.strictEqual(d.texts.filter((t) => t.text === "σ₁" || t.text === "σ₂").length, 2);
+  near(d.texts.find((t) => t.text === "σ₁").at[0], (62 + 20) * 200 / 140, "σ₁ 자리");
+  const leader = d.lines.find((l) => l.kind === "leader");
+  assert.ok(leader && leader.points[1].anchor[1] > 0 && leader.points[1].anchor[1] < 50, "지시선");
+  assert.ok(d.texts.some((t) => t.text === "m+σ") && !d.texts.some((t) => t.text === "dup"));
+  assert.deepStrictEqual(g.parseCurves("60:5, 70:8"), [{ m: 60, s: 5 }, { m: 70, s: 8 }]);
+  assert.strictEqual(g.parseCurves("60:0"), null);
+  assert.deepStrictEqual(g.parseMarks("50:m, 60:m+σ"), [{ v: 50, text: "m" }, { v: 60, text: "m+σ" }]);
+  assert.strictEqual(g.parseMarks("a:b"), null);
+  const webPath = path.join(root, "..", "sci-illu-web", "src", "generators", "math-distribution.js");
+  if (fs.existsSync(webPath)) {
+    const web = fs.readFileSync(webPath, "utf8");
+    for (const name of ["parseCurves", "parseMarks"]) {
+      const start = web.indexOf(`export function ${name}(`), end = web.indexOf("\n}\n", start) + 2;
+      const scriptText = extractFunction(name).split("\n").map((line) => line.replace(/^ {12}/, "").replace(/^ +/, (lead) => " ".repeat(lead.length / 2))).join("\n");
+      assert.strictEqual(scriptText, web.slice(start + "export ".length, end), name + " differs from the web");
+    }
+  }
+  // 설정 v2: 글 4칸을 더해 25칸으로 저장하고 v1(21칸)도 읽는다
+  const store = {};
+  const app = { preferences: { getStringPreference: (k) => store[k] || "", setStringPreference: (k, v) => { store[k] = v; } } };
+  const flagKeys = '["second", "meanLine", "sigmaTicks", "approx"]';
+  const body = `var PREF_KEY = "T", POSITION_LIMIT_MM = 100, FLAG_KEYS = ${flagKeys}, MODES = [1, 2], AXIS_NAMES = [1, 2, 3], SHADES = [1, 2, 3, 4], LABELS = [1, 2];
+    var mode = 0, axisName = 0, mean = 50, sigma = 10, mean2 = 60, sigma2 = 5, trials = 10, chance = 0.5, shade = 1, labelKind = 0, aValue = 40, bValue = 70, shadeK = 20,
+    widthMm = 80, heightMm = 25, fontPt = 8, offsetXmm = 0, offsetYmm = 0, previewEnabled = true, opt = { second: false, meanLine: true, sigmaTicks: false, approx: false },
+    moreCurves = "", curveNames = "", shadeNote = "", markText = ""; function saveLineWidths() {}` +
+    ["saveSettings", "applySettings", "restoreNumber", "parseNumber", "clamp"].map(extractFunction).join("\n") +
+    `return { saveSettings, applySettings, set: function() { moreCurves = "70:8"; curveNames = "σ₁, σ₂"; shadeNote = "0.95"; markText = "50:m"; }, get: function() { return [moreCurves, curveNames, shadeNote, markText]; } };`;
+  const make = () => new Function("app", body)(app);
+  const first = make(); first.set(); first.saveSettings();
+  assert.strictEqual(store.T.split("|").length, 25);
+  const again = make(); again.applySettings();
+  assert.deepStrictEqual(again.get(), ["70:8", "σ₁, σ₂", "0.95", "50:m"]);
+  store.T = store.T.split("|").slice(0, 21).join("|").replace(/^v2/, "v1");
+  const old = make(); old.applySettings();
+  assert.deepStrictEqual(old.get(), ["", "", "", ""], "v1은 새 글을 비운 채로");
 }
 console.log("distribution checks passed");
