@@ -52,11 +52,19 @@ function main() {
 
     var groupBtns = dialog.add("group");
     groupBtns.alignment = "right";
-    // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다
+    // 입력창에서 엔터를 쳐도 실행되지 않도록 기본 버튼을 두지 않는다(드롭다운 엔터는 아래 keydown에서 처리)
     var btnOk = groupBtns.add("button", undefined, "생성");
     btnOk.onClick = function() { dialog.close(1); };
     try { dialog.defaultElement = null; } catch (defaultError) {}
     var btnCancel = groupBtns.add("button", undefined, "취소", {name: "cancel"});
+    // 대지 종류를 고른 뒤(입력창 밖에서) 엔터를 치면 [생성]과 같다. 입력창의 엔터는 값 확정만 한다
+    dialog.addEventListener("keydown", function(event) {
+        var key = event.keyName || event.key;
+        if (key !== "Enter" && key !== "Return" && event.keyCode !== 13) return;
+        if (event.target && event.target.type === "edittext") return;
+        try { event.preventDefault(); } catch (enterError) {}
+        dialog.close(1);
+    });
 
     if (typeof bindTabOrder === "function") bindTabOrder(dialog);
     if (dialog.show() == 1) {
