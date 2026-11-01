@@ -3045,6 +3045,36 @@
         "yAxis": "up"
       },
       "properties": {
+        "cloudMm": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0.4,
+          "maximum": 2
+        },
+        "cloudN": {
+          "type": "number",
+          "default": 120,
+          "minimum": 20,
+          "maximum": 300
+        },
+        "cloudSeed": {
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 99
+        },
+        "cloudSpread": {
+          "type": "number",
+          "default": 1.2,
+          "minimum": 0.2,
+          "maximum": 4
+        },
+        "cloudTurn": {
+          "type": "number",
+          "default": 40,
+          "minimum": 10,
+          "maximum": 80
+        },
         "font": {
           "type": "number",
           "default": 8,
@@ -3067,11 +3097,19 @@
           "minimum": 25,
           "maximum": 90
         },
+        "paths": {
+          "type": "string",
+          "default": ""
+        },
         "shade": {
           "type": "number",
           "default": 0,
           "minimum": 0,
           "maximum": 40
+        },
+        "showCloud": {
+          "type": "boolean",
+          "default": false
         },
         "showDwarf": {
           "type": "boolean",
@@ -3088,6 +3126,10 @@
         "showMain": {
           "type": "boolean",
           "default": true
+        },
+        "showMainLine": {
+          "type": "boolean",
+          "default": false
         },
         "showSuper": {
           "type": "boolean",
