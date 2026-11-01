@@ -223,6 +223,103 @@
         }
       }
     },
+    "box-diagram": {
+      "schemaVersion": 1,
+      "toolId": "box-diagram",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "arrowGap": {
+          "type": "number",
+          "default": 0.8,
+          "minimum": 0,
+          "maximum": 3
+        },
+        "arrows": {
+          "type": "string",
+          "default": "a>b; b>c; b>d; c>d; d>a; c>a"
+        },
+        "boxes": {
+          "type": "string",
+          "default": "a=대기 중/CO2@1,0; b=생산자@0,1; c=소비자@2,1; d=분해자@1,2"
+        },
+        "boxH": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 30
+        },
+        "boxW": {
+          "type": "number",
+          "default": 20,
+          "minimum": 8,
+          "maximum": 50
+        },
+        "font": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 14
+        },
+        "gapX": {
+          "type": "number",
+          "default": 12,
+          "minimum": 2,
+          "maximum": 40
+        },
+        "gapY": {
+          "type": "number",
+          "default": 10,
+          "minimum": 2,
+          "maximum": 40
+        },
+        "groupPad": {
+          "type": "number",
+          "default": 2.5,
+          "minimum": 1,
+          "maximum": 8
+        },
+        "groups": {
+          "type": "string",
+          "default": ""
+        },
+        "headShape": {
+          "type": "number",
+          "default": 3
+        },
+        "headSize": {
+          "type": "number",
+          "default": 100,
+          "minimum": 30,
+          "maximum": 300
+        },
+        "radius": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0.5,
+          "maximum": 6
+        },
+        "shape": {
+          "type": "number",
+          "default": 0
+        },
+        "wArrow": {
+          "type": "number",
+          "default": 0.4,
+          "minimum": 0.1,
+          "maximum": 2
+        },
+        "wBox": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0.1,
+          "maximum": 3
+        }
+      }
+    },
     "cabinet": {
       "schemaVersion": 1,
       "toolId": "cabinet",
