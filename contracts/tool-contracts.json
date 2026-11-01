@@ -1021,6 +1021,197 @@
         }
       }
     },
+    "curve-graph": {
+      "schemaVersion": 1,
+      "toolId": "curve-graph",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "c1Dash": {
+          "type": "boolean",
+          "default": false
+        },
+        "c1Flat": {
+          "type": "boolean",
+          "default": false
+        },
+        "c1Kind": {
+          "type": "number",
+          "default": 0
+        },
+        "c1Name": {
+          "type": "string",
+          "default": ""
+        },
+        "c1Pts": {
+          "type": "string",
+          "default": "0,1; 2,6; 4,8; 8,9"
+        },
+        "c2Dash": {
+          "type": "boolean",
+          "default": true
+        },
+        "c2Flat": {
+          "type": "boolean",
+          "default": false
+        },
+        "c2Kind": {
+          "type": "number",
+          "default": 0
+        },
+        "c2Name": {
+          "type": "string",
+          "default": ""
+        },
+        "c2Pts": {
+          "type": "string",
+          "default": ""
+        },
+        "c3Dash": {
+          "type": "boolean",
+          "default": true
+        },
+        "c3Flat": {
+          "type": "boolean",
+          "default": false
+        },
+        "c3Kind": {
+          "type": "number",
+          "default": 0
+        },
+        "c3Name": {
+          "type": "string",
+          "default": ""
+        },
+        "c3Pts": {
+          "type": "string",
+          "default": ""
+        },
+        "font": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 14
+        },
+        "headShape": {
+          "type": "number",
+          "default": 3
+        },
+        "headSize": {
+          "type": "number",
+          "default": 100,
+          "minimum": 30,
+          "maximum": 300
+        },
+        "height": {
+          "type": "number",
+          "default": 35,
+          "minimum": 15,
+          "maximum": 80
+        },
+        "markGuides": {
+          "type": "boolean",
+          "default": true
+        },
+        "pointGuides": {
+          "type": "boolean",
+          "default": true
+        },
+        "pointsText": {
+          "type": "string",
+          "default": ""
+        },
+        "shadeK": {
+          "type": "number",
+          "default": 15,
+          "minimum": 5,
+          "maximum": 60
+        },
+        "shadeMode": {
+          "type": "number",
+          "default": 0
+        },
+        "shadeX": {
+          "type": "string",
+          "default": "2,5"
+        },
+        "showO": {
+          "type": "boolean",
+          "default": true
+        },
+        "wBody": {
+          "type": "number",
+          "default": 0.8,
+          "minimum": 0.1,
+          "maximum": 3
+        },
+        "wGuide": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0.1,
+          "maximum": 2
+        },
+        "width": {
+          "type": "number",
+          "default": 50,
+          "minimum": 20,
+          "maximum": 100
+        },
+        "wRope": {
+          "type": "number",
+          "default": 0.4,
+          "minimum": 0.1,
+          "maximum": 2
+        },
+        "xMarks": {
+          "type": "string",
+          "default": ""
+        },
+        "xMax": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "xName": {
+          "type": "string",
+          "default": "시간"
+        },
+        "xStep": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 500
+        },
+        "yMarks": {
+          "type": "string",
+          "default": ""
+        },
+        "yMax": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "yName": {
+          "type": "string",
+          "default": "상대량"
+        },
+        "yReverse": {
+          "type": "boolean",
+          "default": false
+        },
+        "yStep": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 500
+        }
+      }
+    },
     "cylinder": {
       "schemaVersion": 1,
       "toolId": "cylinder",
