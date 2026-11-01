@@ -699,6 +699,91 @@
         }
       }
     },
+    "chromosome-cells": {
+      "schemaVersion": 1,
+      "toolId": "chromosome-cells",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "cellD": {
+          "type": "number",
+          "default": 32,
+          "minimum": 14,
+          "maximum": 60
+        },
+        "cellGap": {
+          "type": "number",
+          "default": 10,
+          "minimum": 2,
+          "maximum": 40
+        },
+        "cells": {
+          "type": "string",
+          "default": "(가)=^dL:A/B, dM:D; (나)=L:A/B, ~M:a/b; (다)=S:D"
+        },
+        "cenPct": {
+          "type": "number",
+          "default": 45,
+          "minimum": 20,
+          "maximum": 80
+        },
+        "chromGap": {
+          "type": "number",
+          "default": 2.5,
+          "minimum": 0.5,
+          "maximum": 10
+        },
+        "chromW": {
+          "type": "number",
+          "default": 1.8,
+          "minimum": 0.8,
+          "maximum": 4
+        },
+        "font": {
+          "type": "number",
+          "default": 8,
+          "minimum": 5,
+          "maximum": 14
+        },
+        "geneItalic": {
+          "type": "boolean",
+          "default": true
+        },
+        "hL": {
+          "type": "number",
+          "default": 11,
+          "minimum": 4,
+          "maximum": 30
+        },
+        "hM": {
+          "type": "number",
+          "default": 8,
+          "minimum": 3,
+          "maximum": 24
+        },
+        "hS": {
+          "type": "number",
+          "default": 5,
+          "minimum": 2,
+          "maximum": 18
+        },
+        "wBody": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0.1,
+          "maximum": 3
+        },
+        "wFiber": {
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0.1,
+          "maximum": 2
+        }
+      }
+    },
     "circulation": {
       "schemaVersion": 1,
       "toolId": "circulation",
