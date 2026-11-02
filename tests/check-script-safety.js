@@ -134,6 +134,14 @@ for (const file of alignFiles) {
     console.error(`${artboardGenerator}: new documents must be created with DocumentPreset.units`);
     failures++;
   }
+  if (!/add\("button",\s*undefined,\s*"생성",\s*\{name:\s*"ok"\}\)/.test(source) ||
+      !/dialog\.defaultElement\s*=\s*btnOk/.test(source) ||
+      !/inputCount\.addEventListener\("keydown",\s*createOnEnter\)/.test(source) ||
+      !/inputGap\.addEventListener\("keydown",\s*createOnEnter\)/.test(source) ||
+      !/btnOk\.onClick\(\)/.test(source)) {
+    console.error(`${artboardGenerator}: Enter must activate the create button from every dialog control`);
+    failures++;
+  }
 }
 
 {
