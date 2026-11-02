@@ -26,7 +26,6 @@ try {
     }
 
     var mmToPt = 72 / 25.4;
-    var STROKE_PT = 0.3;
     if (sel.typename === "TextRange") {
         alert("문자 편집을 마치고 선택 도구로 텍스트 개체를 선택해주세요.");
         return;
@@ -67,6 +66,7 @@ try {
     addRow(boxPanel, "좌우 여백", "paddingX", 0, 50, "mm", false);
     addRow(boxPanel, "상하 여백", "paddingY", 0, 50, "mm", false);
     addRow(boxPanel, "코너 둥글기", "radius", 0, 50, "mm", false);
+    addRow(boxPanel, "선 두께", "strokeWidth", 0.1, 10, "pt", false);
     var positionPanel = win.add("panel", undefined, "위치");
     positionPanel.alignChildren = "fill";
     addRow(positionPanel, "가로", "offsetX", -100, 100, "mm", true);
@@ -119,7 +119,7 @@ try {
         var row = panel.add("group");
         var caption = row.add("statictext", undefined, label);
         caption.helpTip = label + " (" + unit + ")";
-        var step = unit === "mm" ? 0.1 : 1;
+        var step = 0.1;
         var input = row.add("edittext", undefined, String(options[key]));
         input.characters = positionOnly ? 7 : 4;
         input.preferredSize.width = positionOnly ? 65 : 46;
@@ -194,6 +194,7 @@ try {
     function writeBoxPath(record, dx, dy) {
         var points = getBoxPoints(record.entry.bounds, options);
         var path = record.path;
+        path.strokeWidth = options.strokeWidth;
         function shifted(point) { return [point[0] + dx, point[1] + dy]; }
         while (path.pathPoints.length > points.length) path.pathPoints[path.pathPoints.length - 1].remove();
         for (var q = 0; q < points.length; q++) {
@@ -222,7 +223,7 @@ try {
                 path.filled = false;
                 path.stroked = true;
                 path.strokeColor = lineColor;
-                path.strokeWidth = STROKE_PT;
+                path.strokeWidth = options.strokeWidth;
                 path.strokeDashes = [];
                 try { path.strokeJoin = StrokeJoin.ROUNDENDJOIN; } catch (joinError) {}
                 record.copy = entry.item.duplicate(group, ElementPlacement.PLACEATBEGINNING);
@@ -258,24 +259,25 @@ try {
     }
 
     function defaultOptions() {
-        return { paddingX: 3, paddingY: 1.5, radius: 0, offsetX: 0, offsetY: 0, preview: true };
+        return { paddingX: 3, paddingY: 1.5, radius: 0, offsetX: 0, offsetY: 0, preview: true, strokeWidth: 0.3 };
     }
 
     function readSettings() {
         var result = defaultOptions();
         try {
             var p = app.preferences.getStringPreference(PREF_KEY).split("|");
-            if (p[0] !== "v1" || p.length !== 7) return result;
-            var keys = ["paddingX", "paddingY", "radius", "offsetX", "offsetY"];
-            var mins = [0, 0, 0, -100, -100];
-            var maxs = [50, 50, 50, 100, 100];
+            if (p[0] !== "v2" || p.length !== 8) return result;
+            var keys = ["paddingX", "paddingY", "radius", "offsetX", "offsetY", "strokeWidth"];
+            var indices = [1, 2, 3, 4, 5, 7];
+            var mins = [0, 0, 0, -100, -100, 0.1];
+            var maxs = [50, 50, 50, 100, 100, 10];
             for (var i = 0; i < keys.length; i++) {
-                var raw = p[i + 1];
+                var raw = p[indices[i]];
                 var value = Number(raw);
                 if (!/\S/.test(raw) || !isFinite(value) || value < mins[i] || value > maxs[i]) return result;
             }
             if (!/^[01]$/.test(p[6])) return result;
-            for (var j = 0; j < keys.length; j++) result[keys[j]] = Number(p[j + 1]);
+            for (var j = 0; j < keys.length; j++) result[keys[j]] = Number(p[indices[j]]);
             result.preview = p[6] === "1";
         } catch (e) {}
         return result;
@@ -283,8 +285,8 @@ try {
 
     function saveSettings() {
         try {
-            app.preferences.setStringPreference(PREF_KEY, ["v1", options.paddingX, options.paddingY,
-                options.radius, options.offsetX, options.offsetY, options.preview ? 1 : 0].join("|"));
+            app.preferences.setStringPreference(PREF_KEY, ["v2", options.paddingX, options.paddingY,
+                options.radius, options.offsetX, options.offsetY, options.preview ? 1 : 0, options.strokeWidth].join("|"));
         } catch (e) {}
     }
 
@@ -297,8 +299,8 @@ try {
     // 네 모서리를 같은 반지름으로 둥글린다. 반지름은 짧은 변의 절반 이하.
     function getBoxPoints(bounds, opts) {
         // 글자 외곽에서 박스 선 안쪽까지의 여백이므로 선 두께의 절반을 더한다.
-        var padX = opts.paddingX * mmToPt + STROKE_PT / 2;
-        var padY = opts.paddingY * mmToPt + STROKE_PT / 2;
+        var padX = opts.paddingX * mmToPt + opts.strokeWidth / 2;
+        var padY = opts.paddingY * mmToPt + opts.strokeWidth / 2;
         var left = bounds[0] - padX;
         var top = bounds[1] + padY;
         var width = bounds[2] - bounds[0] + 2 * padX;

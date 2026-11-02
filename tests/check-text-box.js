@@ -6,7 +6,7 @@ require('./es3-lint')(source, '텍스트 박스');
 new vm.Script(source);
 let saved = '', removed = 0;
 const ctx = {
-  mmToPt: 72 / 25.4, STROKE_PT: 0.3, PREF_KEY: 'TextBox/settings',
+  mmToPt: 72 / 25.4, PREF_KEY: 'TextBox/settings',
   app: { preferences: {
     getStringPreference: () => saved,
     setStringPreference: (key, value) => { assert.equal(key, 'TextBox/settings'); saved = value; }
@@ -19,6 +19,7 @@ const defaults = ctx.defaultOptions();
 assert.equal(defaults.paddingX, 3);
 assert.equal(defaults.paddingY, 1.5);
 assert.equal(defaults.radius, 0);
+assert.equal(defaults.strokeWidth, 0.3);
 const bounds = [10, 40, 100, 20];
 function near(a, b) { assert(Math.abs(a - b) < 1e-8, `${a} != ${b}`); }
 const points = ctx.getBoxPoints(bounds, defaults);
@@ -35,12 +36,23 @@ for (const radius of [0, 1, 50]) {
     assert(point[key].every(Number.isFinite));
   }
 }
-ctx.options = { ...defaults, radius: 12, offsetX: -6, offsetY: 8, preview: false };
+ctx.options = { ...defaults, radius: 12, strokeWidth: 4.2, offsetX: -6, offsetY: 8, preview: false };
 ctx.saveSettings();
 assert.deepEqual(JSON.parse(JSON.stringify(ctx.readSettings())), ctx.options);
 for (const bad of ['v2|3|1.5|0|0|0|1', 'v1|3|1.5|0|0|0', 'v1||1.5|0|0|0|1',
   'v1|51|1.5|0|0|0|1', 'v1|3|1.5|-1|0|0|1', 'v1|3|1.5|0|101|0|1', 'v1|3|1.5|0|0|0|yes']) {
   saved = bad;
+  assert.deepEqual(ctx.readSettings(), defaults);
+}
+for (const width of [0.1, 0.3, 3, 10]) {
+  const p = ctx.getBoxPoints(bounds, { ...defaults, strokeWidth: width });
+  near(bounds[0] - (p[0].anchor[0] + width / 2), 3 * ctx.mmToPt);
+  near(p[0].anchor[1] - width / 2 - bounds[1], 1.5 * ctx.mmToPt);
+  near(p[2].anchor[0] - width / 2 - bounds[2], 3 * ctx.mmToPt);
+  near(bounds[3] - (p[2].anchor[1] + width / 2), 1.5 * ctx.mmToPt);
+}
+for (const width of ['0', '-1', '11', '', 'NaN']) {
+  saved = 'v2|3|1.5|0|0|0|1|' + width;
   assert.deepEqual(ctx.readSettings(), defaults);
 }
 const text = { contents: 'Test', duplicate: () => ({ createOutline: () => ({
@@ -67,6 +79,10 @@ ctx.writeBoxPath(record, 5, -8);
 assert.equal(pathPoints.length, 4);
 near(pathPoints[0].anchor[0], points[0].anchor[0] + 5);
 near(pathPoints[0].anchor[1], points[0].anchor[1] - 8);
+ctx.options.strokeWidth = 8;
+ctx.writeBoxPath(record, 0, 0);
+assert.equal(record.path.strokeWidth, 8);
+near(bounds[0] - (pathPoints[0].anchor[0] + 4), 3 * ctx.mmToPt);
 // Cancel / preview off restore the original and selection; failed confirm rolls back movement.
 let groupRemoved = 0;
 const original = { hidden: true, selected: false, translate: (x, y) => {
