@@ -38,3 +38,34 @@ test('save and reset write locally; only confirmed POST publishes', async () => 
     assert.equal(calls, 1);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+const http = require('node:http');
+const { spawn } = require('node:child_process');
+const { adminUrl, probe, waitUntilReady } = require('../tools/ui-admin-launch');
+test('Windows launcher validates ports and recognizes the existing admin only', async () => {
+  assert.equal(adminUrl('5300'), 'http://127.0.0.1:5300/');
+  for (const bad of ['0', '65536', '5200 & calc', 'NaN']) assert.throws(() => adminUrl(bad));
+  const server = http.createServer((req, res) => res.end('another application'));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const url = adminUrl(server.address().port);
+    assert.equal(await probe(url), 'occupied');
+    await assert.rejects(waitUntilReady(url, { exitCode: null }), /다른 프로그램/);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+test('Windows launcher waits for real server readiness and supports reuse', async () => {
+  const reservation = http.createServer();
+  await new Promise((resolve) => reservation.listen(0, '127.0.0.1', resolve));
+  const port = reservation.address().port;
+  await new Promise((resolve) => reservation.close(resolve));
+  const child = spawn(process.execPath, [path.join(__dirname, '../tools/ui-admin.js'), '--no-push'], {
+    env: { ...process.env, UI_ADMIN_PORT: String(port) }, stdio: 'ignore'
+  });
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  try {
+    await waitUntilReady(adminUrl(port), child);
+    assert.equal(await probe(adminUrl(port)), 'ready');
+    assert.equal((await fetch(adminUrl(port) + 'api')).status, 200);
+  } finally { child.kill(); await exited; }
+  await assert.rejects(waitUntilReady(adminUrl(port), { exitCode: 1 }), /終了|종료/);
+});
