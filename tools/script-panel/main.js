@@ -75,7 +75,7 @@
                 status(errorText(r), true);
             } else {
                 S.scripts = parse(r);
-                status(S.scripts.length + "개");
+                status("");
             }
             render();
         });
@@ -238,11 +238,6 @@
         node.files.forEach(function (it) { list.appendChild(makeRow(it, false, depth)); });
     }
 
-    function shortPath(p) {
-        var parts = p.split("/").filter(function (x) { return x; });
-        return parts.length > 3 ? "…/" + parts.slice(-3).join("/") : p;
-    }
-
     function emptyMessage(list, text) {
         var e = document.createElement("div");
         e.className = "empty";
@@ -254,8 +249,7 @@
         var list = $("list"), favBox = $("favs");
         list.textContent = "";
         favBox.textContent = "";
-        $("path").textContent = shortPath(S.root);
-        $("path").title = S.root;
+        $("pick").title = "스크립트 폴더 지정" + (S.root ? "\n" + S.root : "");
         var q = S.query.trim().toLowerCase();
 
         if (q) {
@@ -291,9 +285,14 @@
 
     // Node runs Git in a separate process; no shell commands go through evalScript.
     var updater = null, updateBusy = false, updateReady = false;
-    function updateMessage(text, detail, error) {
-        $("updateText").textContent = text;
-        $("updateVersions").textContent = detail || "";
+    function updateMessage(text, detail, error, indicator, notice) {
+        var button = $("updateNow");
+        var label = [text, detail].filter(function (part) { return part; }).join("\n");
+        button.title = label || "업데이트";
+        button.setAttribute("aria-label", label || "업데이트");
+        button.className = "ib" + (indicator ? " " + indicator : error ? " attention" : "");
+        $("updateText").textContent = notice ? label : "";
+        $("updates").hidden = !notice;
         $("updates").className = error ? "error" : "";
         $("updateNow").disabled = updateBusy || !updateReady;
     }
@@ -315,7 +314,7 @@
             var job = updater.readJob();
             if (job && (job.state === "waiting" || job.state === "running")) {
                 updateBusy = false;
-                updateMessage(job.message, "업데이트가 예약되어 있습니다. Illustrator를 완전히 종료하세요.");
+                updateMessage(job.message, "Illustrator를 완전히 종료하세요.", false, "attention", true);
                 return;
             }
         } catch (e) {
@@ -330,19 +329,16 @@
                 diverged: "로컬과 원격의 변경이 갈라져 있습니다. Git에서 먼저 정리하세요.",
                 dirty: "로컬 수정 파일이 있습니다. 변경을 정리한 뒤 업데이트하세요."
             };
-            var detail = "로컬 " + state.local + " · 원격 " + state.remote;
-            if (state.behind) detail += " · 새 커밋 " + state.behind + "개";
+            var detail = "";
             var last = updater.readJob();
             var retry = last && last.state === "failed" && state.kind === "current" && !state.dirty;
             if (retry) updateReady = true;
-            var actionLabel = retry ? "설치 재시도" : "업데이트";
-            $("updateNow").title = actionLabel;
-            $("updateNow").setAttribute("aria-label", actionLabel);
             if (last && (last.state === "done" || last.state === "failed")) {
-                detail += " · " + last.message;
-                $("updateVersions").title = last.log ? "업데이트 로그: " + last.log : "";
+                detail = last.message + (last.log ? "\n업데이트 로그: " + last.log : "");
             }
-            updateMessage(retry ? "설치가 완료되지 않았습니다. 다시 시도하세요." : messages[state.kind], detail, retry || state.kind === "diverged" || state.kind === "dirty");
+            updateMessage(retry ? "설치 재시도" : messages[state.kind], detail,
+                retry || state.kind === "diverged" || state.kind === "dirty",
+                retry || state.behind ? "attention" : "current");
         }).catch(function (e) {
             updateBusy = false; updateReady = false;
             updateMessage("원격 상태를 확인하지 못했습니다.", e.message, true);
@@ -354,7 +350,7 @@
         updateMessage("업데이트 준비 중…");
         updater.schedule(S.root).then(function (job) {
             updateBusy = false;
-            updateMessage(job.message, "저장 후 Illustrator를 종료하세요. 종료 후 Git 갱신과 전체 설치를 진행합니다.");
+            updateMessage(job.message, "저장 후 Illustrator를 종료하세요.", false, "attention", true);
         }).catch(function (e) {
             updateBusy = false;
             updateMessage("업데이트를 시작하지 못했습니다.", e.message, true);
