@@ -333,7 +333,7 @@
             var detail = "로컬 " + state.local + " · 원격 " + state.remote;
             if (state.behind) detail += " · 새 커밋 " + state.behind + "개";
             var last = updater.readJob();
-            var retry = last && last.state === "failed" && state.kind === "current";
+            var retry = last && last.state === "failed" && state.kind === "current" && !state.dirty;
             if (retry) updateReady = true;
             var actionLabel = retry ? "설치 재시도" : "업데이트";
             $("updateNow").title = actionLabel;

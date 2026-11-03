@@ -24,6 +24,9 @@ function commit(dir, name) { fs.writeFileSync(path.join(dir, name), name); git(d
     const linkedUpdater = createUpdater(link,path.join(base,'linked-state'));
     assert.equal((await linkedUpdater.check(local)).kind,'current');
     let state = await updater.check(local); assert.equal(state.kind,'current');
+    fs.writeFileSync(path.join(local,'temporary.svg'),'keep');
+    state = await updater.check(local); assert.equal(state.kind,'current'); assert.equal(state.canUpdate,false);
+    fs.unlinkSync(path.join(local,'temporary.svg'));
     commit(peer,'remote'); git(peer,'push');
     state = await updater.check(local); assert.equal(state.kind,'behind'); assert.equal(state.behind,1); assert.equal(state.canUpdate,true);
     if (process.platform === 'win32') {
@@ -49,6 +52,9 @@ function commit(dir, name) { fs.writeFileSync(path.join(dir, name), name); git(d
     commit(local,'local'); state = await updater.check(local); assert.equal(state.kind,'diverged'); assert.equal(state.canUpdate,false);
     git(local,'-c','user.name=fixture','-c','user.email=fixture@example.test','pull','--no-rebase','--no-edit','-s','ours');
     state = await updater.check(local); assert.equal(state.kind,'ahead');
+    fs.writeFileSync(path.join(local,'temporary.svg'),'keep');
+    state = await updater.check(local); assert.equal(state.kind,'ahead'); assert.equal(state.canUpdate,false);
+    fs.unlinkSync(path.join(local,'temporary.svg'));
     await assert.rejects(updater.check(peer),/다른|프로젝트/);
     git(local,'checkout','--detach'); await assert.rejects(updater.check(local));
     git(local,'checkout','main');

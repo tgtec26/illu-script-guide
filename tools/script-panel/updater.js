@@ -29,9 +29,9 @@ function createUpdater(panelDir, stateDir) {
         var upstream = await git(['rev-parse','FETCH_HEAD']);
         var counts = (await git(['rev-list','--left-right','--count',local + '...' + upstream])).split(/\s+/).map(Number);
         var dirty = !!(await git(['status','--porcelain','--untracked-files=normal']));
-        var kind = dirty ? 'dirty' : counts[0] && counts[1] ? 'diverged' : counts[1] ? 'behind' : counts[0] ? 'ahead' : 'current';
+        var kind = counts[0] && counts[1] ? 'diverged' : counts[1] ? (dirty ? 'dirty' : 'behind') : counts[0] ? 'ahead' : 'current';
         return {kind:kind, local:local.slice(0,7), remote:upstream.slice(0,7), branch:branch,
-            ahead:counts[0], behind:counts[1], canUpdate:kind === 'behind'};
+            ahead:counts[0], behind:counts[1], dirty:dirty, canUpdate:kind === 'behind'};
     }
     function readJob() {
         try {
@@ -60,7 +60,7 @@ function createUpdater(panelDir, stateDir) {
             var old = readJob();
             if (old && (old.state === 'waiting' || old.state === 'running')) throw new Error('이미 업데이트가 예약되어 있습니다. Illustrator를 종료하세요.');
             var state = await check(root);
-            if (!state.canUpdate && !(old && old.state === 'failed' && state.kind === 'current')) throw new Error('업데이트할 수 없는 상태입니다. 상태를 다시 확인하세요.');
+            if (!state.canUpdate && !(old && old.state === 'failed' && state.kind === 'current' && !state.dirty)) throw new Error('업데이트할 수 없는 상태입니다. 상태를 다시 확인하세요.');
             if (process.platform !== 'win32' && process.platform !== 'darwin') throw new Error('Windows와 macOS에서 지원합니다.');
             fs.mkdirSync(dir,{recursive:true});
             var lock = path.join(dir,'launch.lock');
