@@ -20,7 +20,9 @@
                 <Resources>
                     <MainPath>./index.html</MainPath>
                     <ScriptPath>./host.jsx</ScriptPath>
-                    <CEFCommandLine />
+                    <CEFCommandLine>
+                        <Parameter>--enable-nodejs</Parameter>
+                    </CEFCommandLine>
                 </Resources>
                 <Lifecycle>
                     <AutoVisible>true</AutoVisible>

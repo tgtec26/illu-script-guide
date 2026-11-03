@@ -288,9 +288,81 @@
         t.appendChild(icon(S.theme === "light" ? "sun" : "moon"));
     }
 
+    // Node runs Git in a separate process; no shell commands go through evalScript.
+    var updater = null, updateBusy = false, updateReady = false;
+    function updateMessage(text, detail, error) {
+        $("updateText").textContent = text;
+        $("updateVersions").textContent = detail || "";
+        $("updates").className = error ? "error" : "";
+        $("checkUpdate").disabled = updateBusy;
+        $("updateNow").disabled = updateBusy || !updateReady;
+    }
+    function initUpdater() {
+        if (updater) return;
+        var node = window.cep_node;
+        if (!node || !node.require) throw new Error("업데이트 기능을 사용하려면 Illustrator를 재시작해 패널을 다시 여세요.");
+        var path = node.require("path");
+        var file = node.require("url").fileURLToPath(window.location.href);
+        var panelDir = path.dirname(file);
+        updater = node.require(path.join(panelDir, "updater.js")).createUpdater(panelDir);
+    }
+    function checkUpdate() {
+        if (updateBusy) return;
+        updateBusy = true; updateReady = false;
+        updateMessage("원격 상태 확인 중…");
+        try {
+            initUpdater();
+            var job = updater.readJob();
+            if (job && (job.state === "waiting" || job.state === "running")) {
+                updateBusy = false;
+                updateMessage(job.message, "업데이트가 예약되어 있습니다. Illustrator를 완전히 종료하세요.");
+                return;
+            }
+        } catch (e) {
+            updateBusy = false; updateMessage(e.message, "Git 설치와 패널 연결 상태를 확인하세요.", true); return;
+        }
+        updater.check(S.root).then(function (state) {
+            updateBusy = false; updateReady = state.canUpdate;
+            var messages = {
+                current: "최신 버전입니다.",
+                behind: "원격에 새 버전이 있습니다. 업데이트해 주세요.",
+                ahead: "로컬에만 있는 커밋이 있습니다.",
+                diverged: "로컬과 원격의 변경이 갈라져 있습니다. Git에서 먼저 정리하세요.",
+                dirty: "로컬 수정 파일이 있습니다. 변경을 정리한 뒤 업데이트하세요."
+            };
+            var detail = "로컬 " + state.local + " · 원격 " + state.remote;
+            if (state.behind) detail += " · 새 커밋 " + state.behind + "개";
+            var last = updater.readJob();
+            var retry = last && last.state === "failed" && state.kind === "current";
+            if (retry) updateReady = true;
+            $("updateNow").textContent = retry ? "설치 재시도" : "업데이트";
+            if (last && (last.state === "done" || last.state === "failed")) {
+                detail += " · " + last.message;
+                $("updateVersions").title = last.log ? "업데이트 로그: " + last.log : "";
+            }
+            updateMessage(retry ? "설치가 완료되지 않았습니다. 다시 시도하세요." : messages[state.kind], detail, retry || state.kind === "diverged" || state.kind === "dirty");
+        }).catch(function (e) {
+            updateBusy = false; updateReady = false;
+            updateMessage("원격 상태를 확인하지 못했습니다.", e.message, true);
+        });
+    }
+    $("checkUpdate").onclick = checkUpdate;
+    $("updateNow").onclick = function () {
+        if (updateBusy || !updateReady || S.busy) return;
+        updateBusy = true; updateReady = false;
+        updateMessage("업데이트 준비 중…");
+        updater.schedule(S.root).then(function (job) {
+            updateBusy = false;
+            updateMessage(job.message, "저장 후 Illustrator를 종료하세요. 종료 후 Git 갱신과 전체 설치를 진행합니다.");
+        }).catch(function (e) {
+            updateBusy = false;
+            updateMessage("업데이트를 시작하지 못했습니다.", e.message, true);
+        });
+    };
+
     $("pick").onclick = function () {
         host("spPickFolder", S.root).then(function (r) {
-            if (r && r !== "EvalScript error.") { S.root = r; save("root", r); refresh(); }
+            if (r && r !== "EvalScript error.") { S.root = r; save("root", r); refresh(); checkUpdate(); }
         });
     };
     $("refresh").onclick = refresh;
@@ -314,5 +386,6 @@
     (S.root ? Promise.resolve("") : host("spDefaultRoot")).then(function (r) {
         if (r && r !== "EvalScript error.") { S.root = r; save("root", r); }
         refresh();
+        checkUpdate();
     });
 })();
