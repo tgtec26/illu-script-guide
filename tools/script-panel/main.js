@@ -290,7 +290,7 @@
     }
 
     // Node runs Git in a separate process; no shell commands go through evalScript.
-    var updater = null, updateBusy = false, updateReady = false, lastUpdateCheck = 0;
+    var updater = null, updateBusy = false, updateReady = false;
     function updateMessage(text, detail, error) {
         $("updateText").textContent = text;
         $("updateVersions").textContent = detail || "";
@@ -308,7 +308,6 @@
     }
     function checkUpdate() {
         if (updateBusy || S.busy) return;
-        lastUpdateCheck = Date.now();
         updateBusy = true; updateReady = false;
         updateMessage("원격 상태 확인 중…");
         try {
@@ -349,12 +348,6 @@
             updateMessage("원격 상태를 확인하지 못했습니다.", e.message, true);
         });
     }
-    // Check on open, every five minutes, and on focus after a one-minute cooldown.
-    var updateTimer = window.setInterval(checkUpdate, 5 * 60 * 1000);
-    window.addEventListener("focus", function () {
-        if (Date.now() - lastUpdateCheck >= 60 * 1000) checkUpdate();
-    });
-    window.addEventListener("unload", function () { window.clearInterval(updateTimer); });
     $("updateNow").onclick = function () {
         if (updateBusy || !updateReady || S.busy) return;
         updateBusy = true; updateReady = false;
@@ -370,7 +363,7 @@
 
     $("pick").onclick = function () {
         host("spPickFolder", S.root).then(function (r) {
-            if (r && r !== "EvalScript error.") { S.root = r; save("root", r); refresh(); checkUpdate(); }
+            if (r && r !== "EvalScript error.") { S.root = r; save("root", r); refresh(); updateReady = false; updateMessage("폴더를 변경했습니다. 패널을 다시 열면 상태를 확인합니다."); }
         });
     };
     $("refresh").onclick = refresh;
