@@ -1,10 +1,11 @@
 ﻿#Requires -Version 5.1
 # 항상 전체 세팅: 스크립트 + 단축키(.kys) + 화살표(.ai) + 폭 프로파일
-# 베타처럼 폴더 이름에 연도가 없으면 자동으로 못 고른다. 직접 지정한다:
+# 기본 실행은 설치된 정식판과 Beta 모두 갱신한다. 하나만 지정하려면:
 #   setup-windows.cmd -IllustratorAppDir "C:\Program Files\Adobe\Adobe Illustrator (Beta)" -IllustratorVer "31.0.0 Beta"
 param(
     [string]$IllustratorAppDir = $env:ILLUSTRATOR_APP_DIR,
-    [string]$IllustratorVer = $env:ILLUSTRATOR_VER
+    [string]$IllustratorVer = $env:ILLUSTRATOR_VER,
+    [switch]$PauseOnExit
 )
 $ErrorActionPreference = "Stop"
 
@@ -15,6 +16,7 @@ $KysName = "cjhwin261022.kys"
 $ArrowName = "화살표.ai"
 $WidthProfileName = "폭속성1.txt"
 
+try {
 Write-Host "illu-script 세팅/업데이트 (Windows)"
 
 function Test-IsAdministrator {
@@ -35,8 +37,10 @@ function Restart-AsAdministrator {
     # 관리자 창은 환경 변수를 이어받지 못하므로 인자로 넘긴다
     if ($IllustratorAppDir) { $Arguments += @("-IllustratorAppDir", "`"$IllustratorAppDir`"") }
     if ($IllustratorVer) { $Arguments += @("-IllustratorVer", "`"$IllustratorVer`"") }
-    Start-Process -FilePath $PowerShellExe -ArgumentList $Arguments -Verb RunAs | Out-Null
-    exit
+    if ($PauseOnExit) { $Arguments += "-PauseOnExit" }
+    $Child = Start-Process -FilePath $PowerShellExe -ArgumentList $Arguments -Verb RunAs -Wait -PassThru
+    $script:PauseOnExit = $false
+    exit $Child.ExitCode
 }
 
 function Get-IllustratorInstallDirs {
@@ -71,8 +75,24 @@ function Get-IllustratorInstallDirs {
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Host "Git이 필요합니다. Git for Windows 설치 후 다시 실행하세요."
     Write-Host "https://git-scm.com/download/win"
-    Read-Host "Enter 키를 누르면 닫습니다"
-    exit 1
+    throw "Git을 설치한 뒤 다시 실행하세요."
+}
+
+# 설치와 Git 갱신을 한 관리자 창에서 한 번만 수행한다.
+if (-not (Test-IsAdministrator)) { Restart-AsAdministrator }
+if (Get-Process -Name "Illustrator" -ErrorAction SilentlyContinue) {
+    throw "Illustrator를 완전히 종료한 뒤 다시 실행하세요. 전체 업데이트에 종료가 필요합니다."
+}
+if ($IllustratorVer -and -not $IllustratorAppDir) {
+    throw "IllustratorVer를 지정할 때는 IllustratorAppDir도 함께 지정하세요."
+}
+
+function Invoke-RepoGit {
+    param([string[]]$GitArguments)
+    & git @GitArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git 갱신 실패 (종료 코드 $LASTEXITCODE). 위 오류를 확인하세요. 로컬 변경은 자동으로 지우지 않습니다."
+    }
 }
 
 # 저장소 안에서 실행하면 그 저장소를, 아니면 GitHub 사본을 원본으로 쓴다.
@@ -83,18 +103,18 @@ if (Test-Path (Join-Path $SelfDir $SourceSubdir)) {
     Write-Host "원본: 이 저장소 ($RepoDir)"
     if (Test-Path (Join-Path $RepoDir ".git")) {
         Write-Host "GitHub 최신본 확인 중..."
-        try { git -C $RepoDir pull --ff-only } catch { Write-Host "  (pull 실패, 현재 상태로 진행)" }
+        Invoke-RepoGit -GitArguments @("-C", $RepoDir, "pull", "--ff-only")
     }
 } else {
     $RepoDir = $CacheDir
     Write-Host "원본: GitHub 사본 ($RepoDir)"
     if (Test-Path (Join-Path $CacheDir ".git")) {
         Write-Host "GitHub 최신본 확인 중..."
-        git -C $CacheDir pull --ff-only
+        Invoke-RepoGit -GitArguments @("-C", $CacheDir, "pull", "--ff-only")
     } else {
         Write-Host "GitHub 저장소 내려받는 중..."
         New-Item -ItemType Directory -Force -Path (Split-Path $CacheDir) | Out-Null
-        git clone $RepoUrl $CacheDir
+        Invoke-RepoGit -GitArguments @("clone", $RepoUrl, $CacheDir)
     }
 }
 
@@ -103,41 +123,28 @@ if (-not (Test-Path $SourceDir)) {
     throw "스크립트 폴더를 찾지 못했습니다: $SourceDir"
 }
 
+function Get-IllustratorSettingsVersion {
+    param($AppDir)
+    if ($IllustratorVer) { return $IllustratorVer }
+    if ($AppDir.Name -match "20\d\d") { return [string]([int]$Matches[0] - 1996) }
+    $Exe = Join-Path $AppDir.FullName "Support Files\Contents\Windows\Illustrator.exe"
+    if (-not (Test-Path -LiteralPath $Exe)) { throw "Illustrator 실행 파일 없음: $Exe" }
+    $VersionInfo = (Get-Item -LiteralPath $Exe).VersionInfo
+    $Version = "{0}.{1}.{2}" -f $VersionInfo.FileMajorPart, $VersionInfo.FileMinorPart, $VersionInfo.FileBuildPart
+    if ($VersionInfo.FileMajorPart -lt 1) { throw "Illustrator 버전을 확인하지 못했습니다: $Exe" }
+    if ($AppDir.Name -match "Beta") { return "$Version Beta" }
+    return [string]$VersionInfo.FileMajorPart
+}
+
 $AllDirs = @(Get-IllustratorInstallDirs | Sort-Object -Property FullName -Unique)
 if ($IllustratorAppDir) {
-    if (-not (Test-Path -LiteralPath $IllustratorAppDir)) {
-        throw "지정한 Illustrator 폴더가 없습니다: $IllustratorAppDir"
-    }
-    $AppDir = Get-Item -LiteralPath $IllustratorAppDir
-} else {
-    $AppDir = $AllDirs |
-        Sort-Object @{ Expression = {
-            if ($_.Name -match "20\d\d") { [int]$Matches[0] } else { 0 }
-        } } -Descending |
-        Select-Object -First 1
+    $AllDirs = @(Get-Item -LiteralPath $IllustratorAppDir)
 }
+if ($AllDirs.Count -eq 0) { throw "Illustrator 설치 폴더를 찾지 못했습니다." }
 
-if (-not $AppDir) {
-    throw "Illustrator 설치 폴더를 찾지 못했습니다."
-}
-
-$Year = if ($AppDir.Name -match "20\d\d") { [int]$Matches[0] } else { 0 }
-if ($IllustratorVer) {
-    $Ver = $IllustratorVer   # 베타: "31.0.0 Beta" (설정 폴더 이름 "Adobe Illustrator 31.0.0 Beta Settings")
-} elseif ($Year -ge 1997) {
-    $Ver = $Year - 1996      # 2026 -> 30
-} else {
-    throw "'$($AppDir.Name)' 폴더에는 연도가 없어 설정 폴더를 알 수 없습니다. -IllustratorVer `"31.0.0 Beta`" 처럼 버전을 함께 지정하세요."
-}
-
-# 연도 없는 폴더(베타)가 따로 있는데 고르지 않았다면 알려 준다. 지금 쓰는 일러가 그쪽이면 스크립트 메뉴·액션이 안 먹는다
-if (-not $IllustratorAppDir) {
-    $Skipped = $AllDirs | Where-Object { $_.FullName -ne $AppDir.FullName -and $_.Name -notmatch "20\d\d" }
-    foreach ($S in $Skipped) {
-        Write-Host "주의: '$($S.Name)'는 연도가 없어 자동으로 고르지 않았습니다. 이 일러에 설치하려면:"
-        Write-Host "  setup-windows.cmd -IllustratorAppDir `"$($S.FullName)`" -IllustratorVer `"31.0.0 Beta`""
-    }
-}
+function Install-Illustrator {
+param($AppDir)
+$Ver = Get-IllustratorSettingsVersion $AppDir
 
 $PresetRoots = @(
     (Join-Path $AppDir.FullName "Presets"),
@@ -182,7 +189,7 @@ New-Item -ItemType Directory -Force -Path $TargetPath | Out-Null
 # Illustrator는 스크립트 폴더 안의 링크를 건너뛴다.
 # 그래서 실제 폴더를 만들고, 원본을 그대로 실행하는 한 줄짜리 스텁을 넣는다.
 # 원본을 고치거나 git pull 하면 재실행 없이 바로 반영된다.
-$StubCount = 0
+$script:StubCount = 0
 Get-ChildItem -Path $SourceDir -Directory | ForEach-Object {
     $Dir = Join-Path $TargetPath $_.Name
     if (Test-Path $Dir) {
@@ -215,7 +222,7 @@ Get-ChildItem -Path $SourceDir -Directory | ForEach-Object {
     Write-Host "  등록: $($_.Name)"
 }
 
-Write-Host "  스크립트 $StubCount개 등록 완료 -> $TargetPath"
+Write-Host "  스크립트 ${script:StubCount}개 등록 완료 -> $TargetPath"
 
 # -Full: 단축키(.kys) → 설정 폴더 ko_KR\x64 (없으면 ko_KR)
 $KysSrc = Join-Path $RepoDir $KysName
@@ -310,6 +317,9 @@ if (Test-Path $WidthProfileSrc) {
     Write-Host "  폭 프로파일 파일 없음(건너뜀): $WidthProfileSrc"
 }
 
+}
+foreach ($AppDir in $AllDirs) { Install-Illustrator $AppDir }
+
 # 스크립트 패널(CEP): 개발자 모드를 켜고 확장 폴더에 원본의 tools\script-panel을 연결한다. 원본이 갱신되면 패널도 같이 갱신된다
 $PanelSrc = Join-Path $RepoDir "tools\script-panel"
 if (Test-Path (Join-Path $PanelSrc "CSXS\manifest.xml")) {
@@ -349,3 +359,10 @@ Write-Host "  6) 창 > 확장 프로그램 > 스크립트 패널 (처음이면 �
 Write-Host ""
 Write-Host "이후 스크립트 내용 수정은 원본만 고치면 바로 반영됩니다."
 Write-Host "스크립트 파일을 추가·삭제·이름변경했을 때만 이 명령을 다시 실행하세요."
+
+} catch {
+    Write-Host "업데이트 실패: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+} finally {
+    if ($PauseOnExit) { Read-Host "Enter 키를 누르면 닫습니다" | Out-Null }
+}

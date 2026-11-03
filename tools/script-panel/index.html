@@ -53,6 +53,14 @@ button { font: inherit; color: var(--fg); background: transparent; border: 0; pa
 .empty { padding: 12px 10px; color: var(--dim); }
 #status { padding: 4px 10px; min-height: 24px; color: var(--dim); border-top: 1px solid var(--line); font-size: 11px; }
 #status.err { color: #ff6b6b; }
+#updates { flex: none; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+#updateText { font-size: 12px; }
+#updateVersions { color: var(--dim); font-size: 11px; margin-top: 3px; user-select: text; }
+#updateNow:disabled { opacity: .45; cursor: default; }
+#updateNow:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+#updateNow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#updates.error #updateText { color: #ff6b6b; }
+.light #updates.error #updateText { color: #b42318; }
 </style>
 </head>
 <body>
@@ -60,9 +68,14 @@ button { font: inherit; color: var(--fg); background: transparent; border: 0; pa
     <button id="pick" class="ib" title="스크립트 폴더 지정"></button>
     <button id="refresh" class="ib" title="새로고침"></button>
     <input id="q" type="text" placeholder="검색" spellcheck="false">
+    <button id="updateNow" class="ib" type="button" title="업데이트" aria-label="업데이트" disabled></button>
     <button id="theme" title="다크 / 화이트 테마 전환"><span class="sw"><i></i></span><span id="themeIcon"></span></button>
 </div>
 <div id="path" title=""></div>
+<section id="updates" aria-label="프로젝트 업데이트">
+    <div id="updateText" role="status" aria-live="polite">업데이트 상태를 확인합니다.</div>
+    <div id="updateVersions"></div>
+</section>
 <div id="favs"></div>
 <div id="list"></div>
 <div id="status"></div>
