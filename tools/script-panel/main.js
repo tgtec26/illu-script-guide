@@ -13,6 +13,7 @@
         chev: '<svg class="chev" viewBox="0 0 10 10"><path d="M3 1.5l4 3.5-4 3.5z"/></svg>',
         star: '<svg viewBox="0 0 24 24"><path d="M12 2.8l2.8 5.9 6.4.9-4.7 4.5 1.2 6.4L12 17.4l-5.7 3.1 1.2-6.4-4.7-4.5 6.4-.9z"/></svg>',
         pick: '<svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2.2h8.4A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/><path d="M12 11v6M9 14h6"/></svg>',
+        update: '<svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 16v4h16v-4"/></svg>',
         refresh: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4.5h-4.5"/></svg>',
         sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
         moon: '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg>'
@@ -289,12 +290,11 @@
     }
 
     // Node runs Git in a separate process; no shell commands go through evalScript.
-    var updater = null, updateBusy = false, updateReady = false;
+    var updater = null, updateBusy = false, updateReady = false, lastUpdateCheck = 0;
     function updateMessage(text, detail, error) {
         $("updateText").textContent = text;
         $("updateVersions").textContent = detail || "";
         $("updates").className = error ? "error" : "";
-        $("checkUpdate").disabled = updateBusy;
         $("updateNow").disabled = updateBusy || !updateReady;
     }
     function initUpdater() {
@@ -307,7 +307,8 @@
         updater = node.require(path.join(panelDir, "updater.js")).createUpdater(panelDir);
     }
     function checkUpdate() {
-        if (updateBusy) return;
+        if (updateBusy || S.busy) return;
+        lastUpdateCheck = Date.now();
         updateBusy = true; updateReady = false;
         updateMessage("원격 상태 확인 중…");
         try {
@@ -335,7 +336,9 @@
             var last = updater.readJob();
             var retry = last && last.state === "failed" && state.kind === "current";
             if (retry) updateReady = true;
-            $("updateNow").textContent = retry ? "설치 재시도" : "업데이트";
+            var actionLabel = retry ? "설치 재시도" : "업데이트";
+            $("updateNow").title = actionLabel;
+            $("updateNow").setAttribute("aria-label", actionLabel);
             if (last && (last.state === "done" || last.state === "failed")) {
                 detail += " · " + last.message;
                 $("updateVersions").title = last.log ? "업데이트 로그: " + last.log : "";
@@ -346,7 +349,12 @@
             updateMessage("원격 상태를 확인하지 못했습니다.", e.message, true);
         });
     }
-    $("checkUpdate").onclick = checkUpdate;
+    // Check on open, every five minutes, and on focus after a one-minute cooldown.
+    var updateTimer = window.setInterval(checkUpdate, 5 * 60 * 1000);
+    window.addEventListener("focus", function () {
+        if (Date.now() - lastUpdateCheck >= 60 * 1000) checkUpdate();
+    });
+    window.addEventListener("unload", function () { window.clearInterval(updateTimer); });
     $("updateNow").onclick = function () {
         if (updateBusy || !updateReady || S.busy) return;
         updateBusy = true; updateReady = false;
@@ -381,6 +389,7 @@
     S.theme = load("theme", "dark") === "light" ? "light" : "dark";
     $("pick").appendChild(icon("pick"));
     $("refresh").appendChild(icon("refresh"));
+    $("updateNow").appendChild(icon("update"));
     applyTheme();
 
     (S.root ? Promise.resolve("") : host("spDefaultRoot")).then(function (r) {
