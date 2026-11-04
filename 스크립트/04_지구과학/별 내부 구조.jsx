@@ -62,6 +62,7 @@ try {
         centerY = (bounds[1] + bounds[3]) / 2;
     }
     var radius = diameter / 2;
+    var sizePercent = 100;
 
     var shellCount = 6;
     var cutDeg = 180;
@@ -79,7 +80,7 @@ try {
     var sourceWasHidden = source !== null ? source.hidden : false;
 
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
-    var DEFAULTS = {shellCount: shellCount, cutDeg: cutDeg, rotationDeg: rotationDeg, contrastK: contrastK, viewX: viewX, viewY: viewY, viewZ: viewZ, offsetXmm: offsetXmm, offsetYmm: offsetYmm};
+    var DEFAULTS = {shellCount: shellCount, cutDeg: cutDeg, rotationDeg: rotationDeg, contrastK: contrastK, viewX: viewX, viewY: viewY, viewZ: viewZ, offsetXmm: offsetXmm, offsetYmm: offsetYmm, sizePercent: sizePercent};
     applySavedSettings();
 
     var LABEL_WIDTH = 66;
@@ -102,6 +103,11 @@ try {
     // 축 선을 감추면 두 절단면이 붙어 보이므로 왼쪽 면을 어둡게 해 대비를 준다
     var contrastField = addNumberField(optionPanel, "왼쪽 대비", "K", contrastK, 5, 0, 50, DEFAULTS.contrastK);
     contrastField.row.enabled = !axisLineOn;
+    var sizeField = addNumberField(optionPanel, "별 크기", "%", sizePercent, 1, 10, 300, DEFAULTS.sizePercent);
+    sizeField.input.characters = 4;
+    sizeField.input.preferredSize.width = 46;
+    sizeField.slider.preferredSize.width = 118;
+    sizeField.row.helpTip = "기준 원의 지름에 대한 크기 (%)";
 
     var viewPanel = addPanel(dlg, "구를 바라보는 시점");
     var viewXField = addNumberField(viewPanel, "X축", "°", viewX, 5, -180, 180, DEFAULTS.viewX);
@@ -578,6 +584,7 @@ try {
     }
 
     function readFields(showAlert) {
+        var size = parseNumber(sizeField.input.text);
         var shells = parseNumber(shellField.input.text);
         var cut = parseNumber(cutField.input.text);
         var rotation = parseNumber(rotationField.input.text);
@@ -588,6 +595,10 @@ try {
         var vy = parseNumber(viewYField.input.text);
         var vz = parseNumber(viewZField.input.text);
 
+        if (size === null || size < 10 || size > 300) {
+            if (showAlert) alert("별 크기는 10부터 300% 사이로 입력해주세요.");
+            return false;
+        }
         if (shells === null || shells < 2) {
             if (showAlert) alert("껍질 수는 2 이상의 정수로 입력해주세요.");
             return false;
@@ -614,6 +625,8 @@ try {
             return false;
         }
 
+        sizePercent = size;
+        radius = diameter * sizePercent / 200;
         shellCount = Math.round(shells);
         cutDeg = cut;
         rotationDeg = rotation;
@@ -765,8 +778,8 @@ try {
     }
 
     function saveSettings() {
-        var parts = ["v6", shellCount, cutDeg, rotationDeg, viewX, viewY, viewZ,
-            axisLineOn ? 1 : 0, contrastK, offsetXmm, offsetYmm];
+        var parts = ["v7", shellCount, cutDeg, rotationDeg, viewX, viewY, viewZ,
+            axisLineOn ? 1 : 0, contrastK, offsetXmm, offsetYmm, sizePercent];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
 
@@ -775,8 +788,8 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if ((p[0] !== "v3" && p[0] !== "v4" && p[0] !== "v5" && p[0] !== "v6") ||
-                p.length < 7) return;
+        var fieldCounts = {v3: 7, v4: 8, v5: 9, v6: 11, v7: 12};
+        if (!fieldCounts[p[0]] || p.length !== fieldCounts[p[0]]) return;
 
         var shells = parseInt(p[1], 10);
         var cut = parseFloat(p[2]);
@@ -791,15 +804,19 @@ try {
         if (vy >= -180 && vy <= 180) viewY = vy;
         if (vz >= -180 && vz <= 180) viewZ = vz;
         if (p[0] !== "v3" && p.length >= 8) axisLineOn = p[7] === "1";
-        if ((p[0] === "v5" || p[0] === "v6") && p.length >= 9) {
+        if (p[0] === "v5" || p[0] === "v6" || p[0] === "v7") {
             var contrast = parseFloat(p[8]);
             if (contrast >= 0 && contrast <= 50) contrastK = contrast;
         }
-        if (p[0] === "v6" && p.length >= 11) {
+        if (p[0] === "v6" || p[0] === "v7") {
             var offX = parseFloat(p[9]);
             var offY = parseFloat(p[10]);
             if (offX >= -POSITION_LIMIT_MM && offX <= POSITION_LIMIT_MM) offsetXmm = offX;
             if (offY >= -POSITION_LIMIT_MM && offY <= POSITION_LIMIT_MM) offsetYmm = offY;
+        }
+        if (p[0] === "v7") {
+            var size = parseNumber(p[11]);
+            if (size !== null && size >= 10 && size <= 300) sizePercent = size;
         }
     }
 })();
