@@ -294,7 +294,7 @@
         $("updateText").textContent = notice ? label : "";
         $("updates").hidden = !notice;
         $("updates").className = error ? "error" : "";
-        $("updateNow").disabled = updateBusy || !updateReady;
+        $("updateNow").disabled = updateBusy;
     }
     function initUpdater() {
         if (updater) return;
@@ -305,10 +305,10 @@
         var panelDir = path.dirname(file);
         updater = node.require(path.join(panelDir, "updater.js")).createUpdater(panelDir);
     }
-    function checkUpdate() {
+    function checkUpdate(notice) {
         if (updateBusy || S.busy) return;
         updateBusy = true; updateReady = false;
-        updateMessage("원격 상태 확인 중…");
+        updateMessage("원격 상태 확인 중…", "", false, "", notice);
         try {
             initUpdater();
             var job = updater.readJob();
@@ -318,7 +318,7 @@
                 return;
             }
         } catch (e) {
-            updateBusy = false; updateMessage(e.message, "Git 설치와 패널 연결 상태를 확인하세요.", true); return;
+            updateBusy = false; updateMessage(e.message, "Git 설치와 패널 연결 상태를 확인하세요.", true, "", notice); return;
         }
         updater.check(S.root).then(function (state) {
             updateBusy = false; updateReady = state.canUpdate;
@@ -338,14 +338,15 @@
             }
             updateMessage(retry ? "설치 재시도" : messages[state.kind], detail,
                 retry || state.kind === "diverged" || state.kind === "dirty",
-                retry || state.behind ? "attention" : "current");
+                retry || state.behind ? "attention" : "current", notice);
         }).catch(function (e) {
             updateBusy = false; updateReady = false;
-            updateMessage("원격 상태를 확인하지 못했습니다.", e.message, true);
+            updateMessage("원격 상태를 확인하지 못했습니다.", e.message, true, "", notice);
         });
     }
     $("updateNow").onclick = function () {
-        if (updateBusy || !updateReady || S.busy) return;
+        if (updateBusy || S.busy) return;
+        if (!updateReady) { checkUpdate(true); return; }
         updateBusy = true; updateReady = false;
         updateMessage("업데이트 준비 중…");
         updater.schedule(S.root).then(function (job) {
@@ -358,7 +359,7 @@
             });
         }).catch(function (e) {
             updateBusy = false;
-            updateMessage("업데이트를 시작하지 못했습니다.", e.message, true);
+            updateMessage("업데이트를 시작하지 못했습니다.", e.message, true, "", true);
         });
     };
 
