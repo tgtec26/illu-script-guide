@@ -62,7 +62,8 @@ try {
         strokeK: {label: "선 색", unit: "K", min: 0, max: 100, step: 10},
         fillK: {label: "내부 색", unit: "K", min: 0, max: 100, step: 10},
         offsetX: {label: "가로", unit: "mm", min: -POSITION_LIMIT_MM, max: POSITION_LIMIT_MM, step: 0.1},
-        offsetY: {label: "세로", unit: "mm", min: -POSITION_LIMIT_MM, max: POSITION_LIMIT_MM, step: 0.1}
+        offsetY: {label: "세로", unit: "mm", min: -POSITION_LIMIT_MM, max: POSITION_LIMIT_MM, step: 0.1},
+        gradientMid: {label: "중간점", unit: "%", min: 13, max: 87, step: 1}
     };
 
     var values = {
@@ -74,11 +75,16 @@ try {
         strokeK: 0,
         fillK: 100,
         offsetX: 0,
-        offsetY: 0
+        offsetY: 0,
+        gradientMid: 50
     };
     var addWhiteLine = true;
+    var useGradient = false;
+    var gradientStart = 0xFFFFFF;
+    var gradientEnd = 0x000000;
     var previewEnabled = true;
     var previewItems = [];
+    var previewGradients = [];
 
     // 저장된 값을 덮기 전의 값이 R 버튼의 초기값이다
     var DEFAULTS = {};
@@ -118,6 +124,23 @@ try {
     var positionPanel = addPanel(dlg, "위치");
     bindPositionRow(addValueRow(positionPanel, "offsetX"), true);
     bindPositionRow(addValueRow(positionPanel, "offsetY"), false);
+
+    var gradientPanel = addPanel(dlg, "그라데이션");
+    var gradientCheck = gradientPanel.add("checkbox", undefined, "선형 그라데이션");
+    gradientCheck.value = useGradient;
+    var colorRow = gradientPanel.add("group");
+    var startButton = colorRow.add("button", undefined, "시작 색");
+    var endButton = colorRow.add("button", undefined, "끝 색");
+    var midControls = addValueRow(gradientPanel, "gradientMid");
+    bindValueRow(midControls);
+    function enableGradientControls() {
+        startButton.enabled = endButton.enabled = useGradient;
+        midControls.input.enabled = midControls.slider.enabled = midControls.reset.enabled = useGradient;
+    }
+    gradientCheck.onClick = function() { useGradient = gradientCheck.value; enableGradientControls(); updatePreview(); };
+    startButton.onClick = function() { var c = $.colorPicker(gradientStart); if (c >= 0) { gradientStart = c; updatePreview(); } };
+    endButton.onClick = function() { var c = $.colorPicker(gradientEnd); if (c >= 0) { gradientEnd = c; updatePreview(); } };
+    enableGradientControls();
 
     var footer = dlg.add("group");
     var previewCheck = footer.add("checkbox", undefined, "미리보기");
@@ -169,6 +192,12 @@ try {
         if (previewItems.length === 0) {
             buildResult();
         }
+        if (previewItems.length !== sourcePaths.length) {
+            clearPreview();
+            hideSources(false);
+            alert("화살표를 만들지 못해 원본을 복원했습니다. 선택한 패스와 그라데이션 설정을 확인해 주세요.");
+            return;
+        }
         for (var r = 0; r < sourcePaths.length; r++) {
             try { sourcePaths[r].remove(); } catch (e) {}
         }
@@ -215,14 +244,29 @@ try {
             } catch (e) {}
             if (outline === null) continue;
 
+            var arrow = null;
             try {
                 var color = makeKColor(values.fillK);
-                var arrow = source.duplicate();
+                arrow = source.duplicate();
                 arrow.hidden = false;
                 setPathNodes(arrow, outline);
                 arrow.closed = true;
                 arrow.filled = true;
                 arrow.fillColor = color;
+                if (useGradient) {
+                    var gradient = doc.gradients.add();
+                    previewGradients.push(gradient);
+                    gradient.type = GradientType.LINEAR;
+                    gradient.gradientStops[0].color = makeRGBColor(gradientStart);
+                    gradient.gradientStops[1].color = makeRGBColor(gradientEnd);
+                    gradient.gradientStops[0].midPoint = values.gradientMid;
+                    var fill = new GradientColor();
+                    fill.gradient = gradient;
+                    arrow.fillColor = fill;
+                    var pts = readPathPoints(source);
+                    var angle = gradientDirection(pts[0].anchor, pts[pts.length - 1].anchor);
+                    arrow.rotate(angle - arrow.fillColor.angle, false, false, true, false, Transformation.CENTER);
+                }
                 if (white !== null) {
                     arrow.stroked = true;
                     arrow.strokeColor = white;
@@ -235,7 +279,9 @@ try {
                 }
                 if (dx !== 0 || dy !== 0) arrow.translate(dx, dy);
                 previewItems.push(arrow);
-            } catch (e2) {}
+            } catch (e2) {
+                if (arrow !== null) try { arrow.remove(); } catch (cleanupError) {}
+            }
         }
         if (white !== null) alignStrokesOutside(previewItems);
     }
@@ -327,6 +373,18 @@ try {
         return color;
     }
 
+    function makeRGBColor(value) {
+        var color = new RGBColor();
+        color.red = (value >> 16) & 255;
+        color.green = (value >> 8) & 255;
+        color.blue = value & 255;
+        return color;
+    }
+
+    function gradientDirection(start, end) {
+        return Math.atan2(end[1] - start[1], end[0] - start[0]) * 180 / Math.PI;
+    }
+
     function readPathPoints(pathItem) {
         var points = [];
         for (var i = 0; i < pathItem.pathPoints.length; i++) {
@@ -347,6 +405,10 @@ try {
             try { previewItems[i].remove(); } catch (e) {}
         }
         previewItems = [];
+        for (var j = previewGradients.length - 1; j >= 0; j--) {
+            try { previewGradients[j].remove(); } catch (e2) {}
+        }
+        previewGradients = [];
     }
 
     // 라벨 (단위): | 입력창 | 스크롤바
@@ -395,7 +457,7 @@ try {
             if (before === after) return;
             var color = makeKColor(after);
             for (var i = 0; i < previewItems.length; i++) {
-                if (controls.key === "fillK") previewItems[i].fillColor = color;
+                if (controls.key === "fillK") { if (!useGradient) previewItems[i].fillColor = color; }
                 else if (addWhiteLine) previewItems[i].strokeColor = color;
             }
             if (previewItems.length > 0) app.redraw();
@@ -466,7 +528,7 @@ try {
 
     function saveSettings() {
         var parts = [
-            "v3",
+            "v4",
             values.startWidth,
             values.endWidth,
             values.headLength,
@@ -476,7 +538,11 @@ try {
             values.offsetX,
             values.offsetY,
             values.strokeK,
-            values.fillK
+            values.fillK,
+            useGradient ? "1" : "0",
+            gradientStart,
+            gradientEnd,
+            values.gradientMid
         ];
         try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (e) {}
     }
@@ -486,7 +552,8 @@ try {
         try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (e) { return; }
         if (!raw) return;
         var p = raw.split("|");
-        if (p[0] !== "v3" || p.length !== 11) return;
+        var oldSettings = p[0] === "v3" && p.length === 11;
+        if (!oldSettings && (p[0] !== "v4" || p.length !== 15)) return;
 
         var keys = ["startWidth", "endWidth", "headLength", "headWidth"];
         for (var i = 0; i < keys.length; i++) {
@@ -498,6 +565,12 @@ try {
         restoreValue("offsetY", p[8]);
         restoreValue("strokeK", p[9]);
         restoreValue("fillK", p[10]);
+        if (!oldSettings) {
+            if (p[11] === "0" || p[11] === "1") useGradient = p[11] === "1";
+            if (/^\d+$/.test(p[12]) && Number(p[12]) <= 16777215) gradientStart = Number(p[12]);
+            if (/^\d+$/.test(p[13]) && Number(p[13]) <= 16777215) gradientEnd = Number(p[13]);
+            restoreValue("gradientMid", p[14]);
+        }
     }
 
     function restoreValue(key, text) {

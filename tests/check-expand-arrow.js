@@ -6,6 +6,15 @@ const root = path.resolve(__dirname, "..");
 const scriptPath = path.join(root, "스크립트", "06_도형", "확장 화살표.jsx");
 const source = fs.readFileSync(scriptPath, "utf8");
 
+// 선형 그라데이션은 중심선 시작점에서 끝점 방향을 따른다.
+{
+  const direction = new Function(`${extractFunction("gradientDirection")} return gradientDirection;`)();
+  assert.strictEqual(direction([0, 0], [10, 0]), 0);
+  assert.strictEqual(direction([0, 0], [0, 10]), 90);
+  assert.strictEqual(direction([0, 0], [-10, 0]), 180);
+  assert.strictEqual(direction([2, 2], [2, 2]), 0);
+}
+
 // K 색은 CMY 없이 생성하고, 저장값은 새 형식과 10K 간격만 허용한다.
 {
   const makeColor = new Function("CMYKColor", `${extractFunction("makeKColor")} return makeKColor;`)(function() {});
@@ -13,16 +22,26 @@ const source = fs.readFileSync(scriptPath, "utf8");
     const color = makeColor(k);
     assert.deepStrictEqual([color.cyan, color.magenta, color.yellow, color.black], [0, 0, 0, k]);
   }
-  const values = {strokeK: 0, fillK: 100};
+  const values = {strokeK: 0, fillK: 100, gradientMid: 50};
   let raw = "v3|0|8|12|18|1|0.3|0|0|30|70";
   const app = {preferences: {getStringPreference: () => raw}};
   const rows = {strokeK: {min: 0, max: 100}, fillK: {min: 0, max: 100}};
+  rows.gradientMid = {min: 13, max: 87};
   for (const key of ["startWidth", "endWidth", "headLength", "headWidth", "whiteWidth", "offsetX", "offsetY"]) rows[key] = {min: -100, max: 200};
-  const load = new Function("app", "values", "ROWS", `var PREF_KEY = "test", addWhiteLine = true;
-    ${extractFunction("restoreValue")} ${extractFunction("applySavedSettings")} return applySavedSettings;`)(app, values, rows);
+  const settings = new Function("app", "values", "ROWS", `var PREF_KEY = "test", addWhiteLine = true, useGradient = false, gradientStart = 0xffffff, gradientEnd = 0;
+    ${extractFunction("restoreValue")} ${extractFunction("applySavedSettings")} return {load: applySavedSettings, gradient: function() { return [useGradient, gradientStart, gradientEnd]; }};`)(app, values, rows);
+  const load = settings.load;
   load();
   assert.strictEqual(values.strokeK, 30);
   assert.strictEqual(values.fillK, 70);
+  raw = "v4|0|8|12|18|1|0.3|0|0|30|70|1|16711680|255|70";
+  load();
+  assert.deepStrictEqual(settings.gradient(), [true, 16711680, 255]);
+  assert.strictEqual(values.gradientMid, 70);
+  raw = "v4|0|8|12|18|1|0.3|0|0|30|70|1|-1|16777216|99";
+  load();
+  assert.deepStrictEqual(settings.gradient(), [true, 16711680, 255]);
+  assert.strictEqual(values.gradientMid, 70);
   raw = "v3|0|8|12|18|1|0.3|0|0|35|110";
   load();
   assert.strictEqual(values.strokeK, 30);
