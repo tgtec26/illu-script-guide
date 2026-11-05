@@ -331,7 +331,7 @@
             };
             var detail = "";
             var last = updater.readJob();
-            var retry = last && last.state === "failed" && state.kind === "current" && !state.dirty;
+            var retry = last && last.state === "failed" && (state.kind === "current" || state.kind === "ahead") && !state.dirty;
             if (retry) updateReady = true;
             if (last && (last.state === "done" || last.state === "failed")) {
                 detail = last.message + (last.log ? "\n업데이트 로그: " + last.log : "");

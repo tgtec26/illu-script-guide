@@ -5,7 +5,7 @@ const vm = require('vm');
 const source = fs.readFileSync(path.join(__dirname, '../tools/script-panel/main.js'), 'utf8');
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-async function panel(check, schedule) {
+async function panel(check, schedule, job) {
     const elements = {};
     function element() {
         return {style:{}, hidden:true, disabled:false, firstChild:{},
@@ -13,7 +13,7 @@ async function panel(check, schedule) {
     }
     const document = {documentElement:{}, createElement:element,
         getElementById(id){ return elements[id] || (elements[id] = element()); }};
-    const updater = {check, schedule, readJob(){ return null; }};
+    const updater = {check, schedule, readJob(){ return job || null; }};
     vm.runInNewContext(source, {
         document, localStorage:{getItem(key){ return key === 'sp.root' ? '"/scripts"' : null; }},
         window:{location:{href:'file:///panel/index.html'},
@@ -54,6 +54,9 @@ async function panel(check, schedule) {
     await settle();
     assert.equal(ready.updates.hidden, false);
     assert(ready.updateText.textContent.includes('Illustrator를 종료'));
+
+    const retryAhead = await panel(async () => ({kind: 'ahead', behind:0, dirty:false, canUpdate:false}), async () => ({state: 'waiting', message: 'job'}), {state: 'failed', message: 'job'});
+    assert(retryAhead.updateNow.title.includes('설치 재시도'), '설치 재시도');
 
     const failed = await panel(async () => ({kind:'behind', behind:1, dirty:false, canUpdate:true}),
         async () => { throw new Error('Terminal launch failed'); });

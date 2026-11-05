@@ -60,7 +60,7 @@ function createUpdater(panelDir, stateDir) {
             var old = readJob();
             if (old && (old.state === 'waiting' || old.state === 'running')) throw new Error('이미 업데이트가 예약되어 있습니다. Illustrator를 종료하세요.');
             var state = await check(root);
-            if (!state.canUpdate && !(old && old.state === 'failed' && state.kind === 'current' && !state.dirty)) throw new Error('업데이트할 수 없는 상태입니다. 상태를 다시 확인하세요.');
+            if (!state.canUpdate && !(old && old.state === 'failed' && (state.kind === 'current' || state.kind === 'ahead') && !state.dirty)) throw new Error('업데이트할 수 없는 상태입니다. 상태를 다시 확인하세요.');
             if (process.platform !== 'win32' && process.platform !== 'darwin') throw new Error('Windows와 macOS에서 지원합니다.');
             fs.mkdirSync(dir,{recursive:true});
             var lock = path.join(dir,'launch.lock');
