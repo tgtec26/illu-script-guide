@@ -70,7 +70,7 @@ function createUpdater(panelDir, stateDir) {
             if (old && (old.state === 'waiting' || old.state === 'running')) throw new Error('이미 업데이트가 예약되어 있습니다. Illustrator를 종료하세요.');
             // Copy the runner: git pull may replace the source file during execution.
             var work = fs.mkdtempSync(path.join(dir,'run-'));
-            fs.writeFileSync(jobFile,JSON.stringify({state:'waiting',started:Date.now(),message:'작업을 저장하고 Illustrator를 종료하면 업데이트합니다.',log:path.join(work,'update.log')}));
+            fs.writeFileSync(jobFile,JSON.stringify({state:'waiting',started:Date.now(),message:'Illustrator 종료를 기다리고 있습니다. 저장 확인 창을 확인하세요.',log:path.join(work,'update.log')}));
             createdJob = true;
             if (process.platform === 'win32') {
                 var worker = path.join(work,'update.ps1');

@@ -8,6 +8,19 @@ const base = fs.mkdtempSync(path.join(os.tmpdir(), 'panel-update-'));
 function git(cwd, ...args) { return cp.execFileSync('git', args, {cwd, encoding:'utf8', stdio:['ignore','pipe','pipe']}).trim(); }
 function commit(dir, name) { fs.writeFileSync(path.join(dir, name), name); git(dir,'add',name); git(dir,'-c','user.name=fixture','-c','user.email=fixture@example.test','commit','-m',name); }
 (async function () {
+    // Only the main executable keeps the macOS updater waiting, not Adobe helper apps.
+    const workerSource = fs.readFileSync(path.join(__dirname, '../tools/script-panel/update-after-close.command'), 'utf8');
+    const match = workerSource.match(/grep -qE '([^']+)'/);
+    assert(match, 'macOS process filter must exist');
+    const processPattern = match[1];
+    function matchesProcess(command) {
+        return cp.spawnSync('/usr/bin/grep', ['-qE', processPattern], {input: command + '\n'}).status === 0;
+    }
+    assert(matchesProcess('/Applications/Adobe Illustrator 2026/Adobe Illustrator.app/Contents/MacOS/Adobe Illustrator'));
+    assert(!matchesProcess('/Applications/Adobe Illustrator 2026/Adobe Illustrator.app/Contents/MacOS/IllustratorDiagnosys.app/Contents/MacOS/IllustratorDiagnosys'));
+    assert(!matchesProcess('/Applications/Adobe Illustrator 2026/Adobe Illustrator.app/Contents/MacOS/CEPHtmlEngine/CEPHtmlEngine.app/Contents/MacOS/CEPHtmlEngine'));
+    const panelSource = fs.readFileSync(path.join(__dirname, '../tools/script-panel/main.js'), 'utf8');
+    assert(panelSource.includes('host("spQuitForUpdate")'), 'scheduled update must request a normal Illustrator quit');
     const remote = path.join(base,'remote.git'), local = path.join(base,'local with spaces'), peer = path.join(base,'peer');
     git(base,'init','--bare',remote);
     git(base,'clone',remote,local);

@@ -3,6 +3,10 @@
 
 var SP_EXT = /\.(jsx|jsxbin|js)$/i;
 
+function spQuitForUpdate() {
+    try { app.quit(); return "OK"; } catch (e) { return "ERR:" + e; }
+}
+
 function spWalk(folder, rel, out, depth) {
     if (depth > 6) return;
     var items = folder.getFiles();

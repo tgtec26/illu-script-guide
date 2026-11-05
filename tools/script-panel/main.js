@@ -314,7 +314,7 @@
             var job = updater.readJob();
             if (job && (job.state === "waiting" || job.state === "running")) {
                 updateBusy = false;
-                updateMessage(job.message, "Illustrator를 완전히 종료하세요.", false, "attention", true);
+                updateMessage(job.message, "저장 확인 창을 확인하세요.", false, "attention", true);
                 return;
             }
         } catch (e) {
@@ -350,7 +350,12 @@
         updateMessage("업데이트 준비 중…");
         updater.schedule(S.root).then(function (job) {
             updateBusy = false;
-            updateMessage(job.message, "저장 후 Illustrator를 종료하세요.", false, "attention", true);
+            updateMessage(job.message, "저장 확인 창을 확인하세요.", false, "attention", true);
+            host("spQuitForUpdate").then(function (result) {
+                if (result && result.indexOf("ERR:") === 0 || result === "EvalScript error.") {
+                    updateMessage("Illustrator를 종료하지 못했습니다.", "업데이트는 잠시 후 취소됩니다. " + result, true, "attention", true);
+                }
+            });
         }).catch(function (e) {
             updateBusy = false;
             updateMessage("업데이트를 시작하지 못했습니다.", e.message, true);

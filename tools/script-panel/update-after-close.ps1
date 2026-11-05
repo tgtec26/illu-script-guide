@@ -14,8 +14,13 @@ function Save-Job($State, $Message) {
     [IO.File]::Replace($TempJob, $JobFile, "$JobFile.bak")
 }
 try {
-    Save-Job 'waiting' '작업을 저장하고 Illustrator를 종료하면 업데이트합니다.'
-    while (Get-Process -Name Illustrator -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 2 }
+    Save-Job 'waiting' 'Illustrator 종료를 기다리고 있습니다. 저장 확인 창을 확인하세요.'
+    $Waited = 0
+    while (Get-Process -Name Illustrator -ErrorAction SilentlyContinue) {
+        if ($Waited -ge 120) { throw 'Illustrator가 종료되지 않아 업데이트를 취소했습니다. 다시 시도하세요.' }
+        Start-Sleep -Seconds 2
+        $Waited += 2
+    }
     Save-Job 'running' 'Git 갱신과 설치를 진행하고 있습니다. 권한 확인 창에서 예를 누르세요.'
     $CurrentBranch = & git -C $RepoDir symbolic-ref --quiet --short HEAD
     if ($LASTEXITCODE -ne 0 -or $CurrentBranch -ne $Branch) { throw '브랜치가 변경되었습니다. 패널에서 다시 확인하세요.' }
