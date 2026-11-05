@@ -7,6 +7,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 
 async function panel(check, schedule, job) {
     const elements = {};
+    const timers = [];
     function element() {
         return {style:{}, hidden:true, disabled:false, firstChild:{},
             appendChild(){}, setAttribute(name, value){ this[name] = value; }};
@@ -15,12 +16,14 @@ async function panel(check, schedule, job) {
         getElementById(id){ return elements[id] || (elements[id] = element()); }};
     const updater = {check, schedule, readJob(){ return job || null; }};
     vm.runInNewContext(source, {
+        setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout(id) { timers[id - 1] = null; },
         document, localStorage:{getItem(key){ return key === 'sp.root' ? '"/scripts"' : null; }},
         window:{location:{href:'file:///panel/index.html'},
             __adobe_cep__:{evalScript(call, done){ done(''); }},
             cep_node:{require(name){ return name.endsWith('updater.js') ? {createUpdater(){ return updater; }} : require(name); }}}
     });
     await settle();
+    elements.runTimers = () => timers.splice(0).forEach(fn => { if (fn) fn(); });
     return elements;
 }
 
@@ -40,12 +43,20 @@ async function panel(check, schedule, job) {
     ui.updateNow.onclick(); await settle();
     assert(ui.updateNow.className.includes('current'), 'Retry must recover from transient errors');
 
+    const completed = await panel(async () => current, async () => {}, {state:'done', message:'업데이트 완료'});
+    completed.updateNow.onclick(); await settle();
+    assert.equal(completed.updates.hidden, false);
+    completed.runTimers();
+    assert.equal(completed.updates.hidden, true, 'Successful message must disappear');
+    assert(completed.updateNow.title.includes('업데이트 완료'), 'Details remain in tooltip');
+
     const blocked = await panel(async () => ({kind:'dirty', behind:1, dirty:true, canUpdate:false}),
         () => { throw new Error('Must not install over local changes'); });
     assert.equal(blocked.updateNow.disabled, false);
     blocked.updateNow.onclick(); await settle();
     assert.equal(blocked.updates.hidden, false);
     assert(blocked.updateText.textContent.includes('로컬 수정'));
+    blocked.runTimers(); assert.equal(blocked.updates.hidden, false, 'Errors remain visible');
 
     const ready = await panel(async () => ({kind:'behind', behind:1, dirty:false, canUpdate:true}),
         async () => ({state:'waiting', message:'작업을 저장하고 Illustrator를 종료하면 업데이트합니다.'}));

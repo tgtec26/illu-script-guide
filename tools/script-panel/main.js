@@ -284,8 +284,9 @@
     }
 
     // Node runs Git in a separate process; no shell commands go through evalScript.
-    var updater = null, updateBusy = false, updateReady = false;
+    var updater = null, updateBusy = false, updateReady = false, updateNoticeTimer = null;
     function updateMessage(text, detail, error, indicator, notice) {
+        if (updateNoticeTimer !== null) { clearTimeout(updateNoticeTimer); updateNoticeTimer = null; }
         var button = $("updateNow");
         var label = [text, detail].filter(function (part) { return part; }).join("\n");
         button.title = label || "업데이트";
@@ -339,6 +340,13 @@
             updateMessage(retry ? "설치 재시도" : messages[state.kind], detail,
                 retry || state.kind === "diverged" || state.kind === "dirty",
                 retry || state.behind ? "attention" : "current", notice);
+            if (notice && !retry && (state.kind === "current" || state.kind === "ahead")) {
+                updateNoticeTimer = setTimeout(function () {
+                    $("updates").hidden = true;
+                    $("updateText").textContent = "";
+                    updateNoticeTimer = null;
+                }, 8000);
+            }
         }).catch(function (e) {
             updateBusy = false; updateReady = false;
             updateMessage("원격 상태를 확인하지 못했습니다.", e.message, true, "", notice);
