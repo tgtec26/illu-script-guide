@@ -261,3 +261,11 @@ assert.ok(source.includes('line.kind === "main" ? MAIN_PT : (line.kind === "thin
 }
 require("./es3-lint")(extractFunction("buildFigure") + extractFunction("spinnerPoint"), "도형 문제 회전판");
 console.log("figure problem checks passed");
+
+{
+  const d = build({ kind: 9, cards: "1@-12,2@5,3;A@10,B,C@-15" });
+  assert.deepStrictEqual(d.texts.map(t => t.text), ["1", "2", "3", "A", "B", "C"]);
+  assert.deepStrictEqual(d.texts.map(t => t.angle), [-12, 5, 0, 10, 0, -15]);
+  assert.ok(d.texts[0].at[1] > d.texts[3].at[1]);
+  assert.notStrictEqual(d.lines[0].points[0].anchor[1], d.lines[0].points[1].anchor[1]);
+}

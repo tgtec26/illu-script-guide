@@ -8967,8 +8967,9 @@ var SCRIPT_KEY = "MiddleMath";
                 piecesRow.enabled = !!KINDS[kind].pieces;
                 piecesRow.children[0].text = KINDS[kind].pieces || "조각 이름:";
                 acrossInput.text = isCardKind() ? cardText : (isSpinnerKind() ? spinnerText : piecesAcross);
-                acrossInput.helpTip = isSpinnerKind() ? "12시에서 시계 방향으로 칸마다 쓸 글자를 쉼표로 나눠 쓴다. 끝에 *를 붙이면 그 칸을 칠한다 (1,2*,3)" : "";
+                acrossInput.helpTip = isSpinnerKind() ? "12시에서 시계 방향으로 칸마다 쓸 글자를 쉼표로 나눠 쓴다. 끝에 *를 붙이면 그 칸을 칠한다 (1,2*,3)" : (isCardKind() ? "쉼표로 카드 구분, 세미콜론으로 줄 바꿈, @ 뒤는 반시계 회전각(−30~30도). 예: 1@-12,2;A,B@10" : "");
                 downInput.enabled = !isCardKind() && !isSpinnerKind();
+                acrossInput.preferredSize.width = isCardKind() ? 160 : 80;
                 extraCheck.enabled = KINDS[kind].extra !== "";
                 extraCheck.text = KINDS[kind].extra !== "" ? KINDS[kind].extra : "추가";
             }
@@ -9132,6 +9133,7 @@ var SCRIPT_KEY = "MiddleMath";
                 var reach = (label.clear || 0) + LABEL_GAP_MM * MM_TO_PT + halfW * Math.abs(dir[0]) + halfH * Math.abs(dir[1]);
                 var x = label.at[0] + dir[0] * reach, y = label.at[1] + dir[1] * reach;
                 frame.translate(x + negativeNumberShift(frame, dir) - (b[0] + b[2]) / 2, y - (b[1] + b[3]) / 2);
+                if (label.angle) frame.rotate(label.angle);
             }
 
             // 글자 서체 (07_문자/한글·영문 서체 적용.jsx 규칙): 한글·공백 Spoqa(기준선 0), 영문·숫자·기호 GSMediumB1(기준선 +0.5pt).
@@ -9414,17 +9416,39 @@ var SCRIPT_KEY = "MiddleMath";
                     }
                     out.notes.push("공 " + count + "개 (1 ~ " + count + "), 한 개를 꺼낼 때 모든 경우의 수 " + count);
                 } else if (o.kind === 9) {
-                    // 숫자 카드: 둥근 직사각형(가로 2, 세로 2.8 단위)을 한 줄로
-                    var cards = String(o.cards).replace(/\s/g, "").split(",");
-                    var shown2 = [];
-                    for (var ci2 = 0; ci2 < cards.length; ci2++) if (cards[ci2] !== "") shown2.push(cards[ci2]);
-                    for (var cj = 0; cj < shown2.length; cj++) {
-                        var x0c = cj * 2.5;
-                        out.lines.push({ points: roundRectPoints(S([x0c, 0]), 2 * u, 2.8 * u, 0.3 * u), closed: true, kind: "main" });
-                        out.texts.push({ text: shown2[cj], at: S([x0c + 1, 1.4]), dir: [0, 0], upright: true });
+                                    // 쉼표는 카드, 세미콜론은 줄, @ 뒤는 반시계 회전각(도).
+                    var rowsC = String(o.cards).replace(/\s/g, "").split(";"), parsedC = [], totalC = 0;
+                    for (var ri = 0; ri < rowsC.length; ri++) {
+                      var tokensC = rowsC[ri].split(","), rowC = [];
+                      for (var ti = 0; ti < tokensC.length; ti++) {
+                        if (!tokensC[ti]) continue;
+                        var matchC = /^(.*?)(?:@([+-]?(?:\d+(?:\.\d*)?|\.\d+)))?$/.exec(tokensC[ti]);
+                        if (!matchC || !matchC[1]) continue;
+                        rowC.push({ text: matchC[1], angle: matchC[2] ? Math.max(-30, Math.min(30, Number(matchC[2]))) : 0 });
+                      }
+                      if (rowC.length) { parsedC.push(rowC); totalC += rowC.length; }
                     }
-                    var n2 = shown2.length;
-                    out.notes.push("카드 " + n2 + "장: 두 장으로 만드는 두 자리 수 최대 " + n2 * (n2 - 1) + "가지 (0이 있으면 십의 자리에 못 옴)");
+                    var advancedC = /[;@]/.test(String(o.cards));
+                    for (var rowIndexC = 0; rowIndexC < parsedC.length; rowIndexC++) {
+                      var rowCardsC = parsedC[rowIndexC], spacingC = advancedC ? 3.2 : 2.5;
+                      for (var colC = 0; colC < rowCardsC.length; colC++) {
+                        var cardC = rowCardsC[colC], cxC = (colC - (rowCardsC.length - 1) / 2) * spacingC, cyC = -rowIndexC * 3.8;
+                        var centerC = S([cxC, cyC]), cornersC = roundRectPoints([(cxC - 1) * u, (cyC - 1.4) * u], 2 * u, 2.8 * u, 0.3 * u);
+                        var radC = cardC.angle * Math.PI / 180, cosC = Math.cos(radC), sinC = Math.sin(radC);
+                        for (var piC = 0; piC < cornersC.length; piC++) {
+                          var pointC = cornersC[piC], keysC = ["anchor", "left", "right"];
+                          for (var kiC = 0; kiC < keysC.length; kiC++) {
+                            var oldC = pointC[keysC[kiC]], dxC = oldC[0] - centerC[0], dyC = oldC[1] - centerC[1];
+                            pointC[keysC[kiC]] = [centerC[0] + dxC * cosC - dyC * sinC, centerC[1] + dxC * sinC + dyC * cosC];
+                          }
+                          all.push(pointC.anchor);
+                        }
+                        out.lines.push({ points: cornersC, closed: true, kind: "main" });
+                        out.texts.push({ text: cardC.text, at: centerC, dir: [0, 0], upright: true, role: "fixed", angle: cardC.angle });
+                      }
+                    }
+                    var n2 = totalC;
+                    out.notes.push(advancedC ? "카드 " + n2 + "장" : "카드 " + n2 + "장: 두 장으로 만드는 두 자리 수 최대 " + n2 * (n2 - 1) + "가지 (0이 있으면 십의 자리에 못 옴)");
                 } else if (o.kind === 10) {
                     // 주사위 앞면: 한 변 3 단위 둥근 정사각형과 눈 (표준 배치)
                     var diceCount = Math.round(p[0]), faces = [p[1], p[2], p[3]], sum = 0;
