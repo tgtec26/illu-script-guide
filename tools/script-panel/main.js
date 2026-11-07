@@ -284,8 +284,9 @@
     }
 
     // Node runs Git in a separate process; no shell commands go through evalScript.
-    var updater = null, updateBusy = false, updateReady = false;
+    var updater = null, updateBusy = false, updateReady = false, updateNoticeTimer = null;
     function updateMessage(text, detail, error, indicator, notice) {
+        if (updateNoticeTimer !== null) { clearTimeout(updateNoticeTimer); updateNoticeTimer = null; }
         var button = $("updateNow");
         var label = [text, detail].filter(function (part) { return part; }).join("\n");
         button.title = label || "업데이트";
@@ -314,7 +315,7 @@
             var job = updater.readJob();
             if (job && (job.state === "waiting" || job.state === "running")) {
                 updateBusy = false;
-                updateMessage(job.message, "Illustrator를 완전히 종료하세요.", false, "attention", true);
+                updateMessage(job.message, "저장 확인 창을 확인하세요.", false, "attention", true);
                 return;
             }
         } catch (e) {
@@ -331,7 +332,7 @@
             };
             var detail = "";
             var last = updater.readJob();
-            var retry = last && last.state === "failed" && state.kind === "current" && !state.dirty;
+            var retry = last && last.state === "failed" && (state.kind === "current" || state.kind === "ahead") && !state.dirty;
             if (retry) updateReady = true;
             if (last && (last.state === "done" || last.state === "failed")) {
                 detail = last.message + (last.log ? "\n업데이트 로그: " + last.log : "");
@@ -339,6 +340,13 @@
             updateMessage(retry ? "설치 재시도" : messages[state.kind], detail,
                 retry || state.kind === "diverged" || state.kind === "dirty",
                 retry || state.behind ? "attention" : "current", notice);
+            if (notice && !retry && (state.kind === "current" || state.kind === "ahead")) {
+                updateNoticeTimer = setTimeout(function () {
+                    $("updates").hidden = true;
+                    $("updateText").textContent = "";
+                    updateNoticeTimer = null;
+                }, 8000);
+            }
         }).catch(function (e) {
             updateBusy = false; updateReady = false;
             updateMessage("원격 상태를 확인하지 못했습니다.", e.message, true, "", notice);
@@ -351,7 +359,12 @@
         updateMessage("업데이트 준비 중…");
         updater.schedule(S.root).then(function (job) {
             updateBusy = false;
-            updateMessage(job.message, "저장 후 Illustrator를 종료하세요.", false, "attention", true);
+            updateMessage(job.message, "저장 확인 창을 확인하세요.", false, "attention", true);
+            host("spQuitForUpdate").then(function (result) {
+                if (result && result.indexOf("ERR:") === 0 || result === "EvalScript error.") {
+                    updateMessage("Illustrator를 종료하지 못했습니다.", "업데이트는 잠시 후 취소됩니다. " + result, true, "attention", true);
+                }
+            });
         }).catch(function (e) {
             updateBusy = false;
             updateMessage("업데이트를 시작하지 못했습니다.", e.message, true, "", true);

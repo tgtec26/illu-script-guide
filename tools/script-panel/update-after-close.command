@@ -16,8 +16,13 @@ save_job() {
   /bin/mv -f "$tmp" "$job"
 }
 fail() { save_job failed "$1"; exit 1; }
-save_job waiting '작업을 저장하고 Illustrator를 종료하면 업데이트합니다.'
-while /bin/ps -axo comm= | /usr/bin/grep -qE '/Adobe Illustrator[^/]*/Contents/MacOS/'; do /bin/sleep 2; done
+save_job waiting 'Illustrator 종료를 기다리고 있습니다. 저장 확인 창을 확인하세요.'
+waited=0
+while /bin/ps -axo comm= | /usr/bin/grep -qE '/Adobe Illustrator[^/]*/Contents/MacOS/Adobe Illustrator$'; do
+  [ "$waited" -lt 120 ] || fail 'Illustrator가 종료되지 않아 업데이트를 취소했습니다. 다시 시도하세요.'
+  /bin/sleep 2
+  waited=$((waited + 2))
+done
 save_job running 'Git 갱신과 설치를 진행하고 있습니다. 터미널의 안내를 확인하세요.'
 current="$(git -C "$repo" symbolic-ref --quiet --short HEAD)" || fail '브랜치를 확인하지 못했습니다.'
 [ "$current" = "$branch" ] || fail '브랜치가 변경되었습니다. 다시 확인하세요.'
