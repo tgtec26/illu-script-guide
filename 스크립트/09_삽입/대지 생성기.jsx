@@ -103,6 +103,16 @@ function generateArtboards(w, h, isPixel, count, gapMM) {
     var heightPt = isPixel ? h : h * mmToPt;
     var gapPt = gapMM * mmToPt;
 
+    // 일러스트레이터 캔버스는 첫 대지 가운데 기준 ±8192pt라 오른쪽 끝이 8192 + 폭/2, 아래쪽 끝이 -(8192 - 높이/2)를
+    // 넘으면 대지 추가가 실패한다(Error 1200 'CoOA'). 실패한 add는 문서를 처음 상태로 되돌려 버리므로(실측)
+    // 시작 전에 들어갈 개수를 계산해 막고, 한 줄이 차면 다음 줄로 넘긴다.
+    var perRow = Math.floor((8191 - widthPt / 2) / (widthPt + gapPt)) + 1;
+    var maxRows = Math.floor((8191 - heightPt * 1.5) / (heightPt + gapPt)) + 1;
+    if (count > perRow * maxRows) {
+        alert("이 크기와 간격으로는 대지를 최대 " + (perRow * maxRows) + "개까지 만들 수 있습니다.");
+        return;
+    }
+
     var colorSpace = isPixel ? DocumentColorSpace.RGB : DocumentColorSpace.CMYK;
     var preset = new DocumentPreset();
     preset.colorMode = colorSpace;
@@ -125,10 +135,10 @@ function generateArtboards(w, h, isPixel, count, gapMM) {
     firstArtboard.artboardRect = [0, 0, widthPt, -heightPt];
 
     for (var i = 1; i < count; i++) {
-        var left = i * (widthPt + gapPt);
-        var top = 0;
+        var left = (i % perRow) * (widthPt + gapPt);
+        var top = 0 - Math.floor(i / perRow) * (heightPt + gapPt);
         var right = left + widthPt;
-        var bottom = -heightPt;
+        var bottom = top - heightPt;
 
         doc.artboards.add([left, top, right, bottom]);
     }
