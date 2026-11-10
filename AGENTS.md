@@ -23,7 +23,7 @@ For contained Adobe Illustrator JSX requests, default to direct implementation i
 - 홈페이지 `docs/assets/app.js`의 `file`은 새 파일명, `id`와 탭 `id`는 영문 그대로다.
 - 파일을 더하거나 이름을 바꾸면 일러에 한 줄짜리 로더를 다시 등록해야 한다: `./setup-mac.command`(설치된 정식판·Beta 모두 등록; `ILLUSTRATOR_APP_DIR`를 지정하면 해당 앱만).
 - 한글 이름은 일러(`$.evalFile`)와 헬퍼 로드가 된다고 베타 Mac에서 확인했다. Windows에서는 아직 확인하지 않았다.
-- JSX 실행 검증은 2027 Beta의 네이티브 `illustrator` MCP로 한다(2026 CEP MCP는 2026-11-10 폐기). 이 MCP에 JSX 실행 도구가 있는지는 아래 "Verifying in Illustrator" 문단을 본다. 옛 osascript 기반 MCP의 경로 제한 때문에 AppleScript로 우회하지 않는다.
+- JSX 실행 검증은 2027 Beta의 네이티브 `illustrator` MCP로 한다(2026 CEP MCP는 2026-11-10 폐기). 이 MCP에 JSX 실행 도구가 있는지는 아래 "Verifying in Illustrator" 문단을 본다. 옛 osascript 기반 MCP의 경로 제한 때문에 AppleScript 기반 MCP로 우회하지 않는다(직접 `osascript`는 아래 "Verifying in Illustrator"의 조건부 허용만).
 
 ## Dialog Option Persistence (required)
 
@@ -188,9 +188,15 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 
 2026-11-10 변경(사용자): **Illustrator 2026과 CEP MCP(`illustrator-cep`)는 더 쓰지 않는다. 앞으로 검증 대상은 2027 Beta 하나이고, 연결은 Beta가 제공하는 네이티브 MCP(`illustrator`, `http://localhost:18412/v1/mcp`)다.** 2026-10-14의 "CEP 직접 연결 우선"과 "2027 Beta는 기본 대상에서 제외"(새 문서 생성 실패, 2026-10-18에 해결됨)는 폐기됐다. 아래 불릿 중 `illustrator-cep`·MCP Control 패널·8081/8083·`illustrator_*` 도구를 말하는 것은 폐기된 CEP 경로의 기록이다. 짧게 나눠 실행, 테스트 문서 재사용, 모달·액션 자동 검증 금지, 복사본 훅 같은 일반 규칙은 연결 방식과 상관없이 그대로 유효하다. CLI-Anything도 CEP 서버를 쓰는 도구라 같이 폐기된다.
 
-네이티브 `illustrator` MCP는 사용자 설정(user scope)에 등록돼 있고 Bearer 토큰이 필요하다. 토큰이 만료되면 `AUTH_HEADER_REJECTED`(401)로 연결되지 않는다(2026-11-10 Mac Studio: 서버는 18412에서 응답했지만 `~/.claude.json`의 토큰이 만료돼 도구 목록을 못 봤다). 토큰 재발급과 갱신은 사용자만 할 수 있으니 401이면 CEP를 되살리지 말고 재발급을 부탁한다. 열린 모달 대화상자가 있으면 문서 조회가 막힌다. 2026-10-18·10-28 확인 기준 이 MCP에는 임의 JSX를 실행하는 도구가 없어 문서 조회·미리보기·내보내기에만 쓴다. 토큰을 새로 받은 뒤 도구 목록을 다시 확인하고 JSX 실행 도구가 생겼으면 이 문단을 고친다. **없을 때 Mac에서 ScriptUI·실행 검증을 어떻게 할지(아래 osascript 금지를 풀지)는 사용자 결정이 필요한 미해결 항목이다.** 참고: 2026-11-10 임시 시험에서 `osascript` `do javascript`는 Beta 앱 경로(`/Applications/Adobe Illustrator (Beta)/Adobe Illustrator.app`)를 명시하고 일러를 맨 앞에 둬야 응답했고, 일러가 뒤에 있으면 멈췄으며, AppleEvent는 약 2분 뒤 타임아웃됐다(스크립트는 계속 돈다).
+네이티브 `illustrator` MCP는 사용자 설정(user scope)에 등록돼 있고 Bearer 토큰이 필요하다. 토큰이 만료되면 `AUTH_HEADER_REJECTED`(401)로 연결되지 않는다(2026-11-10 Mac Studio: 서버는 18412에서 응답했지만 `~/.claude.json`의 토큰이 만료돼 도구 목록을 못 봤다). 토큰 재발급과 갱신은 사용자만 할 수 있으니 401이면 CEP를 되살리지 말고 재발급을 부탁한다. 열린 모달 대화상자가 있으면 문서 조회가 막힌다. 2026-10-18·10-28 확인 기준 이 MCP에는 임의 JSX를 실행하는 도구가 없어 문서 조회·미리보기·내보내기에만 쓴다. 토큰을 새로 받은 뒤 도구 목록을 다시 확인하고 JSX 실행 도구가 생겼으면 이 문단을 고친다. 없을 때 Mac의 실행 검증은 2026-11-10 사용자 결정("조건부 허용")에 따라 아래 조건을 모두 지킨 osascript `do javascript`만 쓴다.
 
-- **osascript로 검증하지 않는다.** `tools/illu-probe.sh`, `illustrator-run` 등 내부에서 AppleScript/`do javascript`를 사용하는 MCP도 실행·조회·PNG 검증에 사용하지 않는다. 네이티브 MCP 연결이 실패하면 이 경로로 자동 대체하지 않고 연결 상태를 확인한 뒤 제한을 보고한다.
+- **osascript는 기본 금지, 조건부로만 허용한다(2026-11-10 사용자 결정).** `tools/illu-probe.sh`, `illustrator-run` 등 내부에서 AppleScript/`do javascript`를 사용하는 MCP는 여전히 실행·조회·PNG 검증에 쓰지 않는다. 직접 `osascript`로 JSX를 돌리는 것은 네이티브 MCP에 JSX 실행 도구가 없거나 연결이 안 될 때만 허용하고, 다음을 모두 지킨다(2026-11-10 시험에서 어긴 곳마다 일러가 응답하지 않았다).
+  1. 앱은 경로로 지정한다: `/Applications/Adobe Illustrator (Beta)/Adobe Illustrator.app`(앱 이름·번들 ID만 쓰면 -1728). 실행 직전에 `open -a`로 맨 앞에 둔다. 일러가 뒤에 있으면 `executeMenuCommand` 등에서 응답이 멈춘다.
+  2. 실행은 백그라운드로 하고 `with timeout of 900 seconds`를 건다. AppleEvent 기본 타임아웃(약 2분)이 나도 스크립트는 계속 도니, 재전송하지 말고 일러 CPU·열린 문서로 상태를 본다. **결과는 반환값이 아니라 파일에 쓴다**(타임아웃이면 반환값이 사라진다). 한 번에 한 경우씩 짧게.
+  3. 시험 문서는 `addDocument`가 돌려준 핸들로만 다루고 `app.activeDocument`를 믿지 않는다(다른 에이전트가 활성 문서를 바꾼다). 끝나면 만든 문서만 `DONOTSAVECHANGES`로 닫고, 사용자·다른 에이전트의 문서는 건드리지 않는다. 만든 뒤 못 닫은 빈 문서는 보고한다.
+  4. 모달(`win.show()`)과 `app.doScript` 액션은 자동으로 돌리지 않는다. 대화상자는 복사본에서 `show`를 훅으로 바꾸고 `alert`를 가로챈다. 바꾼 환경설정(예: `rulerType`)은 원래대로 되돌린다.
+  5. 실패한 `artboards.add`처럼 문서를 되돌리는 오류는 try/catch로 삼키고 이어 가지 않는다(J17).
+  6. 시험 창이 뜨기 전에 사용자에게 한 줄로 알리고, 보고에 "osascript 대체 경로로 검증"이라고 적는다. 도구에서 막히면 이 경로로 넘기기 전에 연결 상태를 먼저 보고한다.
 - (폐기된 2026 CEP 경로의 기록) MCP 등록 이름은 `illustrator-cep`, 소스는 https://github.com/jinkeda/Illustrator_MCP 이다. 설치 위치는 `~/agent/illustrator-mcp-cep`, 패널은 `~/Library/Application Support/Adobe/CEP/extensions/com.illustrator.mcp.panel`이다. 2026 번들 ID는 `com.adobe.illustrator`.
 - 등록된 `illustrator-cep` MCP를 직접 호출하고 Illustrator의 `창 → 확장 프로그램 → MCP Control` 패널을 열어 둔다. 패널은 **자동 연결**되며 Connect 버튼을 요구하지 않는다. 이 Mac의 현재 경로는 MCP HTTP `http://127.0.0.1:8083/mcp` → `ws://127.0.0.1:8081` → CEP `evalScript`다. 공유 서버는 `~/agent/illustrator-cli/CEP 서버.command`로 시작한다. Codex와 CLI는 이 서버를 공유하며 8081을 사용하는 별도 stdio 서버·임시 클라이언트를 동시에 띄우지 않는다. 다른 기기는 등록된 연결 구성을 먼저 확인한다.
 - 먼저 `illustrator_connection_status`에 `probe:true`를 주어 2026 버전·패널 응답·대기 작업을 확인한다. 문서 조회는 `illustrator_document`(list)/`illustrator_get_document`, JSX는 `illustrator_execute_script`, PNG는 `illustrator_export_document`를 쓴다. 실행과 결과 조회를 별도 호출로 나눈다.

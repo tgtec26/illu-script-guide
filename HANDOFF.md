@@ -39,7 +39,7 @@
 
 ## 3. 일러 실행 검증 — 2027 Beta 네이티브 MCP (2026 CEP는 2026-11-10 폐기)
 - **2026-11-10(사용자): 2026과 CEP MCP는 더 쓰지 않는다. 검증은 2027 Beta + 네이티브 `illustrator` MCP(`http://localhost:18412/v1/mcp`)다.** 토큰이 만료되면 401이고 재발급은 사용자만 가능하다. 이 MCP에 JSX 실행 도구가 있는지는 새 토큰으로 도구 목록을 본 뒤 정한다(없으면 Mac의 실행 검증 방법은 사용자 결정 대기). 자세한 내용은 `AGENTS.md`의 "Verifying in Illustrator" 첫 두 문단. 아래 `illustrator-cep`·MCP Control·8081/8083·`illustrator_*` 항목은 폐기된 CEP 경로의 기록이다.
-- osascript·`tools/illu-probe.sh`·AppleScript 기반 MCP로 검증하지 않는다는 규칙은 그대로다. 연결이 안 되면 상태를 점검하고 보고하며 osascript로 자동 우회하지 않는다.
+- `tools/illu-probe.sh`·AppleScript 기반 MCP로 검증하지 않는다는 규칙은 그대로다. 직접 `osascript`(`do javascript`)는 2026-11-10 사용자 결정으로 **조건부 허용**: 네이티브 MCP에 JSX 실행 도구가 없거나 연결이 안 될 때만, Beta 앱 경로 명시·맨 앞·백그라운드·결과는 파일·내 문서 핸들만·모달/액션 제외 등의 조건(`AGENTS.md` 해당 절)을 지킨다. 연결이 안 되면 먼저 상태를 보고한다.
 - 2026에서 `창 → 확장 프로그램 → MCP Control`을 열어 둔다. 패널은 자동 연결이며 Connect 버튼은 없다. 이 Mac의 경로: MCP HTTP `http://127.0.0.1:8083/mcp` → `ws://127.0.0.1:8081` → CEP `evalScript`. `~/agent/illustrator-cli/CEP 서버.command`로 공유 서버 한 개만 실행한다. Codex·CLI가 같은 서버를 공유하며 별도 stdio 서버를 동시에 띄우지 않는다. 다른 기기는 등록 구성을 먼저 확인한다.
 - CLI-Anything은 명령줄·반복 작업용 보조 도구다. CEP MCP와 실행 경로가 같아 CLI 자체가 프리징을 해결하지 않는다. 공식 MCP는 이 Mac에서 Beta 연결이며 2026 대체용으로 미검증이다.
 - 연결 점검: `illustrator_connection_status`(`probe:true`). 문서 조회: `illustrator_document` list / `illustrator_get_document`. JSX 실행: `illustrator_execute_script`. PNG: `illustrator_export_document`(150~200%) 후 실제 이미지 확인.
