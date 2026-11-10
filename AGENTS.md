@@ -23,7 +23,7 @@ For contained Adobe Illustrator JSX requests, default to direct implementation i
 - 홈페이지 `docs/assets/app.js`의 `file`은 새 파일명, `id`와 탭 `id`는 영문 그대로다.
 - 파일을 더하거나 이름을 바꾸면 일러에 한 줄짜리 로더를 다시 등록해야 한다: `./setup-mac.command`(설치된 정식판·Beta 모두 등록; `ILLUSTRATOR_APP_DIR`를 지정하면 해당 앱만).
 - 한글 이름은 일러(`$.evalFile`)와 헬퍼 로드가 된다고 베타 Mac에서 확인했다. Windows에서는 아직 확인하지 않았다.
-- JSX 실행은 2026 CEP MCP의 `illustrator_execute_script`를 쓴다. 한글 경로도 먼저 이 경로로 확인한다. 옛 osascript 기반 MCP의 경로 제한 때문에 AppleScript로 우회하지 않는다.
+- JSX 실행 검증은 2027 Beta의 네이티브 `illustrator` MCP로 한다(2026 CEP MCP는 2026-11-10 폐기). 이 MCP에 JSX 실행 도구가 있는지는 아래 "Verifying in Illustrator" 문단을 본다. 옛 osascript 기반 MCP의 경로 제한 때문에 AppleScript로 우회하지 않는다.
 
 ## Dialog Option Persistence (required)
 
@@ -170,7 +170,7 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 - Use `pathItems.roundedRectangle()` / `rectangle()` instead of writing anchors and handles point by point (1 call vs 30+).
 - Read a group's parts into a name → item map in one pass instead of scanning by name for each part. Re-read after `add`/`move`/`remove`; references can go stale.
 - Skip work when the value did not change (gradient tint, text size, path geometry). Cache the last drawn key per object.
-- Benchmark in Illustrator through the 2026 CEP MCP: copy the script, replace `win.show()` with a short option sweep timed by `new Date().getTime()` (not `$.hiresTimer`), run via `illustrator_execute_script`, and compare PNG exports. Split cases into short calls; do not use osascript or AppleScript-based MCP runners.
+- Benchmark in Illustrator (2027 Beta native MCP; the retired 2026 CEP route used `illustrator_execute_script`): copy the script, replace `win.show()` with a short option sweep timed by `new Date().getTime()` (not `$.hiresTimer`), run it through whatever JSX-capable tool the session has, and compare PNG exports. Split cases into short calls; do not use osascript or AppleScript-based MCP runners.
 
 ## Tabbed Script Bundles
 
@@ -186,12 +186,12 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 
 ## Verifying in Illustrator Without Freezing It (required)
 
-2026-10-14 확정: 이 프로젝트는 **Illustrator 2026의 CEP MCP 직접 연결을 우선 사용**한다. CLI-Anything은 같은 CEP 서버를 이용하는 명령줄·반복 작업용 보조 도구이며, 프리징을 해결하는 별도 실행 엔진이 아니다. 이 Mac Studio의 2027 Beta는 재설치·환경설정 초기화·프로필 복사·새 macOS 계정에서도 새 문서 생성이 실패하므로 기본 검증 대상에서 제외한다.
+2026-11-10 변경(사용자): **Illustrator 2026과 CEP MCP(`illustrator-cep`)는 더 쓰지 않는다. 앞으로 검증 대상은 2027 Beta 하나이고, 연결은 Beta가 제공하는 네이티브 MCP(`illustrator`, `http://localhost:18412/v1/mcp`)다.** 2026-10-14의 "CEP 직접 연결 우선"과 "2027 Beta는 기본 대상에서 제외"(새 문서 생성 실패, 2026-10-18에 해결됨)는 폐기됐다. 아래 불릿 중 `illustrator-cep`·MCP Control 패널·8081/8083·`illustrator_*` 도구를 말하는 것은 폐기된 CEP 경로의 기록이다. 짧게 나눠 실행, 테스트 문서 재사용, 모달·액션 자동 검증 금지, 복사본 훅 같은 일반 규칙은 연결 방식과 상관없이 그대로 유효하다. CLI-Anything도 CEP 서버를 쓰는 도구라 같이 폐기된다.
 
-2026-10-18 갱신(사용자 확인): 위 Mac Studio 2027 Beta의 새 문서 생성 실패는 **해결됐다.** 2027 Beta도 검증 대상으로 쓸 수 있고, 위 "제외한다"는 해결 전의 기록이다. 2027 Beta용 공식 `illustrator` MCP(`http://localhost:18412/v1/mcp`)는 사용자 설정(user scope)에 등록돼 있다. MacBook Air에는 2027 Beta만 있고 `illustrator-cep` 구성은 없으며, 공식 MCP로 일러에 연결되는 것을 확인했다(열린 모달 대화상자가 있으면 문서 조회가 막힌다). 공식 MCP에는 임의 JSX를 실행하는 도구가 없어 문서 조회·미리보기·내보내기에만 쓴다.
+네이티브 `illustrator` MCP는 사용자 설정(user scope)에 등록돼 있고 Bearer 토큰이 필요하다. 토큰이 만료되면 `AUTH_HEADER_REJECTED`(401)로 연결되지 않는다(2026-11-10 Mac Studio: 서버는 18412에서 응답했지만 `~/.claude.json`의 토큰이 만료돼 도구 목록을 못 봤다). 토큰 재발급과 갱신은 사용자만 할 수 있으니 401이면 CEP를 되살리지 말고 재발급을 부탁한다. 열린 모달 대화상자가 있으면 문서 조회가 막힌다. 2026-10-18·10-28 확인 기준 이 MCP에는 임의 JSX를 실행하는 도구가 없어 문서 조회·미리보기·내보내기에만 쓴다. 토큰을 새로 받은 뒤 도구 목록을 다시 확인하고 JSX 실행 도구가 생겼으면 이 문단을 고친다. **없을 때 Mac에서 ScriptUI·실행 검증을 어떻게 할지(아래 osascript 금지를 풀지)는 사용자 결정이 필요한 미해결 항목이다.** 참고: 2026-11-10 임시 시험에서 `osascript` `do javascript`는 Beta 앱 경로(`/Applications/Adobe Illustrator (Beta)/Adobe Illustrator.app`)를 명시하고 일러를 맨 앞에 둬야 응답했고, 일러가 뒤에 있으면 멈췄으며, AppleEvent는 약 2분 뒤 타임아웃됐다(스크립트는 계속 돈다).
 
-- **osascript로 검증하지 않는다.** `tools/illu-probe.sh`, `illustrator-run` 등 내부에서 AppleScript/`do javascript`를 사용하는 MCP도 실행·조회·PNG 검증에 사용하지 않는다. CEP 연결 실패 시 이 경로로 자동 대체하지 않고 연결 상태를 확인한 뒤 제한을 보고한다.
-- MCP 등록 이름은 `illustrator-cep`, 소스는 https://github.com/jinkeda/Illustrator_MCP 이다. 설치 위치는 `~/agent/illustrator-mcp-cep`, 패널은 `~/Library/Application Support/Adobe/CEP/extensions/com.illustrator.mcp.panel`이다. 2026 번들 ID는 `com.adobe.illustrator`.
+- **osascript로 검증하지 않는다.** `tools/illu-probe.sh`, `illustrator-run` 등 내부에서 AppleScript/`do javascript`를 사용하는 MCP도 실행·조회·PNG 검증에 사용하지 않는다. 네이티브 MCP 연결이 실패하면 이 경로로 자동 대체하지 않고 연결 상태를 확인한 뒤 제한을 보고한다.
+- (폐기된 2026 CEP 경로의 기록) MCP 등록 이름은 `illustrator-cep`, 소스는 https://github.com/jinkeda/Illustrator_MCP 이다. 설치 위치는 `~/agent/illustrator-mcp-cep`, 패널은 `~/Library/Application Support/Adobe/CEP/extensions/com.illustrator.mcp.panel`이다. 2026 번들 ID는 `com.adobe.illustrator`.
 - 등록된 `illustrator-cep` MCP를 직접 호출하고 Illustrator의 `창 → 확장 프로그램 → MCP Control` 패널을 열어 둔다. 패널은 **자동 연결**되며 Connect 버튼을 요구하지 않는다. 이 Mac의 현재 경로는 MCP HTTP `http://127.0.0.1:8083/mcp` → `ws://127.0.0.1:8081` → CEP `evalScript`다. 공유 서버는 `~/agent/illustrator-cli/CEP 서버.command`로 시작한다. Codex와 CLI는 이 서버를 공유하며 8081을 사용하는 별도 stdio 서버·임시 클라이언트를 동시에 띄우지 않는다. 다른 기기는 등록된 연결 구성을 먼저 확인한다.
 - 먼저 `illustrator_connection_status`에 `probe:true`를 주어 2026 버전·패널 응답·대기 작업을 확인한다. 문서 조회는 `illustrator_document`(list)/`illustrator_get_document`, JSX는 `illustrator_execute_script`, PNG는 `illustrator_export_document`를 쓴다. 실행과 결과 조회를 별도 호출로 나눈다.
 - 일반 JSX 검증은 `expected_document_token`으로 테스트 문서를 지정하고 `auto_assign_ids:"off"`, `return_preview:false`를 명시한다. 상태만 읽는 JSX는 `read_only:true`로 선언한다. 자동 ID가 필요한 고수준 개체 편집에는 `off`를 일괄 적용하지 않는다. 코드는 짧은 IIFE로 감싸고 반환값은 문자열이나 작은 JSON으로 제한한다. **짧은 JSX 실행 → 결과 조회 → 별도 PNG 내보내기** 순서로 검증한다.
@@ -202,7 +202,7 @@ One DOM call costs 0.1-0.25 ms and `app.redraw()` over a few hundred gradient pa
 - 과거 osascript 검증은 `AIHangMonitor`가 CPU를 계속 쓰는 프리징을 일으켰다. 2026-10-13 CEP 검증(2026 30.8.2, 서버 3.0.0/패널 1.0.2): 문서 생성 1.42초, 조회 0.09초, 짧은 JSX 0.07초, PNG 1.93초. PNG와 실행 후 재조회 정상, 감시 스레드는 대기 상태였다. 장시간 작업은 아직 미검증.
 - 검증 기록: `~/agent/illustrator-mcp-install/cep-test/README.md`, PNG: 같은 폴더의 `result.png`. 설치기는 미서명 CEP 확장 로딩을 위해 CEP 10/11/12의 `PlayerDebugMode`를 1로 설정했다.
 - 2026-10-14 비교: 직접 MCP 조회·짧은 읽기 JSX 각 3회 약 0.16~0.21초, PNG 약 0.20초. CLI는 같은 호출에 프로그램 시작 포함 약 0.59~0.61초였다. 위 옵션으로 삼각형 생성·글자 생성·JSON 조회·PNG를 분리 실행해 정상 응답과 마지막 미완료 작업 없음이 확인됐다. 앞선 삼각형+글자 JSX는 타임아웃이 재현됐으며 원인은 미확정이다. 자동 ID/미리보기가 원인이라고 단정하거나 장시간·모든 JSX의 안정성을 보장하지 않는다. 비교 기록: `~/agent/illustrator-cli/agent-harness/evidence/connection-comparison.md`.
-- 다른 기기에서도 먼저 CEP 연결 가능 여부를 확인한다. 사용할 수 없으면 사용자에게 직접 실행·PNG 확인을 부탁한다.
+- 다른 기기에서도 먼저 네이티브 MCP 연결 가능 여부(토큰 포함)를 확인한다. 사용할 수 없으면 사용자에게 직접 실행·PNG 확인을 부탁한다.
 - **Windows(2026-10-16 측정, 이 Windows 기기)**: 대화상자 레이아웃 검증은 **COM**(`New-Object -ComObject Illustrator.Application` → `DoJavaScript(코드)`)으로 **2027 Beta**(31.0)에 보낸다. 짧게 끝나고 20회 이상 무사고(창 하나 0.3~8초). 공식 `illustrator` MCP(2027 Beta)는 연결·문서 조회는 빠르나 **임의 JSX 실행 도구가 없어** ScriptUI 검증에는 못 쓰고 조회·내보내기용이다. `illustrator-cep`(2026)는 JSX 0.4초로 되지만 "패널 busy/미해결 요청"으로 막혔다가 몇 분 뒤 스스로 풀린 적이 있어 보조용이다. CLI-Anything은 Windows에 없고 pip에도 없다. 하니스 주의: 2027 Beta Windows에서 `show`는 `Window.prototype`이 아니라 창 인스턴스 속성이라 덮어쓰기가 먹지 않는다(창이 열린 채 멈춤). 사본 파일의 `win.show()`를 `$.global.__hookShow(win)`(onShow에서 기록 후 `close(2)`)으로 치환한다. `windowBounds`는 원점에만 화면 배율이 곱해지므로 `bounds`를 부모 따라 합산한다. 전역 `alert`를 덮어쓴 뒤 `delete`하면 원본이 사라지니 `Window.alert`로 되돌린다. ScriptUI에는 `moveAfter`/`moveBefore`가 없다(2027 Beta Windows 확인).
 
 ## Escalation
