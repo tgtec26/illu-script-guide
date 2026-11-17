@@ -37,8 +37,9 @@
 - 점 배치는 쏠리지 않게 **후보 격자 + 가장 먼 점 차례로 고르기**(`spreadDots`).
 - 글자 서체·대화상자 레이아웃·미리보기 이동·옵션 저장(v1 태그)은 `AGENTS.md`.
 
-## 3. 일러 실행 검증 — 2027 Beta 네이티브 MCP (2026 CEP는 2026-11-10 폐기)
-- **2026-11-10(사용자): 2026과 CEP MCP는 더 쓰지 않는다. 검증은 2027 Beta + 네이티브 `illustrator` MCP(`http://localhost:18412/v1/mcp`)다.** 토큰이 만료되면 401이고 재발급은 사용자만 가능하다. 이 MCP에 JSX 실행 도구가 있는지는 새 토큰으로 도구 목록을 본 뒤 정한다(없으면 Mac의 실행 검증 방법은 사용자 결정 대기). 자세한 내용은 `AGENTS.md`의 "Verifying in Illustrator" 첫 두 문단. 아래 `illustrator-cep`·MCP Control·8081/8083·`illustrator_*` 항목은 폐기된 CEP 경로의 기록이다.
+## 3. 일러 실행 검증 — 2027 정식판 + CEP MCP (2026-11-17 CEP로 돌아감)
+- **2026-11-17(사용자): CEP MCP(`illustrator-cep`)로 돌아간다. 대상은 2027 정식판이다.** 네이티브 MCP에는 JSX 실행 도구가 없기 때문이다. Windows 2027(31.0.0)에서 패널 자동 연결·JSX·PNG를 정상 확인했고, Mac은 아직 확인하지 않았다. 아래 CEP 항목은 다시 유효하고 "2026"을 "2027"로 읽는다. 네이티브 MCP는 조회·내보내기 보조용이다. 자세한 내용은 `AGENTS.md`의 "Verifying in Illustrator" 첫 문단.
+- (옛 기록) **2026-11-10(사용자): 2026과 CEP MCP는 더 쓰지 않는다. 검증은 2027 Beta + 네이티브 `illustrator` MCP(`http://localhost:18412/v1/mcp`)다.** 토큰이 만료되면 401이고 재발급은 사용자만 가능하다. 이 MCP에 JSX 실행 도구가 있는지는 새 토큰으로 도구 목록을 본 뒤 정한다(없으면 Mac의 실행 검증 방법은 사용자 결정 대기). 자세한 내용은 `AGENTS.md`의 "Verifying in Illustrator" 첫 두 문단. 아래 `illustrator-cep`·MCP Control·8081/8083·`illustrator_*` 항목은 폐기된 CEP 경로의 기록이다.
 - `tools/illu-probe.sh`·AppleScript 기반 MCP로 검증하지 않는다는 규칙은 그대로다. 직접 `osascript`(`do javascript`)는 2026-11-10 사용자 결정으로 **조건부 허용**: 네이티브 MCP에 JSX 실행 도구가 없거나 연결이 안 될 때만, Beta 앱 경로 명시·맨 앞·백그라운드·결과는 파일·내 문서 핸들만·모달/액션 제외 등의 조건(`AGENTS.md` 해당 절)을 지킨다. 연결이 안 되면 먼저 상태를 보고한다.
 - 2026에서 `창 → 확장 프로그램 → MCP Control`을 열어 둔다. 패널은 자동 연결이며 Connect 버튼은 없다. 이 Mac의 경로: MCP HTTP `http://127.0.0.1:8083/mcp` → `ws://127.0.0.1:8081` → CEP `evalScript`. `~/agent/illustrator-cli/CEP 서버.command`로 공유 서버 한 개만 실행한다. Codex·CLI가 같은 서버를 공유하며 별도 stdio 서버를 동시에 띄우지 않는다. 다른 기기는 등록 구성을 먼저 확인한다.
 - CLI-Anything은 명령줄·반복 작업용 보조 도구다. CEP MCP와 실행 경로가 같아 CLI 자체가 프리징을 해결하지 않는다. 공식 MCP는 이 Mac에서 Beta 연결이며 2026 대체용으로 미검증이다.
@@ -68,7 +69,7 @@
 
 ## 6. 알려진 상태
 - `tests/*.js` 중 **변경 전부터 실패하던 4개**: `check-arrowhead-shapes`, `check-crystal-sizes`, `check-math-heads`, `check-script-safety`. 새로 깨뜨린 것은 없다. 나머지는 `for f in tests/*.js; do node $f || echo FAIL $f; done`로 확인.
-- 2026-11-10(사용자): 이 Mac의 검증 앱은 **Illustrator 2027 Beta 하나**이고 연결은 네이티브 `illustrator` MCP다(2026 30.8.2와 `illustrator-cep`는 더 쓰지 않는다). 옛 기록: 2027 Beta의 새 문서 생성 실패로 기본 대상에서 제외했으나 2026-10-18에 해결됐다. 자세한 내용은 `AGENTS.md`의 "Verifying in Illustrator" 첫 두 문단.
+- (2026-11-17에 바뀜: 2027 정식판 + CEP) 2026-11-10(사용자): 이 Mac의 검증 앱은 **Illustrator 2027 Beta 하나**이고 연결은 네이티브 `illustrator` MCP다(2026 30.8.2와 `illustrator-cep`는 더 쓰지 않는다). 옛 기록: 2027 Beta의 새 문서 생성 실패로 기본 대상에서 제외했으나 2026-10-18에 해결됐다. 자세한 내용은 `AGENTS.md`의 "Verifying in Illustrator" 첫 두 문단.
 - 일러에 스크립트 로더를 다시 등록해야 할 때: `./setup-mac.command`(설치된 정식판·Beta 모두 등록; `ILLUSTRATOR_APP_DIR`를 지정하면 해당 앱만).
 - Windows도 베타는 연도가 없어 자동으로 못 고르고 2026 폴더에 등록된다(액션의 "메뉴 항목" 단계가 `파일 > 스크립트` 메뉴를 찾지 못해 "현재 사용할 수 없습니다"가 뜸): `setup-windows.cmd -IllustratorAppDir "C:\Program Files\Adobe\Adobe Illustrator (Beta)" -IllustratorVer "31.0.0 Beta"`. 베타 `Presets\ko_KR\스크립트` 폴더를 일러가 읽는다(2026-10-12 Windows 베타에서 메뉴·액션 F12 확인).
 
