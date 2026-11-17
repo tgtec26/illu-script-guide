@@ -32,6 +32,30 @@ try {
         if (-not $Loader.Contains('$.evalFile(new File(')) { throw 'Invalid loader' }
         if (-not $Loader.Contains($Category.Replace('\', '/'))) { throw 'Wrong source path' }
     }
+    # Width profile: user file absent -> seeded from app default into ko_KR\x64, then profile inserted.
+    $SavedAppData = $env:APPDATA
+    try {
+        $env:APPDATA = Join-Path $Fixture 'appdata'
+        function Get-Process { $null }
+        $WidthProfileName = '폭속성1.txt'
+        Copy-Item (Join-Path $Root '폭속성1.txt') (Join-Path $RepoDir $WidthProfileName)
+        $AppPath = Join-Path $Fixture 'Adobe Illustrator 2027'
+        New-Item -ItemType Directory -Path (Join-Path $AppPath 'Presets\ko_KR\스크립트') -Force | Out-Null
+        $ResDir = Join-Path $AppPath 'Support Files\Required\Resources\ko_KR'
+        New-Item -ItemType Directory -Path $ResDir -Force | Out-Null
+        [IO.File]::WriteAllText((Join-Path $ResDir '가변 폭 속성'), "/collection1 {`r}`r/Sketch {`r}`r/NumberOfCollections 1`r/CatalogName (Adobe Variable Width Profiles)`r")
+        $X64 = Join-Path $env:APPDATA 'Adobe\Adobe Illustrator 31 Settings\ko_KR\x64'
+        New-Item -ItemType Directory -Path $X64 -Force | Out-Null
+        $IllustratorVer = ''
+        Install-Illustrator (Get-Item -LiteralPath $AppPath)
+        $Wp = [IO.File]::ReadAllText((Join-Path $X64 '가변 폭 속성'))
+        if (-not $Wp.Contains('ed8fad20ec868dec84b131')) { throw 'Width profile not inserted' }
+        if (-not $Wp.Contains('/NumberOfCollections 2')) { throw 'Collection count not bumped' }
+        if ($Wp.IndexOf('/collection2 {') -gt $Wp.IndexOf('/Sketch {')) { throw 'Profile inserted after /Sketch' }
+        Install-Illustrator (Get-Item -LiteralPath $AppPath)
+        if (([regex]::Matches([IO.File]::ReadAllText((Join-Path $X64 '가변 폭 속성')), 'ed8fad20ec868dec84b131')).Count -ne 1) { throw 'Width profile inserted twice' }
+        Remove-Item Function:\Get-Process
+    } finally { $env:APPDATA = $SavedAppData }
     # Git failures must stop installation instead of being swallowed by try/catch.
     $Failed = $false
     try { Invoke-RepoGit -GitArguments @('-C', (Join-Path $Fixture 'missing'), 'pull', '--ff-only') } catch { $Failed = $true }

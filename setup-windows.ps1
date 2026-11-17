@@ -259,8 +259,15 @@ if (Test-Path $WidthProfileSrc) {
         Write-Host "  폭 프로파일 건너뜀 (Illustrator 실행 중)"
         Write-Host "    일러스트레이터를 완전히 종료한 뒤 이 스크립트를 다시 실행하세요."
     } else {
-        $WpDir = Join-Path $env:APPDATA "Adobe\Adobe Illustrator $Ver Settings\ko_KR"
+        # Windows는 사용자 설정을 ko_KR\x64에 둔다(단축키와 같은 곳)
+        $WpDir = Join-Path $env:APPDATA "Adobe\Adobe Illustrator $Ver Settings\ko_KR\x64"
+        if (-not (Test-Path $WpDir)) { $WpDir = Split-Path $WpDir }
         $WpFile = Join-Path $WpDir "가변 폭 속성"
+        # 사용자 프로파일을 저장한 적이 없으면 파일이 없으므로 설치 폴더의 기본 목록으로 시작한다
+        $WpDefault = Join-Path $AppDir.FullName "Support Files\Required\Resources\ko_KR\가변 폭 속성"
+        if ((Test-Path $WpDir) -and -not (Test-Path $WpFile) -and (Test-Path $WpDefault)) {
+            Copy-Item -Path $WpDefault -Destination $WpFile
+        }
         if (-not (Test-Path $WpDir)) {
             Write-Host "  폭 프로파일 건너뜀 (설정 폴더 없음): $WpDir"
         } else {
