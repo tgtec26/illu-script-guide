@@ -49,6 +49,14 @@ try {
     var currentGapText = infoPanel.add("statictext", undefined, "간격: -");
     var currentOffsetText = infoPanel.add("statictext", undefined, "오프셋: 0 pt");
     var targetCountText = infoPanel.add("statictext", undefined, "대상: " + targets.length + "개");
+    // 획 패널 화살촉이 붙은 선은 일러가 파선 위치를 고정해 오프셋이 화면에 반영되지 않는다
+    var arrowCount = 0;
+    for (var a = 0; a < targets.length; a++) {
+        if (hasLiveArrowhead(targets[a].item)) arrowCount++;
+    }
+    if (arrowCount > 0) {
+        infoPanel.add("statictext", undefined, "화살촉 선 " + arrowCount + "개: 일러가 파선 위치를 고정해 움직이지 않습니다", { multiline: true });
+    }
 
     var controlPanel = dlg.add("panel", undefined, "조정");
     controlPanel.alignChildren = "left";
@@ -62,9 +70,16 @@ try {
     var previewCheck = dlg.add("checkbox", undefined, "미리보기");
     previewCheck.value = true;
 
+    // 크게 조정은 슬라이더(패턴 한 주기), 미세 조정은 양옆 버튼(이동 간격)
+    var patternPeriod = getPatternPeriod(targets[0].item.strokeDashes);
+    var sliderGroup = controlPanel.add("group");
+    var btnLeft = sliderGroup.add("button", undefined, "◄");
+    btnLeft.preferredSize = [32, 24];
+    var offsetSlider = sliderGroup.add("slider", undefined, 0, 0, patternPeriod);
+    offsetSlider.preferredSize = [220, 24];
+    var btnRight = sliderGroup.add("button", undefined, "►");
+    btnRight.preferredSize = [32, 24];
     var btnGroup = controlPanel.add("group");
-    var btnLeft = btnGroup.add("button", undefined, "◄ 왼쪽");
-    var btnRight = btnGroup.add("button", undefined, "오른쪽 ►");
     var btnReset = btnGroup.add("button", undefined, "리셋");
 
     var closeGroup = dlg.add("group");
@@ -76,6 +91,16 @@ try {
 
     updateInfo();
     applyPendingOffset();
+
+    offsetSlider.onChanging = function() {
+        pendingOffset = Math.round(offsetSlider.value * 100) / 100;
+        updatePreviewState(true);
+    };
+
+    offsetSlider.onChange = function() {
+        pendingOffset = Math.round(offsetSlider.value * 100) / 100;
+        updatePreviewState(true);
+    };
 
     btnLeft.onClick = function() {
         shiftOffset(-getStep());
@@ -130,13 +155,20 @@ try {
         updatePreviewState();
     }
 
-    function updatePreviewState() {
+    function updatePreviewState(fromSlider) {
         if (previewCheck.value) {
             applyPendingOffset();
         } else if (isApplied) {
             restoreOriginalOffsets();
         }
-        updateInfo();
+        updateInfo(fromSlider);
+    }
+
+    function getPatternPeriod(dashes) {
+        var sum = 0;
+        for (var i = 0; i < dashes.length; i++) sum += dashes[i];
+        if (dashes.length % 2 === 1) sum *= 2;
+        return sum > 0 ? sum : 1;
     }
 
     function applyPendingOffset() {
@@ -159,7 +191,7 @@ try {
         app.redraw();
     }
 
-    function updateInfo() {
+    function updateInfo(fromSlider) {
         var dashes = targets[0].item.strokeDashes;
         if (dashes.length >= 2) {
             currentDashText.text = "점선: " + dashes[0] + " pt";
@@ -169,12 +201,31 @@ try {
             currentGapText.text = "간격: -";
         }
         currentOffsetText.text = "오프셋: " + pendingOffset.toFixed(2) + " pt";
+        if (!fromSlider) {
+            // 패턴은 한 주기마다 반복되므로 슬라이더에는 주기 안의 위치만 보인다
+            var inPeriod = pendingOffset % patternPeriod;
+            if (inPeriod < 0) inPeriod += patternPeriod;
+            offsetSlider.value = inPeriod;
+        }
         targetCountText.text = "대상: " + targets.length + "개";
     }
 
     function getStep() {
         var step = parseFloat(String(stepInput.text).replace(",", "."));
         return isNaN(step) ? 0.5 : step;
+    }
+
+    // 열린 선에서 보이는 범위가 경로 범위보다 선 두께 절반의 1.5배 넘게 튀어나오면 화살촉으로 본다
+    function hasLiveArrowhead(item) {
+        try {
+            if (item.closed) return false;
+            var g = item.geometricBounds, v = item.visibleBounds;
+            var limit = item.strokeWidth / 2 * 1.5 + 0.05;
+            return (g[0] - v[0] > limit) || (v[2] - g[2] > limit) ||
+                (v[1] - g[1] > limit) || (g[3] - v[3] > limit);
+        } catch (e) {
+            return false;
+        }
     }
 
     function collectDashedPaths(items, out) {
