@@ -41,6 +41,14 @@ try {
     var PREF_PREFIX = "PolymerMaker_";
     // 처음 값: R 버튼이 되돌아가는 값이자 저장값이 없을 때 쓰는 값
     var DEFAULTS = {width: 6, rectH: 4, rectR: 0.7, gap: 1, shapeStroke: 1, connStroke: 1, innerK: 0, offsetX: 0, offsetY: 0};
+    function restoreAminoMode() {
+        try {
+            var value = app.preferences.getStringPreference("PolymerMaker/AminoSettings");
+            if (value === "v1|monomer") return "monomer";
+        } catch (preferenceError) {}
+        return "residue";
+    }
+    var savedAminoMode = restoreAminoMode();
     var savedShape = app.preferences.getStringPreference(PREF_PREFIX + "Shape") || "circle";
     var savedWidth = app.preferences.getStringPreference(PREF_PREFIX + "Width") || String(DEFAULTS.width);
     var savedGap = app.preferences.getStringPreference(PREF_PREFIX + "Gap") || String(DEFAULTS.gap);
@@ -68,6 +76,7 @@ try {
     var offsetYmm = restoreOffset(savedOffsetY);
     var previewEnabled = true;
     var previewGroups = [];
+    var previewAminoPalette;
     var pathMetrics = [];      // 패스는 변하지 않으므로 길이 계산은 한 번만 하고 재사용
     var originalHidden = [];
 
@@ -87,11 +96,13 @@ try {
     var rRect = panelShape.add("radiobutton", undefined, "둥근 사각형");
     var rHex = panelShape.add("radiobutton", undefined, "육각형");
     var rRandom = panelShape.add("radiobutton", undefined, "랜덤");
+    var rAmino = panelShape.add("radiobutton", undefined, "아미노산");
     var btnShuffle = panelShape.add("button", undefined, "랜덤 재배치");
 
     if (savedShape === "rect") rRect.value = true;
     else if (savedShape === "hex") rHex.value = true;
     else if (savedShape === "random") rRandom.value = true;
+    else if (savedShape === "amino") rAmino.value = true;
     else rCircle.value = true;
 
     // 크기, 간격 및 굵기 패널 (2줄 배치, 좌우 버튼으로 증감)
@@ -100,6 +111,12 @@ try {
     panelSize.alignChildren = ["left", "top"];
     panelSize.margins = 15;
     panelSize.spacing = 10;
+
+    var aminoRow = panelSize.add("group");
+    aminoRow.add("statictext", undefined, "아미노산 형태");
+    var aminoMode = aminoRow.add("dropdownlist", undefined, ["연결된 잔기", "개별 단위체"]);
+    aminoMode.selection = savedAminoMode === "monomer" ? 1 : 0;
+    aminoMode.helpTip = "단위체는 양끝 돌출부를 표시합니다. 잔기는 결합된 방향으로 배열합니다.";
 
     var fieldW = addNumberField(panelSize, "단위체 너비 (mm):", 120, savedWidth, 0.2, 1, 100, DEFAULTS.width);
     // 둥근 사각형일 때만 쓰는 행. 둥글기의 최댓값은 너비·높이 중 짧은 쪽의 절반이라 syncRadiusLimit이 맞춘다
@@ -169,6 +186,8 @@ try {
     rRect.onClick = onShapeChange;
     rHex.onClick = onShapeChange;
     rRandom.onClick = onShapeChange;
+    rAmino.onClick = onShapeChange;
+    aminoMode.onChange = onShapeChange;
     fieldW.onCommit = fieldRH.onCommit = function () {
         syncRadiusLimit();
         updatePreview();
@@ -286,10 +305,13 @@ try {
         }
     }
 
-    // 높이·둥글기는 단위체 모양이 둥근 사각형일 때만 쓰므로 그때만 켠다
+    // 둥근 사각형과 아미노산 몸체는 높이와 둥글기 설정을 공유한다.
     function syncRectFields() {
-        fieldRH.group.enabled = rRect.value;
-        fieldRR.group.enabled = rRect.value;
+        fieldRH.group.enabled = rRect.value || rAmino.value;
+        fieldRR.group.enabled = rRect.value || rAmino.value;
+        aminoRow.enabled = rAmino.value;
+        fieldCSW.group.enabled = !rAmino.value || aminoMode.selection.index === 0;
+        panelOpt.enabled = !rAmino.value;
     }
 
     function clampField(field, value) {
@@ -326,6 +348,10 @@ try {
         var y  = cubicBezier(lt, p0.anchor[1], p0.rightDirection[1], p1.leftDirection[1], p1.anchor[1]);
         var dx = cubicBezierDeriv(lt, p0.anchor[0], p0.rightDirection[0], p1.leftDirection[0], p1.anchor[0]);
         var dy = cubicBezierDeriv(lt, p0.anchor[1], p0.rightDirection[1], p1.leftDirection[1], p1.anchor[1]);
+        if (dx === 0 && dy === 0) {
+            dx = p1.anchor[0] - p0.anchor[0];
+            dy = p1.anchor[1] - p0.anchor[1];
+        }
         return { x: x, y: y, angle: Math.atan2(dy, dx) * 180 / Math.PI };
     }
     function buildCumLen(pathItem, SAMPLES) {
@@ -540,6 +566,109 @@ try {
         return Math.abs(a.ax - b.ax) < 1e-6 && Math.abs(a.ay - b.ay) < 1e-6;
     }
 
+    // AMINO MODEL START
+    function aminoPalette(document, gray) {
+        var name = "Polymer Amino Body";
+        var gradient, created = false;
+        try { gradient = document.gradients.getByName(name); }
+        catch (missingGradient) {
+            gradient = document.gradients.add();
+            created = true;
+            gradient.type = GradientType.LINEAR;
+            gradient.gradientStops[0].color = gray(14);
+            gradient.gradientStops[1].color = gray(43);
+            gradient.name = name;
+        }
+        var body = new GradientColor();
+        body.gradient = gradient;
+        return {body: body, gradient: gradient, created: created,
+                rim: gray(44), stroke: gray(76), joint: gray(45),
+                pale: gray(12), light: gray(27), medium: gray(42), dark: gray(59)};
+    }
+
+    function drawAminoUnit(parent, u, colors) {
+        var group = parent.groupItems.add();
+        group.name = u.monomer ? "아미노산 단위체" : "아미노산 잔기";
+        var rad = u.angle*Math.PI/180;
+        var cos = Math.cos(rad), sin = Math.sin(rad), s = u.side;
+        var k = .5522847498;
+
+        function point(x, y) {
+            var a = x*u.w, b = y*u.h;
+            return [u.x+a*cos-b*sin,u.y+a*sin+b*cos];
+        }
+        function draw(nodes, fill, strokeWidth, lineColor, open) {
+            var item = group.pathItems.add();
+            for (var i=0; i<nodes.length; i++) {
+                var n = nodes[i], p = item.pathPoints.add();
+                p.anchor = point(n[0],n[1]);
+                p.leftDirection = n.length>2 ? point(n[2],n[3]) : p.anchor;
+                p.rightDirection = n.length>4 ? point(n[4],n[5]) : p.anchor;
+            }
+            item.closed = !open;
+            item.filled = fill !== null;
+            if (item.filled) item.fillColor = fill;
+            item.stroked = strokeWidth > 0;
+            if (item.stroked) {
+                item.strokeColor = lineColor || colors.stroke;
+                item.strokeWidth = strokeWidth;
+                if (open) { item.strokeCap = StrokeCap.ROUNDENDCAP; item.strokeJoin = StrokeJoin.ROUNDENDJOIN; }
+            }
+            return item;
+        }
+        function oval(x,y,a,b,fill,sw) {
+            draw([[x+a,y,x+a,y-b*k,x+a,y+b*k],[x,y+b,x+a*k,y+b,x-a*k,y+b],
+                  [x-a,y,x-a,y+b*k,x-a,y-b*k],[x,y-b,x-a*k,y-b,x+a*k,y-b]],fill,sw);
+        }
+        function body(x,y,w,h,round,fill,sw) {
+            var l=x-w/2,r=x+w/2,b=y-h/2,t=y+h/2;
+            var a=Math.min(w/2,round/u.w),v=Math.min(h/2,round/u.h);
+            return draw([[l+a,t,l+a-a*k,t,l+a,t],[r-a,t,r-a,t,r-a+a*k,t],
+                         [r,t-v,r,t-v+v*k,r,t-v],[r,b+v,r,b+v,r,b+v-v*k],
+                         [r-a,b,r-a+a*k,b,r-a,b],[l+a,b,l+a,b,l+a-a*k,b],
+                         [l,b+v,l,b+v-v*k,l,b+v],[l,t-v,l,t-v,l,t-v+v*k]],fill,sw);
+        }
+        if (u.leftEnd) oval(-.48,-.025,.085,.28,colors.joint,u.stroke*.65);
+        if (u.rightEnd) oval(.52,.015,.135,.145,colors.light,u.stroke*.65);
+        body(0,0,1,1,u.radius,colors.rim,u.stroke);
+        body(-.025,.045,.91,.88,u.radius*.9,colors.body,0);
+
+        var edge = u.stroke*.62, w = Math.min(u.w,u.h);
+        switch (u.variant % 7) {
+        case 0:
+            oval(-.03,.61*s,.198,.25,colors.medium,edge);
+            oval(-.074,.68*s,.053,.062,colors.light,0);
+            break;
+        case 1:
+            oval(-.035,.59*s,.275,.165,colors.light,edge);
+            oval(-.075,.635*s,.118,.063,colors.pale,0);
+            break;
+        case 2:
+            body(-.01,.61*s,.235,.39,w*.07,colors.light,edge);
+            oval(-.01,.87*s,.20,.26,colors.light,edge);
+            oval(-.055,.95*s,.059,.067,colors.pale,0);
+            break;
+        case 3:
+            draw([[-.2,.53*s,-.2,.53*s,-.12,.74*s],[.07,.67*s,-.06,.70*s,.17,.64*s],
+                  [.22,.55*s,.19,.61*s,.22,.55*s]],null,w*.15,colors.medium,true);
+            break;
+        case 4:
+            draw([[-.16,.56*s],[.13,.51*s],[.20,.74*s],[-.085,.81*s]],colors.dark,edge);
+            oval(.052,.74*s,.10,.039,colors.medium,0);
+            break;
+        case 5:
+            draw([[0,.50*s],[.01,.66*s],[.16,.71*s]],null,w*.116,colors.medium,true);
+            draw([[.01,.66*s],[-.10,.82*s]],null,w*.116,colors.medium,true);
+            break;
+        case 6:
+            oval(-.08,.58*s,.137,.151,colors.light,edge);
+            oval(.07,.65*s,.112,.148,colors.light,edge);
+            break;
+        }
+        return group;
+    }
+    // AMINO MODEL END
+
     // ── 4. 옵션 읽기 · 생성 · 미리보기 ────────────────────────────────
     function readOptions(showAlert) {
         var wVal = parseFloat(inW.text);
@@ -559,6 +688,7 @@ try {
         if (rRect.value) shapeType = "rect";
         if (rHex.value)  shapeType = "hex";
         if (rRandom.value) shapeType = "random";
+        if (rAmino.value) shapeType = "amino";
 
         var kVal = parseFloat(fieldK.input.text);
         if (isNaN(kVal) || kVal < 0 || kVal > 100) {
@@ -568,6 +698,7 @@ try {
 
         return {
             shapeType: shapeType,
+            aminoMode: aminoMode.selection.index === 1 ? "monomer" : "residue",
             width: wVal,
             rectH: rhVal,
             rectR: rrVal,
@@ -582,6 +713,10 @@ try {
 
     function saveOptions(options) {
         app.preferences.setStringPreference(PREF_PREFIX + "Shape", options.shapeType);
+        if (options.shapeType === "amino") {
+            try { app.preferences.setStringPreference("PolymerMaker/AminoSettings", "v1|" + options.aminoMode); }
+            catch (preferenceError) {}
+        }
         app.preferences.setStringPreference(PREF_PREFIX + "Width", inW.text);
         app.preferences.setStringPreference(PREF_PREFIX + "RectH", inRH.text);
         app.preferences.setStringPreference(PREF_PREFIX + "RectR", inRR.text);
@@ -630,8 +765,11 @@ try {
     function buildPolymers(options) {
         var SHAPE_W  = options.width * MM;
         var CONN_LEN = options.gap * MM;
-        var UNIT     = SHAPE_W + CONN_LEN;
-        var FIRST_OFFSET = SHAPE_W / 2;
+        var isAmino = options.shapeType === "amino";
+        var monomer = isAmino && options.aminoMode === "monomer";
+        var unitSpan = monomer ? SHAPE_W*1.225 : SHAPE_W;
+        var UNIT     = unitSpan + CONN_LEN;
+        var FIRST_OFFSET = unitSpan / 2;
         var RECT_H   = options.rectH * MM;
         var RECT_R   = Math.min(options.rectR * MM, SHAPE_W / 2, RECT_H / 2); // 둥글기는 짧은 쪽의 절반까지
         var SW       = options.shapeStroke; // 외곽선 굵기는 pt 단위
@@ -643,7 +781,9 @@ try {
         var black = makeGray(100);
 
         // 선택된 커스텀 채우기 색상 준비
-        var customFillColor = getInnerFill(options.innerK, options.hexCode);
+        var customFillColor = isAmino ? null : getInnerFill(options.innerK, options.hexCode);
+        if (isAmino && !previewAminoPalette) previewAminoPalette = aminoPalette(doc, makeGray);
+        var aminoColors = previewAminoPalette;
 
         var groups = [];
         var skippedCount = 0;
@@ -659,7 +799,7 @@ try {
             var cum     = metrics.cum;
             var total   = metrics.total;
 
-            var n = Math.floor((total - SHAPE_W + CONN_LEN) / UNIT) + 1;
+            var n = Math.floor((total - unitSpan + CONN_LEN) / UNIT) + 1;
             if (n < 1) {
                 polymerGroup.remove();
                 skippedCount++;
@@ -668,7 +808,7 @@ try {
 
             for (var i = 0; i < n; i++) {
                 var centerLen = FIRST_OFFSET + UNIT * i;
-                if (centerLen + SHAPE_W/2 > total) break;
+                if (centerLen + unitSpan/2 > total) break;
 
                 var tC  = getTAtLength(cum, SAMPLES, centerLen);
                 var ptC = getPointOnPath(path, tC);
@@ -685,7 +825,11 @@ try {
 
                 var unitW = getUnitWidth(options.shapeType, unitShape, SHAPE_W);
 
-                if (unitShape === "circle") {
+                if (unitShape === "amino") {
+                    drawAminoUnit(polymerGroup, {x:ptC.x,y:ptC.y,angle:ang,w:SHAPE_W,h:RECT_H,
+                        radius:RECT_R,stroke:SW,variant:i,side:monomer || (i%4<2) ? 1 : -1,
+                        monomer:monomer,leftEnd:monomer || i===0,rightEnd:monomer || i===n-1},aminoColors);
+                } else if (unitShape === "circle") {
                     drawCircle(polymerGroup, ptC.x, ptC.y, unitW, SW, black, currentFill);
                 } else if (unitShape === "hex") {
                     var HEX_H = SHAPE_W / 1.5;
@@ -703,7 +847,7 @@ try {
                 }
 
                 // 연결선 그리기: 도형마다 외곽 접점 거리가 다르므로 개별 계산
-                if (CONN_LEN > 0) {
+                if (!monomer && CONN_LEN > 0) {
                     var frontHalf = getAttachHalfWidth(unitShape, unitW, "front");
                     var rightVertex = rotatePoint(ptC.x + frontHalf, ptC.y, ptC.x, ptC.y, ang);
                     var nextCenterLen = centerLen + UNIT;
@@ -793,6 +937,10 @@ try {
         }
     } else {
         restoreOriginals();
+    }
+    if (previewAminoPalette && previewAminoPalette.created &&
+        (result !== 1 || confirmedOptions.shapeType !== "amino")) {
+        previewAminoPalette.gradient.remove();
     }
     app.redraw();
 }());
