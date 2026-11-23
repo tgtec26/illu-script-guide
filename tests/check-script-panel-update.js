@@ -59,9 +59,13 @@ function commit(dir, name) { fs.writeFileSync(path.join(dir, name), name); git(d
         assert.equal(updater.readJob().state,'waiting');
     } finally { cp.spawn=realSpawn; }
     }
+    // Untracked files do not block a fast-forward; git pull --ff-only refuses on a name clash.
     fs.writeFileSync(path.join(local,'unsaved.txt'),'keep');
-    state = await updater.check(local); assert.equal(state.kind,'dirty'); assert.equal(state.canUpdate,false);
+    state = await updater.check(local); assert.equal(state.kind,'behind'); assert.equal(state.canUpdate,true);
     fs.unlinkSync(path.join(local,'unsaved.txt'));
+    fs.writeFileSync(path.join(local,'first'),'edited');
+    state = await updater.check(local); assert.equal(state.kind,'dirty'); assert.equal(state.canUpdate,false);
+    git(local,'checkout','--','first');
     commit(local,'local'); state = await updater.check(local); assert.equal(state.kind,'diverged'); assert.equal(state.canUpdate,false);
     git(local,'-c','user.name=fixture','-c','user.email=fixture@example.test','pull','--no-rebase','--no-edit','-s','ours');
     state = await updater.check(local); assert.equal(state.kind,'ahead');
@@ -97,8 +101,10 @@ function commit(dir, name) { fs.writeFileSync(path.join(dir, name), name); git(d
         }
         runWorker('done');
         runWorker('failed','wrong-branch');
-        fs.writeFileSync(path.join(workerRepo,'dirty.txt'),'keep'); runWorker('failed');
-        fs.unlinkSync(path.join(workerRepo,'dirty.txt'));
+        fs.writeFileSync(path.join(workerRepo,'untracked.txt'),'keep'); runWorker('done');
+        fs.unlinkSync(path.join(workerRepo,'untracked.txt'));
+        fs.writeFileSync(path.join(workerRepo,'seed'),'edited'); runWorker('failed');
+        git(workerRepo,'checkout','--','seed');
         fs.writeFileSync(setup,'exit 7\n'); git(workerRepo,'add','.'); git(workerRepo,'-c','user.name=fixture','-c','user.email=fixture@example.test','commit','-m','failing setup');
         runWorker('failed');
     }

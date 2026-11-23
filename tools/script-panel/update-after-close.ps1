@@ -24,7 +24,7 @@ try {
     Save-Job 'running' 'Git 갱신과 설치를 진행하고 있습니다. 권한 확인 창에서 예를 누르세요.'
     $CurrentBranch = & git -C $RepoDir symbolic-ref --quiet --short HEAD
     if ($LASTEXITCODE -ne 0 -or $CurrentBranch -ne $Branch) { throw '브랜치가 변경되었습니다. 패널에서 다시 확인하세요.' }
-    $Changes = & git -C $RepoDir status --porcelain --untracked-files=normal
+    $Changes = & git -C $RepoDir status --porcelain --untracked-files=no
     if ($LASTEXITCODE -ne 0 -or $Changes) { throw '로컬 변경이 있어 중단했습니다. 변경을 정리한 뒤 다시 시도하세요.' }
     & git -C $RepoDir pull --ff-only *> $Job.log
     if ($LASTEXITCODE -ne 0) { throw "Git 갱신에 실패했습니다. 로그: $($Job.log)" }

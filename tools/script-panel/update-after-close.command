@@ -26,7 +26,7 @@ done
 save_job running 'Git 갱신과 설치를 진행하고 있습니다. 터미널의 안내를 확인하세요.'
 current="$(git -C "$repo" symbolic-ref --quiet --short HEAD)" || fail '브랜치를 확인하지 못했습니다.'
 [ "$current" = "$branch" ] || fail '브랜치가 변경되었습니다. 다시 확인하세요.'
-changes="$(git -C "$repo" status --porcelain --untracked-files=normal)" || fail '로컬 상태를 확인하지 못했습니다.'
+changes="$(git -C "$repo" status --porcelain --untracked-files=no)" || fail '로컬 상태를 확인하지 못했습니다.'
 [ -z "$changes" ] || fail '로컬 변경이 있어 중단했습니다. 변경을 정리한 뒤 다시 시도하세요.'
 # Pull errors must stop the update even on older setup versions which swallowed them.
 git -C "$repo" pull --ff-only > "$log" 2>&1 || fail 'Git 갱신에 실패했습니다. 로그를 확인하세요.'

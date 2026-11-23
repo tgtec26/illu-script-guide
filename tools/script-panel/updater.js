@@ -28,7 +28,7 @@ function createUpdater(panelDir, stateDir) {
         var local = await git(['rev-parse','HEAD']);
         var upstream = await git(['rev-parse','FETCH_HEAD']);
         var counts = (await git(['rev-list','--left-right','--count',local + '...' + upstream])).split(/\s+/).map(Number);
-        var dirty = !!(await git(['status','--porcelain','--untracked-files=normal']));
+        var dirty = !!(await git(['status','--porcelain','--untracked-files=no']));
         var kind = counts[0] && counts[1] ? 'diverged' : counts[1] ? (dirty ? 'dirty' : 'behind') : counts[0] ? 'ahead' : 'current';
         return {kind:kind, local:local.slice(0,7), remote:upstream.slice(0,7), branch:branch,
             ahead:counts[0], behind:counts[1], dirty:dirty, canUpdate:kind === 'behind'};
