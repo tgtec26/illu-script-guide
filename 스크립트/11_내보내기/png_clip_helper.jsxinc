@@ -1,5 +1,6 @@
 // 600ppi·1200ppi PNG 복사 스크립트 공용 (11_내보내기)
-// 대지 크기와 상관없이 작업물(보이는 개체 전체)만 TARGET_PPI PNG(배경 투명)로 내보내고, 그 PNG 파일을 클립보드에 복사한다
+// 대지 크기와 상관없이 TARGET_PPI PNG(배경 투명)로 내보내고, 그 PNG 파일을 클립보드에 복사한다.
+// 선택한 개체가 있으면 그것만, 아무것도 선택하지 않았으면 작업물(보이는 개체 전체)을 내보낸다
 // (탐색기에서 파일을 복사한 것과 같아 한글에 실제 크기로 붙는다). PNG는 문서와 같은 폴더에 "<문서 이름>_<ppi>ppi.png"로 남긴다
 // (저장 전 문서는 임시 폴더). 실행할 때마다 덮어쓴다.
 // 일러스트레이터 스크립트에는 클립보드·외부 명령 기능이 없어, 임시 PowerShell 파일을 .vbs로 숨겨 실행한다(Windows 전용)
@@ -37,10 +38,41 @@ function exportPngToClipboard(TARGET_PPI) {
     options.artBoardClipping = false;   // 대지가 아니라 작업물 경계로 자른다
     options.horizontalScale = TARGET_PPI / 72.0 * 100.0;
     options.verticalScale = TARGET_PPI / 72.0 * 100.0;
+
+    // PNG 내보내기에는 선택한 개체만 내보내는 옵션이 없다. 선택이 있으면 복사해 임시 문서에 붙이고 거기서 내보낸다
+    // (복사로 바뀐 클립보드는 아래에서 PNG 파일로 다시 덮는다). 글자를 편집 중이라 개체가 아닌 선택이면 알리고 끝낸다
+    var selection = doc.selection;
+    var useSelection = selection && selection.length > 0;
+    if (useSelection) {
+        for (var s = 0; s < selection.length; s++) {
+            if (!selection[s] || typeof selection[s].duplicate !== "function") {
+                alert("개체가 아닌 것이 선택되어 있습니다. 글자 편집 중이면 선택 도구로 개체를 선택한 뒤 실행해 주세요.");
+                return;
+            }
+        }
+    }
+    var exportDoc = doc;
+    var tempDoc = null;
+    var exportMessage = null;
     try {
-        doc.exportFile(pngFile, ExportType.PNG24, options);
+        if (useSelection) {
+            app.copy();
+            tempDoc = app.documents.add(doc.documentColorSpace, 100, 100);
+            try { tempDoc.rasterEffectSettings.resolution = doc.rasterEffectSettings.resolution; } catch (effectError) {}   // 그림자·흐림 같은 효과가 원본과 같게 나오도록
+            app.paste();
+            exportDoc = tempDoc;
+        }
+        exportDoc.exportFile(pngFile, ExportType.PNG24, options);
     } catch (exportError) {
-        alert(TARGET_PPI + "ppi PNG 내보내기에 실패했습니다: " + exportError.message);
+        exportMessage = exportError.message;
+    } finally {
+        if (tempDoc !== null) {
+            try { tempDoc.close(SaveOptions.DONOTSAVECHANGES); } catch (closeError) {}
+            try { doc.activate(); } catch (activateError) {}
+        }
+    }
+    if (exportMessage !== null) {
+        alert(TARGET_PPI + "ppi PNG 내보내기에 실패했습니다: " + exportMessage);
         return;
     }
     if (!pngFile.exists) { alert("PNG 파일이 만들어지지 않았습니다."); return; }

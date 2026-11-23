@@ -124,7 +124,7 @@
 | 05_정렬 | Align_LeaderSymbol.jsx | 지시선 기호 정렬.jsx |
 | 05_정렬 | Align_Position12.jsx | 위치 정렬 (12방향).jsx |
 | 05_정렬 | Align_VisibleBounds.jsx | 보이는 영역 정렬.jsx |
-| 06_내보내기 | Output_600png.jsx | 600ppi PNG 내보내기.jsx |
+| 06_내보내기 | Output_600png.jsx | 600ppi PNG 복사.jsx |
 | 07_수학 | Object_HighCommon.jsx | 공통수학.jsx |
 | 07_수학 | Object_HighGeometry.jsx | 기하.jsx |
 | 07_수학 | Object_HighMath1.jsx | 수학1.jsx |
