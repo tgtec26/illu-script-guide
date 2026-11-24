@@ -3,20 +3,23 @@
 // 선택한 개체가 있으면 그것만, 아무것도 선택하지 않았으면 작업물(보이는 개체 전체)을 내보낸다
 // (탐색기에서 파일을 복사한 것과 같아 한글에 실제 크기로 붙는다). PNG는 문서와 같은 폴더에 "<문서 이름>_<ppi>ppi.png"로 남긴다
 // (저장 전 문서는 임시 폴더). 실행할 때마다 덮어쓴다.
-// 일러스트레이터 스크립트에는 클립보드·외부 명령 기능이 없어, 임시 PowerShell 파일을 .vbs로 숨겨 실행한다(Windows 전용)
-// 일러는 PowerShell을 기다리지 않고 바로 끝난다. 기다리면 일러가 멈춘 채 시간 초과가 날 수 있어서, 실패는 PowerShell이 메시지 상자로 알린다
+// 일러스트레이터 스크립트에는 클립보드·외부 명령 기능이 없어, Windows는 임시 PowerShell 파일을 .vbs로 숨겨 실행하고
+// Mac은 같은 폴더의 png_clip_mac.app(Dock에 뜨지 않는 도우미 앱)을 실행한다
+// 일러는 PowerShell·도우미 앱을 기다리지 않고 바로 끝난다. 기다리면 일러가 멈춘 채 시간 초과가 날 수 있어서, 실패는 그쪽이 메시지 상자로 알린다
 function exportPngToClipboard(TARGET_PPI) {
     if (app.documents.length === 0) { alert("열려있는 문서가 없습니다."); return; }
-    if ($.os.indexOf("Windows") < 0) { alert("이 스크립트는 Windows에서만 클립보드에 복사할 수 있습니다."); return; }
+    var isWindows = $.os.indexOf("Windows") >= 0;
+    var sep = isWindows ? "\\" : "/";
 
-    // vbs는 ANSI라 한글 경로를 못 읽는다. 임시 폴더 경로에 한글이 있으면 공용 폴더를 쓴다
+    // vbs는 ANSI라 한글 경로를 못 읽는다. 임시 폴더 경로에 한글이 있으면 공용 폴더를 쓴다. Mac은 도우미 앱이 요청 파일을 찾는 폴더를 쓴다
     var base = Folder.temp.fsName;
-    if (/[^\x00-\x7F]/.test(base)) base = "C:\\Users\\Public";
+    if (!isWindows) base = new Folder("~/Library/Caches").fsName;
+    else if (/[^\x00-\x7F]/.test(base)) base = "C:\\Users\\Public";
     var doc = app.activeDocument;
     // 문서 폴더에 바로 내보내면 이름의 공백이 '-'로 바뀌어 파일을 못 찾는다. 임시 파일로 내보낸 뒤 복사한다
-    var pngFile = new File(base + "\\illu_clip_" + TARGET_PPI + "ppi.png");
+    var pngFile = new File(base + sep + "illu_clip_" + TARGET_PPI + "ppi.png");
     var saveFile = null;
-    try { saveFile = new File(doc.path.fsName + "\\" + doc.name.replace(/\.[^.]+$/, "") + "_" + TARGET_PPI + "ppi.png"); } catch (pathError) {}   // 저장한 적 없는 문서는 path를 읽을 수 없다
+    try { saveFile = new File(doc.path.fsName + sep + doc.name.replace(/\.[^.]+$/, "") + "_" + TARGET_PPI + "ppi.png"); } catch (pathError) {}   // 저장한 적 없는 문서는 path를 읽을 수 없다
     var psFile = new File(base + "\\illu_clip_copy.ps1");
     var vbsFile = new File(base + "\\illu_clip_copy.vbs");
 
@@ -28,9 +31,44 @@ function exportPngToClipboard(TARGET_PPI) {
         f.close();
     }
     function psQuote(text) { return "'" + String(text).replace(/'/g, "''") + "'"; }
+    // Mac: PNG의 해상도 정보(pHYs)를 ppi로 적는다. 일러의 스크립트 내보내기는 이 정보를 적지 않아서, 그대로 두면 실제 크기로 붙지 않는다
+    function setPngPpi(f, ppi) {
+        function u32(n) { return String.fromCharCode((n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255); }
+        function readU32(text, at) { return ((text.charCodeAt(at) << 24) | (text.charCodeAt(at + 1) << 16) | (text.charCodeAt(at + 2) << 8) | text.charCodeAt(at + 3)) >>> 0; }
+        function crc32(text) {
+            var crc = 0xFFFFFFFF, c, i, k;
+            for (i = 0; i < text.length; i++) {
+                c = (crc ^ text.charCodeAt(i)) & 255;
+                for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                crc = (crc >>> 8) ^ c;
+            }
+            return (crc ^ 0xFFFFFFFF) >>> 0;
+        }
+        f.encoding = "BINARY";
+        if (!f.open("r")) throw new Error("PNG 파일을 열지 못했습니다.");
+        var data = f.read();
+        f.close();
+        if (data.substring(0, 8) !== "\x89PNG\r\n\x1a\n" || data.substring(12, 16) !== "IHDR") throw new Error("PNG 파일을 읽지 못했습니다.");
+        // 이미 적힌 해상도 정보는 지운다 (그림 데이터 IDAT 앞에만 올 수 있다)
+        var at = 33, size, type;
+        while (at + 8 <= data.length) {
+            size = readU32(data, at);
+            type = data.substring(at + 4, at + 8);
+            if (type === "IDAT") break;
+            if (type === "pHYs") data = data.substring(0, at) + data.substring(at + 12 + size);
+            else at += 12 + size;
+        }
+        var perMeter = Math.round(ppi / 0.0254);
+        var body = "pHYs" + u32(perMeter) + u32(perMeter) + "\x01";
+        data = data.substring(0, 33) + u32(9) + body + u32(crc32(body)) + data.substring(33);   // IHDR(33바이트까지) 바로 뒤
+        if (!f.open("w")) throw new Error("PNG 파일에 쓰지 못했습니다.");
+        var written = f.write(data);
+        f.close();
+        if (!written) throw new Error("PNG 파일에 쓰지 못했습니다.");
+    }
 
     removeFile(pngFile);
-    removeFile(psFile);   // 이전 실행의 PowerShell 파일(실행이 끝나면 남을 수 있다)
+    if (isWindows) removeFile(psFile);   // 이전 실행의 PowerShell 파일(실행이 끝나면 남을 수 있다)
 
     var options = new ExportOptionsPNG24();
     options.antiAliasing = true;
@@ -77,6 +115,28 @@ function exportPngToClipboard(TARGET_PPI) {
     }
     if (!pngFile.exists) { alert("PNG 파일이 만들어지지 않았습니다."); return; }
     var destFile = saveFile !== null ? saveFile : pngFile;
+
+    // Mac: 해상도 정보를 고치고 문서 폴더에 남긴 뒤, 도우미 앱이 PNG를 클립보드에 올린다
+    // 클립보드에는 캐시 폴더에 문서 이름으로 둔 사본을 올린다. 다운로드·문서·데스크탑 폴더의 파일은 macOS가 막아서 도우미 앱이 파일로 올릴 수 없다
+    if (!isWindows) {
+        try {
+            setPngPpi(pngFile, TARGET_PPI);
+            if (saveFile !== null) pngFile.copy(saveFile);
+            var clipFolder = new Folder(base + "/illu_clip");
+            var oldFiles = clipFolder.exists ? clipFolder.getFiles() : [];
+            for (var o = 0; o < oldFiles.length; o++) removeFile(oldFiles[o]);   // 이전 실행의 사본
+            clipFolder.create();
+            var clipFile = new File(clipFolder.fsName + "/" + doc.name.replace(/\.[^.]+$/, "") + "_" + TARGET_PPI + "ppi.png");
+            if (!pngFile.copy(clipFile)) clipFile = pngFile;
+            var requestFile = new File(base + "/illu_clip_request.txt");
+            requestFile.lineFeed = "Unix";   // 기본값은 줄바꿈을 CR로 적어서 도우미 앱이 줄 끝을 찾지 못한다
+            writeFile(requestFile, clipFile.fsName + "\n", "UTF-8");
+            if (!new File(new File($.fileName).parent.fsName + "/png_clip_mac.app").execute()) throw new Error("png_clip_mac.app을 실행하지 못했습니다. 스크립트 폴더를 다시 받아 주세요.");
+        } catch (macError) {
+            alert("클립보드 복사를 시작하지 못했습니다: " + macError.message + "\nPNG 파일: " + pngFile.fsName);
+        }
+        return;
+    }
 
     // 일러의 스크립트 내보내기는 해상도 정보를 96ppi로 적는다. TARGET_PPI로 고쳐 다시 저장하고(한글이 실제 크기로 붙는다),
     // 문서 폴더로 복사한 뒤, 파일 탐색기에서 파일을 복사한 것과 같이 그 파일을 클립보드에 올린다. 실패하면 메시지 상자로 알린다

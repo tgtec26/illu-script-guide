@@ -1,0 +1,23 @@
+#!/bin/sh
+# 600ppi·1200ppi PNG 복사(png_clip_helper.jsxinc)의 Mac 쪽. 일러 스크립트는 클립보드에 올릴 수 없어서 이 앱을 실행한다(Dock에 뜨지 않는다)
+# 요청 파일 첫 줄 = 클립보드에 올릴 PNG
+# 파일(Finder에서 복사한 것과 같다)과 PNG 그림 데이터를 함께 올려, 파일을 받는 앱과 그림만 받는 앱 모두에 붙는다
+# 다운로드·문서·데스크탑 폴더의 파일은 파일로 올려도 macOS가 빼 버리므로, 일러 스크립트가 캐시 폴더의 사본을 넘긴다
+REQ="$HOME/Library/Caches/illu_clip_request.txt"
+LOG="$HOME/Library/Caches/illu_clip_error.txt"
+PNG=""
+IFS= read -r PNG < "$REQ"
+rm -f "$REQ"
+/usr/bin/osascript -l JavaScript -e '
+ObjC.import("AppKit");
+function run(argv) {
+    var data = $.NSData.dataWithContentsOfFile(argv[0]);
+    if (data.isNil()) throw new Error("PNG: " + argv[0]);
+    var item = $.NSPasteboardItem.alloc.init;
+    item.setStringForType($.NSURL.fileURLWithPathIsDirectory(argv[0], false).absoluteString, "public.file-url");
+    item.setDataForType(data, "public.png");
+    var pb = $.NSPasteboard.generalPasteboard;
+    pb.clearContents;
+    pb.writeObjects($([item]));
+}' "$PNG" 2> "$LOG" && rm -f "$LOG" && exit 0
+/usr/bin/osascript -e 'on run argv' -e 'display alert (item 1 of argv) message (item 2 of argv)' -e 'end run' "클립보드 복사에 실패했습니다" "$(cat "$LOG")"
