@@ -68,7 +68,7 @@
 3. 선택: 피스톤 실린더 세로형(모래), 세포분열 세포 주기 `expandArrows` 옵션 실사용 확인(사용자가 "잘 된다"고 확인함).
 
 ## 6. 알려진 상태
-- `tests/*.js` 중 **변경 전부터 실패하던 4개**: `check-arrowhead-shapes`, `check-crystal-sizes`, `check-math-heads`, `check-script-safety`. 새로 깨뜨린 것은 없다. 나머지는 `for f in tests/*.js; do node $f || echo FAIL $f; done`로 확인.
+- `tests/*.js` 중 **변경 전부터 실패하던 4개**: `check-arrowhead-shapes`, `check-central-dogma`, `check-crystal-sizes`, `check-math-heads`. 새로 깨뜨린 것은 없다. (`check-script-safety`는 2026-11-24에 옛 기대값을 고쳐 통과한다.) 나머지는 `for f in tests/*.js; do node $f || echo FAIL $f; done`로 확인.
 - (2026-11-17에 바뀜: 2027 정식판 + CEP) 2026-11-10(사용자): 이 Mac의 검증 앱은 **Illustrator 2027 Beta 하나**이고 연결은 네이티브 `illustrator` MCP다(2026 30.8.2와 `illustrator-cep`는 더 쓰지 않는다). 옛 기록: 2027 Beta의 새 문서 생성 실패로 기본 대상에서 제외했으나 2026-10-18에 해결됐다. 자세한 내용은 `AGENTS.md`의 "Verifying in Illustrator" 첫 두 문단.
 - 일러에 스크립트 로더를 다시 등록해야 할 때: `./setup-mac.command`(설치된 정식판·Beta 모두 등록; `ILLUSTRATOR_APP_DIR`를 지정하면 해당 앱만).
 - Windows도 베타는 연도가 없어 자동으로 못 고르고 2026 폴더에 등록된다(액션의 "메뉴 항목" 단계가 `파일 > 스크립트` 메뉴를 찾지 못해 "현재 사용할 수 없습니다"가 뜸): `setup-windows.cmd -IllustratorAppDir "C:\Program Files\Adobe\Adobe Illustrator (Beta)" -IllustratorVer "31.0.0 Beta"`. 베타 `Presets\ko_KR\스크립트` 폴더를 일러가 읽는다(2026-10-12 Windows 베타에서 메뉴·액션 F12 확인).

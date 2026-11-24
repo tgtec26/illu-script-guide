@@ -662,17 +662,18 @@ for (const file of [centerAlignBig, centerAlignSmall]) {
 {
   const source = read(coilSpring);
   const required = [
-    'label: "코일 스프링"',
+    'label: "스프링"',
     'var LINE_WIDTH_PT = 0.3',
     'path.strokeWidth = lineWidthPt',
     'path.strokeColor = formGray(shadeK)',
     'var ellipseHeight = loopMm * MM_TO_PT',
     'if (source === null && doc.selection && doc.selection.length > 0) return',
-    'var MIN_TURNS = 5',
-    'var MAX_TURNS = 30',
-    'widthRow.add("statictext", undefined, "너비 (mm):")',
-    'heightRow.add("statictext", undefined, "높이 (mm):")',
-    'turnsRow.add("statictext", undefined, "감는 횟수 (회):")',
+    'var turnsRange = rangeOf("coil", "감는 횟수", "감는 횟수", "회", 5, 30, 1)',
+    'var MIN_TURNS = turnsRange.min',
+    'var MAX_TURNS = turnsRange.max',
+    'widthRow.add("statictext", undefined, "너비")',
+    'heightRow.add("statictext", undefined, "높이")',
+    'turnsRow.add("statictext", undefined, "감는 횟수")',
     'addSliderWithSteps(widthRow, coilWidthMm, SIZE_STEP_MM, maxCoilWidthMm, SIZE_STEP_MM)',
     'addSliderWithSteps(heightRow, coilHeightMm, SIZE_STEP_MM, maxCoilHeightMm, SIZE_STEP_MM)',
     'addSliderWithSteps(turnsRow, turnCount, MIN_TURNS, MAX_TURNS, 1)',
@@ -2279,7 +2280,7 @@ for (const file of updaterFiles) {
     // 입력창이 있는 다이얼로그는 탭이 입력창끼리만 오가도록 00_세팅/ui_tab_helper.jsxinc를 읽고 bindTabOrder를 부른다
     if (source.includes('add("edittext"')) {
       const loadsHelper = source.includes('/00_세팅/ui_tab_helper.jsxinc');
-      const binds = /if \(typeof bindTabOrder === "function"\) bindTabOrder\(\w+\);/.test(source);
+      const binds = /if\s*\(typeof bindTabOrder\s*===\s*"function"\)\s*bindTabOrder\(\w+\);/.test(source);
       if (!loadsHelper || !binds) {
         console.error(`${file}: dialogs with edittext must load ui_tab_helper.jsxinc and call bindTabOrder(win) before show()`);
         failures++;
