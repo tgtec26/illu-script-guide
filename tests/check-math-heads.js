@@ -95,7 +95,7 @@ return {headStyle, registerHead, applyHeadStyle, headShapeFor, saveHeadStyle, lo
   const defs = (source.match(/^ *var (ARROW|SMALL_ARROW|TURN_ARROW|VECTOR_ARROW) = \{/gm) || []).length;
   const regs = (source.match(/^ *registerHead\((ARROW|SMALL_ARROW|TURN_ARROW|VECTOR_ARROW)\);/gm) || []).length;
   assert.ok(defs > 0 && defs === regs, `${file}: every axis spec is registered (${defs} vs ${regs})`);
-  assert.ok(/headShapeList = footer\.add\("dropdownlist", undefined, HEAD_SHAPES\)/.test(source), `${file}: shape dropdown`);
+  assert.ok(/headShapeList = footer\.add\("dropdownlist", undefined, \[HEAD_SHAPES\[3\], HEAD_SHAPES\[2\], HEAD_SHAPES\[0\], HEAD_SHAPES\[1\]\]\)/.test(source), `${file}: shape dropdown`);
   assert.ok(source.includes("var headSizeBar = headSizeGroup.add(\"scrollbar\""), `${file}: size row`);
   assert.ok(source.includes("saveHeadStyle();"), `${file}: saved on confirm`);
   assert.ok(source.includes("headSizeReset.helpTip"), `${file}: R button`);

@@ -53,7 +53,7 @@ for (const file of TRIANGLE_DERIVED) {
   nearPoints(lib.arrowHeadShape([0, 10], 0, 1).points, expectedPoints(3, [0, 10], [0, 1], k), `${file}: upward harpoon`);
 
   assert.ok(source.includes(`var HEAD_SHAPES = ${LABELS};`), `${file}: HEAD_SHAPES`);
-  assert.ok(/headShapeList = \w+\.add\("dropdownlist", undefined, HEAD_SHAPES\)/.test(source), `${file}: shape dropdown`);
+  assert.ok(/headShapeList = \w+\.add\("dropdownlist", undefined, \[HEAD_SHAPES\[3\], HEAD_SHAPES\[2\], HEAD_SHAPES\[0\], HEAD_SHAPES\[1\]\]\)/.test(source), `${file}: shape dropdown`);
   assert.ok(/headShapeList\.onChange = function/.test(source), `${file}: shape dropdown handler`);
 }
 

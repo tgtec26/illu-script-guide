@@ -38,6 +38,7 @@ console.log('crystal sizes: default geometry, independent ion diameters, unchang
 const rows = source.slice(source.indexOf('    function addSliderRow('), source.indexOf('    // ==== 입방정계 엔진'));
 const restore = source.slice(source.indexOf('    function restoreSlider('), source.indexOf('    function restoreInteger('));
 const engineCode = source.slice(source.indexOf('    function makeCubicEngine('), source.indexOf('    // ==== 다이아몬드 엔진'));
+const fold = source.slice(source.indexOf('function foldPanel('), source.indexOf('\n}\n', source.indexOf('function foldPanel(')) + 3);   // 접는 패널(없으면 일반 패널)
 function controls() {
   let previews=0;
   function node(type, text='', value) {
@@ -47,7 +48,7 @@ function controls() {
     }};
   }
   const root=node('tab');
-  const e = new Function('page','updatePreview', `var sliderSyncers=[]; ${rows} ${restore} ${engineCode}
+  const e = new Function('page','updatePreview', `var sliderSyncers=[]; ${fold} ${rows} ${restore} ${engineCode}
     var e=makeCubicEngine('rotation'); e.addRows(page); return e;`)(root,()=>previews++);
   function find(label) {
     const search=n=> n.type==='scrollbar' && n.caption.text.startsWith(label) ? n : n.children.map(search).find(Boolean);
