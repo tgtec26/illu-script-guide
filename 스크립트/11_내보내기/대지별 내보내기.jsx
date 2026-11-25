@@ -7,8 +7,11 @@ try {
     __memo.write($.fileName);
     __memo.close();
 } catch (e) {}
+// 대화상자 정리 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
+try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 
-// 대지마다 그 대지에 걸친 개체를 AI 파일과 1200ppi PNG(배경 투명)로 내보낸다.
+// 고른 대지마다 그 대지에 걸친 개체를 AI 파일과 1200ppi PNG(배경 투명)로 내보낸다.
+// 실행하면 대지 목록에서 내보낼 대지를 고른다. 선택한 개체가 걸친 대지(선택이 없으면 현재 대지)가 미리 골라져 있다.
 // 원본 문서 폴더에 Ai·png 폴더를 만들고 "<대지 이름>.ai", "<대지 이름>.png"로 저장한다(같은 이름이 있으면 덮어쓴다).
 // 대지마다 새 문서를 만들어 그 대지에 걸친 개체만 레이어째 복제한 뒤(원본 문서는 바꾸지 않는다) AI로 저장하고,
 // 같은 문서에서 대지 없이 작업물 경계로 자른 PNG를 내보낸다(대지 밖으로 나간 부분도 잘리지 않는다).
@@ -155,11 +158,65 @@ try {
         tempPng.remove();
     }
 
+    // 내보낼 대지를 고른다. 대지마다 true/false 배열을 돌려주고, 취소하면 null
+    function pickArtboards() {
+        var count = doc.artboards.length, i, j, bounds;
+        var initial = [], anyPicked = false, sel = [];
+        for (i = 0; i < count; i++) initial.push(false);
+        try { if (doc.selection && doc.selection.length) sel = doc.selection; } catch (selError) {}
+        for (j = 0; j < sel.length; j++) {
+            try { bounds = sel[j].visibleBounds; } catch (boundsError) { continue; }   // 글자 편집 중의 선택 등
+            for (i = 0; i < count; i++) {
+                if (intersects(bounds, doc.artboards[i].artboardRect)) { initial[i] = true; anyPicked = true; }
+            }
+        }
+        if (!anyPicked) initial[doc.artboards.getActiveArtboardIndex()] = true;
+
+        var names = [];
+        for (i = 0; i < count; i++) names.push((i + 1) + ". " + doc.artboards[i].name);
+        var dlg = new Window("dialog", "대지별 내보내기");
+        dlg.orientation = "column";
+        dlg.alignChildren = ["fill", "top"];
+        dlg.add("statictext", undefined, "내보낼 대지 (Shift·" + ($.os.indexOf("Windows") >= 0 ? "Ctrl" : "⌘") + " 클릭으로 여러 개)");
+        var list = dlg.add("listbox", undefined, names, { multiselect: true });
+        list.preferredSize = [280, Math.min(400, Math.max(120, count * 20 + 8))];
+        for (i = 0; i < count; i++) if (initial[i]) list.items[i].selected = true;
+        var row = dlg.add("group");
+        row.alignment = ["fill", "top"];
+        var allBtn = row.add("button", undefined, "모두 선택");
+        var gap = row.add("group");
+        gap.alignment = ["fill", "center"];
+        var okBtn = row.add("button", undefined, "확인", { name: "ok" });
+        row.add("button", undefined, "취소", { name: "cancel" });
+
+        var result = null;
+        list.onChange = function () { okBtn.enabled = list.selection !== null; };
+        allBtn.onClick = function () {
+            for (var k = 0; k < list.items.length; k++) list.items[k].selected = true;
+            okBtn.enabled = true;
+        };
+        okBtn.onClick = function () {
+            result = [];
+            for (var k = 0; k < list.items.length; k++) result.push(list.items[k].selected);
+            dlg.close(1);
+        };
+        if (typeof bindTabOrder === "function") bindTabOrder(dlg);
+        if (dlg.show() !== 1) return null;
+        return result;
+    }
+
+    var picked = pickArtboards();
+    if (picked === null) return;
+    // 파일 이름은 고른 대지와 상관없이 대지 전체 순서로 정한다(같은 이름의 " (2)"가 실행마다 바뀌지 않게)
+    var baseNames = [];
+    for (var n = 0; n < doc.artboards.length; n++) baseNames.push(fileBaseName(doc.artboards[n].name, n));
+
     var oldInteraction = app.userInteractionLevel;
     app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
     var done = 0, skipped = [], failed = [];
     try {
         for (var a = 0; a < doc.artboards.length; a++) {
+            if (!picked[a]) continue;
             var ab = doc.artboards[a];
             var rect = ab.artboardRect;
             var nodes = [];
@@ -168,7 +225,7 @@ try {
                 if (node !== null) nodes.push(node);
             }
             if (nodes.length === 0) { skipped.push(ab.name); continue; }
-            var base = fileBaseName(ab.name, a);
+            var base = baseNames[a];
             try {
                 saveArtboard(ab, rect, nodes, new File(aiFolder.fsName + sep + base + ".ai"), new File(pngFolder.fsName + sep + base + ".png"));
                 done++;
