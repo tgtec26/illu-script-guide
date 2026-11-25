@@ -8,9 +8,10 @@ try {
     __memo.close();
 } catch (e) {}
 
-// 대지마다 그 대지에 걸친 개체를 AI 파일과 1200ppi PNG(배경 투명, 대지 크기)로 내보낸다.
+// 대지마다 그 대지에 걸친 개체를 AI 파일과 1200ppi PNG(배경 투명)로 내보낸다.
 // 원본 문서 폴더에 Ai·png 폴더를 만들고 "<대지 이름>.ai", "<대지 이름>.png"로 저장한다(같은 이름이 있으면 덮어쓴다).
-// AI는 대지마다 새 문서를 만들어 그 대지에 걸친 개체만 레이어째 복제해 저장한다(원본 문서는 바꾸지 않는다).
+// 대지마다 새 문서를 만들어 그 대지에 걸친 개체만 레이어째 복제한 뒤(원본 문서는 바꾸지 않는다) AI로 저장하고,
+// 같은 문서에서 대지 없이 작업물 경계로 자른 PNG를 내보낸다(대지 밖으로 나간 부분도 잘리지 않는다).
 // 숨긴 레이어·개체는 빼고, 개체가 하나도 없는 대지는 건너뛴다.
 (function () {
     var TARGET_PPI = 1200;
@@ -83,7 +84,7 @@ try {
         if (node.layer.locked) target.locked = true;
     }
 
-    function saveArtboardAi(ab, rect, nodes, file) {
+    function saveArtboard(ab, rect, nodes, aiFile, pngFile) {
         var width = rect[2] - rect[0], height = rect[1] - rect[3];
         var nd = app.documents.add(doc.documentColorSpace, width, height);
         try {
@@ -92,9 +93,10 @@ try {
             var blank = nd.layers[0];
             for (var i = nodes.length - 1; i >= 0; i--) copyNode(nodes[i], nd.layers, rect, nd.artboards[0].artboardRect);
             blank.remove();   // 새 문서에 처음 있던 빈 레이어
+            exportPng(nd, pngFile);
             var options = new IllustratorSaveOptions();
             options.pdfCompatible = true;
-            nd.saveAs(file, options);
+            nd.saveAs(aiFile, options);
         } finally {
             try { nd.close(SaveOptions.DONOTSAVECHANGES); } catch (closeError) {}
             try { doc.activate(); } catch (activateError) {}
@@ -137,16 +139,15 @@ try {
         if (!written) throw new Error("PNG 파일에 쓰지 못했습니다.");
     }
 
-    function exportArtboardPng(index, file) {
-        doc.artboards.setActiveArtboardIndex(index);
+    function exportPng(source, file) {
         var options = new ExportOptionsPNG24();
         options.antiAliasing = true;
         options.transparency = true;
-        options.artBoardClipping = true;   // 활성 대지 크기로 자른다
+        options.artBoardClipping = false;   // 대지가 아니라 작업물 경계로 자른다
         options.horizontalScale = TARGET_PPI / 72.0 * 100.0;
         options.verticalScale = TARGET_PPI / 72.0 * 100.0;
         if (tempPng.exists) tempPng.remove();
-        doc.exportFile(tempPng, ExportType.PNG24, options);
+        source.exportFile(tempPng, ExportType.PNG24, options);
         if (!tempPng.exists) throw new Error("PNG 파일이 만들어지지 않았습니다.");
         setPngPpi(tempPng, TARGET_PPI);
         if (file.exists) file.remove();
@@ -155,7 +156,6 @@ try {
     }
 
     var oldInteraction = app.userInteractionLevel;
-    var oldArtboard = doc.artboards.getActiveArtboardIndex();
     app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
     var done = 0, skipped = [], failed = [];
     try {
@@ -170,8 +170,7 @@ try {
             if (nodes.length === 0) { skipped.push(ab.name); continue; }
             var base = fileBaseName(ab.name, a);
             try {
-                exportArtboardPng(a, new File(pngFolder.fsName + sep + base + ".png"));
-                saveArtboardAi(ab, rect, nodes, new File(aiFolder.fsName + sep + base + ".ai"));
+                saveArtboard(ab, rect, nodes, new File(aiFolder.fsName + sep + base + ".ai"), new File(pngFolder.fsName + sep + base + ".png"));
                 done++;
             } catch (abError) {
                 failed.push(ab.name + ": " + abError.message);
@@ -179,7 +178,7 @@ try {
         }
     } finally {
         app.userInteractionLevel = oldInteraction;
-        try { doc.activate(); doc.artboards.setActiveArtboardIndex(oldArtboard); } catch (restoreError) {}
+        try { doc.activate(); } catch (restoreError) {}
         try { if (tempPng.exists) tempPng.remove(); } catch (removeError) {}
     }
 
