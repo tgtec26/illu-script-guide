@@ -13,7 +13,8 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
 // 고른 대지마다 그 대지에 걸친 개체를 AI 파일과 1200ppi PNG(배경 투명)로 내보낸다.
 // 실행하면 대지 목록에서 내보낼 대지를 고른다. 선택한 개체가 걸친 대지(선택이 없으면 현재 대지)가 미리 골라져 있다.
 // 원본 문서 폴더에 Ai·png 폴더를 만들고 "<대지 이름>.ai", "<대지 이름>.png"로 저장한다(같은 이름이 있으면 덮어쓴다).
-// 대지마다 새 문서를 만들어 그 대지에 걸친 개체만 레이어째 복제한 뒤(원본 문서는 바꾸지 않는다) AI로 저장하고,
+// 대지마다 새 문서를 만들어 그 대지에 걸친 개체만 레이어째 복제한 뒤 AI로 저장하고,
+// (원본 개체는 바꾸지 않지만, 복제하려고 임시 레이어를 만들었다 지우므로 원본 문서에 저장 안 됨 표시가 붙는다)
 // 같은 문서에서 대지 없이 작업물 경계로 자른 PNG를 내보낸다(대지 밖으로 나간 부분도 잘리지 않는다).
 // 숨긴 레이어·개체는 빼고, 개체가 하나도 없는 대지는 건너뛴다.
 (function () {
@@ -84,19 +85,49 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
         return node.items.length > 0 || node.subs.length > 0 ? node : null;
     }
 
-    // 고른 개체를 새 문서의 같은 이름 레이어로 복제한다. 위치는 placeCopies가 한꺼번에 맞추고,
-    // 잠긴 레이어는 그 뒤에 잠근다(먼저 잠그면 개체를 옮길 수 없다)
-    function copyNode(node, layers, ctx) {
+    // 새 문서에 원본과 같은 이름의 레이어를 만들고, 개체를 넣을 레이어마다 {target, entries}를 ctx.jobs에 모은다.
+    // 잠긴 레이어는 개체를 다 넣은 뒤에 잠근다(먼저 잠그면 개체를 옮길 수 없다)
+    function buildTargets(node, layers, ctx) {
         var target = layers.add();   // add는 맨 위에 넣으므로 아래 레이어부터 부른다
         target.name = node.layer.name;
         try { target.color = node.layer.color; } catch (colorError) {}
-        var i;
-        for (i = node.subs.length - 1; i >= 0; i--) copyNode(node.subs[i], target.layers, ctx);
-        for (i = node.items.length - 1; i >= 0; i--) {
-            var entry = node.items[i];
-            ctx.copies.push({ bounds: entry.bounds, dup: entry.item.duplicate(target, ElementPlacement.PLACEATBEGINNING) });
-        }
+        for (var i = node.subs.length - 1; i >= 0; i--) buildTargets(node.subs[i], target.layers, ctx);
+        if (node.items.length > 0) ctx.jobs.push({ target: target, entries: node.items });
         if (node.layer.locked) ctx.lockLayers.push(target);
+    }
+
+    // 활성이 아닌 문서의 개체를 만질 때마다 일러가 시간을 쓴다(개체당 Mac 약 17ms, Windows 약 150ms).
+    // 그래서 원본을 앞에 둔 채 원본의 임시 레이어에 개체를 레이어별 그룹으로 복제하고(거의 0ms),
+    // 그 묶음을 새 문서로 한 번만 복제한 뒤 임시 레이어를 지운다. 새 문서를 앞에 두고 묶음을 풀어 레이어마다 넣는다
+    // (새 문서가 뒤에 있으면 푸는 move가 오류를 낸다). 원본 개체는 그대로지만 원본 문서에 저장 안 됨 표시가 붙는다
+    function copyJobs(nd, ctx) {
+        var jobs = ctx.jobs, i, k;
+        doc.activate();
+        var tempLayer = doc.layers.add();
+        var copy;
+        try {
+            tempLayer.name = "대지별 내보내기 임시";
+            var bundle = tempLayer.groupItems.add();
+            for (i = 0; i < jobs.length; i++) {
+                var group = bundle.groupItems.add();   // 맨 위에 들어가므로 묶음 안에서는 거꾸로 쌓인다
+                for (k = 0; k < jobs[i].entries.length; k++) jobs[i].entries[k].item.duplicate(group, ElementPlacement.PLACEATEND);
+            }
+            copy = bundle.duplicate(nd.layers[nd.layers.length - 1], ElementPlacement.PLACEATBEGINNING);
+        } finally {
+            tempLayer.remove();
+            nd.activate();
+        }
+        for (i = 0; i < jobs.length; i++) {
+            var groupCopy = copy.pageItems[jobs.length - 1 - i], entries = jobs[i].entries;
+            for (k = entries.length - 1; k >= 0; k--) {   // 아래 개체부터 맨 위로 옮겨 쌓임 순서를 지킨다
+                var dup = groupCopy.pageItems[k], wasLocked = dup.locked;
+                if (wasLocked) dup.locked = false;
+                dup.move(jobs[i].target, ElementPlacement.PLACEATBEGINNING);
+                if (wasLocked) dup.locked = true;
+                ctx.copies.push({ bounds: entries[k].bounds, dup: dup });
+            }
+        }
+        copy.remove();
     }
 
     // 다른 문서로 복제한 개체는 모두 같은 거리만큼 밀려 있다. 개체를 하나씩 옮기지 않고 새 대지를 그 거리만큼 옮긴다.
@@ -141,8 +172,9 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
             nd.artboards[0].name = ab.name;
             var blank = nd.layers[0];
             t2 = now(); times.newDoc += t2 - t; t = t2;
-            var ctx = { copies: [], lockLayers: [] };
-            for (var i = nodes.length - 1; i >= 0; i--) copyNode(nodes[i], nd.layers, ctx);
+            var ctx = { jobs: [], copies: [], lockLayers: [] };
+            for (var i = nodes.length - 1; i >= 0; i--) buildTargets(nodes[i], nd.layers, ctx);
+            copyJobs(nd, ctx);   // 묶음은 맨 아래 레이어(처음 있던 빈 레이어)에 잠깐 들어갔다 지워진다
             blank.remove();   // 새 문서에 처음 있던 빈 레이어
             placeCopies(nd, rect, ctx);
             times.items += ctx.copies.length;
