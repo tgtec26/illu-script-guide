@@ -10,28 +10,55 @@ try {
 // 대화상자 정리 (00_세팅/ui_tab_helper.jsxinc). 파일이 없어도 스크립트는 동작한다
 try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세팅/ui_tab_helper.jsxinc")); } catch (e) {}
 
-// 고른 대지마다 그 대지에 걸친 개체를 AI 파일과 1200ppi PNG(배경 투명)로 내보낸다.
+// 고른 대지마다 그 대지에 걸친 개체를 고른 형식(AI·PDF·SVG·600ppi PNG·1200ppi PNG)으로 내보낸다.
 // 실행하면 대지 목록에서 내보낼 대지를 고른다. 선택한 개체가 걸친 대지(선택이 없으면 현재 대지)가 미리 골라져 있다.
-// 원본 문서 폴더에 Ai·png 폴더를 만들고 "<대지 이름>.ai", "<대지 이름>.png"로 저장한다(같은 이름이 있으면 덮어쓴다).
-// 대지마다 새 문서를 만들어 그 대지에 걸친 개체만 레이어째 복제한 뒤 AI로 저장하고,
-// (원본 개체는 바꾸지 않지만, 복제하려고 임시 레이어를 만들었다 지우므로 원본 문서에 저장 안 됨 표시가 붙는다)
-// 같은 문서에서 대지 없이 작업물 경계로 자른 PNG를 내보낸다(대지 밖으로 나간 부분도 잘리지 않는다).
+// 형식은 목록 아래 버튼을 눌러 켜고 끄며, 확인하면 다음 실행을 위해 기억한다(처음에는 AI·PNG 1200).
+// 원본 문서 폴더에 형식마다 Ai·pdf·svg·png600·png1200 폴더를 만들고 "<대지 이름>.<확장자>"로 저장한다(같은 이름이 있으면 덮어쓴다).
+// 대지마다 새 문서를 만들어 그 대지에 걸친 개체만 레이어째 복제한 뒤 저장한다
+// (원본 개체는 바꾸지 않지만, 복제하려고 임시 레이어를 만들었다 지우므로 원본 문서에 저장 안 됨 표시가 붙는다).
+// AI·PDF·SVG는 대지 크기로, PNG는 대지 없이 작업물 경계로 자른다(대지 밖으로 나간 부분도 잘리지 않는다, 배경 투명).
 // 숨긴 레이어·개체는 빼고, 개체가 하나도 없는 대지는 건너뛴다.
 (function () {
-    var TARGET_PPI = 1200;
+    var PREF_KEY = "ArtboardExport/settings";
+    var FORMATS = [
+        { key: "ai", label: "AI", folder: "Ai", ext: ".ai", on: true },
+        { key: "pdf", label: "PDF", folder: "pdf", ext: ".pdf", on: false },
+        { key: "svg", label: "SVG", folder: "svg", ext: ".svg", on: false },
+        { key: "png600", label: "PNG 600", folder: "png600", ext: ".png", ppi: 600, on: false },
+        { key: "png1200", label: "PNG 1200", folder: "png1200", ext: ".png", ppi: 1200, on: true }
+    ];
     if (app.documents.length === 0) { alert("열려있는 문서가 없습니다."); return; }
     var doc = app.activeDocument;
     var docFolder = null;
     try { if (doc.fullName && doc.path.exists) docFolder = doc.path; } catch (pathError) {}   // 저장한 적 없는 문서는 path를 읽을 수 없다
-    if (docFolder === null) { alert("문서를 먼저 저장해 주세요. 원본이 있는 폴더에 Ai·png 폴더를 만듭니다."); return; }
+    if (docFolder === null) { alert("문서를 먼저 저장해 주세요. 원본이 있는 폴더에 형식별 폴더를 만듭니다."); return; }
 
     var sep = $.os.indexOf("Windows") >= 0 ? "\\" : "/";
-    var aiFolder = new Folder(docFolder.fsName + sep + "Ai");
-    var pngFolder = new Folder(docFolder.fsName + sep + "png");
-    if (!aiFolder.exists && !aiFolder.create()) { alert("Ai 폴더를 만들지 못했습니다: " + aiFolder.fsName); return; }
-    if (!pngFolder.exists && !pngFolder.create()) { alert("png 폴더를 만들지 못했습니다: " + pngFolder.fsName); return; }
-    // 일러의 PNG 내보내기는 이름의 공백을 '-'로 바꾼다. 영문 임시 파일로 내보낸 뒤 대지 이름으로 복사한다
-    var tempPng = new File(Folder.temp.fsName + sep + "illu_artboard_export.png");
+    // 일러의 PNG·SVG 내보내기는 이름의 공백을 '-'로 바꾼다. 영문 임시 파일로 내보낸 뒤 대지 이름으로 복사한다
+    var tempFiles = {
+        png: new File(Folder.temp.fsName + sep + "illu_artboard_export.png"),
+        svg: new File(Folder.temp.fsName + sep + "illu_artboard_export.svg")
+    };
+
+    // 형식 켜짐을 "v1|1|0|0|0|1"(FORMATS 순서)로 저장한다. 태그·개수가 다르면 무시하고 기본값으로 둔다
+    function loadFormats() {
+        var raw = "";
+        try { raw = app.preferences.getStringPreference(PREF_KEY); } catch (readError) { return; }
+        var parts = String(raw || "").split("|");
+        if (parts[0] !== "v1" || parts.length !== FORMATS.length + 1) return;
+        var i, any = false;
+        for (i = 1; i < parts.length; i++) {
+            if (parts[i] !== "0" && parts[i] !== "1") return;
+            if (parts[i] === "1") any = true;
+        }
+        if (!any) return;
+        for (i = 0; i < FORMATS.length; i++) FORMATS[i].on = parts[i + 1] === "1";
+    }
+    function saveFormats() {
+        var parts = ["v1"];
+        for (var i = 0; i < FORMATS.length; i++) parts.push(FORMATS[i].on ? "1" : "0");
+        try { app.preferences.setStringPreference(PREF_KEY, parts.join("|")); } catch (writeError) {}
+    }
 
     // 파일 이름에 못 쓰는 글자는 '_'로, 이름이 겹치면 뒤에 " (2)"를 붙인다
     var usedNames = {};
@@ -163,7 +190,11 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
         for (var k = 0; k < ctx.lockLayers.length; k++) ctx.lockLayers[k].locked = true;
     }
 
-    function saveArtboard(ab, rect, nodes, aiFile, pngFile) {
+    function outFile(format, base) {
+        return new File(format.dir.fsName + sep + base + format.ext);
+    }
+
+    function saveArtboard(ab, rect, nodes, base) {
         var t = now(), t2;
         var width = rect[2] - rect[0], height = rect[1] - rect[3];
         var nd = app.documents.add(doc.documentColorSpace, width, height);
@@ -179,11 +210,24 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
             placeCopies(nd, rect, ctx);
             times.items += ctx.copies.length;
             t2 = now(); times.copy += t2 - t; t = t2;
-            exportPng(nd, pngFile);
+            // 내보내기(exportFile)를 먼저 하고, 문서 경로가 바뀌는 saveAs(PDF → AI)는 뒤에 한다
+            var f, format;
+            for (f = 0; f < FORMATS.length; f++) {
+                format = FORMATS[f];
+                if (format.on && format.ppi) exportPng(nd, outFile(format, base), format.ppi);
+            }
             t2 = now(); times.png += t2 - t; t = t2;
-            var options = new IllustratorSaveOptions();
-            options.pdfCompatible = true;
-            nd.saveAs(aiFile, options);
+            for (f = 0; f < FORMATS.length; f++) {
+                format = FORMATS[f];
+                if (!format.on) continue;
+                if (format.key === "svg") exportSvg(nd, outFile(format, base));
+                else if (format.key === "pdf") nd.saveAs(outFile(format, base), new PDFSaveOptions());
+            }
+            if (FORMATS[0].on) {
+                var options = new IllustratorSaveOptions();
+                options.pdfCompatible = true;
+                nd.saveAs(outFile(FORMATS[0], base), options);
+            }
         } finally {
             t2 = now(); times.save += t2 - t; t = t2;
             try { nd.close(SaveOptions.DONOTSAVECHANGES); } catch (closeError) {}
@@ -228,30 +272,48 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
         if (!written) throw new Error("PNG 파일에 쓰지 못했습니다.");
     }
 
-    function exportPng(source, file) {
-        var options = new ExportOptionsPNG24();
-        options.antiAliasing = true;
-        options.transparency = true;
-        options.artBoardClipping = false;   // 대지가 아니라 작업물 경계로 자른다
-        options.horizontalScale = TARGET_PPI / 72.0 * 100.0;
-        options.verticalScale = TARGET_PPI / 72.0 * 100.0;
-        if (tempPng.exists) tempPng.remove();
-        source.exportFile(tempPng, ExportType.PNG24, options);
-        if (!tempPng.exists) throw new Error("PNG 파일이 만들어지지 않았습니다.");
-        setPngPpi(tempPng, TARGET_PPI);
-        // png 폴더의 파일을 다른 프로그램(동기화·백신·썸네일·뷰어)이 잠깐 잡고 있으면 지우기·복사가 실패한다.
-        // 0.5초씩 기다리며 5번까지 시도하고, 그래도 안 되면 일러가 알려 준 이유를 함께 띄운다
+    // 임시 파일을 대지 이름의 파일로 복사한다. 폴더의 파일을 다른 프로그램(동기화·백신·썸네일·뷰어)이 잠깐 잡고 있으면
+    // 지우기·복사가 실패한다. 0.5초씩 기다리며 5번까지 시도하고, 그래도 안 되면 일러가 알려 준 이유를 함께 띄운다
+    function copyFromTemp(temp, file) {
         var copied = false;
         for (var attempt = 0; attempt < 5 && !copied; attempt++) {
             if (attempt > 0) $.sleep(500);
             if (file.exists) file.remove();
-            copied = tempPng.copy(file);
+            copied = temp.copy(file);
         }
         if (!copied) {
-            var reason = tempPng.error || file.error;
-            throw new Error("png 폴더에 복사하지 못했습니다" + (reason ? " (" + reason + ")" : "") + ".");
+            var reason = temp.error || file.error;
+            throw new Error(file.parent.name + " 폴더에 복사하지 못했습니다" + (reason ? " (" + reason + ")" : "") + ".");
         }
-        tempPng.remove();
+        temp.remove();
+    }
+
+    function exportPng(source, file, ppi) {
+        var tempPng = tempFiles.png;
+        var options = new ExportOptionsPNG24();
+        options.antiAliasing = true;
+        options.transparency = true;
+        options.artBoardClipping = false;   // 대지가 아니라 작업물 경계로 자른다
+        options.horizontalScale = ppi / 72.0 * 100.0;
+        options.verticalScale = ppi / 72.0 * 100.0;
+        if (tempPng.exists) tempPng.remove();
+        source.exportFile(tempPng, ExportType.PNG24, options);
+        if (!tempPng.exists) throw new Error("PNG 파일이 만들어지지 않았습니다.");
+        setPngPpi(tempPng, ppi);
+        copyFromTemp(tempPng, file);
+    }
+
+    function exportSvg(source, file) {
+        var tempSvg = tempFiles.svg;
+        var options = new ExportOptionsSVG();
+        options.embedRasterImages = true;   // 배치 이미지를 파일 안에 넣는다(따로 옮겨도 깨지지 않게)
+        // 기본값은 서체 전체를 SVG 글꼴로 넣어 대지 하나가 30MB를 넘는다. 글자는 글자로 두고 서체는 넣지 않는다(시스템 서체)
+        options.fontSubsetting = SVGFontSubsetting.None;
+        options.documentEncoding = SVGDocumentEncoding.UTF8;
+        if (tempSvg.exists) tempSvg.remove();
+        source.exportFile(tempSvg, ExportType.SVG, options);
+        if (!tempSvg.exists) throw new Error("SVG 파일이 만들어지지 않았습니다.");
+        copyFromTemp(tempSvg, file);
     }
 
     // 내보낼 대지를 고른다. 대지마다 true/false 배열을 돌려주고, 취소하면 null
@@ -277,6 +339,32 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
         var list = dlg.add("listbox", undefined, names, { multiselect: true });
         list.preferredSize = [280, Math.min(400, Math.max(120, count * 20 + 8))];
         for (i = 0; i < count; i++) if (initial[i]) list.items[i].selected = true;
+
+        // 형식 버튼: 누를 때마다 켜고 끈다. 켜진 버튼은 이름 앞에 ✓가 붙는다
+        dlg.add("statictext", undefined, "내보낼 형식 (눌러서 켜고 끄기)");
+        var formatRow = dlg.add("group");
+        formatRow.alignment = ["fill", "top"];
+        formatRow.spacing = 4;
+        var formatOn = [], formatBtns = [];
+        function formatText(k) { return (formatOn[k] ? "✓ " : "") + FORMATS[k].label; }
+        function anyFormat() {
+            for (var k = 0; k < formatOn.length; k++) if (formatOn[k]) return true;
+            return false;
+        }
+        for (i = 0; i < FORMATS.length; i++) {
+            formatOn.push(FORMATS[i].on);
+            var btn = formatRow.add("button", undefined, formatText(i));
+            btn.preferredSize.width = FORMATS[i].ppi ? 84 : 58;
+            btn.helpTip = FORMATS[i].folder + " 폴더에 " + FORMATS[i].ext + " 파일로 저장합니다. 누르면 켜고 끕니다.";
+            btn.formatIndex = i;
+            btn.onClick = function () {
+                formatOn[this.formatIndex] = !formatOn[this.formatIndex];
+                this.text = formatText(this.formatIndex);
+                updateOk();
+            };
+            formatBtns.push(btn);
+        }
+
         var row = dlg.add("group");
         row.alignment = ["fill", "top"];
         var allBtn = row.add("button", undefined, "모두 선택");
@@ -286,23 +374,36 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
         row.add("button", undefined, "취소", { name: "cancel" });
 
         var result = null;
-        list.onChange = function () { okBtn.enabled = list.selection !== null; };
+        function updateOk() { okBtn.enabled = list.selection !== null && anyFormat(); }
+        list.onChange = updateOk;
         allBtn.onClick = function () {
             for (var k = 0; k < list.items.length; k++) list.items[k].selected = true;
-            okBtn.enabled = true;
+            updateOk();
         };
         okBtn.onClick = function () {
             result = [];
             for (var k = 0; k < list.items.length; k++) result.push(list.items[k].selected);
+            for (k = 0; k < FORMATS.length; k++) FORMATS[k].on = formatOn[k];
+            saveFormats();   // 확인할 때만 기억한다(취소는 덮어쓰지 않는다)
             dlg.close(1);
         };
+        updateOk();
         if (typeof bindTabOrder === "function") bindTabOrder(dlg);
         if (dlg.show() !== 1) return null;
         return result;
     }
 
+    loadFormats();
     var picked = pickArtboards();
     if (picked === null) return;
+    var folderLines = [];
+    for (var fi = 0; fi < FORMATS.length; fi++) {
+        var fmt = FORMATS[fi];
+        if (!fmt.on) continue;
+        fmt.dir = new Folder(docFolder.fsName + sep + fmt.folder);
+        if (!fmt.dir.exists && !fmt.dir.create()) { alert(fmt.folder + " 폴더를 만들지 못했습니다: " + fmt.dir.fsName); return; }
+        folderLines.push(fmt.label + ": " + fmt.dir.fsName);
+    }
     // 파일 이름은 고른 대지와 상관없이 대지 전체 순서로 정한다(같은 이름의 " (2)"가 실행마다 바뀌지 않게)
     var baseNames = [];
     for (var n = 0; n < doc.artboards.length; n++) baseNames.push(fileBaseName(doc.artboards[n].name, n));
@@ -330,7 +431,7 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
             if (nodes.length === 0) { skipped.push(ab.name); continue; }
             var base = baseNames[a];
             try {
-                saveArtboard(ab, rect, nodes, new File(aiFolder.fsName + sep + base + ".ai"), new File(pngFolder.fsName + sep + base + ".png"));
+                saveArtboard(ab, rect, nodes, base);
                 done++;
             } catch (abError) {
                 failed.push(ab.name + ": " + abError.message);
@@ -339,10 +440,12 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
     } finally {
         app.userInteractionLevel = oldInteraction;
         try { doc.activate(); } catch (restoreError) {}
-        try { if (tempPng.exists) tempPng.remove(); } catch (removeError) {}
+        for (var tk in tempFiles) {
+            try { if (tempFiles[tk].exists) tempFiles[tk].remove(); } catch (removeError) {}
+        }
     }
 
-    var message = "대지 " + done + "개를 내보냈습니다.\nAi: " + aiFolder.fsName + "\npng: " + pngFolder.fsName;
+    var message = "대지 " + done + "개를 내보냈습니다.\n" + folderLines.join("\n");
     if (skipped.length > 0) message += "\n\n개체가 없어 건너뛴 대지: " + skipped.join(", ");
     if (failed.length > 0) message += "\n\n실패한 대지:\n" + failed.join("\n");
     function sec(ms) { return (ms / 1000).toFixed(1) + "초"; }
