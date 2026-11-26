@@ -47,62 +47,113 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
         return b[0] < r[2] && b[2] > r[0] && b[1] > r[3] && b[3] < r[1];
     }
 
-    // 레이어(하위 레이어 포함) 안에서 대지에 걸친 보이는 개체를 고른다. 위에서 아래 순서
-    function pickLayer(layer, rect) {
+    // 일러에 묻는 호출은 느리다. 단계별 걸린 시간을 재어 마지막 알림에 함께 보여 준다
+    var times = { scan: 0, copy: 0, png: 0, save: 0 };
+    function now() { return new Date().getTime(); }
+
+    // 레이어(하위 레이어 포함)의 보이는 개체와 그 경계를 처음에 한 번만 읽어 둔다. 위에서 아래 순서
+    function scanLayer(layer) {
         if (!layer.visible) return null;
-        var node = { layer: layer, items: [], subs: [] };
+        var node = { layer: layer, entries: [], subs: [] };
+        var items = layer.pageItems, itemCount = items.length;   // 레이어의 pageItems는 바로 아래 개체만 담는다(하위 레이어 개체는 빠짐)
         var i, item;
-        for (i = 0; i < layer.pageItems.length; i++) {
-            item = layer.pageItems[i];   // 레이어의 pageItems는 바로 아래 개체만 담는다(하위 레이어 개체는 빠짐)
+        for (i = 0; i < itemCount; i++) {
+            item = items[i];
             if (item.hidden) continue;
-            if (intersects(item.visibleBounds, rect)) node.items.push(item);
+            node.entries.push({ item: item, bounds: item.visibleBounds });
         }
-        for (i = 0; i < layer.layers.length; i++) {
-            var sub = pickLayer(layer.layers[i], rect);
+        var subLayers = layer.layers, subCount = subLayers.length;
+        for (i = 0; i < subCount; i++) {
+            var sub = scanLayer(subLayers[i]);
+            if (sub !== null) node.subs.push(sub);
+        }
+        return node;
+    }
+
+    // 읽어 둔 경계로 대지에 걸친 개체만 고른다(일러에 다시 묻지 않는다)
+    function pickNode(scanned, rect) {
+        var node = { layer: scanned.layer, items: [], subs: [] };
+        var i;
+        for (i = 0; i < scanned.entries.length; i++) {
+            if (intersects(scanned.entries[i].bounds, rect)) node.items.push(scanned.entries[i]);
+        }
+        for (i = 0; i < scanned.subs.length; i++) {
+            var sub = pickNode(scanned.subs[i], rect);
             if (sub !== null) node.subs.push(sub);
         }
         return node.items.length > 0 || node.subs.length > 0 ? node : null;
     }
 
-    // 고른 개체를 새 문서의 같은 이름 레이어로 복제하고, 원본 대지 기준 위치를 새 대지에 그대로 맞춘다
-    function copyNode(node, layers, srcRect, dstRect) {
+    // 고른 개체를 새 문서의 같은 이름 레이어로 복제한다. 위치는 placeCopies가 한꺼번에 맞추고,
+    // 잠긴 레이어는 그 뒤에 잠근다(먼저 잠그면 개체를 옮길 수 없다)
+    function copyNode(node, layers, ctx) {
         var target = layers.add();   // add는 맨 위에 넣으므로 아래 레이어부터 부른다
         target.name = node.layer.name;
         try { target.color = node.layer.color; } catch (colorError) {}
         var i;
-        for (i = node.subs.length - 1; i >= 0; i--) copyNode(node.subs[i], target.layers, srcRect, dstRect);
+        for (i = node.subs.length - 1; i >= 0; i--) copyNode(node.subs[i], target.layers, ctx);
         for (i = node.items.length - 1; i >= 0; i--) {
-            var src = node.items[i];
-            var dup = src.duplicate(target, ElementPlacement.PLACEATBEGINNING);
-            var sb = src.visibleBounds, db = dup.visibleBounds;
-            var dx = (sb[0] - srcRect[0]) - (db[0] - dstRect[0]);
-            var dy = (sb[1] - srcRect[1]) - (db[1] - dstRect[1]);
-            if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) {
-                var wasLocked = dup.locked;
-                if (wasLocked) dup.locked = false;
-                dup.translate(dx, dy);
-                if (wasLocked) dup.locked = true;
+            var entry = node.items[i];
+            ctx.copies.push({ bounds: entry.bounds, dup: entry.item.duplicate(target, ElementPlacement.PLACEATBEGINNING) });
+        }
+        if (node.layer.locked) ctx.lockLayers.push(target);
+    }
+
+    // 다른 문서로 복제한 개체는 모두 같은 거리만큼 밀려 있다. 개체를 하나씩 옮기지 않고 새 대지를 그 거리만큼 옮긴다.
+    // 거리는 첫 개체와 마지막 개체로 재고, 둘이 다르거나 대지를 옮기지 못하면 예전처럼 개체를 하나씩 옮긴다
+    function placeCopies(nd, rect, ctx) {
+        var copies = ctx.copies;
+        function shiftOf(copy) {
+            var db = copy.dup.visibleBounds;
+            return [db[0] - copy.bounds[0], db[1] - copy.bounds[1]];
+        }
+        var first = shiftOf(copies[0]), last = shiftOf(copies[copies.length - 1]);
+        var moved = false;
+        if (Math.abs(first[0] - last[0]) < 0.01 && Math.abs(first[1] - last[1]) < 0.01) {
+            try {
+                nd.artboards[0].artboardRect = [rect[0] + first[0], rect[1] + first[1], rect[2] + first[0], rect[3] + first[1]];
+                moved = true;
+            } catch (rectError) {}   // 대지가 캔버스 밖으로 나가면 옮길 수 없다
+        }
+        if (!moved) {
+            var dstRect = nd.artboards[0].artboardRect;
+            for (var i = 0; i < copies.length; i++) {
+                var sb = copies[i].bounds, dup = copies[i].dup, db = dup.visibleBounds;
+                var dx = (sb[0] - rect[0]) - (db[0] - dstRect[0]);
+                var dy = (sb[1] - rect[1]) - (db[1] - dstRect[1]);
+                if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) {
+                    var wasLocked = dup.locked;
+                    if (wasLocked) dup.locked = false;
+                    dup.translate(dx, dy);
+                    if (wasLocked) dup.locked = true;
+                }
             }
         }
-        if (node.layer.locked) target.locked = true;
+        for (var k = 0; k < ctx.lockLayers.length; k++) ctx.lockLayers[k].locked = true;
     }
 
     function saveArtboard(ab, rect, nodes, aiFile, pngFile) {
+        var t = now(), t2;
         var width = rect[2] - rect[0], height = rect[1] - rect[3];
         var nd = app.documents.add(doc.documentColorSpace, width, height);
         try {
             try { nd.rasterEffectSettings.resolution = doc.rasterEffectSettings.resolution; } catch (effectError) {}
             nd.artboards[0].name = ab.name;
             var blank = nd.layers[0];
-            for (var i = nodes.length - 1; i >= 0; i--) copyNode(nodes[i], nd.layers, rect, nd.artboards[0].artboardRect);
+            var ctx = { copies: [], lockLayers: [] };
+            for (var i = nodes.length - 1; i >= 0; i--) copyNode(nodes[i], nd.layers, ctx);
             blank.remove();   // 새 문서에 처음 있던 빈 레이어
+            placeCopies(nd, rect, ctx);
+            t2 = now(); times.copy += t2 - t; t = t2;
             exportPng(nd, pngFile);
+            t2 = now(); times.png += t2 - t; t = t2;
             var options = new IllustratorSaveOptions();
             options.pdfCompatible = true;
             nd.saveAs(aiFile, options);
         } finally {
             try { nd.close(SaveOptions.DONOTSAVECHANGES); } catch (closeError) {}
             try { doc.activate(); } catch (activateError) {}
+            times.save += now() - t;
         }
     }
 
@@ -215,13 +266,20 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
     app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
     var done = 0, skipped = [], failed = [];
     try {
+        var t0 = now();
+        var scanned = [], docLayers = doc.layers, layerCount = docLayers.length;
+        for (var l = 0; l < layerCount; l++) {
+            var layerScan = scanLayer(docLayers[l]);
+            if (layerScan !== null) scanned.push(layerScan);
+        }
+        times.scan = now() - t0;
         for (var a = 0; a < doc.artboards.length; a++) {
             if (!picked[a]) continue;
             var ab = doc.artboards[a];
             var rect = ab.artboardRect;
             var nodes = [];
-            for (var l = 0; l < doc.layers.length; l++) {
-                var node = pickLayer(doc.layers[l], rect);
+            for (var s = 0; s < scanned.length; s++) {
+                var node = pickNode(scanned[s], rect);
                 if (node !== null) nodes.push(node);
             }
             if (nodes.length === 0) { skipped.push(ab.name); continue; }
@@ -242,5 +300,7 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
     var message = "대지 " + done + "개를 내보냈습니다.\nAi: " + aiFolder.fsName + "\npng: " + pngFolder.fsName;
     if (skipped.length > 0) message += "\n\n개체가 없어 건너뛴 대지: " + skipped.join(", ");
     if (failed.length > 0) message += "\n\n실패한 대지:\n" + failed.join("\n");
+    function sec(ms) { return (ms / 1000).toFixed(1) + "초"; }
+    message += "\n\n걸린 시간: 개체 읽기 " + sec(times.scan) + " · 복사 " + sec(times.copy) + " · PNG " + sec(times.png) + " · 저장 " + sec(times.save);
     alert(message);
 })();
