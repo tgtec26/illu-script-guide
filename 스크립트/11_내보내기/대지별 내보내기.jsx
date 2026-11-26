@@ -48,7 +48,7 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
     }
 
     // 일러에 묻는 호출은 느리다. 단계별 걸린 시간을 재어 마지막 알림에 함께 보여 준다
-    var times = { scan: 0, copy: 0, png: 0, save: 0 };
+    var times = { scan: 0, newDoc: 0, copy: 0, png: 0, save: 0, close: 0, items: 0 };
     function now() { return new Date().getTime(); }
 
     // 레이어(하위 레이어 포함)의 보이는 개체와 그 경계를 처음에 한 번만 읽어 둔다. 위에서 아래 순서
@@ -140,10 +140,12 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
             try { nd.rasterEffectSettings.resolution = doc.rasterEffectSettings.resolution; } catch (effectError) {}
             nd.artboards[0].name = ab.name;
             var blank = nd.layers[0];
+            t2 = now(); times.newDoc += t2 - t; t = t2;
             var ctx = { copies: [], lockLayers: [] };
             for (var i = nodes.length - 1; i >= 0; i--) copyNode(nodes[i], nd.layers, ctx);
             blank.remove();   // 새 문서에 처음 있던 빈 레이어
             placeCopies(nd, rect, ctx);
+            times.items += ctx.copies.length;
             t2 = now(); times.copy += t2 - t; t = t2;
             exportPng(nd, pngFile);
             t2 = now(); times.png += t2 - t; t = t2;
@@ -151,9 +153,10 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
             options.pdfCompatible = true;
             nd.saveAs(aiFile, options);
         } finally {
+            t2 = now(); times.save += t2 - t; t = t2;
             try { nd.close(SaveOptions.DONOTSAVECHANGES); } catch (closeError) {}
             try { doc.activate(); } catch (activateError) {}
-            times.save += now() - t;
+            times.close += now() - t;
         }
     }
 
@@ -311,6 +314,7 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
     if (skipped.length > 0) message += "\n\n개체가 없어 건너뛴 대지: " + skipped.join(", ");
     if (failed.length > 0) message += "\n\n실패한 대지:\n" + failed.join("\n");
     function sec(ms) { return (ms / 1000).toFixed(1) + "초"; }
-    message += "\n\n걸린 시간: 개체 읽기 " + sec(times.scan) + " · 복사 " + sec(times.copy) + " · PNG " + sec(times.png) + " · 저장 " + sec(times.save);
+    message += "\n\n걸린 시간: 개체 읽기 " + sec(times.scan) + " · 새 문서 " + sec(times.newDoc) + " · 복제 " + sec(times.copy) + "(개체 " + times.items + "개)" +
+        "\nPNG " + sec(times.png) + " · 저장 " + sec(times.save) + " · 닫기 " + sec(times.close);
     alert(message);
 })();
