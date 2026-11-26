@@ -204,8 +204,18 @@ try { $.evalFile(new File(new File($.fileName).parent.parent.fsName + "/00_세�
         source.exportFile(tempPng, ExportType.PNG24, options);
         if (!tempPng.exists) throw new Error("PNG 파일이 만들어지지 않았습니다.");
         setPngPpi(tempPng, TARGET_PPI);
-        if (file.exists) file.remove();
-        if (!tempPng.copy(file)) throw new Error("png 폴더에 복사하지 못했습니다.");
+        // png 폴더의 파일을 다른 프로그램(동기화·백신·썸네일·뷰어)이 잠깐 잡고 있으면 지우기·복사가 실패한다.
+        // 0.5초씩 기다리며 5번까지 시도하고, 그래도 안 되면 일러가 알려 준 이유를 함께 띄운다
+        var copied = false;
+        for (var attempt = 0; attempt < 5 && !copied; attempt++) {
+            if (attempt > 0) $.sleep(500);
+            if (file.exists) file.remove();
+            copied = tempPng.copy(file);
+        }
+        if (!copied) {
+            var reason = tempPng.error || file.error;
+            throw new Error("png 폴더에 복사하지 못했습니다" + (reason ? " (" + reason + ")" : "") + ".");
+        }
         tempPng.remove();
     }
 
