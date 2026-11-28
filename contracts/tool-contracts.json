@@ -949,6 +949,38 @@
         }
       }
     },
+    "coast-globe": {
+      "schemaVersion": 1,
+      "toolId": "coast-globe",
+      "geometry": {
+        "lengthUnit": "mm",
+        "strokeUnit": "pt",
+        "yAxis": "up"
+      },
+      "properties": {
+        "diameter": {
+          "type": "number",
+          "default": 50,
+          "enum": [
+            100,
+            50,
+            20
+          ]
+        },
+        "region": {
+          "type": "string",
+          "default": "korea",
+          "enum": [
+            "korea",
+            "pacific",
+            "western-pacific",
+            "americas",
+            "atlantic",
+            "africa-europe"
+          ]
+        }
+      }
+    },
     "coilspring": {
       "schemaVersion": 1,
       "toolId": "coilspring",
